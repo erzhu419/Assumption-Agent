@@ -118,12 +118,20 @@ def annotate_single(
     )
 
     try:
-        response = client.generate(prompt, max_tokens=512, temperature=0.5)
-        result = parse_json_from_llm(response["text"])
+        response = client.generate(prompt, max_tokens=2048, temperature=0.5)
+        raw = response["text"]
+        result = parse_json_from_llm(raw)
         result["annotator_id"] = persona["id"]
         result["problem_id"] = problem["problem_id"]
         return result
     except Exception as e:
+        # Debug: save first failure's raw output
+        debug_path = Path(__file__).parent.parent / "benchmark" / "annotations" / "_debug_raw.txt"
+        if not debug_path.exists():
+            debug_path.write_text(
+                f"Error: {e}\n\nRaw output:\n{response.get('text', 'N/A') if 'response' in dir() else 'no response'}",
+                encoding="utf-8"
+            )
         print(f"    Error ({persona['id']}): {e}")
         return None
 

@@ -1,0 +1,258 @@
+```json
+[
+  {
+    "problem_id": "SC_001",
+    "domain": "science",
+    "description": "一个农业研究团队正在调查一种新型有机肥料对玉米产量的影响。他们计划在试验田里种植玉米，并施用不同剂量的这种肥料。团队需要设计一个实验，以明确肥料剂量与玉米产量之间的关系，并确保实验结果的可靠性。除了肥料剂量，土壤类型、水分、光照、玉米品种和病虫害防治等因素都可能影响玉米生长。团队资源有限，无法同时监测和控制所有环境因素的微小波动，但他们希望能够分离出肥料效应，并量化其贡献。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": ["S01"],
+      "acceptable_strategies": ["S09"],
+      "explicitly_bad_strategies": [],
+      "reasoning": "核心目标是分离肥料剂量与产量的因果关系，最直接有效的方法是保持其他所有潜在影响因素恒定，只改变肥料剂量。简化策略可以作为辅助，但不能替代对核心变量的控制。"
+    },
+    "coverage_tags": ["S01", "S09"],
+    "problem_type": "实验设计"
+  },
+  {
+    "problem_id": "SC_002",
+    "domain": "science",
+    "description": "一家制药公司开发了一种新的止痛药，初步临床试验显示患者报告的疼痛减轻。然而，这种减轻的程度与安慰剂组的差异并不显著，且存在较大的个体差异。公司内部的生物统计学家认为，可能这种药物并没有预期的效果，或者效果非常微弱。为了在投入更多资源进行大规模三期临床试验之前，更严谨地评估其真实疗效，研究团队需要决定下一步的策略。他们希望避免无谓的投资，但也不想错过潜在的突破。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": ["S13", "S05"],
+      "acceptable_strategies": ["S12"],
+      "explicitly_bad_strategies": ["S08"],
+      "reasoning": "在初步结果不显著时，应优先尝试证伪药物的有效性，或选择更简单的无效应假设。贝叶斯更新可用于整合新数据，但证伪和奥卡姆剃刀更直接地指导了是否继续投入。"
+    },
+    "coverage_tags": ["S13", "S05", "S12"],
+    "problem_type": "假说检验"
+  },
+  {
+    "problem_id": "SC_003",
+    "domain": "science",
+    "description": "一家材料实验室正在生产一种新型的超导薄膜。在过去的一个月里，实验室生产了大约50批薄膜，其中48批达到了预期的超导性能，但有2批薄膜完全没有表现出超导性。所有批次的生产参数，包括温度、压力、气体流量和沉积时间，都由自动化系统严格控制，并记录了详细数据。研究人员仔细检查了这两批失败薄膜的生产日志，发现所有记录的参数都在正常范围内。他们需要找出导致这两批薄膜失效的根本原因。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": ["S17"],
+      "acceptable_strategies": ["S07"],
+      "explicitly_bad_strategies": ["S08"],
+      "reasoning": "通过比较成功批次和失败批次之间的关键差异，可以有效地定位问题根源。反向推理也有助于追溯可能的原因。"
+    },
+    "coverage_tags": ["S17", "S07"],
+    "problem_type": "数据异常分析"
+  },
+  {
+    "problem_id": "SC_004",
+    "domain": "science",
+    "description": "一个流行病学团队正在调查某地区一种罕见儿童疾病的爆发。他们已经排除了已知的传染源和遗传因素。团队怀疑是某种环境暴露导致了疾病。为了找出潜在的致病环境因素，团队收集了患病儿童及其家庭的生活习惯、饮食、居住环境、接触史等大量详细信息，并对同地区健康儿童及其家庭进行了对照调查。现在他们面临海量数据，需要从中筛选出与疾病高度相关的因素，以建立因果推断。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": ["S16", "S17"],
+      "acceptable_strategies": ["S09"],
+      "explicitly_bad_strategies": ["S08"],
+      "reasoning": "通过比较患病组的共同特征（求同法）和患病组与健康组之间的差异（求异法），可以有效地识别潜在的致病因素。降维/简化有助于处理大数据集，但核心仍是比较分析。"
+    },
+    "coverage_tags": ["S16", "S17", "S09"],
+    "problem_type": "因果推断"
+  },
+  {
+    "problem_id": "SC_005",
+    "domain": "science",
+    "description": "一家化工厂正在开发一种新的催化剂合成工艺，该工艺涉及十几种反应物、五种不同的温度区间、三种压力梯度和多种搅拌速度。目标是最大化催化剂的收率和纯度。每次实验成本高昂且耗时。如果采用传统的穷举法，需要进行数千次实验才能覆盖所有参数组合。团队需要在有限的时间和预算内，找到一个接近最优的工艺参数组合。他们已经有了一些初步的理论模型，但模型精度有限。",
+    "difficulty": "complex",
+    "reference_answer": {
+      "optimal_strategies": ["S02", "S09", "S06"],
+      "acceptable_strategies": ["S19", "S08"],
+      "explicitly_bad_strategies": ["S01"],
+      "reasoning": "面对如此多的变量，应首先将问题分解为更小的部分（如先优化温度，再优化压力），并简化问题（如先只考虑几个关键变量或简化模型），从特殊简单情况入手可以逐步建立理解。直接控制变量法在此处因变量过多而效率低下。"
+    },
+    "coverage_tags": ["S02", "S09", "S06", "S19", "S08"],
+    "problem_type": "实验设计"
+  },
+  {
+    "problem_id": "SC_006",
+    "domain": "science",
+    "description": "一位物理学家观察到一种新的超导现象，并提出了两种理论来解释它。第一种理论涉及复杂的量子场论计算和尚未被直接观测到的假想粒子。第二种理论则基于已知的凝聚态物理原理，通过一种巧妙的几何结构解释了现象，不需要引入新的物理实体。两种理论都能在现有数据范围内完美地解释观测结果，并且都做出了可被未来实验检验的预测。物理学家现在需要决定在发表论文时，应该优先支持哪种理论。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": ["S05"],
+      "acceptable_strategies": ["S13"],
+      "explicitly_bad_strategies": ["S08"],
+      "reasoning": "当多个理论都能解释同一现象时，奥卡姆剃刀原则指导我们选择最简单、假设最少的理论。证伪优先则是在未来实验中验证这些理论时更重要的原则。"
+    },
+    "coverage_tags": ["S05", "S13"],
+    "problem_type": "结果解释"
+  },
+  {
+    "problem_id": "SC_007",
+    "domain": "science",
+    "description": "一个气候研究团队正在尝试预测未来十年内某地区发生极端干旱事件的概率。他们已经建立了一个复杂的计算机模型，并基于历史数据对其进行了校准。现在，每年都会有新的气象数据和卫星观测数据产生。团队希望能够利用这些最新的数据，实时更新他们对未来干旱风险的评估，而不是每隔几年就从头开始重新运行整个模型。他们需要一种方法来系统地整合新信息，以提高预测的准确性和及时性。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": ["S12"],
+      "acceptable_strategies": ["S15"],
+      "explicitly_bad_strategies": ["S08"],
+      "reasoning": "贝叶斯更新能够系统地将新的观测数据整合到现有模型中，持续调整对未来事件概率的信念。增量构建可以用于逐步完善模型，但贝叶斯更新更侧重于信念的动态调整。"
+    },
+    "coverage_tags": ["S12", "S15"],
+    "problem_type": "假说检验"
+  },
+  {
+    "problem_id": "SC_008",
+    "domain": "science",
+    "description": "一个深海探测器在海底收集了数周的环境数据，但其核心传感器传回的数据一直显示异常，读数远超正常范围且波动剧烈。工程师团队尝试了远程重启、参数校准、软件更新等多种方法，但问题依然存在。探测器位于数千米深的海底，回收成本极高且耗时。团队反复检查了传感器设计图、历史性能数据和通信协议，并未发现明显错误。现在，时间紧迫，探测器的任务目标是收集可靠的环境数据，而目前的数据完全不可用。",
+    "difficulty": "complex",
+    "reference_answer": {
+      "optimal_strategies": ["S22", "S21"],
+      "acceptable_strategies": ["S07"],
+      "explicitly_bad_strategies": ["S08", "S01"],
+      "reasoning": "在尝试了所有常规故障排除方法后，如果问题依旧，可能意味着传感器或其工作环境存在根本性问题，需要重新定义问题或考虑放弃当前任务。反向推理可以帮助理解问题，但可能无法解决根本性缺陷。"
+    },
+    "coverage_tags": ["S22", "S21", "S07"],
+    "problem_type": "数据异常分析"
+  },
+  {
+    "problem_id": "SC_009",
+    "domain": "science",
+    "description": "一个植物生理学实验室正在研究不同波长的光照对一种特定藻类光合作用效率的影响。他们有能力控制培养箱内的光照波长、强度、持续时间以及二氧化碳浓度和温度。为了准确地测量单一波长光照对光合作用效率的影响，研究人员需要设计一个实验方案。他们希望确保实验结果是由于光照波长变化引起的，而不是其他因素。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": ["S01"],
+      "acceptable_strategies": ["S09"],
+      "explicitly_bad_strategies": [],
+      "reasoning": "为了隔离光照波长这一变量的影响，必须严格控制其他所有可能影响光合作用的因素。简化可以帮助理解，但控制变量是核心。"
+    },
+    "coverage_tags": ["S01", "S09"],
+    "problem_type": "实验设计"
+  },
+  {
+    "problem_id": "SC_010",
+    "domain": "science",
+    "description": "一个化学工程师团队发现，他们新开发的电池生产线在过去一周内，有大约15%的电池在出厂前未能通过最终的容量测试。在此之前，生产线运行了三个月，合格率一直保持在99%以上。团队已经检查了原材料批次、设备维护记录和操作员培训情况，但未能找到明显的变化。他们需要迅速定位并修复导致合格率下降的原因，以避免更大的经济损失。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": ["S07", "S17"],
+      "acceptable_strategies": ["S02"],
+      "explicitly_bad_strategies": ["S08"],
+      "reasoning": "从不合格的结果出发，反推可能导致其发生的原因，并与合格批次进行对比，可以高效地定位问题。将生产流程分解为多个阶段也有助于缩小排查范围。"
+    },
+    "coverage_tags": ["S07", "S17", "S02"],
+    "problem_type": "因果推断"
+  },
+  {
+    "problem_id": "SC_011",
+    "domain": "science",
+    "description": "一家航空航天公司正在测试一种新型复合材料的结构完整性。该材料将被用于制造极端温度和压力条件下工作的飞行器部件。实验室已经测试了材料在标准大气压和室温下的强度，结果令人满意。然而，为了确保在实际应用中的安全性，工程师们需要了解这种材料在接近其设计极限的温度（例如，从-200°C到1500°C）和压力（从真空到数千个大气压）下的表现。他们需要设计一系列测试来全面评估材料的稳健性。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": ["S14"],
+      "acceptable_strategies": ["S01"],
+      "explicitly_bad_strategies": ["S08"],
+      "reasoning": "通过系统地测试材料在各种极端条件下的性能，可以全面了解其稳健性和局限性。控制变量法是执行这些测试的基本方法。"
+    },
+    "coverage_tags": ["S14", "S01"],
+    "problem_type": "假说检验"
+  },
+  {
+    "problem_id": "SC_012",
+    "domain": "science",
+    "description": "一个机器人研究团队正在设计一群能够自主协作完成复杂任务的微型机器人。每个机器人都遵循一套简单的规则，例如“靠近最近的能量源”、“避开障碍物”、“与相邻机器人保持一定距离”。团队希望通过这些简单的局部规则，实现群体在宏观层面上的智能行为，例如集体搬运重物或形成复杂结构。然而，他们发现仅仅通过模拟单个机器人的行为，很难预测整个群体在不同规则组合下的表现。他们需要一种方法来理解和设计这种从简单个体行为到复杂集体行为的涌现现象。",
+    "difficulty": "complex",
+    "reference_answer": {
+      "optimal_strategies": ["S25", "S06", "S09"],
+      "acceptable_strategies": ["S02"],
+      "explicitly_bad_strategies": ["S01"],
+      "reasoning": "解决涌现问题需要认识到整体属性不能简单地从部分推导，需要专门检测涌现性。从最简单的规则集和少量机器人开始，逐步增加复杂性，同时简化模型，有助于理解和设计这种复杂系统。"
+    },
+    "coverage_tags": ["S25", "S06", "S09", "S02"],
+    "problem_type": "实验设计"
+  },
+  {
+    "problem_id": "SC_013",
+    "domain": "science",
+    "description": "一个生物化学实验室正在研究一种新的酶，试图找出其催化活性所需的关键结构域。他们已经通过基因工程技术构建了十几种不同的酶突变体，并在体外进行了活性测试。其中有五种突变体表现出与野生型酶相似的高活性，而其他突变体则完全丧失了活性。所有突变体的氨基酸序列都已被测定。团队需要从这些数据中找出所有高活性突变体所共同拥有的序列特征，以确定酶活性的关键结构域。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": ["S16"],
+      "acceptable_strategies": ["S17"],
+      "explicitly_bad_strategies": ["S08"],
+      "reasoning": "通过找出所有成功（高活性）案例的共同特征，可以直接定位关键结构域。求异法可以作为补充，帮助排除不重要的区域。"
+    },
+    "coverage_tags": ["S16", "S17"],
+    "problem_type": "结果解释"
+  },
+  {
+    "problem_id": "SC_014",
+    "domain": "science",
+    "description": "一个天文学家团队在分析某遥远星系的亮度变化曲线时，发现了一个异常模式：该星系在一段时间内亮度持续下降，然后突然回升，形成了一个V形曲线。传统的解释，如超新星爆发或黑洞吸积，通常会导致快速增亮后缓慢衰减，或者不规则的波动。这个V形模式与所有已知的天体物理现象都不符。团队需要提出一种新的解释，或者重新审视他们的数据和观测方法。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": ["S20", "S22"],
+      "acceptable_strategies": ["S04"],
+      "explicitly_bad_strategies": ["S08"],
+      "reasoning": "当现有解释无法吻合时，从对立面或互补角度审视问题（例如，不是星系变暗，而是有东西遮挡，然后移开），或者重新定义问题本身，可能带来突破。反证法可以用来排除现有解释，但不能直接提供新解释。"
+    },
+    "coverage_tags": ["S20", "S22", "S04"],
+    "problem_type": "数据异常分析"
+  },
+  {
+    "problem_id": "SC_015",
+    "domain": "science",
+    "description": "一个环境保护机构启动了一个大型湿地恢复项目。项目初期投入大量资金，进行了清淤、种植本地植物、引入特定物种等措施。几年后，尽管水质和植物覆盖率有所改善，但生物多样性并未达到预期，一些关键物种仍未回归，生态系统稳定性脆弱。生态学家们检查了当前的各项环境指标，发现它们都处于适宜水平。然而，项目进展缓慢，远低于最初设定的目标。他们需要理解为什么在当前条件看似良好的情况下，生态系统恢复仍不理想。",
+    "difficulty": "complex",
+    "reference_answer": {
+      "optimal_strategies": ["S26", "S24"],
+      "acceptable_strategies": ["S07"],
+      "explicitly_bad_strategies": ["S01"],
+      "reasoning": "湿地生态系统的恢复往往受到历史因素（如过去的污染、物种灭绝）的制约，即使当前条件改善，也可能因为路径依赖而难以恢复。识别关键瓶颈（如缺乏特定物种的迁徙廊道）有助于制定更有效的干预措施。"
+    },
+    "coverage_tags": ["S26", "S24", "S07"],
+    "problem_type": "因果推断"
+  },
+  {
+    "problem_id": "SC_016",
+    "domain": "science",
+    "description": "一位理论物理学家提出了一种新的宇宙模型，该模型预测在宇宙的任何地方，所有黑洞的自旋方向都必须与宇宙大尺度结构的一个特定轴线对齐。这听起来是一个非常大胆且具有普遍性的假设。为了验证这个模型，天文学家需要设计一种观测策略。由于观测黑洞自旋本身就非常困难，并且只能观测到有限数量的黑洞，他们需要一种高效且具有决定性的方法来检验这个理论。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": ["S13"],
+      "acceptable_strategies": ["S04"],
+      "explicitly_bad_strategies": ["S08"],
+      "reasoning": "对于一个普遍性的假设，最有效且科学的方法是寻找一个反例来证伪它。只要找到一个自旋方向不符合预测的黑洞，整个理论就可能被推翻。反证法在此情境下与证伪优先高度相关。"
+    },
+    "coverage_tags": ["S13", "S04"],
+    "problem_type": "假说检验"
+  },
+  {
+    "problem_id": "SC_017",
+    "domain": "science",
+    "description": "一个生物信息学团队正在尝试模拟一个包含上千种蛋白质相互作用的细胞信号通路网络。这个网络的复杂性极高，直接建立一个包含所有细节的完整模型几乎不可能，计算资源也无法支持。团队的目标是理解这个网络如何响应外部刺激，并识别其中的关键调控节点。他们需要一个可行的策略来构建模型，以便在有限的计算资源下，仍然能够捕捉到系统的核心行为。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": ["S09", "S06"],
+      "acceptable_strategies": ["S02", "S18"],
+      "explicitly_bad_strategies": ["S01"],
+      "reasoning": "面对复杂系统，最有效的方法是先简化模型，去除不影响核心行为的复杂因素，并从最简单的子网络或最关键的相互作用开始逐步构建和理解。分而治之和抽象化也有助于管理复杂性。"
+    },
+    "coverage_tags": ["S09", "S06", "S02", "S18"],
+    "problem_type": "实验设计"
+  },
+  {
+    "problem_id": "SC_018",
+    "domain": "science",
+    "description": "一个微生物学实验室分离出一种新的细菌菌株，初步测序显示其基因组与已知的所有细菌都有显著差异。这种细菌表现出独特的代谢途径和极强的抗生素耐药性。为了快速了解这种新菌株的生物学特性和潜在危害，实验室需要决定下一步的研究方向。直接从头开始研究所有基因和代谢产物将耗费大量时间。他们希望能够利用现有知识，快速锁定关键的研究点。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": ["S03", "S18"],
+      "acceptable_strategies": ["S09"],
+      "explicitly_bad_strategies": ["S08"],
+      "reasoning": "通过将新菌株的特征与已知相似菌株进行比较，可以快速推断其潜在功能和特性。抽象化有助于识别共性和差异，而简化问题可以聚焦于最关键的特征。"
+    },
+    "coverage_tags": ["S03", "S18", "S09"],
+    "problem_type": "结果解释"
+  },
+  {
+    "problem_id": "SC_019",
+    "domain": "science",
+    "description": "一个粒子物理实验团队在大型强子对撞机上运行了一项为期数月的实验，收集了数PB（拍字节）的原始数据。这些数据在处理过程中发现存在一些细微的校准误差，导致部分数据点略有偏差。团队有能力通过复杂的算法对这些误差进行修正，但完全修正所有数据

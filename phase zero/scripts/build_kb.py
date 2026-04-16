@@ -213,21 +213,25 @@ def build_strategy(seed: dict, client, dry_run: bool = False) -> dict:
     print(f"Building {seed['id']}: {seed['name_zh']}...", end=" ", flush=True)
     t0 = time.time()
 
-    response = client.generate(prompt, max_tokens=4096, temperature=0.3)
-
-    try:
-        strategy = parse_json_from_llm(response["text"])
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"FAILED (JSON parse error: {e})")
-        err_path = STRATEGY_DIR / f"{seed['id']}_raw_error.txt"
-        err_path.write_text(response["text"], encoding="utf-8")
-        print(f"  Raw output saved to {err_path}")
-        return None
-
-    elapsed = time.time() - t0
-    print(f"OK ({elapsed:.1f}s, {response['input_tokens']}+{response['output_tokens']} tokens)")
-
-    return strategy
+    # Try with increasing max_tokens if truncated
+    for max_tok in [12000, 16384]:
+        response = client.generate(prompt, max_tokens=max_tok, temperature=0.3)
+        try:
+            strategy = parse_json_from_llm(response["text"])
+            elapsed = time.time() - t0
+            print(f"OK ({elapsed:.1f}s, {response['input_tokens']}+{response['output_tokens']} tokens)")
+            return strategy
+        except (json.JSONDecodeError, ValueError) as e:
+            if max_tok < 16384:
+                print(f"truncated ({response['output_tokens']} tokens), retrying with more...", end=" ", flush=True)
+                time.sleep(1)
+                continue
+            else:
+                print(f"FAILED (JSON parse error: {e})")
+                err_path = STRATEGY_DIR / f"{seed['id']}_raw_error.txt"
+                err_path.write_text(response["text"], encoding="utf-8")
+                print(f"  Raw output saved to {err_path}")
+                return None
 
 
 # ---------------------------------------------------------------------------

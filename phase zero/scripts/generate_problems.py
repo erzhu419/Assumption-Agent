@@ -134,7 +134,7 @@ def generate_domain_problems(
     print(f"Generating {count} problems for {domain_key}...", end=" ", flush=True)
     t0 = time.time()
 
-    response = client.generate(prompt, max_tokens=8192, temperature=0.7)
+    response = client.generate(prompt, max_tokens=16384, temperature=0.7)
 
     try:
         problems = parse_json_from_llm(response["text"])
@@ -240,28 +240,51 @@ def main():
         if isinstance(existing, list):
             all_problems.extend(existing)
 
+    BATCH_SIZE = 10  # Generate 10 problems per API call to avoid truncation
+
     for domain_key, domain_info in domains.items():
         out_path = PROBLEMS_DIR / f"{domain_key}.json"
 
         if args.skip_existing and out_path.exists():
             print(f"Skipping {domain_key} (already exists)")
+            existing = json.loads(out_path.read_text(encoding="utf-8"))
+            if isinstance(existing, list):
+                all_problems.extend(existing)
             continue
 
-        count = args.count or domain_info["target_count"]
-        problems = generate_domain_problems(
-            domain_key, domain_info, count, client, args.dry_run
-        )
+        total_count = args.count or domain_info["target_count"]
+        domain_problems = []
 
-        if problems:
+        # Split into batches
+        remaining = total_count
+        batch_num = 0
+        while remaining > 0:
+            batch_count = min(BATCH_SIZE, remaining)
+            batch_num += 1
+            print(f"  [{domain_key} batch {batch_num}] ", end="")
+            batch = generate_domain_problems(
+                domain_key, domain_info, batch_count, client, args.dry_run
+            )
+            if batch:
+                # Re-number IDs sequentially
+                offset = len(domain_problems)
+                for i, p in enumerate(batch):
+                    p["problem_id"] = f"{domain_key}_{offset + i + 1:03d}"
+                domain_problems.extend(batch)
+                remaining -= len(batch)
+            else:
+                remaining -= batch_count  # Skip on failure, don't infinite loop
+
+            if not args.dry_run:
+                time.sleep(2)
+
+        if domain_problems:
             out_path.write_text(
-                json.dumps(problems, ensure_ascii=False, indent=2),
+                json.dumps(domain_problems, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
-            all_problems.extend(problems)
-            print(f"  Wrote {out_path}")
-
-        if not args.dry_run:
-            time.sleep(2)  # Rate limiting between domains
+            all_problems.extend(domain_problems)
+            print(f"  Total: {len(domain_problems)} problems for {domain_key} → {out_path}")
 
     # Coverage check
     if all_problems and not args.dry_run:

@@ -1,0 +1,76 @@
+{
+  "problem_id": "software_engineering_001",
+  "domain": "software_engineering",
+  "difficulty": "easy",
+  "annotations": [
+    {
+      "selected_strategies": [
+        "S17",
+        "S01",
+        "S14"
+      ],
+      "confidence": "high",
+      "reasoning": "问题描述指出“并非普遍存在，而是似乎影响到特定批次的用户，尤其是那些在某个特定日期之前创建的账户”，这强烈暗示需要找出受影响用户和未受影响用户之间的关键差异（S17）。一旦识别出差异，通过控制变量法（S01）来隔离和测试这些差异对问题的影响。同时，考虑到数据不一致和错误可能与新添加的非空列及其默认值有关，对特定日期前的账户（边界条件）进行分析（S14）至关重要。",
+      "annotator_id": "annotator_cs",
+      "problem_id": "software_engineering_001"
+    },
+    {
+      "selected_strategies": [
+        "S17",
+        "S01",
+        "S14"
+      ],
+      "confidence": "high",
+      "reasoning": "问题描述指出问题影响特定批次用户（特定日期前创建），且本地旧快照无法复现。这强烈暗示存在新旧数据或代码路径的差异。S17（求异法）最适合找出受影响用户与正常用户之间的关键差异。S01（控制变量法）可以帮助系统地隔离最近部署的变更（服务更新、数据库模式变更）与问题之间的关系。S14（边界条件分析）则可以用来检查特定日期创建账户的边界情况，以及新添加的非空列默认值填充是否在所有情况下都正确处理。",
+      "annotator_id": "annotator_math",
+      "problem_id": "software_engineering_001"
+    },
+    {
+      "selected_strategies": [
+        "S17",
+        "S01",
+        "S13"
+      ],
+      "confidence": "high",
+      "reasoning": "问题描述指出问题影响特定批次的用户（特定日期前创建），且在本地无法复现，这强烈暗示新旧部署或数据之间存在关键差异。因此，找出成功和失败案例之间的关键差异（S17）是首要任务，并结合控制变量（S01）来隔离这些差异的影响，同时采用证伪优先（S13）来高效排除假设。",
+      "annotator_id": "annotator_science",
+      "problem_id": "software_engineering_001"
+    },
+    {
+      "selected_strategies": [
+        "S17",
+        "S01",
+        "S14"
+      ],
+      "confidence": "high",
+      "reasoning": "问题描述指出问题影响特定批次用户（特定日期前创建），且本地无法复现。S17（求异法）能帮助我们找出受影响用户与正常用户之间的关键差异。S01（控制变量法）可以用来隔离最近的部署变更（服务更新、数据库模式变更）对问题的影响。S14（边界条件分析）可以用来检查特定日期前创建的用户这个边界条件，以及`last_login_ip`列填充默认值可能带来的影响。",
+      "annotator_id": "annotator_business",
+      "problem_id": "software_engineering_001"
+    },
+    {
+      "selected_strategies": [
+        "S17",
+        "S01",
+        "S14"
+      ],
+      "confidence": "high",
+      "reasoning": "问题描述指出问题影响特定批次用户（特定日期前创建），且本地无法复现，这强烈暗示存在新旧数据或环境差异。S17（求异法）能帮助我们找出受影响用户与未受影响用户之间的关键差异，S01（控制变量法）则能系统性地测试这些差异的影响，而S14（边界条件分析）可以帮助我们检查特定日期这个边界条件，以及新旧数据填充默认值的行为。",
+      "annotator_id": "annotator_philosophy",
+      "problem_id": "software_engineering_001"
+    }
+  ],
+  "reference_answer": {
+    "optimal_strategies": [
+      "S01",
+      "S02",
+      "S17"
+    ],
+    "acceptable_strategies": [
+      "S08"
+    ],
+    "explicitly_bad_strategies": [
+      "S11"
+    ],
+    "reasoning": "问题发生在特定部署后，且影响特定条件下的用户。通过控制变量法（S01）隔离最近的变更，分而治之（S02）缩小问题范围（API、服务、数据库），并求异法（S17）比较受影响与未受影响用户的数据差异，能最快定位根本原因。"
+  }
+}

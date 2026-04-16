@@ -86,13 +86,17 @@ class GeminiClient:
         """Returns {"text": str, "input_tokens": int, "output_tokens": int}"""
 
         if self._sdk == "google-genai":
+            from google.genai import types
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt,
-                config={
-                    "max_output_tokens": max_tokens,
-                    "temperature": temperature,
-                }
+                config=types.GenerateContentConfig(
+                    max_output_tokens=max_tokens,
+                    temperature=temperature,
+                    thinking_config=types.ThinkingConfig(
+                        thinking_budget=0  # Disable thinking to avoid token theft
+                    ),
+                ),
             )
             text = response.text
             usage = getattr(response, "usage_metadata", None)

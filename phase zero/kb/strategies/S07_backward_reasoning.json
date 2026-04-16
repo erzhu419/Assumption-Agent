@@ -1,0 +1,346 @@
+{
+  "id": "S07",
+  "name": {
+    "zh": "反向推理",
+    "en": "Backward Reasoning"
+  },
+  "aliases": [
+    "目标导向推理",
+    "逆向搜索",
+    "倒推法"
+  ],
+  "category": "search",
+  "source_references": [
+    {
+      "author": "Pólya, G.",
+      "work": "How to Solve It: A New Aspect of Mathematical Method",
+      "year": 1945,
+      "chapter": "Working Backward",
+      "relevance": "策略的核心思想和应用场景在书中得到详细阐述，是问题解决领域的基础性著作，明确提出了“Working Backward”作为一种启发式策略。"
+    }
+  ],
+  "description": {
+    "one_sentence": "从目标状态出发，反推需要什么前提条件",
+    "detailed": "反向推理是一种从问题或任务的期望结果（目标状态）出发，逐步回溯，以识别达到该目标所需的一系列必要前提条件或中间状态的策略。它通过将目标分解为更小的、更易于管理的问题，并为每个子问题寻找解决方案，最终构建一条从初始状态到目标状态的完整路径。这种方法特别适用于目标明确、但从初始状态到目标状态的直接路径不清晰的问题，常用于规划、证明和诊断。",
+    "intuitive_analogy": "想象你正在玩一个迷宫游戏，但你不知道入口在哪里。反向推理就像是从迷宫的出口开始，一步步地往回走，直到找到入口。或者，你计划一次旅行，你知道最终目的地是哪里，然后你反过来思考：为了到达那里，我需要乘坐什么交通工具？我需要从哪里出发？我需要提前准备什么？"
+  },
+  "operational_steps": [
+    {
+      "step": 1,
+      "action": "明确定义目标状态。清晰地描述期望达到的最终结果或状态。",
+      "on_difficulty": "如果目标状态模糊，递归调用 S_XX（澄清目标）或 S_YY（问题分解）来细化目标。"
+    },
+    {
+      "step": 2,
+      "action": "识别达到当前目标（或子目标）的直接前提条件。思考“为了实现这个，我必须先拥有/完成什么？”",
+      "on_difficulty": "如果前提条件不明确或有多种可能，递归调用 S_ZZ（信息收集）或 S_AA（假设生成与验证）。"
+    },
+    {
+      "step": 3,
+      "action": "将每个识别出的前提条件视为一个新的子目标。",
+      "on_difficulty": "如果子目标过多或过于复杂，考虑 S_YY（问题分解）进一步简化。"
+    },
+    {
+      "step": 4,
+      "action": "对每个新的子目标重复步骤2和3，直到达到一个已知的、可直接实现或已满足的初始状态。",
+      "on_difficulty": "如果陷入循环或无法找到可达的初始状态，可能需要重新评估目标或前提条件的假设，或考虑 S_BB（换个角度思考）。"
+    },
+    {
+      "step": 5,
+      "action": "构造从初始状态到目标状态的完整路径。一旦找到从初始状态到目标状态的反向链条，将其反转，形成一个正向的行动计划。",
+      "on_difficulty": null
+    }
+  ],
+  "applicability_conditions": {
+    "favorable": [
+      {
+        "condition_id": "S07_F_001",
+        "condition": "目标状态明确且可被清晰定义。",
+        "source": "literature",
+        "source_ref": "Polya 1945",
+        "confidence": 0.95,
+        "supporting_cases": [
+          "S07_SUC_001",
+          "S07_SUC_002",
+          "S07_SUC_003"
+        ],
+        "contradicting_cases": [],
+        "last_updated": "2026-04-16",
+        "version": 1,
+        "status": "active",
+        "locked": false,
+        "stability_tier": "foundational"
+      },
+      {
+        "condition_id": "S07_F_002",
+        "condition": "从目标状态回溯到前一个状态的“分支因子”相对较小，即每个状态的前提条件数量有限且易于识别。",
+        "source": "literature",
+        "source_ref": "Nilsson 1980 (Principles of Artificial Intelligence)",
+        "confidence": 0.9,
+        "supporting_cases": [
+          "S07_SUC_002"
+        ],
+        "contradicting_cases": [],
+        "last_updated": "2026-04-16",
+        "version": 1,
+        "status": "active",
+        "locked": false,
+        "stability_tier": "foundational"
+      },
+      {
+        "condition_id": "S07_F_003",
+        "condition": "问题空间具有明确的因果或逻辑依赖关系，允许构建清晰的前提条件链。",
+        "source": "literature",
+        "source_ref": "Polya 1945",
+        "confidence": 0.9,
+        "supporting_cases": [
+          "S07_SUC_001",
+          "S07_SUC_003"
+        ],
+        "contradicting_cases": [],
+        "last_updated": "2026-04-16",
+        "version": 1,
+        "status": "active",
+        "locked": false,
+        "stability_tier": "foundational"
+      },
+      {
+        "condition_id": "S07_F_004",
+        "condition": "从初始状态到目标状态的直接路径难以发现，而从目标反推则更容易收敛。",
+        "source": "expert_knowledge",
+        "source_ref": "N/A",
+        "confidence": 0.85,
+        "supporting_cases": [],
+        "contradicting_cases": [],
+        "last_updated": "2026-04-16",
+        "version": 1,
+        "status": "active",
+        "locked": false,
+        "stability_tier": "foundational"
+      }
+    ],
+    "unfavorable": [
+      {
+        "condition_id": "S07_U_001",
+        "condition": "目标状态模糊、不确定或动态变化，难以固定一个明确的终点。",
+        "source": "literature",
+        "source_ref": "Russell & Norvig 2010 (Artificial Intelligence: A Modern Approach)",
+        "confidence": 0.9,
+        "supporting_cases": [
+          "S07_FAIL_001",
+          "S07_FAIL_002"
+        ],
+        "contradicting_cases": [],
+        "last_updated": "2026-04-16",
+        "version": 1,
+        "status": "active",
+        "locked": false,
+        "stability_tier": "foundational"
+      },
+      {
+        "condition_id": "S07_U_002",
+        "condition": "从目标状态回溯时，每个状态的前提条件数量巨大或难以穷尽，导致“反向分支因子”过大。",
+        "source": "literature",
+        "source_ref": "Nilsson 1980 (Principles of Artificial Intelligence)",
+        "confidence": 0.85,
+        "supporting_cases": [
+          "S07_FAIL_002"
+        ],
+        "contradicting_cases": [],
+        "last_updated": "2026-04-16",
+        "version": 1,
+        "status": "active",
+        "locked": false,
+        "stability_tier": "foundational"
+      },
+      {
+        "condition_id": "S07_U_003",
+        "condition": "问题涉及高度不确定性或随机性，使得前提条件无法可靠地预测或控制。",
+        "source": "literature",
+        "source_ref": "Russell & Norvig 2010 (Artificial Intelligence: A Modern Approach)",
+        "confidence": 0.85,
+        "supporting_cases": [
+          "S07_FAIL_001",
+          "S07_FAIL_002"
+        ],
+        "contradicting_cases": [],
+        "last_updated": "2026-04-16",
+        "version": 1,
+        "status": "active",
+        "locked": false,
+        "stability_tier": "foundational"
+      }
+    ],
+    "failure_modes": [
+      {
+        "mode_id": "S07_FM_001",
+        "description": "陷入循环：在回溯过程中，一个前提条件又指向了之前已经处理过的状态，导致无法前进或找到有效路径。",
+        "source": "literature",
+        "confidence": 0.8,
+        "observed_cases": []
+      },
+      {
+        "mode_id": "S07_FM_002",
+        "description": "识别出错误或不完整的前提条件：导致构建的路径无法真正实现目标，或者路径存在漏洞。",
+        "source": "literature",
+        "confidence": 0.8,
+        "observed_cases": []
+      },
+      {
+        "mode_id": "S07_FM_003",
+        "description": "无法找到可达的初始状态：反推链条最终指向一个无法被满足或无法被识别的“初始”状态，表明目标可能无法实现或策略不适用。",
+        "source": "expert_knowledge",
+        "confidence": 0.75,
+        "observed_cases": []
+      }
+    ]
+  },
+  "historical_cases": {
+    "successes": [
+      {
+        "case_id": "S07_SUC_001",
+        "domain": "数学证明",
+        "case": "欧几里得几何证明",
+        "description": "在几何学中，为了证明一个定理，通常从结论（目标）出发，反推需要哪些中间步骤或已知条件才能得出该结论，直到回溯到公理或已知定理。",
+        "why_this_strategy_worked": "几何证明的逻辑结构清晰，每一步都有明确的前提和结论，非常适合构建反向链条，且目标明确，前提条件可控。",
+        "demonstrates_conditions": [
+          "S07_F_001",
+          "S07_F_003"
+        ]
+      },
+      {
+        "case_id": "S07_SUC_002",
+        "domain": "人工智能",
+        "case": "Prolog逻辑编程语言的推理引擎",
+        "description": "Prolog是一种声明式编程语言，其核心机制就是基于反向链（backward chaining）的推理。当查询一个目标时，它会尝试找到满足该目标所需的规则和事实。",
+        "why_this_strategy_worked": "Prolog的知识库由事实和规则构成，规则定义了如何从前提推导出结论，这天然地支持从目标反推前提，且其搜索空间在设计上是可控的。",
+        "demonstrates_conditions": [
+          "S07_F_001",
+          "S07_F_002",
+          "S07_F_003"
+        ]
+      },
+      {
+        "case_id": "S07_SUC_003",
+        "domain": "项目管理/生产计划",
+        "case": "关键路径法 (CPM) 或逆向排程",
+        "description": "在项目管理中，为了确保项目在截止日期前完成，通常会从项目的最终交付日期（目标）开始，反推每个任务的最后开始时间，以确定关键路径。",
+        "why_this_strategy_worked": "项目任务之间存在明确的依赖关系和时间约束，允许从最终目标反推每个任务的时间节点，且目标明确，任务分解清晰。",
+        "demonstrates_conditions": [
+          "S07_F_001",
+          "S07_F_003"
+        ]
+      }
+    ],
+    "failures": [
+      {
+        "case_id": "S07_FAIL_001",
+        "domain": "经济预测",
+        "case": "预测股票市场走势",
+        "description": "试图从期望的未来股价（目标）反推当前需要满足哪些经济指标、公司业绩或市场情绪，以指导投资决策。",
+        "why_this_strategy_failed": "股票市场受大量不可预测的因素影响，目标状态的前提条件复杂、动态且高度不确定，难以可靠地识别和控制，导致反向推理链条无法有效建立。",
+        "demonstrates_conditions": [
+          "S07_U_001",
+          "S07_U_003"
+        ]
+      },
+      {
+        "case_id": "S07_FAIL_002",
+        "domain": "复杂系统控制",
+        "case": "实时自动驾驶决策",
+        "description": "自动驾驶系统需要实时根据当前环境和目标（如到达目的地）做出决策。如果完全依赖反向推理，从“安全到达目的地”反推每一步操作。",
+        "why_this_strategy_failed": "实时环境变化迅速，前提条件（如其他车辆行为、行人出现）具有高度不确定性，且反向推理的计算量可能过大，无法满足实时性要求，导致决策滞后或错误。",
+        "demonstrates_conditions": [
+          "S07_U_001",
+          "S07_U_002",
+          "S07_U_003"
+        ]
+      }
+    ]
+  },
+  "relationships_to_other_strategies": [
+    {
+      "related_strategy": "S_XX (正向推理)",
+      "relationship_type": "alternative",
+      "description": "反向推理与正向推理是两种互补但又相互替代的搜索策略。正向推理从初始状态出发，探索所有可能的行动及其结果，直到达到目标；反向推理则从目标出发，寻找必要的前提。"
+    },
+    {
+      "related_strategy": "S_XX (手段-目的分析)",
+      "relationship_type": "complementary",
+      "description": "手段-目的分析结合了正向和反向推理的元素。它识别当前状态与目标状态之间的差异（目的），然后选择能够减少这些差异的操作（手段）。反向推理可以帮助识别为了消除某个差异需要达到的中间状态。"
+    },
+    {
+      "related_strategy": "S_XX (问题分解)",
+      "relationship_type": "complementary",
+      "description": "反向推理通过将大目标分解为一系列子目标（前提条件），本质上是一种问题分解的形式，有助于将复杂问题简化为可管理的部分。"
+    },
+    {
+      "related_strategy": "S_XX (规划)",
+      "relationship_type": "subsumption",
+      "description": "许多规划算法，尤其是基于目标栈的规划（Goal Stack Planning）和部分顺序规划（Partial Order Planning），都内在地使用了反向推理来构建行动序列，以达到预设目标。"
+    }
+  ],
+  "knowledge_triples": [
+    {
+      "subject": "目标状态",
+      "relation": "需要",
+      "object": "前提条件"
+    },
+    {
+      "subject": "前提条件",
+      "relation": "成为",
+      "object": "子目标"
+    },
+    {
+      "subject": "反向推理",
+      "relation": "构建",
+      "object": "解决路径"
+    },
+    {
+      "subject": "反向推理",
+      "relation": "适用于",
+      "object": "目标明确问题"
+    }
+  ],
+  "formalization_hints": {
+    "mathematical_structure": "在状态空间图（State-Space Graph）中，反向推理可以被视为从目标节点（Goal Node）开始，沿着边的反方向（逆转操作）进行搜索，直到找到初始节点（Initial Node）。这通常通过构建一个“前驱图”或在原图上进行逆向广度优先搜索（BFS）或深度优先搜索（DFS）实现。",
+    "category_theory_analogue": "在一个范畴C中，对象是状态，态射是转换。反向推理可以看作是寻找从一个目标对象G到初始对象I的态射链，但不是直接寻找f: I -> G，而是寻找一系列态射g_n: S_n -> G, g_{n-1}: S_{n-1} -> S_n, ..., g_1: I -> S_1，使得它们的复合态射存在。这类似于在态射范畴中寻找逆向路径。",
+    "information_geometry_analogue": "考虑一个信息流或因果链的几何表示。反向推理是从信息熵最低（目标状态，信息最明确）的点出发，逆着信息流的方向，寻找导致该低熵状态的更高熵（更不确定，但包含必要信息）的前驱状态，以最小化信息距离。",
+    "connection_to_known_algorithms": [
+      "Goal Stack Planning",
+      "Prolog推理引擎",
+      "STRIPS规划",
+      "A*搜索 (当启发式函数设计为从目标到当前状态的距离时)"
+    ],
+    "markov_kernel_prior_hint": {
+      "dominant_actions_by_state": {
+        "接近目标的状态": [
+          "识别直接前驱",
+          "简化子目标"
+        ],
+        "远离目标但有清晰路径的状态": [
+          "分解为更小的子目标",
+          "验证前提条件"
+        ],
+        "前提条件模糊或分支因子大的状态": [
+          "信息收集",
+          "假设生成与验证"
+        ]
+      },
+      "note": "供阶段三先验估计使用"
+    }
+  },
+  "metadata": {
+    "version": "1.0",
+    "created": "2026-04-16",
+    "last_updated": "2026-04-16",
+    "update_history_ref": "change_history/S07.jsonl",
+    "confidence": "high",
+    "completeness": "high",
+    "needs_review": [],
+    "total_experience_records": 0,
+    "successful_applications": 0,
+    "failed_applications": 0,
+    "effectiveness_score": 0.5
+  }
+}
