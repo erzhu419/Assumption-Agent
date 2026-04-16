@@ -524,27 +524,48 @@ class SimulatedTaskEnvironment(TaskEnvironment):
         wm_output = self.world_model.predict(wm_input)
         
         # 将世界模型的预测转化为 ExecutionOutcome 格式
+        #
+        # 关键设计：奖励信号一致性
+        # 真实环境给的是二元结果（成功/失败），模拟环境也必须给二元结果。
+        # 如果模拟环境给连续概率值作为 evaluation_score，调度器在
+        # 模拟中看到平滑的奖励景观，但在真实环境中看到阶梯状的——
+        # 模拟中学到的微妙偏好会在真实环境的二元信号下消失。
+        #
+        # 因此：用概率采样产生二元结果，evaluation_score 也基于
+        # 二元结果而非连续概率。
+        
         simulated_success = (
             random.random() < wm_output.predicted_success_probability
         )
+        simulated_partial = (
+            not simulated_success and
+            random.random() < wm_output.predicted_partial_success
+        )
+        
+        # evaluation_score 与真实环境一致：基于二元结果
+        if simulated_success:
+            eval_score = 1.0
+        elif simulated_partial:
+            eval_score = 0.5
+        else:
+            eval_score = 0.0
         
         return ExecutionOutcome(
             success=simulated_success,
-            partial_success=(
-                not simulated_success and
-                random.random() < wm_output.predicted_partial_success
-            ),
+            partial_success=simulated_partial,
             trajectory=[],   # 模拟不产生真实轨迹
             total_steps=wm_output.predicted_steps_to_complete,
             wall_clock_seconds=0.1,  # 模拟几乎瞬时
             llm_output="[simulated]",
-            evaluation_score=wm_output.predicted_success_probability,
+            evaluation_score=eval_score,
             failure_reason=(
                 wm_output.predicted_failure_modes[0]
                 if wm_output.predicted_failure_modes and not simulated_success
                 else None
             ),
-            is_simulated=True   # 标记为模拟结果
+            is_simulated=True,
+            # 保留原始概率供分析使用（不用于奖励计算）
+            predicted_probability=wm_output.predicted_success_probability
         )
     
     def evaluate(self, outcome: ExecutionOutcome) -> float:
@@ -720,9 +741,161 @@ assumption_agent/
 
 系统刚启动时没有执行经验，统计模型为空。冷启动策略：
 
-1. **阶段零的标注数据作为种子：** 用阶段零的 100-150 道标注题和人类标注的"最优策略"作为初始数据——虽然没有真实的执行结果，但可以给出 (问题特征, 策略) → 适用/不适用 的先验分布
+1. **阶段零的标注数据作为种子：** 用阶段零的 150-200 道标注题和人类标注的"最优策略"作为初始数据——虽然没有真实的执行结果，但可以给出 (问题特征, 策略) → 适用/不适用 的先验分布
 2. **纯 LLM 模拟启动：** 前 2000 episodes 完全依赖 LLM 模拟器，同时用 10% 的真实执行逐步填充统计模型
 3. **过渡期：** 随着统计模型数据积累，LLM 模拟器的使用比例自动下降
+
+**冷启动验证——LLM 模拟器比随机猜测好吗？**
+
+前 500 episodes 是训练最关键的时期——调度器在此期间建立初始策略偏好。如果 LLM 模拟器在此期间系统性地高估某些策略（如总是预测"分而治之"成功率高），调度器会学到错误的初始偏好，可能需要数千 episodes 才能被后续真实执行纠正。
+
+**冷启动验证协议（在正式训练开始前执行）：**
+
+```python
+def validate_cold_start(
+    llm_simulator: LLMWorldModel,
+    seed_tasks: List[Task],      # 阶段零的标注数据
+    n_validation: int = 50
+) -> ColdStartValidation:
+    """
+    在正式训练前验证 LLM 模拟器的冷启动预测质量。
+    如果比随机猜测差，应直接用 model-free 训练而非 model-based。
+    """
+    tasks = random.sample(seed_tasks, min(n_validation, len(seed_tasks)))
+    
+    llm_predictions = []
+    random_predictions = []
+    ground_truth = []    # 来自人类标注的最优策略
+    
+    for task in tasks:
+        strategies = get_all_strategy_ids()
+        
+        # LLM 模拟器对每条策略的预测
+        llm_ranks = {}
+        for sid in strategies:
+            pred = llm_simulator.predict(WorldModelInput(
+                problem_features=task.features,
+                strategy_id=sid,
+                strategy_summary=get_strategy_summary(sid)
+            ))
+            llm_ranks[sid] = pred.predicted_success_probability
+        
+        # LLM 推荐的 top-1 策略
+        llm_top1 = max(llm_ranks, key=llm_ranks.get)
+        llm_predictions.append(llm_top1)
+        
+        # 随机推荐
+        random_predictions.append(random.choice(strategies))
+        
+        # 人类标注的最优策略
+        ground_truth.append(task.optimal_strategy)
+    
+    llm_accuracy = sum(
+        1 for p, g in zip(llm_predictions, ground_truth) if p == g
+    ) / len(ground_truth)
+    random_accuracy = sum(
+        1 for p, g in zip(random_predictions, ground_truth) if p == g
+    ) / len(ground_truth)
+    
+    is_useful = llm_accuracy > random_accuracy * 1.5  # 至少比随机好 50%
+    
+    return ColdStartValidation(
+        llm_accuracy=llm_accuracy,
+        random_accuracy=random_accuracy,
+        is_useful=is_useful,
+        recommendation=(
+            "model-based OK" if is_useful
+            else "FALLBACK to model-free for first 2000 episodes"
+        )
+    )
+```
+
+**如果冷启动验证失败：** 前 2000 episodes 切换到 model-free 模式（全部真实执行），同时在后台收集数据用于校准 LLM 模拟器。2000 episodes 后重新验证——如果此时 LLM 模拟器（已有真实数据校准）通过验证，再切换到 model-based 模式。
+
+### 3.4 OOD 检测——识别完全未见过的问题类型
+
+当一个完全新类型的问题出现时（问题特征组合在历史数据中从未出现过），世界模型应该明确说"我没有依据来预测这个"，而不是默默输出一个低置信度的预测。
+
+分层校准（1.4 节新增）检查的是**已有数据中**不同数据量区域的准确性，但不检测**完全未见过的**问题类型。需要一个显式的 OOD 检测器：
+
+```python
+class OODDetector:
+    """
+    检测输入是否在世界模型的训练分布之外。
+    """
+    
+    def __init__(self, experience_log: List[ExecutionRecord]):
+        # 用历史经验的特征向量拟合分布边界
+        features = np.array([
+            discretize(r["task"]["complexity_features"])
+            for r in experience_log
+        ])
+        self.seen_states = set(map(tuple, features))
+        
+        # 对连续特征用 k-NN 距离做 OOD 检测
+        self.continuous_features = np.array([
+            encode_continuous(r["task"]["complexity_features"])
+            for r in experience_log
+        ])
+        if len(self.continuous_features) > 0:
+            from sklearn.neighbors import NearestNeighbors
+            self.nn = NearestNeighbors(n_neighbors=5)
+            self.nn.fit(self.continuous_features)
+            # 计算训练数据内部的平均 k-NN 距离作为阈值
+            distances, _ = self.nn.kneighbors(self.continuous_features)
+            self.distance_threshold = np.percentile(
+                distances.mean(axis=1), 95
+            )  # 95 百分位作为 OOD 阈值
+    
+    def is_ood(self, problem_features: ProblemFeatures) -> OODResult:
+        state = tuple(discretize(problem_features))
+        
+        # 检查 1：离散状态是否完全未见过
+        if state not in self.seen_states:
+            return OODResult(
+                is_ood=True,
+                reason="discrete_state_unseen",
+                recommendation="force_real_execution"
+            )
+        
+        # 检查 2：连续特征空间中的 k-NN 距离
+        if len(self.continuous_features) > 0:
+            cont_feat = encode_continuous(problem_features).reshape(1, -1)
+            distances, _ = self.nn.kneighbors(cont_feat)
+            avg_distance = distances.mean()
+            
+            if avg_distance > self.distance_threshold:
+                return OODResult(
+                    is_ood=True,
+                    reason=f"knn_distance={avg_distance:.2f} > threshold={self.distance_threshold:.2f}",
+                    recommendation="force_real_execution"
+                )
+        
+        return OODResult(is_ood=False)
+```
+
+**与 HybridWorldModel 的集成：**
+
+```python
+class HybridWorldModel:
+    # 在 predict() 方法开头增加 OOD 检查
+    
+    def predict(self, input: WorldModelInput) -> WorldModelOutput:
+        # OOD 检测：完全未见过的问题类型不做预测
+        if self.ood_detector and self.ood_detector.is_ood(input.problem_features).is_ood:
+            return WorldModelOutput(
+                predicted_success_probability=0.5,  # 无信息先验
+                prediction_confidence=0.0,           # 零置信度
+                predicted_failure_modes=["OOD: 未见过的问题类型，预测不可靠"],
+                predicted_steps_to_complete=10,
+                condition_match_score=0.0,
+                is_ood=True   # 标记为 OOD
+            )
+        
+        # ... 正常预测流程 ...
+```
+
+当世界模型返回 `is_ood=True` 时，`ModelBasedTrainer` 应自动对该 episode 使用真实执行，同时将真实结果加入世界模型以扩大覆盖范围。
 
 ---
 
