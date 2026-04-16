@@ -37,7 +37,7 @@ NUM_ACTIONS = len(ACTION_SPACE)
 # ---------------------------------------------------------------------------
 # Feature dimensions
 # ---------------------------------------------------------------------------
-EMBEDDING_DIM = 768          # sentence-transformer output dim
+EMBEDDING_DIM = 384          # all-MiniLM-L6-v2 output dim
 STRUCTURAL_FEATURES = 10     # coupling, decomp, baseline, info, reversibility, etc.
 KB_MATCH_FEATURES = NUM_ACTIONS  # one match score per strategy
 CROSS_PROBLEM_FEATURES = NUM_ACTIONS  # recent success rate per strategy

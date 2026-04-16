@@ -119,14 +119,15 @@ class FeatureExtractor:
         # Try to load sentence-transformers
         try:
             from sentence_transformers import SentenceTransformer
-            self._encoder = SentenceTransformer("all-MiniLM-L6-v2")
+            self._encoder = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
             return self._encoder.encode(text)
         except ImportError:
             pass
 
         # Fallback: deterministic hash-based pseudo-embedding
+        import _config as settings
         np.random.seed(hash(text) % (2**31))
-        return np.random.randn(768).astype(np.float32)
+        return np.random.randn(settings.EMBEDDING_DIM).astype(np.float32)
 
     def features_to_vector(self, features: Dict, kb_match_scores: np.ndarray = None,
                            cross_problem_stats: np.ndarray = None) -> np.ndarray:
