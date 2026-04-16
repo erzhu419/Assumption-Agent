@@ -76,11 +76,41 @@ $$\max_{k} r(S_k, x) < \theta_{\text{gap}}$$
 
 ### 1.2 空白检测的数据来源
 
-空白检测需要策略在各种问题状态下的成功率数据。来源有三个：
+空白检测需要策略在各种问题状态下的成功率数据。来源有**四个**，其中来源 1 是最高优先级：
 
-**来源 1：阶段一调度器的执行经验**
+**来源 1（首要）：阶段二的跨策略失败信号**
 
-直接从 `experience_log/executions/` 中统计。
+Phase 2 新增的 `CrossStrategyFailureDetector`（Phase 2 第 6 节）已经在经验持续积累时**实时运行**，将 ≥3 条策略全部失败且 0 成功的问题特征标记为 `strategy_gap`，写入 `experience_log/distilled/gap_signals/`。Phase 4 的空白检测器**首先读取这些信号**，而非从原始经验日志重新统计。
+
+```python
+def load_phase2_gap_signals(self) -> List[StrategyGap]:
+    """
+    优先读取 Phase 2 已经检测到的策略空白信号。
+    这些信号已经做了跨策略因果归因——质量高于从原始日志重新统计。
+    """
+    gap_signals_dir = "experience_log/distilled/gap_signals/"
+    signals = load_all_json(gap_signals_dir)
+    
+    return [
+        StrategyGap(
+            state=signal["problem_state"],
+            state_idx=discretize(signal["problem_state"]),
+            best_existing_strategy=None,   # 全部失败，无最佳
+            best_existing_rate=0.0,
+            total_samples=signal["total_attempts"],
+            failing_strategies=signal["failed_strategies"],
+            source="phase2_cross_strategy",  # 标记来源
+            # Phase 2 已经标记这是 strategy_gap 而非 condition_gap
+            gap_type=GapType.TRUE_GAP
+        )
+        for signal in signals
+        if signal["signal_type"] == "strategy_gap"
+    ]
+```
+
+**来源 2（补充）：阶段一调度器的执行经验**
+
+对 Phase 2 信号未覆盖的区域，从原始经验日志补充统计。这捕捉的是"最佳策略成功率 < 40% 但不是全部失败"的灰色地带——Phase 2 的跨策略检测器不会标记这些（因为至少有一条策略偶尔成功）。
 
 ```python
 class GapDetector:
@@ -326,15 +356,19 @@ CANDIDATE_GENERATION_PROMPT = """
 {existing_strategy_summaries}
 
 ## 要求
-提出 3 个候选新策略。每个候选需要：
+提出 3 个候选。候选可以是**全新策略**或**已有策略的新组合**（标明类型）。
+
+每个候选需要：
 1. 有一个简洁的名称
 2. 有一句话描述
-3. 有 5-8 个具体的操作步骤
-4. 不是已有策略的简单重组——必须包含至少一个"新思路"
-5. 至少引用一个人类知识体系中的灵感来源（可以是科学、哲学、工程、日常生活中的原则）
+3. 如果是新策略：有 5-8 个操作步骤，**每步标注遇到困难时应如何处理**（递归调用其他策略或放弃）
+4. 如果是新组合：指定策略序列和过渡条件
+5. 不是已有策略的简单重组——必须包含至少一个"新思路"
+6. 至少引用一个人类知识体系中的灵感来源
+7. 提供 3-4 条知识三元组（subject, relation, object），捕捉策略的核心逻辑骨架
 
 ## 灵感参考
-以下是一些可能与当前空白相关的思维模式（仅供参考，不要求必须使用）：
+以下是一些可能与当前空白相关的思维模式（仅供参考）：
 - 对偶性思维：从问题的对立面入手
 - 层次分解：不是分解为子问题，而是分解为不同抽象层次
 - 约束翻转：不是在约束下找解，而是修改约束
@@ -347,16 +381,28 @@ CANDIDATE_GENERATION_PROMPT = """
 {{
     "candidates": [
         {{
+            "type": "new_strategy 或 new_composition",
             "name_zh": "策略名称（中文）",
             "name_en": "Strategy Name (English)",
             "one_sentence": "一句话描述",
             "inspiration_source": "灵感来源",
             "key_novelty": "相比已有策略，新在哪里",
-            "operational_steps": [
-                "步骤 1: ...",
-                "步骤 2: ...",
+            "knowledge_triples": [
+                {{"subject": "...", "relation": "...", "object": "..."}},
                 ...
             ],
+            // 如果 type == "new_strategy":
+            "operational_steps": [
+                {{
+                    "step": 1,
+                    "action": "步骤描述",
+                    "on_difficulty": "遇困难时的处理（递归调用哪条策略，或 null）"
+                }},
+                ...
+            ],
+            // 如果 type == "new_composition":
+            "sequence": ["S_XX", "S_YY"],
+            "transition_condition": "何时从第一条策略切换到第二条",
             "hypothesized_favorable_conditions": [
                 "适用条件 1",
                 "适用条件 2"
@@ -410,29 +456,44 @@ STRUCTURING_PROMPT = """
 ```python
 def deduplicate_candidate(
     candidate_kernel: np.ndarray,
+    candidate_seg: StrategyExecutionGraph,
     formal_kb: Dict[str, np.ndarray],
+    seg_graphs: Dict[str, StrategyExecutionGraph],
     iso_detector: IsomorphismDetector
 ) -> DeduplicationResult:
     """
-    检查候选策略的 Markov 核是否与已有策略同构。
+    双表示去重：同时检查 Markov 核和策略执行图。
+    Phase 3 新增了三种关系类型，去重需要全部覆盖：
+    - isomorphic: 两种表示都近 → 真重复
+    - surface_similar_only: 核近但 SEG 远 → 不算重复（结构不同）
+    - hidden_isomorphic: 核远但 SEG 近 → 隐藏重复（最容易遗漏）
     """
     for sid, K_existing in formal_kb.items():
+        seg_existing = seg_graphs.get(sid)
         report = iso_detector._analyze_pair(
             "candidate", candidate_kernel,
-            sid, K_existing
+            sid, K_existing,
+            seg_a=candidate_seg,
+            seg_b=seg_existing
         )
-        if report.relationship in ("isomorphic", "a_subsumes_b"):
+        if report.relationship in ("isomorphic", "a_subsumes_b",
+                                    "hidden_isomorphic"):
             return DeduplicationResult(
                 is_duplicate=True,
                 duplicate_of=sid,
                 relationship=report.relationship,
-                distances=report.distances
+                distances=report.distances,
+                # hidden_isomorphic 特别标注：
+                # 候选看起来新颖（Markov 核远），但执行逻辑和已有策略相同
+                is_hidden_duplicate=(
+                    report.relationship == "hidden_isomorphic"
+                )
             )
     
     return DeduplicationResult(is_duplicate=False)
 ```
 
-去重的意义：防止系统"发明"一个其实已经存在的策略（只是换了个名字和表述）。如果候选策略与已有策略同构，不添加新策略，而是将空白区域的经验反馈给阶段二，让阶段二精化已有策略的适用条件。
+去重的意义：防止系统"发明"一个其实已经存在的策略（只是换了个名字和表述）。`hidden_isomorphic` 检测尤其重要——LLM 生成的候选可能在表面描述上看起来全新，但其执行逻辑（SEG 图结构）与已有策略相同。如果候选与已有策略同构，不添加新策略，而是将空白区域的经验反馈给阶段二，让阶段二精化已有策略的适用条件。
 
 ---
 
@@ -513,7 +574,8 @@ class ConsistencyChecker:
         """
         检查候选策略的 favorable 条件是否与某个已有策略的
         unfavorable 条件在语义上高度相似。
-        复用阶段二的冲突检测逻辑。
+        现在感知 Phase 2 的 stability_tier：与 foundational 条件
+        冲突是 critical，与 tentative 条件冲突只是 info。
         """
         issues = []
         for cond in candidate["applicability_conditions"]["favorable"]:
@@ -524,15 +586,36 @@ class ConsistencyChecker:
                         cond["condition"], unfav["condition"]
                     )
                     if sim > 0.8:
+                        # 根据冲突条件的稳定性分层决定严重程度
+                        tier = unfav.get("stability_tier", "empirical")
+                        if tier == "foundational":
+                            severity = "critical"
+                            desc_suffix = (
+                                "此冲突涉及文献核心规则（foundational），"
+                                "候选策略必须修改或放弃"
+                            )
+                        elif tier == "empirical":
+                            severity = "warning"
+                            desc_suffix = (
+                                "此冲突涉及经验验证规则，"
+                                "可能是合理的 alternative 关系"
+                            )
+                        else:  # tentative
+                            severity = "info"
+                            desc_suffix = (
+                                "此冲突涉及待验证规则（tentative），"
+                                "冲突方可能是错误的"
+                            )
+                        
                         issues.append(ConsistencyIssue(
                             type="condition_conflict",
-                            severity="warning",
+                            severity=severity,
                             description=(
-                                f"候选 favorable 条件 '{cond['condition']}' "
-                                f"与 {sid} 的 unfavorable 条件 "
-                                f"'{unfav['condition']}' 语义相似 "
-                                f"(sim={sim:.2f})。"
-                                f"这不一定是错误——可能是合理的 alternative 关系"
+                                f"候选 favorable '{cond['condition']}' "
+                                f"与 {sid} 的 unfavorable "
+                                f"'{unfav['condition']}' 相似 "
+                                f"(sim={sim:.2f}, tier={tier})。"
+                                f"{desc_suffix}"
                             ),
                             related_strategy=sid
                         ))
@@ -1032,18 +1115,157 @@ def integrate_new_strategy(
     # 阶段二的健康监控将跟踪新策略的后续表现
 ```
 
-### 5.2 新策略的"试用期"
+### 5.2 新策略的"试用期"——与 Phase 2 生命周期管理统一
 
-新策略在集成后的前 100 次使用中处于"试用期"：
+新策略在集成后处于"试用期"，其管理**统一纳入 Phase 2 的策略生命周期管理框架**（Phase 2 第 5 节），而非独立的试用期系统：
 
-- 置信度上限锁定在 0.7（即使表现很好也不立即升到 high）
-- 阶段二的健康监控对新策略使用更严格的阈值（成功率下降 15% 即触发警告，而非已有策略的 20%）
-- 在试用期内，调度器选择新策略时必须附带一个 `backup_strategy`（不允许没有后备）
-- 试用期结束后（100 次使用 + 至少 30 天），如果成功率 ≥ 40%，升级为正式策略（移除试用期限制）；否则降级或移除
+- 新策略的 `stability_tier` 初始化为 `tentative`（Phase 2 的 1.3 节）
+- Phase 2 的健康监控对 `tentative` 策略自动使用更严格的阈值（成功率下降 15% 即触发警告）
+- 在 `tentative` 阶段，调度器选择新策略时必须附带一个 `backup_strategy`
+- 升级路径：`tentative` → `empirical`（需要 30+ 条经验且成功率 > 60%，见 Phase 2 的 STABILITY_TIERS 定义）
+- 退役路径：如果 50+ 次使用中成功率 < 20%，由 Phase 2 的 `check_strategy_retirement()` 自动建议退役
+
+**Phase 4 不再维护独立的试用期逻辑。** 所有策略（无论来源）的生命周期由 Phase 2 统一管理。Phase 4 的职责在策略通过验证并写入知识库后结束——后续的监控、升级、退役全部由 Phase 2 接管。
 
 ---
 
-## 6. 技术实现
+## 6. 数据驱动的策略发现——补充 LLM 生成
+
+### 6.1 为什么需要数据驱动
+
+Claude.md 讨论中的一个关键洞察：LLM 读过所有哲学教科书——它"发明"的策略很可能只是对已读内容的重组，表述变了但本质没变。真正新颖的策略应该来自**执行数据中的模式发现**——发现"在某类问题上，执行器倾向于采取一种没有名字的行为模式，且这个模式的成功率高于所有已命名策略"。
+
+这是数据挖掘，不是文本生成。
+
+### 6.2 执行轨迹聚类——发现无名策略
+
+```python
+class DataDrivenStrategyDiscoverer:
+    """
+    从执行轨迹中发现尚未被命名的有效行为模式。
+    补充 LLM 生成的候选——LLM 重组已有知识，
+    数据驱动发现真正新颖的模式。
+    """
+    
+    def discover(
+        self,
+        experience_log: List[ExecutionRecord],
+        action_space: List[str],
+        min_cluster_size: int = 10,
+        min_success_rate: float = 0.5
+    ) -> List[DiscoveredPattern]:
+        
+        # 1. 提取所有成功执行的行动序列
+        success_sequences = []
+        for record in experience_log:
+            if record["outcome"]["success"]:
+                actions = extract_action_sequence(
+                    record["execution_trajectory"],
+                    action_space
+                )
+                success_sequences.append({
+                    "actions": actions,
+                    "features": record["task"]["complexity_features"],
+                    "strategy_used": record["strategy_selection"]["selected_strategy"]
+                })
+        
+        # 2. 对行动序列做聚类（用编辑距离）
+        from sklearn.cluster import DBSCAN
+        distance_matrix = compute_edit_distance_matrix(
+            [s["actions"] for s in success_sequences]
+        )
+        clusters = DBSCAN(
+            eps=0.3, min_samples=min_cluster_size,
+            metric="precomputed"
+        ).fit(distance_matrix)
+        
+        # 3. 找出"不属于任何已有策略"的成功聚类
+        patterns = []
+        for cluster_id in set(clusters.labels_):
+            if cluster_id == -1:
+                continue  # 噪声
+            
+            members = [
+                success_sequences[i]
+                for i in range(len(success_sequences))
+                if clusters.labels_[i] == cluster_id
+            ]
+            
+            # 检查这个聚类是否与某条已有策略高度重叠
+            strategy_distribution = Counter(
+                m["strategy_used"] for m in members
+            )
+            dominant_strategy = strategy_distribution.most_common(1)[0]
+            dominant_ratio = dominant_strategy[1] / len(members)
+            
+            if dominant_ratio < 0.5:
+                # 这个成功模式不属于任何单一已有策略——
+                # 可能是一种尚未被命名的新策略！
+                
+                # 提取该聚类的典型行动序列
+                typical_sequence = find_medoid(
+                    [m["actions"] for m in members],
+                    distance_matrix
+                )
+                
+                # 提取该聚类的共同问题特征
+                common_features = find_common_features(
+                    [m["features"] for m in members]
+                )
+                
+                patterns.append(DiscoveredPattern(
+                    cluster_size=len(members),
+                    success_rate=len(members) / count_all_attempts(
+                        experience_log, common_features
+                    ),
+                    typical_action_sequence=typical_sequence,
+                    common_problem_features=common_features,
+                    strategy_distribution=dict(strategy_distribution),
+                    # 用 LLM 给这个模式命名和描述
+                    name=None,  # 待 LLM 命名
+                    description=None  # 待 LLM 描述
+                ))
+        
+        return [p for p in patterns if p.success_rate >= min_success_rate]
+    
+    def name_discovered_pattern(
+        self, pattern: DiscoveredPattern
+    ) -> NamedPattern:
+        """
+        用 LLM 为数据驱动发现的无名模式命名和结构化。
+        注意：LLM 的角色是命名和描述，不是发明——
+        模式本身来自数据，LLM 只是给它一个名字。
+        """
+        response = llm_call(NAME_PATTERN_PROMPT.format(
+            typical_sequence=pattern.typical_action_sequence,
+            common_features=pattern.common_problem_features,
+            success_rate=pattern.success_rate,
+            strategy_distribution=pattern.strategy_distribution
+        ))
+        return NamedPattern(
+            pattern=pattern,
+            name=response["name"],
+            description=response["description"],
+            operational_steps=response["operational_steps"],
+            # 数据驱动发现的策略标记来源
+            source="data_driven_discovery"
+        )
+```
+
+**与 LLM 生成的关系：** 数据驱动发现和 LLM 生成是互补的两条路径。两者的候选都进入同一个去重→一致性检验→验证管线。但它们在性质上不同：
+
+| 维度 | LLM 生成 | 数据驱动发现 |
+|------|---------|------------|
+| 创新来源 | 重组 LLM 训练数据中的已有方法论 | 从执行数据中发现无名的新行为模式 |
+| 新颖性 | 可能是旧酒新瓶（换表述） | 真正来自实践的新模式（如果存在的话） |
+| 风险 | 候选看起来新但实质重复 | 候选可能只是噪声不是真正的模式 |
+| 需要的数据量 | 少（LLM 零样本） | 多（需要 500+ 成功执行记录才能聚类） |
+
+**启动条件：** 数据驱动发现只在经验日志积累了 500+ 条成功执行记录后才启动。在此之前，Phase 4 完全依赖 LLM 生成。
+
+---
+
+## 7. 技术实现
 
 ### 6.1 项目文件结构
 
@@ -1122,7 +1344,7 @@ assumption_agent/
 
 ---
 
-## 7. 实验设计
+## 8. 实验设计
 
 ### 7.1 核心实验：系统能否发现有价值的新策略
 
@@ -1173,7 +1395,7 @@ assumption_agent/
 
 ---
 
-## 8. 风险与应对
+## 9. 风险与应对
 
 | 风险 | 概率 | 影响 | 应对措施 |
 |------|------|------|---------|
@@ -1188,7 +1410,7 @@ assumption_agent/
 
 ---
 
-## 9. 增量开发计划
+## 10. 增量开发计划
 
 ### Step 1：空白检测（第 1-3 周）
 
@@ -1243,7 +1465,7 @@ assumption_agent/
 
 ---
 
-## 10. 完成标准（Definition of Done）
+## 11. 完成标准（Definition of Done）
 
 阶段四在以下所有条件同时满足时视为完成：
 
