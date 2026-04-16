@@ -254,7 +254,7 @@ class SACDiscreteDispatcher:
         # Auto temperature tuning
         self.auto_alpha = auto_alpha
         if auto_alpha:
-            self.target_entropy = -np.log(1.0 / num_actions) * 0.98
+            self.target_entropy = -np.log(1.0 / num_actions) * 0.5
             self.log_alpha = torch.zeros(1, requires_grad=True)
             self.alpha_optimizer = optim.Adam([self.log_alpha], lr=lr)
             self.alpha = self.log_alpha.exp().item()
