@@ -1,0 +1,734 @@
+[
+  {
+    "problem_id": "sw_001",
+    "domain": "software_engineering",
+    "description": "你的Web应用在某个特定的API端点上偶尔返回500错误，但只在高并发时出现。日志显示错误来自数据库连接池耗尽。你已经知道问题出在连接池配置，需要找到最优的连接池大小。当前设置为10，你怀疑需要在10-100之间找到一个最优值。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S01"
+      ],
+      "acceptable_strategies": [
+        "S08"
+      ],
+      "explicitly_bad_strategies": [
+        "S02"
+      ],
+      "reasoning": "问题已经定位到单一变量（连接池大小），只需逐一测试不同值。分而治之不适用——这不是可分解的问题。"
+    },
+    "coverage_tags": [
+      "S01",
+      "S08"
+    ]
+  },
+  {
+    "problem_id": "sw_002",
+    "domain": "software_engineering",
+    "description": "你接手了一个10万行代码的遗留系统，没有文档，没有测试，原开发者已离职。老板要求在3个月内给系统添加用户权限管理功能。系统使用了过时的框架（5年前的版本），部分模块间有循环依赖。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S15",
+        "S06"
+      ],
+      "acceptable_strategies": [
+        "S09"
+      ],
+      "explicitly_bad_strategies": [
+        "S01"
+      ],
+      "reasoning": "增量构建（先最小可用版本再逐步扩展）和先特殊后一般（先处理最简单的权限场景）是正确策略。控制变量法不适用——问题不是调试而是构建。"
+    },
+    "coverage_tags": [
+      "S15",
+      "S06",
+      "S09"
+    ]
+  },
+  {
+    "problem_id": "sw_003",
+    "domain": "software_engineering",
+    "description": "你的机器学习模型在训练集上准确率95%，但在测试集上只有60%。你不确定是过拟合、数据泄露、还是训练/测试数据分布不同导致的。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S13",
+        "S17"
+      ],
+      "acceptable_strategies": [
+        "S01"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "证伪优先：系统性地检验每个可能的原因（过拟合？数据泄露？分布偏移？），优先排除最可能的假设。求异法：对比训练集和测试集的差异特征。"
+    },
+    "coverage_tags": [
+      "S13",
+      "S17",
+      "S01"
+    ]
+  },
+  {
+    "problem_id": "sw_004",
+    "domain": "software_engineering",
+    "description": "你需要设计一个实时聊天系统的架构，要求支持100万同时在线用户。你之前做过一个支持1000用户的聊天系统。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S03",
+        "S06"
+      ],
+      "acceptable_strategies": [
+        "S18"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "类比推理：参考之前1000用户系统的架构进行扩展。先特殊后一般：先让系统在1000用户下工作，再逐步扩展到100万。"
+    },
+    "coverage_tags": [
+      "S03",
+      "S06",
+      "S18"
+    ]
+  },
+  {
+    "problem_id": "sw_005",
+    "domain": "software_engineering",
+    "description": "你的团队在讨论是用微服务还是单体架构。两种方案各有支持者，争论了两周没有结论。项目已经延期，必须今天做决定。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S11",
+        "S23"
+      ],
+      "acceptable_strategies": [
+        "S05"
+      ],
+      "explicitly_bad_strategies": [
+        "S01"
+      ],
+      "reasoning": "满意化：不追求最优架构，选第一个'足够好'的方案立即开始。资源约束下近似接受：时间已耗尽，接受当前最佳选项。奥卡姆剃刀：在两个方案解释力相当时选更简单的。"
+    },
+    "coverage_tags": [
+      "S11",
+      "S23",
+      "S05"
+    ]
+  },
+  {
+    "problem_id": "sw_006",
+    "domain": "software_engineering",
+    "description": "部署后用户报告页面加载变慢。你用Chrome DevTools发现一个JavaScript文件从200KB膨胀到了2MB。你需要找出是哪次提交引入了这个问题，过去一周有47次提交。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S01"
+      ],
+      "acceptable_strategies": [
+        "S07"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "经典的git bisect场景——控制变量法的直接应用，逐一（或二分）检查commit。"
+    },
+    "coverage_tags": [
+      "S01",
+      "S07"
+    ]
+  },
+  {
+    "problem_id": "sw_007",
+    "domain": "software_engineering",
+    "description": "你的推荐系统每天为5000万用户生成推荐。最近用户投诉推荐质量下降。你有多个嫌疑：上周的特征工程变更、数据管道中的一个已知bug、以及用户行为的季节性变化。但你无法在生产环境做A/B测试（政策限制），只能分析历史日志。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S17",
+        "S12"
+      ],
+      "acceptable_strategies": [
+        "S14"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "求异法：对比推荐质量好的时期和差的时期，找关键差异。贝叶斯更新：综合多种证据持续更新对各假说的置信度。"
+    },
+    "coverage_tags": [
+      "S17",
+      "S12",
+      "S14"
+    ]
+  },
+  {
+    "problem_id": "sw_008",
+    "domain": "software_engineering",
+    "description": "你的分布式系统有5个微服务，每个单独测试都正常，但组合后在特定的请求序列下会产生数据不一致。你怀疑是分布式事务问题。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S25",
+        "S14"
+      ],
+      "acceptable_strategies": [
+        "S01"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "涌现性检测：单独正常但组合后出问题=涌现故障，需要检查组合行为。边界条件分析：测试特定的请求序列（边界情况）。"
+    },
+    "coverage_tags": [
+      "S25",
+      "S14",
+      "S01"
+    ]
+  },
+  {
+    "problem_id": "sw_009",
+    "domain": "software_engineering",
+    "description": "你在开发一个编译器的类型检查模块。要证明你的类型系统是sound的——即如果类型检查通过，运行时不会出现类型错误。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S04",
+        "S06"
+      ],
+      "acceptable_strategies": [
+        "S18"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "反证法：假设存在一个通过类型检查但运行时出错的程序，推导矛盾。先特殊后一般：先证明简单类型（int, bool）的soundness，再推广到泛型。"
+    },
+    "coverage_tags": [
+      "S04",
+      "S06",
+      "S18"
+    ]
+  },
+  {
+    "problem_id": "sw_010",
+    "domain": "software_engineering",
+    "description": "你负责的服务连续三个月的可用性都低于SLA（99.9%）。团队已经尝试了多种优化（缓存、限流、降级），每次看起来都有改善但下个月又出新问题。老板开始质疑团队能力。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S24",
+        "S22"
+      ],
+      "acceptable_strategies": [
+        "S21"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "关键节点识别：找到可用性问题的根本瓶颈（可能是架构层面而非具体bug）。问题重构：也许不是'怎么修'的问题，而是'架构本身是否适合99.9%'的问题。"
+    },
+    "coverage_tags": [
+      "S24",
+      "S22",
+      "S21"
+    ]
+  },
+  {
+    "problem_id": "sw_011",
+    "domain": "software_engineering",
+    "description": "你有一个复杂的正则表达式匹配引擎，性能很差。profiling显示90%的时间花在一个回溯函数上。你需要优化这个函数。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S24",
+        "S09"
+      ],
+      "acceptable_strategies": [],
+      "explicitly_bad_strategies": [],
+      "reasoning": "关键节点识别：profiling已经找到了瓶颈（回溯函数），集中优化这一点。降维简化：去掉不必要的回溯路径。"
+    },
+    "coverage_tags": [
+      "S24",
+      "S09"
+    ]
+  },
+  {
+    "problem_id": "sw_012",
+    "domain": "software_engineering",
+    "description": "你的团队想引入一个新的ORM框架替换现有的数据库访问层。新框架功能更强，但团队没人用过。项目有3个月的deadline。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S26",
+        "S11"
+      ],
+      "acceptable_strategies": [
+        "S23"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "路径依赖分析：现有代码和团队经验都绑定在旧ORM上，切换成本远超表面看起来的。满意化：旧ORM'足够好'就不要换。"
+    },
+    "coverage_tags": [
+      "S26",
+      "S11",
+      "S23"
+    ]
+  },
+  {
+    "problem_id": "sw_013",
+    "domain": "software_engineering",
+    "description": "你发现线上一个严重bug，但修复这个bug需要重构一个核心模块，预计需要2周。而这个bug只在特定条件下触发，影响了约0.1%的用户。产品经理催你尽快修复。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S23",
+        "S19"
+      ],
+      "acceptable_strategies": [
+        "S15"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "资源约束下近似接受：先做一个workaround（绕过特定条件），而非完美重构。约束松弛：暂时放宽'必须重构核心模块'的约束，看是否有更轻量的方案。"
+    },
+    "coverage_tags": [
+      "S23",
+      "S19",
+      "S15"
+    ]
+  },
+  {
+    "problem_id": "sw_014",
+    "domain": "software_engineering",
+    "description": "你在做code review，发现同事写的代码逻辑上看起来正确，但你直觉觉得有问题。代码通过了所有现有测试。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S14",
+        "S13"
+      ],
+      "acceptable_strategies": [],
+      "explicitly_bad_strategies": [],
+      "reasoning": "边界条件分析：用极端输入测试代码。证伪优先：主动构造能让代码失败的测试用例。"
+    },
+    "coverage_tags": [
+      "S14",
+      "S13"
+    ]
+  },
+  {
+    "problem_id": "sw_015",
+    "domain": "software_engineering",
+    "description": "你的公司开发了一个内部工具，最初只有10人使用。现在CEO要求把它做成SaaS产品对外销售，但内部工具的代码几乎没有安全措施、没有多租户隔离、没有付费系统。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S22",
+        "S15"
+      ],
+      "acceptable_strategies": [
+        "S06"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "问题重构：这不是'升级工具'的问题，而是'要不要从头做一个新产品'的决策。增量构建：如果决定做，应该从最小MVP开始。"
+    },
+    "coverage_tags": [
+      "S22",
+      "S15",
+      "S06"
+    ]
+  },
+  {
+    "problem_id": "sw_016",
+    "domain": "software_engineering",
+    "description": "你需要给一个没有文档的第三方API写一个客户端库。你只有API的URL，没有任何接口文档。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S08"
+      ],
+      "acceptable_strategies": [
+        "S14"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "试错法：发送各种请求，观察响应，逐步推断API的行为。"
+    },
+    "coverage_tags": [
+      "S08",
+      "S14"
+    ]
+  },
+  {
+    "problem_id": "sw_017",
+    "domain": "software_engineering",
+    "description": "你要设计一个缓存系统。注意到读请求和写请求的模式是对称的：读多写少时需要读缓存，写多读少时需要写缓冲。你希望用一个统一的框架处理两种情况。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S10",
+        "S20"
+      ],
+      "acceptable_strategies": [],
+      "explicitly_bad_strategies": [],
+      "reasoning": "对称性利用：读和写的缓存问题具有对称结构。对偶视角：从读和写的对偶关系设计统一框架。"
+    },
+    "coverage_tags": [
+      "S10",
+      "S20"
+    ]
+  },
+  {
+    "problem_id": "sw_018",
+    "domain": "software_engineering",
+    "description": "三个不同客户都报告了一个类似的崩溃问题。你想找出共同原因。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S16"
+      ],
+      "acceptable_strategies": [
+        "S17"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "求同法：找出三个崩溃案例的共同因素。"
+    },
+    "coverage_tags": [
+      "S16",
+      "S17"
+    ]
+  },
+  {
+    "problem_id": "sw_019",
+    "domain": "software_engineering",
+    "description": "你的系统有10个严格的性能约束，但满足所有约束后的设计空间非常小，几乎找不到可行方案。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S19"
+      ],
+      "acceptable_strategies": [
+        "S11"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "约束松弛：暂时放宽某些不那么关键的约束，看问题是否变得可解。"
+    },
+    "coverage_tags": [
+      "S19",
+      "S11"
+    ]
+  },
+  {
+    "problem_id": "sw_020",
+    "domain": "software_engineering",
+    "description": "你的团队花了6个月开发一个基于区块链的供应链追溯系统。开发已完成80%，但市场反馈显示没有客户愿意为此付费，因为现有的条形码方案已经够用了。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S21"
+      ],
+      "acceptable_strategies": [
+        "S23"
+      ],
+      "explicitly_bad_strategies": [
+        "S15"
+      ],
+      "reasoning": "死胡同识别：产品市场不存在（没有客户愿意付费），继续开发是沉没成本谬误。"
+    },
+    "coverage_tags": [
+      "S21",
+      "S23"
+    ]
+  },
+  {
+    "problem_id": "sw_021",
+    "domain": "software_engineering",
+    "description": "你的公司想推行DevOps文化变革。技术上完全可行（CI/CD管道已搭好），但运维团队抵制（担心自动化会裁员），开发团队也不热情（不想半夜收告警）。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S27"
+      ],
+      "acceptable_strategies": [
+        "S24"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "激励结构分析：变革失败的原因不是技术而是利益不对齐——运维怕丢工作，开发怕加负担。需要重新设计激励。"
+    },
+    "coverage_tags": [
+      "S27",
+      "S24"
+    ]
+  },
+  {
+    "problem_id": "sw_022",
+    "domain": "software_engineering",
+    "description": "你要从零实现一个JSON解析器。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S02"
+      ],
+      "acceptable_strategies": [],
+      "explicitly_bad_strategies": [],
+      "reasoning": "分而治之：JSON有清晰的递归结构（对象、数组、基本类型），天然适合递归分解。"
+    },
+    "coverage_tags": [
+      "S02"
+    ]
+  },
+  {
+    "problem_id": "sw_023",
+    "domain": "software_engineering",
+    "description": "你的数据库查询越来越慢，但你不知道是索引问题、查询写法问题、还是数据量增长问题。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S01",
+        "S17"
+      ],
+      "acceptable_strategies": [],
+      "explicitly_bad_strategies": [],
+      "reasoning": "控制变量法：分别测试不同索引配置、不同查询写法。求异法：对比快查询和慢查询的差异。"
+    },
+    "coverage_tags": [
+      "S01",
+      "S17"
+    ]
+  },
+  {
+    "problem_id": "sw_024",
+    "domain": "software_engineering",
+    "description": "用户反馈说'系统不好用'，但无法具体描述哪里不好用。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S08",
+        "S22"
+      ],
+      "acceptable_strategies": [
+        "S16"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "试错法：给用户看不同的界面原型，观察反应。问题重构：'不好用'可能不是UI问题而是功能缺失。"
+    },
+    "coverage_tags": [
+      "S08",
+      "S22",
+      "S16"
+    ]
+  },
+  {
+    "problem_id": "sw_025",
+    "domain": "software_engineering",
+    "description": "你的算法在99%的输入上正确运行，但有一类输入总是导致死循环。你怀疑是某个循环的终止条件有问题。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S14"
+      ],
+      "acceptable_strategies": [
+        "S04"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "边界条件分析：检查极端输入（空集、单元素、最大值）来定位终止条件的漏洞。"
+    },
+    "coverage_tags": [
+      "S14",
+      "S04"
+    ]
+  },
+  {
+    "problem_id": "sw_026",
+    "domain": "software_engineering",
+    "description": "你需要决定是用Python还是Go来实现一个高性能数据处理管道。两种语言各有优劣。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S05",
+        "S11"
+      ],
+      "acceptable_strategies": [],
+      "explicitly_bad_strategies": [],
+      "reasoning": "奥卡姆剃刀：如果两者都能满足需求，选更简单的（团队更熟悉的）。满意化：选第一个满足性能要求的方案。"
+    },
+    "coverage_tags": [
+      "S05",
+      "S11"
+    ]
+  },
+  {
+    "problem_id": "sw_027",
+    "domain": "software_engineering",
+    "description": "你发现了一段代码似乎是多余的——删掉它不影响任何测试。但你不确定是否有未被测试覆盖的路径依赖它。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S13",
+        "S26"
+      ],
+      "acceptable_strategies": [],
+      "explicitly_bad_strategies": [],
+      "reasoning": "证伪优先：尝试证明这段代码是必要的（找到依赖它的场景）。路径依赖：代码可能是历史遗留，当初有用但现在条件已变。"
+    },
+    "coverage_tags": [
+      "S13",
+      "S26"
+    ]
+  },
+  {
+    "problem_id": "sw_028",
+    "domain": "software_engineering",
+    "description": "你的团队每次做代码重构都导致线上故障。老板说'以后不许重构了'。但技术债越积越多。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S27",
+        "S24"
+      ],
+      "acceptable_strategies": [
+        "S15"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "激励结构分析：老板的激励（不出故障）和团队的激励（代码质量）不对齐。关键节点：老板是决策瓶颈。"
+    },
+    "coverage_tags": [
+      "S27",
+      "S24",
+      "S15"
+    ]
+  },
+  {
+    "problem_id": "sw_029",
+    "domain": "software_engineering",
+    "description": "你要实现一个复杂的数学公式，公式有20个参数。你看不懂完整公式但看得懂其中几个简单的特殊情况。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S06"
+      ],
+      "acceptable_strategies": [
+        "S09"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "先特殊后一般：先实现简单的特殊情况（如某些参数为0时），验证正确后逐步推广到完整公式。"
+    },
+    "coverage_tags": [
+      "S06",
+      "S09"
+    ]
+  },
+  {
+    "problem_id": "sw_030",
+    "domain": "software_engineering",
+    "description": "你的服务同时被两个对立的需求撕扯：用户A群体要求更快的响应（减少延迟），用户B群体要求更精确的结果（增加计算，增加延迟）。产品团队说两个都要。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S20",
+        "S19"
+      ],
+      "acceptable_strategies": [
+        "S22"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "对偶/互补视角：延迟和精度是对偶关系，可以设计一个统一框架（如用户可选精度等级）。约束松弛：放宽'两个都要同时满足'的约束。"
+    },
+    "coverage_tags": [
+      "S20",
+      "S19",
+      "S22"
+    ]
+  },
+  {
+    "problem_id": "sw_031",
+    "domain": "software_engineering",
+    "description": "你的CI/CD管道运行时间从10分钟增长到了45分钟，开发效率严重下降。管道有20个步骤。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S24"
+      ],
+      "acceptable_strategies": [
+        "S01"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "关键节点/瓶颈识别：profiling CI管道，找到耗时最长的步骤集中优化。"
+    },
+    "coverage_tags": [
+      "S24",
+      "S01"
+    ]
+  },
+  {
+    "problem_id": "sw_032",
+    "domain": "software_engineering",
+    "description": "你在写一个定理证明器，需要证明某个类型系统的属性P对所有程序成立。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S04",
+        "S06"
+      ],
+      "acceptable_strategies": [],
+      "explicitly_bad_strategies": [],
+      "reasoning": "反证法+先特殊后一般：假设P不成立构造反例推矛盾，从简单程序开始证明再推广。"
+    },
+    "coverage_tags": [
+      "S04",
+      "S06"
+    ]
+  },
+  {
+    "problem_id": "sw_033",
+    "domain": "software_engineering",
+    "description": "你同时收到了来自5个不同用户的不同bug报告。老板要求你按优先级处理。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S24",
+        "S12"
+      ],
+      "acceptable_strategies": [
+        "S11"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "关键节点识别：找到影响最多用户或最严重的bug优先处理。贝叶斯更新：综合bug严重性和影响范围排序。"
+    },
+    "coverage_tags": [
+      "S24",
+      "S12",
+      "S11"
+    ]
+  },
+  {
+    "problem_id": "sw_034",
+    "domain": "software_engineering",
+    "description": "你被要求评估将公司的核心系统从Oracle数据库迁移到PostgreSQL。管理层认为可以省钱。你知道系统大量使用了Oracle特有的PL/SQL存储过程。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S26",
+        "S27"
+      ],
+      "acceptable_strategies": [
+        "S21"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "路径依赖分析：多年积累的Oracle特有代码使迁移成本远超预期。激励结构：管理层只看许可费不看迁移成本。"
+    },
+    "coverage_tags": [
+      "S26",
+      "S27",
+      "S21"
+    ]
+  },
+  {
+    "problem_id": "sw_035",
+    "domain": "software_engineering",
+    "description": "你的A/B测试结果显示新版本和旧版本没有统计显著差异，但新版本开发花了3个月。产品经理想继续迭代，你觉得应该停下来重新思考方向。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S21",
+        "S22"
+      ],
+      "acceptable_strategies": [
+        "S12"
+      ],
+      "explicitly_bad_strategies": [],
+      "reasoning": "死胡同识别：3个月开发无显著改善是强烈的停止信号。问题重构：也许优化的方向本身就不对。"
+    },
+    "coverage_tags": [
+      "S21",
+      "S22",
+      "S12"
+    ]
+  }
+]
