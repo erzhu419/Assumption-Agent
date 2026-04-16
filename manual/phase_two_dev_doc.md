@@ -104,6 +104,45 @@
 
 不引入任何新的数据格式——完全复用阶段零预留的演化接口。
 
+### 1.3 知识稳定性分层（参考 Bayesian Meta-Reasoning + Lifelong Learning Roadmap）
+
+**设计动机：** Bayesian Meta-Reasoning 框架将知识分为 θ_f（基础知识）和 θ_t（任务特定知识），强调两者应有不同的更新速率。Lifelong Learning Roadmap 警告"同时更新所有参数会导致性能退化"。
+
+Phase 2 需要区分知识库中不同来源、不同稳定性的条件，防止经验数据不恰当地覆盖核心文献规则。为此，每条适用条件增加 `stability_tier` 字段：
+
+```python
+STABILITY_TIERS = {
+    "foundational": {
+        "description": "来自核心文献的基础规则（如 Mill 的求异法、Popper 的证伪原则）",
+        "min_evidence_to_modify": 20,
+        "max_confidence_delta_per_update": 0.05,
+        "auto_apply_eligible": False,
+        "examples": "S01_F_001 '系统的各组件可以被独立修改' (Mill 1843)"
+    },
+    "empirical": {
+        "description": "经过 30+ 条经验验证的经验规则",
+        "min_evidence_to_modify": 5,
+        "max_confidence_delta_per_update": 0.15,
+        "auto_apply_eligible": True,
+        "promotion_from_tentative": "total_evidence >= 30 且 success_rate > 0.6"
+    },
+    "tentative": {
+        "description": "新发现的待验证规则",
+        "min_evidence_to_modify": 2,
+        "max_confidence_delta_per_update": 0.20,
+        "auto_apply_eligible": True,
+        "demotion_condition": "success_rate < 0.3 after 20+ evidence"
+    }
+}
+```
+
+**默认分配：**
+- 阶段零文献条件 → `foundational`
+- 阶段二自动发现的新条件 → `tentative`
+- 经过充分验证的经验条件 → `empirical`（自动升级）
+
+**分层对整合器的约束：** 整合器（第 4 节）的 `can_auto_apply()` 函数需要检查 `stability_tier`——对 `foundational` 条件的任何修改都需要人工审核，无论证据数量多少。
+
 ---
 
 ## 2. 经验评估器
@@ -176,6 +215,13 @@ class ExperienceEvaluator:
             len(attribution["violated_conditions"]) > 0):
             score += 0.1
             tags.append("expected_failure")
+        
+        # === 信息量递减（参考 Memory-R1 的 outcome-driven 思路）===
+        # 如果类似经验已出现多次，新的一条信息量递减
+        similar_count = self._count_similar_recent(record, kb_snapshot)
+        diminishing_factor = 1.0 / (1 + np.log(1 + similar_count))
+        # 第1条: 1.0, 第2条: 0.59, 第5条: 0.38, 第10条: 0.29
+        score *= diminishing_factor
         
         # === LLM 辅助评分（对边界情况的补充判断）===
         if 0.3 < score < 0.7:
@@ -480,14 +526,162 @@ CONDITION_MERGE_PROMPT = """
 """
 ```
 
-### 3.4 蒸馏质量控制
+#### Step 4：对比蒸馏（参考 MEL 分叉点分析 + Phase 1 的 6.3 节）
+
+**设计动机：** Phase 1 新增的 `StrategyContrastAnalyzer`（6.3 节）在同一问题上对比失败/成功策略，生成包含分叉点和 `discriminating_condition` 的 `StrategyContrast`。这种配对因果数据比单条经验的信息密度高得多——它已经做了"为什么 A 失败 B 成功"的归因分析，蒸馏器不需要重新推断。
+
+```python
+def distill_from_contrasts(
+    self,
+    contrasts: List[StrategyContrast],
+    kb_snapshot: KBSnapshot
+) -> List[UpdateCandidate]:
+    """
+    从 Phase 1 的策略对比分析中直接提取更新候选。
+    1 条对比 = 3 条单条经验的证据强度（因为已完成因果归因）。
+    """
+    candidates = []
+    for contrast in contrasts:
+        # contrast.key_condition 已经是一个精炼的条件表述
+        # 例如："组件之间存在通过共享缓存的隐性耦合"
+        
+        # 为失败策略添加 unfavorable 条件
+        candidates.append(UpdateCandidate(
+            update_type="condition_added",
+            target_strategy=contrast.failed_strategy,
+            proposed_change={
+                "placement": "unfavorable",
+                "new_condition": {
+                    "condition": contrast.key_condition,
+                    "source": "contrastive_analysis",
+                    "confidence": 0.70,
+                    "stability_tier": "tentative",
+                    ...
+                }
+            },
+            evidence={
+                "supporting_executions": [
+                    contrast.failed_execution_id,
+                    contrast.success_execution_id
+                ],
+                "evidence_breakdown": {
+                    "contrastive_analyses": 1
+                },
+                "weighted_evidence_count": 3.0,  # 1 对比 = 3 普通经验
+                "evidence_strength": "medium"
+            }
+        ))
+        
+        # 同时为成功策略添加 favorable 条件（如果知识库中缺少）
+        if not kb_has_similar_condition(
+            kb_snapshot, contrast.success_strategy,
+            contrast.key_condition, "favorable"
+        ):
+            candidates.append(UpdateCandidate(
+                update_type="condition_added",
+                target_strategy=contrast.success_strategy,
+                proposed_change={
+                    "placement": "favorable",
+                    "new_condition": {
+                        "condition": f"在{contrast.key_condition}的场景下仍然有效",
+                        "source": "contrastive_analysis",
+                        "confidence": 0.65,
+                        "stability_tier": "tentative",
+                        ...
+                    }
+                },
+                evidence={"weighted_evidence_count": 3.0, ...}
+            ))
+    
+    return candidates
+```
+
+#### Step 5：调度器隐式知识提取（参考 EvolveR 的 dynamic scoring）
+
+Phase 1 导出的 `dispatcher_preferences`（Phase 1 的 5.3 节）包含调度器通过 RL 学到的隐式策略-条件映射。这些映射可能包含知识库还没记录的有价值规则。
+
+```python
+def extract_dispatcher_implicit_knowledge(
+    self,
+    dispatcher_preferences: Dict,
+    kb_snapshot: KBSnapshot
+) -> List[UpdateCandidate]:
+    """
+    从调度器的隐式偏好中发现知识库未记录的规则。
+    """
+    candidates = []
+    for pattern in dispatcher_preferences.get("discovered_patterns", []):
+        # 检查这个模式是否已经在知识库中
+        is_novel = not any(
+            compute_embedding_similarity(
+                pattern["pattern"], cond["condition"]
+            ) > 0.7
+            for cond in kb_snapshot.get_all_conditions()
+        )
+        if is_novel and pattern["confidence"] > 0.7 and pattern["evidence_count"] > 10:
+            candidates.append(UpdateCandidate(
+                update_type="condition_added",
+                target_strategy=pattern.get("strategy", "unknown"),
+                proposed_change={
+                    "new_condition": {
+                        "condition": pattern["pattern"],
+                        "source": "dispatcher_implicit",
+                        "confidence": min(0.75, pattern["confidence"]),
+                        "stability_tier": "tentative",
+                    },
+                    ...
+                },
+                evidence={
+                    "evidence_breakdown": {
+                        "dispatcher_rl_patterns": 1
+                    },
+                    "weighted_evidence_count": pattern["evidence_count"] * 0.5,
+                    ...
+                }
+            ))
+    return candidates
+```
+
+### 3.4 证据来源追踪（Provenance Tracking）
+
+**设计动机（参考 Bayesian Meta-Reasoning Position Paper）：** 该论文强调"从外部源检索的知识与内部推理产生的知识应分别追踪"。不同来源的证据可靠性不同，应有不同的权重。
+
+所有 UpdateCandidate 的 `evidence` 字段必须包含 `evidence_breakdown`，按来源分类计数：
+
+```python
+EVIDENCE_WEIGHTS = {
+    "real_executions": 1.0,          # 真实执行：标准权重
+    "simulated_executions": 0.33,    # 世界模型模拟：1/3 权重
+    "contrastive_analyses": 3.0,     # 对比分析：3 倍权重（已含因果归因）
+    "dispatcher_rl_patterns": 0.5,   # 调度器隐式发现：1/2 权重（间接证据）
+}
+
+def compute_weighted_evidence(breakdown: Dict) -> float:
+    """计算加权证据总量"""
+    total = 0.0
+    for source, count in breakdown.items():
+        total += count * EVIDENCE_WEIGHTS.get(source, 1.0)
+    return total
+
+def determine_evidence_strength(weighted_count: float) -> str:
+    if weighted_count >= 5.0:
+        return "strong"
+    elif weighted_count >= 2.0:
+        return "medium"
+    else:
+        return "weak"
+```
+
+**与 1.3 节稳定性分层的联动：** 自动应用条件（4.2 节）现在同时检查 `stability_tier` 和 `evidence_strength`——对 `foundational` 条件的修改需要 `weighted_evidence_count >= 20`，对 `tentative` 条件只需要 `>= 2`。
+
+### 3.5 蒸馏质量控制
 
 为了防止蒸馏器产生低质量的更新候选，设置以下质量门控：
 
-**门控 1：最少证据数量**
-- `evidence_strength = "weak"`：1 条经验支持
-- `evidence_strength = "medium"`：2-4 条经验支持
-- `evidence_strength = "strong"`：≥ 5 条经验支持
+**门控 1：最少证据数量（基于加权证据）**
+- `evidence_strength = "weak"`：weighted_evidence_count < 2
+- `evidence_strength = "medium"`：2 ≤ weighted_evidence_count < 5
+- `evidence_strength = "strong"`：weighted_evidence_count ≥ 5
 - 只有 `medium` 和 `strong` 的候选才进入知识整合器
 
 **门控 2：交叉验证**
@@ -514,9 +708,38 @@ CONDITION_MERGE_PROMPT = """
 
 ```python
 def can_auto_apply(candidate: UpdateCandidate, kb: KBSnapshot) -> bool:
-    """判断更新候选是否可以被自动应用"""
+    """
+    判断更新候选是否可以被自动应用。
+    现在同时检查 stability_tier（1.3 节）和证据强度。
+    """
     
-    # 条件 1：证据强度 ≥ strong
+    # 条件 0（新增）：稳定性分层检查
+    # foundational 条件的任何修改都需要人工审核，无论证据多强
+    if candidate.update_type in ("condition_modified", "confidence_adjusted",
+                                  "condition_moved"):
+        target_cond = get_condition(kb, candidate.target_condition_id)
+        if target_cond:
+            tier = target_cond.get("stability_tier", "empirical")
+            tier_config = STABILITY_TIERS[tier]
+            
+            # foundational 条件不允许自动修改
+            if not tier_config["auto_apply_eligible"]:
+                return False
+            
+            # 检查证据是否满足该层级的最低要求
+            weighted_evidence = candidate.evidence.get(
+                "weighted_evidence_count", 0
+            )
+            if weighted_evidence < tier_config["min_evidence_to_modify"]:
+                return False
+            
+            # 置信度调整幅度不超过该层级的上限
+            if candidate.update_type == "confidence_adjusted":
+                max_delta = tier_config["max_confidence_delta_per_update"]
+                if abs(candidate.proposed_change["magnitude"]) > max_delta:
+                    return False
+    
+    # 条件 1：证据强度 ≥ strong（基于加权证据，见 3.4 节）
     if candidate.evidence.evidence_strength != "strong":
         return False
     
@@ -530,12 +753,7 @@ def can_auto_apply(candidate: UpdateCandidate, kb: KBSnapshot) -> bool:
         if target_cond and target_cond.get("locked", False):
             return False
     
-    # 条件 4：置信度调整幅度不超过 0.15
-    if candidate.update_type == "confidence_adjusted":
-        if abs(candidate.proposed_change["magnitude"]) > 0.15:
-            return False
-    
-    # 条件 5：新条件的置信度不超过 0.85（自动添加的条件不应有过高初始置信度）
+    # 条件 4：新条件的置信度不超过 0.85
     if candidate.update_type == "condition_added":
         if candidate.proposed_change["new_condition"]["confidence"] > 0.85:
             return False
@@ -903,9 +1121,58 @@ CROSS_STRATEGY_PATTERN_PROMPT = """
 """
 ```
 
-**任务 4：生成整合报告**
+**任务 4：回归测试——防止灾难性遗忘（参考 Lifelong Learning Roadmap + Memory Management 论文）**
 
-每次睡眠整合后生成一份人类可读的报告，记录所做的变更和原因。报告写入 `docs/consolidation_reports/`。
+**设计动机：** Lifelong Learning Roadmap 识别出"灾难性遗忘"和"可塑性丧失"是对立的挑战。Memory Management 论文发现系统在任务分布变化时性能显著下降。睡眠整合可能合并或删除某些条件，导致调度器在之前已经能正确处理的任务类型上突然失效。
+
+在应用整合变更之前，必须用回归测试集验证变更不会导致遗忘：
+
+```python
+def consolidation_with_regression_test(
+    kb: KnowledgeBase,
+    consolidation_changes: List[Change],
+    regression_tasks: List[Task],
+    dispatcher,
+    min_retention_rate: float = 0.90
+) -> ConsolidationResult:
+    """
+    在应用整合变更之前，验证旧任务的性能不退化。
+    """
+    # 1. 备份当前知识库
+    kb_backup = kb.snapshot()
+    
+    # 2. 在回归测试集上评估当前性能
+    old_accuracy = evaluate_dispatcher(dispatcher, kb, regression_tasks)
+    
+    # 3. 应用整合变更
+    for change in consolidation_changes:
+        kb.apply(change)
+    
+    # 4. 在回归测试集上评估变更后性能
+    new_accuracy = evaluate_dispatcher(dispatcher, kb, regression_tasks)
+    
+    retention_rate = new_accuracy / old_accuracy if old_accuracy > 0 else 1.0
+    
+    if retention_rate < min_retention_rate:
+        # 整合导致遗忘，回滚
+        kb.restore(kb_backup)
+        return ConsolidationResult(
+            applied=False,
+            reason=f"回归测试保留率 {retention_rate:.0%} < {min_retention_rate:.0%}",
+            retention_rate=retention_rate
+        )
+    
+    return ConsolidationResult(
+        applied=True,
+        retention_rate=retention_rate
+    )
+```
+
+**回归测试集的构建：** 从 Phase 1 训练过程中的历史成功案例中随机抽取 50 道题，覆盖所有 6 个领域。这些题目在整个系统生命周期内保持不变，作为"遗忘探测器"。
+
+**任务 5：生成整合报告**
+
+每次睡眠整合后生成一份人类可读的报告，记录所做的变更、回归测试结果和原因。报告写入 `docs/consolidation_reports/`。
 
 ---
 

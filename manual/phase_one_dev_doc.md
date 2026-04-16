@@ -100,6 +100,11 @@ class DispatcherInput:
     kb_snapshot: KBSnapshot
     # 历史上下文（本次任务已经尝试过的策略及其结果）
     history: List[StrategyAttempt]
+    # 自反思输入（参考 Reflexion 的"语义梯度"）
+    # 当同类问题上次策略选择失败时，将归因分析结果注入
+    recent_reflection: Optional[str] = None
+    # 执行中状态（用于中途策略切换，参考 ReMA 多轮交互）
+    mid_execution_context: Optional[MidExecutionContext] = None
 ```
 
 其中 `ProblemFeatures` 的结构为：
@@ -144,19 +149,79 @@ class DispatcherAction:
 
 **为什么不用连续动作空间（如策略的加权混合）：** 可解释性。离散选择允许我们精确追踪"调度器为什么选了这条策略"，这是阶段二经验反馈的前提。如果调度器输出的是策略的连续混合权重，归因分析会困难得多。
 
-#### 1.2.3 输出与执行流程
+#### 1.2.3 输出与执行流程（含中途策略切换）
 
-当调度器选择了策略 `S_k` 后，系统执行以下流程：
+**设计动机（参考 ReMA）：** ReMA 的核心创新是多轮交替的 meta-thinking 和 reasoning——meta-thinking agent 可以在执行过程中多次介入。Phase 1 的原始设计是单次决策（选策略 → 执行完 → 看结果），无法在执行中途发现策略选错了并及时切换。ReMA 的实验显示多轮 meta-thinking 在 OOD 任务上有显著优势。
 
-1. 从知识库中检索 `S_k` 的 `strategy_prompts`（阶段零 5.3 节定义的导出格式）
+执行流程支持两种模式：
+
+**模式 A：整体执行（默认，适用于简单任务）**
+
+1. 从知识库中检索 `S_k` 的 `strategy_prompts`
 2. 将策略 prompt 与原始问题描述拼接，构造执行器的输入
-3. 调用 LLM 执行器生成执行轨迹
+3. 调用 LLM 执行器生成完整执行轨迹
 4. 结果评估器评估执行结果，产生奖励信号
+
+**模式 B：分步执行与中途切换（适用于复杂任务，difficulty="hard"）**
+
+```python
+def execute_with_mid_switch(
+    dispatcher, executor, task, kb_snapshot, max_switches=2
+):
+    """
+    ReMA 风格的多轮执行：执行器每完成一个操作步骤后，
+    调度器检查是否需要中途切换策略。
+    """
+    strategy = dispatcher.select(task.features, kb_snapshot)
+    switches = 0
+    all_step_results = []
+    
+    for step in strategy.operational_steps:
+        step_result = executor.run_one_step(step, task)
+        all_step_results.append(step_result)
+        
+        # 调度器评估是否需要中途切换
+        if switches < max_switches:
+            mid_context = MidExecutionContext(
+                current_strategy=strategy.id,
+                completed_steps=len(all_step_results),
+                step_results=all_step_results,
+                # 关键信号：当前步骤是否暴露了策略不适用的证据
+                distress_signal=step_result.difficulty_score > 0.8
+            )
+            
+            if dispatcher.should_switch(
+                task.features, kb_snapshot, mid_context
+            ):
+                # 生成反思信息（Reflexion 风格语义梯度）
+                reflection = generate_switch_reflection(
+                    strategy, all_step_results
+                )
+                # 用反思信息辅助选择新策略
+                strategy = dispatcher.select(
+                    task.features, kb_snapshot,
+                    recent_reflection=reflection,
+                    mid_execution_context=mid_context
+                )
+                switches += 1
+                all_step_results = []  # 新策略从头执行
+    
+    return ExecutionOutcome(
+        trajectory=all_step_results,
+        switches=switches,
+        ...
+    )
+```
+
+**何时使用模式 B：** 任务难度为 "hard" 或策略组合（COMP_*）类型时自动启用。简单任务仍用模式 A 以节省调度器调用次数。
+
+**中途切换的后续流程（两种模式共用）：**
+
 5. 如果主策略失败且存在 `backup_strategy`，跳转到步骤 1 使用备选策略
 6. 如果备选策略也失败，查询知识库的 `fallback_graph`（阶段零 5.3 节），选择 fallback 策略
-7. 将完整的执行记录写入经验日志（格式遵循阶段零 2.4 节的 schema）
+7. 将完整的执行记录（含中途切换信息）写入经验日志
 
-**最大重试次数：** 3 次（1 次主策略 + 1 次备选 + 1 次 fallback）。超过 3 次视为该问题上策略选择失败。
+**最大重试次数：** 3 次（1 次主策略 + 1 次备选 + 1 次 fallback）。模式 B 的中途切换不计入重试次数——它是策略内部的调整，不是策略失败后的重选。
 
 ### 1.3 问题特征提取器
 
@@ -201,10 +266,11 @@ FEATURE_EXTRACTION_PROMPT = """
 
 | 维度 | 权重 | 计算方式 |
 |------|------|---------|
-| 任务完成度 | 0.50 | 任务是否被正确解决（二元/连续） |
-| 策略一致性 | 0.20 | 执行轨迹是否真正遵循了所选策略的步骤 |
-| 效率 | 0.15 | 相对于基准步数的归一化步数 |
+| 任务完成度 | 0.40 | 任务是否被正确解决（二元/连续） |
+| 策略一致性 | 0.15 | 执行轨迹是否真正遵循了所选策略的步骤 |
+| 效率 | 0.10 | 相对于基准步数的归一化步数 |
 | 部分进展 | 0.15 | 即使未完全解决，问题规模/复杂度是否降低了 |
+| 步进进度 | 0.20 | 每一步是否让问题更接近解决（参考 MRT/MEL 的稠密过程奖励） |
 
 **奖励函数：**
 
@@ -218,17 +284,52 @@ def compute_reward(outcome: ExecutionOutcome) -> float:
     )
     r_efficiency = max(0, 1.0 - outcome.total_steps / outcome.baseline_steps)
     r_progress = compute_progress_score(outcome)
+    r_step_progress = compute_step_progress_reward(outcome.trajectory)
     
-    reward = (0.50 * r_completion +
-              0.20 * r_consistency +
-              0.15 * r_efficiency +
-              0.15 * r_progress)
+    reward = (0.40 * r_completion +
+              0.15 * r_consistency +
+              0.10 * r_efficiency +
+              0.15 * r_progress +
+              0.20 * r_step_progress)
     
     # 策略选择失败的惩罚：如果用了 fallback 才成功，主策略选择扣分
     if outcome.used_fallback:
         reward *= 0.7
     
+    # 中途切换的奖励调整（模式 B）
+    if outcome.switches > 0 and outcome.success:
+        reward *= 0.9  # 成功但切换了 → 略微扣分（鼓励一次选对）
+    
     return reward
+
+
+def compute_step_progress_reward(
+    trajectory: List[TrajectoryStep]
+) -> float:
+    """
+    MRT/MEL 风格的稠密过程奖励（参考 MRT Section 6 的 progress bonus
+    和 MEL 3.4 节的 dense process reward）。
+    
+    标准 outcome-only RL 的问题是：调度器无法区分"稳步接近正确"
+    和"走了完全错误的路"——两者都在最后才得到一个 0/1 信号。
+    步进奖励在执行的每一步都提供反馈。
+    """
+    if len(trajectory) < 2:
+        return 0.5  # 无法计算步进进度
+    
+    progress_scores = []
+    for i in range(1, len(trajectory)):
+        complexity_before = trajectory[i-1].remaining_complexity
+        complexity_after = trajectory[i].remaining_complexity
+        
+        if complexity_after < complexity_before:
+            progress_scores.append(1.0)   # 正进展：问题变简单了
+        elif complexity_after == complexity_before:
+            progress_scores.append(0.5)   # 无进展
+        else:
+            progress_scores.append(0.0)   # 负进展：问题变更复杂了
+    
+    return np.mean(progress_scores) if progress_scores else 0.5
 ```
 
 **策略一致性的计算：** 这是一个非平凡的问题。我们需要判断 LLM 执行器在执行任务时，是否真正遵循了所选策略的 `operational_steps`。实现方式是用另一个 LLM（裁判模型，不参与训练）对执行轨迹进行分析：
@@ -403,14 +504,12 @@ L_supervised = -Σ_i log p(s_i* | φ(P_i))
 
 **目的：** 通过与任务环境的实际交互，学习人类标注未能覆盖的细微策略选择偏好和条件-策略映射。
 
-**算法选择：** PPO（Proximal Policy Optimization）
+**算法选择：** 因架构而异
 
-选择 PPO 的理由：
-1. 动作空间是离散的且较小（15-20 个策略），PPO 在这种设置下稳定且高效
-2. PPO 是 RLHF/RLVR 中的标准算法，与 LLM 生态系统兼容性好
-3. 相比 DPO 等离线方法，PPO 支持在线探索，这对发现知识库中未被人类标注充分覆盖的策略组合至关重要
+- **方案 A（轻量级网络）使用 PPO**：网络本身有 value head，PPO 在小型离散动作空间下稳定高效
+- **方案 B（LLM 调度器）使用 GRPO**（参考 ReMA/EvolveR/MEL 的共识）：GRPO 不需要学习价值函数，通过组内相对比较估计优势函数，对 LLM 更合适且训练更稳定
 
-**PPO 训练配置：**
+**方案 A 的 PPO 训练配置：**
 
 ```python
 ppo_config = {
@@ -428,11 +527,71 @@ ppo_config = {
 }
 ```
 
+**方案 B 的 GRPO 训练配置（参考 ReMA 和 EvolveR）：**
+
+```python
+grpo_config = {
+    "learning_rate": 1e-5,
+    "clip_epsilon": 0.2,
+    "group_size": 8,               # 每个问题生成 8 条策略选择做组内比较
+    "kl_penalty_beta": 0.05,       # KL 散度约束，防止策略漂移过远
+    # 无 value_loss_coef — GRPO 不需要 value function
+    "entropy_coef": 0.03,
+    "batch_size": 32,
+    "max_episodes": 50000,
+    "early_stopping_patience": 2000,
+}
+```
+
 **探索机制：** 
 
 初期（前 10000 episodes）使用较高的 entropy bonus（`entropy_coef=0.05`），鼓励调度器尝试知识库中所有策略，包括那些人类标注较少推荐的策略。这可能发现某些策略在特定条件下的意外有效性。
 
 后期（10000+ episodes）逐步降低 entropy bonus，让调度器收敛到稳定的策略选择策略。
+
+**策略坍缩监控（参考 ReMA Figure 4）：**
+
+ReMA 发现 1B 参数的小模型在训练中快速坍缩到最简单的 meta-action（EMPTY），而 8B 模型能根据难度选择不同策略。Phase 1 方案 A 的调度器只有 ~300K 参数，有类似的坍缩风险。训练过程中必须持续监控策略覆盖率：
+
+```python
+def monitor_strategy_collapse(
+    recent_selections: List[str],
+    window: int = 500,
+    collapse_threshold: float = 0.6
+) -> Optional[CollapseWarning]:
+    """
+    如果最近 500 次选择中，前 3 策略的占比超过 60%，
+    说明调度器正在坍缩到少数"安全"策略。
+    """
+    from collections import Counter
+    counts = Counter(recent_selections[-window:])
+    total_strategies_used = len(counts)
+    top3_ratio = sum(c for _, c in counts.most_common(3)) / window
+    
+    if top3_ratio > collapse_threshold:
+        return CollapseWarning(
+            top3_strategies=[s for s, _ in counts.most_common(3)],
+            top3_ratio=top3_ratio,
+            total_strategies_used=total_strategies_used,
+            remedy="increase entropy_coef by 50% for next 2000 episodes"
+        )
+    return None
+```
+
+每 500 episodes 检查一次。如果检测到坍缩，自动将 `entropy_coef` 提升 50% 并持续 2000 episodes。
+
+**早停检测（参考 Memory-R1 的数据效率）：**
+
+Memory-R1 用仅 152 条训练数据就实现了有效的 RL 训练。如果调度器的动作空间（15-20 策略）足够结构化且有阶段零的标注数据做 warm-start，可能远不需要 50000 episodes。增加早停检测：
+
+```python
+early_stopping_config = {
+    "check_interval": 1000,          # 每 1000 episodes 检查一次
+    "min_episodes": 5000,            # 至少训练 5000 episodes
+    "improvement_threshold": 0.01,   # 连续 N 次检查提升 < 1% 则停止
+    "patience": 3,                   # 连续 3 次不达标才停止
+}
+```
 
 **课程学习（Curriculum Learning）：**
 
@@ -911,6 +1070,102 @@ class AttributionAnalyzer:
 ```
 
 `_infer_new_condition` 方法使用 LLM 分析失败原因并尝试推断可能的新适用条件。这个推断出的条件是候选状态（`evidence_strength: "weak"`），需要多次独立验证后才能被阶段二正式写入知识库。
+
+### 6.3 对比式策略分析（参考 MEL 的分叉点识别）
+
+**设计动机：** MEL 3.2 节的核心创新是在同一问题上对比正确和错误的推理轨迹，精确定位"推理开始偏离的那一步"（bifurcation point）。Phase 1 的调度器经常会在同一个问题（或同类问题）上先用策略 A 失败、再用策略 B 成功。这种配对数据包含极其丰富的信息——远比两个独立的 (策略, 结果) 对有价值。
+
+当同一问题上出现策略 A 失败、策略 B 成功的情况时，自动生成对比分析：
+
+```python
+class StrategyContrastAnalyzer:
+    """
+    MEL 风格的分叉点分析：
+    对比同一问题上失败策略和成功策略的执行轨迹。
+    """
+    
+    def analyze_contrast(
+        self,
+        problem_id: str,
+        failed_record: ExecutionRecord,
+        success_record: ExecutionRecord
+    ) -> StrategyContrast:
+        
+        # 1. 找到两个轨迹开始分化的步骤
+        bifurcation = self._find_divergence_point(
+            failed_record["execution_trajectory"]["steps"],
+            success_record["execution_trajectory"]["steps"]
+        )
+        
+        # 2. 用 LLM 分析分叉原因
+        analysis = self._llm_analyze_bifurcation(
+            failed_record, success_record, bifurcation
+        )
+        
+        return StrategyContrast(
+            problem_id=problem_id,
+            failed_strategy=failed_record["strategy_selection"]["selected_strategy"],
+            success_strategy=success_record["strategy_selection"]["selected_strategy"],
+            bifurcation_step=bifurcation.step_num,
+            why_failed_diverged=analysis["failure_cause"],
+            why_success_worked=analysis["success_cause"],
+            key_condition=analysis["discriminating_condition"]
+        )
+    
+    def _find_divergence_point(
+        self, failed_steps, success_steps
+    ) -> BifurcationPoint:
+        """
+        找到两个轨迹的语义分叉点：
+        前 N 步可能相似（都在分析问题），
+        但从某一步开始采取了不同方向。
+        """
+        # 用 embedding 相似度逐步比对
+        for i in range(min(len(failed_steps), len(success_steps))):
+            sim = compute_embedding_similarity(
+                failed_steps[i]["action"],
+                success_steps[i]["action"]
+            )
+            if sim < 0.5:  # 行动开始显著不同
+                return BifurcationPoint(
+                    step_num=i,
+                    failed_action=failed_steps[i]["action"],
+                    success_action=success_steps[i]["action"]
+                )
+        
+        return BifurcationPoint(step_num=0, ...)  # 从一开始就不同
+
+BIFURCATION_ANALYSIS_PROMPT = """
+同一个问题上，两种策略产生了不同的结果。
+
+## 失败策略: {failed_strategy_name}
+执行轨迹: {failed_trajectory_summary}
+失败原因: {failure_reason}
+
+## 成功策略: {success_strategy_name}
+执行轨迹: {success_trajectory_summary}
+
+## 分叉点
+在第 {bifurcation_step} 步，两个策略开始采取不同行动：
+- 失败策略选择了: {failed_action}
+- 成功策略选择了: {success_action}
+
+请分析：
+1. 成功策略在分叉点做了什么正确的决定？
+2. 失败策略在分叉点犯了什么错误？
+3. 决定分叉走向的关键问题条件是什么？
+   （即：什么条件下应该像成功策略那样做，而非像失败策略那样做）
+
+输出 JSON:
+{{"failure_cause": "...", "success_cause": "...",
+  "discriminating_condition": "..."}}
+"""
+```
+
+**对比分析的三重用途：**
+1. **调度器的 reflection 输入**：`discriminating_condition` 作为 `recent_reflection` 注入调度器，帮助它在遇到类似问题时做出更好的选择
+2. **Phase 2 经验蒸馏的高质量输入**：对比分析比单条经验的信息密度高得多
+3. **训练时的额外信号**：对比对可用于构造 DPO 风格的偏好数据——(问题, 成功策略) > (问题, 失败策略)
 
 ---
 

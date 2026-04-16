@@ -130,7 +130,30 @@ class StatisticalWorldModel:
         )
     
     def update(self, record: ExecutionRecord):
-        """用新的执行经验增量更新查找表"""
+        """
+        用新的执行经验增量更新查找表。
+        包含经验质量过滤（参考 Memory Management 论文的 error propagation 发现）。
+        """
+        # === 质量过滤：防止低质量经验污染世界模型 ===
+        
+        # 过滤 1：调度器置信度极低的选择（随机探索产生的结果不可靠）
+        selector_confidence = record["strategy_selection"].get(
+            "selector_confidence", 1.0
+        )
+        if selector_confidence < 0.2:
+            return  # 不更新
+        
+        # 过滤 2：策略一致性极低的执行（LLM 没有真正遵循策略）
+        consistency_score = record.get("strategy_consistency_score", 1.0)
+        if consistency_score < 0.3:
+            return  # 执行质量差，结果不能归因于策略
+        
+        # 过滤 3：标记为模拟结果的记录不更新统计模型
+        # （模拟结果来自世界模型自身的预测，用它更新自身会造成自我强化偏差）
+        if record.get("is_simulated", False):
+            return
+        
+        # === 通过过滤，正常更新 ===
         state_idx = discretize(record["task"]["complexity_features"])
         strategy = record["strategy_selection"]["selected_strategy"]
         success = record["outcome"]["success"]
@@ -325,11 +348,120 @@ class WorldModelCalibrator:
         if tau < 0.3:
             world_model.stat_model.rebuild(real_records)
         
+        # === 分层校准（参考 Memory Management 论文 5.1 节）===
+        # 全局 τ 可能掩盖世界模型在罕见组合上完全不可靠的事实
+        stratified = self._stratified_calibration(
+            world_model, real_records
+        )
+        
+        # === LLM 模拟器乐观偏差测量 ===
+        optimism_bias = self._measure_optimism_bias(
+            world_model, real_records
+        )
+        
+        # 如果偏差过大，调整世界模型的统计表
+        if tau < 0.3:
+            world_model.stat_model.rebuild(real_records)
+        
+        # 如果 LLM 模拟器系统性偏乐观，应用修正因子
+        if optimism_bias.bias > 0.15:
+            world_model.llm_model.correction_factor = -optimism_bias.bias
+        
         return CalibrationReport(
             kendall_tau=tau,
             veto_precision=veto_precision,
             calibration_bins=calibration_bins,
-            needs_rebuild=(tau < 0.3)
+            needs_rebuild=(tau < 0.3),
+            stratified=stratified,
+            optimism_bias=optimism_bias
+        )
+    
+    def _stratified_calibration(
+        self,
+        world_model: HybridWorldModel,
+        real_records: List[ExecutionRecord]
+    ) -> StratifiedReport:
+        """
+        按数据量分层校准（参考 Memory Management 论文 5.1 节）。
+        全局指标可能掩盖世界模型在常见组合上很准
+        但在罕见组合上完全不可靠的事实——
+        而恰恰是罕见组合对调度器的探索最重要。
+        """
+        high_data_preds, high_data_actuals = [], []
+        low_data_preds, low_data_actuals = [], []
+        
+        for record in real_records:
+            state_idx = discretize(record["task"]["complexity_features"])
+            strategy = record["strategy_selection"]["selected_strategy"]
+            key = (state_idx, strategy)
+            
+            count = world_model.stat_model.success_table.get(
+                key, RunningStats()
+            ).count
+            
+            wm_input = self._record_to_input(record)
+            pred = world_model.predict(wm_input)
+            actual = 1.0 if record["outcome"]["success"] else 0.0
+            
+            if count >= 20:
+                high_data_preds.append(pred.predicted_success_probability)
+                high_data_actuals.append(actual)
+            elif count < 5:
+                low_data_preds.append(pred.predicted_success_probability)
+                low_data_actuals.append(actual)
+        
+        tau_high = kendalltau(high_data_preds, high_data_actuals)[0] \
+            if len(high_data_preds) >= 10 else None
+        tau_low = kendalltau(low_data_preds, low_data_actuals)[0] \
+            if len(low_data_preds) >= 10 else None
+        
+        # 如果 tau_low < 0.2，世界模型对罕见组合不可靠
+        # → 对这些组合应强制使用真实执行
+        force_real_for_rare = (tau_low is not None and tau_low < 0.2)
+        
+        return StratifiedReport(
+            tau_high_data=tau_high,
+            tau_low_data=tau_low,
+            n_high=len(high_data_preds),
+            n_low=len(low_data_preds),
+            force_real_for_rare=force_real_for_rare
+        )
+    
+    def _measure_optimism_bias(
+        self,
+        world_model: HybridWorldModel,
+        real_records: List[ExecutionRecord]
+    ) -> OptimismBias:
+        """
+        测量 LLM 模拟器是否系统性地高估成功率
+        （参考 ExpeL 4.5 节 World Model Belief Update
+        + Memory Management 3.3 节 experience-following）。
+        
+        LLM 在输入与训练数据相似时倾向于给出乐观预测，
+        对"听起来合适"的策略系统性高估成功率。
+        """
+        llm_preds = []
+        real_outcomes = []
+        
+        for record in real_records:
+            wm_input = self._record_to_input(record)
+            # 绕过混合模型，直接用 LLM 模拟器预测
+            pred = world_model.llm_model.predict(wm_input)
+            llm_preds.append(pred.predicted_success_probability)
+            real_outcomes.append(
+                1.0 if record["outcome"]["success"] else 0.0
+            )
+        
+        mean_pred = np.mean(llm_preds)
+        mean_real = np.mean(real_outcomes)
+        bias = mean_pred - mean_real  # > 0 表示偏乐观
+        
+        return OptimismBias(
+            bias=bias,
+            mean_predicted=mean_pred,
+            mean_actual=mean_real,
+            is_significant=(abs(bias) > 0.15),
+            direction="optimistic" if bias > 0 else "pessimistic"
         )
 ```
 
@@ -337,6 +469,11 @@ class WorldModelCalibrator:
 - 阶段一训练中：每 500 episodes 用 50 条真实执行做一次校准
 - 阶段二运行中：每月一次
 - 阶段四验证中：每次启动新假设验证前做一次
+
+**校准结果的使用：**
+- `force_real_for_rare = True` 时：调度器在选择罕见的 (状态, 策略) 组合时，跳过世界模型直接真实执行
+- `optimism_bias.is_significant = True` 时：LLM 模拟器的预测值自动减去偏差修正因子
+- `needs_rebuild = True` 时：统计模型用最新数据完全重建
 
 ---
 
@@ -414,7 +551,73 @@ class SimulatedTaskEnvironment(TaskEnvironment):
         return outcome.evaluation_score
 ```
 
-### 2.2 模拟与真实的切换
+### 2.2 策略序列模拟（参考 Voyager）
+
+**设计动机：** Voyager 的迭代 prompting 机制中，每次失败后系统会将环境反馈注入下一轮——这是一个多步模拟。阶段一的调度器有 fallback 机制（主策略失败后换备选），阶段零新增了策略组合模式（COMP_001 等）。世界模型必须能模拟这种多步策略序列的效果，而非仅支持单步预测。
+
+```python
+class HybridWorldModel:
+    # ... 在现有方法基础上新增 ...
+    
+    def simulate_strategy_sequence(
+        self,
+        problem_features: ProblemFeatures,
+        strategy_sequence: List[str],
+        max_steps: int = 3
+    ) -> SequenceSimulation:
+        """
+        模拟策略序列的执行结果。
+        用于：
+        1. 阶段一调度器选择策略组合时的评估
+        2. 阶段一 fallback 机制的模拟（主策略→备选→fallback）
+        3. 阶段四新假设验证中的组合策略预筛
+        """
+        results = []
+        cumulative_context = []
+        
+        for i, strategy_id in enumerate(strategy_sequence[:max_steps]):
+            pred = self.predict(WorldModelInput(
+                problem_features=problem_features,
+                strategy_id=strategy_id,
+                strategy_summary="",
+                previous_attempts=[
+                    AttemptSummary(
+                        strategy_id=sid,
+                        predicted_success=r.predicted_success_probability,
+                        failure_modes=r.predicted_failure_modes
+                    )
+                    for sid, r in zip(
+                        strategy_sequence[:i], results
+                    )
+                ]
+            ))
+            results.append(pred)
+            
+            # 如果某一步预测大概率成功，停止序列
+            if pred.predicted_success_probability > 0.7:
+                break
+        
+        # 序列整体成功 = 至少有一步成功
+        overall_success_prob = 1.0 - np.prod([
+            1.0 - r.predicted_success_probability
+            for r in results
+        ])
+        
+        return SequenceSimulation(
+            steps=results,
+            overall_success_probability=overall_success_prob,
+            best_step_index=int(np.argmax([
+                r.predicted_success_probability for r in results
+            ])),
+            total_predicted_steps=sum(
+                r.predicted_steps_to_complete for r in results
+            )
+        )
+```
+
+**与阶段零策略组合的集成：** 当阶段一的调度器选择了一个策略组合（如 COMP_001: S06 → S01），世界模型自动调用 `simulate_strategy_sequence(["S06", "S01"])`，将整体成功概率作为该组合的奖励预测。
+
+### 2.3 模拟与真实的切换
 
 阶段一的训练框架需要支持在模拟和真实环境之间切换：
 

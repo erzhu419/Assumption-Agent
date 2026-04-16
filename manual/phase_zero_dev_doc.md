@@ -69,7 +69,44 @@
 3. **可区分性：** 该策略和知识库中已有的其他策略有明确的区别——存在某些问题场景，使用此策略优于使用其他任何已有策略。
 4. **可验证性：** 该策略的效果可以通过观察执行结果来评估——要么问题被解决了，要么至少问题的规模/复杂度降低了。
 
-### 1.3 初始策略清单（待验证）
+### 1.3 对比式适用条件精炼（参考 ExpeL）
+
+**设计动机：** ExpeL 的 insight 提取 prompt（Figure 2）有一个关键设计——同时展示成功和失败的轨迹对，要求 LLM 通过对比来提取规则。这种对比式提取比单独分析成功案例更能揭示策略奏效的关键条件。
+
+在从文献中初步提取策略并填写 `applicability_conditions` 后，对每条策略执行以下对比精炼流程：
+
+**Step 1：** 为每条策略准备一个成功案例和一个**类似场景下的失败案例**。两个案例的问题表面特征应尽量相似（同领域、同复杂度），但策略在一个上成功、另一个上失败。
+
+**Step 2：** 用 LLM 做对比分析：
+
+```
+你是一个方法论研究专家。
+
+## 策略：{strategy_name}
+{strategy_description}
+
+## 成功案例
+场景：{success_case_description}
+结果：策略成功解决了问题
+成功原因分析：{why_succeeded}
+
+## 失败案例（类似场景）
+场景：{failure_case_description}
+结果：策略未能解决问题
+失败原因分析：{why_failed}
+
+## 分析任务
+对比这两个案例，回答：
+1. 成功案例具备而失败案例不具备的关键条件是什么？
+2. 这个条件在知识库当前的 applicability_conditions 中是否已经被记录？
+3. 如果未记录，请用一句话描述这个新条件，并说明它应该放在 favorable 还是 unfavorable 中。
+```
+
+**Step 3：** 用对比分析结果精炼 `applicability_conditions`——添加遗漏的条件，修改描述不够精确的条件。
+
+**预期效果：** 初始的适用条件来自文献的定性描述（如"因素之间耦合度较低"），经过对比精炼后变成更具操作性的条件（如"组件之间不共享可变状态，且接口调用不产生副作用"）。
+
+### 1.4 初始策略清单（待验证）
 
 以下是基于文献调研的初始候选策略清单。每条策略都需要在后续步骤中被充实和验证。
 
@@ -280,6 +317,13 @@
     }
   ],
 
+  "knowledge_triples": [
+    {"subject": "测试因素", "relation": "逐一改变", "object": "观察结果变化"},
+    {"subject": "其余因素", "relation": "保持不变", "object": "基准配置"},
+    {"subject": "因素耦合度", "relation": "要求", "object": "低"},
+    {"subject": "基准配置", "relation": "前提", "object": "已知可工作"}
+  ],
+
   "formalization_hints": {
     "mathematical_structure": "因素空间 F = F_1 × F_2 × ... × F_n 中，控制变量法对应于沿坐标轴方向的逐一搜索（coordinate descent）。",
     "category_theory_analogue": "可以看作在因素范畴中，固定其他对象，只沿一个态射方向做变换。",
@@ -297,7 +341,8 @@
     "needs_review": ["unfavorable conditions 列表可能不完整", "failure_modes 需要更多案例"],
     "total_experience_records": 0,
     "successful_applications": 0,
-    "failed_applications": 0
+    "failed_applications": 0,
+    "effectiveness_score": 0.5
   }
 }
 ```
@@ -324,7 +369,87 @@
 - **alternative**（替代关系）：策略 A 和策略 B 解决同一类问题，但方法不同。例如"试错法"和"反证法"都可以用来验证假设，但路径不同。
 - **subsumption**（包含关系）：策略 A 是策略 B 的特殊情况。例如"增量构建"可以被看作"控制变量法"在系统构建场景下的特例。
 
-### 2.4 经验记录 Schema（Episodic Memory）
+### 2.4 知识三元组（Knowledge Triples）
+
+**设计动机（参考 EvolveR）：** EvolveR 的每条 principle 由自然语言描述 + 结构化知识三元组两个组件组成。三元组提供了比自然语言更精确的检索锚点，使阶段一的调度器在匹配策略时能利用结构化的知识进行精确匹配，而不仅仅依赖文本嵌入的语义相似度。
+
+每条策略的 `knowledge_triples` 字段存储 3-6 条 (subject, relation, object) 三元组，捕捉该策略的核心逻辑骨架。三元组的编写原则：
+
+1. **因果性：** 至少一条三元组描述"为什么这个策略有效"的因果链
+2. **前提性：** 至少一条三元组描述策略生效的必要前提
+3. **操作性：** 至少一条三元组描述策略的核心操作
+
+三元组在阶段一中的使用方式：调度器在匹配策略时，先将问题描述提取为三元组，再与各策略的 `knowledge_triples` 做结构化匹配（三元组的 subject/object 嵌入相似度），作为 `ProblemFeatures` 的补充特征。
+
+### 2.5 动态评分机制
+
+**设计动机（参考 EvolveR）：** EvolveR 用 $s(p) = \frac{c_{\text{succ}}(p) + 1}{c_{\text{use}}(p) + 2}$（Laplace 平滑的成功率）持续跟踪每条规则的实际效用。本知识库需要在阶段零就定义好评分机制，为阶段二的蒸馏器和整合器提供统一的"策略好坏"标准。
+
+**评分公式：**
+
+每条策略的 `metadata.effectiveness_score` 按以下公式计算：
+
+$$\text{effectiveness\_score}(S) = \frac{\text{successful\_applications}(S) + 1}{\text{total\_experience\_records}(S) + 2}$$
+
+- 初始值为 0.5（无数据时的无信息先验）
+- 随经验积累自动更新
+- 值域为 (0, 1)
+
+**清理阈值：**
+
+- `prune_threshold = 0.25`：低于此值的策略在阶段二的睡眠整合中被标记为 `status: "under_review"`
+- `promotion_threshold = 0.70`：高于此值且 `total_experience_records ≥ 30` 的策略可以将 `confidence` 从 `"medium"` 升级为 `"high"`
+
+**注意：** 评分仅反映策略在被选中使用时的成功率，不反映策略被选中的频率。一条很少被使用但每次都成功的策略可能得分很高——这是合理的。
+
+### 2.6 策略组合模式（Strategy Compositions）
+
+**设计动机（参考 Voyager）：** Voyager 的技能库展示了技能的可组合性——复杂技能通过组合简单技能来构建。方法论策略同样存在组合模式：很多复杂问题的最优解法不是单条策略，而是策略序列（如"先用 S06 简化问题，再用 S01 逐一排查"）。
+
+阶段零的 `relationships_to_other_strategies` 只表达静态关系，不表达动态的组合编排。需要单独的组合模式存储。
+
+**组合模式的 Schema：**
+
+```json
+{
+  "composition_id": "COMP_001",
+  "name": {
+    "zh": "先简化再排查",
+    "en": "Simplify-then-Isolate"
+  },
+  "sequence": ["S06", "S01"],
+  "transition_condition": "S06 成功将问题简化为可控规模后，切换到 S01 逐一检查简化后的各因素",
+  "applicable_when": "问题整体复杂度高（component_count > 5）但具有可简化的结构（decomposability > 0.4）",
+  "source": "literature",
+  "source_ref": "Polya, How to Solve It: 'If you cannot solve the proposed problem, try to solve first some related problem'",
+  "historical_cases": [
+    {
+      "case_id": "COMP_001_CASE_001",
+      "domain": "软件工程",
+      "description": "调试大型系统时，先用最小可复现用例简化问题，再逐一排查简化场景中的组件"
+    }
+  ],
+  "metadata": {
+    "effectiveness_score": 0.5,
+    "total_uses": 0,
+    "successful_uses": 0
+  }
+}
+```
+
+组合模式存储在 `kb/compositions/` 目录下。阶段一的调度器动作空间 = 单策略列表 ∪ 组合模式列表。
+
+**初始组合模式（待验证）：**
+
+| 编号 | 名称 | 序列 | 适用场景 |
+|------|------|------|---------|
+| COMP_001 | 先简化再排查 | S06 → S01 | 高复杂度但可简化的问题 |
+| COMP_002 | 分解后增量 | S02 → S15 | 可分解为独立子问题且需要逐步构建 |
+| COMP_003 | 类比后验证 | S03 → S13 | 找到类似问题的解后用证伪法验证是否真正适用 |
+| COMP_004 | 边界分析后反证 | S14 → S04 | 先找到边界条件再用反证法证明一般情况 |
+| COMP_005 | 估计后精炼 | S12 → S01 | 先用贝叶斯估计缩小搜索范围，再逐一精确排查 |
+
+### 2.7 经验记录 Schema（Episodic Memory）
 
 知识库本身存储的是精炼后的规则（semantic memory）。阶段二会不断写入原始经验（episodic memory），这些经验经过蒸馏后才会影响知识库。两者必须分开存储。
 
@@ -447,10 +572,20 @@
 
 **任务 A：策略-问题匹配（主任务）**
 
+**防范 experience-following 偏差（参考 Memory Management 论文）：** 该论文发现 LLM agent 在输入与记忆高度相似时，会直接复制记忆中的输出模式。人类标注者也可能被策略描述中的关键词"锚定"，导致偏向表面匹配而非深层匹配。为此，标注者被随机分为两组：
+
+- **A 组（开放标注，占标注者的 40%）：** 先看问题描述，先用自己的语言写下解决思路（50-100 字），**再**看策略列表并匹配。这确保标注者的判断不受策略描述措辞的锚定影响。
+- **B 组（直接标注，占标注者的 60%）：** 直接看到问题描述和策略列表，从中选择。这是更高效的标注方式。
+
+如果 A 组和 B 组在同一问题上的策略选择一致性（Cohen's Kappa）低于 0.5，说明 experience-following 偏差显著存在，需要增加 A 组比例并根据 A 组结果调整策略描述的措辞。
+
+标注者需要完成以下任务：
+
 呈现一个问题描述，要求标注者：
-1. 从 20 条策略中选择最适合的 1-3 条（排序）
-2. 对每条选择写一句话的理由
-3. 标注置信度（高/中/低）
+1. （仅 A 组）用自己的语言描述解决思路
+2. 从 20 条策略中选择最适合的 1-3 条（排序）
+3. 对每条选择写一句话的理由
+4. 标注置信度（高/中/低）
 
 示例问题：
 
