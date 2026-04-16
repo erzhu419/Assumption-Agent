@@ -77,7 +77,129 @@ $$K_S: \mathcal{X} \to \Delta(\mathcal{A})$$
 
 对于本阶段的应用（20 条策略的离散 Markov 核比较），这不构成障碍——我们只使用 BSS 定理的有限版本（Fritz Corollary 5.15），它在 FinStoch 中直接成立。但如果未来扩展到连续特征空间（BorelStoch），需要重新审视这些数学基础——BorelStoch 是 a.s.-compatibly representable 的（Fritz Theorem 3.19），完整的 BSS 定理在其中成立。
 
-### 1.2 问题特征空间的离散化
+### 1.2 Markov 核的根本局限与补充表示
+
+**Markov 核丢失时序结构——这是表示层面的根本缺陷。**
+
+一条策略是一个**有序过程**：控制变量法先列出因素(步骤1)→建立基准(步骤2)→逐一改变(步骤3-6)→形成理解(步骤7)。不同步骤推荐完全不同的行动。但 Markov 核 $K_S(x, a)$ 是一个**静态的**状态-行动分布——它把整个顺序过程压缩为一个无时间维度的矩阵。这就像用"各食材出现的频率"表示一道菜谱：你知道它有盐和糖，但不知道先放哪个。
+
+**具体后果：** S01（控制变量法）和 S15（增量构建）都大量使用 `isolate_variable` 和 `decompose`，但执行逻辑完全不同。Markov 核可能非常相似，系统误判为"同构"。
+
+**补充表示：策略执行图（Strategy Execution Graph, SEG）**
+
+在 Markov 核之外，增加一个有向图表示，捕捉策略的时序和分支结构：
+
+```python
+@dataclass
+class StrategyExecutionGraph:
+    """
+    策略的有向图表示——补充 Markov 核缺失的时序结构。
+    节点是行动，边表示执行顺序和条件分支。
+    """
+    nodes: List[SEGNode]
+    edges: List[SEGEdge]
+
+@dataclass
+class SEGNode:
+    step_id: int
+    action_category: str      # ACTION_SPACE 中的行动类别
+    description: str          # 自然语言描述
+    is_recursive: bool        # 是否包含递归调用（来自 on_difficulty）
+    recursive_target: Optional[str]  # 递归调用的目标策略 ID
+
+@dataclass  
+class SEGEdge:
+    from_step: int
+    to_step: int
+    condition: str            # 转移条件（"always" / "on_success" / "on_difficulty"）
+    edge_type: str            # "sequential" / "branch" / "recursive"
+```
+
+**从 Phase 0 的 `operational_steps` 自动构造 SEG：**
+
+```python
+def build_seg_from_steps(strategy: Dict) -> StrategyExecutionGraph:
+    """
+    从阶段零的递归化 operational_steps（含 on_difficulty）
+    构造策略执行图。
+    """
+    nodes = []
+    edges = []
+    
+    for step in strategy["operational_steps"]:
+        node = SEGNode(
+            step_id=step["step"],
+            action_category=classify_action(step["action"]),
+            description=step["action"],
+            is_recursive=(step["on_difficulty"] is not None),
+            recursive_target=extract_strategy_ref(step["on_difficulty"])
+        )
+        nodes.append(node)
+        
+        # 顺序边
+        if step["step"] > 1:
+            edges.append(SEGEdge(
+                from_step=step["step"] - 1,
+                to_step=step["step"],
+                condition="always",
+                edge_type="sequential"
+            ))
+        
+        # 递归分支边
+        if step["on_difficulty"]:
+            edges.append(SEGEdge(
+                from_step=step["step"],
+                to_step=-1,  # 外部策略调用
+                condition=step["on_difficulty"],
+                edge_type="recursive"
+            ))
+    
+    return StrategyExecutionGraph(nodes=nodes, edges=edges)
+```
+
+**SEG 之间的距离——图编辑距离（Graph Edit Distance）：**
+
+```python
+def seg_distance(seg_a: StrategyExecutionGraph, 
+                 seg_b: StrategyExecutionGraph) -> float:
+    """
+    两个策略执行图之间的归一化图编辑距离。
+    捕捉 Markov 核无法捕捉的时序结构差异。
+    """
+    from networkx.algorithms.similarity import graph_edit_distance
+    
+    G_a = seg_to_networkx(seg_a)
+    G_b = seg_to_networkx(seg_b)
+    
+    ged = graph_edit_distance(
+        G_a, G_b,
+        node_subst_cost=lambda n1, n2: (
+            0.0 if n1["action"] == n2["action"] else 1.0
+        ),
+        edge_subst_cost=lambda e1, e2: (
+            0.0 if e1["type"] == e2["type"] else 0.5
+        )
+    )
+    
+    # 归一化
+    max_size = max(len(seg_a.nodes), len(seg_b.nodes))
+    return ged / max_size if max_size > 0 else 0.0
+```
+
+**双表示的综合使用：**
+
+| 维度 | Markov 核 | SEG |
+|------|----------|-----|
+| 捕捉的信息 | 状态-行动频率分布（"做什么"） | 行动序列和条件分支（"按什么顺序做"） |
+| 擅长检测 | 表面行为相似性 | 深层结构相似性 |
+| 计算成本 | O(|X|×|A|) 矩阵运算 | O(n³) 图编辑距离（NP-hard 但策略图小） |
+| 互补关系 | Markov 核距离小 + SEG 距离小 = 真正的同构 |
+| | Markov 核距离小 + SEG 距离大 = 表面相似但结构不同（假同构） |
+| | Markov 核距离大 + SEG 距离小 = 结构相同但应用场景不同（跨域同构） |
+
+同构检测器（3.2 节）的 `_analyze_pair` 现在同时使用两种距离。
+
+### 1.3 问题特征空间的离散化
 
 要构造 Markov 核，首先需要将阶段一定义的连续问题特征空间 $\text{ProblemFeatures}$ 离散化为有限状态集 $\mathcal{X}$。
 
@@ -577,16 +699,18 @@ class IsomorphismDetector:
         return reports
     
     def _analyze_pair(
-        self, sid_a, K_a, sid_b, K_b
+        self, sid_a, K_a, sid_b, K_b,
+        seg_a: StrategyExecutionGraph = None,
+        seg_b: StrategyExecutionGraph = None
     ) -> IsomorphismReport:
         """
-        更新后的分析流程，整合了 6 种度量：
-        - Frobenius（基准快筛）
-        - 谱距离（动力学结构）
-        - Fisher-Rao（范畴论唯一自然度量，Chentsov）
-        - KL 散度（非对称，检测 subsumption 方向，Perrone）
-        - Log-Euclidean（SPD 流形上的几何距离，Lê）
-        - Blackwell 序（辅助结构信息，Fritz，非判定依据）
+        双表示分析流程，整合 7 种度量：
+        Markov 核层（6 种）：Frobenius, 谱距离, Fisher-Rao, KL, Log-Euclidean, Blackwell
+        SEG 层（1 种）：图编辑距离
+        
+        关键原则：Markov 核近 + SEG 近 = 真同构
+                  Markov 核近 + SEG 远 = 假同构（表面相似但结构不同）
+                  Markov 核远 + SEG 近 = 隐藏同构（不同场景但相同逻辑）
         """
         
         # 层 1：Frobenius 快筛
@@ -618,27 +742,44 @@ class IsomorphismDetector:
         a_dominates_b = self._check_blackwell(K_a, K_b)
         b_dominates_a = self._check_blackwell(K_b, K_a)
         
-        # === 判定关系（Fisher + KL 为主，Blackwell 为辅）===
+        # 层 7：SEG 图编辑距离（时序结构）
+        d_seg = (
+            seg_distance(seg_a, seg_b)
+            if seg_a and seg_b else None
+        )
         
-        # 同构：Fisher 近 + 谱近 + KL 对称
-        if (d_spectral < self.thresholds["spectral_candidate"] and
+        # === 双表示综合判定 ===
+        # 核心原则：Markov 核 + SEG 双重验证
+        
+        kernel_close = (
+            d_spectral < self.thresholds["spectral_candidate"] and
             d_fisher < self.thresholds["fisher_strong"] and
-            0.5 < kl_ratio < 2.0):
-            relationship = "isomorphic"
+            0.5 < kl_ratio < 2.0
+        )
+        seg_close = (d_seg is not None and d_seg < 0.3)
+        seg_far = (d_seg is not None and d_seg > 0.7)
         
-        # 包含（KL 非对称 + 可选 Blackwell 佐证）
+        if kernel_close and (seg_close or d_seg is None):
+            relationship = "isomorphic"
+        elif kernel_close and seg_far:
+            # 关键：表面行为相似但执行结构不同 → 假同构
+            relationship = "surface_similar_only"
+        
+        # 包含（KL 非对称）
         elif kl_ratio < 0.3 and d_fisher < self.thresholds["fisher_strong"] * 3:
-            # A 是 B 的特化：从 A 看 B 信息损失小，从 B 看 A 损失大
             relationship = "a_subsumes_b"
         elif kl_ratio > 3.0 and d_fisher < self.thresholds["fisher_strong"] * 3:
             relationship = "b_subsumes_a"
         
-        # Blackwell 互相支配 + Fisher 近 → 同构的额外证据
+        # Blackwell 互相支配 + Fisher 近（辅助证据）
         elif (a_dominates_b and b_dominates_a and
               d_fisher < self.thresholds["fisher_strong"] * 1.5):
             relationship = "isomorphic"
         
-        # 相似但不同构
+        # 隐藏同构：Markov 核远但 SEG 近（不同场景但相同执行逻辑）
+        elif seg_close and d_fisher > self.thresholds["fisher_strong"]:
+            relationship = "hidden_isomorphic"
+        
         elif d_fisher < self.thresholds["fisher_strong"] * 2:
             relationship = "similar"
         else:
@@ -654,7 +795,8 @@ class IsomorphismDetector:
                 "kl_ab": kl_ab,
                 "kl_ba": kl_ba,
                 "kl_ratio": kl_ratio,
-                "log_euclidean": d_log_euclid
+                "log_euclidean": d_log_euclid,
+                "seg": d_seg
             },
             blackwell={"a_dom_b": a_dominates_b, "b_dom_a": b_dominates_a}
         )
@@ -1007,26 +1149,183 @@ assumption_agent/
 - 对形式化发现但人工未标注的关系，请专家评审是否合理
 - **目标：** 至少发现 2 条被专家确认为合理的新关系
 
-### 6.4 消融实验
+### 6.4 关键实验：形式化增值验证——Markov 核比纯 LLM 语义相似度多发现了什么？
+
+**问题：** Phase 3 用 LLM prompting 构造 Markov 核，再用 Fisher 距离计算策略间距离。但 LLM 本身已经"理解"了策略的自然语言描述——直接用策略描述的 embedding 余弦相似度做同构检测，可能已经足够好了。如果 Markov 核的同构检测结果和纯 embedding 相似度高度一致，说明形式化步骤没有增加新的数学洞察——它只是 LLM 已有知识的有损重编码。
+
+**实验设计：**
+
+```python
+def formalization_value_add_test(
+    formal_kb: Dict[str, np.ndarray],
+    strategy_descriptions: Dict[str, str],
+    seg_graphs: Dict[str, StrategyExecutionGraph],
+    known_relationships: List[KnownRelationship],
+    encoder  # sentence-transformer
+):
+    """
+    比较三种同构检测方法，验证形式化是否增加了价值。
+    """
+    # 方法 1：纯 LLM 语义相似度（基线）
+    embeddings = {sid: encoder.encode(desc) 
+                  for sid, desc in strategy_descriptions.items()}
+    semantic_predictions = []
+    for rel in known_relationships:
+        sim = cosine_similarity(
+            embeddings[rel.strategy_a], embeddings[rel.strategy_b]
+        )
+        semantic_predictions.append(sim > 0.7)
+    
+    # 方法 2：Markov 核 Fisher 距离
+    kernel_predictions = []
+    for rel in known_relationships:
+        d = fisher_rao_distance(
+            formal_kb[rel.strategy_a], formal_kb[rel.strategy_b]
+        )
+        kernel_predictions.append(d < calibrated_threshold)
+    
+    # 方法 3：Markov 核 + SEG 双表示（完整 Phase 3）
+    dual_predictions = []
+    for rel in known_relationships:
+        d_fisher = fisher_rao_distance(...)
+        d_seg = seg_distance(
+            seg_graphs[rel.strategy_a], seg_graphs[rel.strategy_b]
+        )
+        dual_predictions.append(
+            d_fisher < threshold_fisher and d_seg < threshold_seg
+        )
+    
+    # 比较三种方法的 F1
+    ground_truth = [rel.is_related for rel in known_relationships]
+    f1_semantic = compute_f1(semantic_predictions, ground_truth)
+    f1_kernel = compute_f1(kernel_predictions, ground_truth)
+    f1_dual = compute_f1(dual_predictions, ground_truth)
+    
+    # 关键指标：形式化是否发现了语义相似度没发现的关系
+    kernel_only = sum(
+        1 for k, s in zip(kernel_predictions, semantic_predictions)
+        if k and not s  # Markov 核检测到但语义相似度没检测到
+    )
+    
+    return FormalizationValueReport(
+        f1_semantic=f1_semantic,
+        f1_kernel=f1_kernel,
+        f1_dual=f1_dual,
+        unique_discoveries_by_kernel=kernel_only,
+        value_added=(f1_dual > f1_semantic * 1.1)  # 至少比语义相似度好 10%
+    )
+```
+
+**如果形式化没有增加价值（`value_added = False`）：** 这本身是一个有价值的研究发现——说明对于 15-20 条方法论策略的规模，LLM 的语义理解已经足够捕捉策略间的关系，范畴论形式化在这个规模下是过度工程化。论文可以转向分析"在什么规模和复杂度下，形式化开始产生超越语义相似度的价值"。
+
+### 6.5 关键实验：经验等价性验证——Fisher 距离小是否意味着功能等价？
+
+**问题：** Fisher 距离衡量的是分布差异，不是功能差异。两条策略可能 Markov 核很不同但在同样的问题上产生同样好的结果（不同路径到达相同目标）。反之，Markov 核相似的策略可能因罕见状态的微妙差异导致实际效果截然不同。
+
+**实验设计：**
+
+```python
+def empirical_equivalence_test(
+    strategy_pairs: List[Tuple[str, str]],  # Fisher 距离小的策略对
+    task_pool: List[Task],
+    executor: LLMExecutor,
+    n_tasks: int = 50
+) -> List[EmpiricalEquivalenceResult]:
+    """
+    对 Fisher 距离小的策略对，在同一批任务上执行，
+    检查实际成功率是否高度相关。
+    """
+    results = []
+    tasks = random.sample(task_pool, n_tasks)
+    
+    for sid_a, sid_b in strategy_pairs:
+        outcomes_a = [execute(sid_a, task) for task in tasks]
+        outcomes_b = [execute(sid_b, task) for task in tasks]
+        
+        # 逐任务配对比较
+        agreement = sum(
+            1 for a, b in zip(outcomes_a, outcomes_b)
+            if a.success == b.success
+        ) / n_tasks
+        
+        # Cohen's Kappa（考虑偶然一致）
+        kappa = compute_cohens_kappa(
+            [o.success for o in outcomes_a],
+            [o.success for o in outcomes_b]
+        )
+        
+        results.append(EmpiricalEquivalenceResult(
+            strategy_a=sid_a,
+            strategy_b=sid_b,
+            agreement_rate=agreement,
+            cohens_kappa=kappa,
+            is_functionally_equivalent=(kappa > 0.6),
+            # 关键区分：
+            # Fisher近 + 功能等价 = 真同构
+            # Fisher近 + 功能不等价 = 假同构（表面相似但实质不同）
+            # Fisher远 + 功能等价 = 隐藏同构（不同路径到达相同目标）
+        ))
+    
+    return results
+```
+
+**这个实验的核心价值：** 它为 Phase 3 的所有数学度量提供了**ground truth 校验**——数学上的"近"是否真的意味着功能上的"近"。如果大量 Fisher 距离小的策略对在功能上不等价，说明 Markov 核表示有系统性缺陷。
+
+### 6.6 消融实验
 
 | 消融变量 | 实验设计 | 目标 |
 |---------|---------|------|
-| 距离度量选择 | 分别用 Frobenius/谱距离/Fisher/Blackwell 做同构检测 | 哪种度量的检测效果最好 |
+| 距离度量选择 | 分别用 Frobenius/谱距离/Fisher/KL/Log-Euclidean/SEG 做同构检测 | 哪种度量（或组合）的检测效果最好 |
+| 表示方式 | 仅 Markov 核 / 仅 SEG / 双表示 | 双表示是否优于单表示 |
 | 特征空间维度 | 分别用 3/4/5/6 个特征维度 | 维度对形式化质量的影响 |
 | 先验 vs 经验 | 纯先验/纯经验/融合 的 Markov 核 | 哪种估计方式更可靠 |
 | 行动空间粒度 | 8/12/16/20 个行动类别 | 粒度对区分度的影响 |
 
-### 6.5 可视化分析
+### 6.7 可视化分析
 
-**策略空间图：** 用 t-SNE 或 UMAP 将 Markov 核投影到 2D，策略之间的空间距离反映 Fisher 距离。用颜色编码策略类别（阶段零的 CAT_A - CAT_F）。
+**策略空间图：** 用 t-SNE 或 UMAP 将 Markov 核投影到 2D，策略之间的空间距离反映 Fisher 距离。用颜色编码策略类别（阶段零的 CAT_A - CAT_G）。
 
-**距离热力图：** 20 × 20 的策略对距离矩阵，直观展示哪些策略接近、哪些远离。
+**距离热力图：** 23 × 23 的策略对距离矩阵，直观展示哪些策略接近、哪些远离。
 
-**Blackwell 格图：** 策略之间的偏序关系图（Hasse diagram），展示信息量的层级结构。
+**Blackwell 格图：** 策略之间的偏序关系图（Hasse diagram），展示精细度的层级结构。
+
+**双表示不一致地图：** 标记 Markov 核距离小但 SEG 距离大的策略对（假同构候选），以及 Markov 核距离大但 SEG 距离小的策略对（隐藏同构候选）。
 
 ---
 
-## 7. 风险与应对
+## 7. Phase 3 的能力边界——诚实声明
+
+### 7.1 Phase 3 能做到什么
+
+| 能力 | 实现方式 | 置信度 |
+|------|---------|-------|
+| 检测两条策略是否在**表面行为**上相似 | Markov 核 Fisher 距离 | 高 |
+| 检测两条策略是否在**执行结构**上相似 | SEG 图编辑距离 | 中 |
+| 给出策略之间的定量距离 | 多种度量的加权组合 | 中 |
+| 检测策略的精细度偏序 | Blackwell 序（辅助） | 低-中 |
+| 为 Phase 4 提供策略空间拓扑地图 | t-SNE/UMAP 投影 | 中 |
+
+### 7.2 Phase 3 做不到什么——以及为什么
+
+**1. 无法检测深层原理同构。** "控制变量法"和"勒夏特列原理"都是"隔离变量观察响应"的不同实例——在 Claude.md 讨论中被称为"负反馈结构同构"。但 Markov 核只捕捉"状态→行动"的统计模式，不捕捉"为什么这个行动在这个状态下是对的"的因果结构。检测深层原理同构需要**因果模型**（如结构因果图），这超出了当前框架。
+
+**2. 无法保证形式化距离反映真实的功能差异。** Fisher 距离衡量的是分布差异，不是结果差异。6.5 节的经验等价性实验会量化这种脱节的程度，但无法在理论上消除它。
+
+**3. 无法处理非程序性策略。** S05（奥卡姆剃刀）、S12（贝叶斯更新）、S21（死胡同识别）本质上不是"给定状态→选择行动"的程序。将它们强制表示为 Markov 核需要不自然的重新解释（如奥卡姆剃刀 → "在各种状态下偏好 evaluate_select"），丢失了它们的本质。
+
+**4. 共享行动空间预设了部分同构。** 16 个行动类别隐式假设"decompose 在数学和软件工程中是同一个行动"——但这正是我们想检测的，不应被预设。
+
+### 7.3 对论文贡献的正确定位
+
+Phase 3 的论文贡献**不应该**声称"我们用范畴论统一了方法论策略"（过度声明）。
+
+正确的定位是：**"我们探索了 Markov 核 + 策略执行图双表示对方法论策略形式化的适用性和局限性。实验发现：(1) 双表示能检测 X% 的已知策略关系，(2) 形式化比纯语义相似度多发现了 Y 条关系（或未能多发现），(3) 数学距离与功能等价的一致性为 Z%。这些结果为未来更强大的策略形式化方法（如基于因果模型的表示）指明了方向。"**
+
+这种定位更诚实，也更有学术价值——负面结果（"Markov 核不够"）和正面结果（"但它能做到这些"）同样可发表，只要分析是严谨的。
+
+---
+
+## 8. 风险与应对
 
 | 风险 | 概率 | 影响 | 应对措施 |
 |------|------|------|---------|
@@ -1035,6 +1334,10 @@ assumption_agent/
 | 行动类别映射不一致 | 高 | 高 | 对 LLM 的行动提取结果做人工抽样审核；对一致性低的行动类别合并或细化定义 |
 | Blackwell 序检测的 LP 数值不稳定 | 中 | 中 | 使用 HiGHS 求解器（scipy 默认）；对边界情况（接近可行/不可行）增大 tolerance |
 | 所有策略都被判定为独立（无同构） | 中 | 高 | 放宽阈值做灵敏度分析；检查是否是行动空间粒度太粗导致所有核都趋于均匀分布 |
+| **形式化没有超越纯语义相似度（循环论证）** | **高** | **高** | **6.4 节实验显式检测；如果确认无增值，论文转向分析"在什么条件下形式化开始产生超越语义的价值"** |
+| **Markov 核距离与功能等价不一致** | **高** | **高** | **6.5 节经验等价性实验量化脱节程度；SEG 图编辑距离补充捕捉结构差异** |
+| **非程序性策略（S05/S12/S21）表示不自然** | **高** | **中** | **对这些策略标注 `formalization_quality: "poor"`，在同构检测中降低其结果的置信度** |
+| **共享行动空间预设同构** | **中** | **中** | **消融实验中测试不同行动空间粒度（6.6 节）；如果粒度变化导致同构结果巨变，说明结果依赖预设** |
 | 形式化度量与实际性能不相关 | 中 | 高 | 先在合成数据（已知同构的人工策略）上验证度量的有效性；如果在真实数据上不相关，说明 Markov 核表示不够充分，需要更丰富的数学结构 |
 | 计算可行性（BorelStoch 太复杂） | 低 | — | 本阶段只在 FinStoch 中工作（离散化后的有限状态）。连续版本留给后续研究 |
 
