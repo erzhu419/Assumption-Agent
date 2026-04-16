@@ -105,7 +105,26 @@ class DispatcherInput:
     recent_reflection: Optional[str] = None
     # 执行中状态（用于中途策略切换，参考 ReMA 多轮交互）
     mid_execution_context: Optional[MidExecutionContext] = None
+    # 跨问题上下文：最近解决的相关问题的策略和结果
+    # 真实使用中问题往往是序列出现的（同一项目的子问题），
+    # 前一个问题的策略选择结果应该影响后一个问题的决策
+    cross_problem_context: Optional[CrossProblemContext] = None
+
+@dataclass
+class CrossProblemContext:
+    # 最近 N 个已完成问题的摘要（按时间倒序）
+    recent_problems: List[ProblemSummary]   # 最多保留 5 个
+    # 最近问题中策略的成功/失败统计
+    recent_strategy_stats: Dict[str, RecentStats]
+    # 是否处于同一项目/会话中
+    same_session: bool = True
 ```
+
+**跨问题上下文的使用方式：**
+- 方案 A（轻量级网络）：将 `recent_strategy_stats` 编码为 K 维向量（每条策略最近的成功率），拼接到输入特征中
+- 方案 B（LLM 调度器）：将 `recent_problems` 的摘要追加到 prompt 中（"最近 3 个相关问题都用分而治之成功了"）
+
+直觉上：如果最近 3 个同类子问题都用 S02 成功了，第 4 个子问题选 S02 的先验应该更高——调度器不需要每次从零开始评估。
 
 其中 `ProblemFeatures` 的结构为：
 
@@ -139,13 +158,75 @@ class ProblemFeatures:
 ```python
 @dataclass
 class DispatcherAction:
-    primary_strategy: str               # 主策略 ID (如 "S01")
+    primary_strategy: str               # 策略/组合/特殊行动 ID
     confidence: float                   # 选择置信度 (0.0-1.0)
     backup_strategy: Optional[str]      # 备选策略 ID（当主策略失败时使用）
     execution_hint: Optional[str]       # 对执行器的额外提示（如"关注耦合问题"）
 ```
 
-动作空间的大小 = 知识库中的策略数量（阶段零目标为 15-20 条）。这是一个离散动作空间，但通过 `confidence` 和 `backup_strategy` 引入了策略组合的可能性。
+**动作空间由三类行动组成：**
+
+| 类型 | ID 范围 | 数量 | 说明 |
+|------|--------|------|------|
+| 单策略 | S01-S23 | 23 | 阶段零知识库中的元策略（含 S21-S23 元决策策略） |
+| 策略组合 | COMP_001-005 | 5 | 阶段零定义的预验证策略序列 |
+| 特殊行动 | SPECIAL_* | 1 | 见下文 |
+| **总计** | | **29** | |
+
+**特殊行动——SPECIAL_GATHER_INFO（"先收集信息"）：**
+
+有些问题在初始描述中信息不完整（`information_completeness` 很低），此时选择任何具体策略都可能是盲目的。人类面对这种情况会先"调研"——收集更多信息后再决策。
+
+当调度器选择 `SPECIAL_GATHER_INFO` 时，执行器不按任何策略的操作步骤执行，而是执行一组预定义的信息收集操作：
+1. 要求 LLM 列出"解决此问题还需要知道什么"
+2. 尝试从问题描述中推断隐含的约束和假设
+3. 将收集到的信息追加到问题描述中，重新运行特征提取
+4. 用更新后的特征重新调用调度器选择策略
+
+**SPECIAL_GATHER_INFO 的奖励：** 如果信息收集后重新选择的策略成功了，`SPECIAL_GATHER_INFO` 获得 0.7 × 最终奖励（成功了但多花了一步，略扣分）。如果信息收集后仍然失败，获得 0.1（至少尝试了，比直接选错策略的 0 好一点）。
+
+**策略组合（COMP_*）的训练集成：**
+
+当调度器选择 COMP_001（如 S06→S01）时，执行流程如下：
+1. 按序列中的第一条策略（S06）执行
+2. 检查过渡条件是否满足（COMP_001 的 `transition_condition`）
+3. 如果满足，切换到序列中的下一条策略（S01）继续执行
+4. 如果不满足（S06 失败或过渡条件不成立），视为组合失败
+
+**组合策略的奖励计算：**
+
+```python
+def compute_composition_reward(
+    comp: StrategyComposition,
+    step_outcomes: List[StepOutcome]
+) -> float:
+    """
+    组合策略的奖励 = 最终步成功奖励 × 过渡效率因子。
+    """
+    if not step_outcomes:
+        return 0.0
+    
+    # 最终步的结果决定主奖励
+    final_outcome = step_outcomes[-1]
+    base_reward = compute_reward(final_outcome)
+    
+    # 过渡效率因子：所有过渡是否顺利
+    n_transitions = len(step_outcomes) - 1
+    smooth_transitions = sum(
+        1 for i in range(n_transitions)
+        if step_outcomes[i].transition_success
+    )
+    transition_factor = (
+        (smooth_transitions / n_transitions) if n_transitions > 0
+        else 1.0
+    )
+    
+    # 组合策略的奖励 = 基础奖励 × 过渡因子 × 0.95
+    # 0.95 的轻微折扣：鼓励在单策略能解决时不使用组合（简单优先）
+    return base_reward * transition_factor * 0.95
+```
+
+**组合策略的一致性评估：** 需要验证执行轨迹是否**按序**遵循了组合中各策略的步骤，且过渡条件被正确触发。用 LLM 裁判做二阶段判断：先判断"执行轨迹是否包含两个明显的阶段"，再分别判断每个阶段是否遵循了对应策略。
 
 **为什么不用连续动作空间（如策略的加权混合）：** 可解释性。离散选择允许我们精确追踪"调度器为什么选了这条策略"，这是阶段二经验反馈的前提。如果调度器输出的是策略的连续混合权重，归因分析会困难得多。
 
@@ -266,16 +347,20 @@ FEATURE_EXTRACTION_PROMPT = """
 
 | 维度 | 权重 | 计算方式 |
 |------|------|---------|
-| 任务完成度 | 0.40 | 任务是否被正确解决（二元/连续） |
-| 策略一致性 | 0.15 | 执行轨迹是否真正遵循了所选策略的步骤 |
+| 任务完成度 | 0.35 | 任务是否被正确解决（二元/连续） |
+| 策略一致性 | 0.10 | 执行轨迹是否真正遵循了所选策略的步骤 |
 | 效率 | 0.10 | 相对于基准步数的归一化步数 |
-| 部分进展 | 0.15 | 即使未完全解决，问题规模/复杂度是否降低了 |
-| 步进进度 | 0.20 | 每一步是否让问题更接近解决（参考 MRT/MEL 的稠密过程奖励） |
+| 部分进展 | 0.10 | 即使未完全解决，问题规模/复杂度是否降低了 |
+| 步进进度 | 0.20 | 每一步是否让问题更接近解决（MRT/MEL 稠密过程奖励） |
+| 置信度校准 | 0.15 | 置信度是否与实际成功率匹配（见下文） |
 
 **奖励函数：**
 
 ```python
-def compute_reward(outcome: ExecutionOutcome) -> float:
+def compute_reward(
+    outcome: ExecutionOutcome,
+    dispatcher_action: DispatcherAction
+) -> float:
     r_completion = 1.0 if outcome.success else (
         0.5 if outcome.partial_success else 0.0
     )
@@ -285,12 +370,16 @@ def compute_reward(outcome: ExecutionOutcome) -> float:
     r_efficiency = max(0, 1.0 - outcome.total_steps / outcome.baseline_steps)
     r_progress = compute_progress_score(outcome)
     r_step_progress = compute_step_progress_reward(outcome.trajectory)
+    r_calibration = compute_confidence_calibration_reward(
+        dispatcher_action.confidence, outcome.success
+    )
     
-    reward = (0.40 * r_completion +
-              0.15 * r_consistency +
+    reward = (0.35 * r_completion +
+              0.10 * r_consistency +
               0.10 * r_efficiency +
-              0.15 * r_progress +
-              0.20 * r_step_progress)
+              0.10 * r_progress +
+              0.20 * r_step_progress +
+              0.15 * r_calibration)
     
     # 策略选择失败的惩罚：如果用了 fallback 才成功，主策略选择扣分
     if outcome.used_fallback:
@@ -298,9 +387,38 @@ def compute_reward(outcome: ExecutionOutcome) -> float:
     
     # 中途切换的奖励调整（模式 B）
     if outcome.switches > 0 and outcome.success:
-        reward *= 0.9  # 成功但切换了 → 略微扣分（鼓励一次选对）
+        reward *= 0.9
+    
+    # 组合策略的特殊奖励（见 1.2.2 节）
+    if outcome.is_composition:
+        reward = compute_composition_reward(
+            outcome.composition, outcome.step_outcomes
+        )
     
     return reward
+
+
+def compute_confidence_calibration_reward(
+    confidence: float, success: bool
+) -> float:
+    """
+    置信度校准奖励：惩罚 confidence 与实际结果的偏差。
+    
+    Phase 4 的策略空白检测依赖调度器的低置信度信号。
+    如果 confidence 没有被校准，Phase 4 可能检测到大量
+    虚假空白（调度器胡乱给低置信度）或遗漏真实空白（过度自信）。
+    
+    奖励逻辑：
+    - 高置信度 + 成功 → 高奖励（自信且正确）
+    - 低置信度 + 失败 → 中等奖励（诚实承认不确定）
+    - 高置信度 + 失败 → 低奖励（过度自信）
+    - 低置信度 + 成功 → 中等奖励（过度保守但无害）
+    """
+    actual = 1.0 if success else 0.0
+    # Brier score 风格：(confidence - actual)^2 越小越好
+    calibration_error = (confidence - actual) ** 2
+    # 转化为 [0, 1] 的奖励（误差为 0 → 奖励 1，误差为 1 → 奖励 0）
+    return 1.0 - calibration_error
 
 
 def compute_step_progress_reward(
@@ -676,9 +794,13 @@ User:
 | 配置 | 方案 A (轻量级网络) | 方案 B (LLM 调度器) |
 |------|-------------------|-------------------|
 | 调度器参数量 | ~300K | ~3B |
-| 每 episode 推理成本 | 特征提取 1 次 LLM 调用 + 执行器 1 次 LLM 调用 | 调度器 1 次 LLM 调用 + 执行器 1 次 LLM 调用 |
-| 50K episodes 总成本 | ~$500-1000 (API) 或 ~48 GPU-hours (本地) | ~$3000-5000 (API) 或 ~200 GPU-hours (本地) |
+| 动作空间大小 | 29（23 单策略 + 5 组合 + 1 特殊行动） | 同左 |
+| 每 episode LLM 调用 | 特征提取 3 次 + 执行器 1 次 = **4 次** | 调度器 1 次 + 执行器 1 次 = 2 次（特征提取集成在调度器 prompt 中） |
+| 50K episodes 总成本（model-free） | ~$800-1500 (API) 或 ~72 GPU-hours (本地) | ~$3000-5000 (API) 或 ~200 GPU-hours (本地) |
+| 50K episodes 总成本（model-based 90/10） | ~$250-400 (API) | ~$500-800 (API) |
 | 训练时间 | 2-4 天 (单 A100) | 1-2 周 (4x A100) |
+
+**成本注释：** 方案 A 的特征提取需要 3 次 LLM 调用（1.3 节的可靠性保障），之前的估算只计了 1 次。Model-based 模式（90% 模拟）大幅降低真实执行成本，但模拟本身的 LLM 调用成本需要额外计入（见 Phase 0.5 的 3.2 节）。
 
 方案 A 是默认选择。方案 B 仅在方案 A 的性能明显不足时启用。
 
@@ -1223,6 +1345,28 @@ BIFURCATION_ANALYSIS_PROMPT = """
 - 例如：调度器可能发现"当 information_completeness < 0.3 时，贝叶斯更新 (S12) 优于试错法 (S08)"——这是否与直觉一致？
 - 这些发现直接输出给阶段二用于知识库更新
 
+### 7.5 补充实验：训练-部署领域鸿沟检测
+
+**问题：** Phase 1 在 benchmark 任务上训练（SWE-bench、MATH、LogiQA 等），但系统最终要处理的是开放式真实问题——Claude.md 中的例子包括"搭建世界模型外推系统"、"在地铁口卖布朗尼"。跨领域泛化实验（7.2 节 leave-one-domain-out）测试的是同一 benchmark 分布内的领域迁移，不是从 benchmark 到真实世界的迁移。
+
+**实验设计：**
+
+构造 20-30 道**非结构化真实问题**（不来自任何 benchmark，由研究者从自身经历中提取）：
+- 来源 1：研究者过去遇到的实际调试/设计/决策问题（如"世界模型外推系统用一次性搭建还是增量替换"）
+- 来源 2：日常生活中的非学术问题（如"搬家时如何高效打包"）
+- 来源 3：跨学科的开放式问题（如"如何判断一个商业点子是否可行"）
+
+对每道题，请 3 名人类专家独立标注最优策略，然后运行调度器。
+
+**指标：**
+- 调度器在非结构化问题上的 top-3 命中率（与 benchmark 上的 top-3 命中率对比）
+- 如果非结构化问题上的命中率 < benchmark 上的 60%，说明存在显著的训练-部署鸿沟
+
+**应对鸿沟的方案（如果检测到）：**
+1. 在 B 类任务集中增加非结构化问题的比例（从 0% 到 20%）
+2. 用 LLM 生成更多非结构化风格的训练题（给 benchmark 题"去结构化"改写）
+3. 在特征提取中增加"结构化程度"字段——对低结构化问题，调度器应倾向于更灵活的策略（如 S08 试错法、SPECIAL_GATHER_INFO）
+
 ---
 
 ## 8. 风险与应对
@@ -1239,6 +1383,10 @@ BIFURCATION_ANALYSIS_PROMPT = """
 | 训练成本超预算 | 中 | 中 | 优先用方案 A（成本低 10 倍）；用课程学习减少困难任务的无效探索 |
 | 与阶段零知识库的格式不兼容 | 低 | 高 | 本阶段启动前先跑一遍阶段零的 `export_for_agent.py`，确认输出格式可被本阶段代码正确解析 |
 | 阶段零知识库质量不足 | 低 | 高 | 在训练开始前用 Baseline 3（规则匹配）做冒烟测试——如果规则匹配的准确率 < 30%，说明知识库的适用条件描述需要改进 |
+| 策略组合（COMP_*）在训练中被忽略 | 中 | 中 | 组合策略的奖励和一致性评估已独立设计（1.2.2 节）；监控组合策略的选择频率，如果 < 5% 则增加定向探索 |
+| 调度器置信度不校准 | 高 | 高 | 置信度校准奖励权重 0.15（1.4 节）；训练后输出校准曲线（预测置信度 vs 实际成功率） |
+| 训练-部署领域鸿沟 | 中 | 高 | 7.5 节补充实验检测鸿沟程度；增加非结构化问题在训练集中的比例（最终目标 20%） |
+| SPECIAL_GATHER_INFO 被过度使用 | 中 | 中 | 信息收集的奖励折扣 0.7 限制滥用；监控使用频率，如果 > 15% 则增加折扣 |
 
 ---
 
