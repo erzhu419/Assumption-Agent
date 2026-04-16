@@ -1,9 +1,10 @@
 """
 Phase 0: Build the philosophical methodology knowledge base.
-Expands each strategy seed into a full JSON schema using Claude API.
+Expands each strategy seed into a full JSON schema using LLM API.
+Supports both Gemini and Claude (configure in .env).
 
 Usage:
-    python build_kb.py                    # Build all 23 strategies
+    python build_kb.py                    # Build all 27 strategies
     python build_kb.py --strategy S01     # Build only S01
     python build_kb.py --dry-run          # Print prompts without calling API
 """
@@ -19,12 +20,7 @@ from datetime import datetime
 # Add parent dir for imports
 sys.path.insert(0, str(Path(__file__).parent))
 from strategy_seeds import STRATEGY_SEEDS, COMPOSITION_SEEDS, CATEGORY_DEFINITIONS
-
-try:
-    from anthropic import Anthropic
-except ImportError:
-    print("pip install anthropic")
-    sys.exit(1)
+from llm_client import create_client, parse_json_from_llm
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -193,42 +189,11 @@ EXPAND_STRATEGY_PROMPT = """你是一个哲学方法论和认知科学专家。�
 
 
 # ---------------------------------------------------------------------------
-# API client
-# ---------------------------------------------------------------------------
-
-def get_client():
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        env_file = Path(__file__).parent.parent / ".env"
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                if line.startswith("ANTHROPIC_API_KEY="):
-                    api_key = line.split("=", 1)[1].strip()
-    if not api_key:
-        raise ValueError(
-            "Set ANTHROPIC_API_KEY in environment or in phase zero/.env"
-        )
-    return Anthropic(api_key=api_key)
-
-
-def get_model():
-    model = os.environ.get("MODEL_NAME")
-    if not model:
-        env_file = Path(__file__).parent.parent / ".env"
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                if line.startswith("MODEL_NAME="):
-                    model = line.split("=", 1)[1].strip()
-    return model or "claude-sonnet-4-20250514"
-
-
-# ---------------------------------------------------------------------------
 # Build one strategy
 # ---------------------------------------------------------------------------
 
-def build_strategy(seed: dict, client: Anthropic, model: str,
-                   dry_run: bool = False) -> dict:
-    """Expand a strategy seed into full schema using Claude API."""
+def build_strategy(seed: dict, client, dry_run: bool = False) -> dict:
+    """Expand a strategy seed into full schema using LLM API."""
     today = datetime.now().strftime("%Y-%m-%d")
     prompt = EXPAND_STRATEGY_PROMPT.format(
         id=seed["id"],
@@ -248,34 +213,19 @@ def build_strategy(seed: dict, client: Anthropic, model: str,
     print(f"Building {seed['id']}: {seed['name_zh']}...", end=" ", flush=True)
     t0 = time.time()
 
-    response = client.messages.create(
-        model=model,
-        max_tokens=4096,
-        temperature=0.3,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    raw = response.content[0].text.strip()
-    # Strip markdown code fences if present
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[1]
-    if raw.endswith("```"):
-        raw = raw.rsplit("```", 1)[0]
-    raw = raw.strip()
+    response = client.generate(prompt, max_tokens=4096, temperature=0.3)
 
     try:
-        strategy = json.loads(raw)
-    except json.JSONDecodeError as e:
+        strategy = parse_json_from_llm(response["text"])
+    except (json.JSONDecodeError, ValueError) as e:
         print(f"FAILED (JSON parse error: {e})")
-        # Save raw output for debugging
         err_path = STRATEGY_DIR / f"{seed['id']}_raw_error.txt"
-        err_path.write_text(raw, encoding="utf-8")
+        err_path.write_text(response["text"], encoding="utf-8")
         print(f"  Raw output saved to {err_path}")
         return None
 
     elapsed = time.time() - t0
-    usage = response.usage
-    print(f"OK ({elapsed:.1f}s, {usage.input_tokens}+{usage.output_tokens} tokens)")
+    print(f"OK ({elapsed:.1f}s, {response['input_tokens']}+{response['output_tokens']} tokens)")
 
     return strategy
 
@@ -366,12 +316,9 @@ def main():
     STRATEGY_DIR.mkdir(parents=True, exist_ok=True)
 
     if not args.dry_run:
-        client = get_client()
-        model = get_model()
-        print(f"Using model: {model}")
+        client = create_client()
     else:
         client = None
-        model = None
 
     # Filter seeds
     seeds = STRATEGY_SEEDS
@@ -391,7 +338,7 @@ def main():
             print(f"Skipping {seed['id']} (already exists)")
             continue
 
-        strategy = build_strategy(seed, client, model, dry_run=args.dry_run)
+        strategy = build_strategy(seed, client, dry_run=args.dry_run)
 
         if strategy is not None:
             out_path.write_text(

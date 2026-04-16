@@ -24,12 +24,7 @@ from collections import Counter, defaultdict
 
 sys.path.insert(0, str(Path(__file__).parent))
 from strategy_seeds import STRATEGY_SEEDS
-
-try:
-    from anthropic import Anthropic
-except ImportError:
-    print("pip install anthropic")
-    sys.exit(1)
+from llm_client import create_client, parse_json_from_llm
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -107,51 +102,13 @@ ANNOTATION_PROMPT = """## 你的背景
 
 
 # ---------------------------------------------------------------------------
-# API helpers
-# ---------------------------------------------------------------------------
-
-def get_client():
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        env_file = Path(__file__).parent.parent / ".env"
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                if line.startswith("ANTHROPIC_API_KEY="):
-                    api_key = line.split("=", 1)[1].strip()
-    if not api_key:
-        raise ValueError("Set ANTHROPIC_API_KEY")
-    return Anthropic(api_key=api_key)
-
-
-def get_model():
-    model = os.environ.get("MODEL_NAME")
-    if not model:
-        env_file = Path(__file__).parent.parent / ".env"
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                if line.startswith("MODEL_NAME="):
-                    model = line.split("=", 1)[1].strip()
-    return model or "claude-sonnet-4-20250514"
-
-
-def parse_json_response(raw: str):
-    raw = raw.strip()
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[1]
-    if raw.endswith("```"):
-        raw = raw.rsplit("```", 1)[0]
-    return json.loads(raw.strip())
-
-
-# ---------------------------------------------------------------------------
 # Annotate one problem with one persona
 # ---------------------------------------------------------------------------
 
 def annotate_single(
     problem: dict,
     persona: dict,
-    client: Anthropic,
-    model: str,
+    client,
 ) -> dict | None:
     prompt = ANNOTATION_PROMPT.format(
         background=persona["background"],
@@ -161,14 +118,8 @@ def annotate_single(
     )
 
     try:
-        response = client.messages.create(
-            model=model,
-            max_tokens=512,
-            temperature=0.5,  # Some diversity but not too random
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = response.content[0].text
-        result = parse_json_response(raw)
+        response = client.generate(prompt, max_tokens=512, temperature=0.5)
+        result = parse_json_from_llm(response["text"])
         result["annotator_id"] = persona["id"]
         result["problem_id"] = problem["problem_id"]
         return result
@@ -271,14 +222,11 @@ def main():
         personas = ANNOTATOR_PERSONAS
 
     if not args.dry_run:
-        client = get_client()
-        model = get_model()
-        print(f"Using model: {model}")
+        client = create_client()
         total_calls = len(all_problems) * len(personas)
-        est_cost = total_calls * 0.003  # ~$0.003 per annotation call
-        print(f"Estimated: {total_calls} API calls, ~${est_cost:.2f}")
+        print(f"Estimated: {total_calls} API calls")
     else:
-        client = model = None
+        client = None
 
     # Annotate
     all_annotations = {}
@@ -299,7 +247,7 @@ def main():
         print(f"[{i+1}/{len(all_problems)}] Annotating {pid}...", flush=True)
         annotations = []
         for persona in personas:
-            result = annotate_single(problem, persona, client, model)
+            result = annotate_single(problem, persona, client)
             if result:
                 annotations.append(result)
             time.sleep(0.5)  # Rate limiting

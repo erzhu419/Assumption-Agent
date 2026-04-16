@@ -19,12 +19,7 @@ from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent))
 from strategy_seeds import STRATEGY_SEEDS
-
-try:
-    from anthropic import Anthropic
-except ImportError:
-    print("pip install anthropic")
-    sys.exit(1)
+from llm_client import create_client, parse_json_from_llm
 
 # ---------------------------------------------------------------------------
 # Config
@@ -110,41 +105,6 @@ GENERATE_PROBLEM_PROMPT = """你是一个跨学科问题设计专家。请生成
 请直接输出 JSON 数组，不要添加 markdown 代码块标记。"""
 
 
-# ---------------------------------------------------------------------------
-# API helpers (reuse from build_kb.py pattern)
-# ---------------------------------------------------------------------------
-
-def get_client():
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        env_file = Path(__file__).parent.parent / ".env"
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                if line.startswith("ANTHROPIC_API_KEY="):
-                    api_key = line.split("=", 1)[1].strip()
-    if not api_key:
-        raise ValueError("Set ANTHROPIC_API_KEY")
-    return Anthropic(api_key=api_key)
-
-
-def get_model():
-    model = os.environ.get("MODEL_NAME")
-    if not model:
-        env_file = Path(__file__).parent.parent / ".env"
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                if line.startswith("MODEL_NAME="):
-                    model = line.split("=", 1)[1].strip()
-    return model or "claude-sonnet-4-20250514"
-
-
-def parse_json_response(raw: str) -> list | dict:
-    raw = raw.strip()
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[1]
-    if raw.endswith("```"):
-        raw = raw.rsplit("```", 1)[0]
-    return json.loads(raw.strip())
 
 
 # ---------------------------------------------------------------------------
@@ -155,8 +115,7 @@ def generate_domain_problems(
     domain_key: str,
     domain_info: dict,
     count: int,
-    client: Anthropic,
-    model: str,
+    client,
     dry_run: bool = False,
 ) -> list:
     prompt = GENERATE_PROBLEM_PROMPT.format(
@@ -175,28 +134,20 @@ def generate_domain_problems(
     print(f"Generating {count} problems for {domain_key}...", end=" ", flush=True)
     t0 = time.time()
 
-    response = client.messages.create(
-        model=model,
-        max_tokens=8192,
-        temperature=0.7,  # Higher for diversity
-        messages=[{"role": "user", "content": prompt}],
-    )
+    response = client.generate(prompt, max_tokens=8192, temperature=0.7)
 
-    raw = response.content[0].text
     try:
-        problems = parse_json_response(raw)
-    except json.JSONDecodeError as e:
+        problems = parse_json_from_llm(response["text"])
+    except (json.JSONDecodeError, ValueError) as e:
         print(f"FAILED (JSON parse: {e})")
         err_path = PROBLEMS_DIR / f"{domain_key}_raw_error.txt"
-        err_path.write_text(raw, encoding="utf-8")
+        err_path.write_text(response["text"], encoding="utf-8")
         return []
 
     elapsed = time.time() - t0
-    usage = response.usage
     print(f"OK ({len(problems)} problems, {elapsed:.1f}s, "
-          f"{usage.input_tokens}+{usage.output_tokens} tokens)")
+          f"{response['input_tokens']}+{response['output_tokens']} tokens)")
 
-    # Assign sequential IDs
     for i, p in enumerate(problems):
         p["problem_id"] = f"{domain_key}_{i+1:03d}"
 
@@ -267,11 +218,9 @@ def main():
     PROBLEMS_DIR.mkdir(parents=True, exist_ok=True)
 
     if not args.dry_run:
-        client = get_client()
-        model = get_model()
-        print(f"Using model: {model}")
+        client = create_client()
     else:
-        client = model = None
+        client = None
 
     domains = DOMAINS
     if args.domain:
@@ -300,7 +249,7 @@ def main():
 
         count = args.count or domain_info["target_count"]
         problems = generate_domain_problems(
-            domain_key, domain_info, count, client, model, args.dry_run
+            domain_key, domain_info, count, client, args.dry_run
         )
 
         if problems:
