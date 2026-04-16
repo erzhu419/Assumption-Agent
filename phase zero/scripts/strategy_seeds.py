@@ -87,6 +87,20 @@ STRATEGY_SEEDS = [
     {"id": "S23", "name_zh": "资源约束下的近似接受", "name_en": "Approximate Acceptance Under Resource Constraints",
      "one_sentence": "资源即将耗尽时，接受当前最优近似解并停止",
      "category": "meta_decision", "sources": ["Simon 1969 (满意化极端版)", "工程传统"]},
+
+    # === CAT_H: 系统结构与涌现 ===
+    {"id": "S24", "name_zh": "关键节点/瓶颈识别", "name_en": "Critical Node / Bottleneck Identification",
+     "one_sentence": "在分析系统变革可行性时，先识别关键决策节点及其利益方向",
+     "category": "system_structure", "sources": ["政治学（制度分析）", "运筹学（TOC 约束理论）", "网络科学"]},
+    {"id": "S25", "name_zh": "涌现性检测", "name_en": "Emergence Detection",
+     "one_sentence": "部分的属性不能线性外推到整体——组合后需要重新评估涌现属性",
+     "category": "system_structure", "sources": ["复杂系统科学", "化学（非加性效应）", "语言学（组合语义）"]},
+    {"id": "S26", "name_zh": "路径依赖分析", "name_en": "Path Dependency Analysis",
+     "one_sentence": "识别当前状态是由历史路径决定的，而非由当前条件唯一确定",
+     "category": "system_structure", "sources": ["演化生物学", "经济史 (Arthur 1994)", "软件工程（技术债）"]},
+    {"id": "S27", "name_zh": "激励结构分析", "name_en": "Incentive Structure Analysis",
+     "one_sentence": "在多方参与的系统中，分析每个参与者的激励方向是否与目标对齐",
+     "category": "system_structure", "sources": ["博弈论（纳什均衡）", "制度经济学", "组织行为学"]},
 ]
 
 COMPOSITION_SEEDS = [
@@ -115,4 +129,5 @@ CATEGORY_DEFINITIONS = {
     "CAT_E": {"name": "评估与选择", "description": "在多个候选方案中做选择", "strategies": ["S05", "S10", "S11", "S12"]},
     "CAT_F": {"name": "构建与迭代", "description": "逐步构造解", "strategies": ["S15"]},
     "CAT_G": {"name": "元决策与终止", "description": "决定是否继续当前路径", "strategies": ["S21", "S22", "S23"]},
+    "CAT_H": {"name": "系统结构与涌现", "description": "分析多方/多部分系统的非线性行为", "strategies": ["S24", "S25", "S26", "S27"]},
 }
