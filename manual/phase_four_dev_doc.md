@@ -1,0 +1,1432 @@
+# 阶段四：新假设生成——完整开发文档 (v1)
+
+## 0. 文档概述
+
+### 0.1 本阶段在整体架构中的位置
+
+这是整个系统的终极目标，也是整段思考旅程的起点——让智能体在碰到已有哲学框架解决不了的问题时，能**提出与已有框架不冲突的新方法论假设，并自我验证它**。
+
+阶段零到阶段三构建的系统已经能做到：装载人类哲学（阶段零）、选择正确策略（阶段一）、从经验中精化策略边界（阶段二）、在数学空间中检测策略同构（阶段三）。但这一切都发生在**已有策略集合的内部**——系统从未超越人类给定的 15-20 条元策略。
+
+本阶段要突破这个边界。当系统面对一个问题，知识库中所有策略的适用条件匹配分数都很低、且执行后全部失败时，系统必须认识到"我现有的工具箱不够用了"，然后做出人类科学家最核心的创造性行为——提出一个新的方法论假设。
+
+**这是从"利用已有哲学"到"创造新哲学"的跃迁。**
+
+回到 Claude.md 讨论中的那句话：
+
+> 你真正想要的不是一个能度量 E=mc² 和楞次定律距离的系统。你想要的是一个能在已有哲学框架不足时提出新方法论假设并自我验证的 AI 系统。
+
+本阶段就是实现这件事。
+
+### 0.2 前置依赖
+
+本阶段严重依赖前三个阶段的输出：
+
+| 依赖 | 来源 | 用途 |
+|------|------|------|
+| 策略知识库 | 阶段零+二 | 定义"已知策略空间"的内容 |
+| 调度器 | 阶段一 | 检测"所有已有策略都失败"的信号 |
+| 反馈管线 | 阶段二 | 验证新策略并将其集成到知识库 |
+| 形式化表示 | 阶段三 | 检测新策略与已有策略的关系（同构？冲突？互补？） |
+
+**新模块只有一个：假设生成与一致性检验模块。** 其余全部沿用前三个阶段的已验证组件。
+
+### 0.3 本阶段目标
+
+1. 建立"策略空白检测"机制——识别知识库覆盖不到的问题类型
+2. 构建新策略的候选生成管线——从 LLM 的生成能力中提取结构化的策略候选
+3. 实现形式化一致性检验——确保新策略与已有策略不矛盾
+4. 设计经验验证协议——在任务上测试新策略并评估其价值
+5. 完成知识库集成——将通过验证的新策略正式纳入知识库
+
+### 0.4 交付物
+
+1. 策略空白检测模块（`gap_detector/`）
+2. 候选策略生成模块（`hypothesis_generator/`）
+3. 形式化一致性检验模块（`consistency_checker/`）
+4. 经验验证协议与执行框架（`validation/`）
+5. 知识库集成流程（复用阶段二的机制并扩展）
+6. 一篇终极论文，核心贡献：首个能在已有哲学框架不足时提出并验证新方法论假设的 AI 系统
+
+### 0.5 时间预算
+
+总计 6-10 个月。空白检测与候选生成：6-8 周。一致性检验：4-6 周。经验验证与迭代：8-12 周。分析与论文写作：4-6 周。
+
+### 0.6 技术路线概述
+
+本阶段的核心操作——空白检测、候选生成、一致性检验、经验验证——全部可以通过 LLM prompting + 阶段三的数学工具 + 阶段二的反馈管线实现，**不需要 fine-tune**。
+
+Fine-tune 的潜在价值在于训练一个专门的"假设生成器"，使其比通用 LLM 更擅长提出结构化的方法论候选。该方案在附录 A 中详述。
+
+---
+
+## 1. 策略空白检测
+
+### 1.1 什么是"空白"
+
+策略空白（strategy gap）是指问题特征空间中的一个区域，在该区域内知识库中所有策略的表现都不令人满意。形式化地：
+
+设 $x \in \mathcal{X}$ 为一个离散化的问题状态（阶段三定义），$r(S_k, x)$ 为策略 $S_k$ 在状态 $x$ 下的平均成功率。状态 $x$ 是一个策略空白当且仅当：
+
+$$\max_{k} r(S_k, x) < \theta_{\text{gap}}$$
+
+其中 $\theta_{\text{gap}}$ 是空白阈值（默认 0.4）。
+
+直觉上：如果在某种问题特征下，知识库中最好的策略也只有不到 40% 的成功率，说明现有策略对这类问题力不从心。
+
+### 1.2 空白检测的数据来源
+
+空白检测需要策略在各种问题状态下的成功率数据。来源有三个：
+
+**来源 1：阶段一调度器的执行经验**
+
+直接从 `experience_log/executions/` 中统计。
+
+```python
+class GapDetector:
+    
+    def detect_gaps(
+        self,
+        experience_log: List[ExecutionRecord],
+        feature_space: List[DiscreteState],
+        strategies: List[str],
+        gap_threshold: float = 0.4,
+        min_samples: int = 10
+    ) -> List[StrategyGap]:
+        
+        # 统计每个 (状态, 策略) 对的成功率
+        success_counts = defaultdict(lambda: defaultdict(lambda: [0, 0]))
+        # success_counts[state_idx][strategy_id] = [successes, total]
+        
+        for record in experience_log:
+            state_idx = discretize(record["task"]["complexity_features"])
+            strategy = record["strategy_selection"]["selected_strategy"]
+            total = success_counts[state_idx][strategy]
+            total[1] += 1
+            if record["outcome"]["success"]:
+                total[0] += 1
+        
+        gaps = []
+        for state_idx, state in enumerate(feature_space):
+            # 检查该状态下是否有足够的数据
+            total_samples = sum(
+                counts[1]
+                for counts in success_counts[state_idx].values()
+            )
+            if total_samples < min_samples:
+                continue  # 数据不足，无法判断
+            
+            # 计算最高成功率
+            best_rate = 0.0
+            best_strategy = None
+            for sid in strategies:
+                counts = success_counts[state_idx].get(sid, [0, 0])
+                if counts[1] > 0:
+                    rate = counts[0] / counts[1]
+                    if rate > best_rate:
+                        best_rate = rate
+                        best_strategy = sid
+            
+            if best_rate < gap_threshold:
+                gaps.append(StrategyGap(
+                    state=state,
+                    state_idx=state_idx,
+                    best_existing_strategy=best_strategy,
+                    best_existing_rate=best_rate,
+                    total_samples=total_samples,
+                    failing_strategies=self._get_all_tried(
+                        success_counts[state_idx]
+                    )
+                ))
+        
+        return gaps
+```
+
+**来源 2：阶段三的形式化拓扑**
+
+阶段三的策略空间可视化可能揭示 Markov 核分布的"稀疏区域"——问题状态空间中没有任何策略的 Markov 核给出高概率行动的区域。
+
+```python
+def detect_coverage_gaps(
+    formal_kb: Dict[str, np.ndarray],
+    entropy_threshold: float = 0.9
+) -> List[int]:
+    """
+    找到所有策略的 Markov 核在其上都接近均匀分布的状态。
+    均匀分布 = 策略"不知道在这种状态下该做什么" = 空白。
+    """
+    max_entropy = np.log(formal_kb[list(formal_kb.keys())[0]].shape[1])
+    
+    uncovered_states = []
+    for state_idx in range(formal_kb[list(formal_kb.keys())[0]].shape[0]):
+        all_high_entropy = True
+        for sid, K in formal_kb.items():
+            row = K[state_idx, :]
+            entropy = -np.sum(row * np.log(row + 1e-10))
+            if entropy / max_entropy < entropy_threshold:
+                all_high_entropy = False
+                break
+        if all_high_entropy:
+            uncovered_states.append(state_idx)
+    
+    return uncovered_states
+```
+
+**来源 3：调度器的低置信度信号**
+
+阶段一的调度器在选择策略时输出 `confidence` 值。如果调度器在某类问题上持续给出低置信度（< 0.3），说明它"不确定该用什么策略"——这本身就是空白的信号。
+
+### 1.3 空白的分类
+
+检测到的空白不全都需要新策略。分类如下：
+
+| 空白类型 | 特征 | 处理方式 |
+|---------|------|---------|
+| **数据空白** | 该状态下的样本量 < 10 | 不生成新策略，收集更多数据 |
+| **适用条件空白** | 某条已有策略其实适用，但其适用条件描述不够精确 | 交给阶段二精化条件 |
+| **组合空白** | 单独的策略不够用，但策略组合可能有效 | 生成"策略组合"候选而非全新策略 |
+| **真正的空白** | 已有策略在结构上确实无法覆盖 | 生成新策略候选（本阶段核心） |
+
+区分这四种空白的方法：
+
+```python
+def classify_gap(
+    gap: StrategyGap,
+    kb_snapshot: KBSnapshot,
+    formal_kb: Dict[str, np.ndarray]
+) -> GapType:
+    
+    # 数据空白
+    if gap.total_samples < 10:
+        return GapType.DATA_GAP
+    
+    # 适用条件空白：检查是否有策略的 Markov 核在该状态下
+    # 给出高概率行动，但调度器没选它
+    for sid, K in formal_kb.items():
+        max_action_prob = np.max(K[gap.state_idx, :])
+        if max_action_prob > 0.3 and sid not in gap.failing_strategies:
+            return GapType.CONDITION_GAP
+    
+    # 组合空白：检查是否有两条策略的 Markov 核在该状态下
+    # 互补（一条覆盖某些行动，另一条覆盖其余行动）
+    strategy_ids = list(formal_kb.keys())
+    for i in range(len(strategy_ids)):
+        for j in range(i + 1, len(strategy_ids)):
+            K_i = formal_kb[strategy_ids[i]][gap.state_idx, :]
+            K_j = formal_kb[strategy_ids[j]][gap.state_idx, :]
+            # 如果两者的高概率行动不重叠且合集覆盖多数行动
+            top_i = set(np.where(K_i > 0.15)[0])
+            top_j = set(np.where(K_j > 0.15)[0])
+            if len(top_i & top_j) == 0 and len(top_i | top_j) >= 5:
+                return GapType.COMBINATION_GAP
+    
+    # 排除以上三种后，判定为真正的空白
+    return GapType.TRUE_GAP
+```
+
+---
+
+## 2. 新策略候选生成
+
+### 2.1 设计理念
+
+候选生成是本阶段最具创造性的环节。它利用 LLM 的生成能力，在理解空白特征的基础上提出新的方法论策略。
+
+**关键约束：** 生成的候选必须遵循阶段零定义的策略 schema——它不是一段自由文本，而是一个结构化的 JSON 对象，包含名称、描述、操作步骤、适用条件等所有必填字段。这确保新策略可以被无缝集成到现有系统中。
+
+### 2.2 生成流程
+
+```
+策略空白
+(GapType.TRUE_GAP)
+        │
+        ▼
+┌───────────────────┐
+│  Step 1: 空白分析   │  理解为什么已有策略失败
+│  (Gap Analysis)    │
+└────────┬──────────┘
+         │
+         ▼
+┌───────────────────┐
+│  Step 2: 候选生成   │  LLM 提出 3-5 个候选策略
+│  (Candidate Gen)   │
+└────────┬──────────┘
+         │
+         ▼
+┌───────────────────┐
+│  Step 3: 结构化     │  将自然语言候选转为知识库 schema
+│  (Structuring)     │
+└────────┬──────────┘
+         │
+         ▼
+┌───────────────────┐
+│  Step 4: 去重       │  检查是否与已有策略同构
+│  (Deduplication)   │  → 调用阶段三的同构检测
+└────────┬──────────┘
+         │ 通过去重的候选
+         ▼
+    进入一致性检验（第 3 节）
+```
+
+### 2.3 Step 1：空白分析
+
+在生成新策略之前，先深入分析为什么已有策略在该空白区域失败。
+
+```python
+GAP_ANALYSIS_PROMPT = """
+你是一个方法论研究专家。
+
+## 背景
+以下问题特征组合是一个"策略空白"——现有知识库中所有策略在此类问题上的成功率都低于 {gap_threshold}%。
+
+## 问题特征
+- 组件间耦合度: {coupling}
+- 可分解性: {decomposability}
+- 是否有基准: {has_baseline}
+- 信息完整度: {information_completeness}
+- 组件数量: {component_count}
+
+## 已尝试过的策略及其失败原因
+{failing_strategies_with_reasons}
+
+## 分析任务
+请回答：
+1. 这些策略为什么都失败了？它们共同的盲点是什么？
+2. 这种问题特征组合的核心困难是什么？
+3. 理想的解决策略应该具备什么特性？（不需要给出具体策略，只描述特性）
+
+输出 JSON:
+{{
+    "common_blindspot": "所有失败策略共同的盲点描述",
+    "core_difficulty": "这类问题的核心困难",
+    "desired_properties": [
+        "新策略应具备的特性 1",
+        "新策略应具备的特性 2",
+        ...
+    ],
+    "reasoning": "分析推理过程"
+}}
+"""
+```
+
+### 2.4 Step 2：候选生成
+
+基于空白分析的结果，让 LLM 提出候选新策略。
+
+```python
+CANDIDATE_GENERATION_PROMPT = """
+你是一个方法论创新专家。你的任务是提出一个全新的问题解决策略。
+
+## 空白分析
+核心困难: {core_difficulty}
+已有策略的共同盲点: {common_blindspot}
+新策略应具备的特性: {desired_properties}
+
+## 已有策略列表（新策略不能和这些重复）
+{existing_strategy_summaries}
+
+## 要求
+提出 3 个候选新策略。每个候选需要：
+1. 有一个简洁的名称
+2. 有一句话描述
+3. 有 5-8 个具体的操作步骤
+4. 不是已有策略的简单重组——必须包含至少一个"新思路"
+5. 至少引用一个人类知识体系中的灵感来源（可以是科学、哲学、工程、日常生活中的原则）
+
+## 灵感参考
+以下是一些可能与当前空白相关的思维模式（仅供参考，不要求必须使用）：
+- 对偶性思维：从问题的对立面入手
+- 层次分解：不是分解为子问题，而是分解为不同抽象层次
+- 约束翻转：不是在约束下找解，而是修改约束
+- 随机扰动：引入随机性来跳出局部最优
+- 元认知：对自己的推理过程进行推理
+- 类比迁移：从远程领域借用结构
+- 退步法：故意让问题变得更难，从更一般的问题中找到线索
+
+输出 JSON:
+{{
+    "candidates": [
+        {{
+            "name_zh": "策略名称（中文）",
+            "name_en": "Strategy Name (English)",
+            "one_sentence": "一句话描述",
+            "inspiration_source": "灵感来源",
+            "key_novelty": "相比已有策略，新在哪里",
+            "operational_steps": [
+                "步骤 1: ...",
+                "步骤 2: ...",
+                ...
+            ],
+            "hypothesized_favorable_conditions": [
+                "适用条件 1",
+                "适用条件 2"
+            ],
+            "hypothesized_unfavorable_conditions": [
+                "不适用条件 1"
+            ]
+        }},
+        ...
+    ]
+}}
+"""
+```
+
+**为什么让 LLM 生成 3 个而非 1 个：** 多样性。LLM 的第一个回答往往是最"安全"的——最接近训练数据中的已知模式。要求 3 个候选迫使 LLM 探索更远的可能性空间。
+
+**灵感参考的作用：** 提供一组抽象的思维方向，帮助 LLM 跳出"在已有策略的表面上做变形"的惯性。这些灵感来源本身就是元策略——"关于如何发明新策略的策略"。
+
+### 2.5 Step 3：结构化
+
+将 LLM 的候选输出转化为完全符合阶段零 2.1 节策略 schema 的 JSON 对象。
+
+```python
+STRUCTURING_PROMPT = """
+请将以下候选策略转化为标准的知识库格式。
+
+## 候选策略
+名称: {candidate_name}
+描述: {candidate_description}
+操作步骤: {candidate_steps}
+假设的适用条件: {candidate_conditions}
+灵感来源: {inspiration_source}
+
+## 目标格式
+请输出完整的策略 JSON，遵循以下格式：
+- id: 使用 "S_NEW_{number}" 格式
+- 所有字段都必须填写
+- source_references 填写灵感来源
+- confidence 统一设为 0.5（初始假设）
+- status 统一设为 "under_review"
+- historical_cases 中至少构造 1 个假想的成功案例和 1 个假想的失败案例
+
+{strategy_schema_template}
+"""
+```
+
+### 2.6 Step 4：去重
+
+调用阶段三的同构检测器，检查候选策略是否与已有策略在结构上等价。
+
+```python
+def deduplicate_candidate(
+    candidate_kernel: np.ndarray,
+    formal_kb: Dict[str, np.ndarray],
+    iso_detector: IsomorphismDetector
+) -> DeduplicationResult:
+    """
+    检查候选策略的 Markov 核是否与已有策略同构。
+    """
+    for sid, K_existing in formal_kb.items():
+        report = iso_detector._analyze_pair(
+            "candidate", candidate_kernel,
+            sid, K_existing
+        )
+        if report.relationship in ("isomorphic", "a_subsumes_b"):
+            return DeduplicationResult(
+                is_duplicate=True,
+                duplicate_of=sid,
+                relationship=report.relationship,
+                distances=report.distances
+            )
+    
+    return DeduplicationResult(is_duplicate=False)
+```
+
+去重的意义：防止系统"发明"一个其实已经存在的策略（只是换了个名字和表述）。如果候选策略与已有策略同构，不添加新策略，而是将空白区域的经验反馈给阶段二，让阶段二精化已有策略的适用条件。
+
+---
+
+## 3. 形式化一致性检验
+
+### 3.1 什么是"一致性"
+
+一个新策略与已有知识库一致，意味着：
+
+1. **无直接矛盾：** 新策略的 favorable 条件不与任何已有策略的 unfavorable 条件在同一场景下发生逻辑冲突
+2. **无行动冲突：** 在同一问题状态下，新策略推荐的行动不与一个公认有效的已有策略的推荐行动直接矛盾（除非新策略是后者的 alternative）
+3. **拓扑可容纳：** 新策略的 Markov 核在策略空间中占据一个此前空白的位置，而非挤入一个已有策略密集的区域
+
+### 3.2 一致性检验流程
+
+```python
+class ConsistencyChecker:
+    """
+    检验新策略候选与已有知识库的一致性。
+    使用阶段三的形式化工具 + LLM prompting，不涉及模型训练。
+    """
+    
+    def check(
+        self,
+        candidate: Dict,           # 候选策略（阶段零 schema 格式）
+        candidate_kernel: np.ndarray,  # 候选策略的 Markov 核
+        kb: KnowledgeBase,
+        formal_kb: Dict[str, np.ndarray]
+    ) -> ConsistencyReport:
+        
+        issues = []
+        
+        # 检验 1：条件矛盾检测
+        condition_conflicts = self._check_condition_conflicts(
+            candidate, kb
+        )
+        issues.extend(condition_conflicts)
+        
+        # 检验 2：行动冲突检测
+        action_conflicts = self._check_action_conflicts(
+            candidate_kernel, formal_kb
+        )
+        issues.extend(action_conflicts)
+        
+        # 检验 3：拓扑位置检查
+        topology_check = self._check_topology(
+            candidate_kernel, formal_kb
+        )
+        issues.extend(topology_check)
+        
+        # 检验 4：LLM 语义一致性审核
+        semantic_check = self._llm_semantic_review(
+            candidate, kb
+        )
+        issues.extend(semantic_check)
+        
+        # 汇总
+        critical = [i for i in issues if i.severity == "critical"]
+        warnings = [i for i in issues if i.severity == "warning"]
+        
+        if critical:
+            verdict = "rejected"
+        elif len(warnings) > 3:
+            verdict = "needs_revision"
+        else:
+            verdict = "passed"
+        
+        return ConsistencyReport(
+            verdict=verdict,
+            issues=issues,
+            critical_count=len(critical),
+            warning_count=len(warnings)
+        )
+    
+    def _check_condition_conflicts(
+        self, candidate, kb
+    ) -> List[ConsistencyIssue]:
+        """
+        检查候选策略的 favorable 条件是否与某个已有策略的
+        unfavorable 条件在语义上高度相似。
+        复用阶段二的冲突检测逻辑。
+        """
+        issues = []
+        for cond in candidate["applicability_conditions"]["favorable"]:
+            for sid in kb.get_all_strategy_ids():
+                strategy = kb.load_strategy(sid)
+                for unfav in strategy["applicability_conditions"]["unfavorable"]:
+                    sim = compute_embedding_similarity(
+                        cond["condition"], unfav["condition"]
+                    )
+                    if sim > 0.8:
+                        issues.append(ConsistencyIssue(
+                            type="condition_conflict",
+                            severity="warning",
+                            description=(
+                                f"候选 favorable 条件 '{cond['condition']}' "
+                                f"与 {sid} 的 unfavorable 条件 "
+                                f"'{unfav['condition']}' 语义相似 "
+                                f"(sim={sim:.2f})。"
+                                f"这不一定是错误——可能是合理的 alternative 关系"
+                            ),
+                            related_strategy=sid
+                        ))
+        return issues
+    
+    def _check_action_conflicts(
+        self, candidate_kernel, formal_kb
+    ) -> List[ConsistencyIssue]:
+        """
+        检查在某个问题状态下，候选策略推荐的主行动
+        是否与一个高成功率的已有策略推荐的主行动直接对立。
+        """
+        issues = []
+        n_states = candidate_kernel.shape[0]
+        
+        for state_idx in range(n_states):
+            cand_top = np.argmax(candidate_kernel[state_idx, :])
+            
+            for sid, K in formal_kb.items():
+                exist_top = np.argmax(K[state_idx, :])
+                # 检查是否是"对立行动"
+                if self._are_opposing_actions(cand_top, exist_top):
+                    exist_prob = K[state_idx, exist_top]
+                    cand_prob = candidate_kernel[state_idx, cand_top]
+                    if exist_prob > 0.4 and cand_prob > 0.4:
+                        issues.append(ConsistencyIssue(
+                            type="action_conflict",
+                            severity="warning",
+                            description=(
+                                f"在状态 {state_idx}，候选推荐 "
+                                f"'{ACTION_SPACE[cand_top]}' "
+                                f"(p={cand_prob:.2f})，"
+                                f"但 {sid} 强烈推荐对立行动 "
+                                f"'{ACTION_SPACE[exist_top]}' "
+                                f"(p={exist_prob:.2f})"
+                            ),
+                            related_strategy=sid
+                        ))
+        return issues
+    
+    def _check_topology(
+        self, candidate_kernel, formal_kb
+    ) -> List[ConsistencyIssue]:
+        """
+        检查候选策略在策略空间中的位置。
+        如果它距离所有已有策略都非常近，可能是冗余的。
+        如果它距离所有已有策略都非常远，可能是"幻觉策略"。
+        """
+        issues = []
+        distances = []
+        
+        for sid, K in formal_kb.items():
+            d = fisher_rao_distance(candidate_kernel, K)
+            distances.append((sid, d))
+        
+        min_dist = min(d for _, d in distances)
+        max_dist = max(d for _, d in distances)
+        mean_dist = np.mean([d for _, d in distances])
+        
+        if min_dist < 0.05:
+            nearest = min(distances, key=lambda x: x[1])
+            issues.append(ConsistencyIssue(
+                type="too_close",
+                severity="warning",
+                description=(
+                    f"候选策略与 {nearest[0]} 的 Fisher 距离仅 "
+                    f"{nearest[1]:.4f}，可能是冗余的"
+                )
+            ))
+        
+        if mean_dist > 2.0:
+            issues.append(ConsistencyIssue(
+                type="too_far",
+                severity="warning",
+                description=(
+                    f"候选策略与所有已有策略的平均 Fisher 距离 "
+                    f"为 {mean_dist:.2f}，远高于正常范围。"
+                    f"可能是 LLM 幻觉生成的无意义策略"
+                )
+            ))
+        
+        return issues
+```
+
+### 3.3 LLM 语义一致性审核
+
+数学检验可能遗漏语义层面的矛盾。用 LLM 做最终的语义审核：
+
+```python
+SEMANTIC_CONSISTENCY_PROMPT = """
+你是一个哲学方法论专家。请审核以下候选新策略是否与已有的方法论体系一致。
+
+## 候选策略
+名称: {candidate_name}
+描述: {candidate_description}
+操作步骤: {candidate_steps}
+假设的适用条件: {candidate_conditions}
+
+## 已有策略体系摘要
+{existing_strategies_summary}
+
+## 审核标准
+1. 候选策略的逻辑是否自洽（步骤之间不矛盾）？
+2. 候选策略是否与某个已有策略在本质上相同（换了表述但核心一样）？
+3. 候选策略是否包含任何明显不合理的假设？
+4. 候选策略的适用条件是否合理（不过度宽泛也不过度狭窄）？
+
+输出 JSON:
+{{
+    "self_consistent": true/false,
+    "potential_duplicate_of": "策略 ID 或 null",
+    "unreasonable_assumptions": ["..."],
+    "condition_quality": "too_broad / reasonable / too_narrow",
+    "overall_verdict": "accept / revise / reject",
+    "revision_suggestions": ["..."],
+    "reasoning": "..."
+}}
+"""
+```
+
+---
+
+## 4. 经验验证
+
+### 4.1 验证协议
+
+通过一致性检验的候选策略进入经验验证阶段。验证的核心问题是：**这个候选策略在其声称适用的问题类型上，是否真的比已有策略表现更好？**
+
+验证分四个阶段，前两个阶段利用阶段零点五的世界模型做廉价预筛，后两个阶段在真实环境中做严格验证。
+
+```
+候选策略 S_new
+        │
+        ▼
+┌───────────────────┐
+│  阶段 0: 世界模型    │  在世界模型中大量模拟
+│  预筛 (WM Screen)  │  200+ 次模拟，零真实执行成本
+└────────┬──────────┘
+         │ 模拟成功率 > 25%
+         ▼
+┌───────────────────┐
+│  阶段 1: 小规模验证 │  在 20-30 道精选任务上真实测试
+│  (Pilot Test)      │  快速失败检测
+└────────┬──────────┘
+         │ 通过 (成功率 > 30%)
+         ▼
+┌───────────────────┐
+│  阶段 2: 对比验证   │  与最佳已有策略 head-to-head
+│  (Comparative)     │  在 50-100 道任务上
+└────────┬──────────┘
+         │ 优于 baseline (p < 0.05)
+         ▼
+┌───────────────────┐
+│  阶段 3: 泛化验证   │  在未见过的领域/任务上测试
+│  (Generalization)  │  确认不是过拟合
+└────────┬──────────┘
+         │ 通过
+         ▼
+    正式纳入知识库
+```
+
+### 4.2 阶段 0：世界模型预筛（WM Screening）
+
+**目的：** 在不消耗任何真实执行成本的情况下，快速淘汰明显无效的候选策略。这是阶段零点五世界模型在阶段四中最重要的应用。
+
+```python
+def world_model_screening(
+    candidate: Dict,
+    gap: StrategyGap,
+    world_model: HybridWorldModel,
+    n_simulations: int = 200
+) -> WMScreeningResult:
+    """
+    用世界模型大量模拟候选策略在空白区域的表现。
+    成本：200 次模拟 × ~$0.01 = ~$2（如果走 LLM 模拟器）
+    对比：200 次真实执行 × ~$0.10 = ~$20
+    """
+    # 从空白区域的特征组合中采样问题
+    sampled_features = sample_features_from_gap(gap, n_simulations)
+    
+    predictions = []
+    for features in sampled_features:
+        wm_input = WorldModelInput(
+            problem_features=features,
+            strategy_id="candidate",
+            strategy_summary=candidate["description"]["one_sentence"]
+        )
+        pred = world_model.predict(wm_input)
+        predictions.append(pred)
+    
+    # 统计模拟成功率
+    sim_success_rate = np.mean([
+        p.predicted_success_probability for p in predictions
+    ])
+    
+    # 与最佳已有策略的模拟对比
+    baseline_predictions = []
+    for features in sampled_features:
+        wm_input = WorldModelInput(
+            problem_features=features,
+            strategy_id=gap.best_existing_strategy,
+            strategy_summary=""
+        )
+        pred = world_model.predict(wm_input)
+        baseline_predictions.append(pred)
+    
+    baseline_rate = np.mean([
+        p.predicted_success_probability for p in baseline_predictions
+    ])
+    
+    # 候选的模拟成功率应高于已有策略的模拟成功率
+    sim_improvement = sim_success_rate - baseline_rate
+    
+    passed = sim_success_rate > 0.25 and sim_improvement > 0.0
+    
+    return WMScreeningResult(
+        sim_success_rate=sim_success_rate,
+        baseline_sim_rate=baseline_rate,
+        sim_improvement=sim_improvement,
+        passed=passed,
+        n_simulations=n_simulations,
+        # 记录世界模型预测的主要失败模式，供后续分析
+        predicted_failure_modes=Counter(
+            mode
+            for p in predictions
+            for mode in p.predicted_failure_modes
+        ).most_common(5)
+    )
+```
+
+**预筛阈值 25% 的理由：** 世界模型本身有预测偏差（通常偏乐观），所以模拟成功率 25% 大约对应真实成功率 15-20%。只有高于这个下限的候选才值得花真实执行的成本去验证。
+
+**世界模型预筛的价值：** 如果候选生成阶段产生了 10 个候选，其中 7 个在世界模型预筛中被淘汰，那么后续的真实执行验证只需要在 3 个候选上进行——节省了 70% 的验证成本。
+
+**世界模型预测偏差的补偿：** 如果世界模型的校准报告显示它对新策略有系统性乐观偏差（这很可能，因为新策略不在世界模型的训练分布内），预筛阈值应该上调。具体调整幅度基于阶段零点五的校准数据。
+
+### 4.3 阶段 1：小规模验证（Pilot Test）
+
+**目的：** 在真实环境中快速淘汰世界模型预筛的假阳性——那些在模拟中看起来可行但实际执行中失败的候选。
+
+```python
+def pilot_test(
+    candidate: Dict,
+    gap: StrategyGap,
+    task_env: TaskEnvironment,
+    llm_executor: LLMExecutor,
+    n_tasks: int = 25
+) -> PilotResult:
+    """
+    在策略空白区域的任务上快速测试候选策略。
+    """
+    # 从空白区域的特征组合中选取任务
+    tasks = task_env.sample_tasks_by_features(
+        gap.state, n_tasks
+    )
+    
+    successes = 0
+    trajectories = []
+    
+    for task in tasks:
+        # 用候选策略的 operational_steps 构造 prompt
+        strategy_prompt = build_strategy_prompt(candidate)
+        outcome = task_env.execute_with_strategy(
+            strategy_prompt, llm_executor
+        )
+        if outcome.success:
+            successes += 1
+        trajectories.append(outcome)
+    
+    success_rate = successes / n_tasks
+    
+    return PilotResult(
+        success_rate=success_rate,
+        passed=success_rate > 0.30,
+        trajectories=trajectories,
+        n_tasks=n_tasks
+    )
+```
+
+**淘汰阈值 30% 的理由：** 空白区域的定义是"最好的已有策略成功率 < 40%"。如果候选策略连 30% 都达不到，它不太可能在更大规模的测试中超越已有策略。
+
+### 4.4 阶段 2：对比验证（Comparative Test）
+
+```python
+def comparative_test(
+    candidate: Dict,
+    gap: StrategyGap,
+    task_env: TaskEnvironment,
+    llm_executor: LLMExecutor,
+    kb: KnowledgeBase,
+    n_tasks: int = 80
+) -> ComparativeResult:
+    """
+    将候选策略与该空白区域的最佳已有策略进行对比。
+    """
+    tasks = task_env.sample_tasks_by_features(gap.state, n_tasks)
+    
+    candidate_results = []
+    baseline_results = []
+    
+    for task in tasks:
+        # 候选策略执行
+        cand_prompt = build_strategy_prompt(candidate)
+        cand_outcome = task_env.execute_with_strategy(
+            cand_prompt, llm_executor
+        )
+        candidate_results.append(cand_outcome.success)
+        
+        # 最佳已有策略执行（同一任务）
+        baseline_strategy = kb.load_strategy(gap.best_existing_strategy)
+        base_prompt = build_strategy_prompt(baseline_strategy)
+        base_outcome = task_env.execute_with_strategy(
+            base_prompt, llm_executor
+        )
+        baseline_results.append(base_outcome.success)
+    
+    # 配对统计检验
+    from scipy.stats import mcnemar
+    
+    # 构造 2x2 列联表
+    both_success = sum(c and b for c, b in zip(candidate_results, baseline_results))
+    cand_only = sum(c and not b for c, b in zip(candidate_results, baseline_results))
+    base_only = sum(not c and b for c, b in zip(candidate_results, baseline_results))
+    both_fail = sum(not c and not b for c, b in zip(candidate_results, baseline_results))
+    
+    table = [[both_success, base_only], [cand_only, both_fail]]
+    stat_result = mcnemar(table, exact=True)
+    
+    cand_rate = sum(candidate_results) / n_tasks
+    base_rate = sum(baseline_results) / n_tasks
+    
+    return ComparativeResult(
+        candidate_rate=cand_rate,
+        baseline_rate=base_rate,
+        improvement=cand_rate - base_rate,
+        p_value=stat_result.pvalue,
+        passed=(cand_rate > base_rate and stat_result.pvalue < 0.05),
+        n_tasks=n_tasks
+    )
+```
+
+### 4.5 阶段 3：泛化验证
+
+对比验证仅在策略空白区域的任务上进行。泛化验证检查候选策略是否在非空白区域也有价值——或者至少不会造成危害。
+
+```python
+def generalization_test(
+    candidate: Dict,
+    task_env: TaskEnvironment,
+    llm_executor: LLMExecutor,
+    n_tasks_per_domain: int = 20
+) -> GeneralizationResult:
+    """
+    在多个领域上测试候选策略，检查泛化能力。
+    """
+    results_by_domain = {}
+    
+    for domain in task_env.get_all_domains():
+        tasks = task_env.sample_tasks_by_domain(domain, n_tasks_per_domain)
+        successes = sum(
+            1 for task in tasks
+            if task_env.execute_with_strategy(
+                build_strategy_prompt(candidate),
+                llm_executor
+            ).success
+        )
+        results_by_domain[domain] = successes / n_tasks_per_domain
+    
+    # 候选策略在非目标领域上不应该有灾难性差表现
+    min_rate = min(results_by_domain.values())
+    
+    return GeneralizationResult(
+        domain_rates=results_by_domain,
+        min_domain_rate=min_rate,
+        passed=min_rate >= 0.15,  # 即使在最差领域也不应低于 15%
+    )
+```
+
+### 4.6 候选策略的迭代修正
+
+如果候选策略未通过验证但表现出部分潜力（例如 pilot 成功率在 20-30% 之间），不直接丢弃，而是尝试修正。
+
+```python
+STRATEGY_REVISION_PROMPT = """
+候选策略 "{candidate_name}" 在验证中表现不佳。
+
+## 验证结果
+成功率: {success_rate}%
+典型的失败案例:
+{failure_examples}
+
+## 分析
+策略的操作步骤中，步骤 {step_number} 最常关联到失败:
+{step_analysis}
+
+## 修正任务
+请修改策略的操作步骤，使其更好地应对验证中暴露的问题。
+要求：
+1. 保留策略的核心思路（不要改成一个完全不同的策略）
+2. 只修改与失败关联度最高的步骤
+3. 添加对失败条件的显式处理
+
+输出修改后的 operational_steps（JSON 数组）。
+"""
+```
+
+最多允许 2 轮修正。如果 2 轮修正后仍未通过 pilot test，该候选被正式丢弃。
+
+---
+
+## 5. 知识库集成
+
+### 5.1 集成流程
+
+通过全部三阶段验证的候选策略按以下流程集成到知识库中。
+
+```python
+def integrate_new_strategy(
+    candidate: Dict,
+    candidate_kernel: np.ndarray,
+    validation_results: ValidationResults,
+    kb: KnowledgeBase,
+    formal_kb: Dict[str, np.ndarray],
+    iso_detector: IsomorphismDetector
+):
+    """
+    将验证通过的新策略集成到知识库。
+    """
+    # 1. 分配正式 ID
+    new_id = kb.allocate_next_id()  # 如 "S21"
+    candidate["id"] = new_id
+    
+    # 2. 更新元数据
+    candidate["metadata"].update({
+        "version": "1.0",
+        "created": datetime.utcnow().isoformat(),
+        "confidence": "low",    # 新策略初始置信度为 low
+        "completeness": "low",
+        "source": "phase4_generated",
+        "validation_results": {
+            "pilot_success_rate": validation_results.pilot.success_rate,
+            "comparative_improvement": validation_results.comparative.improvement,
+            "comparative_p_value": validation_results.comparative.p_value,
+            "generalization_min_rate": validation_results.generalization.min_domain_rate
+        },
+        "total_experience_records": validation_results.total_tasks,
+        "successful_applications": validation_results.total_successes,
+        "failed_applications": validation_results.total_failures
+    })
+    
+    # 3. 适用条件状态更新
+    for cond in (candidate["applicability_conditions"]["favorable"] +
+                 candidate["applicability_conditions"]["unfavorable"]):
+        cond["status"] = "active"
+        cond["source"] = "phase4_hypothesized"
+        # 置信度基于验证结果调整
+        cond["confidence"] = min(0.7, validation_results.pilot.success_rate)
+    
+    # 4. 计算与所有已有策略的关系
+    relationships = []
+    for sid, K in formal_kb.items():
+        report = iso_detector._analyze_pair(
+            new_id, candidate_kernel, sid, K
+        )
+        if report.relationship != "independent":
+            relationships.append({
+                "related_strategy": sid,
+                "relationship_type": _map_to_kb_type(report.relationship),
+                "description": f"形式化分析检测到的关系",
+                "formal_evidence": report.distances
+            })
+    candidate["relationships_to_other_strategies"] = relationships
+    
+    # 5. 保存策略文件
+    kb.save_strategy(candidate)
+    
+    # 6. 更新形式化知识库
+    formal_kb[new_id] = candidate_kernel
+    save_kernel(new_id, candidate_kernel)
+    
+    # 7. 写入变更历史
+    write_change_history(
+        new_id,
+        change_type="initial_creation",
+        author="phase4_auto",
+        changes="新策略由阶段四自动生成并通过验证",
+        evidence_refs=[
+            r.execution_id
+            for r in validation_results.all_records
+        ]
+    )
+    
+    # 8. 更新调度器的动作空间
+    # 在下次调度器加载知识库时自动生效
+    
+    # 9. 通知阶段二：新策略已添加，进入经验监控
+    # 阶段二的健康监控将跟踪新策略的后续表现
+```
+
+### 5.2 新策略的"试用期"
+
+新策略在集成后的前 100 次使用中处于"试用期"：
+
+- 置信度上限锁定在 0.7（即使表现很好也不立即升到 high）
+- 阶段二的健康监控对新策略使用更严格的阈值（成功率下降 15% 即触发警告，而非已有策略的 20%）
+- 在试用期内，调度器选择新策略时必须附带一个 `backup_strategy`（不允许没有后备）
+- 试用期结束后（100 次使用 + 至少 30 天），如果成功率 ≥ 40%，升级为正式策略（移除试用期限制）；否则降级或移除
+
+---
+
+## 6. 技术实现
+
+### 6.1 项目文件结构
+
+```
+assumption_agent/
+├── ...                              # 阶段一二三的所有目录保持不变
+├── hypothesis/                      # 阶段四新增目录
+│   ├── gap_detector/
+│   │   ├── detector.py              # 策略空白检测
+│   │   ├── gap_classifier.py        # 空白分类
+│   │   └── coverage_analyzer.py     # 基于形式化拓扑的覆盖分析
+│   ├── generator/
+│   │   ├── gap_analyzer.py          # 空白分析
+│   │   ├── candidate_generator.py   # 候选策略生成
+│   │   ├── structurer.py            # 结构化为知识库 schema
+│   │   ├── deduplicator.py          # 去重（调用阶段三）
+│   │   └── prompts.py               # 所有 LLM prompt 模板
+│   ├── consistency/
+│   │   ├── checker.py               # 一致性检验主模块
+│   │   ├── condition_conflict.py    # 条件矛盾检测
+│   │   ├── action_conflict.py       # 行动冲突检测
+│   │   ├── topology_check.py        # 拓扑位置检查
+│   │   └── prompts.py
+│   ├── validation/
+│   │   ├── pilot_test.py            # 小规模验证
+│   │   ├── comparative_test.py      # 对比验证
+│   │   ├── generalization_test.py   # 泛化验证
+│   │   ├── revision.py              # 候选修正
+│   │   └── protocol.py              # 验证协议（串联三阶段）
+│   ├── integration/
+│   │   ├── integrator.py            # 知识库集成
+│   │   └── probation.py             # 试用期管理
+│   ├── pipeline.py                  # 完整管线
+│   └── config.py
+├── scripts/
+│   ├── ...
+│   ├── detect_gaps.py               # 运行空白检测
+│   ├── generate_candidates.py       # 生成候选策略
+│   ├── validate_candidate.py        # 验证候选策略
+│   └── integrate_strategy.py        # 集成新策略
+└── tests/
+    ├── ...
+    ├── test_gap_detector.py
+    ├── test_generator.py
+    ├── test_consistency.py
+    ├── test_validation.py
+    └── test_integration.py
+```
+
+### 6.2 LLM 调用成本估算
+
+| 操作 | 频率 | 每次 token 消耗 | 模型 | 估算成本 |
+|------|------|----------------|------|---------|
+| 空白分析 | 每个空白 1 次 | ~2K in + 500 out | gpt-4o | ~$0.10 |
+| 候选生成 | 每个空白 1 次 | ~3K in + 2K out | gpt-4o | ~$0.20 |
+| 结构化 | 每个候选 1 次 | ~2K in + 3K out | gpt-4o | ~$0.20 |
+| 语义一致性审核 | 每个候选 1 次 | ~4K in + 1K out | gpt-4o | ~$0.20 |
+| 候选修正 | ~30% 候选需修正 | ~2K in + 1K out | gpt-4o | ~$0.10 |
+| **每个空白的总成本** | | | | **~$1-3** |
+| **假设发现 5-10 个空白** | | | | **~$10-30** |
+
+验证阶段的主要成本是 LLM 执行器的调用（与阶段一相同），不是本阶段的额外成本。
+
+### 6.3 与其他阶段的接口
+
+| 方向 | 数据 | 说明 |
+|------|------|------|
+| 阶段一 → 四 | 低置信度信号 | 调度器在哪些问题上"不确定" |
+| 阶段一 → 四 | 经验日志 | 空白检测的成功率统计 |
+| 阶段二 → 四 | 变更历史 | 频繁失败的策略可能暗示空白 |
+| 阶段三 → 四 | 形式化拓扑 | 覆盖分析 + 去重 + 一致性检验 |
+| 阶段四 → 零 | 新策略 JSON | 写入 `kb/strategies/` |
+| 阶段四 → 三 | 新策略的 Markov 核 | 写入 `formal_kb/kernels/` |
+| 阶段四 → 二 | 新策略的经验记录 | 验证阶段的执行记录写入经验日志 |
+| 阶段四 → 一 | 扩展的动作空间 | 调度器下次加载时自动获取 |
+
+---
+
+## 7. 实验设计
+
+### 7.1 核心实验：系统能否发现有价值的新策略
+
+**假设 H1：** 系统生成的新策略中，至少有一条在其目标空白区域上的表现显著优于所有已有策略。
+
+**实验设计：**
+- 运行完整管线：空白检测 → 候选生成 → 一致性检验 → 三阶段验证
+- 记录每个候选的全流程结果
+- 对通过验证的新策略，报告其在空白区域上相对于最佳已有策略的改进幅度
+
+### 7.2 核心实验：新策略的人类评审
+
+**假设 H2：** 系统生成的新策略中，至少有一条被人类专家确认为"有价值的、此前未被显式提出的方法论洞察"。
+
+**实验设计：**
+- 将通过验证的所有新策略提交给 5 名领域专家（覆盖 CS、数学、自然科学、工程、哲学）
+- 每名专家独立评审，评估维度：
+  - 新颖性（0-5）：此策略在方法论文献中是否前所未见？
+  - 合理性（0-5）：此策略的逻辑是否自洽且有说服力？
+  - 实用性（0-5）：如果你知道此策略，是否会在实际问题中使用它？
+  - 表述清晰度（0-5）：操作步骤是否足够清晰到可以执行？
+- **目标：** 至少一条新策略的平均新颖性 ≥ 3.0 且合理性 ≥ 3.5
+
+### 7.3 关键实验：新策略集成后的系统性能
+
+**假设 H3：** 将新策略集成到知识库后，调度器在全量测试集上的综合任务完成率提升 ≥ 3%。
+
+**实验设计：**
+- 对比条件 A：仅含阶段零原始策略的知识库（KB v1.0）
+- 对比条件 B：经过阶段二演化的知识库（KB v1.x）
+- 对比条件 C：含阶段四新策略的知识库（KB v2.0）
+- 在全量测试集上运行调度器（调度器可能需要用 KB v2.0 重新训练或微调）
+- **注意：** 新策略主要在空白区域有贡献，在非空白区域应保持不变。因此全量提升 3% 对应空白区域的大幅提升
+
+### 7.4 分析实验
+
+**分析 1：候选淘汰漏斗**
+- 记录每个环节的淘汰率：去重淘汰了多少？一致性检验淘汰了多少？Pilot 淘汰了多少？
+- 分析哪个环节的淘汰率最高——揭示 LLM 在策略生成上的主要弱点
+
+**分析 2：生成多样性**
+- 对同一个空白，LLM 生成的 3 个候选之间的 Fisher 距离分布
+- 多样性是否足够？是否存在"模式坍缩"（3 个候选其实很相似）
+
+**分析 3：新策略的来源分析**
+- 新策略的灵感来源分布（科学、哲学、工程、日常生活等）
+- LLM 是否倾向于从某些领域借鉴？这种倾向是否合理？
+
+---
+
+## 8. 风险与应对
+
+| 风险 | 概率 | 影响 | 应对措施 |
+|------|------|------|---------|
+| 没有检测到真正的空白 | 中 | 高 | 降低空白阈值（从 0.4 到 0.3）；增加任务多样性；检查是否是任务集覆盖不足而非策略不足 |
+| LLM 生成的候选全部是已有策略的变形 | 高 | 高 | 去重环节过滤；prompt 中显式要求"新思路"并惩罚与已有策略的重复；提供更抽象的灵感来源 |
+| 候选策略通过一致性检验但经验验证全部失败 | 高 | 中 | 增加候选修正轮次；分析失败模式寻找系统性问题；如果反复失败说明 LLM 在方法论创新上的能力有限——这本身是一个有价值的研究发现 |
+| 新策略在空白区域有效但污染非空白区域 | 中 | 中 | 泛化验证环节检查非空白区域不退化；试用期机制限制新策略的影响范围 |
+| 验证成本过高（每个候选需要 100+ LLM 调用） | 中 | 中 | Pilot test 快速淘汰无效候选；对 pilot 成功率 < 20% 的候选直接淘汰 |
+| 人类专家对新策略的评审结果不一致 | 中 | 中 | 增加专家人数；对评审不一致的策略做深入讨论会 |
+| 形式化一致性检验阈值设置不当 | 中 | 中 | 先在已知的策略关系上校准阈值；灵敏度分析 |
+| 整个阶段的核心前提（LLM 能发明新方法论）不成立 | 低 | 极高 | 即使失败也是有价值的结论——它精确标定了当前 AI 系统在方法论创新上的能力边界；论文可以转向分析失败模式 |
+
+---
+
+## 9. 增量开发计划
+
+### Step 1：空白检测（第 1-3 周）
+
+**目标：** 从阶段一二的执行经验中检测策略空白。
+
+- 实现基于经验的空白检测器
+- 实现基于阶段三形式化拓扑的覆盖分析
+- 实现空白分类器
+- **验证：** 在现有数据上识别出至少 3 个 TRUE_GAP 类型的空白
+
+### Step 2：候选生成（第 4-7 周）
+
+**目标：** 为每个空白生成候选新策略。
+
+- 实现空白分析 prompt
+- 实现候选生成 prompt
+- 实现结构化和去重
+- **验证：** 对 3 个空白各生成 3 个候选，去重后剩余 ≥ 5 个独特候选
+
+### Step 3：一致性检验（第 8-10 周）
+
+**目标：** 对所有候选进行一致性检验。
+
+- 实现四层一致性检验（条件矛盾、行动冲突、拓扑位置、语义审核）
+- **验证：** 至少 3 个候选通过一致性检验
+
+### Step 4：经验验证（第 11-16 周）
+
+**目标：** 对通过一致性检验的候选进行三阶段验证。
+
+- 实现 pilot test / comparative test / generalization test
+- 实现候选修正流程
+- **验证：** 至少 1 个候选通过全部三阶段验证
+
+### Step 5：集成与试用期（第 17-19 周）
+
+**目标：** 将验证通过的新策略集成到知识库。
+
+- 实现集成流程
+- 实现试用期管理
+- 用更新后的知识库重新评估调度器性能
+- **验证：** 新策略集成后，空白区域的成功率提升可测量
+
+### Step 6：评估与论文（第 20-24 周）
+
+**目标：** 运行所有实验，完成论文。
+
+- H1-H3 实验
+- 人类专家评审
+- 候选淘汰漏斗分析
+- 论文写作
+
+---
+
+## 10. 完成标准（Definition of Done）
+
+阶段四在以下所有条件同时满足时视为完成：
+
+1. 系统在阶段一二的执行经验中检测到至少 3 个真正的策略空白
+2. 系统为每个空白生成了至少 2 个通过去重的独特候选策略
+3. 至少 1 个候选策略通过了完整的三阶段验证（pilot + comparative + generalization）
+4. 通过验证的新策略在其目标空白区域上的成功率显著优于最佳已有策略（p < 0.05）
+5. 至少 1 个新策略被人类专家确认为"有价值的、此前未被显式提出的方法论洞察"（新颖性 ≥ 3.0 且合理性 ≥ 3.5）
+6. 新策略已正式集成到知识库，并通过 schema 验证
+7. 新策略的形式化 Markov 核已加入 formal_kb，与已有策略的距离和关系已计算
+8. 新策略进入试用期后，在 100 次使用中成功率保持 ≥ 40%（或做出降级/移除决策）
+9. 完整的候选淘汰漏斗数据已记录（记录每个环节淘汰了多少候选及其原因）
+10. 完成一篇论文初稿
+
+---
+
+## 附录 A：Fine-Tune 替代方案
+
+### A.1 为什么默认不 fine-tune
+
+本阶段的核心操作在默认方案中全部通过 prompting + 数学计算实现：
+
+| 操作 | 默认实现方式 | 不 fine-tune 的理由 |
+|------|------------|-------------------|
+| 空白检测 | 规则函数（经验统计 + 阈值） | 纯数值计算，不涉及 ML |
+| 候选生成 | LLM prompting | 策略发明是开放式创造任务，通用 LLM 的多样性是优势 |
+| 一致性检验 | 阶段三数学工具 + LLM prompting | 数学部分无需 ML，语义审核用通用 LLM 足够 |
+| 经验验证 | 阶段一的执行框架 | 复用已有组件 |
+
+### A.2 场景一：假设生成器的专用训练
+
+**触发条件：** LLM 生成的候选策略在去重环节中 > 70% 被淘汰为已有策略的变形（LLM 无法跳出已有模式），或在一致性检验中 > 80% 被淘汰为逻辑不自洽。
+
+**方案：** 训练一个专用的假设生成器，使其比通用 LLM 更擅长生成结构化、一致、新颖的策略候选。
+
+**训练数据构造：**
+
+这是最大的挑战——"好的新策略"的训练数据从何而来？
+
+```python
+HYPOTHESIS_GENERATOR_FINETUNE_CONFIG = {
+    "base_model": "Qwen2.5-7B-Instruct",
+    "method": "LoRA",
+    "lora_rank": 16,
+    
+    "training_data_sources": {
+        # 来源 1: 阶段零知识库中的已有策略
+        # 模拟"从空白到策略"的过程
+        "existing_strategies": {
+            "method": "leave_one_out",
+            # 每次去掉一条策略，用其余策略定义"已有知识库"
+            # 训练目标是从空白特征中"重新发明"被去掉的策略
+            "n_samples": 20,  # 每条策略 1 个样本
+        },
+        
+        # 来源 2: 跨领域方法论迁移
+        # 从设计模式、编程范式等领域提取方法论
+        # 训练目标是将其翻译为本系统的策略 schema
+        "cross_domain": {
+            "sources": [
+                "software_design_patterns",    # GoF 设计模式
+                "cognitive_biases_debiasing",   # 认知偏误的纠偏策略
+                "military_strategy",            # 军事战略原则
+                "negotiation_tactics",          # 谈判策略
+            ],
+            "n_samples_per_source": 10,
+        },
+        
+        # 来源 3: 系统自身成功的候选（bootstrapping）
+        # 在 prompting 方案运行一段时间后，
+        # 收集通过验证的候选作为正例
+        "validated_candidates": {
+            "min_samples": 5,  # 至少 5 条才启动
+            "quality_filter": "passed_all_3_stages",
+        },
+    },
+}
+```
+
+**Leave-one-out 训练的详细设计：**
+
+```python
+def generate_leave_one_out_data(kb: KnowledgeBase) -> List[Dict]:
+    """
+    对知识库中的每条策略，构造一个 (空白描述 → 策略) 的训练样本。
+    """
+    training_data = []
+    all_strategies = kb.get_all_strategies()
+    
+    for target in all_strategies:
+        # 构造"假装 target 不存在"的场景
+        remaining = [s for s in all_strategies if s["id"] != target["id"]]
+        
+        # 找到 target 策略最擅长的问题状态
+        best_states = find_dominant_states(target, remaining)
+        
+        for state in best_states:
+            training_data.append({
+                "input": {
+                    "existing_strategies": [
+                        summarize_strategy(s) for s in remaining
+                    ],
+                    "gap_description": describe_state(state),
+                    "failing_strategies": find_failing_in_state(
+                        remaining, state
+                    ),
+                    "desired_properties": infer_properties(target)
+                },
+                "output": {
+                    "generated_strategy": format_as_candidate(target)
+                }
+            })
+    
+    return training_data
+```
+
+**风险：** Leave-one-out 数据只有 20 条（每条策略 1 条），远不够训练。需要配合跨领域数据和数据增强。即便如此，fine-tune 方案在"发明新策略"这种开放式任务上的价值不确定——可能反而导致模式坍缩（所有候选都像训练数据中的策略）。
+
+### A.3 场景二：用 RL 优化生成质量
+
+**触发条件：** 候选生成的淘汰漏斗中，一致性检验和经验验证的通过率都很低（< 20%），但分析发现失败模式有规律可循（如"总是在步骤 3 出现逻辑跳跃"）。
+
+**方案：** 将候选生成建模为 RL 问题——策略是"如何生成策略"，奖励来自验证结果。
+
+```python
+GENERATOR_RL_CONFIG = {
+    "base_model": "hypothesis_generator (A.2 的输出)",
+    "rl_algorithm": "PPO",
+    
+    "reward_design": {
+        "passed_dedup": 0.2,            # 通过去重
+        "passed_consistency": 0.3,       # 通过一致性检验
+        "passed_pilot": 0.5,             # 通过 pilot test
+        "passed_comparative": 0.8,       # 通过对比验证
+        "passed_generalization": 1.0,    # 通过全部验证
+        "rejected_at_dedup": -0.1,       # 去重失败
+        "rejected_inconsistent": -0.2,   # 一致性失败
+    },
+    
+    "training": {
+        "episodes": 500,                 # 每个 episode = 生成 1 个候选并走完验证
+        "max_revisions_per_episode": 2,
+    },
+    
+    # 关键约束: 每个 episode 的成本约 $1-3
+    # 500 episodes ≈ $500-1500
+    "budget_cap": 2000,
+}
+```
+
+**风险评估：** 这个方案的成本极高（$500-1500），且 RL 在如此稀疏的奖励信号（每个 episode 耗时数小时才得到一个标量奖励）下很可能无法收敛。**不推荐在本阶段启用。** 仅在系统已稳定运行 6+ 个月、积累了大量候选生成-验证数据之后考虑。
+
+### A.4 启用决策
+
+```
+prompting 方案运行 3+ 个月
+            │
+            ▼
+候选去重淘汰率 > 70%?
+    │
+    是 → 启用 A.2（假设生成器 fine-tune）
+    否 ↓
+
+一致性/验证通过率 < 20% 且失败模式有规律?
+    │
+    是 → 先尝试优化 prompt，如仍无效 → 考虑 A.3（RL 优化）
+    否 → 保持 prompting 方案
+```
+
+### A.5 Fine-tune 方案对项目结构的影响
+
+```
+assumption_agent/
+├── hypothesis/
+│   ├── ...                          # 现有目录不变
+│   └── finetuned_models/
+│       ├── hypothesis_generator/    # A.2: 假设生成器
+│       │   ├── prepare_loo_data.py  # leave-one-out 数据准备
+│       │   ├── prepare_xdomain.py   # 跨领域数据准备
+│       │   ├── train.py
+│       │   └── config.yaml
+│       └── generator_rl/           # A.3: RL 优化
+│           ├── reward_model.py      # 奖励函数
+│           ├── train_rl.py
+│           └── config.yaml
+```
