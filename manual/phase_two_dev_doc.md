@@ -66,9 +66,9 @@
          ▼
 ┌───────────────────┐
 │   经验蒸馏器        │     "这条经验对知识库有什么启示？"
-│  (Experience       │
-│   Distiller)       │     输入: 筛选后的经验 + 知识库当前状态
-│                    │     输出: 更新候选 (UpdateCandidate)
+│  (Experience       │  ◄── 拒绝反馈（整合器的拒绝原因）
+│   Distiller)       │     蒸馏器学习避免重复产出同类被拒候选
+│                    │
 └────────┬──────────┘
          │
          ▼
@@ -85,13 +85,20 @@
 │                    │     输出: 应用/拒绝/人工审核
 └────────┬──────────┘
          │
-    ┌────┼────┐
-    ▼    ▼    ▼
-  应用  拒绝  人工审核
-   │    │      │
+    ┌────┼────┬──────────────────┐
+    ▼    ▼    ▼                  ▼
+  应用  拒绝  人工审核          拒绝原因
+   │    │      │              回传蒸馏器
    ▼    ▼      ▼
   kb/  rejected/ pending_human/
   更新  归档     等待
+
+                    ▼ (定期触发)
+         ┌───────────────────┐
+         │  跨策略失败分析器   │     "多条策略在同类问题上共同失败？"
+         │  + 策略生命周期管理 │     → 信号传递给阶段四（策略空白）
+         │  + KB 一致性审计    │     → 策略退役/分裂/合并建议
+         └───────────────────┘
 ```
 
 ### 1.2 三个模块与阶段零 schema 的关系
@@ -1020,9 +1027,333 @@ class KBHealthMonitor:
 
 回滚操作调用阶段零的 `kb_rollback.py`（阶段零 2.6 节），不需要重新实现。
 
+### 4.6 整合器 → 蒸馏器的反馈回路
+
+**问题：** 当前管线是纯前馈的。如果蒸馏器持续产出被整合器以相同原因拒绝的候选（如"与 S01_F_001 foundational 条件冲突"），蒸馏器不会"学到"避开这类提案——它会反复浪费 LLM 调用成本产出同类无效候选。
+
+**机制：** 整合器每次拒绝候选时，将拒绝原因写入 `rejection_patterns` 缓存。蒸馏器在生成候选前读取该缓存，将高频拒绝模式注入 LLM prompt 作为"禁区"。
+
+```python
+class RejectionFeedback:
+    """
+    整合器拒绝模式的累积统计。
+    蒸馏器在每轮分析前读取，避免重复犯同样的错。
+    """
+    
+    def __init__(self):
+        self.patterns = defaultdict(int)
+        # key: (target_strategy, rejection_reason_category)
+        # value: 累积拒绝次数
+    
+    def record_rejection(self, candidate: UpdateCandidate, reason: str):
+        category = self._categorize_reason(reason)
+        key = (candidate.target_strategy, category)
+        self.patterns[key] += 1
+    
+    def get_active_warnings(self, strategy_id: str, min_count: int = 3):
+        """返回该策略上被拒绝 ≥3 次的模式"""
+        return [
+            (category, count)
+            for (sid, category), count in self.patterns.items()
+            if sid == strategy_id and count >= min_count
+        ]
+    
+    def _categorize_reason(self, reason: str) -> str:
+        """将拒绝原因归类为可复用的模式"""
+        if "foundational" in reason:
+            return "conflicts_with_foundational"
+        elif "contradictory" in reason:
+            return "contradicts_existing_condition"
+        elif "too_close" in reason or "duplicate" in reason:
+            return "near_duplicate"
+        else:
+            return "other"
+```
+
+蒸馏器在 `SINGLE_EXPERIENCE_ANALYSIS_PROMPT` 中增加一段：
+
+```
+## 禁区提示（来自整合器的历史拒绝反馈）
+以下类型的建议曾被多次拒绝，请避免：
+{rejection_warnings}
+```
+
 ---
 
-## 5. "睡眠整合"机制
+## 5. 策略生命周期管理
+
+### 5.1 为什么需要策略级别的管理
+
+Phase 2 的原始设计只修改策略的 `applicability_conditions`——策略本身永远不会被退役、分裂或合并。但知识库应该是一个**活的有机体**：
+
+- 低效策略应该被退役（从动作空间中移除），减少调度器的探索负担
+- 在不同领域表现截然不同的策略应该被分裂为领域特化版本
+- 总是被一起使用的策略应该被合并为一条（或显式地转为策略组合 COMP_*）
+
+策略生命周期管理在每次睡眠整合（第 6 节）时运行。
+
+### 5.2 策略退役
+
+```python
+def check_strategy_retirement(
+    strategy_id: str,
+    experience_log: List[ExecutionRecord],
+    min_uses: int = 50,
+    retirement_threshold: float = 0.20
+) -> Optional[RetirementProposal]:
+    """
+    如果一条策略在 50+ 次使用中成功率持续低于 20%，
+    建议将其从活跃策略集中退役。
+    
+    退役不是删除——策略仍保留在知识库中（供参考和阶段四使用），
+    但调度器的动作空间中不再包含它。
+    """
+    records = [r for r in experience_log
+               if r["strategy_selection"]["selected_strategy"] == strategy_id]
+    
+    if len(records) < min_uses:
+        return None  # 数据不足
+    
+    success_rate = sum(
+        1 for r in records if r["outcome"]["success"]
+    ) / len(records)
+    
+    if success_rate < retirement_threshold:
+        # 检查是否在某个特定领域表现好（如果是，不退役而是分裂）
+        domain_rates = compute_domain_rates(records)
+        if any(rate > 0.5 for rate in domain_rates.values()):
+            return None  # 至少在某个领域有效，建议分裂而非退役
+        
+        return RetirementProposal(
+            strategy_id=strategy_id,
+            overall_rate=success_rate,
+            total_uses=len(records),
+            reason=f"成功率 {success_rate:.0%} 在 {len(records)} 次使用中"
+                   f"持续低于阈值 {retirement_threshold:.0%}",
+            action="deactivate"  # 从动作空间移除但保留在 KB 中
+        )
+```
+
+### 5.3 策略分裂
+
+```python
+def check_strategy_split(
+    strategy_id: str,
+    experience_log: List[ExecutionRecord],
+    min_uses_per_domain: int = 15,
+    divergence_threshold: float = 0.30
+) -> Optional[SplitProposal]:
+    """
+    如果一条策略在不同领域的成功率差异 > 30%，
+    建议将其分裂为领域特化版本。
+    """
+    domain_rates = compute_domain_rates(
+        [r for r in experience_log
+         if r["strategy_selection"]["selected_strategy"] == strategy_id],
+        min_per_domain=min_uses_per_domain
+    )
+    
+    if len(domain_rates) < 2:
+        return None  # 领域覆盖不足
+    
+    max_rate = max(domain_rates.values())
+    min_rate = min(domain_rates.values())
+    
+    if max_rate - min_rate > divergence_threshold:
+        best_domains = [d for d, r in domain_rates.items() if r > max_rate - 0.1]
+        worst_domains = [d for d, r in domain_rates.items() if r < min_rate + 0.1]
+        
+        return SplitProposal(
+            strategy_id=strategy_id,
+            domain_rates=domain_rates,
+            divergence=max_rate - min_rate,
+            suggestion=f"分裂为 {strategy_id}a（适用于 {best_domains}，"
+                       f"成功率 {max_rate:.0%}）和 {strategy_id}b"
+                       f"（需修改适用条件以排除 {worst_domains}）",
+            requires_human_review=True  # 策略分裂必须人工审核
+        )
+```
+
+### 5.4 策略合并
+
+```python
+def check_strategy_merge(
+    experience_log: List[ExecutionRecord],
+    strategy_ids: List[str],
+    co_selection_threshold: float = 0.70
+) -> List[MergeProposal]:
+    """
+    如果两条策略在 70%+ 的问题上被一起选择（标注或实际使用），
+    建议合并或转为策略组合。
+    """
+    proposals = []
+    
+    # 统计策略共现矩阵
+    co_selection = defaultdict(int)
+    total_selection = defaultdict(int)
+    
+    for record in experience_log:
+        selected = record["strategy_selection"]["selected_strategy"]
+        total_selection[selected] += 1
+        # 检查同一问题上是否也尝试过其他策略
+        if "alternatives_considered" in record["strategy_selection"]:
+            for alt in record["strategy_selection"]["alternatives_considered"]:
+                pair = tuple(sorted([selected, alt]))
+                co_selection[pair] += 1
+    
+    for (s1, s2), count in co_selection.items():
+        min_total = min(total_selection[s1], total_selection[s2])
+        if min_total > 0 and count / min_total > co_selection_threshold:
+            proposals.append(MergeProposal(
+                strategy_a=s1,
+                strategy_b=s2,
+                co_selection_rate=count / min_total,
+                suggestion=(
+                    f"{s1} 和 {s2} 在 {count / min_total:.0%} 的场景下共现，"
+                    f"建议合并为一条策略或创建 COMP_NEW"
+                ),
+                requires_human_review=True
+            ))
+    
+    return proposals
+```
+
+---
+
+## 6. 跨策略失败分析
+
+### 6.1 设计动机
+
+蒸馏器的 Step 1（单条经验分析）逐策略工作：S01 失败 → 给 S01 加条件，S02 失败 → 给 S02 加条件。但当**多条策略在同一个问题上共同失败**时，问题不在于各策略各缺了一个条件——问题在于**这类问题需要一种全新方法**。
+
+逐策略的条件添加会将同一个底层现象拆散到多条策略的 unfavorable 列表中，干扰 Phase 4 的空白检测器将它们关联起来。
+
+### 6.2 跨策略失败检测器
+
+```python
+class CrossStrategyFailureDetector:
+    """
+    检测多条策略在同类问题上共同失败的模式。
+    这种模式暗示的不是策略的条件缺失，而是策略空白。
+    """
+    
+    def detect(
+        self,
+        experience_log: List[ExecutionRecord],
+        min_strategies_failed: int = 3,
+        min_occurrences: int = 5
+    ) -> List[CrossFailurePattern]:
+        
+        # 按问题特征分组
+        problems_by_features = defaultdict(list)
+        for record in experience_log:
+            state = tuple(sorted(
+                discretize(record["task"]["complexity_features"]).items()
+            ))
+            problems_by_features[state].append(record)
+        
+        patterns = []
+        for state, records in problems_by_features.items():
+            # 找出在此类问题上失败的所有策略
+            failed_strategies = set()
+            succeeded_strategies = set()
+            for r in records:
+                sid = r["strategy_selection"]["selected_strategy"]
+                if r["outcome"]["success"]:
+                    succeeded_strategies.add(sid)
+                else:
+                    failed_strategies.add(sid)
+            
+            # 纯失败区域：≥3 条策略失败且没有任何策略成功
+            pure_failures = failed_strategies - succeeded_strategies
+            if len(pure_failures) >= min_strategies_failed and \
+               len(succeeded_strategies) == 0 and \
+               len(records) >= min_occurrences:
+                
+                patterns.append(CrossFailurePattern(
+                    problem_state=dict(state),
+                    failed_strategies=list(pure_failures),
+                    total_attempts=len(records),
+                    # 关键：这是一个策略空白信号，不是条件缺失
+                    signal_type="strategy_gap",
+                    recommendation=(
+                        f"问题特征 {dict(state)} 下，"
+                        f"{len(pure_failures)} 条策略全部失败"
+                        f"（{', '.join(pure_failures)}），"
+                        f"且没有任何策略成功。"
+                        f"建议直接传递给阶段四的空白检测器，"
+                        f"而非给每条策略单独添加 unfavorable 条件。"
+                    )
+                ))
+        
+        return patterns
+```
+
+**与 Phase 4 的接口：** 跨策略失败模式直接写入 `experience_log/distilled/gap_signals/`，Phase 4 的空白检测器优先读取这些信号——它们比从各策略的 unfavorable 条件中反向推断空白要可靠得多。
+
+**与蒸馏器的联动：** 当跨策略失败检测器标记了某个问题特征组合为 `strategy_gap` 后，蒸馏器在分析该组合下的单条经验时，**不再**为各策略独立添加 unfavorable 条件——而是在候选中标注 `"skip_individual_conditions": true, "gap_signal_ref": "gap_xxx"`，将归因权留给 Phase 4。
+
+---
+
+## 7. 轨迹摘要生成规范
+
+### 7.1 问题
+
+蒸馏器的 LLM prompt 使用 `{trajectory_summary}`，但摘要的生成方式未被定义。如果摘要丢失了关键的执行细节（如"组件 C 和 F 共享缓存"），蒸馏器只能推断出笼统的条件而非精确的条件。
+
+### 7.2 摘要生成规范
+
+```python
+def generate_trajectory_summary(
+    trajectory: List[TrajectoryStep],
+    max_tokens: int = 500
+) -> str:
+    """
+    生成执行轨迹的结构化摘要。
+    关键原则：保留失败点附近的细节，压缩成功步骤。
+    """
+    if not trajectory:
+        return "[空轨迹]"
+    
+    # 找到关键步骤：失败步、转折步、最后一步
+    critical_steps = []
+    for i, step in enumerate(trajectory):
+        if step.difficulty_score > 0.7:      # 困难步骤
+            critical_steps.append(i)
+        if step.is_failure_point:             # 失败发生点
+            critical_steps.append(i)
+            if i > 0:
+                critical_steps.append(i - 1)  # 失败前一步也保留
+    critical_steps.append(len(trajectory) - 1)  # 最后一步
+    
+    parts = []
+    for i, step in enumerate(trajectory):
+        if i in critical_steps:
+            # 关键步骤：保留完整描述
+            parts.append(
+                f"[步骤 {i+1} ★] {step.action}: {step.full_description}"
+                f" → 结果: {step.result}"
+            )
+        else:
+            # 非关键步骤：压缩为一行
+            parts.append(f"[步骤 {i+1}] {step.action} → {step.result_brief}")
+    
+    summary = "\n".join(parts)
+    
+    # 如果超过 token 限制，优先保留关键步骤
+    if len(summary) > max_tokens * 4:  # 粗略估计
+        summary = "\n".join(
+            p for i, p in enumerate(parts) if i in critical_steps
+        )
+    
+    return summary
+```
+
+**完整轨迹的可选访问：** 对于信息量评分 > 0.7 的高价值经验（unexpected_failure 或 surprising_success），蒸馏器可以请求完整轨迹而非摘要——通过在 prompt 中附加完整的 `execution_trajectory.steps`。这增加了 LLM 调用成本（~2x token），但对高价值经验值得投入。
+
+---
+
+## 8. "睡眠整合"机制
 
 ### 5.1 设计理念
 
@@ -1170,13 +1501,160 @@ def consolidation_with_regression_test(
 
 **回归测试集的构建：** 从 Phase 1 训练过程中的历史成功案例中随机抽取 50 道题，覆盖所有 6 个领域。这些题目在整个系统生命周期内保持不变，作为"遗忘探测器"。
 
-**任务 5：生成整合报告**
+**任务 5：知识库整体一致性审计**
 
-每次睡眠整合后生成一份人类可读的报告，记录所做的变更、回归测试结果和原因。报告写入 `docs/consolidation_reports/`。
+冲突检测（4.4 节）只检查**新候选**与**已有条件**的冲突。但经过多轮独立更新后，**已有条件之间**可能累积出矛盾——两次独立更新各自不与其他条件冲突，但它们之间互相冲突。
+
+例如：第 100 次更新给 S01 添加 unfavorable "组件数量 > 10"，第 200 次更新添加 favorable "系统规模较大时效果更显著"——两者可能在语义上矛盾（大系统 = 组件多）。
+
+```python
+def audit_kb_consistency(kb: KnowledgeBase) -> ConsistencyAuditReport:
+    """
+    全量扫描知识库中所有条件对，检测累积的矛盾。
+    """
+    issues = []
+    
+    for strategy in kb.get_all_strategies():
+        sid = strategy["id"]
+        favorable = strategy["applicability_conditions"]["favorable"]
+        unfavorable = strategy["applicability_conditions"]["unfavorable"]
+        
+        # 检查 1：同一策略内 favorable 和 unfavorable 的语义矛盾
+        for f_cond in favorable:
+            for u_cond in unfavorable:
+                sim = compute_embedding_similarity(
+                    f_cond["condition"], u_cond["condition"]
+                )
+                if sim > 0.7:
+                    # 高相似度的 favorable 和 unfavorable 可能矛盾
+                    issues.append(ConsistencyIssue(
+                        strategy=sid,
+                        condition_a=f_cond["condition_id"],
+                        condition_b=u_cond["condition_id"],
+                        similarity=sim,
+                        type="internal_contradiction",
+                        description=(
+                            f"favorable '{f_cond['condition']}' 与 "
+                            f"unfavorable '{u_cond['condition']}' "
+                            f"语义相似度 {sim:.2f}，可能矛盾"
+                        )
+                    ))
+        
+        # 检查 2：同一列表内的条件是否互相矛盾
+        for cond_list_name, cond_list in [
+            ("favorable", favorable), ("unfavorable", unfavorable)
+        ]:
+            for i in range(len(cond_list)):
+                for j in range(i + 1, len(cond_list)):
+                    # 用 LLM 检查两个同类条件是否逻辑矛盾
+                    if are_logically_contradictory(
+                        cond_list[i]["condition"],
+                        cond_list[j]["condition"]
+                    ):
+                        issues.append(ConsistencyIssue(
+                            strategy=sid,
+                            condition_a=cond_list[i]["condition_id"],
+                            condition_b=cond_list[j]["condition_id"],
+                            type="same_list_contradiction",
+                            description=(
+                                f"两个 {cond_list_name} 条件互相矛盾"
+                            )
+                        ))
+    
+    return ConsistencyAuditReport(
+        issues=issues,
+        total_conditions_checked=sum(
+            len(s["applicability_conditions"]["favorable"]) +
+            len(s["applicability_conditions"]["unfavorable"])
+            for s in kb.get_all_strategies()
+        ),
+        needs_human_review=len(issues) > 0
+    )
+```
+
+**任务 6：策略生命周期检查**
+
+运行第 5 节定义的策略退役/分裂/合并检查，生成建议列表。所有策略级别的变更都需要人工审核。
+
+**任务 7：生成整合报告**
+
+每次睡眠整合后生成一份人类可读的报告，包含：
+- 条件去重结果
+- 一致性审计发现的矛盾
+- 策略生命周期建议（退役/分裂/合并）
+- 回归测试结果
+- 跨策略失败模式（来自第 6 节）
+
+报告写入 `docs/consolidation_reports/`。
 
 ---
 
-## 6. 技术实现
+### 8.6 健康监控的混淆变量控制
+
+**问题：** 健康监控（4.5 节）将经验按 KB 更新时间点分为 before/after 两组比较成功率，但这个对比被多种混淆变量污染：任务分布变化、调度器行为变化（如果 Phase 1 RL 仍在训练）、样本量不对称。
+
+**改进：配对对比替代时间分割**
+
+```python
+def paired_health_check(
+    strategy_id: str,
+    kb_version_before: str,
+    kb_version_after: str,
+    task_pool: List[Task],
+    dispatcher,
+    n_tasks: int = 30
+) -> PairedHealthResult:
+    """
+    用同一批任务在 KB 更新前后各跑一次，做配对对比。
+    消除任务分布差异和调度器变化的混淆。
+    """
+    # 抽取测试任务（固定）
+    test_tasks = random.sample(task_pool, min(n_tasks, len(task_pool)))
+    
+    # 加载更新前的 KB，运行调度器
+    kb_before = load_kb_version(kb_version_before)
+    results_before = []
+    for task in test_tasks:
+        outcome = run_with_kb(dispatcher, kb_before, task, strategy_id)
+        results_before.append(outcome.success)
+    
+    # 加载更新后的 KB，运行调度器（同一批任务）
+    kb_after = load_kb_version(kb_version_after)
+    results_after = []
+    for task in test_tasks:
+        outcome = run_with_kb(dispatcher, kb_after, task, strategy_id)
+        results_after.append(outcome.success)
+    
+    # McNemar 配对检验
+    from scipy.stats import mcnemar
+    both_success = sum(a and b for a, b in zip(results_before, results_after))
+    before_only = sum(a and not b for a, b in zip(results_before, results_after))
+    after_only = sum(not a and b for a, b in zip(results_before, results_after))
+    both_fail = sum(not a and not b for a, b in zip(results_before, results_after))
+    
+    table = [[both_success, before_only], [after_only, both_fail]]
+    stat = mcnemar(table, exact=True)
+    
+    rate_before = sum(results_before) / len(results_before)
+    rate_after = sum(results_after) / len(results_after)
+    
+    return PairedHealthResult(
+        rate_before=rate_before,
+        rate_after=rate_after,
+        improvement=rate_after - rate_before,
+        p_value=stat.pvalue,
+        is_degraded=(rate_after < rate_before and stat.pvalue < 0.05),
+        is_improved=(rate_after > rate_before and stat.pvalue < 0.05)
+    )
+```
+
+**何时使用配对对比 vs 时间分割：**
+- **重要更新（修改 foundational 条件、策略分裂/合并）：** 必须用配对对比（更严格但成本高）
+- **常规更新（新增 tentative 条件、置信度微调）：** 可用时间分割（成本低，接受较大噪声）
+
+---
+
+## 9. 技术实现
 
 ### 6.1 项目文件结构
 
@@ -1416,7 +1894,7 @@ def detect_model_reality_gap(
 
 ---
 
-## 7. 实验设计
+## 10. 实验设计
 
 ### 7.1 核心实验：知识库演化的有效性
 
@@ -1471,7 +1949,7 @@ def detect_model_reality_gap(
 
 ---
 
-## 8. 风险与应对
+## 11. 风险与应对
 
 | 风险 | 概率 | 影响 | 应对措施 |
 |------|------|------|---------|
@@ -1486,7 +1964,7 @@ def detect_model_reality_gap(
 
 ---
 
-## 9. 增量开发计划
+## 12. 增量开发计划
 
 ### Step 1：Mock 管线验证（第 1-2 周）
 
@@ -1545,7 +2023,7 @@ def detect_model_reality_gap(
 
 ---
 
-## 10. 完成标准（Definition of Done）
+## 13. 完成标准（Definition of Done）
 
 阶段二在以下所有条件同时满足时视为完成：
 
