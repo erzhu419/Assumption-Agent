@@ -1,0 +1,825 @@
+[
+  {
+    "problem_id": "software_engineering_001",
+    "domain": "software_engineering",
+    "description": "你负责维护一个内部API服务，该服务提供用户画像数据。最近一次部署后，你收到报告称，`/api/v2/users/{id}/profile` 这个关键端点对于某些用户ID返回的数据不一致，有时甚至完全错误。这个问题并非普遍存在，而是似乎影响到特定批次的用户，尤其是那些在某个特定日期之前创建的账户。在本地开发环境中，使用旧的数据库快照，这个问题无法复现。API网关的日志显示请求成功，用户管理服务的日志也显示数据已成功从数据库获取，但在客户端接收到的数据对于受影响的用户而言，其格式可能不正确或缺少某些字段。最近的部署包含对用户管理服务的更新以及一个次要的数据库模式变更（添加了一个非空 `last_login_ip` 列）。数据库团队确认，对于现有用户，该列已填充默认值。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S01",
+        "S02",
+        "S17"
+      ],
+      "acceptable_strategies": [
+        "S08"
+      ],
+      "explicitly_bad_strategies": [
+        "S11"
+      ],
+      "reasoning": "问题发生在特定部署后，且影响特定条件下的用户。通过控制变量法（S01）隔离最近的变更，分而治之（S02）缩小问题范围（API、服务、数据库），并求异法（S17）比较受影响与未受影响用户的数据差异，能最快定位根本原因。"
+    },
+    "coverage_tags": [
+      "S01",
+      "S02",
+      "S17"
+    ],
+    "problem_type": "调试"
+  },
+  {
+    "problem_id": "software_engineering_002",
+    "domain": "software_engineering",
+    "description": "你刚将一个新的微服务 `image-resizer` 部署到预发布环境。这是一个用Go语言编写的简单应用程序，监听特定端口并处理图片缩放请求。在本地开发机上，它运行良好，没有任何问题。然而，部署到Kubernetes集群后，`image-resizer` Pod反复进入 `CrashLoopBackOff` 状态。查看Pod日志，发现一个错误信息：“Error: bind: address already in use.”。同一命名空间内的其他服务运行正常。部署配置中明确指定服务监听端口为 `8080`。你已经初步确认，没有其他Pod在其配置中显式声明使用了 `8080` 端口。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S08",
+        "S17"
+      ],
+      "acceptable_strategies": [
+        "S01"
+      ],
+      "explicitly_bad_strategies": [
+        "S04"
+      ],
+      "reasoning": "错误信息非常明确地指出了端口占用。最直接的方法是尝试改变端口（S08）或仔细比较生产和本地环境的配置差异（S17），以验证端口是否确实被隐式占用或存在其他冲突。"
+    },
+    "coverage_tags": [
+      "S08",
+      "S17"
+    ],
+    "problem_type": "部署故障排除"
+  },
+  {
+    "problem_id": "software_engineering_003",
+    "domain": "software_engineering",
+    "description": "你的电商平台中有一个名为 `ProcessOrderWorkflow(orderId)` 的核心遗留函数，代码行数已超过1000行。它负责处理订单生命周期的所有环节，包括验证订单项、应用折扣、检查库存、处理支付、更新订单状态、发送确认邮件以及触发发货通知。这个函数由于其庞大的体积、众多的职责以及复杂的内部依赖，成为了频繁出现bug的源头，难以扩展，并且几乎无法进行单元测试。开发人员普遍对其望而却步，导致新功能的开发速度非常缓慢。你的任务是重构这个函数以提高可维护性和可测试性，但整个重构过程必须确保系统持续运行，并且所有变更在上线前都必须经过严格测试。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S02",
+        "S18",
+        "S15"
+      ],
+      "acceptable_strategies": [
+        "S09"
+      ],
+      "explicitly_bad_strategies": [
+        "S08"
+      ],
+      "reasoning": "该函数职责过多，应将其分解为更小、更专注的模块（S02）。通过抽象化（S18）定义清晰的接口和职责，并采用增量构建（S15）的方式，逐步替换或提取功能，可以安全地完成重构。"
+    },
+    "coverage_tags": [
+      "S02",
+      "S18",
+      "S15"
+    ],
+    "problem_type": "代码重构"
+  },
+  {
+    "problem_id": "software_engineering_004",
+    "domain": "software_engineering",
+    "description": "用户报告你的SaaS应用中的“仪表盘”页面加载非常缓慢，有时需要10-15秒。这个页面聚合了来自多个微服务的数据，并显示各种图表和指标。初步的性能分析显示，仪表盘的后端API端点（`/dashboard/data`）是主要耗时部分。该端点会执行多个数据库查询来获取用户特定的统计数据、最近活动和系统范围的聚合信息。数据库服务器本身没有显示异常高的CPU或I/O利用率，并且其他使用相同数据库的API性能正常。问题似乎在高峰时段更为严重。你怀疑这可能与查询的数量或复杂性有关，或者存在N+1查询问题，但快速的代码审查并未立即揭示明显的罪魁祸首。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S24",
+        "S13",
+        "S01"
+      ],
+      "acceptable_strategies": [
+        "S07",
+        "S17"
+      ],
+      "explicitly_bad_strategies": [
+        "S11"
+      ],
+      "reasoning": "首先应识别仪表盘API中的关键瓶颈（S24），例如特定的数据库查询或数据聚合逻辑。然后，通过证伪优先（S13）的方法，系统性地排除各种性能假设，并结合控制变量法（S01）隔离影响因素，以精确找出根源。"
+    },
+    "coverage_tags": [
+      "S24",
+      "S13",
+      "S01"
+    ],
+    "problem_type": "性能优化"
+  },
+  {
+    "problem_id": "software_engineering_005",
+    "domain": "software_engineering",
+    "description": "你被要求设计一个针对社交媒体平台的新型实时通知系统。该系统需要能够向数百万用户发送各种类型的通知（例如，新粉丝、帖子评论、收到消息），并通过不同的渠道（应用内、电子邮件、推送通知）进行分发。关键需求包括对关键通知的低延迟、高可靠性（无通知丢失）以及处理突发活动高峰的可伸缩性。平台目前已经拥有强大的用户认证服务和成熟的消息队列基础设施。你将从零开始设计通知系统的特定组件。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S09",
+        "S06",
+        "S18"
+      ],
+      "acceptable_strategies": [
+        "S03",
+        "S15"
+      ],
+      "explicitly_bad_strategies": [
+        "S11"
+      ],
+      "reasoning": "面对复杂系统设计，应首先通过降维/简化（S09）聚焦核心功能，例如先设计应用内通知。然后，通过先特殊后一般（S06）逐步扩展到其他通知类型和渠道。同时，利用抽象化（S18）定义清晰的模块和接口，确保系统的可扩展性和可维护性。"
+    },
+    "coverage_tags": [
+      "S09",
+      "S06",
+      "S18"
+    ],
+    "problem_type": "系统设计"
+  },
+  {
+    "problem_id": "software_engineering_006",
+    "domain": "software_engineering",
+    "description": "你的团队正在开发一个名为 `OrderProcessor` 的新服务，它需要与现有的 `InventoryService` 进行通信，以检查库存水平并预留商品。`InventoryService` 目前通过REST API对外提供服务。现在，你的团队正在考虑 `OrderProcessor` 与 `InventoryService` 交互的两种通信模式：\n1.  **直接同步REST API调用**：`OrderProcessor` 向 `InventoryService` 发送HTTP请求并等待响应。\n2.  **异步消息队列**：`OrderProcessor` 将“检查库存”消息发布到队列，`InventoryService` 消费该消息进行处理，并将“库存已检查”消息发布回另一个队列，`OrderProcessor` 再消费此消息。\n`InventoryService` 是关键服务，必须保持高可用性。`OrderProcessor` 需要知道库存状态才能继续处理订单，但并不严格要求即时实时响应；几秒钟的延迟是可接受的。系统会偶尔经历高负载峰值。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S14",
+        "S03",
+        "S27"
+      ],
+      "acceptable_strategies": [
+        "S20"
+      ],
+      "explicitly_bad_strategies": [
+        "S11"
+      ],
+      "reasoning": "两种模式各有优劣，应通过边界条件分析（S14）评估在高负载、服务故障等极端情况下的表现。类比推理（S03）借鉴类似场景的成功经验。若两个服务由不同团队维护，则激励结构分析（S27）有助于理解各自团队的偏好和权衡。"
+    },
+    "coverage_tags": [
+      "S14",
+      "S03",
+      "S27"
+    ],
+    "problem_type": "架构选择"
+  },
+  {
+    "problem_id": "software_engineering_007",
+    "domain": "software_engineering",
+    "description": "一个涉及用户、产品和支付三个微服务以及两个数据库的关键分布式事务，偶尔会以一个泛型错误“Transaction Aborted”失败。这种失败发生得不可预测，大约占总事务的1-2%，通常在适中到高负载期间，但并非总是如此。日志中没有发现一致的模式（没有特定的服务错误、没有特定的用户、也没有特定的产品）。重试有时会成功，有时会再次失败。系统使用分布式事务协调器，但其日志仅确认事务已中止，并未指出根本原因。这个问题已经持续数周，耗费了大量开发时间，多次尝试修复竞态条件或死锁的补丁都未能解决问题。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S13",
+        "S17",
+        "S12",
+        "S07"
+      ],
+      "acceptable_strategies": [
+        "S01",
+        "S02"
+      ],
+      "explicitly_bad_strategies": [
+        "S08"
+      ],
+      "reasoning": "面对这种间歇性、难以复现的复杂问题，应优先采用证伪（S13）而非验证假设，并仔细比较成功与失败事务之间的所有差异（S17）。利用贝叶斯更新（S12）方法，根据新收集的证据持续调整对不同假设的置信度。同时，反向推理（S07）从事务中止状态倒推可能导致该状态的前提条件，有助于发现隐藏的故障路径。"
+    },
+    "coverage_tags": [
+      "S13",
+      "S17",
+      "S12",
+      "S07"
+    ],
+    "problem_type": "调试"
+  },
+  {
+    "problem_id": "software_engineering_008",
+    "domain": "software_engineering",
+    "description": "你公司的旗舰产品，一个数据分析平台，正经历全系统范围的性能下降。用户抱怨报告生成缓慢、仪表盘加载迟钝以及数据摄取速度慢。初步使用APM工具的调查显示，许多服务都存在高延迟、数据库负载增加以及几个关键组件的CPU使用率升高。然而，仅仅优化单个服务（例如，增加特定微服务的实例、优化几个热门查询）只带来了微不足道的临时改进，整体用户体验仍然很差。该系统由数十个相互连接的微服务、多个数据存储和几个第三方集成组成。你面临有限的硬件预算和在主要客户续约前解决性能问题的紧迫期限。持续的“打地鼠式”优化已经证明无效。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S24",
+        "S25",
+        "S23",
+        "S21"
+      ],
+      "acceptable_strategies": [
+        "S22"
+      ],
+      "explicitly_bad_strategies": [
+        "S08",
+        "S11"
+      ],
+      "reasoning": "这种局部优化无效的问题表明存在涌现性（S25），需要识别真正的系统级关键瓶颈（S24）。考虑到有限的资源和时间压力，继续无目的地优化是死胡同（S21）。此时，可能需要接受资源约束下的近似解（S23），优先保障最核心功能的性能，而非追求全面最优。"
+    },
+    "coverage_tags": [
+      "S24",
+      "S25",
+      "S23",
+      "S21"
+    ],
+    "problem_type": "性能优化"
+  },
+  {
+    "problem_id": "software_engineering_009",
+    "domain": "software_engineering",
+    "description": "核心模块 `DataTransformationEngine` 是一个庞大的C++代码库，由不同团队在长达15年的时间里开发。它负责所有数据存储前的处理逻辑。该模块几乎没有单元测试，其依赖关系错综复杂，修改一个部分经常会破坏看似不相关的其他功能。业务部门迫切需要添加对新数据源格式的支持，这要求对该模块进行重大修改。过去尝试重构其小部分代码的努力，都导致了回归、延误和开发人员的沮丧。全面重写的估计成本高得令人望而却步（一个专门团队需要一年以上），但当前的维护成本也日益增加。管理层正在推动快速修复，但工程团队担心进一步的不稳定。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S21",
+        "S22",
+        "S26"
+      ],
+      "acceptable_strategies": [
+        "S09"
+      ],
+      "explicitly_bad_strategies": [
+        "S08",
+        "S15"
+      ],
+      "reasoning": "继续在现有模块内尝试重构或修补是死胡同（S21），因为历史路径依赖（S26）已使代码过于脆弱。最有效的策略是问题重构（S22），例如采用“绞杀者模式”逐步替换旧模块，或者将新功能隔离在新服务中，避免触碰旧代码核心。"
+    },
+    "coverage_tags": [
+      "S21",
+      "S22",
+      "S26"
+    ],
+    "problem_type": "代码重构"
+  },
+  {
+    "problem_id": "software_engineering_010",
+    "domain": "software_engineering",
+    "description": "你的组织正在启动一项重大计划，以遵守新的全球数据隐私法规（例如GDPR、CCPA）。这要求集中管理用户同意，并确保跨所有系统的数据匿名化/删除。目前，用户数据分散在数十个微服务中，每个服务由不同的团队拥有，技术债务和自治程度各不相同。一些团队渴望遵守，另一些则认为这是一项负担。提议的解决方案涉及一个新的“隐私网关”服务，所有数据访问都必须通过它路由。然而，集成此网关需要对现有API和数据库模式进行重大更改，并且遭到几个关键团队的抵制，他们担心会干扰其路线图，并认为这是一个过度工程化的解决方案。你需要提出一个策略来有效地实施这项跨组织的变革。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S27",
+        "S24",
+        "S20",
+        "S22"
+      ],
+      "acceptable_strategies": [
+        "S09",
+        "S15"
+      ],
+      "explicitly_bad_strategies": [
+        "S04"
+      ],
+      "reasoning": "此问题涉及复杂的组织变革和多方利益冲突。首先需要进行激励结构分析（S27），理解各团队的顾虑和目标。识别关键决策节点或阻力最大的团队（S24）进行重点沟通。同时，可以尝试对偶/互补视角（S20）或问题重构（S22），将隐私网关包装成一个业务优势或风险规避者，而非纯粹的合规负担，以争取更广泛的支持。"
+    },
+    "coverage_tags": [
+      "S27",
+      "S24",
+      "S20",
+      "S22"
+    ],
+    "problem_type": "系统设计"
+  },
+  {
+    "problem_id": "software_engineering_011",
+    "domain": "software_engineering",
+    "description": "你负责维护一个大型电商平台的订单处理系统。最近上线了一个新功能，允许用户批量导入商品信息。上线后，部分用户反馈在导入包含特定复杂字符（如日文、表情符号）的商品名称时，系统会返回一个通用的“无效输入”错误，导致导入失败。然而，使用标准英文字符或数字的导入操作则一切正常。错误日志中只记录了“Invalid Input: Data validation failed”，但没有提供具体的字段或行号信息。由于系统负载较高，无法在生产环境进行大规模调试，你需要找到问题的根源并提供解决方案。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S01",
+        "S17"
+      ],
+      "acceptable_strategies": [
+        "S06",
+        "S09"
+      ],
+      "explicitly_bad_strategies": [
+        "S08",
+        "S11"
+      ],
+      "reasoning": "通过比较成功和失败的案例（S17），识别导致问题的特定输入模式（复杂字符）。然后，在受控环境中（S01）每次只改变一个因素，逐步缩小范围，验证每个可疑因素，直到定位到问题根源。"
+    },
+    "coverage_tags": [
+      "S01",
+      "S17"
+    ],
+    "problem_type": "调试"
+  },
+  {
+    "problem_id": "software_engineering_012",
+    "domain": "software_engineering",
+    "description": "你负责一个高并发社交媒体应用的后端服务。最近，用户反馈个人主页加载速度明显变慢，有时甚至出现超时。通过监控系统发现，一个核心API响应时间从之前的几十毫秒飙升到几秒钟。初步分析表明，这个API依赖的一个复杂数据库查询是主要瓶颈。该查询涉及多个表的JOIN操作，并且在高峰时段表现尤为糟糕。数据库的整体CPU和I/O利用率并未达到上限，数据量虽然持续增长，但并非突然暴增。你需要制定一个计划来诊断并解决这个性能问题，确保主页加载恢复正常。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S02",
+        "S24"
+      ],
+      "acceptable_strategies": [
+        "S01",
+        "S07"
+      ],
+      "explicitly_bad_strategies": [
+        "S08",
+        "S11"
+      ],
+      "reasoning": "将整个请求链路分解（S02），从数据库、缓存、应用层逐一排查，并使用性能分析工具识别真正的瓶颈点（S24）。这有助于快速定位问题，而不是盲目优化。"
+    },
+    "coverage_tags": [
+      "S02",
+      "S24"
+    ],
+    "problem_type": "性能优化"
+  },
+  {
+    "problem_id": "software_engineering_013",
+    "domain": "software_engineering",
+    "description": "你的团队被要求设计一个全新的实时数据分析平台，旨在处理来自物联网设备的海量传感器数据。该平台需要支持每秒数百万条数据的摄入、实时聚合、异常检测，并将处理结果同步到多个下游系统，包括数据仓库、操作仪表盘和告警服务。关键需求包括极低延迟（亚秒级）、高吞吐量、高可用性和灵活的扩展性。团队内部对于采用纯流式处理架构（如Apache Flink）还是混合批流架构（如Spark Streaming结合Kafka）存在分歧。纯流式架构能满足低延迟，但对复杂批处理任务支持不够；混合架构则反之。此外，公司现有的运维团队对特定技术栈的熟悉程度也不同，预算对运维复杂性有严格限制。你需要在这些相互冲突的需求和约束下，提出一个最合适的架构方案。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S25",
+        "S27",
+        "S22"
+      ],
+      "acceptable_strategies": [
+        "S02",
+        "S07",
+        "S18"
+      ],
+      "explicitly_bad_strategies": [
+        "S11",
+        "S05"
+      ],
+      "reasoning": "架构选择不仅是技术问题，也是组织问题。需要识别不同方案组合可能产生的非线性涌现特性（S25），分析团队对不同技术栈的偏好和运维成本（S27），甚至可能需要重新定义问题范围或分阶段实现（S22）来解决内部冲突和技术挑战。"
+    },
+    "coverage_tags": [
+      "S25",
+      "S27",
+      "S22"
+    ],
+    "problem_type": "架构选择"
+  },
+  {
+    "problem_id": "software_engineering_014",
+    "domain": "software_engineering",
+    "description": "你正在维护一个包含核心业务逻辑的遗留模块，该模块负责处理产品库存管理。这个模块最初由少数人开发，经过多年迭代，已经变成了一个拥有数千行代码的巨大类，内部耦合严重，充斥着复杂的条件逻辑和重复代码。任何小的修改都可能引入意想不到的副作用，导致测试和部署周期变长。现在，公司计划推出一个全新的供应链管理系统，需要与这个库存模块进行深度集成，并要求支持多种新的库存策略。然而，由于模块的复杂性，当前的集成工作进展缓慢，且风险极高。团队普遍认为需要对其进行彻底重构，但又担心重构的成本和风险，以及可能延误新系统的上线时间。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S02",
+        "S15",
+        "S06"
+      ],
+      "acceptable_strategies": [
+        "S18",
+        "S09"
+      ],
+      "explicitly_bad_strategies": [
+        "S08",
+        "S04"
+      ],
+      "reasoning": "将巨大的模块分解为更小的、可管理的单元（S02），并采用增量的方式逐步重构（S15），每次只修改一小部分，确保现有功能不受影响。可以从最简单的、风险最低的部分开始（S06）。"
+    },
+    "coverage_tags": [
+      "S02",
+      "S15",
+      "S06"
+    ],
+    "problem_type": "代码重构"
+  },
+  {
+    "problem_id": "software_engineering_015",
+    "domain": "software_engineering",
+    "description": "你负责一个核心支付网关微服务的部署。最近，一个包含小幅功能改进和依赖更新的新版本被部署到生产环境。部署完成后，监控系统立即发出大量警报，显示服务错误率飙升（HTTP 500错误），并且平均响应时间急剧增加。紧急回滚到上一个稳定版本后，问题立即消失。再次尝试部署新版本，问题重现。该新版本在预发布环境（Staging）通过了所有自动化测试和手动验证，运行良好。预发布环境与生产环境在基础设施层面高度相似，但配置文件（如数据库连接、第三方API密钥、资源配额）存在差异。你需要迅速找出导致生产环境部署失败的根本原因。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S01",
+        "S17",
+        "S13"
+      ],
+      "acceptable_strategies": [
+        "S09",
+        "S06"
+      ],
+      "explicitly_bad_strategies": [
+        "S08",
+        "S11"
+      ],
+      "reasoning": "通过比较生产和预发布环境的差异（S17），特别是配置文件和资源配额，可以系统性地排除可能导致问题的变量。在受控环境中，每次只改变一个变量（S01），并优先验证那些最可能导致问题的假设（S13）。"
+    },
+    "coverage_tags": [
+      "S01",
+      "S17",
+      "S13"
+    ],
+    "problem_type": "部署故障排除"
+  },
+  {
+    "problem_id": "software_engineering_016",
+    "domain": "software_engineering",
+    "description": "你正在为一个快速增长的社交媒体平台设计一个新的统一通知服务。该服务需要能够发送多种类型的通知（例如：应用内推送、电子邮件、短信），并允许用户精细地配置他们的通知偏好。服务的关键要求包括：高吞吐量（支持数百万用户和突发流量高峰）、低延迟（实时通知）、高可靠性（确保消息送达）和易于扩展。通知的触发源多样，包括用户行为（如点赞、评论）、系统事件（如新版本发布）和营销活动。目前，通知逻辑分散在各个业务服务中，导致管理混乱、难以追踪和扩展。你需要设计一个中心化的服务来解决这些问题。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S18",
+        "S02",
+        "S07"
+      ],
+      "acceptable_strategies": [
+        "S15",
+        "S09"
+      ],
+      "explicitly_bad_strategies": [
+        "S11",
+        "S08"
+      ],
+      "reasoning": "首先，抽象出通知的核心概念和流程（S18），将其分解为消息生成、路由、发送等子模块（S02）。然后，从用户接收通知的目标出发，反推所需的组件和流程（S07），确保满足可靠性、可扩展性等关键需求。"
+    },
+    "coverage_tags": [
+      "S18",
+      "S02",
+      "S07"
+    ],
+    "problem_type": "系统设计"
+  },
+  {
+    "problem_id": "software_engineering_017",
+    "domain": "software_engineering",
+    "description": "一个在线协作平台的用户反馈，他们更新个人资料（如头像、昵称）后，有时在其他用户查看时仍显示旧信息。这个问题是间歇性的，似乎只影响一小部分用户，且在不同设备上表现不一。后端API和数据库日志确认，用户提交的更新请求已成功处理，并且数据在主数据库中是正确的。该平台使用了多层缓存（包括分布式缓存Redis和CDN）以及一个用于快速查询的用户资料聚合视图。最近没有部署与用户资料更新逻辑直接相关的代码。你需要找出导致用户资料显示不一致的根本原因。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S17",
+        "S01",
+        "S13"
+      ],
+      "acceptable_strategies": [
+        "S07",
+        "S09"
+      ],
+      "explicitly_bad_strategies": [
+        "S08",
+        "S11"
+      ],
+      "reasoning": "通过比较受影响用户和未受影响用户的行为模式或数据流（S17），可以缩小问题范围。在可控环境下（S01），逐层禁用或刷新缓存，以证伪缓存层导致数据不一致的假设（S13）。"
+    },
+    "coverage_tags": [
+      "S17",
+      "S01",
+      "S13"
+    ],
+    "problem_type": "调试"
+  },
+  {
+    "problem_id": "software_engineering_018",
+    "domain": "software_engineering",
+    "description": "你的小团队被要求开发一个内部使用的请假管理系统。这个系统需要实现员工提交请假申请、经理审批、以及自动发送邮件通知等基本功能。预期用户数量不会超过50人，系统负载将非常低。主要目标是快速开发并上线，同时尽可能降低运维成本和复杂度。团队成员对主流的Web开发框架（如Django、Spring Boot）和云服务（如AWS Lambda、Heroku）都有一定了解。你需要在多种技术栈和架构模式中，选择一个最适合当前项目需求和团队资源的方案。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S05",
+        "S11",
+        "S03"
+      ],
+      "acceptable_strategies": [
+        "S15",
+        "S09"
+      ],
+      "explicitly_bad_strategies": [
+        "S25",
+        "S22"
+      ],
+      "reasoning": "对于简单、低负载的内部工具，应选择最简单、最成熟的方案（S05），快速达到满意效果（S11）。可以借鉴团队已有经验的类似项目（S03），避免过度设计。"
+    },
+    "coverage_tags": [
+      "S05",
+      "S11",
+      "S03"
+    ],
+    "problem_type": "架构选择"
+  },
+  {
+    "problem_id": "software_engineering_019",
+    "domain": "software_engineering",
+    "description": "你的团队已经连续数周尝试将一个新的、高度复杂的微服务部署到生产环境，但每次都遭遇不同的、难以复现的部署失败。这个微服务需要与多个遗留系统集成，涉及复杂的网络策略配置和严格的安全合规要求。失败表现多种多样，包括但不限于“连接拒绝”、“权限不足”、“内存溢出”或“数据格式不匹配”。这些错误在不同的部署尝试中随机出现，使得定位和调试变得极其困难。团队为此投入了大量时间和资源，错过了多个关键里程碑，士气低落。项目经理要求立即解决，但技术负责人开始怀疑是生产环境本身或当前服务架构存在根本性不兼容，导致问题无法通过常规调试手段解决。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S21",
+        "S22",
+        "S23"
+      ],
+      "acceptable_strategies": [
+        "S09",
+        "S19"
+      ],
+      "explicitly_bad_strategies": [
+        "S08",
+        "S01"
+      ],
+      "reasoning": "当常规的调试和部署策略陷入僵局，且资源耗尽、士气低落时，需要识别这是一个死胡同（S21）。此时，重新审视问题定义或寻求替代方案（S22），甚至考虑在当前资源限制下接受一个近似但可行的解决方案（S23），比继续盲目尝试更明智。"
+    },
+    "coverage_tags": [
+      "S21",
+      "S22",
+      "S23"
+    ],
+    "problem_type": "部署故障排除"
+  },
+  {
+    "problem_id": "software_engineering_020",
+    "domain": "software_engineering",
+    "description": "在一个电商平台中，计算商品折扣的逻辑目前分散在三个不同的微服务中：购物车服务、结算服务和订单历史服务。虽然核心算法相似，但每个服务中的实现细节略有差异，导致在某些特定条件下，用户看到的折扣金额可能不一致，甚至出现计算错误。这种重复和不一致的代码不仅增加了维护成本，也提高了引入新bug的风险。团队决定将这段折扣计算逻辑提取为一个独立的、可复用的组件或服务，以确保一致性并简化未来的维护。挑战在于如何在不影响现有三个服务正常运行的前提下，安全、逐步地完成这项重构。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S02",
+        "S15",
+        "S18"
+      ],
+      "acceptable_strategies": [
+        "S09",
+        "S06"
+      ],
+      "explicitly_bad_strategies": [
+        "S04",
+        "S08"
+      ],
+      "reasoning": "将折扣计算逻辑抽象成一个独立的概念（S18），然后将其从现有服务中逐步分离（S02），并采用增量方式（S15）替换现有调用，确保每次修改都经过验证，降低风险。"
+    },
+    "coverage_tags": [
+      "S02",
+      "S15",
+      "S18"
+    ],
+    "problem_type": "代码重构"
+  },
+  {
+    "problem_id": "software_engineering_021",
+    "domain": "software_engineering",
+    "description": "你正在负责一个复杂的单页应用（SPA）的开发，其中包含一个数据表格组件。用户报告称，在特定情况下，表格中的数据没有正确更新。具体来说，当用户在筛选器中选择某个选项后，表格有时会显示旧数据，即使后端 API 已经返回了新的、正确的数据。开发者工具的网络请求显示 API 响应是即时的且数据无误。初步检查代码，数据流向复杂，涉及多个父子组件之间的状态传递和异步操作。你怀疑问题可能出在前端状态管理或组件生命周期的某个环节，但代码库庞大，难以直接定位。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S01"
+      ],
+      "acceptable_strategies": [
+        "S08"
+      ],
+      "explicitly_bad_strategies": [
+        "S04",
+        "S11"
+      ],
+      "reasoning": "核心问题是数据更新机制的局部故障。最有效的做法是系统性地隔离出问题发生的环境，逐步排除干扰因素，确定是哪个环节的数据流出现了阻断或错误。试错法在小范围尝试时也有效，但不及控制变量法系统。"
+    },
+    "coverage_tags": [
+      "S01",
+      "S08"
+    ],
+    "problem_type": "调试"
+  },
+  {
+    "problem_id": "software_engineering_022",
+    "domain": "software_engineering",
+    "description": "一家快速增长的电商公司计划为其现有平台添加一个实时通知系统。该系统需要向用户推送订单状态更新、促销信息和个性化推荐。现有平台是一个庞大的单体应用，使用关系型数据库。公司希望这个新系统能够支持高并发，并且未来可以轻松扩展以处理更多类型的通知和更高的用户量。预算和时间都比较紧张，但质量和可扩展性是长期目标。你需要在现有架构的基础上，设计一个能够满足这些需求的新通知模块。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S02",
+        "S15"
+      ],
+      "acceptable_strategies": [
+        "S09",
+        "S03"
+      ],
+      "explicitly_bad_strategies": [
+        "S04",
+        "S11"
+      ],
+      "reasoning": "将通知系统从单体应用中拆分出来，作为独立服务，有助于实现高并发和可扩展性。同时，从最核心的通知功能开始构建，逐步迭代，可以控制风险和成本。简化和类比也能提供有益的参考方向。"
+    },
+    "coverage_tags": [
+      "S02",
+      "S15",
+      "S09",
+      "S03"
+    ],
+    "problem_type": "系统设计"
+  },
+  {
+    "problem_id": "software_engineering_023",
+    "domain": "software_engineering",
+    "description": "你的团队最近在 CI/CD 流水线中引入了一个新的静态代码分析工具。从那以后，一个原本稳定运行的部署流水线开始频繁失败，错误信息指向一个常见的依赖包的安装问题。具体来说，构建阶段在安装 `package-X` 时总是超时。此前该依赖包一直正常安装。团队成员怀疑新工具可能与构建环境的某些配置冲突，或是引入了新的环境变量导致的问题。然而，回滚新工具的引入需要复杂的流程，你需要在不完全回滚的情况下，尽快找出并解决问题。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S01",
+        "S17"
+      ],
+      "acceptable_strategies": [
+        "S08"
+      ],
+      "explicitly_bad_strategies": [
+        "S04",
+        "S11"
+      ],
+      "reasoning": "最直接的方法是隔离新工具的影响，例如暂时禁用它，或者在没有它的环境中测试。比较成功和失败的构建日志或环境配置差异也能快速定位问题。简单试错也可以，但效率可能不高。"
+    },
+    "coverage_tags": [
+      "S01",
+      "S17",
+      "S08"
+    ],
+    "problem_type": "部署故障排除"
+  },
+  {
+    "problem_id": "software_engineering_024",
+    "domain": "software_engineering",
+    "description": "你负责维护一个大规模的分布式微服务系统，最近系统报告在特定的、高并发的负载模式下，会出现间歇性的高延迟。这些延迟是随机的，没有明确的模式，有时发生在数据库操作，有时发生在服务间通信，有时则发生在缓存层。单个服务的指标看起来正常，但整体用户请求的响应时间却明显变长。你已经尝试过增加资源、优化常用查询，但问题依然存在。更糟糕的是，这种高负载模式难以在测试环境中完全复现，导致定位问题变得异常困难。你怀疑可能存在一些非线性的、在极端并发下才会显现的交互问题。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S02",
+        "S13",
+        "S14",
+        "S25"
+      ],
+      "acceptable_strategies": [
+        "S07",
+        "S17"
+      ],
+      "explicitly_bad_strategies": [
+        "S11",
+        "S08"
+      ],
+      "reasoning": "问题复杂且难以复现，需要系统性地分解问题，并针对不同假设进行严格的证伪。检查系统在极端边界条件下的行为至关重要，因为问题可能由非线性交互引起。简单试错或满意化无法解决这种深层次的复杂问题。"
+    },
+    "coverage_tags": [
+      "S02",
+      "S13",
+      "S14",
+      "S25",
+      "S07",
+      "S17"
+    ],
+    "problem_type": "性能优化"
+  },
+  {
+    "problem_id": "software_engineering_025",
+    "domain": "software_engineering",
+    "description": "一家初创公司正在开发一个全新的 SaaS 产品，面向企业客户。产品初期功能相对简单，但公司有宏伟的愿景，希望未来能快速迭代、添加大量新功能，并且可能需要支持数十万甚至上百万企业用户。团队规模目前较小，只有5名开发人员。在选择系统架构时，团队内部对采用传统的单体应用还是前沿的微服务架构存在争议。单体应用开发速度快，初期成本低，但可能在未来扩展性上遇到瓶颈。微服务架构虽然具备更好的扩展性和灵活性，但初期开发和运维成本高，对团队技能要求也更高。你需要在权衡当前资源和未来愿景的情况下，提出一个合理的架构选择方案。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S09",
+        "S15",
+        "S03"
+      ],
+      "acceptable_strategies": [
+        "S24"
+      ],
+      "explicitly_bad_strategies": [
+        "S04",
+        "S11"
+      ],
+      "reasoning": "考虑到团队规模、初期功能和未来不确定性，从一个简化版（如模块化单体）开始，并逐步演进是更稳妥的选择。参考类似规模和发展阶段的成功案例也能提供宝贵经验。识别关键的扩展瓶颈和决策节点，有助于指导架构演进。"
+    },
+    "coverage_tags": [
+      "S09",
+      "S15",
+      "S03",
+      "S24"
+    ],
+    "problem_type": "架构选择"
+  },
+  {
+    "problem_id": "software_engineering_026",
+    "domain": "software_engineering",
+    "description": "在一个遗留系统中，你发现了一个名为 `process_order_and_dispatch` 的函数。这个函数长达 600 行，包含了订单验证、库存扣减、支付处理、物流接口调用、通知发送和错误日志记录等十多个不同的业务逻辑。函数内部嵌套了多层 `if-else` 和 `for` 循环，导致可读性极差，每次修改都伴随着高风险。现在，业务部门要求对订单处理流程进行一项小的调整，但这处修改需要你深入理解这个庞大的函数，并确保不会影响其他不相关的逻辑。你认为在修改之前，必须对该函数进行重构，以降低未来维护的难度。",
+    "difficulty": "easy",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S02"
+      ],
+      "acceptable_strategies": [
+        "S18"
+      ],
+      "explicitly_bad_strategies": [
+        "S04",
+        "S11"
+      ],
+      "reasoning": "将一个包含多重职责的复杂函数分解成多个独立、职责单一的小函数或类，是提高代码可读性和可维护性的最直接有效的方法。抽象化可以帮助识别这些独立的职责。"
+    },
+    "coverage_tags": [
+      "S02",
+      "S18"
+    ],
+    "problem_type": "代码重构"
+  },
+  {
+    "problem_id": "software_engineering_027",
+    "domain": "software_engineering",
+    "description": "一个关键的批处理作业，负责夜间数据同步，在过去几周内出现了几次数据不一致的问题。具体表现为，部分记录未能正确同步，或者同步的数据与源系统存在细微差异。问题出现的频率不高，且每次发生时，受影响的数据记录都是随机的，没有明显的规律。作业的日志记录非常粗糙，只记录了作业开始和结束，以及是否有致命错误，但没有详细的中间步骤或数据上下文。由于数据量庞大，手动检查所有记录是不现实的。你怀疑可能在某个数据转换或写入步骤中，存在一个难以察觉的条件竞争或隐秘的错误。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S07",
+        "S13",
+        "S17"
+      ],
+      "acceptable_strategies": [
+        "S14"
+      ],
+      "explicitly_bad_strategies": [
+        "S08",
+        "S11"
+      ],
+      "reasoning": "从数据不一致的最终结果反推可能导致其发生的前提条件，并针对这些假设进行测试和证伪，是定位这种隐秘问题的有效方法。比较成功和失败批次之间的差异，以及检查边界数据或极端情况，也能提供线索。盲目试错效率低下。"
+    },
+    "coverage_tags": [
+      "S07",
+      "S13",
+      "S17",
+      "S14"
+    ],
+    "problem_type": "调试"
+  },
+  {
+    "problem_id": "software_engineering_028",
+    "domain": "software_engineering",
+    "description": "一家大型企业启动了一个战略性的数字化转型项目，旨在用一套全新的、高度集成的企业资源规划（ERP）系统取代所有老旧的内部系统。项目启动至今已两年，投入了巨额资金和人力。然而，项目进度持续滞后，预算严重超支，交付的功能模块质量低下且不稳定。团队内部士气低落，关键技术人员流失。业务部门对项目成果极度不满，认为新系统无法满足其核心需求，甚至不如旧系统。项目经理和高级管理层已经多次尝试重新制定计划、调整范围、增加资源，但情况并未好转。你作为外部顾问被邀请来评估项目现状，并提出下一步行动建议。",
+    "difficulty": "hard",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S21",
+        "S22",
+        "S26"
+      ],
+      "acceptable_strategies": [
+        "S24",
+        "S27"
+      ],
+      "explicitly_bad_strategies": [
+        "S11",
+        "S15"
+      ],
+      "reasoning": "在项目长期失败、投入巨大且反复尝试改进无效的情况下，继续沿用原有路径是不可取的。必须考虑项目是否已陷入死胡同，需要重新评估其存在的根本性问题，甚至彻底放弃或重构项目。分析项目的历史路径和各方激励，能帮助理解为何会走到当前境地。"
+    },
+    "coverage_tags": [
+      "S21",
+      "S22",
+      "S26",
+      "S24",
+      "S27"
+    ],
+    "problem_type": "系统设计"
+  },
+  {
+    "problem_id": "software_engineering_029",
+    "domain": "software_engineering",
+    "description": "你团队维护的一个核心数据库查询，用于生成用户报告，最近被报告在某些特定情况下执行缓慢。通常情况下，该查询在几百毫秒内完成，但在某些时间点或针对某些用户，它可能需要数十秒甚至一分钟才能完成。查询本身已经经过索引优化，并且在大部分场景下表现良好。数据库监控显示，在查询变慢时，数据库的 CPU 或 I/O 使用率并未达到瓶颈，但 `waiting for lock` 或 `long running transaction` 的事件偶尔出现。你怀疑问题可能与数据本身的特性、数据库的并发访问模式或特定的时间窗口有关。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S17",
+        "S14",
+        "S01"
+      ],
+      "acceptable_strategies": [
+        "S07"
+      ],
+      "explicitly_bad_strategies": [
+        "S08",
+        "S11"
+      ],
+      "reasoning": "通过对比查询快和慢时的具体环境、用户、数据参数和时间点，可以找出导致性能下降的关键差异。检查边界条件（如数据量极大、并发用户数极多）也能揭示潜在问题。控制变量地改变查询参数或并发模式，有助于定位触发慢查询的特定组合。"
+    },
+    "coverage_tags": [
+      "S17",
+      "S14",
+      "S01",
+      "S07"
+    ],
+    "problem_type": "性能优化"
+  },
+  {
+    "problem_id": "software_engineering_030",
+    "domain": "software_engineering",
+    "description": "一家公司最近将其大部分云服务从一个云提供商迁移到了另一个。最初的成本评估显示，迁移后将节省约 20% 的基础设施费用。然而，在迁移完成后的第一个月，实际账单显示总成本反而增加了 15%，远超预期。公司内部不同团队负责不同的服务，每个团队都有一定的自主权来配置其云资源。初步检查发现，没有明显的资源过度配置，例如没有大量闲置的虚拟机或未使用的存储。你被要求找出导致成本意外增加的原因，并提出解决方案。",
+    "difficulty": "medium",
+    "reference_answer": {
+      "optimal_strategies": [
+        "S02",
+        "S17",
+        "S27"
+      ],
+      "acceptable_strategies": [
+        "S07"
+      ],
+      "explicitly_bad_strategies": [
+        "S11",
+        "S08"
+      ],
+      "reasoning": "将总成本问题分解到各个服务和团队，可以帮助定位具体的费用增长点。对比迁移前后的详细费用构成，找出关键差异，是识别问题所在的关键。此外，考虑不同团队的资源使用习惯和激励结构，有助于理解为何会出现意外的成本飙升，例如是否新云平台的某些服务计费模式不同，或者团队没有动力去优化成本。"
+    },
+    "coverage_tags": [
+      "S02",
+      "S17",
+      "S27",
+      "S07"
+    ],
+    "problem_type": "部署故障排除"
+  }
+]

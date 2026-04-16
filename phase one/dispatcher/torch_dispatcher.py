@@ -364,6 +364,8 @@ class SACDiscreteDispatcher:
             self.alpha_optimizer.zero_grad()
             alpha_loss.backward()
             self.alpha_optimizer.step()
+            with torch.no_grad():
+                self.log_alpha.clamp_(-5.0, 2.0)
             self.alpha = self.log_alpha.exp().item()
 
         # --- Soft target update ---

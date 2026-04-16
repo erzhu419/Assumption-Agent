@@ -340,6 +340,9 @@ class RESACDiscreteDispatcher:
             self.alpha_optimizer.zero_grad()
             alpha_loss.backward()
             self.alpha_optimizer.step()
+            # Clamp alpha to prevent divergence
+            with torch.no_grad():
+                self.log_alpha.clamp_(-5.0, 2.0)  # alpha ∈ [0.007, 7.4]
             self.alpha = self.log_alpha.exp().item()
 
         # === Soft target update ===
