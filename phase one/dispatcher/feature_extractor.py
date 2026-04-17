@@ -37,10 +37,25 @@ class FeatureExtractor:
     Uses LLM for structural features + sentence embedding for text features.
     """
 
-    def __init__(self, use_llm: bool = True):
+    def __init__(self, use_llm: bool = True, cache_path: str = None):
         self.use_llm = use_llm
         self._client = None
         self._encoder = None
+
+        # Load pre-computed embedding cache if available
+        self._embedding_cache = {}
+        import _config as settings
+        cp = cache_path or str(settings.PROJECT_ROOT / "cache" / "embeddings.npz")
+        try:
+            from pathlib import Path
+            if Path(cp).exists():
+                data = np.load(cp, allow_pickle=True)
+                ids = data["ids"]
+                embeddings = data["embeddings"]
+                self._embedding_cache = {str(pid): emb for pid, emb in zip(ids, embeddings)}
+                print(f"  Loaded {len(self._embedding_cache)} cached embeddings")
+        except Exception:
+            pass
 
     @property
     def client(self):
@@ -48,7 +63,7 @@ class FeatureExtractor:
             self._client = create_client()
         return self._client
 
-    def extract(self, problem_description: str) -> Dict:
+    def extract(self, problem_description: str, problem_id: str = None) -> Dict:
         """
         Extract features from a problem description.
         Returns dict with structural features + text embedding.
@@ -58,7 +73,7 @@ class FeatureExtractor:
         else:
             structural = self._extract_structural_heuristic(problem_description)
 
-        embedding = self._get_embedding(problem_description)
+        embedding = self._get_embedding(problem_description, problem_id=problem_id)
 
         return {
             **structural,
@@ -111,23 +126,23 @@ class FeatureExtractor:
             "difficulty": "medium",
         }
 
-    def _get_embedding(self, text: str) -> np.ndarray:
-        """Get text embedding. Uses simple hash if no encoder available."""
-        if self._encoder is not None:
-            return self._encoder.encode(text)
-
-        # Try to load sentence-transformers
-        try:
-            from sentence_transformers import SentenceTransformer
-            self._encoder = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
-            return self._encoder.encode(text)
-        except ImportError:
-            pass
-
-        # Fallback: deterministic hash-based pseudo-embedding
+    def _get_embedding(self, text: str, problem_id: str = None) -> np.ndarray:
+        """Get text embedding. Priority: cache > model > hash fallback."""
         import _config as settings
-        np.random.seed(hash(text) % (2**31))
-        return np.random.randn(settings.EMBEDDING_DIM).astype(np.float32)
+
+        # 1. Check pre-computed cache (instant)
+        if problem_id and problem_id in self._embedding_cache:
+            return self._embedding_cache[problem_id]
+
+        # Also try matching by text hash in case problem_id not available
+        text_key = str(hash(text) % (2**31))
+        if text_key in self._embedding_cache:
+            return self._embedding_cache[text_key]
+
+        # 2. Cache miss: use zero vector (fast) instead of loading model (slow)
+        # sentence-transformer takes 8+ seconds to load and blocks training
+        # Run precompute_embeddings.py first to avoid this path
+        return np.zeros(settings.EMBEDDING_DIM, dtype=np.float32)
 
     def features_to_vector(self, features: Dict, kb_match_scores: np.ndarray = None,
                            cross_problem_stats: np.ndarray = None) -> np.ndarray:

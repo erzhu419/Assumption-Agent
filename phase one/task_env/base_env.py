@@ -131,16 +131,19 @@ class TaskEnvironment:
         ann = self._annotations.get(problem_id)
         task = self._current_task
 
-        if ann is None:
-            # No annotation — treat as unknown
+        # Get reference answer: from annotations if available, otherwise from problem itself
+        if ann is not None:
+            ref = ann.get("reference_answer", {})
+        elif task is not None and "reference_answer" in task:
+            # Augmented problems have reference_answer embedded (inherited from seed)
+            ref = task["reference_answer"]
+        else:
             return ExecutionOutcome(
                 success=False,
                 evaluation_score=0.0,
                 strategy_used=selected_strategy,
-                failure_reason="no_annotation",
+                failure_reason="no_reference",
             )
-
-        ref = ann.get("reference_answer", {})
         optimal = set(ref.get("optimal_strategies", []))
         acceptable = set(ref.get("acceptable_strategies", []))
 
@@ -157,7 +160,8 @@ class TaskEnvironment:
 
         # Check annotator agreement: does majority agree with this choice?
         annotator_votes = []
-        for a in ann.get("annotations", []):
+        ann_data = ann if ann is not None else {}
+        for a in ann_data.get("annotations", []):
             top1 = a["selected_strategies"][0] if a.get("selected_strategies") else None
             if top1:
                 annotator_votes.append(top1)

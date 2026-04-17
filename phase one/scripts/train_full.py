@@ -83,7 +83,7 @@ def train_one(algo: str, task_env, extractor, episodes: int,
         obs = task_env.sample_task("train")
 
         # Extract features
-        features_dict = extractor.extract(obs.description)
+        features_dict = extractor.extract(obs.description, problem_id=obs.problem_id)
         feature_vec = extractor.features_to_vector(features_dict)
 
         # Select action
@@ -148,7 +148,7 @@ def train_one(algo: str, task_env, extractor, episodes: int,
     correct = 0
     total = 0
     for p in problems:
-        fd = extractor.extract(p["description"])
+        fd = extractor.extract(p["description"], problem_id=p.get("problem_id"))
         fv = extractor.features_to_vector(fd)
         act = dispatcher.select_action(fv, cfg.ACTION_SPACE)
         ref = p.get("reference_answer", {})

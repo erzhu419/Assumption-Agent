@@ -90,7 +90,7 @@ class PPOTrainer:
             obs = self.task_env.sample_task("train")
 
             # --- Extract features ---
-            features_dict = self.extractor.extract(obs.description)
+            features_dict = self.extractor.extract(obs.description, problem_id=obs.problem_id)
             feature_vec = self.extractor.features_to_vector(features_dict)
 
             # --- Select action ---

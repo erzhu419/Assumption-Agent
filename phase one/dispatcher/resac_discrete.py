@@ -24,6 +24,9 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+# Auto-detect GPU
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 @dataclass
 class DispatcherAction:
@@ -201,13 +204,13 @@ class RESACDiscreteDispatcher:
         self.critic_actor_ratio = critic_actor_ratio
         self.batch_size = batch_size
 
-        # Ensemble Q-networks
-        self.qf = EnsembleQNetwork(input_dim, num_actions, hidden_dim, ensemble_size)
-        self.target_qf = EnsembleQNetwork(input_dim, num_actions, hidden_dim, ensemble_size)
+        # Ensemble Q-networks on GPU
+        self.qf = EnsembleQNetwork(input_dim, num_actions, hidden_dim, ensemble_size).to(DEVICE)
+        self.target_qf = EnsembleQNetwork(input_dim, num_actions, hidden_dim, ensemble_size).to(DEVICE)
         self.target_qf.load_state_dict(self.qf.state_dict())
 
-        # Policy
-        self.policy = CategoricalPolicy(input_dim, num_actions, hidden_dim)
+        # Policy on GPU
+        self.policy = CategoricalPolicy(input_dim, num_actions, hidden_dim).to(DEVICE)
 
         # Optimizers
         self.qf_optimizer = optim.Adam(self.qf.parameters(), lr=lr)
@@ -219,7 +222,7 @@ class RESACDiscreteDispatcher:
             # Target entropy = 50% of max entropy (log(num_actions))
             # 0.98 was too high — forced near-uniform distribution, alpha diverged
             self.target_entropy = -np.log(1.0 / num_actions) * 0.5
-            self.log_alpha = torch.zeros(1, requires_grad=True)
+            self.log_alpha = torch.zeros(1, requires_grad=True, device=DEVICE)
             self.alpha_optimizer = optim.Adam([self.log_alpha], lr=lr)
             self.alpha = self.log_alpha.exp().item()
         else:
@@ -232,11 +235,11 @@ class RESACDiscreteDispatcher:
 
     def select_action(self, features: np.ndarray,
                       action_space: list = None) -> DispatcherAction:
-        state = torch.FloatTensor(features).unsqueeze(0)
+        state = torch.FloatTensor(features).unsqueeze(0).to(DEVICE)
 
         with torch.no_grad():
             probs, log_probs = self.policy(state)
-            probs_np = probs.squeeze(0).numpy()
+            probs_np = probs.squeeze(0).cpu().numpy()
 
             # Ensemble Q for value estimate
             q_ensemble = self.qf(state)  # (ensemble, 1, num_actions)
@@ -249,7 +252,7 @@ class RESACDiscreteDispatcher:
             action_idx = int(probs.argmax(dim=-1).item())
 
         confidence = float(probs_np[action_idx])
-        log_prob = float(log_probs.squeeze(0)[action_idx].item())
+        log_prob = float(log_probs.squeeze(0)[action_idx].cpu().item())
         strategy_id = action_space[action_idx] if action_space else str(action_idx)
 
         sorted_idx = np.argsort(probs_np)[::-1]
@@ -278,6 +281,9 @@ class RESACDiscreteDispatcher:
         # Higher critic-to-actor ratio (from RE-SAC)
         for critic_step in range(self.critic_actor_ratio):
             states, actions, rewards, next_states, dones = self.buffer.sample(self.batch_size)
+            states = states.to(DEVICE); actions = actions.to(DEVICE)
+            rewards = rewards.to(DEVICE); next_states = next_states.to(DEVICE)
+            dones = dones.to(DEVICE)
 
             # === Critic update ===
             with torch.no_grad():

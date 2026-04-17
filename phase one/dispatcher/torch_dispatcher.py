@@ -13,6 +13,9 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Optional, List, Tuple
 
+# Auto-detect GPU
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 @dataclass
 class DispatcherAction:
@@ -101,9 +104,9 @@ class DQNDispatcher:
         self.epsilon_decay = epsilon_decay
         self.step_count = 0
 
-        # Networks
-        self.q_net = QNetwork(input_dim, num_actions)
-        self.target_net = QNetwork(input_dim, num_actions)
+        # Networks on GPU
+        self.q_net = QNetwork(input_dim, num_actions).to(DEVICE)
+        self.target_net = QNetwork(input_dim, num_actions).to(DEVICE)
         self.target_net.load_state_dict(self.q_net.state_dict())
 
         self.optimizer = optim.Adam(self.q_net.parameters(), lr=lr)
@@ -112,12 +115,12 @@ class DQNDispatcher:
 
     def select_action(self, features: np.ndarray,
                       action_space: list = None) -> DispatcherAction:
-        state = torch.FloatTensor(features).unsqueeze(0)
+        state = torch.FloatTensor(features).unsqueeze(0).to(DEVICE)
 
         with torch.no_grad():
             q_values, v = self.q_net(state)
             q_values = q_values.squeeze(0)
-            probs = F.softmax(q_values, dim=-1).numpy()
+            probs = F.softmax(q_values, dim=-1).cpu().numpy()
 
         # Epsilon-greedy during training
         if self.training and random.random() < self.epsilon:
@@ -154,6 +157,9 @@ class DQNDispatcher:
             return 0.0
 
         states, actions, rewards, next_states, dones = self.buffer.sample(self.batch_size)
+        states = states.to(DEVICE); actions = actions.to(DEVICE)
+        rewards = rewards.to(DEVICE); next_states = next_states.to(DEVICE)
+        dones = dones.to(DEVICE)
 
         # Current Q
         q_values, _ = self.q_net(states)
@@ -230,22 +236,22 @@ class SACDiscreteDispatcher:
         self.tau = tau
         self.batch_size = batch_size
 
-        # Networks: two Q-networks + target (twin Q for stability)
-        self.q1 = QNetwork(input_dim, num_actions)
-        self.q2 = QNetwork(input_dim, num_actions)
-        self.q1_target = QNetwork(input_dim, num_actions)
-        self.q2_target = QNetwork(input_dim, num_actions)
+        # Networks on GPU
+        self.q1 = QNetwork(input_dim, num_actions).to(DEVICE)
+        self.q2 = QNetwork(input_dim, num_actions).to(DEVICE)
+        self.q1_target = QNetwork(input_dim, num_actions).to(DEVICE)
+        self.q2_target = QNetwork(input_dim, num_actions).to(DEVICE)
         self.q1_target.load_state_dict(self.q1.state_dict())
         self.q2_target.load_state_dict(self.q2.state_dict())
 
-        # Policy network (separate from Q for SAC)
+        # Policy network on GPU
         self.policy = nn.Sequential(
             nn.Linear(input_dim, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
             nn.ReLU(),
             nn.Linear(128, num_actions),
-        )
+        ).to(DEVICE)
 
         self.q1_optimizer = optim.Adam(self.q1.parameters(), lr=lr)
         self.q2_optimizer = optim.Adam(self.q2.parameters(), lr=lr)
@@ -255,7 +261,7 @@ class SACDiscreteDispatcher:
         self.auto_alpha = auto_alpha
         if auto_alpha:
             self.target_entropy = -np.log(1.0 / num_actions) * 0.5
-            self.log_alpha = torch.zeros(1, requires_grad=True)
+            self.log_alpha = torch.zeros(1, requires_grad=True, device=DEVICE)
             self.alpha_optimizer = optim.Adam([self.log_alpha], lr=lr)
             self.alpha = self.log_alpha.exp().item()
         else:
@@ -274,11 +280,11 @@ class SACDiscreteDispatcher:
 
     def select_action(self, features: np.ndarray,
                       action_space: list = None) -> DispatcherAction:
-        state = torch.FloatTensor(features).unsqueeze(0)
+        state = torch.FloatTensor(features).unsqueeze(0).to(DEVICE)
 
         with torch.no_grad():
             probs, log_probs = self._get_action_probs(state)
-            probs_np = probs.squeeze(0).numpy()
+            probs_np = probs.squeeze(0).cpu().numpy()
 
             q1_vals, _ = self.q1(state)
             value = (probs * q1_vals).sum().item()
@@ -289,7 +295,7 @@ class SACDiscreteDispatcher:
             action_idx = int(probs.argmax(dim=-1).item())
 
         confidence = float(probs_np[action_idx])
-        log_prob = float(log_probs.squeeze(0)[action_idx].item())
+        log_prob = float(log_probs.squeeze(0)[action_idx].cpu().item())
 
         strategy_id = action_space[action_idx] if action_space else str(action_idx)
 
@@ -315,6 +321,9 @@ class SACDiscreteDispatcher:
             return 0.0
 
         states, actions, rewards, next_states, dones = self.buffer.sample(self.batch_size)
+        states = states.to(DEVICE); actions = actions.to(DEVICE)
+        rewards = rewards.to(DEVICE); next_states = next_states.to(DEVICE)
+        dones = dones.to(DEVICE)
 
         # --- Q-function update ---
         with torch.no_grad():
