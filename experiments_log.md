@@ -219,3 +219,62 @@ Paths open for user decision:
 3. **Accept phase2 as main deliverable** and write up
 
 ---
+
+## Phase 1 "Big Redo": Canonical heuristic questions from Polya/Popper (REVERTED)
+
+**Hypothesis:** My Phase 1 paraphrases were suboptimal — going back to Polya's and Popper's **actual heuristic questions** (verbatim from source texts) should improve orientation fidelity and hence performance.
+
+**Pipeline:**
+
+1. LLM extracted 5-6 canonical heuristic questions per strategy from Polya 1945 / Popper 1959. Most marked as verbatim or near-verbatim. Examples:
+   - S03: "Have you seen it before?" / "Can you think of a familiar problem having the same or a similar unknown?"
+   - S19: "Could you drop a condition?"
+   - S22: "Can you restate the problem?"
+   - S13: "What observations, if found, would refute my theory?"
+2. Stored as `phase zero/kb/strategies_canonical/S*.json` with source citation (author/work/year/section).
+3. New framework `phase1_canonical_framework.py`:
+   - SELECT sees canonical questions as module hint
+   - ADAPT rephrases for task category
+   - EXECUTE uses **persona prompting**: "你作为内化了 Polya/Popper 精神的思考者…"
+4. Stacked with Phase 2 triggers.
+
+### Results
+
+| 对比 | 胜率 | Δ score |
+|---|---|---|
+| phase1_canonical_plus_p2 vs baseline | 47.0% | -0.31 |
+| **phase1_canonical_plus_p2 vs phase2_triggers** | **46.0%** | **-0.26** ← REVERT |
+
+**By domain (vs phase2_triggers):**
+
+| Domain | canonical | phase2 | 解读 |
+|---|---|---|---|
+| business | 7 | 8 | 略输 |
+| daily_life | 9 | 6 | canonical 赢 |
+| engineering | 7 | 8 | 略输 |
+| **mathematics** | **4** | **11** | **canonical 大败** |
+| **science** | **5** | **10** | **canonical 大败** |
+| sw_eng | 14 | 11 | canonical 赢 |
+
+### Important unexpected finding
+
+**Authentic source material is WORSE than LLM-oriented paraphrase** for LLM prompting.
+
+Why:
+1. Polya 的问句 ("Could you drop a condition?") 是为**人类自我反思**写的 — 抽象、开放、依赖内省。LLM 读它走一个 "yes/no 检查" 就过去了。
+2. 我的 paraphrase ("当感觉'没出路'时，问自己'哪条约束是真必要的，哪条是我自己加的'") 是为 **LLM 指令消化**写的 — 带场景 trigger，更具体，有操作指引。
+3. Persona prompting ("你作为内化了 Polya 精神的思考者") 是**间接**的 — LLM 跟随这种角色扮演不如直接给它具体警觉。
+
+**Methodological implication:** 做 LLM harness 时，"回归原典" 不是自动优化方向。需要的是 **"LLM-adapted orientation"** — 基于原典精神但针对 LLM 消化特性做过 phrasing 改写的版本。我之前写的 12 个 Phase 1 paraphrase 误打误撞命中了这一点。
+
+**Decision: REVERT. phase2_triggers (53% vs baseline) remains the winning variant.**
+
+---
+
+## Open paths (for user decision)
+
+- **A. Selective archetypes**: inject Phase 3 archetypes only for business/daily_life
+- **B. Phase 4 改造 (meta-generation)**: let LLM generate NEW orientations from its own failures
+- **C. Phase 3 "case + metaphor library"**: per-archetype 10-20 真实 cases + 跨源隐喻（不限原文），embedding retrieval，让 LLM 通过看多个 instances 归纳 pattern（per user's correction 2026-04-22）
+- **D. Accept phase2_triggers as main deliverable** and write up
+
