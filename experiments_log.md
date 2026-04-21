@@ -85,18 +85,75 @@
 - **technique form 赢 formal domains** (math/science) —— 这些领域需要 "procedural rigor"，attention priors 反而损失必要的结构
 - 这不是 orientation vs technique 谁更好，而是**不同问题类型匹配不同形式**
 
-**本次停在这里**。两种路径供用户醒来决策：
+**User directive after waking:** 做 A 和 B，并加一个"LLM auto-detect form"的 C.
 
-**路径 A（domain-gated 混合）：**
-- 在 practical domains 用 orientation form（12 Polya/Popper）
-- 在 formal domains 用 technique form（原版 operational_steps）
-- 预期：把 practical 60%+ 的优势拿住，同时保留 math/science 的步骤结构
-- 实现：为每个 (domain, difficulty) 类别选择 form
+### Track A/C extended results
 
-**路径 B（接受 inconclusive，原架构继续改造 Phase 2/3/4）：**
-- 不改 form，保留 ours_27 作为 base
-- Phase 2 改造目标仍然是"意识触发条件 from experience"
+**Track A (domain_gated):** 70 orient + 30 technique cached answers (rule: practical→orient, formal→technique).
 
-两个路径都可做，但路径 A 基于实证数据，更稳。
+| 对比 | 胜率 |
+|---|---|
+| domain_gated vs baseline | 45.0% |
+| domain_gated vs ours_27 | 56.2% (27 ties; practical wins) |
+
+**Track C (auto_detect):** LLM classifies per (domain, difficulty) before form selection.
+- Classifier 62% agreement with naive domain rule.
+- Divergences: engineering/easy+hard→proc (disagrees), sci/hard+medium→orient (disagrees), sw_eng/easy+hard→proc (disagrees).
+
+| 对比 | 胜率 |
+|---|---|
+| auto_detect vs baseline | 46.0% |
+| auto_detect vs ours_27 | 49.0% |
+| auto_detect vs domain_gated | 48.0% |
+
+**Phase 1 final verdict:** 6 classifier divergences net-negative (2 helpful on sw_eng, 4 harmful on engineering+science). **domain_gated > auto_detect**. But neither beats baseline. All form-choice strategies stuck at 45-50%.
+
+**Phase 1 kept:** orient_hybrid as representative base for Phase 2 (orientation form has the "attention prior" infrastructure we want to build on).
+
+---
+
+## Phase 2 改造: Awareness Triggers from Failure Mining
+
+**Hypothesis:** From cases where orient_hybrid lost to baseline, extract "missed early signals" and inject them as per-category attention priors in EXECUTE. These triggers are orientations (警觉/反问), not techniques.
+
+**Pipeline:**
+
+1. Mine losses: 55 orient_hybrid-lost cases, LLM extracts 3 triggers each = **161 triggers across 14 categories**
+2. Sample triggers by (domain, difficulty): exact category first, then same-domain, then same-difficulty
+3. Inject top-4 triggers into EXECUTE prompt as historical警觉, alongside attention_priors from Stage 1
+
+**Variant:** phase2_triggers. Reuses orient_hybrid's Stage 0/1 structures — ONLY EXECUTE prompt differs.
+
+### Phase 2 results (100 problems, seed=42)
+
+| 对比 | 胜率 | Δ score |
+|---|---|---|
+| **phase2_triggers vs baseline** | **53.0%** | **+0.14** ← FIRST variant to beat baseline |
+| phase2_triggers vs orient_hybrid | **56.0%** | +0.31 |
+
+**By domain (vs baseline):**
+
+| Domain | phase2_triggers | ours_27 baseline | Δ |
+|---|---|---|---|
+| business | 53.3% | 53.3% | 0 |
+| daily_life | **73.3%** | 66.7% | +6.6 |
+| engineering | **46.7%** | 33.3% | **+13.4** |
+| mathematics | 33.3% | 33.3% | 0 |
+| science | 40.0% | 40.0% | 0 |
+| sw_eng | **64.0%** | 52.0% | **+12.0** |
+
+**By difficulty:** easy 33%, medium 54%, **hard 55%** (triggers help hard problems most).
+
+**Key insight:** The triggers are **problem-specific wisdom extracted from failure**. sw_eng/hard had 21 triggers mined (most), and sw_eng jumped +12pp. Engineering/medium had 17 triggers, engineering gained +13pp. Triggers on math/science didn't fire as much because these tend to need procedural rigor more than awareness priors.
+
+**Decision: KEEP.** Phase 2 改造 is effective. Use phase2_triggers as base for Phase 3 改造.
+
+---
+
+## Phase 3 改造: Hierarchical Problem Isomorphism (pending)
+
+**Planned Hypothesis:** For each new problem, find structurally isomorphic HISTORICAL problems (using our Phase 3 Markov kernel distances + embeddings) and use their past successful solution patterns as additional attention priors. This is "跨时代、跨领域的类比" per reflection.
+
+**Will extend phase2_triggers base.**
 
 ---
