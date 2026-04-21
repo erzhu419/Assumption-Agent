@@ -269,6 +269,35 @@ Why:
 
 **Decision: REVERT. phase2_triggers (53% vs baseline) remains the winning variant.**
 
+### Follow-up: Clean ablation (per user's challenge 2026-04-22)
+
+User challenged: "学富五车学贯中西的人怎么会比水管工差? 之前的对比可能有 confounds (persona, 3-layer, ordering)."
+
+Clean ablation: built `strategies_canonical_orientation/` — 12 JSONs with **SAME schema** as `strategies_orientation/`, only `attention_priors` field swapped to Polya/Popper canonical Chinese heuristic questions. Ran through IDENTICAL orientation_framework + phase2_framework pipelines. Same layer count, no persona, same warning directness.
+
+| 对比 | 胜率 | Δ score |
+|---|---|---|
+| orient_canonical_plus_p2 vs baseline | 49.0% | -0.01 |
+| **orient_canonical_plus_p2 vs phase2_triggers** | **46.5%** | **-0.18** |
+
+Nearly identical to the initial -0.26 Phase 1 big redo. Confirms: **content is the main driver, not prompt design**.
+
+**Interpretation of "学富五车 vs 水管工":**
+
+In human reader scenario, canonical (学富五车) wins trivially. In LLM consumer scenario, paraphrase (水管工-translator) wins.
+
+Reason: Polya's "Have you seen it before?" is written for humans — who pause, search memory, actually do analogy. LLM reads same text → produces a text continuation, does NOT actually pause-and-reflect.
+
+My paraphrase "当感觉'没出路'时，问自己'哪条约束是真必要的'" embeds:
+  - scenario trigger (当感觉没出路时) → LLM recognizes WHEN to apply
+  - specific self-question (哪条约束真必要) → LLM has concrete operation
+
+Best-in-class agent: **学富五车 + 水管工 = 同时理解原典精神 + 理解 LLM 消化特性的 paraphrase 作者**. Not "canonical text in; wisdom out" — it's "canonical-understood-and-LLM-translated". The value is in the TRANSLATOR's dual literacy, not extractable directly from source.
+
+**Hard difficulty particularly hurt by canonical:** 39.5% vs phase2's 60.5% on hard problems — exactly where we'd expect wisdom to help most. Abstract heuristic questions lack scenario grip on complex problems.
+
+**Formal domains** (math 33%, science 40%, engineering 40%) uniformly lose with canonical; **practical domains** (daily_life 60%, business 53%) sometimes win. Matches the practical-vs-formal axis found in Phases 1 and 3.
+
 ---
 
 ## Open paths (for user decision)

@@ -128,18 +128,20 @@ def execute_with_triggers(client, problem: str, structure: Dict,
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", default="phase2_triggers")
+    ap.add_argument("--base", default="orient_hybrid",
+                    help="which cached variant's structures to reuse (default orient_hybrid)")
     ap.add_argument("--n", type=int, default=100)
     args = ap.parse_args()
 
     answers_path = ANSWERS_DIR / f"{args.variant}_answers.json"
     struct_path = STRUCTURES_DIR / f"{args.variant}_structures.json"
     answers = cache_load(answers_path)
-    # Reuse orient_hybrid structures (same Stage 0/1) unless already cached for this variant
+    # Reuse base variant structures (same Stage 0/1) unless already cached for this variant
     if not struct_path.exists():
-        orient_struct = cache_load(STRUCTURES_DIR / "orient_hybrid_structures.json")
-        if orient_struct:
-            cache_save(struct_path, orient_struct)
-            print(f"  [reused] copied orient_hybrid structures ({len(orient_struct)} categories)")
+        base_struct = cache_load(STRUCTURES_DIR / f"{args.base}_structures.json")
+        if base_struct:
+            cache_save(struct_path, base_struct)
+            print(f"  [reused] copied {args.base} structures ({len(base_struct)} categories)")
     structures = cache_load(struct_path)
 
     if not TRIGGERS_PATH.exists():

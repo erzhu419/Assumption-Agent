@@ -50,6 +50,7 @@ for d in [ANSWERS_DIR, STRUCTURES_DIR, JUDGMENTS_DIR]:
 
 KB_DIR = cfg.KB_DIR
 ORIENT_DIR = cfg.PHASE0_DIR / "kb" / "strategies_orientation"
+ORIENT_CANONICAL_DIR = cfg.PHASE0_DIR / "kb" / "strategies_canonical_orientation"
 
 
 # ========================================================================
@@ -191,30 +192,32 @@ JUDGE_PROMPT = """你是方法论评审专家。下面是同一个问题的两�
 # Module loaders
 # ========================================================================
 
-def load_orient_modules(hybrid: bool = True) -> List[Tuple[str, Dict]]:
+def load_orient_modules(hybrid: bool = True, source: str = "paraphrase") -> List[Tuple[str, Dict]]:
     """
     Load strategies.
 
-    If hybrid=True: returns 12 orientation-form (Polya/Popper) + 15 original technique-form.
-    If hybrid=False: returns only the 12 orientation-form strategies (pure subset).
+    source="paraphrase": use strategies_orientation/ (my Phase 1 paraphrases)
+    source="canonical":  use strategies_canonical_orientation/ (Polya/Popper originals)
+
+    If hybrid=True: 12 orient-form + 15 original technique-form.
+    If hybrid=False: only the 12 orient-form.
     """
     modules = []
     orient_ids = set()
 
-    # First: load orientation versions
-    for f in sorted(ORIENT_DIR.glob("S*.json")):
+    src_dir = ORIENT_CANONICAL_DIR if source == "canonical" else ORIENT_DIR
+
+    for f in sorted(src_dir.glob("S*.json")):
         d = json.loads(f.read_text(encoding="utf-8"))
         modules.append((d["id"], d))
         orient_ids.add(d["id"])
 
-    # Then: if hybrid, add the original technique-form strategies for IDs NOT in orient_ids
     if hybrid:
         for f in sorted(KB_DIR.glob("S*.json")):
             d = json.loads(f.read_text(encoding="utf-8"))
             if d["id"] not in orient_ids:
                 modules.append((d["id"], d))
 
-    # Sort by id for deterministic ordering
     modules.sort(key=lambda x: x[0])
     return modules
 
@@ -365,13 +368,14 @@ def execute_orient(client, problem: str, structure: Dict) -> str:
 # Main
 # ========================================================================
 
-def run_variant(variant: str, problems: List[Dict], hybrid: bool = True):
+def run_variant(variant: str, problems: List[Dict], hybrid: bool = True,
+                source: str = "paraphrase"):
     answers_path = ANSWERS_DIR / f"{variant}_answers.json"
     struct_path = STRUCTURES_DIR / f"{variant}_structures.json"
     answers = cache_load(answers_path)
     structures = cache_load(struct_path)
 
-    modules = load_orient_modules(hybrid=hybrid)
+    modules = load_orient_modules(hybrid=hybrid, source=source)
     print(f"  [{variant}] loaded {len(modules)} modules "
           f"({sum(1 for _, d in modules if d.get('form') == 'orientation')} orientation, "
           f"{sum(1 for _, d in modules if d.get('form', 'technique') == 'technique')} technique)")
@@ -434,19 +438,21 @@ def run_variant(variant: str, problems: List[Dict], hybrid: bool = True):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--variant", required=True, help="e.g. orient_hybrid, orient_pure")
+    ap.add_argument("--variant", required=True, help="e.g. orient_hybrid, orient_canonical_hybrid")
     ap.add_argument("--hybrid", action="store_true", default=True,
                     help="12 orientation + 15 technique (default)")
     ap.add_argument("--pure", action="store_true",
                     help="only 12 orientation strategies")
+    ap.add_argument("--source", choices=["paraphrase", "canonical"], default="paraphrase",
+                    help="orientation source: paraphrase (my Phase 1) or canonical (Polya/Popper orig)")
     ap.add_argument("--n", type=int, default=100)
     args = ap.parse_args()
 
     hybrid = not args.pure
     problems = load_sample(args.n)
-    print(f"Running {args.variant} ({'hybrid' if hybrid else 'pure orientation'}) "
-          f"on {len(problems)} problems")
-    run_variant(args.variant, problems, hybrid=hybrid)
+    print(f"Running {args.variant} ({'hybrid' if hybrid else 'pure orientation'}, "
+          f"source={args.source}) on {len(problems)} problems")
+    run_variant(args.variant, problems, hybrid=hybrid, source=args.source)
 
 
 if __name__ == "__main__":
