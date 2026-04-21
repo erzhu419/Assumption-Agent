@@ -150,10 +150,72 @@
 
 ---
 
-## Phase 3 改造: Hierarchical Problem Isomorphism (pending)
+## Phase 3 改造: Cross-Civilizational Archetypes (REVERTED)
 
-**Planned Hypothesis:** For each new problem, find structurally isomorphic HISTORICAL problems (using our Phase 3 Markov kernel distances + embeddings) and use their past successful solution patterns as additional attention priors. This is "跨时代、跨领域的类比" per reflection.
+**Actual implementation:** Rather than per-problem hierarchical structure retrieval, built a library of 20 universal archetypes drawn from cross-civilizational wisdom (箴言/Ecclesiastes + 孙子/Polya/Popper/Kahneman/Hayek/Smith/Acton). Each archetype is an *orientation*, not a technique — "沉没成本谬误", "囚徒困境 / 代理人问题", "路径依赖", "观念根源", "已有的后必再有" etc. LLM detects 2-3 applicable archetypes per (domain, difficulty) category. Archetype wisdom injected as Layer 3 of EXECUTE prompt, on top of Phase 2 triggers.
 
-**Will extend phase2_triggers base.**
+**Variant: phase3_archetypes.** Reuses phase2_triggers structures + triggers.
+
+### Phase 3 v1 (parse bug)
+
+max_tokens=300 truncated LLM's JSON output mid-reasoning. 14/16 categories got empty archetype lists. phase3 essentially became phase2 + "(无原型适用)" placeholder — which actually noise-polluted the EXECUTE prompt.
+
+- phase3 v1 vs baseline: 48% (regressed from phase2's 53%)
+- phase3 v1 vs phase2: 51% (within noise)
+
+### Phase 3 v2 (parse fixed: max_tokens=600 + regex fallback)
+
+All 16 categories now got archetypes. Detected reasonable picks, e.g.:
+- business/hard → 路径依赖, 层级失灵, 锁定效应
+- math/hard → 奥卡姆剃刀, 可证伪性, 边际效益递减
+- sw_eng/hard → 二阶效应, 路径依赖, 确认偏误
+
+**Notable:** 二阶效应 (A08) selected for 11/16 categories — LLM sees "long-term consequences" as near-universal orientation.
+
+### Phase 3 v2 results
+
+| 对比 | 胜率 | Δ score |
+|---|---|---|
+| phase3_v2 vs baseline | 49.0% | -0.19 |
+| **phase3_v2 vs phase2_triggers** | **47.0%** | **-0.18** ← REVERT |
+
+**By domain (phase3_v2 vs phase2_triggers):**
+
+| Domain | phase3 wins | phase2 wins | Δ |
+|---|---|---|---|
+| business | 9 | 6 | +3 |
+| daily_life | 9 | 6 | +3 |
+| engineering | 7 | 8 | -1 |
+| **mathematics** | **5** | **10** | **-5** |
+| science | 6 | 9 | -3 |
+| **sw_eng** | **11** | **14** | **-3** |
+
+### Diagnosis
+
+Archetypes help **practical decision domains** (business/daily_life +3pp each) but **hurt procedural/technical domains** (math/science/sw_eng combined -11pp). The "Layer 3 universal wisdom" framing primes LLM toward abstract philosophical analysis, while math/science problems need concrete procedural rigor.
+
+This echoes Phase 1's finding: practical vs formal axis dominates form/content choice. Adding more orientation-layer content to formal domains is net-negative.
+
+### Decision: REVERT Phase 3 改造
+
+Per autonomous rule "<-3pp → REVERT, 不继续此方向". phase2_triggers remains the winning base.
+
+**Phase 4 改造 NOT automatically initiated** per "没效果就改回来" + "停止后续阶段" (autonomous rule). Awaiting user decision.
+
+---
+
+## Current winning variant: phase2_triggers
+
+53% vs baseline (first to beat baseline). Uses:
+- 12 Polya/Popper strategies in orientation form (Phase 1 改造, +0)
+- 15 original technique strategies (from phase 0)
+- Hybrid SELECT/ADAPT/IMPLEMENT pipeline (Self-Discover task-level)
+- Failure-mined awareness triggers injected into EXECUTE (Phase 2 改造, +6pp)
+
+Paths open for user decision:
+
+1. **Selective archetypes** — inject archetypes only for business/daily_life, not formal domains
+2. **Phase 4 改造** — let LLM generate NEW attention priors from its own failures (meta on meta)
+3. **Accept phase2 as main deliverable** and write up
 
 ---
