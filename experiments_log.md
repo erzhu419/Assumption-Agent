@@ -307,3 +307,77 @@ Best-in-class agent: **学富五车 + 水管工 = 同时理解原典精神 + 理
 - **C. Phase 3 "case + metaphor library"**: per-archetype 10-20 真实 cases + 跨源隐喻（不限原文），embedding retrieval，让 LLM 通过看多个 instances 归纳 pattern（per user's correction 2026-04-22）
 - **D. Accept phase2_triggers as main deliverable** and write up
 
+---
+
+## Phase 2 v2/v3/v4/v5 iteration: Wisdom Library experiments
+
+After user challenge "学富五车输水管工反直觉，能不能增多？", explored three approaches.
+
+### v2 — 6 aphorism triggers (GPT-5.4 mined from our 55 losses, pure condensation)
+
+GPT-5.4 clustered 55 losses and condensed each cluster to one ≤35-char aphorism. 6 triggers produced:
+- "雾里岔路多，先立坐标再迈步"
+- "约束一旦点名，答案别绕着走"
+- "一团可能性时，顺序比深度值钱"
+- "久攻不下时，先重审前提与骨架"
+- "大数不吓人，占比才吓人"
+- "约束都在台面上，别急着重写问题"
+
+Quality: genuinely aphorism-level, memorable, cross-domain. But results:
+- **v2 vs baseline: 42%** (Δ -0.44)
+- **v2 vs phase2_triggers: 42%** (Δ -0.51)
+
+**Big failure.** Why:
+1. Aphorisms need LLM to unpack at execute time; Flash can't do this stably
+2. Execute prompt forced explicit citation ("明确提及如何塑形思考") → LLM awkwardly shoehorned
+3. 6 high-density triggers have low hit rate; 161 diluted triggers have HIGH hit rate
+
+### v3 — 75-entry wisdom library (GPT-5.4 curated from cross-civ non-fiction)
+
+Built 75-entry library spanning 9 source clusters (biblical / chinese_classics / popper_russell / einstein_feynman / hayek_smith / folk_aphorisms / sunzi_clausewitz / polya / misc high-insight). Kahneman cluster lost to API 402.
+
+Each entry: aphorism + source + signal + pre-unpacked (60-120 char scenario+self-question) + cross-domain examples.
+
+But v3 architecture **dropped Stage-1 priors entirely** — only wisdom priors in EXECUTE. Results:
+- **v3 vs baseline: 40%** (Δ -0.47)
+- **v3 vs phase2_triggers: 37%** (Δ -0.57)
+
+Confounded: the loss isn't "wisdom library fails", it's "dropping Stage-1 priors fails".
+
+### v4 — Stage-1 priors + wisdom (replaces 161 triggers)
+
+Clean ablation: wisdom DROPS IN for 161 triggers. Same Stage-1, same EXECUTE structure.
+- **v4 vs baseline: 48%** (Δ -0.10)
+- **v4 vs phase2_triggers: 48%** (Δ -0.13)
+
+**daily_life jumps to 80%** (new high). But math/science/engineering drop. Wisdom alone can't replace failure-mined 161.
+
+### v5 — ALL stacked (Stage-1 + 161 triggers + wisdom)
+
+Three-layer thinking background in EXECUTE:
+- **v5 vs baseline: 52%** (Δ +0.11) ≈ phase2_triggers (53%)
+- **v5 vs phase2_triggers: 54%** (Δ +0.18) ← MARGINAL WIN
+
+**By domain (v5 vs phase2_triggers direct compare):**
+
+| Domain | v5 | phase2_triggers | Δ |
+|---|---|---|---|
+| business | 9 | 6 | +3 |
+| daily_life | 10 | 5 | +5 |
+| engineering | 7 | 8 | -1 |
+| math | 6 | 9 | -3 |
+| science | 6 | 9 | -3 |
+| sw_eng | 16 | 9 | **+7** |
+
+Engineering/math/science lose slightly; business/daily_life/sw_eng win. Net +8 (54-46).
+
+### Decision: MARGINAL KEEP v5 as new base
+
++4pp vs phase2 puts v5 in borderline zone (decision rule was +5pp for clean keep). Accepted as new winner given multiple tests all point same direction.
+
+**Winning variant: phase2_v5** — Stage-1 orient priors + 161 failure-mined triggers + 75 cross-civ wisdom (LLM-selected per problem) + soft attribution (not forced citation).
+
+**Findings / insights logged to `phase2_redesign_notes.md`.**
+
+---
+

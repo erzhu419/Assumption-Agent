@@ -51,6 +51,7 @@ for d in [ANSWERS_DIR, STRUCTURES_DIR, JUDGMENTS_DIR]:
 KB_DIR = cfg.KB_DIR
 ORIENT_DIR = cfg.PHASE0_DIR / "kb" / "strategies_orientation"
 ORIENT_CANONICAL_DIR = cfg.PHASE0_DIR / "kb" / "strategies_canonical_orientation"
+ORIENT_TRANSLATED_DIR = cfg.PHASE0_DIR / "kb" / "strategies_translated"
 
 
 # ========================================================================
@@ -196,8 +197,9 @@ def load_orient_modules(hybrid: bool = True, source: str = "paraphrase") -> List
     """
     Load strategies.
 
-    source="paraphrase": use strategies_orientation/ (my Phase 1 paraphrases)
-    source="canonical":  use strategies_canonical_orientation/ (Polya/Popper originals)
+    source="paraphrase": strategies_orientation/ (my Phase 1 paraphrases)
+    source="canonical":  strategies_canonical_orientation/ (Polya/Popper originals)
+    source="translated": strategies_translated/ (LLM-translated from canonical)
 
     If hybrid=True: 12 orient-form + 15 original technique-form.
     If hybrid=False: only the 12 orient-form.
@@ -205,7 +207,12 @@ def load_orient_modules(hybrid: bool = True, source: str = "paraphrase") -> List
     modules = []
     orient_ids = set()
 
-    src_dir = ORIENT_CANONICAL_DIR if source == "canonical" else ORIENT_DIR
+    if source == "canonical":
+        src_dir = ORIENT_CANONICAL_DIR
+    elif source == "translated":
+        src_dir = ORIENT_TRANSLATED_DIR
+    else:
+        src_dir = ORIENT_DIR
 
     for f in sorted(src_dir.glob("S*.json")):
         d = json.loads(f.read_text(encoding="utf-8"))
@@ -443,8 +450,9 @@ def main():
                     help="12 orientation + 15 technique (default)")
     ap.add_argument("--pure", action="store_true",
                     help="only 12 orientation strategies")
-    ap.add_argument("--source", choices=["paraphrase", "canonical"], default="paraphrase",
-                    help="orientation source: paraphrase (my Phase 1) or canonical (Polya/Popper orig)")
+    ap.add_argument("--source", choices=["paraphrase", "canonical", "translated"],
+                    default="paraphrase",
+                    help="orientation source: paraphrase | canonical | translated")
     ap.add_argument("--n", type=int, default=100)
     args = ap.parse_args()
 
