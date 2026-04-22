@@ -70,8 +70,46 @@ ANSWERS_DIR = CACHE_ROOT / "answers"
 STRUCTURES_DIR = CACHE_ROOT / "structures"
 JUDGMENTS_DIR = CACHE_ROOT / "judgments"
 SAMPLES_PATH = CACHE_ROOT / "sample_100.json"
+JUDGE_CONTENT_CACHE_PATH = CACHE_ROOT / "judge_content_cache.json"
 for d in [ANSWERS_DIR, STRUCTURES_DIR, JUDGMENTS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
+
+
+# Content-hash judge cache: key = sha256(problem | answer_a | answer_b) → verdict.
+# Survives across pair-names (judgments/{a}_vs_{b}.json) so the same answer
+# pair judged under a different pair name returns cached.
+_CONTENT_CACHE = None
+
+
+def _load_content_cache():
+    global _CONTENT_CACHE
+    if _CONTENT_CACHE is not None:
+        return _CONTENT_CACHE
+    if JUDGE_CONTENT_CACHE_PATH.exists():
+        try:
+            _CONTENT_CACHE = json.loads(JUDGE_CONTENT_CACHE_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            _CONTENT_CACHE = {}
+    else:
+        _CONTENT_CACHE = {}
+    return _CONTENT_CACHE
+
+
+def _save_content_cache():
+    if _CONTENT_CACHE is not None:
+        JUDGE_CONTENT_CACHE_PATH.write_text(
+            json.dumps(_CONTENT_CACHE, ensure_ascii=False), encoding="utf-8")
+
+
+def _content_hash(problem: str, a: str, b: str) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    h.update(problem.encode("utf-8"))
+    h.update(b"\x00")
+    h.update(a.encode("utf-8"))
+    h.update(b"\x00")
+    h.update(b.encode("utf-8"))
+    return h.hexdigest()
 
 
 # ========================================================================
@@ -382,12 +420,18 @@ def generate_baseline_answer(client, problem: str) -> str:
 
 
 def judge_pair(client, problem: str, a: str, b: str) -> Dict:
+    cache = _load_content_cache()
+    key = _content_hash(problem, a, b)
+    if key in cache:
+        return cache[key]
     r = _generate_with_retry(client, JUDGE_PROMPT.format(problem=problem, answer_a=a, answer_b=b),
                         max_tokens=256, temperature=0.1)
     try:
-        return parse_json_from_llm(r["text"])
+        verdict = parse_json_from_llm(r["text"])
     except Exception:
-        return {"winner": "tie", "score_a": 5, "score_b": 5, "reasoning": "parse_failure"}
+        verdict = {"winner": "tie", "score_a": 5, "score_b": 5, "reasoning": "parse_failure"}
+    cache[key] = verdict
+    return verdict
 
 
 # ========================================================================
@@ -531,10 +575,12 @@ def run_judge(variant_a: str, variant_b: str, problems: List[Dict], seed: int):
         new_count += 1
         if new_count % 10 == 0:
             cache_save(judgments_path, judgments)
+            _save_content_cache()
             print(f"  [judge {variant_a} vs {variant_b}] {i+1}/{len(problems)} "
                   f"(new={new_count} hit={hit_count}) {time.time()-t0:.0f}s")
 
     cache_save(judgments_path, judgments)
+    _save_content_cache()
     # Report
     report_judgments(variant_a, variant_b, judgments)
     print(f"  total: new={new_count} hit={hit_count} ({time.time()-t0:.0f}s)")
