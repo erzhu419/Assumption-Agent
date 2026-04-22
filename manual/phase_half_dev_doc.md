@@ -1,5 +1,112 @@
 # 阶段零点五：世界模型——完整开发文档 (v1)
 
+---
+
+## 🏁 2026-04-23 v16 里程碑回看
+
+**写于**: v16 架构验证完成后。**重大概念澄清**：v16 实际上**构建了一个世界模型**，只是和原设计的 cost profile 相反。
+
+### 核心 pivot: "World model 没消失，只是变贵了"
+
+原 Phase 0.5 目标: **训练一个小而快的 forward predictor**，使 RL 可以在毫秒级"模拟"策略执行后果。
+
+v16 实际路径: **LLM 内部世界模型 + 静态案例缓存 + 运行时同域检索** 组成了一个**大而慢的世界模型**。
+
+| 维度 | 原 Phase 0.5 目标 | v16 实际实现 |
+|---|---|---|
+| **预测"按策略走会怎样"** | ✅ 小模型 forward rollout | ✅ LLM Turn-1 draft 本质就是这一步 |
+| **推理成本** | **毫秒级** | **~16 秒** (2 LLM calls × 8s) |
+| **准确性/丰富度** | 取决于训练数据 | LLM + 历史真实案例 = 高 |
+| **可训练/可更新** | 训练循环明确 | 只能扩 case library，不训练权重 |
+| **适用 RL** | ✅ 设计上可以 | ❌ 太贵，每步 16s 根本跑不起 RL |
+
+**用户原话**（对话 2026-04-23）:
+> "v16 里利用的 n 条案例静态知识 + 当场推理一条，其实就是构建了一个世界模型，只是这个模型 inference 非常贵，不像世界模型一样便宜。"
+
+这是对 Phase 0.5 的**根本性再定位**——目标没死，成本 profile 翻了。
+
+### v16 实际构建的"世界模型"拆解
+
+```
+"World model query" for problem P 在 v16 里对应：
+┌─────────────────────────────────────────────────────┐
+│ 静态层 (预计算, ~$2/million, 一次构建):               │
+│   • wisdom_library (75 条智慧 + 结构化 signal)       │
+│   • wisdom_diverse_exemplars (75 × 3 cross-domain) │
+│   • signal_embeddings (问题 + wisdom 嵌入)          │
+├─────────────────────────────────────────────────────┤
+│ 检索层 (运行时, ~ms):                                 │
+│   • 同域最近判例 (cosine sim in same domain)        │
+│   • v3 selections (每题 pre-picked 3-5 wisdom)       │
+├─────────────────────────────────────────────────────┤
+│ 生成层 (运行时, ~16s, 最贵):                          │
+│   • Turn 1: 给定 problem + priors + 3 diverse case  │
+│           + 1 same-domain case → draft "如果按这套   │
+│           思路走，会得到什么答案"                       │
+│   • Turn 2: audit draft "这条思路 miss 了什么" →    │
+│           revise (等效于"模拟后修正 trajectory")      │
+└─────────────────────────────────────────────────────┘
+```
+
+**每次 v16 inference = 一次完整的"模拟 + 评估"世界模型 query**。
+
+### 为什么这个 world model 这么贵
+
+1. **"substrate 不可分离"** (world_model_thinking_layer.md): 在推理/语言问题上，LLM 本身就是世界模型的 substrate，无法 factor out 成一个小网络
+2. **每 query 都要跑 LLM 前向**: 不像 LeWorldModel 那种 5M 参数 encoder 可以 GPU batch inference，我们的"世界模型"调用至少 1 B 参数的 Flash
+3. **案例库不能替代 LLM**: 静态案例提供 anchoring，但最终"如果按这套思路走会怎样"还得 LLM 生成
+
+### 原设计假设的哪些仍对
+
+- ✅ **"需要模拟器才能不在真实环境 10000 次试错"**: v16 确实避免了真实环境试错（靠 LLM judge + 内部世界模型），只是代价转到每次 inference 16s
+- ✅ **"世界模型是 cheap hypothesis validation"**: v16 的 audit turn 是 cheap（相对真实部署）但非 "cheap" 的绝对值
+- ✅ **"model-based RL 潜在受益"**: 如果将来把 v16 distill 成一个小 forward predictor，RL 路径就开了
+
+### 原设计假设的哪些错了
+
+- ❌ **"世界模型可以是 small neural forward predictor"**: 对 pixel 类任务可以（LeWorldModel 15M 参数），对 reasoning 任务不行（需要 LLM 全部能力）
+- ❌ **"世界模型可以独立于知识库训练"**: v16 里 world model 的质量**依赖** wisdom library + case library 的质量——两者不可分离
+- ❌ **"双来源反馈：真实 + 模拟"**: v16 只有一个来源（LLM），但通过 case anchoring 让它更可靠
+
+### 仍未做到的原意
+
+1. ❌ **廉价 forward model**: 真正 ms 级的 policy/value predictor 没造
+2. ❌ **RL 训练循环**: 因为 WM 太贵，RL 跑不起
+3. ❌ **准确性评估报告**: 我们没度量 v16 draft "预测的解答路径" vs "真实最优解答路径" 的偏差
+4. ❌ **校准机制**: v16 的"世界模型"没有明确的 calibration layer
+
+### 如果要真正建一个"小而快的世界模型"，路径应该是什么
+
+**v16 → 蒸馏 → 小 WM**:
+
+1. 用 v16 在 1000+ 问题上跑（大规模）
+2. 收集 (problem, draft, audit-revised-answer) 三元组
+3. 训练一个 small forward predictor:
+   - 输入: problem_embedding + wisdom_embedding + priors
+   - 输出: expected answer embedding (或判分的 score)
+4. 这个小模型可以 ms 级 rollout，足以用于 RL
+
+这是**Phase 0.5 的真正 v2 方向**——不是从头训 world model，而是**从 v16 蒸馏**。
+
+### 启示
+
+"**我以为 Phase 0.5 不适用我们**"是错的。**Phase 0.5 的目标还在**，只是:
+- v16 里隐式实现了（昂贵版本）
+- 要实现原设计的"cheap forward simulator"，需要从 v16 蒸馏
+- 这是 Phase 0.5 的 future work 入口
+
+**与 Phase 0.5 dev doc 原文的对应**:
+- §1.1 WorldModelInput: v16 里 `(problem_features, problem_embedding, strategy_id=wisdom_ids, strategy_summary=cases)` 近似实现
+- §1 "什么是预测目标"被 v16 验证：不是物理世界状态，是"策略指导下 LLM 大概得到什么"
+- §0.3 "世界模型不需要完美——只要在预测'走不通'这件事可靠": v16 audit 就是这个的事后版本（draft 不完善 → 识别 + 修正）
+
+**v16 artifact 索引**:
+- v16 世界模型三层: 静态 (`wisdom_diverse_exemplars.json`) + 检索 (`build_same_domain_exemplar`) + 生成 (`EXECUTE_V15` + `REFLECT_PROMPT`)
+- 对比反例: `phase2_v13_scenario_framework.py` (纯 scenario 生成，无案例锚定，败 v13-reflect)
+- 理论讨论: `world_model_thinking_layer.md`, `v16_final_results.md`
+
+---
+
 ## 0. 文档概述
 
 ### 0.1 本阶段在整体架构中的位置

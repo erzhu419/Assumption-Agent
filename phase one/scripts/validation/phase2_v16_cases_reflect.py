@@ -109,6 +109,8 @@ def main():
     ap.add_argument("--base", default="orient_hybrid")
     ap.add_argument("--n", type=int, default=100)
     ap.add_argument("--max-wisdoms", type=int, default=2)
+    ap.add_argument("--sample", default="sample_100.json",
+                    help="sample file under cache/ (e.g. sample_holdout_50.json)")
     args = ap.parse_args()
 
     answers_path = ANSWERS_DIR / f"{args.variant}_answers.json"
@@ -138,7 +140,7 @@ def main():
     print(f"  {args.variant}: wisdom={len(library)}, exemplars for {len(diverse_exs)} wisdoms")
     print(f"  math/sci -> hygiene; others -> cases Turn 1 + audit Turn 2")
 
-    sample = json.loads((CACHE / "sample_100.json").read_text(encoding="utf-8"))[: args.n]
+    sample = json.loads((CACHE / args.sample).read_text(encoding="utf-8"))[: args.n]
 
     client = create_client()
     t0 = time.time()

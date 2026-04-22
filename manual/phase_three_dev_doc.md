@@ -1,5 +1,82 @@
 # 阶段三：形式化对齐层——完整开发文档 (v1)
 
+---
+
+## 🏁 2026-04-23 v16 里程碑回看
+
+**写于**: v16 架构验证完成后。
+
+### 原意 → v16 实际覆盖
+
+原计划：**用范畴论 (FinStoch Markov 核) + 信息几何 (KL/Fisher) 检测策略同构**。例："控制变量法" 和 "消融实验" 表述不同但结构同构。
+
+**v16 完全没走形式化路径**，但**用 LLM 语义判断 + cross-domain exemplar 完成了等价的实际任务**：
+
+| 原设计目标 | v16 实际做法 | 状态 |
+|---|---|---|
+| 策略 → Markov 核表示 | ❌ 没做 | ❌ 放弃形式路线 |
+| KL/Fisher 距离计算 | ❌ 没做 | ❌ |
+| 策略同构自动检测 | ✅ **GPT-5.4 挑选跨域判例**（`build_diverse_exemplars_v15.py`）= 隐式同构检测 | ✅ 用 LLM 实现 |
+| 形式化度量 ↔ 实际性能的一致性验证 | ❌ 没做 | ❌ |
+
+### 关键发现：**v16 的 cross-domain exemplars 实质是"语义同构的经验归纳"**
+
+原设计想做的：
+> "控制变量法 (S01)" 和 "消融实验 (S15)" 结构同构 → 数学证明
+
+v16 实际做到的：
+- GPT-5.4 看 W022 "控制变量" wisdom + 100 个问题
+- 挑出 3 个跨域范例：
+  - engineering 问题 (传感器故障诊断)
+  - science 问题 (实验设计控制)
+  - software_engineering 问题 (A/B 测试)
+- **这 3 个范例在表述层面完全不像，但都被识别为"同一个 wisdom 的应用"** → 这就是同构检测的 LLM semantic 版本
+
+### 这是"失败的形式化 vs 成功的语义"
+
+Phase 3 dev doc 承认了形式化路线的风险（见 §0.5 路线 A vs B）。**实际上被证明**：
+- 形式化路径 (Markov kernel + Fisher info) 对 15-20 条策略可做，但**对 75 条 wisdom + 161 triggers 的规模不可行**
+- 而 LLM 语义同构在 v16 的规模下（100 题 × 75 wisdom × 3 exemplar）轻松完成
+- **且 exemplars 的质量惊人**: 100% 达到 3-domain spread（见 `v16_final_results.md`）
+
+### 仍未做到的原意
+
+- ❌ 范畴论形式化 (FinStoch, Markov kernel)
+- ❌ 信息几何度量 (KL divergence, Fisher info metric, Wasserstein)
+- ❌ 同构证明与可解释性（我们的 LLM-selected exemplars 是黑盒，可审计但不可证明）
+- ❌ 发表"首次用范畴论+信息几何对方法论策略形式化"的论文
+
+### 用户反思触及的一个更深问题
+
+在对话中用户提到 "Phase 4 的自我提出假设并递归式的自我论证的能力，仍然是智能终极目标"。v16 的 audit-revise pass 是这个目标的 local version，但**递归式层级结构**（原 Phase 3 设想的 "已有的后必再有 = 层级 3 永远同一个，层级 1 不同"）**没实现**。
+
+### 如果重启这份 dev doc 应该做什么
+
+**两条路**:
+
+1. **保留形式化路线作为纯理论研究** (推荐给 paper 方向)
+   - 单独发一篇"Categorical Information Geometry for Methodological Strategies"论文
+   - 用 15-20 条 Phase 0 原策略验证（规模可控）
+   - 和 v16 的 LLM-semantic approach 做消融对比
+
+2. **放弃形式化 → 升级 "LLM-semantic isomorphism" 为 Phase 3 主题**
+   - 把 `wisdom_diverse_exemplars.json` 的构建流程正式化
+   - 研究：什么样的"语义同构 prompt 设计"能最大化跨域覆盖？
+   - 验证：同构检测质量 vs 下游性能的相关性
+
+### 启示
+
+**原设计的"数学形式化"是项目出发点，但被 LLM capability 绕过了**。这和 Claude.md / Gemini.md 讨论的大方向（范畴论 + 信息几何）都承认了同样的事实：**LLM 语义能力在小规模上已经能替代形式化工具**。
+
+**但 v16 的方案仍然不是 useless for the formal goal**: 它可以**作为形式化方法的训练数据**——用 LLM 自动挑选的同构 pairs 训练一个 lightweight 同构分类器。
+
+**v16 artifact 索引**:
+- Code: `phase one/scripts/validation/build_diverse_exemplars_v15.py` (LLM 语义同构检测)
+- Data: `wisdom_diverse_exemplars.json` (75 wisdoms × 3 cross-domain exemplars = 225 隐式同构对)
+- Theory ref: `reflection_wisdom_vs_technique.md` ("层级同构" 的哲学基础)
+
+---
+
 ## 0. 文档概述
 
 ### 0.1 本阶段在整体架构中的位置
