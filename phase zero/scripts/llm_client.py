@@ -57,10 +57,23 @@ def detect_provider() -> str:
 # ---------------------------------------------------------------------------
 
 class GeminiClient:
+    """Gemini client. If GEMINI_BASE_URL is set, routes through an OpenAI-compatible
+    proxy (e.g. NewAPI at ruoli.dev); otherwise uses native Google SDK."""
+
     def __init__(self):
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY not set")
+
+        self.model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+        self.provider = "gemini"
+        base_url = os.environ.get("GEMINI_BASE_URL", "").strip()
+
+        if base_url:
+            from openai import OpenAI
+            self._sdk = "openai-proxy"
+            self.client = OpenAI(base_url=base_url, api_key=api_key)
+            return
 
         try:
             from google import genai
@@ -78,12 +91,24 @@ class GeminiClient:
                     "  or: pip install google-generativeai"
                 )
 
-        self.model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-        self.provider = "gemini"
-
     def generate(self, prompt: str, max_tokens: int = 4096,
                  temperature: float = 0.3) -> dict:
         """Returns {"text": str, "input_tokens": int, "output_tokens": int}"""
+
+        if self._sdk == "openai-proxy":
+            resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            text = resp.choices[0].message.content or ""
+            usage = resp.usage
+            return {
+                "text": text,
+                "input_tokens": usage.prompt_tokens if usage else 0,
+                "output_tokens": usage.completion_tokens if usage else 0,
+            }
 
         if self._sdk == "google-genai":
             from google.genai import types
@@ -103,7 +128,6 @@ class GeminiClient:
             input_tokens = getattr(usage, "prompt_token_count", 0) if usage else 0
             output_tokens = getattr(usage, "candidates_token_count", 0) if usage else 0
         else:
-            # google-generativeai (older SDK)
             model = self._genai.GenerativeModel(
                 self.model,
                 generation_config={
