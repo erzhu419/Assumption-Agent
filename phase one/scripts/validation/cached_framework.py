@@ -633,10 +633,18 @@ def main():
                     help="Judge variant A vs variant B")
     ap.add_argument("--report", nargs=2, metavar=("A", "B"),
                     help="Re-report cached judgments")
+    ap.add_argument("--sample", default=None,
+                    help="Override sample file (e.g. sample_holdout_50.json)")
     args = ap.parse_args()
 
-    problems = load_or_sample_problems(args.n, args.seed)
-    print(f"Problem sample: {len(problems)} (seed={args.seed})")
+    if args.sample:
+        problems = json.loads((CACHE_ROOT / args.sample).read_text(encoding="utf-8"))
+        # strip meta marker if present
+        problems = [p for p in problems if "description" in p]
+        print(f"Problem sample: {len(problems)} from {args.sample}")
+    else:
+        problems = load_or_sample_problems(args.n, args.seed)
+        print(f"Problem sample: {len(problems)} (seed={args.seed})")
 
     if args.variant:
         run_variant(args.variant, problems, args.seed)
