@@ -43,8 +43,8 @@ from phase2_v15_exemplar_framework import (
 CACHE = PROJECT.parent / "phase two" / "analysis" / "cache"
 ANSWERS_DIR = CACHE / "answers"
 STRUCTURES_DIR = CACHE / "structures"
-WISDOM_PATH = CACHE / "wisdom_library.json"
-SELECTIONS_PATH = CACHE / "phase2_v3_selections.json"
+WISDOM_PATH_DEFAULT = CACHE / "wisdom_library.json"
+SELECTIONS_PATH_DEFAULT = CACHE / "phase2_v3_selections.json"
 EXEMPLARS_PATH = CACHE / "wisdom_diverse_exemplars.json"
 EMB_PATH = CACHE / "signal_embeddings.npz"
 
@@ -111,7 +111,14 @@ def main():
     ap.add_argument("--max-wisdoms", type=int, default=2)
     ap.add_argument("--sample", default="sample_100.json",
                     help="sample file under cache/ (e.g. sample_holdout_50.json)")
+    ap.add_argument("--selections", default=None,
+                    help="override selections file (e.g. phase2_v3_selections_v2.json)")
+    ap.add_argument("--wisdom", default=None,
+                    help="override wisdom library file (e.g. wisdom_library_v17.json)")
     args = ap.parse_args()
+
+    selections_path = (CACHE / args.selections) if args.selections else SELECTIONS_PATH_DEFAULT
+    wisdom_path = (CACHE / args.wisdom) if args.wisdom else WISDOM_PATH_DEFAULT
 
     answers_path = ANSWERS_DIR / f"{args.variant}_answers.json"
     drafts_path = ANSWERS_DIR / f"{args.variant}_drafts.json"
@@ -125,9 +132,9 @@ def main():
             cache_save(struct_path, base_struct)
     structures = cache_load(struct_path)
 
-    library = json.loads(WISDOM_PATH.read_text(encoding="utf-8"))
+    library = json.loads(wisdom_path.read_text(encoding="utf-8"))
     lib_by_id = {e["id"]: e for e in library}
-    selections = cache_load(SELECTIONS_PATH)
+    selections = cache_load(selections_path)
     diverse_exs = cache_load(EXEMPLARS_PATH)
     v13 = json.loads(V13_REFLECT.read_text(encoding="utf-8"))
     ours = json.loads(OURS_27.read_text(encoding="utf-8"))
