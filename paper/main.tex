@@ -98,11 +98,21 @@ by itself. It converges in three cycles to a strictly stricter
 fixed-point gate
 (\texttt{gemini\_wr$\geq$0.60 AND claude\_wr$\geq$0.55}) and, under
 that gate, \emph{withdraws every one of its own previous commits}.
-This is the first demonstration we are aware of where a
-self-improving LLM loop runs, audits, and retracts itself without
-human intervention between cycles. Our contribution is the loop,
-the audit, and the concrete failure mode it reveals—a small but
-concrete step toward agents that build the tools they think with
+
+\noindent\textbf{We then pull the original plan back in.} A staged
+validation funnel (pilot at $n{=}10$, comparative at $n{=}50$,
+cross-domain, cross-family) run retrospectively on all $12$
+candidates produces $12 \to 4 \to 0 \to 0 \to 0$: zero candidates
+survive all stages. The unexpected result is that even \emph{same
+judge family, same content, different side-randomization seed}
+suffices to flip every single original KEEP decision. The gate is
+fragile along at least three independent axes simultaneously:
+seed, family, and domain aggregation.
+
+\noindent\textbf{Contribution.} The loop, the four-way audit, the
+recursion to fixed point, the staged funnel, and the concrete
+multi-dimensional failure mode they reveal. A small but concrete
+step toward agents that build the tools they think with
 \emph{and} notice when their own tools mislead them.
 \end{abstract}
 
@@ -861,6 +871,112 @@ grows. The claim here is narrower and more defensible: \emph{under
 its own self-proposed, cross-family-aware gate, the agent reverses
 every one of its current commits}. This is what recursive
 self-validation looks like when it works.
+
+\subsection{Experiment 5 — Staged validation funnel
+(pilot + comparative + generalization + cross-family)}
+\label{sec:funnel}
+
+The original Phase-4 plan (see project documentation) specified a
+\emph{three-stage} validation pipeline: (1) a cheap pilot on
+\(n \approx 10\) problems, (2) the full comparative A/B at
+\(n = 50\), and (3) a cross-domain generalization check. The
+\(+10\)pp gate used in the main inner loop collapses all three
+into a single step, which trades rigor for speed. We now run the
+original three-stage gate on every one of our \(12\) candidates,
+prepend it with a \emph{side-stability} check (the same gemini
+judge, re-rolled), and append Experiment~1's cross-family check as
+Stage~4:
+
+\begin{center}\small
+\begin{tabular}{c l p{7cm}}
+  \toprule
+  Stage & Threshold & Test \\
+  \midrule
+  1 & \texttt{wr} $\geq 0.60$ &
+    \emph{pilot}: 10 domain-stratified problems, same gemini judge,
+    \textbf{fresh side-randomization seed} \\
+  2 & \texttt{wr} $\geq 0.60$ &
+    \emph{comparative}: full 50-problem A/B, gemini judge \\
+  3 & no domain $< 0.40$ \textbf{and} $\geq 3/6$ domains $\geq 0.55$ &
+    \emph{cross-domain}: per-domain wr from stage-2 verdicts \\
+  4 & \texttt{wr} $\geq 0.55$ &
+    \emph{cross-family}: Claude Opus 4.6 on full 50 pairs \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+The funnel result (each row is a candidate; \texttt{P}/\texttt{F}
+is pass/fail; \texttt{—} means skipped because an earlier stage
+failed):
+
+\begin{center}\small
+\begin{tabular}{l l c c c c l}
+  \toprule
+  cid & committed & S1 & S2 & S3 & S4 & final \\
+  \midrule
+  WCAND01   & ---  & P & F & F & — & FAIL\_S2 \\
+  WCAND02   & ---  & P & F & F & — & FAIL\_S2 \\
+  WCAND03   & ---  & F & F & F & — & FAIL\_S1 \\
+  WCAND04   & ---  & F & F & F & — & FAIL\_S1 \\
+  \textbf{WCAND05}   & \textbf{W076} & \textbf{F} & \textbf{F} & \textbf{F} & \textbf{F} & FAIL\_S1 \\
+  WCAND06   & ---  & F & F & F & — & FAIL\_S1 \\
+  WCAND07   & ---  & P & F & F & — & FAIL\_S2 \\
+  WCAND08   & ---  & F & F & F & — & FAIL\_S1 \\
+  WCAND09   & ---  & F & F & F & — & FAIL\_S1 \\
+  \textbf{WCAND10}   & \textbf{W077} & \textbf{F} & \textbf{F} & \textbf{F} & \textbf{F} & FAIL\_S1 \\
+  WCAND11   & ---  & P & F & F & — & FAIL\_S2 \\
+  \textbf{WCROSSL01} & \textbf{W078} & \textbf{F} & \textbf{F} & \textbf{F} & \textbf{F} & FAIL\_S1 \\
+  \midrule
+  \multicolumn{7}{l}{\textbf{Funnel: $12 \to 4 \to 0 \to 0 \to 0$. Zero
+    candidates pass all stages.}} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{The side-stability finding.} The most unexpected result
+in this table is the \texttt{F} at Stage 1 for \emph{all three
+original KEEPs}. The \emph{same} gemini-3-flash judge, running on
+the \emph{same} solver outputs, returns
+wr\(_{\text{ext}}\)(W076) \(= 0.41\) on the stage-1 pilot (and
+\(0.41\) on the full 50-pair re-run), compared with \(0.64\) in
+the original validation run. The only difference between the two
+runs is \textbf{the Python process random seed that assigns
+each pair's left/right presentation order}. In other words, the
+original decision depended on a specific side-randomization
+seed: with a different seed, \emph{the same judge family returns
+the opposite verdict}. The ext--vs--base content is identical in
+both runs; only the ordering of presentation to the judge
+differs. This is a widely discussed LLM-judge phenomenon
+(\cite{zheng2023judging, wang2024positionbias}), but is rarely
+surfaced at the level of individual library-mutation decisions.
+
+\paragraph{Putting cross-family and side-stability together.} The
+original KEEP for W076 is fragile in \emph{at least three}
+independent dimensions:
+\begin{enumerate}[leftmargin=*,topsep=2pt,itemsep=0pt]
+  \item \textbf{Side-order sensitivity.} Same judge, same content,
+    different presentation: \(0.64 \to 0.41\).
+  \item \textbf{Cross-family sensitivity.} Different judge family,
+    same content, same presentation: \(0.64 \to 0.40\)
+    (Experiment 1).
+  \item \textbf{Cross-domain fragility.} Per-domain wr ranges from
+    \(0.20\) to \(0.75\); the gate ignores the former and profits
+    from the latter.
+\end{enumerate}
+
+\noindent Any one of these would have been enough to refuse the
+commit. All three fire on the same candidate. The
+same-family \(+10\)pp gate is not just one-judge-biased; it is
+\emph{seed-biased}, \emph{family-biased}, and
+\emph{domain-aggregation-biased}, independently.
+
+\paragraph{The full claim.} Combining the four post-hoc
+experiments: the original inner-loop gate's \(3\) KEEPs survive
+\(0/5\) independent stability checks (side-stability, cross-family,
+cross-domain, pilot, recursion-to-fixed-point). We do not claim the
+underlying wisdoms have zero value; we claim the specific
+\emph{procedure} that committed them was systematically insufficient
+by multiple measurable standards.
 
 \section{Discussion}
 \label{sec:discussion}
