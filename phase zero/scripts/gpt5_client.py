@@ -8,10 +8,11 @@ as the cheap workhorse for everything else.
 import os
 from openai import OpenAI
 
-# API config (user-provided 2026-04-22)
 BASE_URL = os.environ.get("GPT5_BASE_URL", "https://ruoli.dev/v1")
-API_KEY = os.environ.get("GPT5_API_KEY", "REDACTED-OLD-KEY-B")
+API_KEY = os.environ.get("GPT5_API_KEY", "")
 DEFAULT_MODEL = os.environ.get("GPT5_MODEL", "gpt-5.4")
+if not API_KEY:
+    raise RuntimeError("GPT5_API_KEY environment variable must be set")
 
 
 class GPT5Client:

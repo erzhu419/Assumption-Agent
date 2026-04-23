@@ -9,9 +9,10 @@ import os
 from openai import OpenAI
 
 BASE_URL = os.environ.get("CLAUDE_PROXY_BASE_URL", "https://ruoli.dev/v1")
-API_KEY = os.environ.get("CLAUDE_PROXY_API_KEY",
-                          "REDACTED-OLD-KEY-A")
+API_KEY = os.environ.get("CLAUDE_PROXY_API_KEY", "")
 DEFAULT_MODEL = os.environ.get("CLAUDE_PROXY_MODEL", "claude-opus-4-6")
+if not API_KEY:
+    raise RuntimeError("CLAUDE_PROXY_API_KEY environment variable must be set")
 
 
 class ClaudeProxyClient:
