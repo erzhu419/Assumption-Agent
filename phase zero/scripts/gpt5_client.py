@@ -8,6 +8,12 @@ as the cheap workhorse for everything else.
 import os
 from openai import OpenAI
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 BASE_URL = os.environ.get("GPT5_BASE_URL", "https://ruoli.dev/v1")
 API_KEY = os.environ.get("GPT5_API_KEY", "")
 DEFAULT_MODEL = os.environ.get("GPT5_MODEL", "gpt-5.4")

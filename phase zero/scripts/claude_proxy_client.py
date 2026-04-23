@@ -8,6 +8,12 @@ path in llm_client.py which uses the official SDK.
 import os
 from openai import OpenAI
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 BASE_URL = os.environ.get("CLAUDE_PROXY_BASE_URL", "https://ruoli.dev/v1")
 API_KEY = os.environ.get("CLAUDE_PROXY_API_KEY", "")
 DEFAULT_MODEL = os.environ.get("CLAUDE_PROXY_MODEL", "claude-opus-4-6")
