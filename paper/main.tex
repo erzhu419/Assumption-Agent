@@ -89,10 +89,21 @@ not enough. An agent can be simultaneously (i)~honest about its gate
 only becomes visible once a separate-family judge re-scores the
 identical text. We argue cross-family re-judgment should become a
 routine reporting item for any self-improving LLM loop, not a
-stretch goal. Our contribution is the loop, the audit, and the
-concrete failure mode—a small but concrete step toward agents that
-build the tools they think with \emph{and} notice when their own
-tools mislead them.
+stretch goal.
+
+\noindent\textbf{We then close the recursion.} A final experiment
+(\texttt{auto\_recurse.py}, \S\ref{sec:recursion}) lets the agent
+chain audit$\,\to\,$belief-update$\,\to\,$gate-proposal$\,\to\,$re-audit
+by itself. It converges in three cycles to a strictly stricter
+fixed-point gate
+(\texttt{gemini\_wr$\geq$0.60 AND claude\_wr$\geq$0.55}) and, under
+that gate, \emph{withdraws every one of its own previous commits}.
+This is the first demonstration we are aware of where a
+self-improving LLM loop runs, audits, and retracts itself without
+human intervention between cycles. Our contribution is the loop,
+the audit, and the concrete failure mode it reveals—a small but
+concrete step toward agents that build the tools they think with
+\emph{and} notice when their own tools mislead them.
 \end{abstract}
 
 \section{Introduction}
@@ -767,10 +778,89 @@ Experiments 1--3 together let us say, concretely:
     log of past gate behaviour, the agent can propose a
     \emph{falsifiable} modification to the gate itself (Experiment 3).
 \end{itemize}
-This is still not ``recursive self-hypothesizing without bound''—the
-hypothesis space at the meta-level is fenced by our prompts. But it
-is the first strictly non-object-level, non-human-curated
-hypothesis we have evidence the loop can produce.
+But the three audit steps above are still \emph{human-triggered
+snapshots}. The next subsection closes the recursion.
+
+\subsection{Experiment 4 — Recursion demonstrated: the agent runs
+its own audit-update-reaudit loop to fixed point}
+\label{sec:recursion}
+
+Experiments 1--3 each produce useful signal in isolation. To claim
+\emph{recursive self-validation} we need the system to
+\emph{itself} chain them: audit, update belief, propose a new
+gate, apply the new gate, re-audit under it, and decide whether
+belief has converged. We implement this as a single script,
+\texttt{auto\_recurse.py}, parameterised by
+\texttt{max\_cycles}. Each cycle is:
+
+\begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=1pt]
+  \item Apply the current gate to the \(12\) validation rows; take
+    the resulting \texttt{KEEPs\_t}.
+  \item For every \(cid \in \texttt{KEEPs\_t}\) whose cross-family
+    score is missing, invoke Claude Opus 4.6 to score the \(50\)
+    answer pairs.
+  \item Update per-wisdom confidence by a smoothed average of the
+    two families' \(\text{wr}\) scores.
+  \item Ask GPT-5.4 (with the full two-judge evidence table and
+    current gate as context) whether the gate should be tightened;
+    accept a new gate iff it is strictly more conservative.
+  \item Re-apply the (possibly new) gate; if the gate is unchanged
+    from the previous cycle, declare fixed point.
+\end{enumerate}
+
+\noindent The run (seeded with Experiment 1's Claude scores for the
+three original KEEPs) converges in \textbf{three cycles}:
+
+\begin{center}\small
+\begin{tabular}{c l l r r}
+  \toprule
+  Cycle & Gate in effect & Proposed next gate & \(|\)KEEPs\(|\)
+    & Action \\
+  \midrule
+  1 & \texttt{gemini\_wr>=0.60} &
+      \texttt{...AND claude\_wr>=0.50} & \(3\) & tighten \\
+  2 & \texttt{gemini>=0.60 AND claude>=0.50} &
+      \texttt{...AND claude\_wr>=0.55} & \(1\) & tighten \\
+  3 & \texttt{gemini>=0.60 AND claude>=0.55} &
+      (unchanged) & \(0\) & \textbf{fixed point} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The agent's reasoning at each step (paraphrased from the
+GPT-5.4 output with numerics preserved):
+
+\begin{itemize}[leftmargin=*, topsep=2pt, itemsep=2pt]
+  \item \textbf{Cycle 1 rationale:} ``\(3/12\) pass the single-judge
+    gate, but Claude's re-judgment shows only \(1\) reaches
+    \(0.50\)—single-family gate mislabels; require agreement.''
+  \item \textbf{Cycle 2 rationale:} ``The surviving candidate
+    (WCROSSL01, \emph{是骡子是马}) only reaches Claude
+    \(\text{wr} = 0.51\); safety margin too thin; tighten to
+    \(0.55\).''
+  \item \textbf{Cycle 3 rationale:} ``No candidate passes; further
+    tightening would be stricter but adds no safety given zero
+    current survivors; hold.''
+\end{itemize}
+
+\paragraph{Meaning.} This is, as far as we know, the first paper
+that demonstrates a closed-loop LLM agent proposing a gate,
+testing it with an out-of-family judge, updating its belief,
+proposing a \emph{stricter} gate, and terminating at an empirical
+fixed point—all without human intervention between cycles. The
+fixed-point gate eliminates every candidate the original gate had
+approved. Put differently: \emph{the recursion, given the tools it
+itself asked for, withdraws its original commits}.
+
+\paragraph{Does this commit the agent to ``no library growth ever
+again''?} No. The fixed point is a statement about the current
+\(12\) candidates. A future cycle running on a \emph{new} batch of
+problems can produce new candidates; those would go through the
+same (now-tightened) gate; if one of them passes, the library
+grows. The claim here is narrower and more defensible: \emph{under
+its own self-proposed, cross-family-aware gate, the agent reverses
+every one of its current commits}. This is what recursive
+self-validation looks like when it works.
 
 \section{Discussion}
 \label{sec:discussion}
