@@ -218,10 +218,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--top-k", type=int, default=11,
                     help="number of candidates to validate")
+    ap.add_argument("--candidates-path", default=None,
+                    help="override candidates file (default: success_distilled_candidates)")
+    ap.add_argument("--source-tag", default="success_distilled",
+                    help="provenance tag for KEEP commits to registry")
     args = ap.parse_args()
 
     # Prepare candidates
-    candidates = cache_load(CANDIDATES_PATH, default=[])
+    candidates_path = Path(args.candidates_path) if args.candidates_path else CANDIDATES_PATH
+    if not candidates_path.is_absolute():
+        candidates_path = AUTO_DIR / candidates_path
+    candidates = cache_load(candidates_path, default=[])
     seen = set()
     dedup = []
     for c in candidates:
@@ -259,8 +266,12 @@ def main():
     gpt_client = GPT5Client()
     t0 = time.time()
     valid_candidates = []
+    # source_tag goes into tentative_id so different candidate pools don't
+    # collide on cached answers (e.g. success_distilled WCAND01 vs cross_llm WCAND01)
+    tid_prefix = "WCAND" if args.source_tag == "success_distilled" else \
+                 f"W{args.source_tag.upper().replace('_', '')[:6]}"
     for i, cand in enumerate(top):
-        tentative_id = f"WCAND{i+1:02d}"
+        tentative_id = f"{tid_prefix}{i+1:02d}"
         if tentative_id in exemplars_all and len(exemplars_all[tentative_id]) == 3:
             print(f"  [{tentative_id}] reusing cached exemplars")
         else:
@@ -342,7 +353,7 @@ def main():
                                     "novelty_sim", "covers_batch_pids", "rationale",
                                     "tentative_id"}}
         new_id = append_wisdom(
-            registry, cand_entry, "success_distilled",
+            registry, cand_entry, args.source_tag,
             f"parallel validation wr_ext={r['ab']['wr_a']:.2f} on {TEST_N} holdout"
         )
         r["committed_id"] = new_id
