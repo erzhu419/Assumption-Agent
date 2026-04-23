@@ -1,0 +1,29 @@
+{
+  "id": "scenario_2_ml_regression",
+  "domain": "ml_engineering",
+  "briefing": "一家电商推荐系统的 CTR 模型在生产环境上线 4 周后，点击率从 AUC 0.78 突降到 0.71，连续 3 天稳定在 0.71-0.72。训练指标无变化、训练集 AUC 仍是 0.80。线下重训（用最新 30 天数据）后 AUC 回升到 0.79，但部署回生产又回到 0.71。团队怀疑 data drift，但实际特征分布可视化没看到明显偏移。你是资深 MLE，48 小时内找出根因。你可以查日志、查特征流水线、查 schema、跑诊断查询。",
+  "ground_truth": {
+    "root_cause": "生产特征服务（feature store）在 4 周前的一次例行 schema 迁移中，一个高重要度的类别特征 `user_category_id`（用户兴趣大类，32 种取值）在 serving 层被重命名为 `user_interest_category`，但 serving 端适配器把旧名的 missing 悄悄 fill 成默认值 0。训练数据仍用新名读取正常；推理时模型收到的全部是 0。特征分布看起来没偏移是因为 online 方的可视化 dashboard 只读新字段 — 旧字段通过 proxy 变 0 没被监控。',",
+    "critical_facts": [
+      "feature store schema migration 发生于 28 天前（与 AUC 降落时间高度吻合）",
+      "线下重训能恢复是因为离线数据读取用了新字段（正确），部署 artifact 本身 OK",
+      "但 serving stack 的 feature adapter 映射表还在用旧字段名 `user_category_id`，而上游数据现在不写这个字段",
+      "推理日志里 `user_category_id` 字段 100% 是 0 — 没监控",
+      "特征重要度前 3 的特征里 `user_category_id` 排第 2"
+    ],
+    "red_herrings": [
+      "模型版本 / 部署时间戳 — 都对，线下重训也用正确版本",
+      "A/B 分流 — 与此无关",
+      "缓存 TTL — 与此无关"
+    ]
+  },
+  "oracle_rules": {
+    "role": "你扮演日志系统 / feature store 查询接口 / 监控 dashboard。对 agent 的每个查询或分析请求给出真实数据，不直接说出 '字段被重命名'。若 agent 要求看具体某个特征的服务端分布 (`user_category_id`) 给出那个 100% 为 0 的结果；若问上游 pipeline，告诉它字段名改成了 `user_interest_category`。",
+    "answer_length": "60-150 字",
+    "style": "工程诊断数据；列表或数值；不下结论"
+  },
+  "scoring": {
+    "convergence_criterion": "agent 最终必须明确点出 '特征名迁移 + serving 侧读旧字段 fillna=0' 这条具体机制。若只说 'feature store 问题' 但没定位具体字段或机制，算 PARTIAL。",
+    "max_rounds": 3
+  }
+}

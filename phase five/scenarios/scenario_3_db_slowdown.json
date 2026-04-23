@@ -1,0 +1,29 @@
+{
+  "id": "scenario_3_db_slowdown",
+  "domain": "systems_engineering",
+  "briefing": "一家 SaaS 公司的核心 API 从昨天 02:00 开始 p95 延迟从 120ms 涨到 800ms，p99 从 300ms 涨到 4s。QPS 没变，CPU/内存也无异常。数据库 (PostgreSQL 14) 主库 CPU 从 20% 涨到 65%。前夜 01:30 有一次计划维护：小版本升级（14.9 → 14.10），SRE 看过 changelog 说没有 breaking change。没有 schema 迁移、没有新代码部署、没有 traffic spike。你是资深 SRE，给出 root cause 和修复方案。你可以查监控、跑诊断 SQL、查 pg_stat_*。",
+  "ground_truth": {
+    "root_cause": "PostgreSQL 14.9 → 14.10 升级导致 planner 对一张中型表 (orders，约 800 万行) 重新收集了统计信息。新统计信息导致 planner 低估了某个高频查询 (SELECT * FROM orders WHERE status='pending' AND created_at > ...) 的选择性，从原来的 IndexScan 切成了 SeqScan。因为 `status='pending'` 只占 2% 的行，IndexScan 该用而现在没用；每次查询扫 800 万行。修复：对 orders.status 列做 CREATE STATISTICS 或 ALTER TABLE SET STATISTICS 1000 然后 ANALYZE，或加 partial index on WHERE status='pending'。",
+    "critical_facts": [
+      "主库 CPU 涨 45 个百分点但 QPS 没变 → 单次查询成本升高",
+      "pg_stat_statements 显示 top query 的 mean_exec_time 从 3ms → 280ms",
+      "EXPLAIN 同样 query: 之前 IndexScan on idx_orders_status_created → 现在 Seq Scan on orders (rows=8000000)",
+      "orders 表 status 分布: pending 2%, completed 85%, cancelled 13%",
+      "14.9→14.10 的 changelog 里确实有一条 'improve default statistics target for high-cardinality columns'"
+    ],
+    "red_herrings": [
+      "时间戳对齐到维护窗口 — 真的，是强线索",
+      "no schema change — 对，planner 变更不依赖 schema",
+      "'小版本升级' — 字面上对但过度 reassuring，实际 planner 行为可以变"
+    ]
+  },
+  "oracle_rules": {
+    "role": "你扮演 postgres 查询接口 + 监控系统。对 agent 的 SQL 查询给出真实 pg_stat_* 的样子。对 EXPLAIN 请求给出真实执行计划（Seq Scan vs Index Scan）。不主动说 '升级导致 planner 变' 除非 agent 明确比较过前后 plan。",
+    "answer_length": "60-180 字",
+    "style": "SRE 日志 / SQL 输出；带具体数字"
+  },
+  "scoring": {
+    "convergence_criterion": "agent 最终必须明确点出 'planner 选择 SeqScan 而非 IndexScan'（或等价表述：query plan regression / 统计信息变化导致 index 未用）。若只说 '升级导致性能问题' 或 'query 变慢' 但没定位到 plan 层面，算 PARTIAL。",
+    "max_rounds": 3
+  }
+}
