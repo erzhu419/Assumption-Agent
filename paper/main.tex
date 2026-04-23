@@ -978,6 +978,105 @@ underlying wisdoms have zero value; we claim the specific
 \emph{procedure} that committed them was systematically insufficient
 by multiple measurable standards.
 
+\section{Beyond single-advisory benchmarks: a multi-step
+research-task pilot}
+\label{sec:multistep}
+
+The 100-problem benchmark exercised throughout \S\ref{sec:experiments}
+is fundamentally \emph{single-advisory}: one problem, one answer,
+one judge verdict. Many research and engineering workflows, however,
+demand \emph{multi-round} assumption-revision: propose hypotheses,
+gather evidence, update beliefs, re-propose. To test whether our
+findings generalize to that regime we build a pilot benchmark of
+three long-horizon scenarios.
+
+\paragraph{Benchmark.} Each scenario specifies a \emph{briefing}
+(visible to the agent), a \emph{hidden ground-truth mechanism}, a
+list of \emph{critical facts} the environment may reveal on demand,
+and a list of \emph{plausible red-herrings} also consistent with
+surface observations. The three scenarios span domains where
+root-cause diagnosis requires targeted investigation rather than
+pattern matching:
+
+\begin{center}\small
+\begin{tabular}{l l p{4.5cm}}
+  \toprule
+  Scenario & Domain & Ground-truth root cause (hidden) \\
+  \midrule
+  Clinical trial & Medicine &
+    Drug--drug interaction with warfarin (CYP2C9), amplified by
+    chronic kidney disease \\
+  ML CTR regression & ML engineering &
+    Feature-store schema migration silently renamed a high-importance
+    categorical column; serving stack continues to read the old
+    column and gets \(0\) \\
+  DB slowdown & Systems &
+    Postgres minor-version upgrade changed planner statistics;
+    a hot query regressed from \texttt{IndexScan} to \texttt{SeqScan} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Oracle and judge.} To avoid the same-family contamination
+identified in \S\ref{sec:selfaudit}, the \emph{oracle} (simulating the
+experimental environment) is GPT-5.4, the \emph{solver} is
+gemini-3-flash, and the \emph{judge} is Claude Opus 4.6
+(three different vendor families). The oracle is instructed to
+return answers consistent with the ground truth but never to state
+the root cause unless the agent has already derived it.
+
+\paragraph{Agent strategies.} Two baselines are compared:
+\begin{description}[leftmargin=1.5em, topsep=2pt, itemsep=1pt]
+  \item[\textbf{single\_pass}:] The solver reads the briefing and
+    writes a final diagnosis with no oracle interaction.
+  \item[\textbf{belief\_track}:] The solver maintains an explicit
+    hypothesis state (\(\leq 3\) hypotheses with explicit
+    confidences) across \(3\) rounds. Each round it proposes
+    \(1\text{--}3\) targeted investigations; the oracle answers;
+    the agent updates hypotheses in light of the answers. A final
+    diagnosis is committed after round \(3\).
+\end{description}
+
+\paragraph{Result.} On this small benchmark,
+\texttt{belief\_track} converges on all three scenarios; the
+single-pass baseline misses the mechanism in the ML-regression
+scenario:
+
+\begin{center}\small
+\begin{tabular}{l c c}
+  \toprule
+  Scenario & single\_pass & belief\_track \\
+  \midrule
+  Clinical trial    & CONVERGED & CONVERGED \\
+  ML CTR regression & PARTIAL   & \textbf{CONVERGED} \\
+  DB slowdown       & CONVERGED & CONVERGED \\
+  \midrule
+  Total CONVERGED   & \(2/3\)   & \(\mathbf{3/3}\) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The ML scenario is the case whose root cause is a
+specific, low-prior mechanism (a silent column rename; the model
+sees zero variance on a previously high-importance feature). Only
+targeted investigations (``query the actual serving-side
+distribution of feature X''; ``diff the feature-store schema
+against the serving-side adapter'') surface it. \texttt{single\_pass}
+returns a plausible but under-specified ``feature-store issue''
+verdict; \texttt{belief\_track} queries the oracle with the
+specific diagnostic, receives ``\(user\_category\_id = 0\) for
+\(100\%\) of inference requests,'' and commits to the correct
+mechanism.
+
+\paragraph{Scope.} \(N = 3\) is a pilot. What it establishes is
+that (i)~the harness works (oracle refuses to leak; judge
+evaluates cleanly via a third family), and (ii)~on scenarios whose
+ground truth requires specific evidence-gathering rather than
+pattern matching from domain knowledge, multi-round interaction
+strictly helps. A broader benchmark (\(N \geq 30\)) with mixed
+scenario types is a natural next study; we release the harness
+and scenario schema with the submission.
+
 \section{Discussion}
 \label{sec:discussion}
 
