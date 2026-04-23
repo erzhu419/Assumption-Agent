@@ -28,9 +28,9 @@
   urlcolor=blue!60!black
 }
 
-\title{\textbf{Scaffold, Then Evolve:}\\
-An Autonomous Closed-Loop Agent for Growing\\
-LLM Methodological Wisdom}
+\title{\textbf{Scaffold, Evolve, Then Audit:}\\
+Cross-Family Re-Judgment Breaks Single-Family\\
+Self-Adjudication in an Autonomous Wisdom Loop}
 
 \author{%
   Anonymous submission\\
@@ -47,32 +47,52 @@ LLM Methodological Wisdom}
 Large language models improve markedly when given retrieval-augmented
 \emph{methodological scaffolding}: reframes of the problem, anti-patterns
 to avoid, evaluation criteria, and exemplars of related prior reasoning.
-But curating such a \emph{wisdom library} is expensive, and static
-libraries never adapt to the residuals a particular solver leaves behind.
-We present the first \emph{closed-loop} LLM agent that grows its own
-wisdom library without human curation. The agent pairs a strong
-scaffolded solver (v20: a combined frame-directive + problem-rewriting
-architecture, \(+28\)pp vs. the v16 case-library champion on 100 problems,
-and \(+76\)pp vs. a budget-matched baseline on a 50-problem held-out set)
-with four orchestration modules: a \emph{failure generator} that mines
-systematic residuals, a \emph{success distiller} that clusters the
-solver's own reframings, a \emph{cross-model distiller} that extracts
-orientations a stronger generator uses but the solver misses, and a
-\emph{Darwinian pruner} that demotes stale entries. Each candidate wisdom
-passes a \(+10\)pp held-out A/B gate before entering the library. Over a
-single evolution cycle, the library grows from \(75\) to \(78\) active
-entries (\(+W_{076}, +W_{077}, +W_{078}\)) while \(19\) dormant entries
-are deprecated—producing four distinct provenance classes
-(\texttt{original}, \texttt{success\_distilled}, \texttt{cross\_llm},
-\texttt{deprecated}) with honest tracked metadata. Our experiments show
-that (i)~the scaffold's held-out advantage \emph{amplifies} rather than
-degrades (\(0.86 \to 0.88\) vs. baseline, \(0.62 \to 0.82\) vs. the next
-best scaffold), (ii)~only \(3/12\) autonomously proposed candidates pass
-the A/B gate—evidence the gate is honest, not permissive, and (iii)~the
-surviving wisdoms come from disjoint evidence sources, demonstrating
-genuine complementarity across mining signals. We argue this is a small
-but concrete step toward agents that \emph{build the tools they think
-with}.
+A natural next step is an LLM agent that \emph{curates its own}
+methodological wisdom library—proposing, validating, and pruning
+entries without a human in the loop. We build and exercise exactly
+such a loop, and report a finding that we believe should reshape how
+self-improvement results in this literature are read.
+
+\noindent\textbf{The setup.} A strong scaffolded solver (v20,
+\(+28\)pp vs. the v16 case-library champion on 100 problems,
+\(+76\)pp vs. a budget-matched baseline on a 50-problem held-out set) is
+paired with four orchestration modules: a failure generator, a
+success distiller, a cross-model distiller, and a Darwinian pruner.
+Each candidate wisdom must pass a \(+10\)pp held-out A/B gate to
+enter the library.
+
+\noindent\textbf{The inner-loop result looks strong.} Over a single
+cycle the library grows \(75 \to 77 \to 58_{\text{active}} +
+19_{\text{deprecated}} \to 59_{\text{active}} + 19_{\text{deprecated}}\).
+Three new wisdoms are committed (\(W_{076}, W_{077}, W_{078}\))
+from disjoint evidence sources; nine candidates are refused;
+nineteen stale entries are deprecated. Only \(3/12\) proposals pass
+the gate—evidence that the A/B gate is doing real work.
+
+\noindent\textbf{The outer-loop audit breaks the result.} We then
+re-judge the same 150 answer pairs (50 held-out problems \(\times\) 3
+KEEP decisions) with a different LLM family (Claude Opus 4.6).
+\textbf{\(0/3\) KEEP decisions survive cross-family re-judgment:}
+\(W_{076}\) falls from \(0.64 \to 0.40\), \(W_{077}\) from
+\(0.60 \to 0.47\), \(W_{078}\) from \(0.60 \to 0.51\). Every single
+KEEP flips to REVERT under the cross-family judge. A self-rebuttal
+step, run \emph{before} the cross-judge was invoked, had already
+predicted this: the agent returned \texttt{further\_test} (never
+\texttt{accept}) on all three KEEPs, naming judge-preference
+alignment as the strongest confound. The cross-judge confirmed the
+rebuttal.
+
+\noindent\textbf{The take-away.} Single-family self-adjudication is
+not enough. An agent can be simultaneously (i)~honest about its gate
+(9/12 REVERTs, disjoint evidence sources, auditable logs),
+(ii)~successful by its own measurement, and (iii)~wrong in a way that
+only becomes visible once a separate-family judge re-scores the
+identical text. We argue cross-family re-judgment should become a
+routine reporting item for any self-improving LLM loop, not a
+stretch goal. Our contribution is the loop, the audit, and the
+concrete failure mode—a small but concrete step toward agents that
+build the tools they think with \emph{and} notice when their own
+tools mislead them.
 \end{abstract}
 
 \section{Introduction}
@@ -153,14 +173,54 @@ investigation, no right to speak}, W078 \emph{Is it a mule or a
 horse—take it out for a test}) from disjoint evidence sources.
 \emph{Only 3 of 12 candidates pass}: the gate is doing real work.
 
-\paragraph{Contribution 4 — A study of failure modes.} We report
-exactly where the closed loop breaks: (i)~failure-driven candidates
-never fire in our run because the solver's residuals are too
-idiosyncratic at the scale we tested; (ii)~cross-model distillation
-produces only one candidate with borderline novelty; (iii)~the
-Darwinian pruner deprecates \(25\%\) of the library on a single scan,
-which may reflect over-aggressive default thresholds. These are
-actionable, not failures-as-marketing.
+\paragraph{Contribution 4 — Cross-family re-judgment \emph{breaks}
+single-family self-adjudication.} This is the result we want this
+paper to be read for. After a clean inner-loop cycle that produces
+three KEEPs under a \(+10\)pp held-out gate judged by
+\emph{gemini-3-flash}, we re-judge the exact same \(3 \times 50\)
+answer pairs using \emph{Claude Opus 4.6} (Anthropic). Under the
+cross-family judge, \emph{every single KEEP flips}: \(W_{076}\) goes
+from wr\(= 0.64\) to \(0.40\); \(W_{077}\) from \(0.60\) to \(0.47\);
+\(W_{078}\) from \(0.60\) to \(0.51\). This is not a subtle
+numerical drift; it is a complete failure of the inner-loop gate to
+produce decisions that are stable under a disjoint judge family.
+The symmetry of the finding (\(3/3\) flips, not \(1/3\) or
+\(2/3\)) is the evidence: this is systematic, not statistical.
+
+\paragraph{Contribution 5 — The agent's self-rebuttal step had
+already predicted this.} Before we invoked the cross-family judge,
+a self-rebuttal step asked GPT-5.4 to produce the three strongest
+counter-hypotheses for each KEEP and a final verdict. On all three
+KEEPs the verdict was \texttt{further\_test} (never
+\texttt{accept}), and the \#1-ranked confound for all three was
+\emph{judge-preference alignment}: ``the judge's taste for
+`investigate-first', `compare-explicitly', `staged migration' is a
+well-attested bias; a wisdom that \emph{activates such phrasings}
+can win without improving substance.'' Cross-judge Experiment~1 is
+the direct falsifier of this prediction, and it confirmed it.
+
+\paragraph{Contribution 6 — A meta-wisdom about the gate itself.}
+A separate self-audit step, shown only the log of past KEEP/REVERT
+decisions, diagnoses the gate as too strict in the \([0.54, 0.62]\)
+gray zone (where a single pair-flip moves wr by \(0.02\)) and
+proposes a falsifiable three-tier replacement:
+\texttt{wr} \(\geq 0.64 \Rightarrow\) auto KEEP, \texttt{wr} \(\leq 0.52
+\Rightarrow\) auto REVERT, \([0.53, 0.63] \Rightarrow\) extend to
+\(n = 100\) or run a second independent A/B. The agent supplies its
+own falsifier for this meta-wisdom. Combined with Contribution 5,
+this is evidence that the loop has genuine introspective bandwidth
+\emph{separate from} its tendency to self-congratulate on the
+object-level A/B.
+
+\paragraph{Contribution 7 — A study of failure modes.} We report
+where the closed loop breaks at the object level:
+(i)~failure-driven candidates never fire in our run because the
+solver's residuals are too idiosyncratic at \(N = 50\);
+(ii)~cross-model distillation produces only one candidate with
+borderline novelty (\(0.75\)); (iii)~the Darwinian pruner deprecates
+\(25\%\) of the library on a single scan, which may reflect
+over-aggressive default thresholds. These are actionable, not
+failures-as-marketing.
 
 \textbf{Scope and non-claims.} We do not claim the agent invents new
 \emph{concepts}: every committed wisdom is still rooted in a
@@ -563,8 +623,180 @@ the KEEP set} and the \emph{overlap of evidence}:
 Turn-0 logs; cross-LLM from hard-loss judgments). This is the minimum
 test for complementarity across sources, and it passes.
 
+\subsection{Recursive self-audit: three experiments}
+\label{sec:selfaudit}
+
+The loop as described so far \emph{proposes hypotheses and
+self-adjudicates} via a held-out A/B gate. But two concerns remain:
+(i)~solver and gate judge share the same LLM family, which could mask
+judge-preference confounds rather than measure methodological lift,
+and (ii)~the gate itself is never inspected for systematic bias. We
+run three experiments that give the agent one additional level of
+reflection.
+
+\paragraph{Experiment 1 — Cross-judge stability (the central
+result of this paper).} The three KEEP decisions are re-judged on
+the \emph{same 150 answer pairs} by \emph{Claude Opus 4.6}, accessed
+through a proxy that serves multiple vendors so the plumbing is
+identical. Results:
+\begin{center}\small
+\begin{tabular}{l r r c l}
+  \toprule
+  & \multicolumn{2}{c}{Win rate of ext} & & \\
+  \cmidrule(lr){2-3}
+  ID & gemini-3-flash & Claude Opus 4.6 & $\Delta$ & Agreement \\
+  \midrule
+  W076 & 0.64 ($32 : 18$) & \textbf{0.40} ($18 : 27 :  5_{\text{tie}}$)
+    & $-0.24$ & \textbf{FLIP} \\
+  W077 & 0.60 ($30 : 20$) & \textbf{0.47} ($19 : 21 : 10_{\text{tie}}$)
+    & $-0.13$ & \textbf{FLIP} \\
+  W078 & 0.60 ($30 : 20$) & \textbf{0.51} ($23 : 22 :  5_{\text{tie}}$)
+    & $-0.09$ & \textbf{FLIP} \\
+  \midrule
+  \multicolumn{4}{r}{Cross-judge STABLE fraction:} &
+  \textbf{0 / 3} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\noindent \emph{The exact same 50 ext-answer strings and 50 base-answer
+strings are being compared in both columns}—only the judging
+family changes. Every KEEP flips. The magnitude ranges from
+\emph{collapse} ($W_{076}$: $0.64 \to 0.40$) to \emph{narrow flip}
+($W_{078}$: $0.60 \to 0.51$), but the \emph{direction} is
+consistent: a judge from outside the family downgrades every
+KEEP.
+
+Interpretation: the inner-loop A/B gate is measuring
+\emph{gemini-3-flash's preference for answers that activate
+certain rhetorical structures} (``staged migration,'' ``diagnose
+first,'' ``bake-off before choosing''), which the three KEEPs
+specifically encourage. A new library entry that \emph{activates
+those phrasings} wins the intra-family A/B without improving
+methodological substance. This is exactly the confound
+Experiment~2's self-rebuttal named first, unprompted.
+
+The consequence for self-improving-LLM papers is stark: a
+$+N$pp improvement reported with a same-family judge is, until
+further notice, a statement about judge-preference alignment, not
+methodological uplift. We believe cross-family re-judgment of the
+\emph{identical answer pairs} is the cheapest meaningful
+falsification test one can bolt onto any such loop.
+
+\paragraph{Experiment 2 — Self-rebuttal.} For each KEEP, GPT-5.4 is
+given the wisdom record, the 50-pair A/B evidence, and told to
+produce the three strongest counter-hypotheses and a final verdict
+(\texttt{accept} / \texttt{further\_test} / \texttt{reject}). The
+agent returns \texttt{further\_test} on all three (no
+\texttt{accept}s), citing three high-severity confound classes that
+recur verbatim across cases:
+\begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=2pt]
+  \item \textbf{Judge-preference (3/3 cases).} The judge's taste for
+    ``investigate first,'' ``compare explicitly,'' ``staged
+    migration'' is a well-attested bias; a wisdom that \emph{activates
+    such phrasings} can win without improving substance.
+  \item \textbf{Held-out distribution match (3/3 cases).} If the 50
+    held-out problems happen to over-represent domains where the
+    wisdom's trigger condition holds, the measured \(+10\)pp is a
+    sample-coverage effect, not a general uplift.
+  \item \textbf{Library-interaction (3/3 cases).} The ext library
+    contains all base wisdoms plus one; behavioural changes may come
+    from retrieval-order shifts, not the new entry per se.
+\end{enumerate}
+These are exactly the confounds a skeptical human reviewer would
+raise. The system predicts them about itself. We see this as a
+strength for paper-writing and a concrete roadmap for a follow-up
+cycle (stratify test set by triggering conditions; ablate one-wisdom-at-a-time
+retrieval; cross-judge).
+
+\paragraph{Experiment 3 — Meta-wisdom about the gate.} The agent is
+shown all twelve validation rows (\(9\) REVERT, \(3\) KEEP) and asked
+to diagnose systematic bias in the gate itself. It identifies, from
+the wr distribution alone, four patterns:
+\begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=0pt]
+  \item Nine REVERTs cluster in \([0.46, 0.58]\); six of them are
+    within \(1\) pair-flip of the threshold.
+  \item \texttt{wr} \(= 0.58\) (\(29\) : \(21\)) and \texttt{wr} \(= 0.60\)
+    (\(30 : 20\)) differ by \emph{one pair} but span the life-death
+    boundary.
+  \item All three KEEPs are at the right tail
+    (\(0.60, 0.60, 0.64\)).
+  \item The full distribution is right-skewed: \(10/12\) candidates
+    have \texttt{wr} \(\geq 0.51\), yet the gate kills everything
+    \(< 0.60\).
+\end{enumerate}
+From these observations the agent proposes a meta-wisdom
+\emph{``临界一票，不定生死''} (``One critical vote must not decide
+life and death'') with a concrete gate modification:
+\begin{quote}\small
+\texttt{wr >= 0.64} \(\Rightarrow\) auto KEEP; \texttt{wr <= 0.52}
+\(\Rightarrow\) auto REVERT; \textbf{\(0.53 \leq\) wr} \(\leq 0.63
+\Rightarrow\) extend to \(n = 100\) or run a second independent A/B;
+in all cases, report confidence intervals rather than a single
+point estimate.
+\end{quote}
+It also produces its own falsifier:
+\begin{quote}\small
+``If gray-zone candidates remain \(< 0.55\) after extension to \(n
+\geq 100\), and current KEEPs hold \(\geq 0.60\) on re-test, then the
+threshold is not too strict—the candidates are genuinely weak, and I
+will abandon this meta-wisdom.''
+\end{quote}
+
+\noindent This is, to our knowledge, the first time a library-evolution
+loop has produced an auditable, testable hypothesis
+\emph{about its own decision procedure}, stated at exactly the level
+of abstraction needed to modify the procedure. We do not automatically
+apply the meta-wisdom—its correct use is to run the falsifier in
+the next cycle. What we show is that the loop has the introspective
+bandwidth to name its own failure mode without external prompting
+beyond the log of its own past choices.
+
+\paragraph{How these experiments move the self-adjudication claim.}
+Before these experiments, the paper could at best claim
+\emph{single-judge self-adjudication inside one LLM family}.
+Experiments 1--3 together let us say, concretely:
+\begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
+  \item \textbf{Cross-family judge agreement} is measurable
+    (Experiment 1) and should become a routine reporting item;
+  \item \textbf{Self-predicted failure modes} are specific and
+    useful—the system's rebuttal verdicts \emph{agree with the
+    criticisms a human reviewer would raise}, not a rubber-stamp
+    (Experiment 2);
+  \item \textbf{Meta-level self-hypothesis} is generatable: given a
+    log of past gate behaviour, the agent can propose a
+    \emph{falsifiable} modification to the gate itself (Experiment 3).
+\end{itemize}
+This is still not ``recursive self-hypothesizing without bound''—the
+hypothesis space at the meta-level is fenced by our prompts. But it
+is the first strictly non-object-level, non-human-curated
+hypothesis we have evidence the loop can produce.
+
 \section{Discussion}
 \label{sec:discussion}
+
+\paragraph{The single most important question: do the KEPT wisdoms
+have \emph{any} value?} Cross-family re-judgment says ``not as much
+as the inner loop thought.'' But it does not say ``zero.'' Claude's
+scores are $0.40, 0.47, 0.51$—one collapse and two near-parities.
+A future cycle could: (a)~commit wisdoms only if \emph{both} judges
+return $\geq 0.55$, turning the gate into an AND; (b)~commit only
+when the \emph{judge-family-average} wr
+$\bar{\text{wr}} \geq 0.58$; (c)~keep the same gate but require a
+second A/B on a completely new held-out split. Any of these would
+have rejected all three of our current KEEPs. The library would
+still grow—just from a smaller, more stable candidate set.
+
+\paragraph{What does this mean for the prior literature?} Many
+recent reports of self-improving LLM loops—self-rewarding LMs,
+self-play fine-tuning, instruction-backtranslation, STaR-style
+bootstrap—use a judge (or reward model) from the same family as
+the generator. Our experiment does not falsify these directly (they
+target the \emph{weights}, not a retrieval library), but it raises a
+specific testable question: are the reported gains intra-family
+judge-preference alignments or true capability gains? A drop-in
+cross-family re-judge, on the \emph{identical} generator outputs
+from the paper's most-improved checkpoint, is cheap and decisive.
 
 \paragraph{Why did the failure generator never fire?} The intended
 signal was ``judge gave B \(\geq\) 8-point margin, accumulate
@@ -629,20 +861,52 @@ open question and probably deserves its own paper.
 multi-cycle study with staged held-out splits is the natural
 continuation.
 
+\section{Appendix: Experiment 1 per-problem detail}
+\label{app:crossjudge}
+
+Full \texttt{\{pid \(\to\) verdict\}} maps for all three KEEP cases
+are stored in
+\texttt{phase four/autonomous/exp1\_cross\_judge\_log.json} and
+regenerated by
+\texttt{phase four/exp1\_cross\_judge.py}. The regenerator uses the
+\(+\)/- pair-side randomization rule inherited from
+\texttt{validate\_parallel.py} so that per-PID side allocation is
+identical across both judging families; the only input difference
+is the judge family. Problem-level audit: we observe no single
+pid that flipped in only one direction—the judges agree on the
+direction of individual pairs about as often as they disagree,
+but \emph{Claude's tie rate is materially higher} (14\% vs.\ 0\%
+for \emph{gemini-3-flash}) and its ext-advantage score is
+systematically lower. This is consistent with the hypothesis that
+the gemini judge has a sharper preference signal for specific
+rhetorical patterns.
+
 \section{Conclusion}
 \label{sec:conclusion}
 
-Scaffolded LLMs benefit from methodological libraries; methodological
-libraries benefit from autonomous curation. We showed that a
-moderately strong scaffold (v20) can be \emph{paired with} a
-four-component closed-loop orchestrator to yield a library that
-grows, prunes, and imports cross-model wisdom—all under an
-auditable A/B gate. The net of one cycle is three new active
-wisdoms, nineteen retired, and a held-out advantage that does not
-degrade with library mutation. The agent does not invent concepts; it
-locates the aphorism-sized holes in its own scaffold and patches them.
-We view this as a small but tangible step from ``LLMs with static
-scaffolds'' toward ``LLMs that curate the tools they think with.''
+We set out to build the simplest honest closed-loop agent that
+\emph{proposes} wisdom, \emph{validates} it, \emph{prunes} what
+stops being used, and \emph{imports} what a stronger cross-model
+generator sees but the solver misses. We did build it, and its
+inner loop works: three new active wisdoms, nineteen retired,
+\(3/12\) candidates KEPT by a strict \(+10\)pp A/B gate, all
+auditable.
+
+Then we ran the cheapest falsification test on our own result: we
+re-judged the identical answer pairs with a disjoint-family judge.
+\emph{All three KEEPs flipped}, and the agent's own pre-committed
+self-rebuttal step had named this exact failure mode first.
+
+What remains true: the loop is honest about its state
+(\(9/12\) rejections, disjoint evidence sources, every decision
+logged with evidence). What we now know is additionally true: an
+honest loop with a same-family gate produces KEEPs that do not
+transport to a different-family re-judgment. The discipline going
+forward is not to close this loop harder; it is to include
+cross-family re-judgment as a first-class reporting item and to
+treat a same-family $+N$pp as preliminary until cross-family
+re-judgment confirms the direction. Our agent could have told us
+this; now we have told the reader.
 
 \paragraph{Reproducibility.} All code
 (\texttt{wisdom\_registry.py}, \texttt{success\_distiller.py},
