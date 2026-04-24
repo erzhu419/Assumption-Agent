@@ -1,0 +1,108 @@
+[
+  {
+    "timestamp": "2026-04-24T03:19:32Z",
+    "agent": "claude-opus-4-6",
+    "agent_routing": {
+      "output": {
+        "routing_table": [
+          {
+            "pattern_number": 1,
+            "external_signal": "Agent 即将对一个数据源（文件/API/DB）编写读取或写入代码，但当前 workspace 中尚未 cat/grep/head 过该数据源的任何真实样本",
+            "counter_example_signal": "Agent 已经在同一 session 中 cat 过该文件并确认了 schema，现在只是在修改处理逻辑——此时不需要再次 Read before write，而可能需要 Pattern 6 (Bisection)"
+          },
+          {
+            "pattern_number": 2,
+            "external_signal": "Agent 手中已存在 ≥2 个完成同一任务的 artifact（如两份 answer、两版 pipeline），且已有评测结果显示它们之间存在可量化的质量差距（如 score diff ≥ 显著阈值）",
+            "counter_example_signal": "只有一个 artifact，或有多个 artifact 但尚未跑过任何评测/无法判断谁 strong 谁 weak——此时应先跑评测，而非直接蒸馏"
+          },
+          {
+            "pattern_number": 3,
+            "external_signal": "Agent 刚获得一个 positive metric（如 pass-rate 提升、score 上涨），且该 metric 的全部证据来自同一条数据管线或同一个 judge/evaluator",
+            "counter_example_signal": "Positive signal 已经被两个数据流不同源的测量分别确认过（如 judge A + 人工抽检 / 不同 test set）——此时无需再做 orthogonal falsification，应进入下一步"
+          },
+          {
+            "pattern_number": 4,
+            "external_signal": "同一个 module 在同一个角色/职责上已经连续 ≥3 次迭代失败，且每次失败后的修复都是在调该 module 自身的参数或 prompt",
+            "counter_example_signal": "Module 第一次失败，或者失败原因已被 Pattern 6 定位到具体代码 bug 层——此时应先 patch 具体 bug，而非重新分配角色"
+          },
+          {
+            "pattern_number": 5,
+            "external_signal": "Agent 即将提交一次 validation run（如 pytest / eval script / submission），且本轮改动尚未生成任何 falsifiable prediction 或 pre-registered 预期结果",
+            "counter_example_signal": "Agent 正在做 exploratory data analysis 或 debug 中间步骤，还没到 validation 阶段——此时不需要 self-rebuttal，需要的是 Pattern 1 或 Pattern 6"
+          },
+          {
+            "pattern_number": 6,
+            "external_signal": "Agent 生成的代码刚运行失败（报错/输出不符预期），且 agent 的下一步动作是准备重新生成整段代码而非先阅读已生成代码的 traceback/输出",
+            "counter_example_signal": "代码尚未运行过（还在编写阶段），或者失败原因已经被定位到 data schema 不匹配——前者不适用，后者应回到 Pattern 1"
+          },
+          {
+            "pattern_number": 7,
+            "external_signal": "评测结果呈现退化分布：所有 case 全部 PASS、全部 FAIL、或所有 case 得分方差 ≈ 0（无区分度），且 agent 的下一步计划是调参/改阈值以获得更好看的数字",
+            "counter_example_signal": "评测结果有合理的分布和方差，只是整体水平低于预期——此时是正常的优化场景，不是 null result，应走 Pattern 2 或 Pattern 4"
+          },
+          {
+            "pattern_number": 8,
+            "external_signal": "Agent 需要实现一个新 feature/module，且当前 workspace 中不存在该功能的任何代码骨架，agent 正准备从空文件开始写",
+            "counter_example_signal": "Agent 已有一个基本能跑的实现，只需修改其中一个子模块的逻辑——此时不需要找外部 repo，应直接 patch，可能需要 Pattern 6"
+          }
+        ],
+        "hardest_disambiguation": "Pattern 4 (Switch role when module fails) 和 Pattern 6 (Bisection through bug layers) 最容易混淆。两者都在 '代码/模块反复失败' 时触发。关键区分点是失败的 **层次和次数**：如果失败刚发生且 agent 还没读过 traceback，应先用 Pattern 6 定位具体 bug 层；只有当 Pattern 6 已经执行过多轮（≥3 次定位-修复循环仍失败）、且每次修复都是在同一个 module 的同一个职责上打补丁时，才应升级到 Pattern 4 做角色重分配。简言之，Pattern 6 是 micro 层的 '先诊断再修'，Pattern 4 是 macro 层的 '这个模块不适合干这件事'。时间序列上 6 先于 4。",
+        "missing_patterns_you_noticed": "至少有三条值得补充：(A) Checkpoint before exploration——在做任何 exploratory 改动前先 git commit / snapshot 当前可工作状态，触发信号是 'agent 即将尝试一个不确定能否成功的大改动且当前版本是可运行的'；(B) Timeout-based scope cut——当单个子任务耗时超过预设 budget（如 wall-clock 或 token 用量）的 50% 仍无进展时，主动砍掉该子任务或降级目标，而非继续投入；(C) Diff-review before commit——在提交最终 artifact 前，对比本轮改动与上一轮的 diff，确认没有 regression，触发信号是 'agent 即将 submit/commit 且本轮改动涉及 ≥2 个文件'。"
+      },
+      "raw_text": "{\"routing_table\": [\n    {\"pattern_number\": 1,\n     \"external_signal\": \"Agent 即将对一个数据源（文件/API/DB）编写读取或写入代码，但当前 workspace 中尚未 cat/grep/head 过该数据源的任何真实样本\",\n     \"counter_example_signal\": \"Agent 已经在同一 session 中 cat 过该文件并确认了 schema，现在只是在修改处理逻辑——此时不需要再次 Read before write，而可能需要 Pattern 6 (Bisection)\"},\n    {\"pattern_number\": 2,\n     \"external_signal\": \"Agent 手中已存在 ≥2 个完成同一任务的 artifact（如两份 answer、两版 pipeline），且已有评测结果显示它们之间存在可量化的质量差距（如 score diff ≥ 显著阈值）\",\n     \"counter_example_signal\": \"只有一个 artifact，或有多个 artifact 但尚未跑过任何评测/无法判断谁 strong 谁 weak——此时应先跑评测，而非直接蒸馏\"},\n    {\"pattern_number\": 3,\n     \"external_signal\": \"Agent 刚获得一个 positive metric（如 pass-rate 提升、score 上涨），且该 metric 的全部证据来自同一条数据管线或同一个 judge/evaluator\",\n     \"counter_example_signal\": \"Positive signal 已经被两个数据流不同源的测量分别确认过（如 judge A + 人工抽检 / 不同 test set）——此时无需再做 orthogonal falsification，应进入下一步\"},\n    {\"pattern_number\": 4,\n     \"external_signal\": \"同一个 module 在同一个角色/职责上已经连续 ≥3 次迭代失败，且每次失败后的修复都是在调该 module 自身的参数或 prompt\",\n     \"counter_example_signal\": \"Module 第一次失败，或者失败原因已被 Pattern 6 定位到具体代码 bug 层——此时应先 patch 具体 bug，而非重新分配角色\"},\n    {\"pattern_number\": 5,\n     \"external_signal\": \"Agent 即将提交一次 validation run（如 pytest / eval script / submission），且本轮改动尚未生成任何 falsifiable prediction 或 pre-registered 预期结果\",\n     \"counter_example_signal\": \"Agent 正在做 exploratory data analysis 或 debug 中间步骤，还没到 validation 阶段——此时不需要 self-rebuttal，需要的是 Pattern 1 或 Pattern 6\"},\n    {\"pattern_number\": 6,\n     \"external_signal\": \"Agent 生成的代码刚运行失败（报错/输出不符预期），且 agent 的下一步动作是准备重新生成整段代码而非先阅读已生成代码的 traceback/输出\",\n     \"counter_example_signal\": \"代码尚未运行过（还在编写阶段），或者失败原因已经被定位到 data schema 不匹配——前者不适用，后者应回到 Pattern 1\"},\n    {\"pattern_number\": 7,\n     \"external_signal\": \"评测结果呈现退化分布：所有 case 全部 PASS、全部 FAIL、或所有 case 得分方差 ≈ 0（无区分度），且 agent 的下一步计划是调参/改阈值以获得更好看的数字\",\n     \"counter_example_signal\": \"评测结果有合理的分布和方差，只是整体水平低于预期——此时是正常的优化场景，不是 null result，应走 Pattern 2 或 Pattern 4\"},\n    {\"pattern_number\": 8,\n     \"external_signal\": \"Agent 需要实现一个新 feature/module，且当前 workspace 中不存在该功能的任何代码骨架，agent 正准备从空文件开始写\",\n     \"counter_example_signal\": \"Agent 已有一个基本能跑的实现，只需修改其中一个子模块的逻辑——此时不需要找外部 repo，应直接 patch，可能需要 Pattern 6\"}\n  ],\n  \"hardest_disambiguation\": \"Pattern 4 (Switch role when module fails) 和 Pattern 6 (Bisection through bug layers) 最容易混淆。两者都在 '代码/模块反复失败' 时触发。关键区分点是失败的 **层次和次数**：如果失败刚发生且 agent 还没读过 traceback，应先用 Pattern 6 定位具体 bug 层；只有当 Pattern 6 已经执行过多轮（≥3 次定位-修复循环仍失败）、且每次修复都是在同一个 module 的同一个职责上打补丁时，才应升级到 Pattern 4 做角色重分配。简言之，Pattern 6 是 micro 层的 '先诊断再修'，Pattern 4 是 macro 层的 '这个模块不适合干这件事'。时间序列上 6 先于 4。\",\n  \"missing_patterns_you_noticed\": \"至少有三条值得补充：(A) Checkpoint before exploration——在做任何 exploratory 改动前先 git commit / snapshot 当前可工作状态，触发信号是 'agent 即将尝试一个不确定能否成功的大改动且当前版本是可运行的'；(B) Timeout-based scope cut——当单个子任务耗时超过预设 budget（如 wall-clock 或 token 用量）的 50% 仍无进展时，主动砍掉该子任务或降级目标，而非继续投入；(C) Diff-review before commit——在提交最终 artifact 前，对比本轮改动与上一轮的 diff，确认没有 regression，触发信号是 'agent 即将 submit/commit 且本轮改动涉及 ≥2 个文件'。\"\n}",
+      "elapsed_s": 41
+    },
+    "alignment": {
+      "output": {
+        "alignments": [
+          {
+            "pattern": 1,
+            "level": "STRONG_MATCH",
+            "comment": "两者都指向「要操作数据源前先看真实样本」。Agent 更具体地列出了 cat/grep/head 等动作，Researcher 用「碰缓存文件」概括，但触发条件本质一致：写代码前未 inspect 目标数据。"
+          },
+          {
+            "pattern": 2,
+            "level": "STRONG_MATCH",
+            "comment": "完全对齐：≥2 个 artifact + 已有可量化质量差距。Agent 补充了 score diff ≥ 显著阈值的细节，但触发条件与 Researcher 的「知道谁强谁弱」一致。"
+          },
+          {
+            "pattern": 3,
+            "level": "WEAK_MATCH",
+            "comment": "方向一致：都在说「刚拿到正向信号时要警惕」。但 Researcher 强调 load-bearing（信号本身重要性），Agent 强调 single-source（证据来源单一性），触发侧重点不同。Agent 加了一层「需交叉验证」的意思，Researcher 更泛。"
+          },
+          {
+            "pattern": 4,
+            "level": "WEAK_MATCH",
+            "comment": "方向一致但阈值和范围有偏差。Researcher 说 ≥2 次 fail，Agent 说 ≥3 次且限定了「修复都是调自身参数/prompt」。Agent 增加了对修复策略单一性的约束，触发条件更窄更具体。"
+          },
+          {
+            "pattern": 5,
+            "level": "STRONG_MATCH",
+            "comment": "高度对齐：都指向「commit/提交前还没跑 validation」。Agent 用 falsifiable prediction / pre-registered 预期来表述，本质就是 Researcher 说的「还没跑 validation」，且 Agent 更精确地要求先写下预期再跑。"
+          },
+          {
+            "pattern": 6,
+            "level": "STRONG_MATCH",
+            "comment": "核心一致：代码失败后应先读 traceback 再行动。Researcher 说「traceback 指向多处」，Agent 说「准备重新生成整段代码而非先读 traceback」。触发条件都是「失败后跳过诊断直接重写」，Agent 表述为行为模式更清晰。"
+          },
+          {
+            "pattern": 7,
+            "level": "STRONG_MATCH",
+            "comment": "完全对齐：结果无区分度（全 pass/全 fail/方差≈0）。Agent 额外加了「下一步是调参美化数字」的行为预判，但触发信号与 Researcher 的 trivial/no discrimination 一致。"
+          },
+          {
+            "pattern": 8,
+            "level": "DIVERGED",
+            "comment": "Researcher 的触发是「知道 ≥3 相似 repo 可参考」，强调利用已有参考实现。Agent 的触发是「workspace 无骨架、准备从空文件写」，强调避免从零开始。一个是 reference-aware 路由，一个是 cold-start 检测，方向相关但触发条件不同。"
+          }
+        ],
+        "strong_match_count": 5,
+        "overall_similarity": 0.72,
+        "agent_insight_researcher_missed": "Pattern 3 中 Agent 强调 single-source evidence（正向信号全部来自同一管线/evaluator）的交叉验证需求，这是 Researcher 未显式提及的具体 failure mode；Pattern 5 中 Agent 要求 pre-registered prediction（先写预期再跑），比 Researcher 的「跑 validation」更有方法论深度。",
+        "researcher_insight_agent_missed": "Pattern 8 中 Researcher 的核心洞察是「已知有 ≥3 相似 repo 时应先 survey 再写」——这是一个 reference-exploitation 策略。Agent 只识别了 cold-start 场景但完全没提到利用外部已有实现作为起点，漏掉了 prior-art search 这一关键路由动作。"
+      },
+      "raw_text": "```json\n{\n  \"alignments\": [\n    {\n      \"pattern\": 1,\n      \"level\": \"STRONG_MATCH\",\n      \"comment\": \"两者都指向「要操作数据源前先看真实样本」。Agent 更具体地列出了 cat/grep/head 等动作，Researcher 用「碰缓存文件」概括，但触发条件本质一致：写代码前未 inspect 目标数据。\"\n    },\n    {\n      \"pattern\": 2,\n      \"level\": \"STRONG_MATCH\",\n      \"comment\": \"完全对齐：≥2 个 artifact + 已有可量化质量差距。Agent 补充了 score diff ≥ 显著阈值的细节，但触发条件与 Researcher 的「知道谁强谁弱」一致。\"\n    },\n    {\n      \"pattern\": 3,\n      \"level\": \"WEAK_MATCH\",\n      \"comment\": \"方向一致：都在说「刚拿到正向信号时要警惕」。但 Researcher 强调 load-bearing（信号本身重要性），Agent 强调 single-source（证据来源单一性），触发侧重点不同。Agent 加了一层「需交叉验证」的意思，Researcher 更泛。\"\n    },\n    {\n      \"pattern\": 4,\n      \"level\": \"WEAK_MATCH\",\n      \"comment\": \"方向一致但阈值和范围有偏差。Researcher 说 ≥2 次 fail，Agent 说 ≥3 次且限定了「修复都是调自身参数/prompt」。Agent 增加了对修复策略单一性的约束，触发条件更窄更具体。\"\n    },\n    {\n      \"pattern\": 5,\n      \"level\": \"STRONG_MATCH\",\n      \"comment\": \"高度对齐：都指向「commit/提交前还没跑 validation」。Agent 用 falsifiable prediction / pre-registered 预期来表述，本质就是 Researcher 说的「还没跑 validation」，且 Agent 更精确地要求先写下预期再跑。\"\n    },\n    {\n      \"pattern\": 6,\n      \"level\": \"STRONG_MATCH\",\n      \"comment\": \"核心一致：代码失败后应先读 traceback 再行动。Researcher 说「traceback 指向多处」，Agent 说「准备重新生成整段代码而非先读 traceback」。触发条件都是「失败后跳过诊断直接重写」，Agent 表述为行为模式更清晰。\"\n    },\n    {\n      \"pattern\": 7,\n      \"level\": \"STRONG_MATCH\",\n      \"comment\": \"完全对齐：结果无区分度（全 pass/全 fail/方差≈0）。Agent 额外加了「下一步是调参美化数字」的行为预判，但触发信号与 Researcher 的 trivial/no discrimination 一致。\"\n    },\n    {\n      \"pattern\": 8,\n      \"level\": \"DIVERGED\",\n      \"comment\": \"Researcher 的触发是「知道 ≥3 相似 repo 可参考」，强调利用已有参考实现。Agent 的触发是「workspace 无骨架、准备从空文件写」，强调避免从零开始。一个是 reference-aware 路由，一个是 cold-start 检测，方向相关但触发条件不同。\"\n    }\n  ],\n  \"strong_match_count\": 5,\n  \"overall_similarity\": 0.72,\n  \"agent_insight_researcher_missed\": \"Pattern 3 中 Agent 强调 single-source evidence（正向信号全部来自同一管线/evaluator）的交叉验证需求，这是 Researcher 未显式提及的具体 failure mode；Pattern 5 中 Agent 要求 pre-registered prediction（先写预期再跑），比 Researcher 的「跑 validation」更有方法论深度。\",\n  \"researcher_insight_agent_missed\": \"Pattern 8 中 Researcher 的核心洞察是「已知有 ≥3 相似 repo 时应先 survey 再写」——这是一个 reference-exploitation 策略。Agent 只识别了 cold-start 场景但完全没提到利用外部已有实现作为起点，漏掉了 prior-art search 这一关键路由动作。\"\n}\n```",
+      "elapsed_s": 24
+    }
+  }
+]

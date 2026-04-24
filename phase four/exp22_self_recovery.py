@@ -122,6 +122,19 @@ PHASE_C_PROMPT = """你现在要重新设计 Gate A，加入你命名的 design 
 == 你对这个 move 的抽象 ==
 {general_principle}
 
+== 可用的 methodology patterns (v2 toolkit) ==
+你项目里积累的 8 条 pattern + 它们的 trigger：
+1. Read before write      (要碰 cache file 前 grep schema)
+2. Cross-artifact distill (2+ 做同样事的 artifact 知谁强谁弱时 → 蒸馏结构差)
+3. Orthogonal falsification (刚拿 load-bearing positive signal 时)
+4. Switch role            (module 在 X 角色 ≥2 次 fail 时)
+5. Self-rebuttal          (刚 commit 未跑 validation 时)
+6. Bisection through bugs (LLM code 多处报错时)
+7. Null results as finding (结果 trivial no-discrim 时)
+8. Least-to-most construction (要实现 feature 且知 ≥3 相似 repo 时)
+
+在设计和实现 v2 gate 的步骤里，你可能会 reach for 其中若干条。**在输出里显式注明**哪一步用了哪条 pattern。
+
 == 约束 ==
 1. 保留 Gate A 的 4 个 components 的核心思想（reframe-depth, content-delta, wisdom-alignment, antipattern-avoidance）—— 不要抛弃，要**升级**它们。
 2. 每个 component 必须用这个 move 重写：说清楚"用在 pids 的哪个子集上"以及"这个子集怎么定义"。
@@ -138,7 +151,10 @@ PHASE_C_PROMPT = """你现在要重新设计 Gate A，加入你命名的 design 
     "why_conditioning_matters": "30-50 字说明为什么用这个子集比 pooled 更有信号"}}
  ],
  "combination_rule": "...",
- "predicted_pass_count_on_12_candidates": "你估计 new gate 会 PASS 几个（和为什么）"}}
+ "predicted_pass_count_on_12_candidates": "你估计 new gate 会 PASS 几个（和为什么）",
+ "methodology_patterns_used": [
+   {{"step": "描述这一步", "pattern_number": 1-8, "why_this_pattern_fires": "20-40字"}}
+ ]}}
 """
 
 
@@ -188,14 +204,18 @@ def main():
     print(f"  general_principle: {b_out.get('general_principle','?')[:200]}")
     print(f"  when_required: {b_out.get('when_required','?')[:100]}")
 
-    # Phase C: redesign
+    # Phase C: redesign (with retry + fallback to GPT-5.4)
     print("\n=== Phase C: Redesign gate with the missing move ===")
     t0 = time.time()
     c_prompt = PHASE_C_PROMPT.format(
         missing_move=a_out.get("missing_design_move", ""),
         general_principle=b_out.get("general_principle", ""),
     )
-    c_out, c_raw = try_call(client, c_prompt, max_tokens=2500)
+    c_out, c_raw = try_call(client, c_prompt, max_tokens=4000)
+    if not c_out:
+        print(f"  [Claude empty, fallback to GPT-5.4]")
+        fb = GPT5Client()
+        c_out, c_raw = try_call(fb, c_prompt, max_tokens=4000)
     log["phases"]["C_redesign"] = {"output": c_out, "raw": c_raw,
                                     "elapsed_s": int(time.time()-t0)}
     print(f"  gate_name: {c_out.get('gate_name','?')}")

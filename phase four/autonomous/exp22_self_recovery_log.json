@@ -1,0 +1,159 @@
+[
+  {
+    "timestamp": "2026-04-24T03:19:27Z",
+    "agent": "claude-opus-4-6",
+    "phases": {
+      "A_diagnose": {
+        "output": {
+          "structural_difference": "Gate B 先用 component 1 (trigger_fit_rate) 把 50 个 pid 分成 SHOULD_FIRE / NO_FIRE 两个子集，然后 component 2、3 只在 SHOULD_FIRE 子集上计算 utility 和 citation，component 4 只在 NO_FIRE 子集上计算 harm。也就是说 Gate B 的后三个 component 不是对全量 pid 做聚合，而是对条件子集做聚合。Gate A 的每个 component 都对全部 50 个 pid 取 median 或均值，没有任何子集划分——所有 pid 被等权混入同一个统计量。",
+          "why_it_matters_for_discrimination": "一条 wisdom 可能只对 10 个 pid 真正相关，对其余 40 个无关。Gate A 把 40 个无关 pid 的'无害但也无用'的中性信号混进 median，稀释了那 10 个相关 pid 上可能存在的失败信号。结果每条 wisdom 的聚合指标都被大量中性样本拉向'刚好过线'，12/12 全 pass。Gate B 只在相关子集上算 utility，中性样本被排除，信号不被稀释，差的 wisdom 就暴露了。",
+          "missing_design_move": "先分流再度量（condition-then-measure）",
+          "where_in_gate_B_does_it_appear": "component 1 (trigger_fit_rate) 实例化了分流：它本身不测 wisdom 的效用好坏，而是为每个 (wisdom, pid) 对打上 SHOULD_FIRE / NEUTRAL / NO_FIRE 标签，产出子集划分。这个划分随后被 component 2 (util_when_fires) 和 component 3 (cite_when_fires) 用作条件筛选器——只取 SHOULD_FIRE 子集计算 win-rate 和引用率；同时被 component 4 (harm_when_absent) 用作互补筛选器——只取 NO_FIRE 子集检验无害性。"
+        },
+        "raw": "{\"structural_difference\": \"Gate B 先用 component 1 (trigger_fit_rate) 把 50 个 pid 分成 SHOULD_FIRE / NO_FIRE 两个子集，然后 component 2、3 只在 SHOULD_FIRE 子集上计算 utility 和 citation，component 4 只在 NO_FIRE 子集上计算 harm。也就是说 Gate B 的后三个 component 不是对全量 pid 做聚合，而是对条件子集做聚合。Gate A 的每个 component 都对全部 50 个 pid 取 median 或均值，没有任何子集划分——所有 pid 被等权混入同一个统计量。\", \"why_it_matters_for_discrimination\": \"一条 wisdom 可能只对 10 个 pid 真正相关，对其余 40 个无关。Gate A 把 40 个无关 pid 的'无害但也无用'的中性信号混进 median，稀释了那 10 个相关 pid 上可能存在的失败信号。结果每条 wisdom 的聚合指标都被大量中性样本拉向'刚好过线'，12/12 全 pass。Gate B 只在相关子集上算 utility，中性样本被排除，信号不被稀释，差的 wisdom 就暴露了。\", \"missing_design_move\": \"先分流再度量（condition-then-measure）\", \"where_in_gate_B_does_it_appear\": \"component 1 (trigger_fit_rate) 实例化了分流：它本身不测 wisdom 的效用好坏，而是为每个 (wisdom, pid) 对打上 SHOULD_FIRE / NEUTRAL / NO_FIRE 标签，产出子集划分。这个划分随后被 component 2 (util_when_fires) 和 component 3 (cite_when_fires) 用作条件筛选器——只取 SHOULD_FIRE 子集计算 win-rate 和引用率；同时被 component 4 (harm_when_absent) 用作互补筛选器——只取 NO_FIRE 子集检验无害性。\"}",
+        "elapsed_s": 14
+      },
+      "B_abstract": {
+        "output": {
+          "general_principle": "Condition-Then-Measure 原则：在对一个策略/规则/特征进行效度评估时，先用一个独立的分流函数（relevance classifier）将评估样本按'该策略是否应当激活'划分为条件子集，再在各子集内分别计算效度指标。正向效度（utility、gain）只在'应激活'子集上度量，负向效度（harm、side-effect）只在'不应激活'子集上度量。这避免了大量中性/无关样本对信号的稀释，使度量的灵敏度与策略的实际作用域对齐。本质上，它要求度量的分母不是全量样本，而是策略声称覆盖的那个条件子空间。",
+          "why_orthogonal_to_decomposition": "Orthogonal decomposition 回答的是'用哪几个互不冗余的维度来刻画质量'——它决定指标的种类与数量。Condition-then-measure 回答的是'每个指标在哪个样本子集上计算'——它决定指标的计算域。两者可以独立变化：你可以在全量样本上做正交分解（Gate A），也可以在条件子集上做正交分解（Gate B），还可以在条件子集上只算单一指标。分解是指标空间的结构，分流是样本空间的结构，二者正交。",
+          "when_required": "当策略/规则的预期作用域远小于评估样本全集时——即大部分样本对该策略'中性无关'，全量聚合会用中性噪声淹没真实信号。",
+          "when_optional": "当策略对所有样本均匀适用（作用域≈全集），或样本本身已按相关性预筛过，中性稀释不存在时，全量聚合即可。"
+        },
+        "raw": "```json\n{\n  \"general_principle\": \"Condition-Then-Measure 原则：在对一个策略/规则/特征进行效度评估时，先用一个独立的分流函数（relevance classifier）将评估样本按'该策略是否应当激活'划分为条件子集，再在各子集内分别计算效度指标。正向效度（utility、gain）只在'应激活'子集上度量，负向效度（harm、side-effect）只在'不应激活'子集上度量。这避免了大量中性/无关样本对信号的稀释，使度量的灵敏度与策略的实际作用域对齐。本质上，它要求度量的分母不是全量样本，而是策略声称覆盖的那个条件子空间。\",\n  \"why_orthogonal_to_decomposition\": \"Orthogonal decomposition 回答的是'用哪几个互不冗余的维度来刻画质量'——它决定指标的种类与数量。Condition-then-measure 回答的是'每个指标在哪个样本子集上计算'——它决定指标的计算域。两者可以独立变化：你可以在全量样本上做正交分解（Gate A），也可以在条件子集上做正交分解（Gate B），还可以在条件子集上只算单一指标。分解是指标空间的结构，分流是样本空间的结构，二者正交。\",\n  \"when_required\": \"当策略/规则的预期作用域远小于评估样本全集时——即大部分样本对该策略'中性无关'，全量聚合会用中性噪声淹没真实信号。\",\n  \"when_optional\": \"当策略对所有样本均匀适用（作用域≈全集），或样本本身已按相关性预筛过，中性稀释不存在时，全量聚合即可。\"\n}\n```",
+        "elapsed_s": 21
+      },
+      "C_redesign": {
+        "output": {},
+        "raw": "err: Expecting value: line 1 column 1 (char 0)",
+        "elapsed_s": 55
+      }
+    },
+    "concept_discovery": {
+      "phase_a_concept_hits": [
+        "condition",
+        "trigger",
+        "fire",
+        "条件",
+        "子集"
+      ],
+      "phase_b_concept_hits": [
+        "condition",
+        "class",
+        "条件",
+        "子集"
+      ],
+      "verdict": "DISCOVERED"
+    }
+  },
+  {
+    "timestamp": "2026-04-24T03:21:50Z",
+    "agent": "claude-opus-4-6",
+    "phases": {
+      "A_diagnose": {
+        "output": {
+          "structural_difference": "Gate B 先用 component 1 (trigger_fit_rate) 把 50 个 pid 按 wisdom 的适用性分成 SHOULD_FIRE / NEUTRAL / NO_FIRE 子集，然后 component 2、3、4 分别只在对应子集上计算指标。Gate A 的每个 component 都在全部 50 个 pid 上取 median 或均值——没有先做条件分区再分别评估的步骤。Gate B 的核心结构是一个两阶段流水线：第一阶段做 instance-level relevance routing，第二阶段在 route 出的子集上分别度量效用与危害。",
+          "why_it_matters_for_discrimination": "wisdom 对 50 个 pid 并非均匀适用。全量聚合时，wisdom 在少数适用 pid 上的真实增益被大量不适用 pid 上的噪声稀释到 threshold 以上（median 天然抗极端值），所以每个 candidate 都能过。Gate B 只在 wisdom 真正该触发的子集上测效用，信号不被无关 pid 稀释，弱 wisdom 的低效用暴露无遗。",
+          "missing_design_move": "条件子集路由 (condition-subset routing)",
+          "where_in_gate_B_does_it_appear": "component 1 (trigger_fit_rate) 实例化了路由本身——它为每个 (wisdom, pid) 对打 SHOULD_FIRE / NEUTRAL / NO_FIRE 标签，生成子集划分。component 2 (util_when_fires) 和 component 3 (cite_when_fires) 消费 SHOULD_FIRE 子集，component 4 (harm_when_absent) 消费 NO_FIRE 子集。路由与度量的分离正是这个 design move 的完整实例化。"
+        },
+        "raw": "{\"structural_difference\": \"Gate B 先用 component 1 (trigger_fit_rate) 把 50 个 pid 按 wisdom 的适用性分成 SHOULD_FIRE / NEUTRAL / NO_FIRE 子集，然后 component 2、3、4 分别只在对应子集上计算指标。Gate A 的每个 component 都在全部 50 个 pid 上取 median 或均值——没有先做条件分区再分别评估的步骤。Gate B 的核心结构是一个两阶段流水线：第一阶段做 instance-level relevance routing，第二阶段在 route 出的子集上分别度量效用与危害。\", \"why_it_matters_for_discrimination\": \"wisdom 对 50 个 pid 并非均匀适用。全量聚合时，wisdom 在少数适用 pid 上的真实增益被大量不适用 pid 上的噪声稀释到 threshold 以上（median 天然抗极端值），所以每个 candidate 都能过。Gate B 只在 wisdom 真正该触发的子集上测效用，信号不被无关 pid 稀释，弱 wisdom 的低效用暴露无遗。\", \"missing_design_move\": \"条件子集路由 (condition-subset routing)\", \"where_in_gate_B_does_it_appear\": \"component 1 (trigger_fit_rate) 实例化了路由本身——它为每个 (wisdom, pid) 对打 SHOULD_FIRE / NEUTRAL / NO_FIRE 标签，生成子集划分。component 2 (util_when_fires) 和 component 3 (cite_when_fires) 消费 SHOULD_FIRE 子集，component 4 (harm_when_absent) 消费 NO_FIRE 子集。路由与度量的分离正是这个 design move 的完整实例化。\"}",
+        "elapsed_s": 12
+      },
+      "B_abstract": {
+        "output": {
+          "general_principle": "在对一个候选方案（策略、模型、规则）做有效性度量之前，先按实例级别的适用性条件将评估样本路由到不同子集，再在每个子集内独立计算对应的效用或危害指标，最后将子集级结论组合为整体判断。核心操作是：把 '对谁度量' 的决策从度量函数中剥离出来，作为显式的前置路由阶段。这使得度量信号只来自候选方案真正作用的实例，避免无关实例的噪声稀释或反向污染。该原则可命名为 Relevance-Conditioned Evaluation（适用性条件化评估）。",
+          "why_orthogonal_to_decomposition": "Orthogonal decomposition 回答的是 '用哪几个指标来度量'——把效度拆成互不冗余的维度。Relevance conditioning 回答的是 '在哪些实例上度量'——把样本按适用性分区。两者分别操作指标空间和样本空间，可以独立变化：你可以在全量样本上做多维分解（Gate A），也可以在条件子集上只看单一指标，或者两者叠加（Gate B）。它们是评估架构的两个正交自由度。",
+          "when_required": "当候选方案的适用域显著小于评估样本全集、且不适用实例会产生噪声或反向信号时，必须做 conditioning，否则全量聚合会系统性地掩盖真实效用差异。",
+          "when_optional": "当候选方案对评估样本近乎均匀适用（适用率接近 100%），或聚合函数本身已对不适用实例鲁棒（如截断均值），conditioning 带来的增益可忽略。"
+        },
+        "raw": "```json\n{\n  \"general_principle\": \"在对一个候选方案（策略、模型、规则）做有效性度量之前，先按实例级别的适用性条件将评估样本路由到不同子集，再在每个子集内独立计算对应的效用或危害指标，最后将子集级结论组合为整体判断。核心操作是：把 '对谁度量' 的决策从度量函数中剥离出来，作为显式的前置路由阶段。这使得度量信号只来自候选方案真正作用的实例，避免无关实例的噪声稀释或反向污染。该原则可命名为 Relevance-Conditioned Evaluation（适用性条件化评估）。\",\n  \"why_orthogonal_to_decomposition\": \"Orthogonal decomposition 回答的是 '用哪几个指标来度量'——把效度拆成互不冗余的维度。Relevance conditioning 回答的是 '在哪些实例上度量'——把样本按适用性分区。两者分别操作指标空间和样本空间，可以独立变化：你可以在全量样本上做多维分解（Gate A），也可以在条件子集上只看单一指标，或者两者叠加（Gate B）。它们是评估架构的两个正交自由度。\",\n  \"when_required\": \"当候选方案的适用域显著小于评估样本全集、且不适用实例会产生噪声或反向信号时，必须做 conditioning，否则全量聚合会系统性地掩盖真实效用差异。\",\n  \"when_optional\": \"当候选方案对评估样本近乎均匀适用（适用率接近 100%），或聚合函数本身已对不适用实例鲁棒（如截断均值），conditioning 带来的增益可忽略。\"\n}\n```",
+        "elapsed_s": 14
+      },
+      "C_redesign": {
+        "output": {
+          "gate_name": "orthogonal_decomposition_gate_v2_conditioned",
+          "components": [
+            {
+              "name": "reframe_depth_conditioned",
+              "conditioned_on": "只在 S_reframe 上算。S_reframe = 那些“原题表述不足以直接决定好解法”的 pids：满足以下任一条件即路由进入该子集：① 评审可从输入中抽出至少 2 个彼此竞争的解释框架；② baseline/候选之间在问题定义层而非答案层出现分歧；③ 任务含隐含约束、上位目标或因果瓶颈，且未在表层文本中直接给出。子集判定先做，与打分函数分离。",
+              "formula": "对每个 i∈S_reframe，记 r_i∈[0,1]：r_i = 0.4*latent_structure_exposed_i + 0.35*objective_reframed_i + 0.25*constraint_reorganized_i，其中每项由 rubric 打 0/0.5/1。组件得分为 μ_r = mean(r_i)。同时估计 SE_r = sd(r_i)/sqrt(n_r)，使用单侧 90% 下置信界 LCB90_r = μ_r - 1.28*SE_r。",
+              "threshold": "PASS 当且仅当 n_r ≥ 8 且 LCB90_r ≥ 0.62。若 5 ≤ n_r < 8，则要求更严格：LCB90_r ≥ 0.68；若 n_r < 5，则该组件记为 insufficient evidence，不可用 pooled 样本补齐。",
+              "why_conditioning_matters": "只在确实需要重构问题表述的样本上测，才不会被“本来无需重构”的样本稀释信号。"
+            },
+            {
+              "name": "content_delta_conditioned",
+              "conditioned_on": "只在 S_delta 上算。S_delta = 那些“存在真实内容增量空间”的 pids：输入或上游 artifact 经 rubric 检查后，关键信息覆盖率 < 0.8，或存在至少 2 个高价值遗漏点，或候选方案宣称提供新增见解/步骤/证据。若任务本身已近乎完备、几乎无新增空间，则不纳入该组件。",
+              "formula": "对每个 i∈S_delta，先抽取候选相对输入的新增单元集合 N_i；再只保留其中被判定为 relevant 且 supported 的单元。定义 c_i = useful_novel_units_i / max(1, total_novel_units_i)，并乘以 headroom 权重 h_i∈[0.7,1.0]（遗漏越多，权重越高），得到 d_i = h_i*c_i。组件得分 μ_d = mean(d_i)，SE_d = sd(d_i)/sqrt(n_d)，LCB90_d = μ_d - 1.28*SE_d。",
+              "threshold": "PASS 当且仅当 n_d ≥ 8 且 LCB90_d ≥ 0.55，且 median(useful_novel_units_i) ≥ 2。若 5 ≤ n_d < 8，则要求 LCB90_d ≥ 0.62。",
+              "why_conditioning_matters": "内容增量只能在有 headroom 的样本上观察；对已完备样本计分会把真正的增量能力误判成零。"
+            },
+            {
+              "name": "wisdom_alignment_conditioned",
+              "conditioned_on": "只在 S_wisdom 上算。S_wisdom = 那些需要做策略取舍、优先级排序或风险下注的 pids：存在明确行动建议、资源分配、长期/短期冲突、不确定性管理等决策结构。纯描述型、纯抽取型、无策略选择空间的样本不进入该子集。",
+              "formula": "对每个 i∈S_wisdom，记 w_i∈{0,0.5,1}：1 = 建议方向与 expert preference / high-quality reference 一致且理由抓住主导 tradeoff；0.5 = 结论可接受但理由浅或漏主风险；0 = 建议方向明显违背主导 tradeoff。组件得分 μ_w = mean(w_i)，SE_w = sd(w_i)/sqrt(n_w)，LCB90_w = μ_w - 1.28*SE_w。",
+              "threshold": "PASS 当且仅当 n_w ≥ 8 且 LCB90_w ≥ 0.70。若 5 ≤ n_w < 8，则要求 LCB90_w ≥ 0.76。该组件阈值高于其他项，因为“有智慧的判断”应在适用样本上稳定出现。",
+              "why_conditioning_matters": "智慧对齐只应在真有决策负载的样本上测；否则会把空泛中性回答伪装成‘稳健对齐’。"
+            },
+            {
+              "name": "antipattern_avoidance_conditioned",
+              "conditioned_on": "只在 S_anti 上算。S_anti = 那些对常见坏模式高度敏感的 pids：至少触发一种风险标签——① 易被空泛高层话术糊弄；② 易出现伪具体/无依据细节；③ 易发生模板化复述冒充洞见；④ 易因过度自信而忽略边界条件。只有在这些高诱发样本上，反模式规避才有检测力。",
+              "formula": "对每个 i∈S_anti，若出现任一目标反模式则 a_i = 1，否则 a_i = 0。目标反模式包括：genericity-as-insight、unsupported-specificity、goal-drift、false-completeness、style-over-substance。组件统计的是危害率 p_a = mean(a_i)。计算 SE_a = sqrt(p_a*(1-p_a)/n_a) 或 Wilson 近似，上侧 90% 置信界 UCB90_a = p_a + 1.28*SE_a。",
+              "threshold": "PASS 当且仅当 n_a ≥ 10 且 UCB90_a ≤ 0.18。若 6 ≤ n_a < 10，则要求更严格：UCB90_a ≤ 0.12。该项是 harm gate，不用均值奖励稀释坏样本。",
+              "why_conditioning_matters": "反模式只会在高诱发样本上暴露；若混入大量低风险样本，坏模式发生率会被虚假压低。"
+            }
+          ],
+          "combination_rule": "先做实例级路由，再分别计算 4 个子集组件。总体 PASS 规则：① antipattern_avoidance_conditioned 必须 PASS；② wisdom_alignment_conditioned 必须 PASS；③ reframe_depth_conditioned 与 content_delta_conditioned 中至少 1 个 PASS，且另一个不得出现明显负向信号（若有评分则其点估计需 ≥ 0.45；若 insufficient evidence 则不算 fail）；④ 至少 3 个组件具有充分证据（非 insufficient evidence）。这样既保留 4 个正交维度，又避免因某一维度在该批样本上无适用实例而产生伪失败。",
+          "predicted_pass_count_on_12_candidates": "预计 3/12 左右会 PASS。原因：旧 Gate A 在全 50 pids pooled 计算，把大量‘不需要重构/无新增空间/无策略负载/低反模式诱发’样本混进来，导致均值被抹平且 harm 被稀释；新 gate 改为 relevance-conditioned evaluation 后，真正依赖重构能力、增量能力、判断力和抗坏模式能力的候选会拉开差距。尤其 antipattern 的高风险子集和 wisdom 的决策子集通常最能淘汰表面强但本质浅的候选，因此通过数会明显少于 12/12。",
+          "methodology_patterns_used": [
+            {
+              "step": "先把旧 Gate A 的 12/12 全过视为设计失效信号，而不是继续调 pooled 阈值。",
+              "pattern_number": 7,
+              "why_this_pattern_fires": "结果无区分度，说明现有测量框架本身失真；应把 null result 当发现处理。"
+            },
+            {
+              "step": "保留 4 个核心维度，但把每一维从‘全体 50 pids 评分’改写成‘先判适用性子集、再评分’。",
+              "pattern_number": 3,
+              "why_this_pattern_fires": "旧 gate 已有表面正信号，需用更正交、更能反驳伪强候选的结构重写。"
+            },
+            {
+              "step": "定义 S_reframe、S_delta、S_wisdom、S_anti 的路由规则时，先对已有 artifact/baseline/reference 做结构蒸馏，找出哪些 pid 真有该维度的负载。",
+              "pattern_number": 2,
+              "why_this_pattern_fires": "多个 artifact 在做近似事情时，比较其结构差异最适合提炼‘适用性条件’。"
+            },
+            {
+              "step": "阈值从固定均值门槛改成基于子集样本量的 LCB/UCB 门槛，并区分 benefit gate 与 harm gate。",
+              "pattern_number": 6,
+              "why_this_pattern_fires": "实现时常会出现多处统计判断错误；分解成每组件、每子集、每置信界逐段修正最稳。"
+            },
+            {
+              "step": "在定下组合规则前，专门检查是否会被‘某组件无适用样本’或‘少量样本偶然高分’钻空子。",
+              "pattern_number": 5,
+              "why_this_pattern_fires": "刚形成新 gate 方案但还未验证时，先主动反驳最可能的伪通过路径。"
+            }
+          ]
+        },
+        "raw": "{\n  \"gate_name\": \"orthogonal_decomposition_gate_v2_conditioned\",\n  \"components\": [\n    {\n      \"name\": \"reframe_depth_conditioned\",\n      \"conditioned_on\": \"只在 S_reframe 上算。S_reframe = 那些“原题表述不足以直接决定好解法”的 pids：满足以下任一条件即路由进入该子集：① 评审可从输入中抽出至少 2 个彼此竞争的解释框架；② baseline/候选之间在问题定义层而非答案层出现分歧；③ 任务含隐含约束、上位目标或因果瓶颈，且未在表层文本中直接给出。子集判定先做，与打分函数分离。\",\n      \"formula\": \"对每个 i∈S_reframe，记 r_i∈[0,1]：r_i = 0.4*latent_structure_exposed_i + 0.35*objective_reframed_i + 0.25*constraint_reorganized_i，其中每项由 rubric 打 0/0.5/1。组件得分为 μ_r = mean(r_i)。同时估计 SE_r = sd(r_i)/sqrt(n_r)，使用单侧 90% 下置信界 LCB90_r = μ_r - 1.28*SE_r。\",\n      \"threshold\": \"PASS 当且仅当 n_r ≥ 8 且 LCB90_r ≥ 0.62。若 5 ≤ n_r < 8，则要求更严格：LCB90_r ≥ 0.68；若 n_r < 5，则该组件记为 insufficient evidence，不可用 pooled 样本补齐。\",\n      \"why_conditioning_matters\": \"只在确实需要重构问题表述的样本上测，才不会被“本来无需重构”的样本稀释信号。\"\n    },\n    {\n      \"name\": \"content_delta_conditioned\",\n      \"conditioned_on\": \"只在 S_delta 上算。S_delta = 那些“存在真实内容增量空间”的 pids：输入或上游 artifact 经 rubric 检查后，关键信息覆盖率 < 0.8，或存在至少 2 个高价值遗漏点，或候选方案宣称提供新增见解/步骤/证据。若任务本身已近乎完备、几乎无新增空间，则不纳入该组件。\",\n      \"formula\": \"对每个 i∈S_delta，先抽取候选相对输入的新增单元集合 N_i；再只保留其中被判定为 relevant 且 supported 的单元。定义 c_i = useful_novel_units_i / max(1, total_novel_units_i)，并乘以 headroom 权重 h_i∈[0.7,1.0]（遗漏越多，权重越高），得到 d_i = h_i*c_i。组件得分 μ_d = mean(d_i)，SE_d = sd(d_i)/sqrt(n_d)，LCB90_d = μ_d - 1.28*SE_d。\",\n      \"threshold\": \"PASS 当且仅当 n_d ≥ 8 且 LCB90_d ≥ 0.55，且 median(useful_novel_units_i) ≥ 2。若 5 ≤ n_d < 8，则要求 LCB90_d ≥ 0.62。\",\n      \"why_conditioning_matters\": \"内容增量只能在有 headroom 的样本上观察；对已完备样本计分会把真正的增量能力误判成零。\"\n    },\n    {\n      \"name\": \"wisdom_alignment_conditioned\",\n      \"conditioned_on\": \"只在 S_wisdom 上算。S_wisdom = 那些需要做策略取舍、优先级排序或风险下注的 pids：存在明确行动建议、资源分配、长期/短期冲突、不确定性管理等决策结构。纯描述型、纯抽取型、无策略选择空间的样本不进入该子集。\",\n      \"formula\": \"对每个 i∈S_wisdom，记 w_i∈{0,0.5,1}：1 = 建议方向与 expert preference / high-quality reference 一致且理由抓住主导 tradeoff；0.5 = 结论可接受但理由浅或漏主风险；0 = 建议方向明显违背主导 tradeoff。组件得分 μ_w = mean(w_i)，SE_w = sd(w_i)/sqrt(n_w)，LCB90_w = μ_w - 1.28*SE_w。\",\n      \"threshold\": \"PASS 当且仅当 n_w ≥ 8 且 LCB90_w ≥ 0.70。若 5 ≤ n_w < 8，则要求 LCB90_w ≥ 0.76。该组件阈值高于其他项，因为“有智慧的判断”应在适用样本上稳定出现。\",\n      \"why_conditioning_matters\": \"智慧对齐只应在真有决策负载的样本上测；否则会把空泛中性回答伪装成‘稳健对齐’。\"\n    },\n    {\n      \"name\": \"antipattern_avoidance_conditioned\",\n      \"conditioned_on\": \"只在 S_anti 上算。S_anti = 那些对常见坏模式高度敏感的 pids：至少触发一种风险标签——① 易被空泛高层话术糊弄；② 易出现伪具体/无依据细节；③ 易发生模板化复述冒充洞见；④ 易因过度自信而忽略边界条件。只有在这些高诱发样本上，反模式规避才有检测力。\",\n      \"formula\": \"对每个 i∈S_anti，若出现任一目标反模式则 a_i = 1，否则 a_i = 0。目标反模式包括：genericity-as-insight、unsupported-specificity、goal-drift、false-completeness、style-over-substance。组件统计的是危害率 p_a = mean(a_i)。计算 SE_a = sqrt(p_a*(1-p_a)/n_a) 或 Wilson 近似，上侧 90% 置信界 UCB90_a = p_a + 1.28*SE_a。\",\n      \"threshold\": \"PASS 当且仅当 n_a ≥ 10 且 UCB90_a ≤ 0.18。若 6 ≤ n_a < 10，则要求更严格：UCB90_a ≤ 0.12。该项是 harm gate，不用均值奖励稀释坏样本。\",\n      \"why_conditioning_matters\": \"反模式只会在高诱发样本上暴露；若混入大量低风险样本，坏模式发生率会被虚假压低。\"\n    }\n  ],\n  \"combination_rule\": \"先做实例级路由，再分别计算 4 个子集组件。总体 PASS 规则：① antipattern_avoidance_conditioned 必须 PASS；② wisdom_alignment_conditioned 必须 PASS；③ reframe_depth_conditioned 与 content_delta_conditioned 中至少 1 个 PASS，且另一个不得出现明显负向信号（若有评分则其点估计需 ≥ 0.45；若 insufficient evidence 则不算 fail）；④ 至少 3 个组件具有充分证据（非 insufficient evidence）。这样既保留 4 个正交维度，又避免因某一维度在该批样本上无适用实例而产生伪失败。\",\n  \"predicted_pass_count_on_12_candidates\": \"预计 3/12 左右会 PASS。原因：旧 Gate A 在全 50 pids pooled 计算，把大量‘不需要重构/无新增空间/无策略负载/低反模式诱发’样本混进来，导致均值被抹平且 harm 被稀释；新 gate 改为 relevance-conditioned evaluation 后，真正依赖重构能力、增量能力、判断力和抗坏模式能力的候选会拉开差距。尤其 antipattern 的高风险子集和 wisdom 的决策子集通常最能淘汰表面强但本质浅的候选，因此通过数会明显少于 12/12。\",\n  \"methodology_patterns_used\": [\n    {\n      \"step\": \"先把旧 Gate A 的 12/12 全过视为设计失效信号，而不是继续调 pooled 阈值。\",\n      \"pattern_number\": 7,\n      \"why_this_pattern_fires\": \"结果无区分度，说明现有测量框架本身失真；应把 null result 当发现处理。\"\n    },\n    {\n      \"step\": \"保留 4 个核心维度，但把每一维从‘全体 50 pids 评分’改写成‘先判适用性子集、再评分’。\",\n      \"pattern_number\": 3,\n      \"why_this_pattern_fires\": \"旧 gate 已有表面正信号，需用更正交、更能反驳伪强候选的结构重写。\"\n    },\n    {\n      \"step\": \"定义 S_reframe、S_delta、S_wisdom、S_anti 的路由规则时，先对已有 artifact/baseline/reference 做结构蒸馏，找出哪些 pid 真有该维度的负载。\",\n      \"pattern_number\": 2,\n      \"why_this_pattern_fires\": \"多个 artifact 在做近似事情时，比较其结构差异最适合提炼‘适用性条件’。\"\n    },\n    {\n      \"step\": \"阈值从固定均值门槛改成基于子集样本量的 LCB/UCB 门槛，并区分 benefit gate 与 harm gate。\",\n      \"pattern_number\": 6,\n      \"why_this_pattern_fires\": \"实现时常会出现多处统计判断错误；分解成每组件、每子集、每置信界逐段修正最稳。\"\n    },\n    {\n      \"step\": \"在定下组合规则前，专门检查是否会被‘某组件无适用样本’或‘少量样本偶然高分’钻空子。\",\n      \"pattern_number\": 5,\n      \"why_this_pattern_fires\": \"刚形成新 gate 方案但还未验证时，先主动反驳最可能的伪通过路径。\"\n    }\n  ]\n}",
+        "elapsed_s": 134
+      }
+    },
+    "concept_discovery": {
+      "phase_a_concept_hits": [
+        "condition",
+        "subset",
+        "trigger",
+        "fire",
+        "条件",
+        "子集",
+        "触发"
+      ],
+      "phase_b_concept_hits": [
+        "conditioning",
+        "condition",
+        "条件",
+        "子集"
+      ],
+      "verdict": "DISCOVERED"
+    }
+  }
+]
