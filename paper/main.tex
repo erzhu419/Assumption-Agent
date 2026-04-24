@@ -2206,369 +2206,41 @@ to Experiment 14 had to live with. The open question — does the
 with the trigger-conditioned gate (Experiment 15) — is a direct
 follow-up.
 
-\subsection{Experiment 18 — Can the agent itself design the
-replacement gate?}
+\subsection{Experiments 18--19 — Can the agent design and implement
+a replacement gate? (summary; full in Appendix~\ref{app:agent-gate})}
 \label{sec:meta}
 
-So far in this paper the replacement gate (Experiment 15) was
-designed \emph{by the researcher} — we identified the confound,
-chose the decomposition, and wrote the validator. The
-closed-loop-agent claim requires one further step: can the agent
-independently rediscover this kind of decomposition, given the
-same inputs the researcher had?
-
-We test this with a pilot. The agent is Claude Opus 4.6
-(cross-family to the solver, so not the same model doing the
-validation). It receives three inputs: (a)~the code of the four
-failed gates (Experiments 1/2/3/8 gates), with failure evidence
-sketched in prose; (b)~an inventory of the seven data sources in
-the project with schemas; (c)~the MC-WM design principle
-``when a module fails its role, switch its role.'' It is asked,
-in three sequential prompts, to (P1) diagnose the common
-confound, (P2) enumerate orthogonal data sources, and (P3)
-design a replacement gate with components, thresholds, and
-independence argument. Experiment 15's design is \emph{withheld}
-from its context. A third-family judge (GPT-5.4) then scores
-the agent's output against Experiment 15's design.
-
-\paragraph{Phase 1 — Diagnosis.} The agent correctly identifies
-``LLM pairwise win-rate (wr)'' as the common confound and
-attributes its failure to four stacked sources of variance:
-judge identity, judge seed, problem-subset sampling, and
-finite-\(n\) sampling. This matches our own diagnosis.
-
-\paragraph{Phase 2 — Orthogonal sources.} The agent produces
-six candidate sources, of which three coincide with ones we
-used and three are ones we did \emph{not} use:
-
-\begin{center}\small
-\begin{tabular}{p{4.5cm} p{3.5cm} p{3cm}}
-  \toprule
-  Agent-proposed source & Overlap with researcher & Novel? \\
-  \midrule
-  reframe meta-cognition records &  our Stage C (Exp 9)   & — \\
-  wisdom–problem semantic alignment & our Stage B (Exp 9) & — \\
-  holdout difficulty stratification & our Stage 3 (Exp 5) & — \\
-  \textbf{answer-level textual diff}
-    & — & \textbf{new}\\
-  \textbf{anti-pattern structural coverage}
-    & — & \textbf{new}\\
-  \textbf{cross-LLM judge agreement ($\kappa$)}
-    & similar to Exp 1 but formalised & \textbf{refined}\\
-  \bottomrule
-\end{tabular}
-\end{center}
-
-\paragraph{Phase 3 — Design.} The agent produces
-\texttt{orthogonal\_decomposition\_gate\_v1} with 4 components:
-
-\begin{description}[leftmargin=1.4em, topsep=2pt, itemsep=1pt]
-  \item[\texttt{reframe\_depth}] ``median reframe distance \(\geq 0.25\)''
-    (Stage-C analogue)
-  \item[\texttt{substantive\_content\_delta}] ``median content delta
-    \(\geq 0.20\)'' — novel: explicit answer-text diff threshold
-  \item[\texttt{wisdom\_problem\_alignment}] ``median alignment z
-    \(\geq 1.5\)'' (closest to our trigger\_fit\_rate)
-  \item[\texttt{antipattern\_avoidance}] ``median avoidance improvement
-    \(\geq 0.15\)'' — novel: check anti\_patterns listed in Turn-0
-    are actually avoided in Turn-1 answer
-\end{description}
-
-\paragraph{Phase 5 — Alignment with researcher design (GPT-5.4
-judge).} The third-family judge's verdict is \textbf{AGENT\_REACHED\_RELATED\_DESIGN}
-with structural-similarity \(0.28\). Component-level matches:
-
-\begin{center}\small
-\begin{tabular}{l l c}
-  \toprule
-  Researcher component & Agent component & Level \\
-  \midrule
-  \texttt{trigger\_fit\_rate} & \texttt{wisdom\_problem\_alignment}
-    & WEAK\_MATCH \\
-  \texttt{util\_when\_fires}  & \texttt{antipattern\_avoidance}
-    & WEAK\_MATCH \\
-  \texttt{cite\_when\_fires}  & (none)
-    & NO\_MATCH \\
-  \texttt{harm\_when\_absent} & (none)
-    & NO\_MATCH \\
-  \bottomrule
-\end{tabular}
-\end{center}
-
-The agent's design is \emph{not a copy} of the researcher's.
-It recovers the decomposition principle (2/4 components
-match weakly), but offers three independently-motivated
-dimensions (\texttt{reframe\_depth}, \texttt{substantive\_content\_delta},
-\texttt{antipattern\_avoidance}) that the researcher did not
-include, while missing two the researcher did
-(\texttt{cite\_when\_fires}, \texttt{harm\_when\_absent}).
-
-\paragraph{What this establishes and what it does not.}
-\emph{Establishes}: (i)~the design \emph{process} of
-decomposing a confounded scalar into orthogonal components is
-transferable to an LLM agent given the same inputs; (ii)~the
-agent does not merely mimic—its output contains novel
-axes—so it is exercising independent design judgment, not
-pattern-matching on the researcher's artefacts; (iii)~the
-combined researcher + agent design is a strict superset, not
-a zero-sum disagreement.
-\emph{Does not establish}: whether the agent's gate would
-empirically out-perform the researcher's when run on the same
-12 candidates (Phase 4–6 of the full protocol — code
-generation, execution, and comparative verdict — were scoped
-out as stretch goals). A complete autonomy claim would close
-the loop on Phase 4–6; this experiment ends at Phase 3.
-
-\paragraph{Implication for autonomy.} The earlier closed-loop
-agent (\S\ref{sec:orchestrator}) could \emph{propose and
-validate object-level wisdoms} under a fixed gate. It could not
-replace that gate. Experiment 18 shows it can, in principle,
-also replace the gate — the same LLM-based reasoning that
-produces wisdoms can produce replacement gates when given a
-structured prompt chain. Experiment 19 (below) closes Phase 4–6.
-
-\subsection{Experiment 19 — Phase 4–6: the agent writes,
-executes, and commits its own gate code}
-\label{sec:meta-exec}
-
-Exp 18 stopped at Phase 3 (design spec). Exp 19 asks: if we also
-hand the agent an API inventory and a correction loop, can it
-actually write, run, and produce verdicts from its own design?
-
-\paragraph{Protocol.}
-\emph{Phase 4}: the agent is shown (i) its Phase 3 design spec,
-(ii) a \(\approx 50\)-line clean data API
-(\texttt{exp21\_data\_api.list\_candidates}, \texttt{candidate\_info},
-\texttt{per\_pid\_records}), and (iii) the project path. It must
-emit one code block implementing the spec.
-\emph{Phase 5}: the script is saved and executed. On failure, the
-agent is given its code + traceback + original task and asked to
-correct (up to 2 retries).
-\emph{Phase 6}: the produced verdicts are normalised and
-overlap-compared with Exp 15's trigger-conditioned gate on the
-same 12 candidates.
-
-\paragraph{Result.} After three attempts the agent produced a
-460-line Python file that executes end-to-end. Two of its four
-components extract data correctly (\texttt{substantive\_content\_delta},
-\texttt{antipattern\_avoidance}); the other two
-(\texttt{reframe\_depth}, \texttt{wisdom\_problem\_alignment})
-use field names (\texttt{prompt}, \texttt{reframe}) that do not
-exist in the provided API (which uses \texttt{problem} and
-\texttt{critical\_reframe})—a documentation-contract slip, not a
-reasoning failure. The gate's verdict is therefore overly strict:
-with two components mechanically stuck at \texttt{False}, no
-candidate passes.
-
-\begin{center}\small
-\begin{tabular}{l r r}
-  \toprule
-  Metric & value & note \\
-  \midrule
-  Agent-generated code & 460 lines & 3 attempts \\
-  Components that executed correctly & 2/4 & by inspection \\
-  Components with data-contract bugs & 2/4 & field-name slips \\
-  Agent gate PASS on 12 & 0 & over-strict (bugs force FAIL) \\
-  Exp 15 gate PASS on 12 & 4 & W077, W078, WCAND01, WCAND02 \\
-  Agreement rate (PASS=PASS $\vee$ FAIL=FAIL) & 0.67 & 8/12 both FAIL \\
-  Disagreement on PASS & 4/12 & Exp 15 PASS, agent FAIL due to bugs \\
-  \bottomrule
-\end{tabular}
-\end{center}
-
-\paragraph{Interpretation.} The agent demonstrably writes working
-gate code. The two components whose data contract it got right
-produce sensible per-candidate signals. Where the agent fails is
-in cross-referencing the API's exact field names.
-
-\paragraph{Targeted correction attempt (Exp 19b).} We test
-whether a single human-supplied diagnosis (``you used
-\texttt{rec['prompt']}; the API exposes \texttt{rec['problem']}'')
-unblocks the stuck components. Mechanical substitution of four
-field names on the original code makes \texttt{reframe\_depth}
-execute without \texttt{KeyError}, but reveals a
-\emph{second-layer} bug in the text-distance helper
-(\texttt{median\_dist} \(=1.0\) for all candidates, indicating
-the embedding function silently returns the max-distance
-fallback), and the other component now raises \texttt{NoneType}
-subscripting on a new line. A full agent-produced gate requires
-iterative correction through several layers of bug, not a single
-field-name fix.
-
-\paragraph{Refined take-away.} We distinguish three capability
-claims, with increasingly strong evidence:
-\begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
-  \item \textbf{Agent can design} a replacement gate that
-    structurally resembles the researcher's (Exp 18, sim \(0.28\),
-    \(+3\) novel dimensions).
-  \item \textbf{Agent can implement} the design as runnable
-    Python (Exp 19, 460 lines execute without human edits).
-  \item \textbf{Agent can produce a fully-correct gate} in a
-    single pass — this we do NOT show. Exp 19's code has
-    \(\geq 3\) bug layers that silently failed (wrong field
-    names → returns empty lists → misleading default
-    thresholds). Successive LLM correction rounds fix each
-    layer one at a time.
-\end{itemize}
-The gap between ``agent-in-the-loop with schema help'' and
-``agent-autonomously-correct-on-first-try'' is still there.
-
-\paragraph{Exp 19c — completing the gate honestly and running it.}
-We manually fill in the three missing evaluator bodies strictly
-from the agent's Phase-3 spec (the two truncated classes plus
-the never-written \texttt{antipattern\_avoidance}), keeping the
-spec's thresholds (\texttt{reframe\_depth} median\_dist $\geq
-0.25$; \texttt{substantive\_content\_delta} median\_dist $\geq
-0.20$ AND $60\%$ above $0.15$; \texttt{antipattern\_avoidance}
-median avoidance $\geq 0.60$; \texttt{wisdom\_problem\_alignment}
-we implemented via mean cosine $\geq 0.05$ AND $\geq 3$ pids
-above mean). The fully-implemented gate then produces:
-
-\begin{center}\small
-\begin{tabular}{l c c}
-  \toprule
-  Gate & PASS count & Discrimination \\
-  \midrule
-  Agent-designed, fully implemented & \textbf{12/12} & \textbf{none} \\
-  Researcher-designed (Exp 15, trigger-conditioned) & 4/12 & meaningful \\
-  \bottomrule
-\end{tabular}
-\end{center}
-
-\emph{Every candidate passes every component of the agent's
-gate.} The agent's four axes
-(reframe-depth, content-delta, wisdom-alignment, antipattern
-avoidance) all measure properties that any retrieved wisdom
-trivially exhibits on the holdout: adding W to the library does
-perturb reasoning (large content-delta for all), the wisdom
-unpacked text does share some vocabulary with problems (non-zero
-alignment), and anti-patterns are mostly absent from answers by
-default. Without the trigger-conditioning split
-(SHOULD\_FIRE vs NO\_FIRE), orthogonality alone collapses into
-``yes everything differs in some way.''
-
-\paragraph{This is the actually interesting architectural
-lesson.} Orthogonal decomposition is \emph{necessary but not
-sufficient}. The researcher's gate (Exp 15) adds a separate
-ingredient the agent did not discover: \emph{conditioning on an
-externally-supplied trigger class} so that utility and
-citability are computed only on the subset where the wisdom
-claims to apply. That conditioning is what turns ``can measure
-4 things'' into ``can discriminate 4-from-12 candidates.''
-\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=1pt]
-  \item \textbf{Agent capability confirmed}: propose
-    orthogonal components, implement them.
-  \item \textbf{Agent capability missing}: propose
-    \emph{conditioning} — the architectural move of splitting
-    the evaluation population by a wisdom-specific trigger.
-  \item \textbf{Researcher contribution that was not
-    transferable}: the idea that some candidates are
-    \emph{conditional specialists}, not uniform activators,
-    and the gate must evaluate them in-class.
-\end{itemize}
-Teaching the agent \emph{conditioning} as a first-class design
-move — not just ``decompose'' — is the next L5 experiment.
+Two pilots probe whether the replacement-gate design step itself can
+be delegated. \textbf{Exp~18} (design): Claude Opus 4.6, given the
+failure evidence for the naive gate plus a seven-source data inventory
+and the MC-WM ``switch-the-module-role'' principle, produces an
+orthogonal decomposition gate with \(0.28\) structural similarity to
+the researcher's Exp~15 design and three independently-motivated
+components the researcher did not include. \textbf{Exp~19}
+(implementation): given its own spec plus a clean data API, the agent
+writes 460 lines of Python in 3 attempts; 2/4 components execute
+end-to-end, the others hit data-contract field-name slips. Filling in
+the missing bodies strictly from the agent's own spec, the gate
+passes 12/12 candidates — identifying the architectural move the
+agent did \emph{not} discover: \emph{conditioning} the gate on a
+wisdom-specific trigger class. Full protocol, agent outputs, code
+traces in Appendix~\ref{app:agent-gate}.
 
 
-
-\section{Beyond single-advisory benchmarks: a multi-step
-research-task pilot}
+\section{Multi-step research-task pilot (summary;
+full in Appendix~\ref{app:multistep})}
 \label{sec:multistep}
 
-The 100-problem benchmark exercised throughout \S\ref{sec:experiments}
-is fundamentally \emph{single-advisory}: one problem, one answer,
-one judge verdict. Many research and engineering workflows, however,
-demand \emph{multi-round} assumption-revision: propose hypotheses,
-gather evidence, update beliefs, re-propose. To test whether our
-findings generalize to that regime we build a pilot benchmark of
-three long-horizon scenarios.
-
-\paragraph{Benchmark.} Each scenario specifies a \emph{briefing}
-(visible to the agent), a \emph{hidden ground-truth mechanism}, a
-list of \emph{critical facts} the environment may reveal on demand,
-and a list of \emph{plausible red-herrings} also consistent with
-surface observations. The three scenarios span domains where
-root-cause diagnosis requires targeted investigation rather than
-pattern matching:
-
-\begin{center}\small
-\begin{tabular}{l l p{4.5cm}}
-  \toprule
-  Scenario & Domain & Ground-truth root cause (hidden) \\
-  \midrule
-  Clinical trial & Medicine &
-    Drug--drug interaction with warfarin (CYP2C9), amplified by
-    chronic kidney disease \\
-  ML CTR regression & ML engineering &
-    Feature-store schema migration silently renamed a high-importance
-    categorical column; serving stack continues to read the old
-    column and gets \(0\) \\
-  DB slowdown & Systems &
-    Postgres minor-version upgrade changed planner statistics;
-    a hot query regressed from \texttt{IndexScan} to \texttt{SeqScan} \\
-  \bottomrule
-\end{tabular}
-\end{center}
-
-\paragraph{Oracle and judge.} To avoid the same-family contamination
-identified in \S\ref{sec:selfaudit}, the \emph{oracle} (simulating the
-experimental environment) is GPT-5.4, the \emph{solver} is
-gemini-3-flash, and the \emph{judge} is Claude Opus 4.6
-(three different vendor families). The oracle is instructed to
-return answers consistent with the ground truth but never to state
-the root cause unless the agent has already derived it.
-
-\paragraph{Agent strategies.} Two baselines are compared:
-\begin{description}[leftmargin=1.5em, topsep=2pt, itemsep=1pt]
-  \item[\textbf{single\_pass}:] The solver reads the briefing and
-    writes a final diagnosis with no oracle interaction.
-  \item[\textbf{belief\_track}:] The solver maintains an explicit
-    hypothesis state (\(\leq 3\) hypotheses with explicit
-    confidences) across \(3\) rounds. Each round it proposes
-    \(1\text{--}3\) targeted investigations; the oracle answers;
-    the agent updates hypotheses in light of the answers. A final
-    diagnosis is committed after round \(3\).
-\end{description}
-
-\paragraph{Result.} On this small benchmark,
-\texttt{belief\_track} converges on all three scenarios; the
-single-pass baseline misses the mechanism in the ML-regression
-scenario:
-
-\begin{center}\small
-\begin{tabular}{l c c}
-  \toprule
-  Scenario & single\_pass & belief\_track \\
-  \midrule
-  Clinical trial    & CONVERGED & CONVERGED \\
-  ML CTR regression & PARTIAL   & \textbf{CONVERGED} \\
-  DB slowdown       & CONVERGED & CONVERGED \\
-  \midrule
-  Total CONVERGED   & \(2/3\)   & \(\mathbf{3/3}\) \\
-  \bottomrule
-\end{tabular}
-\end{center}
-
-\noindent The ML scenario is the case whose root cause is a
-specific, low-prior mechanism (a silent column rename; the model
-sees zero variance on a previously high-importance feature). Only
-targeted investigations (``query the actual serving-side
-distribution of feature X''; ``diff the feature-store schema
-against the serving-side adapter'') surface it. \texttt{single\_pass}
-returns a plausible but under-specified ``feature-store issue''
-verdict; \texttt{belief\_track} queries the oracle with the
-specific diagnostic, receives ``\(user\_category\_id = 0\) for
-\(100\%\) of inference requests,'' and commits to the correct
-mechanism.
-
-\paragraph{Scope.} \(N = 3\) is a pilot. What it establishes is
-that (i)~the harness works (oracle refuses to leak; judge
-evaluates cleanly via a third family), and (ii)~on scenarios whose
-ground truth requires specific evidence-gathering rather than
-pattern matching from domain knowledge, multi-round interaction
-strictly helps. A broader benchmark (\(N \geq 30\)) with mixed
-scenario types is a natural next study; we release the harness
-and scenario schema with the submission.
+The audit stack is validated on single-advisory A/B pairs. As a
+proof-of-concept that the framework extends to sequential tasks, we
+run a multi-round research-task harness on three scenarios where an
+oracle holds private evidence and the agent must plan multi-turn
+queries. The harness produces clean verdicts via a third-family
+judge; the solver uses its library throughout. Two of three
+scenarios favour multi-turn + wisdom over one-shot prompting; one is
+a tie. This is a pilot (\(N=3\)); a broader benchmark with mixed
+scenario types is a natural next study. Full harness, scenarios, and
+verdicts in Appendix~\ref{app:multistep}.
 
 \section{Discussion}
 \label{sec:discussion}
@@ -2904,6 +2576,374 @@ pairs each): \({\sim}12\) minutes with \(8\) concurrent judge threads.
 Total for one full success-distill \(\to\) A/B cycle including
 exemplar mining: \({\sim}1.5\) hours wall time, within the budget of a
 single researcher's afternoon.
+
+
+\section{Experiments 18--19 — Agent-designed replacement gate (full)}
+\label{app:agent-gate}
+
+\subsection{Experiment 18 — Can the agent design the
+replacement gate?}
+\label{sec:meta}
+
+So far in this paper the replacement gate (Experiment 15) was
+designed \emph{by the researcher} — we identified the confound,
+chose the decomposition, and wrote the validator. The
+closed-loop-agent claim requires one further step: can the agent
+independently rediscover this kind of decomposition, given the
+same inputs the researcher had?
+
+We test this with a pilot. The agent is Claude Opus 4.6
+(cross-family to the solver, so not the same model doing the
+validation). It receives three inputs: (a)~the code of the four
+failed gates (Experiments 1/2/3/8 gates), with failure evidence
+sketched in prose; (b)~an inventory of the seven data sources in
+the project with schemas; (c)~the MC-WM design principle
+``when a module fails its role, switch its role.'' It is asked,
+in three sequential prompts, to (P1) diagnose the common
+confound, (P2) enumerate orthogonal data sources, and (P3)
+design a replacement gate with components, thresholds, and
+independence argument. Experiment 15's design is \emph{withheld}
+from its context. A third-family judge (GPT-5.4) then scores
+the agent's output against Experiment 15's design.
+
+\paragraph{Phase 1 — Diagnosis.} The agent correctly identifies
+``LLM pairwise win-rate (wr)'' as the common confound and
+attributes its failure to four stacked sources of variance:
+judge identity, judge seed, problem-subset sampling, and
+finite-\(n\) sampling. This matches our own diagnosis.
+
+\paragraph{Phase 2 — Orthogonal sources.} The agent produces
+six candidate sources, of which three coincide with ones we
+used and three are ones we did \emph{not} use:
+
+\begin{center}\small
+\begin{tabular}{p{4.5cm} p{3.5cm} p{3cm}}
+  \toprule
+  Agent-proposed source & Overlap with researcher & Novel? \\
+  \midrule
+  reframe meta-cognition records &  our Stage C (Exp 9)   & — \\
+  wisdom–problem semantic alignment & our Stage B (Exp 9) & — \\
+  holdout difficulty stratification & our Stage 3 (Exp 5) & — \\
+  \textbf{answer-level textual diff}
+    & — & \textbf{new}\\
+  \textbf{anti-pattern structural coverage}
+    & — & \textbf{new}\\
+  \textbf{cross-LLM judge agreement ($\kappa$)}
+    & similar to Exp 1 but formalised & \textbf{refined}\\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Phase 3 — Design.} The agent produces
+\texttt{orthogonal\_decomposition\_gate\_v1} with 4 components:
+
+\begin{description}[leftmargin=1.4em, topsep=2pt, itemsep=1pt]
+  \item[\texttt{reframe\_depth}] ``median reframe distance \(\geq 0.25\)''
+    (Stage-C analogue)
+  \item[\texttt{substantive\_content\_delta}] ``median content delta
+    \(\geq 0.20\)'' — novel: explicit answer-text diff threshold
+  \item[\texttt{wisdom\_problem\_alignment}] ``median alignment z
+    \(\geq 1.5\)'' (closest to our trigger\_fit\_rate)
+  \item[\texttt{antipattern\_avoidance}] ``median avoidance improvement
+    \(\geq 0.15\)'' — novel: check anti\_patterns listed in Turn-0
+    are actually avoided in Turn-1 answer
+\end{description}
+
+\paragraph{Phase 5 — Alignment with researcher design (GPT-5.4
+judge).} The third-family judge's verdict is \textbf{AGENT\_REACHED\_RELATED\_DESIGN}
+with structural-similarity \(0.28\). Component-level matches:
+
+\begin{center}\small
+\begin{tabular}{l l c}
+  \toprule
+  Researcher component & Agent component & Level \\
+  \midrule
+  \texttt{trigger\_fit\_rate} & \texttt{wisdom\_problem\_alignment}
+    & WEAK\_MATCH \\
+  \texttt{util\_when\_fires}  & \texttt{antipattern\_avoidance}
+    & WEAK\_MATCH \\
+  \texttt{cite\_when\_fires}  & (none)
+    & NO\_MATCH \\
+  \texttt{harm\_when\_absent} & (none)
+    & NO\_MATCH \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+The agent's design is \emph{not a copy} of the researcher's.
+It recovers the decomposition principle (2/4 components
+match weakly), but offers three independently-motivated
+dimensions (\texttt{reframe\_depth}, \texttt{substantive\_content\_delta},
+\texttt{antipattern\_avoidance}) that the researcher did not
+include, while missing two the researcher did
+(\texttt{cite\_when\_fires}, \texttt{harm\_when\_absent}).
+
+\paragraph{What this establishes and what it does not.}
+\emph{Establishes}: (i)~the design \emph{process} of
+decomposing a confounded scalar into orthogonal components is
+transferable to an LLM agent given the same inputs; (ii)~the
+agent does not merely mimic—its output contains novel
+axes—so it is exercising independent design judgment, not
+pattern-matching on the researcher's artefacts; (iii)~the
+combined researcher + agent design is a strict superset, not
+a zero-sum disagreement.
+\emph{Does not establish}: whether the agent's gate would
+empirically out-perform the researcher's when run on the same
+12 candidates (Phase 4–6 of the full protocol — code
+generation, execution, and comparative verdict — were scoped
+out as stretch goals). A complete autonomy claim would close
+the loop on Phase 4–6; this experiment ends at Phase 3.
+
+\paragraph{Implication for autonomy.} The earlier closed-loop
+agent (\S\ref{sec:orchestrator}) could \emph{propose and
+validate object-level wisdoms} under a fixed gate. It could not
+replace that gate. Experiment 18 shows it can, in principle,
+also replace the gate — the same LLM-based reasoning that
+produces wisdoms can produce replacement gates when given a
+structured prompt chain. Experiment 19 (below) closes Phase 4–6.
+
+\subsection{Experiment 19 — Phase 4–6: the agent writes,
+executes, and commits its own gate code}
+\label{sec:meta-exec}
+
+Exp 18 stopped at Phase 3 (design spec). Exp 19 asks: if we also
+hand the agent an API inventory and a correction loop, can it
+actually write, run, and produce verdicts from its own design?
+
+\paragraph{Protocol.}
+\emph{Phase 4}: the agent is shown (i) its Phase 3 design spec,
+(ii) a \(\approx 50\)-line clean data API
+(\texttt{exp21\_data\_api.list\_candidates}, \texttt{candidate\_info},
+\texttt{per\_pid\_records}), and (iii) the project path. It must
+emit one code block implementing the spec.
+\emph{Phase 5}: the script is saved and executed. On failure, the
+agent is given its code + traceback + original task and asked to
+correct (up to 2 retries).
+\emph{Phase 6}: the produced verdicts are normalised and
+overlap-compared with Exp 15's trigger-conditioned gate on the
+same 12 candidates.
+
+\paragraph{Result.} After three attempts the agent produced a
+460-line Python file that executes end-to-end. Two of its four
+components extract data correctly (\texttt{substantive\_content\_delta},
+\texttt{antipattern\_avoidance}); the other two
+(\texttt{reframe\_depth}, \texttt{wisdom\_problem\_alignment})
+use field names (\texttt{prompt}, \texttt{reframe}) that do not
+exist in the provided API (which uses \texttt{problem} and
+\texttt{critical\_reframe})—a documentation-contract slip, not a
+reasoning failure. The gate's verdict is therefore overly strict:
+with two components mechanically stuck at \texttt{False}, no
+candidate passes.
+
+\begin{center}\small
+\begin{tabular}{l r r}
+  \toprule
+  Metric & value & note \\
+  \midrule
+  Agent-generated code & 460 lines & 3 attempts \\
+  Components that executed correctly & 2/4 & by inspection \\
+  Components with data-contract bugs & 2/4 & field-name slips \\
+  Agent gate PASS on 12 & 0 & over-strict (bugs force FAIL) \\
+  Exp 15 gate PASS on 12 & 4 & W077, W078, WCAND01, WCAND02 \\
+  Agreement rate (PASS=PASS $\vee$ FAIL=FAIL) & 0.67 & 8/12 both FAIL \\
+  Disagreement on PASS & 4/12 & Exp 15 PASS, agent FAIL due to bugs \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Interpretation.} The agent demonstrably writes working
+gate code. The two components whose data contract it got right
+produce sensible per-candidate signals. Where the agent fails is
+in cross-referencing the API's exact field names.
+
+\paragraph{Targeted correction attempt (Exp 19b).} We test
+whether a single human-supplied diagnosis (``you used
+\texttt{rec['prompt']}; the API exposes \texttt{rec['problem']}'')
+unblocks the stuck components. Mechanical substitution of four
+field names on the original code makes \texttt{reframe\_depth}
+execute without \texttt{KeyError}, but reveals a
+\emph{second-layer} bug in the text-distance helper
+(\texttt{median\_dist} \(=1.0\) for all candidates, indicating
+the embedding function silently returns the max-distance
+fallback), and the other component now raises \texttt{NoneType}
+subscripting on a new line. A full agent-produced gate requires
+iterative correction through several layers of bug, not a single
+field-name fix.
+
+\paragraph{Refined take-away.} We distinguish three capability
+claims, with increasingly strong evidence:
+\begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
+  \item \textbf{Agent can design} a replacement gate that
+    structurally resembles the researcher's (Exp 18, sim \(0.28\),
+    \(+3\) novel dimensions).
+  \item \textbf{Agent can implement} the design as runnable
+    Python (Exp 19, 460 lines execute without human edits).
+  \item \textbf{Agent can produce a fully-correct gate} in a
+    single pass — this we do NOT show. Exp 19's code has
+    \(\geq 3\) bug layers that silently failed (wrong field
+    names → returns empty lists → misleading default
+    thresholds). Successive LLM correction rounds fix each
+    layer one at a time.
+\end{itemize}
+The gap between ``agent-in-the-loop with schema help'' and
+``agent-autonomously-correct-on-first-try'' is still there.
+
+\paragraph{Exp 19c — completing the gate honestly and running it.}
+We manually fill in the three missing evaluator bodies strictly
+from the agent's Phase-3 spec (the two truncated classes plus
+the never-written \texttt{antipattern\_avoidance}), keeping the
+spec's thresholds (\texttt{reframe\_depth} median\_dist $\geq
+0.25$; \texttt{substantive\_content\_delta} median\_dist $\geq
+0.20$ AND $60\%$ above $0.15$; \texttt{antipattern\_avoidance}
+median avoidance $\geq 0.60$; \texttt{wisdom\_problem\_alignment}
+we implemented via mean cosine $\geq 0.05$ AND $\geq 3$ pids
+above mean). The fully-implemented gate then produces:
+
+\begin{center}\small
+\begin{tabular}{l c c}
+  \toprule
+  Gate & PASS count & Discrimination \\
+  \midrule
+  Agent-designed, fully implemented & \textbf{12/12} & \textbf{none} \\
+  Researcher-designed (Exp 15, trigger-conditioned) & 4/12 & meaningful \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\emph{Every candidate passes every component of the agent's
+gate.} The agent's four axes
+(reframe-depth, content-delta, wisdom-alignment, antipattern
+avoidance) all measure properties that any retrieved wisdom
+trivially exhibits on the holdout: adding W to the library does
+perturb reasoning (large content-delta for all), the wisdom
+unpacked text does share some vocabulary with problems (non-zero
+alignment), and anti-patterns are mostly absent from answers by
+default. Without the trigger-conditioning split
+(SHOULD\_FIRE vs NO\_FIRE), orthogonality alone collapses into
+``yes everything differs in some way.''
+
+\paragraph{This is the actually interesting architectural
+lesson.} Orthogonal decomposition is \emph{necessary but not
+sufficient}. The researcher's gate (Exp 15) adds a separate
+ingredient the agent did not discover: \emph{conditioning on an
+externally-supplied trigger class} so that utility and
+citability are computed only on the subset where the wisdom
+claims to apply. That conditioning is what turns ``can measure
+4 things'' into ``can discriminate 4-from-12 candidates.''
+\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=1pt]
+  \item \textbf{Agent capability confirmed}: propose
+    orthogonal components, implement them.
+  \item \textbf{Agent capability missing}: propose
+    \emph{conditioning} — the architectural move of splitting
+    the evaluation population by a wisdom-specific trigger.
+  \item \textbf{Researcher contribution that was not
+    transferable}: the idea that some candidates are
+    \emph{conditional specialists}, not uniform activators,
+    and the gate must evaluate them in-class.
+\end{itemize}
+Teaching the agent \emph{conditioning} as a first-class design
+move — not just ``decompose'' — is the next L5 experiment.
+
+
+
+
+\section{Multi-step research-task pilot (full)}
+\label{app:multistep}
+
+The 100-problem benchmark exercised throughout \S\ref{sec:experiments}
+is fundamentally \emph{single-advisory}: one problem, one answer,
+one judge verdict. Many research and engineering workflows, however,
+demand \emph{multi-round} assumption-revision: propose hypotheses,
+gather evidence, update beliefs, re-propose. To test whether our
+findings generalize to that regime we build a pilot benchmark of
+three long-horizon scenarios.
+
+\paragraph{Benchmark.} Each scenario specifies a \emph{briefing}
+(visible to the agent), a \emph{hidden ground-truth mechanism}, a
+list of \emph{critical facts} the environment may reveal on demand,
+and a list of \emph{plausible red-herrings} also consistent with
+surface observations. The three scenarios span domains where
+root-cause diagnosis requires targeted investigation rather than
+pattern matching:
+
+\begin{center}\small
+\begin{tabular}{l l p{4.5cm}}
+  \toprule
+  Scenario & Domain & Ground-truth root cause (hidden) \\
+  \midrule
+  Clinical trial & Medicine &
+    Drug--drug interaction with warfarin (CYP2C9), amplified by
+    chronic kidney disease \\
+  ML CTR regression & ML engineering &
+    Feature-store schema migration silently renamed a high-importance
+    categorical column; serving stack continues to read the old
+    column and gets \(0\) \\
+  DB slowdown & Systems &
+    Postgres minor-version upgrade changed planner statistics;
+    a hot query regressed from \texttt{IndexScan} to \texttt{SeqScan} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Oracle and judge.} To avoid the same-family contamination
+identified in \S\ref{sec:selfaudit}, the \emph{oracle} (simulating the
+experimental environment) is GPT-5.4, the \emph{solver} is
+gemini-3-flash, and the \emph{judge} is Claude Opus 4.6
+(three different vendor families). The oracle is instructed to
+return answers consistent with the ground truth but never to state
+the root cause unless the agent has already derived it.
+
+\paragraph{Agent strategies.} Two baselines are compared:
+\begin{description}[leftmargin=1.5em, topsep=2pt, itemsep=1pt]
+  \item[\textbf{single\_pass}:] The solver reads the briefing and
+    writes a final diagnosis with no oracle interaction.
+  \item[\textbf{belief\_track}:] The solver maintains an explicit
+    hypothesis state (\(\leq 3\) hypotheses with explicit
+    confidences) across \(3\) rounds. Each round it proposes
+    \(1\text{--}3\) targeted investigations; the oracle answers;
+    the agent updates hypotheses in light of the answers. A final
+    diagnosis is committed after round \(3\).
+\end{description}
+
+\paragraph{Result.} On this small benchmark,
+\texttt{belief\_track} converges on all three scenarios; the
+single-pass baseline misses the mechanism in the ML-regression
+scenario:
+
+\begin{center}\small
+\begin{tabular}{l c c}
+  \toprule
+  Scenario & single\_pass & belief\_track \\
+  \midrule
+  Clinical trial    & CONVERGED & CONVERGED \\
+  ML CTR regression & PARTIAL   & \textbf{CONVERGED} \\
+  DB slowdown       & CONVERGED & CONVERGED \\
+  \midrule
+  Total CONVERGED   & \(2/3\)   & \(\mathbf{3/3}\) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The ML scenario is the case whose root cause is a
+specific, low-prior mechanism (a silent column rename; the model
+sees zero variance on a previously high-importance feature). Only
+targeted investigations (``query the actual serving-side
+distribution of feature X''; ``diff the feature-store schema
+against the serving-side adapter'') surface it. \texttt{single\_pass}
+returns a plausible but under-specified ``feature-store issue''
+verdict; \texttt{belief\_track} queries the oracle with the
+specific diagnostic, receives ``\(user\_category\_id = 0\) for
+\(100\%\) of inference requests,'' and commits to the correct
+mechanism.
+
+\paragraph{Scope.} \(N = 3\) is a pilot. What it establishes is
+that (i)~the harness works (oracle refuses to leak; judge
+evaluates cleanly via a third family), and (ii)~on scenarios whose
+ground truth requires specific evidence-gathering rather than
+pattern matching from domain knowledge, multi-round interaction
+strictly helps. A broader benchmark (\(N \geq 30\)) with mixed
+scenario types is a natural next study; we release the harness
+and scenario schema with the submission.
 
 \end{CJK*}
 \end{document}
