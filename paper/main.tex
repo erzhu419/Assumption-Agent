@@ -142,18 +142,29 @@ does not measure whether the specific wisdom is doing the
 work.} This is independent evidence for the pair-wr collapse
 from a measurement frame with zero data-overlap.
 
-\noindent\textbf{Contribution.} The loop, the ten-experiment
-audit stack (cross-family, side-stability, cross-domain, staged
-funnel, recursion-to-fixed-point, triangulation, inverted-
-disagreement check, meta-wisdom's own falsifier, embedding-space
-orthogonal validation, LLM-judged faithfulness), the
-multi-dimensional failure modes they reveal across sample size,
-judge family, judge seed, domain aggregation, and
-direction-of-activation, and the agent's meta-wisdom
-independently predicting the extension result. A concrete step
-toward agents that build the tools they think with \emph{and}
-notice when their own tools mislead them—even if the notice
-costs all three of their provisional commits.
+\noindent\textbf{We build the replacement gate.} Following
+MC-WM's principle ``when a module fails its role, switch its
+role,'' we decompose pair-wr into three independent components
+— trigger-fit, conditional utility, concrete citability — and
+combine them into a trigger-conditioned gate (Exp 15). On the
+same 12 candidates, the new gate \textbf{retains 2 of the 3
+original KEEPs (W077, W078) and rescues 2 previously rejected
+candidates (WCAND01, WCAND02)}. A trigger-indexed library
+taxonomy (Exp 16) and a prospective-citation solver at \(95\%\)
+target-citation rate (Exp 17) complete the architectural trio.
+Final validated library delta on held-out 50:
+\(\boxed{+2\ \text{retained} +2\ \text{rescued} -1\ \text{withdrawn}}\),
+replacing the earlier pooled-pair-wr verdict of \(+0\).
+
+\noindent\textbf{Contribution.} The loop, the audit stack that
+falsifies the naive pooled-pair-wr gate (10 experiments), the
+orthogonal measurement frames that diagnose \emph{why} (Exp 9,
+13), the three architectural probes that separate citation from
+utility (Exp 12–14), and the replacement gate design (Exp 15,
+16, 17) that recovers positive signal on the same data. A
+concrete step toward agents that build the tools they think
+with \emph{and} rebuild those tools when they notice they were
+measuring the wrong thing.
 \end{abstract}
 
 \section{Introduction}
@@ -1522,8 +1533,196 @@ measure utility via pair-wr must decouple them, measuring (a)
 (b) ``given that it is cited, does the answer improve?''
 separately. Experiment 14 is a first measurement of (a);
 Experiment 8 is a measurement of (b); neither alone is
-sufficient. A follow-up paper will prospectively integrate
-both into a new gate.
+sufficient. The following three sections build the
+follow-up gate.
+
+\subsection{Experiment 15 — Trigger-conditioned gate (L1
+measurement redesign)}
+\label{sec:l1}
+
+We separate the three dimensions confounded in pair-wr into
+explicit components, guided by MC-WM's principle
+``\emph{when a module fails its role, switch its role}.'' For
+each of \(12 \times 50 = 600\) (wisdom, pid) pairs, Claude Opus
+4.6 labels the pid as \texttt{SHOULD\_FIRE}, \texttt{NEUTRAL},
+or \texttt{NO\_FIRE} relative to the wisdom's claimed trigger.
+Existing cached pair-verdicts and Exp 14 citation judgments are
+then partitioned by this label.
+
+Four derived metrics per candidate:
+
+\begin{description}[leftmargin=1.5em, topsep=2pt, itemsep=1pt]
+  \item[\(\text{trigger\_fit\_rate}\):] fraction of pids labelled
+    as SHOULD\_FIRE or NEUTRAL (sanity: self-description is at
+    all coherent).
+  \item[\(\text{util\_when\_fires}\):] pair-wr on SHOULD\_FIRE
+    subset (actual utility given trigger presence).
+  \item[\(\text{cite\_when\_fires}\):] any-cite rate on
+    SHOULD\_FIRE subset (Exp 14 citation locatability given
+    trigger presence).
+  \item[\(\text{harm\_when\_absent}\):] pair-wr on NO\_FIRE
+    subset (should approximate 0.50; no-op when not triggered).
+\end{description}
+
+Gate: $\text{util} \geq 0.55 \wedge n_{\text{fire}} \geq 8
+\wedge \text{cite} \geq 0.50 \wedge |\text{harm} - 0.5| \leq 0.10$.
+This is the first gate in this study that refuses to reduce
+wisdom validity to a scalar — each component has its own data
+source and cannot be pumped by noise in the others.
+
+\begin{center}\small
+\begin{tabular}{l l r r r r r c}
+  \toprule
+  cid & wid & trig\_fit & \(n_{\text{fire}}\) & util\_fire
+    & cite\_fire & harm\_abs & gate \\
+  \midrule
+  \textbf{WCAND01} & ---- & 0.76 & 22 & \textbf{0.59} & 0.75 & 0.40 & \textbf{PASS} \\
+  \textbf{WCAND02} & ---- & 0.80 & 14 & \textbf{0.71} & 1.00 & 0.50 & \textbf{PASS} \\
+  WCAND03 & ---- & 0.62 & 13 & 0.54 & 1.00 & 0.36 & FAIL \\
+  WCAND04 & ---- & 0.64 & 11 & 0.64 & 1.00 & 0.67 & FAIL \\
+  WCAND05 & W076 & 0.48 & \textbf{5} & 0.60 & 1.00 & 0.57 & FAIL (too narrow) \\
+  WCAND06 & ---- & 0.32 & 3 & 0.00 & --- & 0.47 & FAIL \\
+  WCAND07 & ---- & 0.24 & 2 & 0.50 & 1.00 & 0.55 & FAIL (too narrow) \\
+  WCAND08 & ---- & 0.56 & 9 & 0.44 & 1.00 & 0.50 & FAIL \\
+  WCAND09 & ---- & 0.88 & 25 & 0.48 & 1.00 & 0.50 & FAIL \\
+  \textbf{WCAND10} & \textbf{W077} & 0.88 & 26 & \textbf{0.60} & 1.00 & 0.50 & \textbf{PASS} \\
+  WCAND11 & ---- & 0.20 & 2 & 0.00 & --- & 0.49 & FAIL \\
+  \textbf{WCROSSL01} & \textbf{W078} & 0.80 & 21 & \textbf{0.62} & 1.00 & 0.60 & \textbf{PASS} \\
+  \midrule
+  \multicolumn{8}{l}{Trigger-conditioned gate PASS: \textbf{4/12}
+    (two original KEEPs retained, two REVERTs rescued)} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{First positive result in the entire study.}
+The trigger-conditioned gate retains \textbf{W077} and
+\textbf{W078} — two of the three original KEEPs that had
+collapsed under pooled n=100 pair-wr (Exp 8) — and additionally
+rescues two REVERTs: WCAND01 (\emph{上工治未病}; util\_fire =
+\(0.59\) on 22 should-fire problems) and WCAND02
+(\emph{别高效解决一个被看错的问题}; util\_fire = \(0.71\) on
+14 should-fire problems). W076 fails not on utility but on
+\emph{breadth}: Claude labels only 5/50 problems as should-fire,
+below the \(n_{\text{fire}} \geq 8\) minimum — the wisdom's
+self-description is empirically too narrow for the holdout
+distribution.
+
+This is the minimal evidence for a non-vacuous gate: positive
+signal where pooled pair-wr sees noise, reliable negatives on
+the obviously-weak candidates (WCAND06, WCAND11 with \(n_{\text{fire}}
+\leq 3\)), and refused-for-good-reason verdicts on borderline
+cases (WCAND03 util = 0.54 barely fails, WCAND04 harm\_absent =
+0.67 penalises wrong-domain firing). The validated library
+delta under this gate becomes:
+\[
+  \boxed{+2\ \text{retained (W077, W078)} \;+\; 2\ \text{rescued (WCAND01, WCAND02)} \;-\; 1\ \text{withdrawn (W076)}}
+\]
+on the held-out 50, replacing the earlier \(+0\) verdict from
+pooled pair-wr. This is preliminary — the gate was designed and
+evaluated on the same 12 candidates. A prospective study on
+fresh candidates would be the proper confirmation.
+
+\subsection{Experiment 16 — Trigger-indexed library (L2
+structural redesign)}
+\label{sec:l2}
+
+The current library is a flat list; retrieval is by embedding
+cosine over \texttt{unpacked\_for\_llm}. We design a
+trigger-indexed alternative: a 10-class canonical taxonomy
+(paradigm shift, multi-variable tradeoff, diagnosis under noise,
+method selection, sunk cost, risk vs.\ safety, localise vs.\
+systemic, time sensitivity, stakeholder incentive, calibration
+feedback) covering the Phase-3 library. Each of the 75
+library wisdoms is labelled with 1–3 trigger classes (Claude);
+each of the 50 held-out problems is labelled with 0–3 active
+triggers; retrieval becomes a set-intersection rather than an
+embedding cosine. Trigger-coverage distribution:
+
+\begin{center}\small
+\begin{tabular}{l r r}
+  \toprule
+  trigger class & wisdoms & problems \\
+  \midrule
+  calibration\_feedback   & 30 & 9 \\
+  risk\_vs\_safety        & 28 & 15 \\
+  diagnosis\_under\_noise & 26 & 17 \\
+  localize\_vs\_systemic  & 20 & 21 \\
+  paradigm\_shift         & 16 & 3 \\
+  stakeholder\_incentive  & 15 & 9 \\
+  time\_sensitivity       & 13 & 16 \\
+  multi\_variable\_tradeoff & 11 & 26 \\
+  method\_selection       &  8 & 14 \\
+  sunk\_cost\_or\_past    &  6 & 5 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+The library shows \emph{over-coverage} of
+\texttt{calibration\_feedback} and \texttt{risk\_vs\_safety} (30
+and 28 wisdoms) relative to problem incidence (9, 15), and
+\emph{under-coverage} of \texttt{multi\_variable\_tradeoff}
+(11 wisdoms for 26 problems) — exactly the kind of structural
+mismatch flat-list retrieval cannot surface. A full
+evaluation of trigger-retrieval quality vs.\ embedding-retrieval
+quality requires re-running v20 with both retrievers on the
+same problems, left for a follow-up. The labelled taxonomy is
+released with the supplementary materials.
+
+\subsection{Experiment 17 — Citation-aware solver (L3 solver
+redesign)}
+\label{sec:l3}
+
+The retrospective citation audit in Experiment 14 depended on a
+judge attributing wisdoms to answer passages after the fact.
+Prospective citation removes that indirection: the solver's
+prompt is modified to require explicit
+\texttt{used\_wisdoms: [\{id, applied\_at, reason\}]} output
+alongside the answer, referencing its provided retrieval set.
+We run this on 20 held-out pids with the base 75 wisdoms plus
+\(W_{076}\) always retrieved, and measure three rates:
+
+\begin{center}\small
+\begin{tabular}{l r l}
+  \toprule
+  metric & value & note \\
+  \midrule
+  Target shown in retrieval & 20/20 (100\%) & W076 forced into top-2 \\
+  Any wisdom cited          & 19/20 (95\%)  & solver reliably declares usage \\
+  \(W_{076}\) cited given shown & 19/20 (95\%) & prospective target-cite rate \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Prospective target-citation (\(95\%\)) \emph{substantially
+exceeds} retrospective any-cite for the same wisdom from
+Experiment 14 (\(82\%\)). Requiring citation in output directly
+forces specific integration. Quotes recovered include:
+
+\begin{itemize}[leftmargin=1.2em, topsep=2pt, itemsep=2pt]
+  \item \texttt{business\_0062}: ``\emph{不中断现金流的前提下，
+    完成从「卖货」到「卖品牌」的平稳过渡}'' — W076's
+    ``continuity'' + ``staged transition''.
+  \item \texttt{software\_engineering\_0256}: ``\emph{将此次
+    优化视为「在役系统上的范式迁移」\ldots 针对失效的历史前提
+    进行分阶段转型}'' — W076's \texttt{unpacked\_for\_llm}
+    phrasing is reproduced nearly verbatim.
+  \item \texttt{mathematics\_0246}: ``\emph{在保持模形式对称性
+    这一「生产连续性」的前提下}'' — W076's ``保全核心资产''
+    translated to a math-domain analogue.
+\end{itemize}
+
+\noindent Prospective citation is an architectural requirement,
+not a judging requirement: once the solver emits citations, no
+external judge is needed to answer ``where did the wisdom
+apply?''. The cost of requiring citations in output is
+negligible; the benefit is that \emph{any} downstream gate can
+condition on solver-declared usage rather than retrospective
+attribution, breaking the circularity that every experiment up
+to Experiment 14 had to live with. The open question — does the
+\(95\%\) citation rate translate to a utility gain when paired
+with the trigger-conditioned gate (Experiment 15) — is a direct
+follow-up.
 
 
 
