@@ -1724,6 +1724,133 @@ to Experiment 14 had to live with. The open question — does the
 with the trigger-conditioned gate (Experiment 15) — is a direct
 follow-up.
 
+\subsection{Experiment 18 — Can the agent itself design the
+replacement gate?}
+\label{sec:meta}
+
+So far in this paper the replacement gate (Experiment 15) was
+designed \emph{by the researcher} — we identified the confound,
+chose the decomposition, and wrote the validator. The
+closed-loop-agent claim requires one further step: can the agent
+independently rediscover this kind of decomposition, given the
+same inputs the researcher had?
+
+We test this with a pilot. The agent is Claude Opus 4.6
+(cross-family to the solver, so not the same model doing the
+validation). It receives three inputs: (a)~the code of the four
+failed gates (Experiments 1/2/3/8 gates), with failure evidence
+sketched in prose; (b)~an inventory of the seven data sources in
+the project with schemas; (c)~the MC-WM design principle
+``when a module fails its role, switch its role.'' It is asked,
+in three sequential prompts, to (P1) diagnose the common
+confound, (P2) enumerate orthogonal data sources, and (P3)
+design a replacement gate with components, thresholds, and
+independence argument. Experiment 15's design is \emph{withheld}
+from its context. A third-family judge (GPT-5.4) then scores
+the agent's output against Experiment 15's design.
+
+\paragraph{Phase 1 — Diagnosis.} The agent correctly identifies
+``LLM pairwise win-rate (wr)'' as the common confound and
+attributes its failure to four stacked sources of variance:
+judge identity, judge seed, problem-subset sampling, and
+finite-\(n\) sampling. This matches our own diagnosis.
+
+\paragraph{Phase 2 — Orthogonal sources.} The agent produces
+six candidate sources, of which three coincide with ones we
+used and three are ones we did \emph{not} use:
+
+\begin{center}\small
+\begin{tabular}{p{4.5cm} p{3.5cm} p{3cm}}
+  \toprule
+  Agent-proposed source & Overlap with researcher & Novel? \\
+  \midrule
+  reframe meta-cognition records &  our Stage C (Exp 9)   & — \\
+  wisdom–problem semantic alignment & our Stage B (Exp 9) & — \\
+  holdout difficulty stratification & our Stage 3 (Exp 5) & — \\
+  \textbf{answer-level textual diff}
+    & — & \textbf{new}\\
+  \textbf{anti-pattern structural coverage}
+    & — & \textbf{new}\\
+  \textbf{cross-LLM judge agreement ($\kappa$)}
+    & similar to Exp 1 but formalised & \textbf{refined}\\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Phase 3 — Design.} The agent produces
+\texttt{orthogonal\_decomposition\_gate\_v1} with 4 components:
+
+\begin{description}[leftmargin=1.4em, topsep=2pt, itemsep=1pt]
+  \item[\texttt{reframe\_depth}] ``median reframe distance \(\geq 0.25\)''
+    (Stage-C analogue)
+  \item[\texttt{substantive\_content\_delta}] ``median content delta
+    \(\geq 0.20\)'' — novel: explicit answer-text diff threshold
+  \item[\texttt{wisdom\_problem\_alignment}] ``median alignment z
+    \(\geq 1.5\)'' (closest to our trigger\_fit\_rate)
+  \item[\texttt{antipattern\_avoidance}] ``median avoidance improvement
+    \(\geq 0.15\)'' — novel: check anti\_patterns listed in Turn-0
+    are actually avoided in Turn-1 answer
+\end{description}
+
+\paragraph{Phase 5 — Alignment with researcher design (GPT-5.4
+judge).} The third-family judge's verdict is \textbf{AGENT\_REACHED\_RELATED\_DESIGN}
+with structural-similarity \(0.28\). Component-level matches:
+
+\begin{center}\small
+\begin{tabular}{l l c}
+  \toprule
+  Researcher component & Agent component & Level \\
+  \midrule
+  \texttt{trigger\_fit\_rate} & \texttt{wisdom\_problem\_alignment}
+    & WEAK\_MATCH \\
+  \texttt{util\_when\_fires}  & \texttt{antipattern\_avoidance}
+    & WEAK\_MATCH \\
+  \texttt{cite\_when\_fires}  & (none)
+    & NO\_MATCH \\
+  \texttt{harm\_when\_absent} & (none)
+    & NO\_MATCH \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+The agent's design is \emph{not a copy} of the researcher's.
+It recovers the decomposition principle (2/4 components
+match weakly), but offers three independently-motivated
+dimensions (\texttt{reframe\_depth}, \texttt{substantive\_content\_delta},
+\texttt{antipattern\_avoidance}) that the researcher did not
+include, while missing two the researcher did
+(\texttt{cite\_when\_fires}, \texttt{harm\_when\_absent}).
+
+\paragraph{What this establishes and what it does not.}
+\emph{Establishes}: (i)~the design \emph{process} of
+decomposing a confounded scalar into orthogonal components is
+transferable to an LLM agent given the same inputs; (ii)~the
+agent does not merely mimic—its output contains novel
+axes—so it is exercising independent design judgment, not
+pattern-matching on the researcher's artefacts; (iii)~the
+combined researcher + agent design is a strict superset, not
+a zero-sum disagreement.
+\emph{Does not establish}: whether the agent's gate would
+empirically out-perform the researcher's when run on the same
+12 candidates (Phase 4–6 of the full protocol — code
+generation, execution, and comparative verdict — were scoped
+out as stretch goals). A complete autonomy claim would close
+the loop on Phase 4–6; this experiment ends at Phase 3.
+
+\paragraph{Implication for autonomy.} The earlier closed-loop
+agent (\S\ref{sec:orchestrator}) could \emph{propose and
+validate object-level wisdoms} under a fixed gate. It could not
+replace that gate. Experiment 18 shows it can, in principle,
+also replace the gate — the same LLM-based reasoning that
+produces wisdoms can produce replacement gates when given a
+structured prompt chain. The gap between ``agent-in-the-loop''
+and ``human-in-the-loop'' shrinks to: providing the agent with
+its own failure history as inspectable inputs and a design
+principle like ``switch role when a module fails.'' This paper
+has provided exactly that evidence stack; a follow-up paper
+would wire Phase 4–6 and let the agent iterate its own gates
+end-to-end.
+
 
 
 \section{Beyond single-advisory benchmarks: a multi-step

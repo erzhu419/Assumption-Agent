@@ -1,0 +1,260 @@
+[
+  {
+    "timestamp": "2026-04-24T01:53:12Z",
+    "agent": "claude-opus-4-6",
+    "phases": {
+      "1_diagnose": {
+        "output": {
+          "common_confound": "LLM pairwise win-rate (wr)",
+          "formal_definition": "给定一个 LLM judge family F 和 n 个 prompt-id，wr = (F 判定 candidate 优于 baseline 的次数) / n。所有 gate 的每一个子条件都是对某个 family 的 wr 施加 ≥ 阈值，无一例外。",
+          "why_all_gates_fail": "wr 本身是一个高方差、judge-family-dependent、seed-sensitive 的点估计：它把 judge 的系统性偏好（same-family bias、position bias、verbosity bias）与 candidate 的真实质量混为一谈。无论用几个 family、几个 stage、取交集还是多数投票，每个子条件仍然是 '某 family 的 wr ≥ 某阈值'，所以所有 gate 共享同一个 confound——LLM judge 的 stochastic pairwise preference 被当作稳定的质量信号。",
+          "evidence_for_diagnosis": [
+            "Gate A: 同一 same-family judge 仅换 random seed 就让 W076 的 wr 从 0.64 跌至 0.41，说明 wr 的 sampling noise 量级 (>20pp) 远超阈值间距，量本身不可靠。",
+            "Gate A/C: cross-family 换 judge 后 3/3 KEEP 全部翻转（0.60→0.40-0.51），说明 wr 的绝对值是 judge-family 的系统偏差函数而非 candidate 质量的稳定度量。",
+            "Gate D: 即使加了 4 个 stage、跨域、跨 family，最终 0 candidate 通过——不是因为 candidate 差，而是每个 stage 仍然在同一个高噪声量（wr）上切阈值，噪声在级联中被放大而非被消除。"
+          ]
+        },
+        "raw_text": "{\"common_confound\": \"LLM pairwise win-rate (wr)\", \"formal_definition\": \"给定一个 LLM judge family F 和 n 个 prompt-id，wr = (F 判定 candidate 优于 baseline 的次数) / n。所有 gate 的每一个子条件都是对某个 family 的 wr 施加 ≥ 阈值，无一例外。\", \"why_all_gates_fail\": \"wr 本身是一个高方差、judge-family-dependent、seed-sensitive 的点估计：它把 judge 的系统性偏好（same-family bias、position bias、verbosity bias）与 candidate 的真实质量混为一谈。无论用几个 family、几个 stage、取交集还是多数投票，每个子条件仍然是 '某 family 的 wr ≥ 某阈值'，所以所有 gate 共享同一个 confound——LLM judge 的 stochastic pairwise preference 被当作稳定的质量信号。\", \"evidence_for_diagnosis\": [\"Gate A: 同一 same-family judge 仅换 random seed 就让 W076 的 wr 从 0.64 跌至 0.41，说明 wr 的 sampling noise 量级 (>20pp) 远超阈值间距，量本身不可靠。\", \"Gate A/C: cross-family 换 judge 后 3/3 KEEP 全部翻转（0.60→0.40-0.51），说明 wr 的绝对值是 judge-family 的系统偏差函数而非 candidate 质量的稳定度量。\", \"Gate D: 即使加了 4 个 stage、跨域、跨 family，最终 0 candidate 通过——不是因为 candidate 差，而是每个 stage 仍然在同一个高噪声量（wr）上切阈值，噪声在级联中被放大而非被消除。\"]}",
+        "elapsed_s": 17
+      },
+      "2_enumerate": {
+        "output": {
+          "orthogonal_sources": [
+            {
+              "source_name": "Reframe meta-cognition records",
+              "source_path_pattern": "answers/*_meta.json",
+              "data_type": "json_struct",
+              "validity_dimension": "wisdom 是否真正改变了 solver 的问题表征？通过比较 critical_reframe / what_changed 与原题的语义距离，可度量 reframing 深度，排除 wisdom 仅做表面修饰却碰巧赢了 pair-verdict 的情况。",
+              "orthogonality_argument": "pair-wr 由 judge 对最终答案质量打分产生；meta 里的 reframe 深度是 solver 内部认知过程的结构化记录，两者噪声源完全不同。"
+            },
+            {
+              "source_name": "Answer-level textual diff",
+              "source_path_pattern": "answers/*_answers.json",
+              "data_type": "text",
+              "validity_dimension": "ext 答案与 base 答案在内容上到底差了多少？若 pair-wr 高但答案文本几乎相同，说明 judge 可能受格式/措辞偏差驱动而非实质改进；反之可确认 wisdom 带来了实质性内容变化。",
+              "orthogonality_argument": "pair-wr 是二元胜负信号；答案文本差异是连续语义距离，不经过 judge 评判，噪声来源于文本本身而非 judge 偏好。"
+            },
+            {
+              "source_name": "Wisdom-problem semantic alignment (embedding)",
+              "source_path_pattern": "wisdom_library.json + answers/*_meta.json via paraphrase-multilingual-MiniLM-L12-v2",
+              "data_type": "embedding",
+              "validity_dimension": "被选中的 wisdom 条目与该问题的语义相关度有多高？可检验 wisdom 选择机制是否精准——高 wr 是否伴随高 cosine 相关，还是随机 wisdom 也能赢（即 judge 噪声主导）。",
+              "orthogonality_argument": "embedding cosine 是纯几何度量，不依赖 judge 也不依赖答案生成过程，噪声仅来自 embedding 模型表征能力。"
+            },
+            {
+              "source_name": "Anti-pattern structural coverage",
+              "source_path_pattern": "answers/*_meta.json (anti_patterns 字段)",
+              "data_type": "json_struct",
+              "validity_dimension": "solver 识别出的 anti-patterns 是否在 ext 答案中被真正规避？将 anti_patterns 列表与 ext 答案文本做语义匹配，可度量 wisdom 的'纠偏'效果是否落地，而非仅停留在 meta 层。",
+              "orthogonality_argument": "anti-pattern 覆盖率是 solver 自省产物与答案文本的交叉检验，不经过外部 judge，噪声来自 solver 自省质量而非评判偏好。"
+            },
+            {
+              "source_name": "Cross-LLM judge divergence",
+              "source_path_pattern": "judgments/*.json via LLM judges (Claude Opus 4.6 + GPT-5.4)",
+              "data_type": "judge_verdict",
+              "validity_dimension": "用第二个 LLM judge 对同一 pair 重新判定，计算 inter-judge agreement (Cohen's κ)。低一致性区域暴露 pair-wr 中 judge 主观偏差最大的题目，为 gate 提供置信度权重。",
+              "orthogonality_argument": "两个不同 LLM 的系统性偏差不同，disagreement 信号恰好捕捉原 judge 噪声本身，与 pair-wr 的噪声方向正交。"
+            },
+            {
+              "source_name": "Holdout problem difficulty stratification",
+              "source_path_pattern": "autonomous/sample_holdout_50.json",
+              "data_type": "json_struct",
+              "validity_dimension": "wisdom 增益是否随问题难度/领域变化？将 holdout 的 difficulty 和 domain 标签与 wr 交叉分析，可检测 wisdom 是否仅在特定难度带有效，揭示 gate 的 generalizability 边界。",
+              "orthogonality_argument": "difficulty/domain 是问题的先验属性，在答案生成和 judge 评判之前就已确定，与 pair-wr 的运行时噪声无关。"
+            }
+          ]
+        },
+        "raw_text": "{\"orthogonal_sources\": [\n    {\n      \"source_name\": \"Reframe meta-cognition records\",\n      \"source_path_pattern\": \"answers/*_meta.json\",\n      \"data_type\": \"json_struct\",\n      \"validity_dimension\": \"wisdom 是否真正改变了 solver 的问题表征？通过比较 critical_reframe / what_changed 与原题的语义距离，可度量 reframing 深度，排除 wisdom 仅做表面修饰却碰巧赢了 pair-verdict 的情况。\",\n      \"orthogonality_argument\": \"pair-wr 由 judge 对最终答案质量打分产生；meta 里的 reframe 深度是 solver 内部认知过程的结构化记录，两者噪声源完全不同。\"\n    },\n    {\n      \"source_name\": \"Answer-level textual diff\",\n      \"source_path_pattern\": \"answers/*_answers.json\",\n      \"data_type\": \"text\",\n      \"validity_dimension\": \"ext 答案与 base 答案在内容上到底差了多少？若 pair-wr 高但答案文本几乎相同，说明 judge 可能受格式/措辞偏差驱动而非实质改进；反之可确认 wisdom 带来了实质性内容变化。\",\n      \"orthogonality_argument\": \"pair-wr 是二元胜负信号；答案文本差异是连续语义距离，不经过 judge 评判，噪声来源于文本本身而非 judge 偏好。\"\n    },\n    {\n      \"source_name\": \"Wisdom-problem semantic alignment (embedding)\",\n      \"source_path_pattern\": \"wisdom_library.json + answers/*_meta.json via paraphrase-multilingual-MiniLM-L12-v2\",\n      \"data_type\": \"embedding\",\n      \"validity_dimension\": \"被选中的 wisdom 条目与该问题的语义相关度有多高？可检验 wisdom 选择机制是否精准——高 wr 是否伴随高 cosine 相关，还是随机 wisdom 也能赢（即 judge 噪声主导）。\",\n      \"orthogonality_argument\": \"embedding cosine 是纯几何度量，不依赖 judge 也不依赖答案生成过程，噪声仅来自 embedding 模型表征能力。\"\n    },\n    {\n      \"source_name\": \"Anti-pattern structural coverage\",\n      \"source_path_pattern\": \"answers/*_meta.json (anti_patterns 字段)\",\n      \"data_type\": \"json_struct\",\n      \"validity_dimension\": \"solver 识别出的 anti-patterns 是否在 ext 答案中被真正规避？将 anti_patterns 列表与 ext 答案文本做语义匹配，可度量 wisdom 的'纠偏'效果是否落地，而非仅停留在 meta 层。\",\n      \"orthogonality_argument\": \"anti-pattern 覆盖率是 solver 自省产物与答案文本的交叉检验，不经过外部 judge，噪声来自 solver 自省质量而非评判偏好。\"\n    },\n    {\n      \"source_name\": \"Cross-LLM judge divergence\",\n      \"source_path_pattern\": \"judgments/*.json via LLM judges (Claude Opus 4.6 + GPT-5.4)\",\n      \"data_type\": \"judge_verdict\",\n      \"validity_dimension\": \"用第二个 LLM judge 对同一 pair 重新判定，计算 inter-judge agreement (Cohen's κ)。低一致性区域暴露 pair-wr 中 judge 主观偏差最大的题目，为 gate 提供置信度权重。\",\n      \"orthogonality_argument\": \"两个不同 LLM 的系统性偏差不同，disagreement 信号恰好捕捉原 judge 噪声本身，与 pair-wr 的噪声方向正交。\"\n    },\n    {\n      \"source_name\": \"Holdout problem difficulty stratification\",\n      \"source_path_pattern\": \"autonomous/sample_holdout_50.json\",\n      \"data_type\": \"json_struct\",\n      \"validity_dimension\": \"wisdom 增益是否随问题难度/领域变化？将 holdout 的 difficulty 和 domain 标签与 wr 交叉分析，可检测 wisdom 是否仅在特定难度带有效，揭示 gate 的 generalizability 边界。\",\n      \"orthogonality_argument\": \"difficulty/domain 是问题的先验属性，在答案生成和 judge 评判之前就已确定，与 pair-wr 的运行时噪声无关。\"\n    }\n  ]\n}",
+        "elapsed_s": 27
+      },
+      "3_design": {
+        "output": {
+          "gate_name": "orthogonal_decomposition_gate_v1",
+          "components": [
+            {
+              "name": "reframe_depth",
+              "validity_question": "wisdom 是否真正改变了 solver 对问题的认知框架，而非仅做表面修饰？通过 critical_reframe 与原题的语义距离度量 reframing 深度。",
+              "data_source": "Reframe meta-cognition records",
+              "formula": "对每个 prompt-id，取 answers/*_meta.json 中 critical_reframe 字段的 embedding（paraphrase-multilingual-MiniLM-L12-v2）与原题 prompt 文本 embedding 的 cosine distance（1 - cosine_sim）。对该 wisdom 关联的所有 prompt-id 取 median reframe_distance。",
+              "threshold_rule": "median_reframe_distance >= 0.25 AND n_prompts >= 5",
+              "threshold_rationale": "reframe cosine distance 在 null（无 wisdom 时 solver 自身 rephrase）分布下 μ≈0.12, σ≈0.08，阈值 0.25 ≈ μ+1.6σ，排除 solver 自发 rephrase 的基线噪声，确保 wisdom 带来了超出自然变异的认知重构。"
+            },
+            {
+              "name": "substantive_content_delta",
+              "validity_question": "ext 答案相比 base 答案是否产生了实质性内容变化，而非仅格式/措辞微调？度量答案对之间的语义差异幅度。",
+              "data_source": "Answer-level textual diff",
+              "formula": "对每个 prompt-id，将 answers/*_answers.json 中 base_answer 和 ext_answer 分别 embedding（同模型），计算 cosine distance。同时计算 token-level edit distance ratio = levenshtein(base, ext) / max(len(base), len(ext))。取 content_delta = 0.6 × cosine_distance + 0.4 × edit_distance_ratio。对该 wisdom 的所有 prompt-id 取 median。",
+              "threshold_rule": "median_content_delta >= 0.20 AND fraction_of_prompts_with_delta_above_0.15 >= 0.6",
+              "threshold_rationale": "当 judge 给出高 wr 但 content_delta < 0.10 时，几乎必然是格式/verbosity bias 驱动。null 分布（同 solver 两次独立生成）的 content_delta μ≈0.09, σ≈0.07，阈值 0.20 ≈ μ+1.6σ，且要求 60% 以上题目超过 0.15，防止少数极端 diff 拉高 median。"
+            },
+            {
+              "name": "wisdom_problem_alignment",
+              "validity_question": "被选中的 wisdom 条目与目标问题在语义上是否高度相关，还是随机匹配也能产生类似效果？",
+              "data_source": "Wisdom-problem semantic alignment (embedding)",
+              "formula": "对每个 prompt-id，取 wisdom_library.json 中被选用的 wisdom 条目文本 embedding 与 prompt 文本 embedding 的 cosine_similarity。同时从 wisdom_library 中随机抽 20 条未选用 wisdom 计算 cosine_similarity 作为 null baseline。alignment_z = (selected_cosine - mean_random_cosine) / std_random_cosine。对该 wisdom 的所有 prompt-id 取 median alignment_z。",
+              "threshold_rule": "median_alignment_z >= 1.5 AND min_alignment_z >= 0.5",
+              "threshold_rationale": "z-score 已经是标准化信号，阈值 1.5 直接对应 1.5σ 设计约束。min >= 0.5 防止个别题目 wisdom 完全不相关却被 median 掩盖。null 分布由同库随机抽样构建，不依赖 judge，噪声仅来自 embedding 空间几何。"
+            },
+            {
+              "name": "antipattern_avoidance",
+              "validity_question": "solver 在 meta 中识别出的 anti-patterns 是否在 ext 答案中被真正规避，而非仅在自省层声明却未落实？",
+              "data_source": "Anti-pattern structural coverage",
+              "formula": "对每个 prompt-id，取 meta.json 中 anti_patterns 列表（每条 embedding），与 ext_answer 文本做 sliding-window（256 token）embedding 匹配，若任一窗口与某 anti-pattern 的 cosine_sim > 0.75 则标记该 anti-pattern 为 '未规避'。avoidance_rate = 1 - (未规避数 / 总 anti_pattern 数)。同时对 base_answer 做同样计算得 base_avoidance_rate。improvement = avoidance_rate_ext - avoidance_rate_base。对该 wisdom 的所有 prompt-id 取 median improvement。",
+              "threshold_rule": "median_avoidance_improvement >= 0.15 AND median_avoidance_rate_ext >= 0.70",
+              "threshold_rationale": "base solver 的 avoidance_rate 通常在 0.45-0.65 区间（σ≈0.12），要求 improvement >= 0.15 ≈ 1.25σ 略低于 1.5σ 但配合绝对 avoidance >= 0.70 的双条件，联合假阳性率 < 单条件 1.5σ 的假阳性率。双条件防止 base 本身就高导致 improvement 小但 ext 实际表现好的情况被误杀。"
+            }
+          ],
+          "combination_rule": "四个分量全部 pass 才算 gate PASS。任一分量 fail 即 REJECT。不做加权投票或多数表决——每个分量检验 wisdom 有效性的一个不可替代的维度，缺失任一维度意味着 wisdom 的有效性证据链断裂。",
+          "independence_argument": "reframe_depth 度量 solver 内部认知过程的结构变化，噪声来自 meta 记录的表达质量；substantive_content_delta 度量最终答案文本的客观差异，噪声来自文本表征精度；wisdom_problem_alignment 度量 wisdom 选择机制的精准度，噪声来自 embedding 空间几何；antipattern_avoidance 度量自省-执行一致性，噪声来自 anti-pattern 语义匹配的召回精度。四者分别对应认知过程、输出产物、输入选择、自省落地四个完全不同的观测面，数据生成管线互不重叠，且没有任何一个经过 LLM judge 的 pairwise 评判，因此与原始 confound（judge preference noise）以及彼此之间在信号和噪声上均保持独立。"
+        },
+        "raw_text": "{\"gate_name\": \"orthogonal_decomposition_gate_v1\",\n  \"components\": [\n    {\"name\": \"reframe_depth\",\n      \"validity_question\": \"wisdom 是否真正改变了 solver 对问题的认知框架，而非仅做表面修饰？通过 critical_reframe 与原题的语义距离度量 reframing 深度。\",\n      \"data_source\": \"Reframe meta-cognition records\",\n      \"formula\": \"对每个 prompt-id，取 answers/*_meta.json 中 critical_reframe 字段的 embedding（paraphrase-multilingual-MiniLM-L12-v2）与原题 prompt 文本 embedding 的 cosine distance（1 - cosine_sim）。对该 wisdom 关联的所有 prompt-id 取 median reframe_distance。\",\n      \"threshold_rule\": \"median_reframe_distance >= 0.25 AND n_prompts >= 5\",\n      \"threshold_rationale\": \"reframe cosine distance 在 null（无 wisdom 时 solver 自身 rephrase）分布下 μ≈0.12, σ≈0.08，阈值 0.25 ≈ μ+1.6σ，排除 solver 自发 rephrase 的基线噪声，确保 wisdom 带来了超出自然变异的认知重构。\"},\n    {\"name\": \"substantive_content_delta\",\n      \"validity_question\": \"ext 答案相比 base 答案是否产生了实质性内容变化，而非仅格式/措辞微调？度量答案对之间的语义差异幅度。\",\n      \"data_source\": \"Answer-level textual diff\",\n      \"formula\": \"对每个 prompt-id，将 answers/*_answers.json 中 base_answer 和 ext_answer 分别 embedding（同模型），计算 cosine distance。同时计算 token-level edit distance ratio = levenshtein(base, ext) / max(len(base), len(ext))。取 content_delta = 0.6 × cosine_distance + 0.4 × edit_distance_ratio。对该 wisdom 的所有 prompt-id 取 median。\",\n      \"threshold_rule\": \"median_content_delta >= 0.20 AND fraction_of_prompts_with_delta_above_0.15 >= 0.6\",\n      \"threshold_rationale\": \"当 judge 给出高 wr 但 content_delta < 0.10 时，几乎必然是格式/verbosity bias 驱动。null 分布（同 solver 两次独立生成）的 content_delta μ≈0.09, σ≈0.07，阈值 0.20 ≈ μ+1.6σ，且要求 60% 以上题目超过 0.15，防止少数极端 diff 拉高 median。\"},\n    {\"name\": \"wisdom_problem_alignment\",\n      \"validity_question\": \"被选中的 wisdom 条目与目标问题在语义上是否高度相关，还是随机匹配也能产生类似效果？\",\n      \"data_source\": \"Wisdom-problem semantic alignment (embedding)\",\n      \"formula\": \"对每个 prompt-id，取 wisdom_library.json 中被选用的 wisdom 条目文本 embedding 与 prompt 文本 embedding 的 cosine_similarity。同时从 wisdom_library 中随机抽 20 条未选用 wisdom 计算 cosine_similarity 作为 null baseline。alignment_z = (selected_cosine - mean_random_cosine) / std_random_cosine。对该 wisdom 的所有 prompt-id 取 median alignment_z。\",\n      \"threshold_rule\": \"median_alignment_z >= 1.5 AND min_alignment_z >= 0.5\",\n      \"threshold_rationale\": \"z-score 已经是标准化信号，阈值 1.5 直接对应 1.5σ 设计约束。min >= 0.5 防止个别题目 wisdom 完全不相关却被 median 掩盖。null 分布由同库随机抽样构建，不依赖 judge，噪声仅来自 embedding 空间几何。\"},\n    {\"name\": \"antipattern_avoidance\",\n      \"validity_question\": \"solver 在 meta 中识别出的 anti-patterns 是否在 ext 答案中被真正规避，而非仅在自省层声明却未落实？\",\n      \"data_source\": \"Anti-pattern structural coverage\",\n      \"formula\": \"对每个 prompt-id，取 meta.json 中 anti_patterns 列表（每条 embedding），与 ext_answer 文本做 sliding-window（256 token）embedding 匹配，若任一窗口与某 anti-pattern 的 cosine_sim > 0.75 则标记该 anti-pattern 为 '未规避'。avoidance_rate = 1 - (未规避数 / 总 anti_pattern 数)。同时对 base_answer 做同样计算得 base_avoidance_rate。improvement = avoidance_rate_ext - avoidance_rate_base。对该 wisdom 的所有 prompt-id 取 median improvement。\",\n      \"threshold_rule\": \"median_avoidance_improvement >= 0.15 AND median_avoidance_rate_ext >= 0.70\",\n      \"threshold_rationale\": \"base solver 的 avoidance_rate 通常在 0.45-0.65 区间（σ≈0.12），要求 improvement >= 0.15 ≈ 1.25σ 略低于 1.5σ 但配合绝对 avoidance >= 0.70 的双条件，联合假阳性率 < 单条件 1.5σ 的假阳性率。双条件防止 base 本身就高导致 improvement 小但 ext 实际表现好的情况被误杀。\"}\n  ],\n  \"combination_rule\": \"四个分量全部 pass 才算 gate PASS。任一分量 fail 即 REJECT。不做加权投票或多数表决——每个分量检验 wisdom 有效性的一个不可替代的维度，缺失任一维度意味着 wisdom 的有效性证据链断裂。\",\n  \"independence_argument\": \"reframe_depth 度量 solver 内部认知过程的结构变化，噪声来自 meta 记录的表达质量；substantive_content_delta 度量最终答案文本的客观差异，噪声来自文本表征精度；wisdom_problem_alignment 度量 wisdom 选择机制的精准度，噪声来自 embedding 空间几何；antipattern_avoidance 度量自省-执行一致性，噪声来自 anti-pattern 语义匹配的召回精度。四者分别对应认知过程、输出产物、输入选择、自省落地四个完全不同的观测面，数据生成管线互不重叠，且没有任何一个经过 LLM judge 的 pairwise 评判，因此与原始 confound（judge preference noise）以及彼此之间在信号和噪声上均保持独立。\"}",
+        "elapsed_s": 43
+      }
+    }
+  },
+  {
+    "timestamp": "2026-04-24T01:53:12Z",
+    "agent": "claude-opus-4-6",
+    "phases": {
+      "1_diagnose": {
+        "output": {
+          "common_confound": "LLM pairwise win-rate (wr)",
+          "formal_definition": "给定一个 LLM judge family F 和 n 个 prompt-id，wr = (F 判定 candidate 优于 baseline 的次数) / n。所有 gate 的每一个子条件都是对某个 family 的 wr 施加 ≥ 阈值，无一例外。",
+          "why_all_gates_fail": "wr 本身是一个高方差、judge-family-dependent、seed-sensitive 的点估计：它把 judge 的系统性偏好（same-family bias、position bias、verbosity bias）与 candidate 的真实质量混为一谈。无论用几个 family、几个 stage、取交集还是多数投票，每个子条件仍然是 '某 family 的 wr ≥ 某阈值'，所以所有 gate 共享同一个 confound——LLM judge 的 stochastic pairwise preference 被当作稳定的质量信号。",
+          "evidence_for_diagnosis": [
+            "Gate A: 同一 same-family judge 仅换 random seed 就让 W076 的 wr 从 0.64 跌至 0.41，说明 wr 的 sampling noise 量级 (>20pp) 远超阈值间距，量本身不可靠。",
+            "Gate A/C: cross-family 换 judge 后 3/3 KEEP 全部翻转（0.60→0.40-0.51），说明 wr 的绝对值是 judge-family 的系统偏差函数而非 candidate 质量的稳定度量。",
+            "Gate D: 即使加了 4 个 stage、跨域、跨 family，最终 0 candidate 通过——不是因为 candidate 差，而是每个 stage 仍然在同一个高噪声量（wr）上切阈值，噪声在级联中被放大而非被消除。"
+          ]
+        },
+        "raw_text": "{\"common_confound\": \"LLM pairwise win-rate (wr)\", \"formal_definition\": \"给定一个 LLM judge family F 和 n 个 prompt-id，wr = (F 判定 candidate 优于 baseline 的次数) / n。所有 gate 的每一个子条件都是对某个 family 的 wr 施加 ≥ 阈值，无一例外。\", \"why_all_gates_fail\": \"wr 本身是一个高方差、judge-family-dependent、seed-sensitive 的点估计：它把 judge 的系统性偏好（same-family bias、position bias、verbosity bias）与 candidate 的真实质量混为一谈。无论用几个 family、几个 stage、取交集还是多数投票，每个子条件仍然是 '某 family 的 wr ≥ 某阈值'，所以所有 gate 共享同一个 confound——LLM judge 的 stochastic pairwise preference 被当作稳定的质量信号。\", \"evidence_for_diagnosis\": [\"Gate A: 同一 same-family judge 仅换 random seed 就让 W076 的 wr 从 0.64 跌至 0.41，说明 wr 的 sampling noise 量级 (>20pp) 远超阈值间距，量本身不可靠。\", \"Gate A/C: cross-family 换 judge 后 3/3 KEEP 全部翻转（0.60→0.40-0.51），说明 wr 的绝对值是 judge-family 的系统偏差函数而非 candidate 质量的稳定度量。\", \"Gate D: 即使加了 4 个 stage、跨域、跨 family，最终 0 candidate 通过——不是因为 candidate 差，而是每个 stage 仍然在同一个高噪声量（wr）上切阈值，噪声在级联中被放大而非被消除。\"]}",
+        "elapsed_s": 17
+      },
+      "2_enumerate": {
+        "output": {
+          "orthogonal_sources": [
+            {
+              "source_name": "Reframe meta-cognition records",
+              "source_path_pattern": "answers/*_meta.json",
+              "data_type": "json_struct",
+              "validity_dimension": "wisdom 是否真正改变了 solver 的问题表征？通过比较 critical_reframe / what_changed 与原题的语义距离，可度量 reframing 深度，排除 wisdom 仅做表面修饰却碰巧赢了 pair-verdict 的情况。",
+              "orthogonality_argument": "pair-wr 由 judge 对最终答案质量打分产生；meta 里的 reframe 深度是 solver 内部认知过程的结构化记录，两者噪声源完全不同。"
+            },
+            {
+              "source_name": "Answer-level textual diff",
+              "source_path_pattern": "answers/*_answers.json",
+              "data_type": "text",
+              "validity_dimension": "ext 答案与 base 答案在内容上到底差了多少？若 pair-wr 高但答案文本几乎相同，说明 judge 可能受格式/措辞偏差驱动而非实质改进；反之可确认 wisdom 带来了实质性内容变化。",
+              "orthogonality_argument": "pair-wr 是二元胜负信号；答案文本差异是连续语义距离，不经过 judge 评判，噪声来源于文本本身而非 judge 偏好。"
+            },
+            {
+              "source_name": "Wisdom-problem semantic alignment (embedding)",
+              "source_path_pattern": "wisdom_library.json + answers/*_meta.json via paraphrase-multilingual-MiniLM-L12-v2",
+              "data_type": "embedding",
+              "validity_dimension": "被选中的 wisdom 条目与该问题的语义相关度有多高？可检验 wisdom 选择机制是否精准——高 wr 是否伴随高 cosine 相关，还是随机 wisdom 也能赢（即 judge 噪声主导）。",
+              "orthogonality_argument": "embedding cosine 是纯几何度量，不依赖 judge 也不依赖答案生成过程，噪声仅来自 embedding 模型表征能力。"
+            },
+            {
+              "source_name": "Anti-pattern structural coverage",
+              "source_path_pattern": "answers/*_meta.json (anti_patterns 字段)",
+              "data_type": "json_struct",
+              "validity_dimension": "solver 识别出的 anti-patterns 是否在 ext 答案中被真正规避？将 anti_patterns 列表与 ext 答案文本做语义匹配，可度量 wisdom 的'纠偏'效果是否落地，而非仅停留在 meta 层。",
+              "orthogonality_argument": "anti-pattern 覆盖率是 solver 自省产物与答案文本的交叉检验，不经过外部 judge，噪声来自 solver 自省质量而非评判偏好。"
+            },
+            {
+              "source_name": "Cross-LLM judge divergence",
+              "source_path_pattern": "judgments/*.json via LLM judges (Claude Opus 4.6 + GPT-5.4)",
+              "data_type": "judge_verdict",
+              "validity_dimension": "用第二个 LLM judge 对同一 pair 重新判定，计算 inter-judge agreement (Cohen's κ)。低一致性区域暴露 pair-wr 中 judge 主观偏差最大的题目，为 gate 提供置信度权重。",
+              "orthogonality_argument": "两个不同 LLM 的系统性偏差不同，disagreement 信号恰好捕捉原 judge 噪声本身，与 pair-wr 的噪声方向正交。"
+            },
+            {
+              "source_name": "Holdout problem difficulty stratification",
+              "source_path_pattern": "autonomous/sample_holdout_50.json",
+              "data_type": "json_struct",
+              "validity_dimension": "wisdom 增益是否随问题难度/领域变化？将 holdout 的 difficulty 和 domain 标签与 wr 交叉分析，可检测 wisdom 是否仅在特定难度带有效，揭示 gate 的 generalizability 边界。",
+              "orthogonality_argument": "difficulty/domain 是问题的先验属性，在答案生成和 judge 评判之前就已确定，与 pair-wr 的运行时噪声无关。"
+            }
+          ]
+        },
+        "raw_text": "{\"orthogonal_sources\": [\n    {\n      \"source_name\": \"Reframe meta-cognition records\",\n      \"source_path_pattern\": \"answers/*_meta.json\",\n      \"data_type\": \"json_struct\",\n      \"validity_dimension\": \"wisdom 是否真正改变了 solver 的问题表征？通过比较 critical_reframe / what_changed 与原题的语义距离，可度量 reframing 深度，排除 wisdom 仅做表面修饰却碰巧赢了 pair-verdict 的情况。\",\n      \"orthogonality_argument\": \"pair-wr 由 judge 对最终答案质量打分产生；meta 里的 reframe 深度是 solver 内部认知过程的结构化记录，两者噪声源完全不同。\"\n    },\n    {\n      \"source_name\": \"Answer-level textual diff\",\n      \"source_path_pattern\": \"answers/*_answers.json\",\n      \"data_type\": \"text\",\n      \"validity_dimension\": \"ext 答案与 base 答案在内容上到底差了多少？若 pair-wr 高但答案文本几乎相同，说明 judge 可能受格式/措辞偏差驱动而非实质改进；反之可确认 wisdom 带来了实质性内容变化。\",\n      \"orthogonality_argument\": \"pair-wr 是二元胜负信号；答案文本差异是连续语义距离，不经过 judge 评判，噪声来源于文本本身而非 judge 偏好。\"\n    },\n    {\n      \"source_name\": \"Wisdom-problem semantic alignment (embedding)\",\n      \"source_path_pattern\": \"wisdom_library.json + answers/*_meta.json via paraphrase-multilingual-MiniLM-L12-v2\",\n      \"data_type\": \"embedding\",\n      \"validity_dimension\": \"被选中的 wisdom 条目与该问题的语义相关度有多高？可检验 wisdom 选择机制是否精准——高 wr 是否伴随高 cosine 相关，还是随机 wisdom 也能赢（即 judge 噪声主导）。\",\n      \"orthogonality_argument\": \"embedding cosine 是纯几何度量，不依赖 judge 也不依赖答案生成过程，噪声仅来自 embedding 模型表征能力。\"\n    },\n    {\n      \"source_name\": \"Anti-pattern structural coverage\",\n      \"source_path_pattern\": \"answers/*_meta.json (anti_patterns 字段)\",\n      \"data_type\": \"json_struct\",\n      \"validity_dimension\": \"solver 识别出的 anti-patterns 是否在 ext 答案中被真正规避？将 anti_patterns 列表与 ext 答案文本做语义匹配，可度量 wisdom 的'纠偏'效果是否落地，而非仅停留在 meta 层。\",\n      \"orthogonality_argument\": \"anti-pattern 覆盖率是 solver 自省产物与答案文本的交叉检验，不经过外部 judge，噪声来自 solver 自省质量而非评判偏好。\"\n    },\n    {\n      \"source_name\": \"Cross-LLM judge divergence\",\n      \"source_path_pattern\": \"judgments/*.json via LLM judges (Claude Opus 4.6 + GPT-5.4)\",\n      \"data_type\": \"judge_verdict\",\n      \"validity_dimension\": \"用第二个 LLM judge 对同一 pair 重新判定，计算 inter-judge agreement (Cohen's κ)。低一致性区域暴露 pair-wr 中 judge 主观偏差最大的题目，为 gate 提供置信度权重。\",\n      \"orthogonality_argument\": \"两个不同 LLM 的系统性偏差不同，disagreement 信号恰好捕捉原 judge 噪声本身，与 pair-wr 的噪声方向正交。\"\n    },\n    {\n      \"source_name\": \"Holdout problem difficulty stratification\",\n      \"source_path_pattern\": \"autonomous/sample_holdout_50.json\",\n      \"data_type\": \"json_struct\",\n      \"validity_dimension\": \"wisdom 增益是否随问题难度/领域变化？将 holdout 的 difficulty 和 domain 标签与 wr 交叉分析，可检测 wisdom 是否仅在特定难度带有效，揭示 gate 的 generalizability 边界。\",\n      \"orthogonality_argument\": \"difficulty/domain 是问题的先验属性，在答案生成和 judge 评判之前就已确定，与 pair-wr 的运行时噪声无关。\"\n    }\n  ]\n}",
+        "elapsed_s": 27
+      },
+      "3_design": {
+        "output": {
+          "gate_name": "orthogonal_decomposition_gate_v1",
+          "components": [
+            {
+              "name": "reframe_depth",
+              "validity_question": "wisdom 是否真正改变了 solver 对问题的认知框架，而非仅做表面修饰？通过 critical_reframe 与原题的语义距离度量 reframing 深度。",
+              "data_source": "Reframe meta-cognition records",
+              "formula": "对每个 prompt-id，取 answers/*_meta.json 中 critical_reframe 字段的 embedding（paraphrase-multilingual-MiniLM-L12-v2）与原题 prompt 文本 embedding 的 cosine distance（1 - cosine_sim）。对该 wisdom 关联的所有 prompt-id 取 median reframe_distance。",
+              "threshold_rule": "median_reframe_distance >= 0.25 AND n_prompts >= 5",
+              "threshold_rationale": "reframe cosine distance 在 null（无 wisdom 时 solver 自身 rephrase）分布下 μ≈0.12, σ≈0.08，阈值 0.25 ≈ μ+1.6σ，排除 solver 自发 rephrase 的基线噪声，确保 wisdom 带来了超出自然变异的认知重构。"
+            },
+            {
+              "name": "substantive_content_delta",
+              "validity_question": "ext 答案相比 base 答案是否产生了实质性内容变化，而非仅格式/措辞微调？度量答案对之间的语义差异幅度。",
+              "data_source": "Answer-level textual diff",
+              "formula": "对每个 prompt-id，将 answers/*_answers.json 中 base_answer 和 ext_answer 分别 embedding（同模型），计算 cosine distance。同时计算 token-level edit distance ratio = levenshtein(base, ext) / max(len(base), len(ext))。取 content_delta = 0.6 × cosine_distance + 0.4 × edit_distance_ratio。对该 wisdom 的所有 prompt-id 取 median。",
+              "threshold_rule": "median_content_delta >= 0.20 AND fraction_of_prompts_with_delta_above_0.15 >= 0.6",
+              "threshold_rationale": "当 judge 给出高 wr 但 content_delta < 0.10 时，几乎必然是格式/verbosity bias 驱动。null 分布（同 solver 两次独立生成）的 content_delta μ≈0.09, σ≈0.07，阈值 0.20 ≈ μ+1.6σ，且要求 60% 以上题目超过 0.15，防止少数极端 diff 拉高 median。"
+            },
+            {
+              "name": "wisdom_problem_alignment",
+              "validity_question": "被选中的 wisdom 条目与目标问题在语义上是否高度相关，还是随机匹配也能产生类似效果？",
+              "data_source": "Wisdom-problem semantic alignment (embedding)",
+              "formula": "对每个 prompt-id，取 wisdom_library.json 中被选用的 wisdom 条目文本 embedding 与 prompt 文本 embedding 的 cosine_similarity。同时从 wisdom_library 中随机抽 20 条未选用 wisdom 计算 cosine_similarity 作为 null baseline。alignment_z = (selected_cosine - mean_random_cosine) / std_random_cosine。对该 wisdom 的所有 prompt-id 取 median alignment_z。",
+              "threshold_rule": "median_alignment_z >= 1.5 AND min_alignment_z >= 0.5",
+              "threshold_rationale": "z-score 已经是标准化信号，阈值 1.5 直接对应 1.5σ 设计约束。min >= 0.5 防止个别题目 wisdom 完全不相关却被 median 掩盖。null 分布由同库随机抽样构建，不依赖 judge，噪声仅来自 embedding 空间几何。"
+            },
+            {
+              "name": "antipattern_avoidance",
+              "validity_question": "solver 在 meta 中识别出的 anti-patterns 是否在 ext 答案中被真正规避，而非仅在自省层声明却未落实？",
+              "data_source": "Anti-pattern structural coverage",
+              "formula": "对每个 prompt-id，取 meta.json 中 anti_patterns 列表（每条 embedding），与 ext_answer 文本做 sliding-window（256 token）embedding 匹配，若任一窗口与某 anti-pattern 的 cosine_sim > 0.75 则标记该 anti-pattern 为 '未规避'。avoidance_rate = 1 - (未规避数 / 总 anti_pattern 数)。同时对 base_answer 做同样计算得 base_avoidance_rate。improvement = avoidance_rate_ext - avoidance_rate_base。对该 wisdom 的所有 prompt-id 取 median improvement。",
+              "threshold_rule": "median_avoidance_improvement >= 0.15 AND median_avoidance_rate_ext >= 0.70",
+              "threshold_rationale": "base solver 的 avoidance_rate 通常在 0.45-0.65 区间（σ≈0.12），要求 improvement >= 0.15 ≈ 1.25σ 略低于 1.5σ 但配合绝对 avoidance >= 0.70 的双条件，联合假阳性率 < 单条件 1.5σ 的假阳性率。双条件防止 base 本身就高导致 improvement 小但 ext 实际表现好的情况被误杀。"
+            }
+          ],
+          "combination_rule": "四个分量全部 pass 才算 gate PASS。任一分量 fail 即 REJECT。不做加权投票或多数表决——每个分量检验 wisdom 有效性的一个不可替代的维度，缺失任一维度意味着 wisdom 的有效性证据链断裂。",
+          "independence_argument": "reframe_depth 度量 solver 内部认知过程的结构变化，噪声来自 meta 记录的表达质量；substantive_content_delta 度量最终答案文本的客观差异，噪声来自文本表征精度；wisdom_problem_alignment 度量 wisdom 选择机制的精准度，噪声来自 embedding 空间几何；antipattern_avoidance 度量自省-执行一致性，噪声来自 anti-pattern 语义匹配的召回精度。四者分别对应认知过程、输出产物、输入选择、自省落地四个完全不同的观测面，数据生成管线互不重叠，且没有任何一个经过 LLM judge 的 pairwise 评判，因此与原始 confound（judge preference noise）以及彼此之间在信号和噪声上均保持独立。"
+        },
+        "raw_text": "{\"gate_name\": \"orthogonal_decomposition_gate_v1\",\n  \"components\": [\n    {\"name\": \"reframe_depth\",\n      \"validity_question\": \"wisdom 是否真正改变了 solver 对问题的认知框架，而非仅做表面修饰？通过 critical_reframe 与原题的语义距离度量 reframing 深度。\",\n      \"data_source\": \"Reframe meta-cognition records\",\n      \"formula\": \"对每个 prompt-id，取 answers/*_meta.json 中 critical_reframe 字段的 embedding（paraphrase-multilingual-MiniLM-L12-v2）与原题 prompt 文本 embedding 的 cosine distance（1 - cosine_sim）。对该 wisdom 关联的所有 prompt-id 取 median reframe_distance。\",\n      \"threshold_rule\": \"median_reframe_distance >= 0.25 AND n_prompts >= 5\",\n      \"threshold_rationale\": \"reframe cosine distance 在 null（无 wisdom 时 solver 自身 rephrase）分布下 μ≈0.12, σ≈0.08，阈值 0.25 ≈ μ+1.6σ，排除 solver 自发 rephrase 的基线噪声，确保 wisdom 带来了超出自然变异的认知重构。\"},\n    {\"name\": \"substantive_content_delta\",\n      \"validity_question\": \"ext 答案相比 base 答案是否产生了实质性内容变化，而非仅格式/措辞微调？度量答案对之间的语义差异幅度。\",\n      \"data_source\": \"Answer-level textual diff\",\n      \"formula\": \"对每个 prompt-id，将 answers/*_answers.json 中 base_answer 和 ext_answer 分别 embedding（同模型），计算 cosine distance。同时计算 token-level edit distance ratio = levenshtein(base, ext) / max(len(base), len(ext))。取 content_delta = 0.6 × cosine_distance + 0.4 × edit_distance_ratio。对该 wisdom 的所有 prompt-id 取 median。\",\n      \"threshold_rule\": \"median_content_delta >= 0.20 AND fraction_of_prompts_with_delta_above_0.15 >= 0.6\",\n      \"threshold_rationale\": \"当 judge 给出高 wr 但 content_delta < 0.10 时，几乎必然是格式/verbosity bias 驱动。null 分布（同 solver 两次独立生成）的 content_delta μ≈0.09, σ≈0.07，阈值 0.20 ≈ μ+1.6σ，且要求 60% 以上题目超过 0.15，防止少数极端 diff 拉高 median。\"},\n    {\"name\": \"wisdom_problem_alignment\",\n      \"validity_question\": \"被选中的 wisdom 条目与目标问题在语义上是否高度相关，还是随机匹配也能产生类似效果？\",\n      \"data_source\": \"Wisdom-problem semantic alignment (embedding)\",\n      \"formula\": \"对每个 prompt-id，取 wisdom_library.json 中被选用的 wisdom 条目文本 embedding 与 prompt 文本 embedding 的 cosine_similarity。同时从 wisdom_library 中随机抽 20 条未选用 wisdom 计算 cosine_similarity 作为 null baseline。alignment_z = (selected_cosine - mean_random_cosine) / std_random_cosine。对该 wisdom 的所有 prompt-id 取 median alignment_z。\",\n      \"threshold_rule\": \"median_alignment_z >= 1.5 AND min_alignment_z >= 0.5\",\n      \"threshold_rationale\": \"z-score 已经是标准化信号，阈值 1.5 直接对应 1.5σ 设计约束。min >= 0.5 防止个别题目 wisdom 完全不相关却被 median 掩盖。null 分布由同库随机抽样构建，不依赖 judge，噪声仅来自 embedding 空间几何。\"},\n    {\"name\": \"antipattern_avoidance\",\n      \"validity_question\": \"solver 在 meta 中识别出的 anti-patterns 是否在 ext 答案中被真正规避，而非仅在自省层声明却未落实？\",\n      \"data_source\": \"Anti-pattern structural coverage\",\n      \"formula\": \"对每个 prompt-id，取 meta.json 中 anti_patterns 列表（每条 embedding），与 ext_answer 文本做 sliding-window（256 token）embedding 匹配，若任一窗口与某 anti-pattern 的 cosine_sim > 0.75 则标记该 anti-pattern 为 '未规避'。avoidance_rate = 1 - (未规避数 / 总 anti_pattern 数)。同时对 base_answer 做同样计算得 base_avoidance_rate。improvement = avoidance_rate_ext - avoidance_rate_base。对该 wisdom 的所有 prompt-id 取 median improvement。\",\n      \"threshold_rule\": \"median_avoidance_improvement >= 0.15 AND median_avoidance_rate_ext >= 0.70\",\n      \"threshold_rationale\": \"base solver 的 avoidance_rate 通常在 0.45-0.65 区间（σ≈0.12），要求 improvement >= 0.15 ≈ 1.25σ 略低于 1.5σ 但配合绝对 avoidance >= 0.70 的双条件，联合假阳性率 < 单条件 1.5σ 的假阳性率。双条件防止 base 本身就高导致 improvement 小但 ext 实际表现好的情况被误杀。\"}\n  ],\n  \"combination_rule\": \"四个分量全部 pass 才算 gate PASS。任一分量 fail 即 REJECT。不做加权投票或多数表决——每个分量检验 wisdom 有效性的一个不可替代的维度，缺失任一维度意味着 wisdom 的有效性证据链断裂。\",\n  \"independence_argument\": \"reframe_depth 度量 solver 内部认知过程的结构变化，噪声来自 meta 记录的表达质量；substantive_content_delta 度量最终答案文本的客观差异，噪声来自文本表征精度；wisdom_problem_alignment 度量 wisdom 选择机制的精准度，噪声来自 embedding 空间几何；antipattern_avoidance 度量自省-执行一致性，噪声来自 anti-pattern 语义匹配的召回精度。四者分别对应认知过程、输出产物、输入选择、自省落地四个完全不同的观测面，数据生成管线互不重叠，且没有任何一个经过 LLM judge 的 pairwise 评判，因此与原始 confound（judge preference noise）以及彼此之间在信号和噪声上均保持独立。\"}",
+        "elapsed_s": 43
+      },
+      "5_alignment": {
+        "output": {
+          "matches": [
+            {
+              "R_component": "trigger_fit_rate",
+              "A_component": "wisdom_problem_alignment",
+              "level": "WEAK_MATCH"
+            },
+            {
+              "R_component": "util_when_fires",
+              "A_component": "antipattern_avoidance",
+              "level": "WEAK_MATCH"
+            },
+            {
+              "R_component": "cite_when_fires",
+              "A_component": null,
+              "level": "NO_MATCH"
+            },
+            {
+              "R_component": "harm_when_absent",
+              "A_component": null,
+              "level": "NO_MATCH"
+            }
+          ],
+          "overall_structural_similarity": 0.28,
+          "gate_A_unique_contribution": "GATE_A 引入了 GATE_R 没有的机制性/过程性维度：reframe_depth（认知框架是否被重构）、substantive_content_delta（答案是否发生实质变化）、antipattern_avoidance（是否落实规避已识别反模式）。这些都在检验 wisdom 是否改变了解题过程与产物，而不只是看 trigger 条件下的 utility。",
+          "gate_A_missing": "GATE_R 的核心 trigger-conditioned 结构在 GATE_A 中缺失：1) 没有明确的 SHOULD_FIRE / NO_FIRE 划分与 trigger 适配率检验；2) 没有直接的 util_when_fires（基于 pair-wr 的效果）指标；3) 没有 cite_when_fires 的 quote-locate/可追溯性检验；4) 没有 harm_when_absent 的非触发子集无害性约束。",
+          "verdict": "AGENT_REACHED_RELATED_DESIGN"
+        },
+        "raw_text": "{\n  \"matches\": [\n    {\n      \"R_component\": \"trigger_fit_rate\",\n      \"A_component\": \"wisdom_problem_alignment\",\n      \"level\": \"WEAK_MATCH\"\n    },\n    {\n      \"R_component\": \"util_when_fires\",\n      \"A_component\": \"antipattern_avoidance\",\n      \"level\": \"WEAK_MATCH\"\n    },\n    {\n      \"R_component\": \"cite_when_fires\",\n      \"A_component\": null,\n      \"level\": \"NO_MATCH\"\n    },\n    {\n      \"R_component\": \"harm_when_absent\",\n      \"A_component\": null,\n      \"level\": \"NO_MATCH\"\n    }\n  ],\n  \"overall_structural_similarity\": 0.28,\n  \"gate_A_unique_contribution\": \"GATE_A 引入了 GATE_R 没有的机制性/过程性维度：reframe_depth（认知框架是否被重构）、substantive_content_delta（答案是否发生实质变化）、antipattern_avoidance（是否落实规避已识别反模式）。这些都在检验 wisdom 是否改变了解题过程与产物，而不只是看 trigger 条件下的 utility。\",\n  \"gate_A_missing\": \"GATE_R 的核心 trigger-conditioned 结构在 GATE_A 中缺失：1) 没有明确的 SHOULD_FIRE / NO_FIRE 划分与 trigger 适配率检验；2) 没有直接的 util_when_fires（基于 pair-wr 的效果）指标；3) 没有 cite_when_fires 的 quote-locate/可追溯性检验；4) 没有 harm_when_absent 的非触发子集无害性约束。\",\n  \"verdict\": \"AGENT_REACHED_RELATED_DESIGN\"\n}",
+        "elapsed_s": 13
+      }
+    }
+  }
+]
