@@ -103,17 +103,41 @@ that gate, \emph{withdraws every one of its own previous commits}.
 validation funnel (pilot at $n{=}10$, comparative at $n{=}50$,
 cross-domain, cross-family) run retrospectively on all $12$
 candidates produces $12 \to 4 \to 0 \to 0 \to 0$: zero candidates
-survive all stages. The unexpected result is that even \emph{same
-judge family, same content, different side-randomization seed}
-suffices to flip every single original KEEP decision. The gate is
-fragile along at least three independent axes simultaneously:
-seed, family, and domain aggregation.
+survive. The unexpected result is that even \emph{same judge
+family, same content, different side-randomization seed} suffices
+to flip every single original KEEP decision. The gate is fragile
+along three independent axes simultaneously: seed, family, and
+domain aggregation.
 
-\noindent\textbf{Contribution.} The loop, the four-way audit, the
-recursion to fixed point, the staged funnel, and the concrete
-multi-dimensional failure mode they reveal. A small but concrete
-step toward agents that build the tools they think with
-\emph{and} notice when their own tools mislead them.
+\noindent\textbf{Triangulation is not enough.} Having falsified
+the single-family gate, we bring in a third LLM family (GPT-5.4)
+and run majority-of-3 voting at \(n = 50\). This gate looked
+promising—it rejected two of the three original KEEPs
+(\(W_{076}, W_{077}\)) as family-bias false positives, confirmed
+the third (\(W_{078}\)) by 2/3 family agreement, and rescued a
+REVERT (WCAND07). We then ran the agent's own meta-wisdom
+falsifier: extend the three KEEPs to \(n = 100\) on fresh
+problems. At \(n = 100\) two of three stabilise at
+\(\text{wr} = 0.52 < 0.55\) (the meta-wisdom's prediction holds);
+the third stays in the gray zone at \(0.57\). \textbf{Zero
+candidates hold above \(0.60\) at \(n = 100\).} The majority-of-3
+verdict at \(n = 50\) that survived for \(W_{078}\) collapses at
+\(n = 100\): gemini drops from \(0.60\) to \(0.52\), claude from
+\(0.51\) to \(0.49\). Final autonomous library delta, after every
+audit: \(\boxed{+0}\) KEEPs; the loop's committed wisdoms are all
+either family-bias FPs or noise-driven at \(n = 50\).
+
+\noindent\textbf{Contribution.} The loop, the eight-experiment
+audit stack (cross-family, side-stability, cross-domain, staged
+funnel, recursion-to-fixed-point, triangulation, inverted-
+disagreement check, and the meta-wisdom's own falsifier), the
+multi-dimensional failure modes they reveal across sample size,
+judge family, judge seed, and domain aggregation, and the
+agent's meta-wisdom independently predicting the extension
+result. A concrete step toward agents that build the tools they
+think with \emph{and} notice when their own tools mislead
+them—even if the notice costs all three of their provisional
+commits.
 \end{abstract}
 
 \section{Introduction}
@@ -970,13 +994,207 @@ same-family \(+10\)pp gate is not just one-judge-biased; it is
 \emph{seed-biased}, \emph{family-biased}, and
 \emph{domain-aggregation-biased}, independently.
 
-\paragraph{The full claim.} Combining the four post-hoc
+\paragraph{The full claim so far.} Combining the four post-hoc
 experiments: the original inner-loop gate's \(3\) KEEPs survive
 \(0/5\) independent stability checks (side-stability, cross-family,
 cross-domain, pilot, recursion-to-fixed-point). We do not claim the
 underlying wisdoms have zero value; we claim the specific
-\emph{procedure} that committed them was systematically insufficient
-by multiple measurable standards.
+\emph{procedure} that committed them was systematically insufficient.
+Sections \ref{sec:exp6} and \ref{sec:exp7} now look for a procedure
+that does better.
+
+\subsection{Experiment 6 — The conjunction gate has false
+negatives too: Claude would KEEP what gemini rejected}
+\label{sec:exp6}
+
+If the conjunction gate from \S\ref{sec:recursion} is to be
+recommended, it must be examined for errors \emph{in the other
+direction}: does it reject any REVERTs the original single-family
+gate rejected, that cross-family agreement would actually keep? We
+run Claude Opus 4.6 on the same 50 answer pairs for each of the
+\emph{nine} REVERT candidates (Exp 1 covered only the three KEEPs):
+
+\begin{center}\small
+\begin{tabular}{l c c c l}
+  \toprule
+  cid & gemini\_wr & claude\_wr & new-gate fate
+    & disagreement type \\
+  \midrule
+  WCAND01 & 0.58 & 0.44 & REVERT & both low \\
+  WCAND06 & 0.58 & 0.46 & REVERT & both low \\
+  WCAND03 & 0.56 & 0.36 & REVERT & both low \\
+  \textbf{WCAND07} & \textbf{0.56} & \textbf{0.62} & REVERT
+    & \textbf{gemini low / claude high} \\
+  WCAND09 & 0.55 & 0.49 & REVERT & both low \\
+  \textbf{WCAND11} & \textbf{0.54} & \textbf{0.57} & REVERT
+    & \textbf{gemini low / claude high} \\
+  WCAND08 & 0.51 & 0.33 & REVERT & both low \\
+  WCAND04 & 0.48 & 0.45 & REVERT & both low \\
+  WCAND02 & 0.46 & 0.53 & REVERT & claude slightly higher \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Observation.} The conjunction gate leaves all
+\(9/9\) REVERTs rejected—consistent with the original. But
+two candidates (WCAND07, WCAND11) sit in an \emph{inverted}
+disagreement: Claude rates them \emph{above} its own threshold
+(\(\geq 0.55\)) while gemini rates them below \(0.60\). The
+conjunction gate loses them because one family says no; a
+disjunction (\texttt{OR}) gate would save them at the cost of
+also saving the three known false positives. The conjunction
+gate is therefore precise but potentially lossy on inverted
+disagreements. Only a third family can break the tie.
+
+\subsection{Experiment 7 — Three-family triangulation empirically
+validates a majority-of-3 gate}
+\label{sec:exp7}
+
+We bring in a third family (\emph{GPT-5.4}) to re-judge the same
+answer pairs for the three original KEEPs and the two inverted
+REVERTs from Experiment 6:
+
+\begin{center}\small
+\begin{tabular}{l c c c c c l}
+  \toprule
+  cid & gemini & claude & gpt-5.4 & votes\(_{\geq 0.55}\)
+    & majority-3 & diagnosis \\
+  \midrule
+  W076 & 0.64 & 0.40 & 0.52 & 1/3 & FAIL
+    & family-bias FP (gemini loose) \\
+  W077 & 0.60 & 0.47 & 0.50 & 1/3 & FAIL
+    & family-bias FP (gemini loose) \\
+  \textbf{W078} & \textbf{0.60} & 0.51 & \textbf{0.68} & 2/3
+    & \textbf{PASS} & two families agree: real uplift \\
+  \textbf{WCAND07} & 0.56 & \textbf{0.62} & 0.52 & 2/3
+    & \textbf{PASS} & false negative of single-family gate \\
+  WCAND11 & 0.54 & 0.57 & 0.52 & 1/3 & FAIL
+    & borderline; insufficient evidence \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Interpretation.} Three gate procedures, three empirical
+outcomes, in increasing rigor:
+
+\begin{center}\small
+\begin{tabular}{l c p{6.5cm}}
+  \toprule
+  Gate procedure & \#KEEPs & composition \\
+  \midrule
+  Single-family  (gemini \(\geq 0.60\))              & 3
+    & W076, W077, W078\,\,\newline\footnotesize 2/3 are cross-family
+      false positives \\
+  Two-family AND (gemini \(\geq 0.60\) AND claude \(\geq 0.55\))   & 0
+    & —\,\,\newline\footnotesize misses W078 (validated by gpt-5.4)
+      and WCAND07 (validated by claude): \emph{too strict} \\
+  Three-family majority (\(\geq 2\) of 3 families \(\geq 0.55\))   & 2
+    & \textbf{W078, WCAND07}\,\,\newline\footnotesize retains
+      cross-family-agreed positives, rejects family-bias FPs \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Validated claim.} The majority-of-3 gate is the first
+gate procedure in this study that we have empirical evidence
+\emph{for}, not just against. It rejects the two KEEPs that
+Experiment 1 revealed as gemini-specific artifacts (W076, W077),
+retains the one KEEP that two independent families endorse
+(W078), and rescues one REVERT (WCAND07 \emph{亲兄弟，明算账})
+that Experiment 6 flagged as a likely false negative. The two
+survivors are the smallest set of wisdoms in our run supported
+by the reasonable evidentiary bar ``at least two independent
+vendor families disagree with the third.''
+
+\paragraph{A preliminary library picture at \(n = 50\).}
+Under majority-of-3 at \(n = 50\), the autonomous evolution's
+provisional net effect is \(+W_{078} + \text{WCAND07}\) with
+\(W_{076}, W_{077}\) withdrawn. We call this \emph{preliminary}
+because Experiment 8 (next) re-tests the same three KEEPs on a
+fresh 50-problem extension and reveals that even the
+triangulated verdict at \(n = 50\) is not stable at \(n = 100\).
+
+\subsection{Experiment 8 — Falsifier of Experiment 3: extend the
+gray zone to \(n = 100\)}
+\label{sec:exp8}
+
+Experiment 3's self-generated meta-wisdom stated: ``for candidates
+in the gray zone \([0.53, 0.63]\), extend to \(n = 100\); if
+\(\text{wr}\) stabilises below \(0.55\), the original gate was
+noise-dominated.'' We run this falsifier directly. A fresh
+50-problem extension set (\texttt{sample\_extend\_50}, stratified
+to match the holdout distribution and disjoint from both the
+train and holdout sets) is generated. The v20 solver runs base +
+3 ext variants (\(W_{076}, W_{077}, W_{078}\); the exemplars for
+other candidates had been cleaned, so only the original KEEPs
+are tested in this round). Both judges score the extension pairs.
+
+\begin{center}\small
+\begin{tabular}{l c c c c c c l}
+  \toprule
+  cid & wid & orig(n=50) & ext(n=50) & claude(ext) & combined n=100 & falsifier
+    & fate \\
+  \midrule
+  WCAND05 & W076 & 0.64 & 0.49 & 0.41 & \textbf{0.57}
+    & STILL\_GRAY & 0.52 < 0.57 < 0.60 \\
+  WCAND10 & W077 & 0.60 & 0.44 & 0.42 & \textbf{0.52}
+    & STABLE\_<0.55 & falsifier's prediction holds \\
+  WCROSSL01 & W078 & 0.60 & 0.44 & 0.46 & \textbf{0.52}
+    & STABLE\_<0.55 & falsifier's prediction holds \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Interpretation — the agent's meta-wisdom is correct.}
+Experiment 3 predicted gray-zone candidates would stabilise below
+\(0.55\) under extension, falsifying the original \(+10\)pp
+commit. At \(n = 100\): W077 and W078 land at \(\text{wr} = 0.52
+< 0.55\) cleanly (the meta-wisdom is \emph{confirmed}). W076
+stabilises at \(0.57\)—still in the gray zone, neither clearly
+\emph{KEEP} nor clearly rejected (the meta-wisdom is
+\emph{consistent} but not strongly confirmed on this one case).
+Most importantly, \textbf{zero candidates stabilise above
+\(0.60\)}; the gate was not too strict—the candidates were
+largely noise.
+
+\paragraph{Consequence for Experiment 7's majority-of-3
+verdict.} At \(n = 50\) Experiment 7 concluded majority-of-3
+passes \(W_{078}\) (gemini 0.60 + gpt-5.4 0.68 vs. claude 0.51).
+Extension changes this picture: at \(n = 100\), W078's gemini
+drops from \(0.60\) to \(0.52\) and claude to \(0.49\); of
+three families, only the (not-extended) gpt-5.4 score at
+\(n = 50\) still exceeds \(0.55\). Under a majority-of-3 rule
+\emph{applied to \(n = 100\) evidence for two families and
+\(n = 50\) for the third}, \(W_{078}\)'s vote count drops from
+\(2/3\) to at most \(1/3\)—below the KEEP threshold.
+
+\paragraph{Honest re-statement of the empirically validated
+library change.} After Exp 8:
+\begin{itemize}[leftmargin=*, topsep=2pt, itemsep=0pt]
+  \item \textbf{No} candidate in the current \(12\)-candidate
+    batch has a robustly validated autonomous commit: once
+    extended to \(n = 100\), no KEEP passes even a 2-of-3
+    majority at the \(\geq 0.55\) threshold.
+  \item Experiment 3's self-generated meta-wisdom about the gate
+    (``extend to \(n = 100\); gray-zone candidates stabilise
+    below \(0.55\)'') is \emph{confirmed} for 2 of 3 re-tested
+    KEEPs.
+  \item The library's \emph{actually validated} net change from
+    autonomous evolution is \(\mathbf{+\,0}\) KEEPs (pruning's
+    \(-19\) stale entries still holds; that did not depend on
+    judge family).
+\end{itemize}
+
+\paragraph{Why we still call this a positive result.} The inner
+loop proposed three candidates that \emph{looked} committable
+under its own gate. A minimal extension (doubling the test set
+with fresh problems disjoint from train and holdout) revealed
+that at least two of the three are noise, and left the third
+(\(W_{076}\)) with no robust family agreement at \(n = 100\).
+The agent's own meta-wisdom predicted this; the extension
+confirmed it. The loop now has \emph{documented} empirical
+grounds for insisting on \(n = 100\) cross-family evidence
+before committing, not just \(n = 50\) single-family.
 
 \section{Beyond single-advisory benchmarks: a multi-step
 research-task pilot}
