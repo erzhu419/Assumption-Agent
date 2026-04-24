@@ -2178,6 +2178,110 @@ trigger-gate PASS vs.\ same baseline (\(p = 0.068\)). These are
 consistent with ``no candidate improves on the random-inclusion
 baseline.''
 
+\subsection{Per-domain breakdown of the null verdict}
+\label{sec:per-domain}
+
+A reasonable reviewer concern is that aggregating wr\_ext across
+six problem domains might wash out a real per-domain signal. We
+therefore stratify all \(5 \times 50 = 250\) verdicts per KEEP by
+problem domain and compute pooled wr\_ext (across the five judges)
+with 95\% Wilson CI per (KEEP, domain) cell. Eighteen cells in
+total (Fig.~\ref{fig:per-domain}).
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figs/per_domain_null.png}
+  \caption{Null verdict, broken down by problem domain. Each panel
+    is one KEEP; each bar is wr\_ext pooled across the five judges
+    on the pids in that domain (95\% Wilson CIs). Of \(18\) cells,
+    \(17\) have point estimate strictly below the \(0.60\) KEEP
+    threshold; the single exception (\(W_{078} \times\) engineering,
+    \(0.61\) at \(n = 28\)) has 95\% CI lower bound \(0.42\), well
+    below parity. The null verdict is therefore not a
+    domain-aggregation artifact: there is no domain in which any
+    KEEP would survive its own gate.}
+  \label{fig:per-domain}
+\end{figure}
+
+The strongest per-domain estimates are \(W_{077}\) on business
+(\(0.59\), \(n=64\)) and \(W_{078}\) on engineering (\(0.61\),
+\(n=28\)) — both with CIs that comfortably contain \(0.50\). The
+weakest is \(W_{076}\) on mathematics (\(0.25\), \(n=20\)) — an
+\emph{actively negative} signal, plausibly because the wisdom's
+``change with the times'' framing is a bad fit for closed-form
+math problems.
+
+\subsection{A worked example: tier-divided judges on one problem}
+\label{sec:worked-example}
+
+To make the audit-stack claim concrete we walk through one (pid,
+candidate) pair end-to-end. Problem \texttt{business\_0208} asks
+the solver to advise the head of a small consultancy stuck below
+break-even after \(18\) months: is the bottleneck product-market
+fit, sales execution, or industry-cycle inertia? The candidate is
+\(W_{078}\) (\emph{是骡子是马，拉出来遛遛}, ``mule or horse, take
+it out for a test'' --- a bake-off orientation: list candidates,
+set metrics, run tests, then commit).
+
+\paragraph{Base solver answer (\texttt{library}\(_{v20.1}\), no
+additional candidate).} Lays out a three-step
+\emph{diagnose-validate-deliver} loop: a three-layer funnel
+diagnosis (product / sales / GTM mismatch), a 90-day
+``lightweight wedge'' MVI (a low-priced standardised diagnostic
+module as a Trojan horse for paid scale-out), and a stakeholder-
+management track with explicit milestones at days 30/60/90. Closes
+with ``demonstrate self-correction capability to the investors.''
+
+\paragraph{Library-augmented answer (\(+ W_{078}\)).} Same overall
+three-section scaffold, but the framing shifts from ``run an MVI
+to validate'' to \emph{``isolate variables to identify root cause,
+then run a ladder of tests against KPIs.''} New content: an
+explicit \emph{cash-flow-positive \(>\) model-validation \(>\)
+scale-up} priority ladder; a vertical-niche focus that ``stops
+all-industry expansion'' to drive a \(30\%+\) per-project delivery-
+cost reduction; and an investor-KPI list (LTV/CAC, delivery-
+standardisation rate, key-stage conversion-rate uplift). The
+W078 wisdom is visibly active: every recommendation now travels
+through a ``measure-then-decide'' filter rather than a
+``believe-then-execute'' one.
+
+\paragraph{Verdict spread across the five-judge panel.} On this
+specific pid (\(W_{078}\) re-judged on cached Exp~10 base/ext
+pair, identical side-randomization seed across all five judges):
+
+\begin{center}\small
+\begin{tabular}{l l c}
+  \toprule
+  Tier & Judge & verdict \\
+  \midrule
+  cheap     & gemini-3-flash    & base \\
+  cheap     & claude-haiku-4.5  & ext  \\
+  cheap     & gpt-5.4-mini      & ext  \\
+  \midrule
+  expensive & claude-opus-4.6   & base \\
+  expensive & gpt-5.4           & base \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{What this teaches.} Two cheap-tier families prefer the
+wisdom-augmented answer; both expensive-tier families prefer the
+cleaner baseline. This is exactly the pattern
+Claim~\ref{claim:stability} predicts: the wisdom \emph{does}
+inject substantive new content (a real \(Z^{\mathrm{specific}}\)
+component --- the priority ladder, the vertical focus, the KPI
+list), but it \emph{also} introduces stylistic features
+(\(Z^{\mathrm{style}}\): explicit ``生存路径重塑'',
+``阶梯式行动'', LTV/CAC enumeration) that cheap families read as
+``concrete and decisive'' while expensive families read as
+``mechanical KPI checklist.'' The single-family inner-loop gate,
+which on this pid sees only one of these readings, would commit
+the wisdom on a \(2/3\) cheap-tier vote. The audit stack rejects
+the commit because three of five judges disagree on the same
+content. \emph{The audit's restraint is correct on this pid not
+because the wisdom is useless, but because it is genuinely
+disputed.}
+
 \subsection{Experiments 12–14 — Three architectural probes (not
 gate-tuning): fragmentation, conditional-activator, citation}
 \label{sec:arch}
@@ -2982,14 +3086,77 @@ answers.
 \section{Compute and cost}
 \label{app:compute}
 
-Each v20 subprocess on \(50\) problems: \({\sim}20\) minutes wall time,
-\({\sim}\) input \(180\)k tokens, output \(40\)k tokens. Twelve
-parallel v20 runs in the validation gate: \({\sim}45\) minutes wall
-with \(6\) concurrent workers. Eleven parallel A/B judges (\(50\)
-pairs each): \({\sim}12\) minutes with \(8\) concurrent judge threads.
-Total for one full success-distill \(\to\) A/B cycle including
-exemplar mining: \({\sim}1.5\) hours wall time, within the budget of a
-single researcher's afternoon.
+Table~\ref{tab:compute} consolidates the per-experiment compute and
+cost figures scattered through the paper. All API costs are computed
+at the per-call price of the corresponding model on the
+\texttt{ruoli.dev} proxy; wall times reported with the parallelism
+in the actual run.
+
+\begin{table}[h]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{l l l r l}
+\toprule
+Stage & Experiment & Calls & \multicolumn{1}{c}{Wall} & API cost \\
+\midrule
+\multicolumn{5}{l}{\emph{Phase 1 — build}}\\
+\quad scaffolded solver dev (v13--v20)
+  & --- & ${\sim}50$k gen+judge & 4--6\,d & \(\sim\$80\) \\
+\midrule
+\multicolumn{5}{l}{\emph{Phase 2 — evolve (one inner-loop cycle)}}\\
+\quad failure / success / cross-LLM proposers
+  & §3 modules & ${\sim}300$ gen & 30\,min & \(\sim\$3\) \\
+\quad 12-candidate $+10$pp held-out A/B at $n=50$
+  & §4 inner loop & 600 gen + 600 judge & 1.5\,h & \(\sim\$8\) \\
+\midrule
+\multicolumn{5}{l}{\emph{Phase 3 — audit (per-layer)}}\\
+\quad L1 cross-family (Opus) on 3 KEEPs
+  & Exp~1 & 150 judge (Opus) & 12\,min & \(\sim\$12\) \\
+\quad L2 side-shuffle reseed
+  & Exp~5 & 150 judge (gemini) & 8\,min & \(\sim\$1\) \\
+\quad L3 sample extension to $n{=}100$
+  & Exp~8 & 600 gen + 300 judge & 1\,h & \(\sim\$6\) \\
+\quad L4 cross-solver, 1 KEEP
+  & Exp~26 & 60 gen + 180 judge & 30\,min & \(\sim\$3\) \\
+\quad L5 fresh-domain + GSM8K
+  & Exp~31--32 & 100 gen + 150 judge & 35\,min & \(\sim\$3\) \\
+\quad L6 faithfulness (LLM-judged citation)
+  & Exp~14 & 240 judge (Claude) & 25\,min & \(\sim\$10\) \\
+\midrule
+\multicolumn{5}{l}{\emph{Phase 4 — recovery and statistics}}\\
+\quad trigger-conditioned gate dev
+  & Exp~15 & 600 label calls & 50\,min & \(\sim\$5\) \\
+\quad 9 new candidates prospective
+  & Exp~33 & 360 gen + 360 judge & 1.2\,h & \(\sim\$5\) \\
+\midrule
+\multicolumn{5}{l}{\emph{Robustness add-ons}}\\
+\quad Exp~34 (W078, 2 expensive judges)
+  & Exp~34 & 100 judge (Opus + GPT-5.4) & 4\,min & \(\sim\$6.5\) \\
+\quad Exp~35 (3 KEEPs $\times$ 2 expensive judges)
+  & Exp~35 & 300 judge & 12\,min & \(\sim\$25\) \\
+\quad Exp~36 (3 KEEPs $\times$ 3 cheap judges, $\kappa$)
+  & Exp~36 & 450 judge & 10\,min & \(\sim\$5\) \\
+\midrule
+\multicolumn{4}{l}{\textbf{Total budget for the full paper}} & \(\sim\$170\) \\
+\bottomrule
+\end{tabular}
+\caption{Per-experiment compute and API-cost breakdown. The full
+six-layer audit on three KEEPs (Phase 3, the paper's main
+methodological contribution) costs roughly \(\$35\) and runs in
+\({\sim}3\) hours wall time at researcher-laptop parallelism. The
+robustness add-ons at the bottom (Exp~34--36, scaling and
+\(\kappa\)) are deliberately small relative to the audit's primary
+cost so that the stack is replicable on a graduate-student
+budget.}
+\label{tab:compute}
+\end{table}
+
+A typical reader can read this table as: \emph{the audit stack is
+not the expensive part of the paper.} The expensive part is the
+six-month scaffold-development effort (Phase 1) that produced the
+v20 solver these audits were applied to. Anyone who has already
+built a self-improvement loop should be able to attach the audit
+stack to their existing artefacts with a budget under \(\$50\).
 
 
 \section{Experiments 18--19 — Agent-designed replacement gate (full)}
