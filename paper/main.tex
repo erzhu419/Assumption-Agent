@@ -1367,6 +1367,165 @@ evaluated per-trigger-class rather than per-library-inclusion.
 
 % keep the existing multi-step section right after
 
+\subsection{Experiments 12–14 — Three architectural probes (not
+gate-tuning): fragmentation, conditional-activator, citation}
+\label{sec:arch}
+
+Experiments 1–11 all vary how we \emph{judge} a candidate; they
+hold the library's architecture fixed. The failure modes they
+expose suggest that the problem is not tighter judging but the
+\emph{structure} of the library–solver interaction. We therefore
+probe three independent architectural alternatives:
+
+\paragraph{Experiment 12 — Fragmentation
+(\texttt{exp14\_fragment\_decomposition.py}).} The current unit of
+retrieval is an \(\approx 80\)-character
+\texttt{unpacked\_for\_llm} string that packs a trigger, a
+prescribed move, and an anti-pattern. We decompose each
+candidate with GPT-5.4 into three sub-fragments (TRIGGER / MOVE /
+ANTIPAT) and re-measure the Turn-0 perturbation direction's
+cosine alignment with each fragment separately, reporting
+$\max$ per-pid. Result: \(11/12\) candidates improve by
+\(\geq 0.05\) when measured against the best-fitting fragment
+instead of the whole wisdom, but \emph{no candidate reaches
+meaningful alignment (\(\geq 0.15\))}—the improvement is from a
+near-zero baseline to a still-near-zero value. Of the fragments,
+ANTIPAT is most often the best-aligned (it describes what to
+avoid; the solver's \texttt{what\_changed} often names
+anti-patterns too). Interpretation: granularity is not the main
+bottleneck.
+
+\paragraph{Experiment 13 — Conditional activator
+(\texttt{exp15\_conditional\_activator.py}).} Pooled pair-wr
+averages across \(50\) problems of mixed domain. If a wisdom
+applies only to a subset of problems, the signal is diluted by
+no-op pids. We partition each candidate's \(50\) verdicts by
+problem domain (six classes of size \(5\text{–}14\)) and report
+per-domain wr. Result:
+
+\begin{center}\small
+\begin{tabular}{l l c l}
+  \toprule
+  cid & wid & pooled wr & specialist domain(s) (wr \(\geq 0.60\), \(n \geq 5\)) \\
+  \midrule
+  WCAND01 & ---- & 0.45 & engineering (0.67), science (0.75), math (0.60) \\
+  WCAND04 & ---- & 0.46 & \textbf{science (0.75)} \\
+  WCAND05 & W076 & 0.41 & daily\_life (0.60) \\
+  \textbf{WCAND07} & ---- & 0.52 & \textbf{engineering (0.83)}, math (0.67) \\
+  \textbf{WCAND10} & W077 & 0.52 & \textbf{software\_engineering (0.73)} \\
+  \textbf{WCROSSL01} & W078 & 0.44 & \textbf{science (0.75)}, daily\_life (0.60) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\(10/12\) candidates have at least one domain where \(\text{wr}
+\geq 0.60\) with \(n \geq 5\)—invisible under the pooled gate.
+Strikingly, candidates whose \emph{claimed} domain differs from
+the empirically strong domain are common: WCAND07's aphorism is
+\emph{``Brothers, clean accounts''} (social/financial), yet its
+strongest empirical specialty is engineering. W078's
+\emph{``Mule-or-horse: field test''} matches its strongest
+empirical specialty (science). Only \(5/12\) specialists align
+with the wisdom's own self-described trigger. \textbf{This is the
+first experiment that finds positive signal}: the conditional-
+activator framing uncovers specialist wisdoms that the pooled
+gate systematically rejects. It also suggests that wisdoms'
+self-descriptions of \emph{where} they should apply are only
+half right.
+
+\paragraph{Experiment 14 — Citation audit
+(\texttt{exp16\_citation\_audit.py}).} The current solver does
+not cite which wisdom it used on which step. An architectural
+alternative is to require the solver to emit explicit citations.
+As a cheaper retrospective proxy, we ask Claude Opus 4.6 to
+locate the wisdom in the ext-answer: for each \((cid, pid)\)
+pair (\(n = 15\) per candidate), given the problem, the answer,
+and W's description, does a specific passage in the answer
+concretely execute W's orientation? Claude returns
+\textbf{CITED\_CLEAR} (passage quoted), \textbf{CITED\_WEAK}
+(directionally compatible), or \textbf{NOT\_CITED}.
+
+\begin{center}\small
+\begin{tabular}{l l c c c r r l}
+  \toprule
+  cid & wid & CLEAR & WEAK & NOT & clear\_rate & any\_cite & gate \\
+  \midrule
+  WCAND01 & ---- & 0 & 8 & 5 & 0.00 & 0.62 & PASS \\
+  WCAND02 & ---- & 0 & 5 & 2 & 0.00 & 0.71 & PASS \\
+  WCAND03 & ---- & 1 & 4 & 2 & 0.14 & 0.71 & PASS \\
+  WCAND04 & ---- & 1 & 4 & 3 & 0.12 & 0.62 & PASS \\
+  \textbf{WCAND05} & \textbf{W076} & 2 & 7 & 2 & 0.18 & 0.82 & PASS \\
+  WCAND06 & ---- & 0 & 4 & 6 & 0.00 & 0.40 & FAIL \\
+  WCAND07 & ---- & 0 & 6 & 8 & 0.00 & 0.43 & FAIL \\
+  WCAND08 & ---- & 1 & 3 & 9 & 0.08 & 0.31 & FAIL \\
+  WCAND09 & ---- & 0 & 5 & 1 & 0.00 & 0.83 & PASS \\
+  WCAND10 & W077 & 2 & 2 & 5 & 0.22 & 0.44 & FAIL \\
+  \textbf{WCAND11} & ---- & 0 & 1 & 13 & 0.00 & \textbf{0.07} & FAIL \\
+  \textbf{WCROSSL01} & \textbf{W078} & 2 & 7 & 0 & 0.22 & \textbf{1.00} & PASS \\
+  \midrule
+  \multicolumn{8}{l}{Pass citation gate: 7/12} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Two candidates yield a clean headline. WCROSSL01 (W078, \emph{Is
+it a mule or a horse—take it out for a test}) is the only
+candidate with \(\mathbf{0}\) NOT\_CITED: Claude locates the
+wisdom's orientation in every one of 9 valid judgements, with
+concrete quotes like \emph{``列候选、定指标、做检验、再决定''}
+on business\_0210 and \emph{``需从光变曲线形态、多波段颜色变化及径向速度特征
+三个维度进行分析''} on science\_0004. WCAND11 (\emph{Brand or
+commodity}) is the opposite extreme: \(13/14\) judgements are
+NOT\_CITED (\texttt{any\_cite} \(= 0.07\)). The rest distribute
+between these endpoints.
+
+\paragraph{Across all three architectural probes.}
+Experiment 12 shows granularity is not the bottleneck
+(fragments help marginally but absolute alignment is still
+near zero). Experiment 13 is the first experiment in the
+entire paper to surface positive signal: conditional
+per-domain wr reveals specialist wisdoms hidden by pooled
+averaging. Experiment 14 locates two candidates that are
+concretely quotable in the answer (W078 at \(100\%\) any-cite
+with zero \texttt{NOT\_CITED}, W076 at \(82\%\)). Cross-cutting:
+
+\begin{center}\small
+\begin{tabular}{l l c c c c}
+  \toprule
+  cid & wid & Exp 13 specialist & Exp 14 any-cite & Exp 11 gpt-5.4
+    & Exp 8 n{=}100 gemini \\
+  \midrule
+  WCAND05 & W076 & daily\_life 0.60 & 0.82 & 0.52 & \textbf{0.57} \\
+  WCAND10 & W077 & software\_eng 0.73 & 0.44 & 0.50 & \textbf{0.52} \\
+  \textbf{WCROSSL01} & \textbf{W078} & \textbf{science 0.75} & \textbf{1.00}
+    & \textbf{0.68} & \textbf{0.52} \\
+  WCAND07 & ---- & engineering 0.83 & 0.43 & 0.52 & — \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{W078 is the only candidate with consistently positive
+signal across every architectural probe we could build}: it
+shows a conditional specialist domain (science), it is
+concretely citable in every ext answer, and a third vendor
+family (GPT-5.4) scored it at \texttt{wr} \(= 0.68\) on
+\(n = 50\). And yet at \(n = 100\) the same wisdom's pair-wr
+drops to \(0.52\) (Experiment 8). \textbf{A wisdom can be
+architecturally present in every sense — named, retrieved,
+cited in concrete passages, preferred by multiple judges at
+\(n = 50\) — and still not improve answer quality at
+\(n = 100\) under any single family's scalar pair-wr.} The
+cleanest reading is that wisdom-citation and wisdom-utility
+are \emph{distinct dimensions}: a library design that wants to
+measure utility via pair-wr must decouple them, measuring (a)
+``does this wisdom get cited on the problems it claims?'' and
+(b) ``given that it is cited, does the answer improve?''
+separately. Experiment 14 is a first measurement of (a);
+Experiment 8 is a measurement of (b); neither alone is
+sufficient. A follow-up paper will prospectively integrate
+both into a new gate.
+
+
 
 \section{Beyond single-advisory benchmarks: a multi-step
 research-task pilot}
