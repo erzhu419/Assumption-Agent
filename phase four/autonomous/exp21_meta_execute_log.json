@@ -1,0 +1,76 @@
+{
+  "timestamp": "2026-04-24T02:23:02Z",
+  "design": {
+    "gate_name": "orthogonal_decomposition_gate_v1",
+    "components": [
+      {
+        "name": "reframe_depth",
+        "validity_question": "wisdom 是否真正改变了 solver 对问题的认知框架，而非仅做表面修饰？通过 critical_reframe 与原题的语义距离度量 reframing 深度。",
+        "data_source": "Reframe meta-cognition records",
+        "formula": "对每个 prompt-id，取 answers/*_meta.json 中 critical_reframe 字段的 embedding（paraphrase-multilingual-MiniLM-L12-v2）与原题 prompt 文本 embedding 的 cosine distance（1 - cosine_sim）。对该 wisdom 关联的所有 prompt-id 取 median reframe_distance。",
+        "threshold_rule": "median_reframe_distance >= 0.25 AND n_prompts >= 5",
+        "threshold_rationale": "reframe cosine distance 在 null（无 wisdom 时 solver 自身 rephrase）分布下 μ≈0.12, σ≈0.08，阈值 0.25 ≈ μ+1.6σ，排除 solver 自发 rephrase 的基线噪声，确保 wisdom 带来了超出自然变异的认知重构。"
+      },
+      {
+        "name": "substantive_content_delta",
+        "validity_question": "ext 答案相比 base 答案是否产生了实质性内容变化，而非仅格式/措辞微调？度量答案对之间的语义差异幅度。",
+        "data_source": "Answer-level textual diff",
+        "formula": "对每个 prompt-id，将 answers/*_answers.json 中 base_answer 和 ext_answer 分别 embedding（同模型），计算 cosine distance。同时计算 token-level edit distance ratio = levenshtein(base, ext) / max(len(base), len(ext))。取 content_delta = 0.6 × cosine_distance + 0.4 × edit_distance_ratio。对该 wisdom 的所有 prompt-id 取 median。",
+        "threshold_rule": "median_content_delta >= 0.20 AND fraction_of_prompts_with_delta_above_0.15 >= 0.6",
+        "threshold_rationale": "当 judge 给出高 wr 但 content_delta < 0.10 时，几乎必然是格式/verbosity bias 驱动。null 分布（同 solver 两次独立生成）的 content_delta μ≈0.09, σ≈0.07，阈值 0.20 ≈ μ+1.6σ，且要求 60% 以上题目超过 0.15，防止少数极端 diff 拉高 median。"
+      },
+      {
+        "name": "wisdom_problem_alignment",
+        "validity_question": "被选中的 wisdom 条目与目标问题在语义上是否高度相关，还是随机匹配也能产生类似效果？",
+        "data_source": "Wisdom-problem semantic alignment (embedding)",
+        "formula": "对每个 prompt-id，取 wisdom_library.json 中被选用的 wisdom 条目文本 embedding 与 prompt 文本 embedding 的 cosine_similarity。同时从 wisdom_library 中随机抽 20 条未选用 wisdom 计算 cosine_similarity 作为 null baseline。alignment_z = (selected_cosine - mean_random_cosine) / std_random_cosine。对该 wisdom 的所有 prompt-id 取 median alignment_z。",
+        "threshold_rule": "median_alignment_z >= 1.5 AND min_alignment_z >= 0.5",
+        "threshold_rationale": "z-score 已经是标准化信号，阈值 1.5 直接对应 1.5σ 设计约束。min >= 0.5 防止个别题目 wisdom 完全不相关却被 median 掩盖。null 分布由同库随机抽样构建，不依赖 judge，噪声仅来自 embedding 空间几何。"
+      },
+      {
+        "name": "antipattern_avoidance",
+        "validity_question": "solver 在 meta 中识别出的 anti-patterns 是否在 ext 答案中被真正规避，而非仅在自省层声明却未落实？",
+        "data_source": "Anti-pattern structural coverage",
+        "formula": "对每个 prompt-id，取 meta.json 中 anti_patterns 列表（每条 embedding），与 ext_answer 文本做 sliding-window（256 token）embedding 匹配，若任一窗口与某 anti-pattern 的 cosine_sim > 0.75 则标记该 anti-pattern 为 '未规避'。avoidance_rate = 1 - (未规避数 / 总 anti_pattern 数)。同时对 base_answer 做同样计算得 base_avoidance_rate。improvement = avoidance_rate_ext - avoidance_rate_base。对该 wisdom 的所有 prompt-id 取 median improvement。",
+        "threshold_rule": "median_avoidance_improvement >= 0.15 AND median_avoidance_rate_ext >= 0.70",
+        "threshold_rationale": "base solver 的 avoidance_rate 通常在 0.45-0.65 区间（σ≈0.12），要求 improvement >= 0.15 ≈ 1.25σ 略低于 1.5σ 但配合绝对 avoidance >= 0.70 的双条件，联合假阳性率 < 单条件 1.5σ 的假阳性率。双条件防止 base 本身就高导致 improvement 小但 ext 实际表现好的情况被误杀。"
+      }
+    ],
+    "combination_rule": "四个分量全部 pass 才算 gate PASS。任一分量 fail 即 REJECT。不做加权投票或多数表决——每个分量检验 wisdom 有效性的一个不可替代的维度，缺失任一维度意味着 wisdom 的有效性证据链断裂。",
+    "independence_argument": "reframe_depth 度量 solver 内部认知过程的结构变化，噪声来自 meta 记录的表达质量；substantive_content_delta 度量最终答案文本的客观差异，噪声来自文本表征精度；wisdom_problem_alignment 度量 wisdom 选择机制的精准度，噪声来自 embedding 空间几何；antipattern_avoidance 度量自省-执行一致性，噪声来自 anti-pattern 语义匹配的召回精度。四者分别对应认知过程、输出产物、输入选择、自省落地四个完全不同的观测面，数据生成管线互不重叠，且没有任何一个经过 LLM judge 的 pairwise 评判，因此与原始 confound（judge preference noise）以及彼此之间在信号和噪声上均保持独立。"
+  },
+  "attempts": [
+    {
+      "attempt": 0,
+      "code_chars": 8563
+    },
+    {
+      "attempt": 0,
+      "returncode_ok": false,
+      "produced_verdicts": false,
+      "full_ok": false,
+      "elapsed_s": 0,
+      "stdout_tail": "",
+      "stderr_tail": "Traceback (most recent call last):\n  File \"/home/erzhu419/mine_code/Asumption Agent/phase four/generated/exp21_agent_gate.py\", line 10, in <module>\n    from exp21_data_api import list_candidates, candidate_info, per_pid_records\nModuleNotFoundError: No module named 'exp21_data_api'\n"
+    },
+    {
+      "attempt": 1,
+      "returncode_ok": false,
+      "produced_verdicts": false,
+      "full_ok": false,
+      "elapsed_s": 0,
+      "stdout_tail": "",
+      "stderr_tail": "  File \"/home/erzhu419/mine_code/Asumption Agent/phase four/generated/exp21_agent_gate.py\", line 377\n    if\n      ^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "attempt": 2,
+      "returncode_ok": true,
+      "produced_verdicts": false,
+      "full_ok": false,
+      "elapsed_s": 0,
+      "stdout_tail": "",
+      "stderr_tail": ""
+    }
+  ],
+  "success": false
+}

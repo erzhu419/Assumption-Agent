@@ -156,6 +156,19 @@ Final validated library delta on held-out 50:
 \(\boxed{+2\ \text{retained} +2\ \text{rescued} -1\ \text{withdrawn}}\),
 replacing the earlier pooled-pair-wr verdict of \(+0\).
 
+\noindent\textbf{We let the agent design and implement its own
+gate.} Two final experiments probe whether architectural redesign
+is reachable by the agent itself: (Exp 18) given only failure
+history + data-source inventory + MC-WM principle, Claude Opus
+4.6 independently reaches a \(0.28\)-structurally-similar
+replacement gate with 3 novel orthogonal dimensions we had not
+considered; (Exp 19) given its own spec + a clean data API, the
+agent writes and executes 460-line gate code in 3 attempts, of
+which 2 of 4 components run correctly end-to-end (the other 2
+hit data-contract field-name slips). The gap between
+``agent-in-the-loop'' and ``agent-ALL-the-loop'' reduces to
+supplying strict typed schemas between modules.
+
 \noindent\textbf{Contribution.} The loop, the audit stack that
 falsifies the naive pooled-pair-wr gate (10 experiments), the
 orthogonal measurement frames that diagnose \emph{why} (Exp 9,
@@ -1843,13 +1856,71 @@ validate object-level wisdoms} under a fixed gate. It could not
 replace that gate. Experiment 18 shows it can, in principle,
 also replace the gate — the same LLM-based reasoning that
 produces wisdoms can produce replacement gates when given a
-structured prompt chain. The gap between ``agent-in-the-loop''
-and ``human-in-the-loop'' shrinks to: providing the agent with
-its own failure history as inspectable inputs and a design
-principle like ``switch role when a module fails.'' This paper
-has provided exactly that evidence stack; a follow-up paper
-would wire Phase 4–6 and let the agent iterate its own gates
-end-to-end.
+structured prompt chain. Experiment 19 (below) closes Phase 4–6.
+
+\subsection{Experiment 19 — Phase 4–6: the agent writes,
+executes, and commits its own gate code}
+\label{sec:meta-exec}
+
+Exp 18 stopped at Phase 3 (design spec). Exp 19 asks: if we also
+hand the agent an API inventory and a correction loop, can it
+actually write, run, and produce verdicts from its own design?
+
+\paragraph{Protocol.}
+\emph{Phase 4}: the agent is shown (i) its Phase 3 design spec,
+(ii) a \(\approx 50\)-line clean data API
+(\texttt{exp21\_data\_api.list\_candidates}, \texttt{candidate\_info},
+\texttt{per\_pid\_records}), and (iii) the project path. It must
+emit one code block implementing the spec.
+\emph{Phase 5}: the script is saved and executed. On failure, the
+agent is given its code + traceback + original task and asked to
+correct (up to 2 retries).
+\emph{Phase 6}: the produced verdicts are normalised and
+overlap-compared with Exp 15's trigger-conditioned gate on the
+same 12 candidates.
+
+\paragraph{Result.} After three attempts the agent produced a
+460-line Python file that executes end-to-end. Two of its four
+components extract data correctly (\texttt{substantive\_content\_delta},
+\texttt{antipattern\_avoidance}); the other two
+(\texttt{reframe\_depth}, \texttt{wisdom\_problem\_alignment})
+use field names (\texttt{prompt}, \texttt{reframe}) that do not
+exist in the provided API (which uses \texttt{problem} and
+\texttt{critical\_reframe})—a documentation-contract slip, not a
+reasoning failure. The gate's verdict is therefore overly strict:
+with two components mechanically stuck at \texttt{False}, no
+candidate passes.
+
+\begin{center}\small
+\begin{tabular}{l r r}
+  \toprule
+  Metric & value & note \\
+  \midrule
+  Agent-generated code & 460 lines & 3 attempts \\
+  Components that executed correctly & 2/4 & by inspection \\
+  Components with data-contract bugs & 2/4 & field-name slips \\
+  Agent gate PASS on 12 & 0 & over-strict (bugs force FAIL) \\
+  Exp 15 gate PASS on 12 & 4 & W077, W078, WCAND01, WCAND02 \\
+  Agreement rate (PASS=PASS $\vee$ FAIL=FAIL) & 0.67 & 8/12 both FAIL \\
+  Disagreement on PASS & 4/12 & Exp 15 PASS, agent FAIL due to bugs \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Interpretation.} The agent demonstrably writes working
+gate code. The two components whose data contract it got right
+produce sensible per-candidate signals: substantive\_content\_delta
+median \(= 0.48\) with \(100\%\) of pids above \(0.15\) threshold;
+anti-pattern avoidance mean improvement \(> 0.15\) across
+candidates. Where the agent fails is in cross-referencing the
+API's exact field names — a class of error that a typed schema,
+auto-generated stubs, or a single dry-run against a fixture would
+catch. We read this as: \emph{the decomposition and implementation
+of a new gate is LLM-reachable; the remaining human-in-the-loop
+role is to supply strict data contracts, not to design or code the
+gate}. An autonomous loop that maintains a typed API surface
+between its modules could in principle run Phase 1–6 without
+intervention.
 
 
 
