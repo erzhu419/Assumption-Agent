@@ -30,9 +30,9 @@
   urlcolor=blue!60!black
 }
 
-\title{\textbf{Scaffold, Evolve, Then Audit:}\\
-Cross-Family Re-Judgment Breaks Single-Family\\
-Self-Adjudication in an Autonomous Wisdom Loop}
+\title{\textbf{Six Layers of Re-Judgment:}\\
+An Audit Stack for Self-Improving LLM Loops,\\
+and Evidence the Default Gate Is Confidently Wrong}
 
 \author{%
   Anonymous submission\\
@@ -358,6 +358,55 @@ instruction-backtranslation~\citep{chen2024selfplay, li2024backtrans}
 all close an outer loop at the \emph{weights} level. We close an outer
 loop at the \emph{retrieval corpus} level, which is orders of magnitude
 cheaper and allows the changes to be auditable.
+
+\paragraph{Audit practices across representative self-improvement
+papers.} Our central claim — that a single-family held-out A/B gate
+is the default in the current literature, and that this default is
+insufficient — rests on a simple observation about reported
+evaluation protocols. Table~\ref{tab:audit-practices} summarises
+the judge-to-solver family relationship and the audit layers each
+paper reports. The pattern we wish to flag is not that these papers
+are wrong; it is that none of them routinely runs a cross-family
+(L1) re-judgment of its committed outputs, and none reports a
+non-pair-wr faithfulness axis (L6).
+
+\begin{table}[h]
+  \centering\small
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{l c c c c c c}
+    \toprule
+    Paper (cite) & Solver & Judge & L1 & L3 & L4 & L6 \\
+                 & family & family & x-family & extend \(n\) & x-solver & faith. \\
+    \midrule
+    STaR \citep{zelikman2022star}            & LM & same / auto & --- & --- & --- & --- \\
+    Self-Rewarding \citep{yuan2024selfrewarding} & LM & same       & --- & --- & --- & --- \\
+    SPIN \citep{chen2024selfplay}            & LM & same          & --- & --- & --- & --- \\
+    Reflexion \citep{shinn2023reflexion}     & LM & same          & --- & --- & --- & --- \\
+    Self-Refine \citep{madaan2023selfrefine} & LM & same          & --- & --- & --- & --- \\
+    Voyager \citep{wang2023voyager}          & LM & env reward    & n/a & --- & --- & --- \\
+    AgentKB \citep{sumers2024agentkb}        & LM & same / auto   & --- & --- & --- & --- \\
+    PromptBreeder \citep{fernando2023promptbreeder} & LM & same   & --- & --- & --- & --- \\
+    \midrule
+    This work                                 & gemini & 3-family & \(\checkmark\) & \(\checkmark\) & \(\checkmark\) & \(\checkmark\) \\
+    \bottomrule
+  \end{tabular}
+  \caption{Audit practices in representative self-improvement
+    papers. ``L1 x-family'' = re-judgment by a different-vendor LLM
+    family on identical outputs. ``L3 extend \(n\)'' = sample
+    extension beyond the gate's training \(n\). ``L4 x-solver'' =
+    re-solving with a different solver family. ``L6 faith.'' =
+    faithfulness axis outside pair-wr. Dashes indicate the axis is
+    not reported in the paper's primary experimental protocol; this
+    is a statement about \emph{reporting}, not about whether the
+    authors could have run the axis.}
+  \label{tab:audit-practices}
+\end{table}
+
+The reading we want this table to support is modest: across
+eight representative papers, the L1 cross-family column is
+uniformly empty. Our contribution is not ``these papers are
+wrong,'' but ``the L1 column is a default reporting gap the field
+has collectively not filled.''
 
 \paragraph{Case-based reasoning and skill libraries.} Case-based
 reasoning~\citep{aamodt1994cbr} and skill-library
@@ -698,6 +747,33 @@ reports that our paper advocates correcting.
 
 \section{Experiments}
 \label{sec:experiments}
+
+\paragraph{A note on staged stress testing (not pre-registration).}
+We are explicit about the order in which the six audit layers were
+added, because the honest account bears on hindsight-bias concerns.
+We did \emph{not} pre-register the full stack before running the
+inner loop. Instead, the stack grew through staged reviewer
+simulation, with each layer added in response to a specific
+objection and evaluated with thresholds fixed \emph{before} the
+layer's data was observed: \textbf{L1} (cross-family judge,
+Exp~1--3) was the first audit, in response to the ``same-family
+self-adjudication'' concern; \textbf{L2} (side-reseed, Exp~5) was
+added when we noticed position effects on small samples;
+\textbf{L3} (\(n{=}50 \to 100\), Exp~8) was added when the CI
+analysis showed the \(+10\)pp gate sat inside the gray band;
+\textbf{L4} (cross-solver, Exp~26) was added to answer the
+solver-family objection; \textbf{L5} (fresh domain + GSM8K,
+Exp~31--32) was added to answer the ``no standard benchmark''
+objection; \textbf{L6} (non-pair-wr faithfulness, Exp~9--14) was
+added to answer the ``pair-wr alone is not identifying the right
+quantity'' objection. Layer thresholds (wr \(\geq 0.50\) boundary,
+\(+10\)pp margin, \(n_{\mathrm{fire}} \geq 8\), etc.) were chosen
+from statistical defaults before each layer's data was observed,
+so \emph{threshold hindsight} is bounded; \emph{layer-selection
+hindsight} is bounded to the extent that new layers were always
+added in response to an external objection, not a desired
+conclusion. Timestamps for each layer's first commit are preserved
+in the supplementary repository.
 
 \subsection{Setup}
 \label{sec:setup}
