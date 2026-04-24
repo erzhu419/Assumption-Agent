@@ -127,17 +127,33 @@ verdict at \(n = 50\) that survived for \(W_{078}\) collapses at
 audit: \(\boxed{+0}\) KEEPs; the loop's committed wisdoms are all
 either family-bias FPs or noise-driven at \(n = 50\).
 
-\noindent\textbf{Contribution.} The loop, the eight-experiment
+\noindent\textbf{Two orthogonal measurement axes arrive at the
+same failure mode from outside pair-wr.} Embedding-space
+faithfulness (sentence-transformer cosine between
+perturbation-direction and wisdom-description) is near-zero for
+all 12 candidates, and LLM-judged faithfulness (Claude over
+20 pids per candidate) never reaches a strict-YES rate above
+\(0.10\). The candidates cause real perturbations to the
+solver's Turn-0 reasoning (perturbation magnitudes in
+\([0.71,0.77]\)), but the direction of perturbation is not
+the direction the wisdom self-advertises. Put differently:
+\emph{pair-wr measures generic context-perturbation lift; it
+does not measure whether the specific wisdom is doing the
+work.} This is independent evidence for the pair-wr collapse
+from a measurement frame with zero data-overlap.
+
+\noindent\textbf{Contribution.} The loop, the ten-experiment
 audit stack (cross-family, side-stability, cross-domain, staged
 funnel, recursion-to-fixed-point, triangulation, inverted-
-disagreement check, and the meta-wisdom's own falsifier), the
+disagreement check, meta-wisdom's own falsifier, embedding-space
+orthogonal validation, LLM-judged faithfulness), the
 multi-dimensional failure modes they reveal across sample size,
-judge family, judge seed, and domain aggregation, and the
-agent's meta-wisdom independently predicting the extension
-result. A concrete step toward agents that build the tools they
-think with \emph{and} notice when their own tools mislead
-them—even if the notice costs all three of their provisional
-commits.
+judge family, judge seed, domain aggregation, and
+direction-of-activation, and the agent's meta-wisdom
+independently predicting the extension result. A concrete step
+toward agents that build the tools they think with \emph{and}
+notice when their own tools mislead them—even if the notice
+costs all three of their provisional commits.
 \end{abstract}
 
 \section{Introduction}
@@ -1195,6 +1211,162 @@ The agent's own meta-wisdom predicted this; the extension
 confirmed it. The loop now has \emph{documented} empirical
 grounds for insisting on \(n = 100\) cross-family evidence
 before committing, not just \(n = 50\) single-family.
+
+\subsection{Experiments 9 \& 10 — Orthogonal validation: measuring
+wisdom validity on axes other than pair-win-rate}
+\label{sec:orthogonal}
+
+Experiments 1–8 all measured the same quantity: a candidate's
+pair-win-rate against a base library, varying only the judge
+family, the side-ordering seed, the sample size, and the domain
+partitioning. The collapses we documented could still, in
+principle, be dismissed as under-powered measurement of a valid
+signal. We therefore design two \emph{orthogonal} tests—
+measurements that do not use pair-win-rate at all, and whose
+verdicts are statistically independent from any of Experiments
+1–8.
+
+\paragraph{Three orthogonal stages (Experiment 9
+\texttt{rigorous\_gate.py}).} Each candidate wisdom is scored on:
+
+\begin{description}[leftmargin=1.5em, topsep=2pt, itemsep=1pt]
+  \item[\textbf{Stage B — Basis coverage.}] Embed the candidate's
+    \texttt{unpacked\_for\_llm} with a multilingual
+    sentence-transformer; embed all 75 existing library
+    entries; compute the residual norm of the candidate after
+    projecting onto the library's row span. A high residual
+    means the candidate adds a direction the library did not
+    already cover. No LLM calls; no pair-wr.
+  \item[\textbf{Stage C — Perturbation magnitude.}] For every
+    held-out problem, compute
+    $\|\,\text{embed}(\mathit{ext}.\texttt{what\_changed}) -
+      \text{embed}(\mathit{base}.\texttt{what\_changed})\|$
+    across the 50 pids. Average. A high mean means the candidate
+    actually changes the solver's Turn-0 reframe, not just its
+    final output. Uses meta files that were never judged; no
+    pair-wr.
+  \item[\textbf{Stage A — Faithfulness alignment.}] Same per-pid
+    diff as Stage C, but normalised to a unit vector and
+    cosine-aligned with the candidate's own
+    \texttt{unpacked\_for\_llm} embedding. High alignment means
+    the direction the wisdom pushes reasoning is the direction
+    the wisdom \emph{says} it should push. No LLM calls.
+\end{description}
+
+\paragraph{Results.} Across all 12 candidates, Stage C passes
+everywhere (mean perturbation in the range
+\(0.71\text{–}0.77\) unit-vector distance; \textbf{wisdoms do
+change reasoning}). Stage B residuals range
+\(0.29\text{–}0.49\)—candidates add partial orthogonality to
+the library but rarely open a full new direction. Stage A
+alignments are in the range \(-0.04\) to \(+0.03\): essentially
+orthogonal. The three original KEEPs (W076, W077, W078) are
+\emph{not} more aligned than the nine REVERTs. W078 is in fact
+the \emph{least novel} in basis-coverage (residual \(0.295\));
+the most novel candidate (WCAND11 \emph{若不是品牌}, residual
+\(0.488\)) was a REVERT.
+
+\paragraph{Interpretation.} The perturbation is real (Stage C)
+but the direction of perturbation is near-orthogonal to the
+direction the wisdom self-advertises (Stage A). Concretely, on
+\texttt{business\_0089} (a digital-transformation problem
+matching W076's claimed trigger), adding W076 to the library
+changes the Turn-0 reframe from ``将技术与人的对立转化为\emph{价值链重构}''
+to ``转化为\emph{技术对人的赋能}, 代际传承, \emph{风险控制}''. The new
+output mentions risk control (arguably aligned) but also
+generational succession (unrelated). \emph{The wisdom acts as a
+mixed perturbation, not as a single-direction activator along its
+claimed axis.}
+
+\paragraph{Consequence for pair-wr interpretation.} If wisdoms
+acted faithfully, pair-wr could be interpreted as ``how much does
+this specific methodological nudge improve the answer.'' Since
+they do not, a more accurate interpretation is:
+\emph{pair-wr measures whatever the LLM does when you hand it
+additional context paraphrased from human aphorisms}. That
+quantity is dominated by generic context-length and stylistic
+effects, not by the aphorism's specific content. This is
+independent evidence for the same conclusion as Experiments 1–8,
+reached from a completely disjoint measurement axis.
+
+\subsection{Experiment 11 — LLM-judged faithfulness}
+\label{sec:faith}
+
+Experiment 9's Stage A uses sentence-transformer embeddings,
+which may fail to resolve the methodological distinctions we
+care about. Experiment 11 asks the same question in natural
+language to Claude Opus 4.6 (cross-family to the solver). For
+each (wisdom, pid) pair the judge is shown the wisdom's
+\texttt{unpacked\_for\_llm} and the two \texttt{what\_changed}
+strings (base and ext), and asked whether the delta reflects the
+wisdom's claimed orientation: \textbf{YES} (the delta clearly
+activates the wisdom), \textbf{PARTIAL} (an element could be
+mapped to the wisdom but is not prominent), or \textbf{NO}
+(the delta is unrelated to the wisdom's self-advertised
+territory). \(n = 20\) pids per candidate, chosen by a fixed
+seed.
+
+\begin{center}\small
+\begin{tabular}{l l r r r c c}
+  \toprule
+  cid & wid & YES & PARTIAL & NO & faith\(_{\text{YES}}\) & aligned\(_{\text{Y+P}}\) \\
+  \midrule
+  WCAND01 & ---- & 1 & 15 & 4 & 0.05 & 0.80 \\
+  WCAND02 & ---- & 0 & 17 & 3 & 0.00 & 0.85 \\
+  WCAND03 & ---- & 1 & 17 & 2 & 0.05 & 0.90 \\
+  WCAND04 & ---- & 0 & 15 & 4 & 0.00 & 0.79 \\
+  WCAND05 & W076 & 1 & 14 & 4 & 0.05 & 0.79 \\
+  \textbf{WCAND06} & ---- & \textbf{0} & \textbf{5} & \textbf{15} & \textbf{0.00} & \textbf{0.25} \\
+  WCAND07 & ---- & 0 & 11 & 9 & 0.00 & 0.55 \\
+  WCAND08 & ---- & 0 & 15 & 5 & 0.00 & 0.75 \\
+  WCAND09 & ---- & 2 & 16 & 2 & 0.10 & 0.90 \\
+  WCAND10 & W077 & 1 & 14 & 3 & 0.06 & 0.83 \\
+  \textbf{WCAND11} & ---- & \textbf{0} & \textbf{4} & \textbf{16} & \textbf{0.00} & \textbf{0.20} \\
+  WCROSSL01 & W078 & 0 & 10 & 9 & 0.00 & 0.53 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{The two measurements agree on the core finding.}
+Across all 12 candidates the strict YES rate is
+\(\leq 0.10\)—the judge almost never sees the candidate's
+specific orientation \emph{clearly} activating on a problem.
+Most perturbations are labelled \texttt{PARTIAL}: a connection
+can be drawn but is not principled. Two candidates fail the
+liberal threshold as well (WCAND06 \emph{Spilt milk, look
+forward}: 5P/15N; WCAND11 \emph{Brand or commodity}: 4P/16N).
+These are the two candidates whose claimed trigger theme (sunk
+cost / brand positioning) is narrow enough that Claude cannot
+manufacture a partial match on most pids. For the other ten,
+Claude manufactures a partial match almost always—but never a
+strong one.
+
+\paragraph{Cross-referencing embedding and LLM.} The two
+measurements disagree at the \texttt{PARTIAL} threshold—the
+embedding space is geometric and does not see the thematic
+overlap the LLM judge finds—but agree that \emph{strong
+faithful activation is essentially absent across all 12
+candidates}. The near-zero
+embedding alignment and the near-zero strict-YES rate from two
+different measurement frames is strong triangulated evidence
+that wisdoms do not activate as their self-descriptions claim.
+
+\paragraph{Consequence for the library-evolution agenda.} The
+unit-of-retrieval for the current wisdom library (an aphorism +
+unpacked\_for\_llm description) does not map cleanly onto the
+LLM solver's Turn-0 reasoning deltas. Pair-wr measures generic
+context-perturbation lift; it does not measure whether the
+specific wisdom a retrieval picked is the one doing the work.
+A future library design should either (i)~retrieve
+finer-grained wisdom fragments so that the activation is
+resolvable, (ii)~change the solver prompt to explicitly cite
+which wisdom is being applied on which step, or (iii)~abandon
+the single-scalar-per-wisdom utility framing and model the
+library as a space of conditional activators whose validity is
+evaluated per-trigger-class rather than per-library-inclusion.
+
+% keep the existing multi-step section right after
+
 
 \section{Beyond single-advisory benchmarks: a multi-step
 research-task pilot}
