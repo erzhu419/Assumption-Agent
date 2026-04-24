@@ -42,7 +42,18 @@ def parse_args():
 # ---------------------------------------------------------------------------
 
 def tokenize(text: str) -> List[str]:
-    """Simple whitespace + punctuation tokenizer."""
+    """Whitespace/punct tokenizer + CJK per-char split (patch)."""
+    import re as _re
+    if not text:
+        return []
+    tokens = []
+    for chunk in _re.findall(r"[A-Za-z0-9_一-鿿]+", text.lower()):
+        if _re.search(r"[一-鿿]", chunk):
+            tokens.extend(list(chunk))
+        else:
+            tokens.append(chunk)
+    return tokens
+    # (Original body below bypassed:)
     if not text:
         return []
     text = text.lower().strip()
