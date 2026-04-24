@@ -9,7 +9,9 @@
 \usepackage[margin=1in]{geometry}
 \usepackage{graphicx}
 \usepackage{booktabs}
-\usepackage{amsmath,amssymb}
+\usepackage{amsmath,amssymb,amsthm}
+\newtheorem{proposition}{Proposition}
+\newtheorem{claim}{Claim}
 \usepackage{url}
 \usepackage{hyperref}
 \usepackage{xcolor}
@@ -491,6 +493,105 @@ Six parallel v20 subprocesses and eight parallel judge threads bring
 the total wall time for \(11\) candidates + \(1\) base from
 \({\sim}6\) hours to \({\sim}1\) hour \emph{without compromising the
 evaluation}.
+
+\subsection{What the A/B gate actually measures (decomposition)}
+\label{sec:theory}
+
+Before presenting experiments that attack the gate, we state formally
+what pair-wr \emph{is} and what it \emph{cannot separate}. Fix a
+solver \(S\), a retriever \(R\), a judge \(J\), a wisdom \(w\), and
+a problem distribution \(P\). Let \(a_0(p) = S(R(\emptyset, p), p)\)
+be the baseline answer and \(a_w(p) = S(R(\{w\}, p), p)\) the ext
+answer. The observed quantity is
+\[
+  \mathrm{wr}_{\mathrm{ext}}(w; S, J, P) \;=\;
+  \mathbb{E}_{p \sim P}\!\left[\mathbb{1}\!\left\{
+    J(p, a_w(p), a_0(p)) = w\right\}\right].
+\]
+
+\begin{proposition}[pair-wr decomposition]
+Let \(Z_w(p) := \mathbb{1}\{J(p, a_w, a_0) = w\} - \tfrac12\). Then
+\(\mathrm{wr}_{\mathrm{ext}}(w) - \tfrac12 = \mathbb{E}_p Z_w(p)\)
+and \(Z_w(p)\) admits a decomposition
+\(Z_w = Z_w^{\mathrm{specific}} + Z_w^{\mathrm{generic}} +
+Z_w^{\mathrm{style}}\) where:
+\begin{description}[leftmargin=1.5em,topsep=2pt,itemsep=1pt]
+  \item[\(Z_w^{\mathrm{specific}}\)] lift attributable to the
+    \emph{content} of \(w\) — the particular orientation \(w\)
+    advertises, instantiated at \(p\).
+  \item[\(Z_w^{\mathrm{generic}}\)] lift attributable to
+    \emph{any} extra context of matching length and register
+    perturbing Turn-0 away from a default basin (measurable by
+    swapping \(w\) with a length-matched placebo).
+  \item[\(Z_w^{\mathrm{style}}\)] lift attributable to \(w\)
+    producing surface features (register shifts, phrase patterns)
+    that \(J\) happens to prefer, regardless of problem-specific
+    fit.
+\end{description}
+\end{proposition}
+
+The decomposition is exact by construction (it is an accounting
+identity under counterfactual interventions; we do not assume
+independence of the three terms). What matters is what
+\(\mathrm{wr}_{\mathrm{ext}}\) \emph{alone} fails to identify:
+
+\begin{claim}[identifiability]
+A single-family \((S, J)\) measurement of
+\(\mathrm{wr}_{\mathrm{ext}}(w)\) at any fixed \(n\) cannot
+distinguish
+\(\mathbb{E}\,Z_w^{\mathrm{specific}}\) from
+\(\mathbb{E}(Z_w^{\mathrm{generic}} + Z_w^{\mathrm{style}})\).
+\end{claim}
+
+This is the theoretical content of our audit stack. Each layer
+targets one non-specific term:
+\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=1pt]
+  \item \textbf{L1 (cross-family judge)} changes \(J\) while
+    holding \(a_0, a_w\) fixed: cancels \(J\)-specific stylistic
+    preferences, so persistent lift localises to
+    \(Z^{\mathrm{specific}}\) (plus any style preference \emph{both}
+    families share — a residual we acknowledge).
+  \item \textbf{L2 (side-reseed)} changes the nuisance of
+    A/B position while holding everything else fixed: cancels
+    position-induced judge bias.
+  \item \textbf{L3 (\(n\) extension)} shrinks the CI without
+    changing the estimand; exposes when an inner-loop
+    \(0.60 \pm 0.12\) was noise about a true value
+    near \(0.50\).
+  \item \textbf{L4 (cross-solver)} changes \(S\) while holding
+    \(w, J, P\) fixed: cancels solver-specific interactions with
+    the wisdom phrasing.
+  \item \textbf{L5 (fresh domain / GSM8K)} changes \(P\): exposes
+    when \(Z_w^{\mathrm{specific}}\) was specific to the training-like
+    distribution rather than the population the solver will face.
+  \item \textbf{L6 (faithfulness)} directly estimates
+    \(Z_w^{\mathrm{specific}}\) from outside pair-wr: via embedding
+    cosine between perturbation direction and \(w\)'s
+    self-description, and via LLM-judged citation strictness.
+\end{itemize}
+
+\emph{Under this decomposition, the headline claim of \S\ref{sec:intro} has a
+precise form.} Our loop's inner-loop KEEPs exhibit
+\(\mathrm{wr}_{\mathrm{ext}} > 0.60\) at \(n = 50\), which requires
+\emph{one or more} of the three terms to be positive. Every audit
+layer that cancels a non-specific term returns the measurement to
+the vicinity of \(0.50\) (Table~\ref{tab:ci}). By elimination,
+either \(Z^{\mathrm{specific}}\) is near-zero for these KEEPs, or it
+is non-zero but exactly cancelled by
+\(Z^{\mathrm{generic}} + Z^{\mathrm{style}}\) summing to a negative
+residual that conspiratorially reappears across every layer. The
+first explanation is the simpler one; it is the one the null result
+supports.
+
+\emph{What the theory does not say.} It does not say wisdom
+injection cannot work — only that the default gate cannot
+demonstrate it. It does not say the three non-specific terms are
+uniformly bad — \(Z^{\mathrm{generic}}\) is likely why solvers
+benefit from almost any coherent scaffolding, including random
+length-matched context. It does identify exactly which
+experimental interventions isolate \(Z^{\mathrm{specific}}\), and
+it is the absence of such interventions in current self-improvement
+reports that our paper advocates correcting.
 
 \section{Experiments}
 \label{sec:experiments}
@@ -2741,6 +2842,56 @@ Table~\ref{tab:deprecated} lists the deprecated IDs.
   \caption{The pruner's first-scan output.}
   \label{tab:deprecated}
 \end{table}
+
+\section{Reproducibility appendix}
+\label{app:repro}
+
+\paragraph{Model identities.} All API calls flow through the
+\texttt{ruoli.dev} OpenAI-compatible proxy, with three family routes:
+Google (model \texttt{gemini-3-flash}), Anthropic (models
+\texttt{claude-haiku-4-5-20251001}, \texttt{claude-opus-4-6}), OpenAI
+(models \texttt{gpt-5.4-mini}, \texttt{gpt-5.4}). The proxy is used
+uniformly for both solver and judge roles across every experiment;
+no experiment mixes proxy and direct vendor access.
+
+\paragraph{Temperature and sampling.} Solver Turn-0 (frame + rewrite)
+and Turn-1 (execute): \texttt{temperature} \(= 0.2\text{--}0.3\),
+\texttt{max\_tokens} \(= 500\) (frame) / \(1000\) (execute). Judge
+calls: \texttt{temperature} \(= 0.0\), \texttt{max\_tokens} \(= 300\).
+These values are constants in the experiment scripts and not
+hyperparameter-tuned.
+
+\paragraph{Random seeds.} The A/B side-randomization uses
+\texttt{random.Random(hash(pid) \% 2**32)} with the problem\_id as
+seed key, giving deterministic per-pid allocation across re-runs of
+the same experiment. The side-shuffle audit layer (Exp~5) changes
+the seed offset to \texttt{hash(pid) + 17} to decouple from the
+original run. Problem-subset sampling (Exp~31) uses
+\texttt{random.Random(2028)} as the global seed. All seeds are
+recorded in the script header and carried into log JSON.
+
+\paragraph{Data sources and cached artifacts.} The 1768-problem pool
+lives in \texttt{phase zero/benchmark/problems/\{mathematics,
+science, business, software\_engineering\}.json}. Cached answers
+per-experiment sit under \texttt{phase two/analysis/cache/answers/};
+cross-family judge logs under \texttt{phase four/autonomous/}.
+Every audit layer's verdict is recoverable from its log file alone:
+\{pid\(\to\)winner\} maps are preserved end-to-end, so the exact
+decision trajectory is deterministic given the cached answer text.
+
+\paragraph{What is \emph{not} reproducible.} Exact output tokens
+depend on the proxy's routing state at call time; re-running the
+same prompt two weeks later is not token-identical even with fixed
+temperature and seed. This is an inherent property of hosted LLM
+APIs, not specific to our setup. Our reproducibility target is one
+level up: given the cached answer text (\texttt{.../answers/*.json}),
+every audit-layer verdict in the paper is exactly reproducible.
+
+\paragraph{Supplementary archive.} Code, prompts, cached answers,
+and log JSONs are bundled in the supplementary tarball. A single
+entry point, \texttt{phase four/run\_audit\_stack.sh}, reproduces
+Tables~\ref{tab:ci} and the six-layer audit table given the cached
+answers.
 
 \section{Compute and cost}
 \label{app:compute}
