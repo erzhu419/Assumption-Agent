@@ -6,11 +6,17 @@ path in llm_client.py which uses the official SDK.
 """
 
 import os
+from pathlib import Path
 from openai import OpenAI
 
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    # Look for .env at project root (phase zero/scripts/../../) in addition to CWD
+    project_root = Path(__file__).resolve().parent.parent.parent
+    for candidate in (project_root / ".env", project_root / "phase zero" / ".env"):
+        if candidate.exists():
+            load_dotenv(candidate, override=False)
+    load_dotenv(override=False)  # also try CWD
 except ImportError:
     pass
 

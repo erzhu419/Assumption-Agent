@@ -6,11 +6,16 @@ as the cheap workhorse for everything else.
 """
 
 import os
+from pathlib import Path
 from openai import OpenAI
 
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    project_root = Path(__file__).resolve().parent.parent.parent
+    for candidate in (project_root / ".env", project_root / "phase zero" / ".env"):
+        if candidate.exists():
+            load_dotenv(candidate, override=False)
+    load_dotenv(override=False)
 except ImportError:
     pass
 
