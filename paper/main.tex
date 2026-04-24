@@ -1616,14 +1616,14 @@ audit layers.
 construct:
 
 \begin{center}\small
-\begin{tabular}{l c c c c c c}
+\begin{tabular}{l c c c c c c c}
   \toprule
-  & Exp 1 & Exp 5 & Exp 8 & Exp 26 & Exp 31 & \textbf{Exp 32} \\
-  KEEP & cross-fam & side & n=100 & cross-solver & fresh-domain & \textbf{GSM8K} \\
+  & Exp 1 & Exp 5 & Exp 8 & Exp 26 & Exp 31 & Exp 32 & \textbf{Exp 34} \\
+  KEEP & cross-fam & side & n=100 & cross-slv & fresh & GSM8K & \textbf{exp-judge} \\
   \midrule
-  W076 & FLIP & FLIP & gray & NULL & --- & --- \\
-  W077 & FLIP &  --- & FAIL &  --- & --- & --- \\
-  \textbf{W078} & FLIP &  --- & FAIL &  --- & NULL & \textbf{HARM} \\
+  W076 & FLIP & FLIP & gray & NULL & --- & --- & --- \\
+  W077 & FLIP &  --- & FAIL &  --- & --- & --- & --- \\
+  \textbf{W078} & FLIP &  --- & FAIL &  --- & NULL & \textbf{HARM} & \textbf{NULL} \\
   \bottomrule
 \end{tabular}
 \end{center}
@@ -1634,7 +1634,9 @@ suggested. The W078 pass in Exp 11 was an n=50 single-domain
 single-family-pair majority-of-3 local lucky draw that does not
 replicate to fresh domain with three-family judging. The ``inner
 loop produces decisions nothing else agrees with'' claim is now
-supported by \textbf{five independent audit layers}.
+supported by \textbf{six independent audit layers} (Exp~34 adds
+the expensive-judge layer: Opus and GPT-5.4 both score \(W_{078}\)
+at wr\_ext \(= 0.43\), below the cheap haiku L1 mark of \(0.51\)).
 
 Five of six fatal objections are now closed experimentally
 (\#1, \#2, \#3, \#4, \#11):
@@ -1655,6 +1657,98 @@ Five of six fatal objections are now closed experimentally
 Only objection \#5 (wisdom-ontology framing) remains, and is a
 writing issue not a data issue. The paper's central thesis now
 has six independent confirming data streams.
+
+\subsection{Experiment 34 — Expensive-tier judge robustness}
+\label{sec:exp34}
+
+A reasonable reviewer objection to the audit stack as presented
+so far is that all three families in our judge panel (gemini-3-flash,
+claude-haiku, gpt-5.4-mini) are in the \emph{cheap} tier. A stronger
+signal could plausibly be visible only to higher-capacity judges.
+We re-run layer L1 on the strongest surviving KEEP
+(\(W_{078}\), the only one that reached majority-of-3 at \(n=50\) in
+Exp~11) using expensive-tier judges: \emph{claude-opus-4-6} and
+\emph{gpt-5.4}. Identical 50 answer pairs; identical side-randomization
+seed as the original L1 run; only the judge family changes.
+
+\textbf{Result: the null replicates under expensive judges.}
+\(W_{078}\) wr\_ext: \(0.43\) (claude-opus-4-6, \(n = 46\) non-tie,
+95\% Wilson CI \([0.30, 0.58]\)); \(0.43\) (gpt-5.4, \(n = 49\)
+non-tie, CI \([0.30, 0.57]\)). Both families agree; neither CI's
+upper bound reaches the \(+10\)pp gate at \(0.60\), and both lower
+bounds sit at \(0.30\). The mean of \(0.43\) is in fact
+\emph{lower} than the cheap-tier L1 wr of \(0.51\) (claude-haiku)
+reported in Exp~1, suggesting that higher-capacity judges are, if
+anything, \emph{less} convinced by the candidate, not more. Total
+cost: 100 API calls, \(\sim\$6.5\), log at
+\texttt{phase four/autonomous/exp34\_expensive\_judges\_log.json}.
+
+\textbf{Implication for the audit stack.} The L1 verdict is not a
+cheap-tier artifact. A self-improvement loop whose gate decisions
+fail under cheap L1 will also fail under expensive L1 — the judge
+budget is not where the gate's fragility lives.
+
+\subsection{Binomial confidence intervals on headline claims}
+\label{sec:stats}
+
+Table~\ref{tab:ci} reports 95\% Wilson binomial CIs on the
+headline wr\_ext values. Three observations follow directly.
+\emph{(i)} Even the inner-loop KEEPs
+\(W_{077}\) and \(W_{078}\) have CI\(\text{s}\) that \emph{include}
+\(0.50\): the original \(+10\)pp gate was already on statistically
+thin ground at \(n = 50\). \emph{(ii)} Every audit-stack measurement
+(L1, L3, L4, L6) produces CIs that \emph{also} include \(0.50\);
+there is no layer at which the three KEEPs collectively clear
+\(0.50\). \emph{(iii)} The binary composite result — \(3/22\)
+candidates PASS at the trigger-conditioned gate versus a random
+baseline of \(\sim 30\%\) — has one-sided \(p = 0.068\)
+(near-significant null), and \(0/9\) new Exp~33 candidates PASS
+has \(p = 0.040\) (null confirmed).
+
+\begin{table}[h]
+  \centering\small
+  \begin{tabular}{l c c c}
+    \toprule
+    Claim & wr\_ext & \(n\) & 95\% CI \\
+    \midrule
+    \multicolumn{4}{l}{\emph{Inner-loop (gemini judge)}}\\
+    \quad \(W_{076}\) & 0.64 & 50 & \([0.50,\ 0.76]\) \\
+    \quad \(W_{077}\) & 0.60 & 50 & \([0.46,\ 0.72]\) \\
+    \quad \(W_{078}\) & 0.60 & 50 & \([0.46,\ 0.72]\) \\
+    \midrule
+    \multicolumn{4}{l}{\emph{L1 cross-family (Opus judge)}}\\
+    \quad \(W_{076}\) & 0.40 & 50 & \([0.28,\ 0.54]\) \\
+    \quad \(W_{077}\) & 0.47 & 50 & \([0.35,\ 0.61]\) \\
+    \quad \(W_{078}\) & 0.51 & 50 & \([0.39,\ 0.65]\) \\
+    \midrule
+    \multicolumn{4}{l}{\emph{L3 sample extension (gemini, \(n=100\))}}\\
+    \quad \(W_{076}\) & 0.52 & 100 & \([0.42,\ 0.62]\) \\
+    \quad \(W_{077}\) & 0.57 & 100 & \([0.47,\ 0.66]\) \\
+    \quad \(W_{078}\) & 0.52 & 100 & \([0.42,\ 0.62]\) \\
+    \midrule
+    \multicolumn{4}{l}{\emph{L4 cross-solver (3 families \(\times\) 20 pids)}}\\
+    \quad \(W_{076}\) mean & 0.41 & 60 & \([0.30,\ 0.54]\) \\
+    \midrule
+    \multicolumn{4}{l}{\emph{Exp~34 expensive judges on \(W_{078}\)}}\\
+    \quad claude-opus-4-6 & 0.43 & 46 & \([0.30,\ 0.58]\) \\
+    \quad gpt-5.4 & 0.43 & 49 & \([0.30,\ 0.57]\) \\
+    \bottomrule
+  \end{tabular}
+  \caption{95\% Wilson binomial CIs on headline pair-wr claims.
+    Every audit-stack CI contains \(0.50\); two of three inner-loop
+    CIs contain \(0.50\) as well. The narrative verb ``flips''
+    (inner-loop \(\to\) L1) corresponds to a shift within overlapping
+    CIs, consistent with the claim that the gate was measuring noise
+    to begin with.}
+  \label{tab:ci}
+\end{table}
+
+Binary composite claims: \(0/9\) new Exp~33 candidates pass the
+\(+10\)pp gate vs.\ a baseline of \(30\%\) random PASS rate
+(one-sided exact binomial \(p = 0.040\)); \(3/22\) combined
+trigger-gate PASS vs.\ same baseline (\(p = 0.068\)). These are
+consistent with ``no candidate improves on the random-inclusion
+baseline.''
 
 \subsection{Experiments 12–14 — Three architectural probes (not
 gate-tuning): fragmentation, conditional-activator, citation}
@@ -2441,18 +2535,46 @@ natural next study.
 \section{Limitations}
 \label{sec:limitations}
 
-\textbf{Single LLM family.} Both solver and judge come from the same
-\emph{gemini-3-flash} family through a proxy. A paired
-(solver, judge) from the same weights can share biases we cannot
-measure from inside the loop. The cross-LLM distiller's use of GPT-5.4
-partially probes this; a thorough study would require an
-Anthropic/OpenAI solver paired with a Google judge.
+\textbf{Scope: Chinese open-ended problems.} The scaffold (v20), the
+wisdom library, and the 1768-problem benchmark pool are all authored
+in Chinese and designed for \emph{open-ended, multi-domain} reasoning
+(business strategy, scientific investigation, software-engineering
+judgement, mathematical estimation). Our audit stack's null verdict
+is established on this distribution. GSM8K (Exp~32) is included as a
+cross-language portability probe, not as a representative test: the
+\(W_{078}\) harms-accuracy finding there should be read as
+``the wisdom does not transfer out of the Chinese open-ended scaffold,''
+not as ``the audit stack works on English math word problems.'' A
+fair English-only replication of the full pipeline (English scaffold,
+English-authored wisdoms, English-judged A/B) is a necessary follow-up
+before any cross-lingual generality claim.
 
-\textbf{Small held-out set.} \(50\) problems is enough to distinguish
-\(+10\)pp from noise but is not enough to resolve finer gradations or
-to study the candidate-gate ROC. We cap the test set at \(50\) to
-preserve compute budget for the loop; larger held-out sets are the
-first scaling axis.
+\textbf{Single LLM family for solver.} The solver is
+\emph{gemini-3-flash} throughout. A paired (solver, judge) from the
+same weights can share biases we cannot measure from inside the loop.
+Exp~26 partially probes this (same wisdom re-solved by three solver
+families: mean wr\_ext \(= 0.41\), no family \(\geq 0.50\)), but a full
+re-run with an Anthropic/OpenAI solver is the natural next step.
+
+\textbf{Judge budget.} The audit stack's three judges are in the cheap
+tier (gemini-3-flash, claude-haiku, gpt-5.4-mini). Exp~34 re-runs the
+L1 judge on W078 with expensive-tier judges (Claude Opus 4.6, GPT-5.4);
+see \S\ref{sec:exp34} for the result. This is one family combination
+on one candidate; a fuller judge-budget sweep is deferred.
+
+\textbf{Small held-out set per layer.} \(50\) problems per layer is
+enough to distinguish \(+10\)pp from noise but not to resolve finer
+gradations. We report binomial CIs in
+\S\ref{sec:stats} for core claims; stratified ROC analysis is deferred.
+
+\textbf{Reproducibility via third-party proxy.} API access to the
+three families is mediated by the \texttt{ruoli.dev} OpenAI-compatible
+proxy, not the official vendor endpoints. Temperatures and seeds are
+recorded in each log file; however, exact-token reproduction requires
+the proxy's routing state at run time, which is not under our control.
+The decision trajectory (pid $\to$ verdict $\to$ KEEP/REVERT) is
+deterministic given the cached answer text; re-runs against official
+endpoints are a pending replication.
 
 \textbf{Source-credentialed aphorisms.} Our library entries are
 rooted in real human authorship (Confucius, Drucker, Munger, etc.).
@@ -2460,9 +2582,9 @@ The success distiller refuses to fabricate sources when asked. Whether
 the loop \emph{could} be run with fully self-authored aphorisms is an
 open question and probably deserves its own paper.
 
-\textbf{One evolution cycle.} As noted above, we ran one cycle. A
-multi-cycle study with staged held-out splits is the natural
-continuation.
+\textbf{One evolution cycle.} We ran one cycle. A multi-cycle study
+with staged held-out splits is the natural continuation; our audit
+stack's operational specification does not change with the cycle count.
 
 \section{Appendix: Experiment 1 per-problem detail}
 \label{app:crossjudge}
