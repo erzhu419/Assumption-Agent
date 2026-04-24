@@ -160,7 +160,22 @@ classical tradition (aphorisms from \emph{Yi Jing}, Munger, Drucker,
 Mao, Confucius, folk proverbs, etc.) and unpacked into LLM-legible form.
 Over six iterative framework revisions (v13 through v20, see
 Figure~\ref{fig:arch}), such a scaffolded solver rises from \(74\%\) to
-\(86\%\) win rate against a budget-matched baseline.
+\(86\%\) win rate against a budget-matched baseline
+(Fig.~\ref{fig:wisdom-prosthesis}).
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.68\linewidth]{figs/intuition_wisdom_prosthesis.png}
+  \caption{The scaffolded-solver setup this paper builds on. A raw
+    LLM given ``just solve it'' underperforms (\(74\%\) win rate) the
+    same model augmented with a retrieval-selected top-\(K\) wisdom
+    library (\(86\%\) win rate). Wisdoms are short
+    methodological aphorisms (Yi Jing, Munger, Drucker, Mao, folk
+    sayings) unpacked into LLM-legible form. This is the substrate on
+    which the audit stack is run; the audit claims are
+    scaffold-independent.}
+  \label{fig:wisdom-prosthesis}
+\end{figure}
 
 The limits of this approach, however, are exactly the limits of human
 library curation. Every wisdom that is missed is a residual—a
@@ -202,11 +217,24 @@ attacks a different failure mode and shares no data with the others:
     both measured on data with zero overlap with the gate signal.
 \end{enumerate}
 
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.55\linewidth]{figs/intuition_audit_sieve.png}
+  \caption{The six-layer audit stack as a sieve. The inner loop's
+    held-out \(+10\)pp gate selects \(3/12\) candidates (the committed
+    KEEPs \(W_{076}, W_{077}, W_{078}\)). Each subsequent layer is
+    an independent filter attacking a distinct non-specific source
+    of lift (judge preference, side position, noise, solver
+    interaction, domain, style). \(\mathbf{0}\) candidates exit at
+    the bottom; the final validated library delta is \(+0\).}
+  \label{fig:audit-sieve}
+\end{figure}
+
 \textbf{We report a null result under this audit stack.} The
 inner loop produces \(3/12\) KEEPs (gate-positive at \(n=50\),
 gemini-judged). After the audit: \(\mathbf{0/3}\) KEEPs
-survive any layer, let alone all six. Final validated library delta:
-\(\boxed{+0}\). Our contributions are:
+survive any layer, let alone all six (Fig.~\ref{fig:audit-sieve}).
+Final validated library delta: \(\boxed{+0}\). Our contributions are:
 
 \paragraph{Contribution 1 — The six-layer audit stack (primary).} We
 specify each layer operationally enough to run against any future
@@ -577,8 +605,27 @@ claimed by any single family, cross-family re-judgment identifies
 KEEPs the residual consumes the entirety of the claimed signal —
 hence the null verdict is robust even under the weakened claim.
 
-This is the theoretical content of our audit stack. Each layer
-targets one non-specific term:
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.92\linewidth]{figs/intuition_decomposition.png}
+  \caption{Pair-wr decomposition and audit-layer cancellation
+    (schematic). \textbf{Left:} the observed inner-loop wr\_ext
+    above the \(0.50\) baseline is an additive mix of three
+    contributions. In our three KEEPs the \(Z_{\mathrm{specific}}\)
+    slice (blue, wisdom-content lift) is small; the visible lift is
+    dominated by \(Z_{\mathrm{generic}}\) (yellow, any-extra-context
+    lift) and \(Z_{\mathrm{style}}\) (red, judge style-preference
+    lift). \textbf{Right:} each audit layer cancels one
+    non-specific slice. After L1 (judge swap) through L6
+    (non-pair-wr faithfulness), the residual is approximately just
+    \(Z_{\mathrm{specific}} \approx 0\) — the empirical finding
+    the paper reports.}
+  \label{fig:decomposition}
+\end{figure}
+
+Figure~\ref{fig:decomposition} is the schematic of this
+theoretical content. Each audit layer targets one non-specific
+term:
 \begin{itemize}[leftmargin=*,topsep=2pt,itemsep=1pt]
   \item \textbf{L1 (cross-family judge)} changes \(J\) while
     holding \(a_0, a_w\) fixed: cancels \(J\)-specific stylistic
@@ -1827,7 +1874,8 @@ budget is not where the gate's fragility lives.
 \label{sec:stats}
 
 Table~\ref{tab:ci} reports 95\% Wilson binomial CIs on the
-headline wr\_ext values. Three observations follow directly.
+headline wr\_ext values (Fig.~\ref{fig:gray-zone} for the
+intuition). Three observations follow directly.
 \emph{(i)} Even the inner-loop KEEPs
 \(W_{077}\) and \(W_{078}\) have CI\(\text{s}\) that \emph{include}
 \(0.50\): the original \(+10\)pp gate was already on statistically
@@ -1839,6 +1887,21 @@ candidates PASS at the trigger-conditioned gate versus a random
 baseline of \(\sim 30\%\) — has one-sided \(p = 0.068\)
 (near-significant null), and \(0/9\) new Exp~33 candidates PASS
 has \(p = 0.040\) (null confirmed).
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.7\linewidth]{figs/intuition_gray_zone_fragility.png}
+  \caption{Measurement fragility in the \([0.50, 0.65]\) band at
+    \(n = 50\). A one-pair flip on \(50\) pairs changes wr by
+    \(0.02\); the \(+10\)pp KEEP threshold sits just inside a band
+    where identical answer pairs under a different seed or
+    different judge family routinely cross the decision boundary.
+    The inner-loop \(0.60\)--\(0.64\) KEEPs (blue rows) live in
+    this band; the \(0.40\)--\(0.51\) L1 cross-family scores do
+    too. Single-family \(n = 50\) A/B is measurement-fragile in
+    this band.}
+  \label{fig:gray-zone}
+\end{figure}
 
 \begin{table}[h]
   \centering\small
