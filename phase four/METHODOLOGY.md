@@ -1,302 +1,319 @@
-# 方法论：从提出假设到自我验证
+# 方法论：从提出假设到自我验证（带 trigger-conditions）
 
-> 本文档记录从 auto_recurse 初始闭环到 Exp 22 L5 self-recovery 的完整方法论。
-> 用户在 session 中主要作 direction-setting（选方向、审 framing），execution 全部由 Claude 走。
-> 本文诚实记录 Claude 实际走过的**步骤、参考物、失败-修复模式**，而不是事后合理化。
-
----
-
-## 0. 核心元原则（事后提炼）
-
-所有其他动作都服务于这几条：
-
-1. **Read before write** — 在写任何新 exp 代码前，必先 grep/Read 现有 meta、answer、log、md 文件，确认数据 schema 和已有工具。**80% 的实现 bug 是 data-contract 假设错**。
-2. **Orthogonal falsification first** — 任何 positive signal 默认是噪声，直到用**数据流不同源**的独立测量再证实一次。
-3. **Cross_llm_distiller pattern 可在任意抽象层级复用** — 这是 project 最基础的推理原语，能作用在 answer、gate、architecture 三个层级。
-4. **MC-WM 切角色原则** — 一个 module 在角色 X 上反复失败，不要加固 X，让它做 Y，把 X 交给别人。
-5. **Agent 自己的怀疑是 design input** — 在跑 validation 前先让 agent 提反驳，把反驳当作**必须被证伪或证实的 prediction**。
-6. **Null results 是发现** — 12/12 PASS 不是"成功"，是"gate 不 discriminate"的信息。
+> **v2 升级说明**：v1 只列了 8 条 principle，缺每条的 **trigger-condition**
+> （什么时候该用、什么时候不该用、怎么识别"现在"是那个时刻）。
+> 正是本项目 Exp 15 → Exp 22 发现的同一个 gap ——
+> **principle 不自我应用**，必须配 conditioning 才能落到每一步。
+>
+> v1 的错误本身是个 case-in-point：在 wisdom library 层发现 conditioning 不够，
+> 到 methodology library 层我仍然只列 scalar rule。这次修正。
 
 ---
 
-## 1. Session 的完整走向
+## 0. 元结构：为什么单列 principle 不够
 
-```
-初始愿景(user)         agent 能自己提假设 + 自我验证
-    ↓
-Phase 1 闭环           success_distiller + validate_parallel → 3 KEEPs (W076/77/78)
-    ↓
-Phase 2 falsification  cross-judge (Claude) → 0/3 STABLE
-                       side-shuffle → 0/3 STABLE
-                       cross-domain → 多数 FAIL
-                       auto_recurse → 3-cycle fixed point at 0 KEEP
-    ↓
-Phase 3 orthogonal 诊断   embedding-Stage-A: 对齐 ≈ 0
-                          LLM-faithfulness: strict YES ≤ 10%
-    ↓
-Phase 4 architectural     L1 trigger-conditioned gate: 4/12 PASS ← 第一次 discriminate
-                          L2 trigger-indexed library
-                          L3 citation-aware solver: 95% prospective cite
-    ↓
-Phase 5 agent self-design agent 独立产 gate 设计 (sim=0.28 + 3 novel axes)
-                          agent 自写 460 行 gate code
-                          填补 → 12/12 PASS (undiscriminating)
-    ↓
-Phase 6 agent self-recovery  agent 读自己失败 + researcher 成功
-                             独立命名 "condition-stratified measurement"
-```
+看这个递归：
 
----
-
-## 2. 实际用到的 7 个方法模式
-
-### Pattern 1 — Read before write
-
-**每个新 exp 开始前都做的事**：
-
-```bash
-# 1. grep 项目里有没有做过类似的
-grep -rn "关键词" phase*/scripts
-
-# 2. 找相关 json schema
-python -c "
-import json
-d = json.loads(open('some_file.json').read())
-print(type(d).__name__, list(d.keys())[:3] if isinstance(d, dict) else len(d))
-# sample first entry
-"
-
-# 3. 找文件 mtime + 是否被 gitignore
-ls -la some_cache_dir/ | head
-```
-
-**为什么重要**：Exp 21 agent 写 gate code 失败的核心原因就是**不做 Read before write** —— 它假设字段叫 `prompt` 而实际叫 `problem`。我自己每次都先 Read 所以几乎没犯过同类 bug。
-
-**参考物**：
-- `manual/phase_four_dev_doc.md` — 原 3-stage validation 计划
-- `phase4_v3_directions.md` — 4 directions + 12 脑洞
-- `phase two/analysis/cache/answers/*_meta.json` — Turn-0 JSON schema
-- `MEMORY.md` / `project_mcwm_architecture_pivot.md` — MC-WM "switch role" 原则
-- 各次实验的 traceback 和 stdout tail
-
----
-
-### Pattern 2 — Cross-artifact distillation (复用 cross_llm_distiller)
-
-**这是整个项目最核心的 primitive，可作用在三个层级**：
-
-| 层级 | weak artifact | strong artifact | distilled thing |
+| 层级 | 知识单位 | 单列 principle 的失败 | 加 trigger 后 |
 |---|---|---|---|
-| Answer (原版) | 3-flash 答卷 | GPT-5.4 答卷 | "orientation W 没用到的" |
-| Architecture (Exp 22) | Gate A (12/12 PASS) | Gate B (4/12 PASS) | "condition-stratified measurement" |
-| Method (可拓展) | 单一判官 gate | 三家族 majority gate | "triangulation" 作为元原则 |
+| **对象层** | wisdom (如 W078) | 12/12 PASS (Exp 21c, 无 discrimination) | Exp 17 SHOULD_FIRE partition → 4/12 PASS |
+| **架构层** | orthogonal decomposition | agent gate 12/12 PASS | 加 conditioning → 可 discriminate |
+| **方法层** | "from least to most" | 原则记住了，每一步不知道是否适用 | 加 applies-when + canonical case + trigger signal |
 
-**Recipe**：
-```
-1. 取两个做同样任务的产物，一个 strong 一个 weak
-2. 用同一评价标准确认哪个好
-3. 询问: "strong 做到的哪些事 weak 没做到"
-4. 把差异形式化成可复用 principle
-5. 把 principle 写回 prompt，让 weak agent 自己试着整合
-```
+三层**同构**：任何可复用知识单位 X 都需要配 trigger-condition C_X。
+C_X 不能从 X 自身 derive，必须从**正负 case 对比**中 distill 出来。
 
-**参考物**：`phase four/cross_llm_distiller.py` — 原版实现，直接改 prompt scope 就能提升层级。
-
----
-
-### Pattern 3 — Orthogonal falsification
-
-**规则**：任何 positive signal 必须被来自**完全不同数据流**的测量再证实一次。
-
-**实际应用**：
-```
-pair-wr on holdout_50 → W076 wr=0.64 (positive?)
-├─ Exp 1:  cross-family judge on SAME pairs       → claude_wr=0.40 (FLIP)
-├─ Exp 5:  side-shuffle (fresh PYTHONHASHSEED)    → gemini re-roll=0.41 (FLIP)
-├─ Exp 8:  extend to fresh n=50 problems         → wr_combined=0.57 (gray)
-├─ Exp 9:  embedding-space faithfulness alignment → ≈ 0 (no signal)
-├─ Exp 13: LLM-judged strict faithfulness        → 5% YES
-└─ Exp 15: trigger-conditioned utility           → conditional wr=0.60 on n=26
-```
-
-每个都从**disjoint data stream** 测一次。6 个独立维度都同意，才算"真的"。
-
-**为什么 orthogonal 关键**：如果所有测量都从 pair-wr 派生（比如多加几家族 judge 投票），它们共享 judge-preference / position-bias / seed noise，一起错。必须从 embedding、meta、answer-text 这些**没碰 pair verdict 的源**再测一次。
+本文档 v2 版本每条 pattern 都带 **5 个字段**：
+- **Applies WHEN** — 该动手的条件
+- **Does NOT apply WHEN** — 该放手的条件
+- **Positive case** — 本 session 里用对了的具体例子
+- **Negative case** — 用错或 overapply 的例子
+- **Trigger signal** — 实际当下能察觉到 "现在该用这个" 的外显信号
 
 ---
 
-### Pattern 4 — Switch role (MC-WM 原则)
+## 1. Pattern: Read before write
 
-**规则**：一个 module 在角色 X 上反复失败时，不要继续调参让它做 X，让它做 Y，把 X 交给新 module。
+**Applies WHEN**
+- 要写代码读/写某个已存在的 cache / meta / answer JSON
+- Claim 依赖于某具体数据结构
+- 整合到已有 pipeline（复用现成 script）
 
-**实际应用轨迹**：
+**Does NOT apply WHEN**
+- 纯 greenfield，没有先前 artifact 可参考
+- 纯算法实现，无 I/O side effect
+- Refactor 已有 tested 代码（Read 只会 slow）
 
+**Positive case**
+Exp 14/15/17 我每次都先跑:
+```bash
+python -c "import json; d=json.loads(open('_valp_v20_ext_WCAND01_meta.json').read());
+          print(list(d[next(iter(d))].keys()))"
 ```
-pair-wr 作 gate                    → 失败 (noise dominated)
-    ↓ 不加严阈值 (那是继续做 X)
-pair-wr 作 component of 4          → 成立，其他 3 components 从 disjoint source 补齐
+→ 知道 schema: `frame, critical_reframe, anti_patterns, evaluation_criteria, rewritten_problem, what_changed`。所有后续 component 函数都用对字段名。
 
-single judge family 作 gate        → 失败 (family bias)
-    ↓ 不扩样本 (那是继续做 X)
-single judge 作 1/3 voter         → 成立，加 2 个独立家族作 majority-3
+**Negative case**
+Exp 21 agent 没做 Read，写 `rec["prompt"]` 假设字段叫 prompt，实际叫 problem。
+静默 exit 0 但 n_prompts=0，花了 3 轮 correction 才发现。
 
-gate 作 all-problems aggregator    → 失败 (conflates fire/no-fire)
-    ↓ 不改 formula
-gate 作 per-subset conditional     → 成立，先 trigger-label 再聚合
-```
-
-**参考物**：`MEMORY.md` 的 `project_mcwm_architecture_pivot.md`:
-> SINDy correction fails OOD (-837%) → **SINDy as OOD detector** (not corrector); QΔ Residual Bellman penalizes Q-targets
-
-完全同构的 move，只是映射到 wisdom library 场景。
+**Trigger signal**
+每次要 `open(some_cached_file).read()` 前 → 停。先 grep/cat 看真实 schema。
 
 ---
 
-### Pattern 5 — Agent self-rebuttal as prediction
+## 2. Pattern: Cross-artifact distillation (最重要，liftable 到任意层级)
 
-**规则**：让 agent 在跑 validation 之前先提出 **"如果这次 KEEP 其实是假阳性，原因可能是什么"**。把这些预测记录下来。后续 validation 结果要么证实要么证伪这些预测。
+**Applies WHEN**
+- 有两个（或多个）做同样任务的 artifact
+- 能判定哪个 strong 哪个 weak（有外部 metric）
+- 结构差异可被 LLM 识别并命名
 
-**实际应用**：
-- Exp 2 agent 预测 W076/W077/W078 的 #1 failure mode 是 "judge-preference alignment"
-- Exp 1 cross-judge 运行 → 3/3 flip，#1 confound 正是 judge preference
-- **预测命中**：agent 在**没看到 Exp 1 结果时**就说对了
+**Does NOT apply WHEN**
+- 只有 1 个 artifact（没对比基准）
+- 不知道哪个更好（没 strong/weak 划分）
+- 差异在连续参数空间（无结构性 move 可蒸馏）
 
-**为什么有用**：比起事后合理化，pre-committed skepticism 让 agent 的诊断能力有 falsifiability。且 agent 往往能列出**人类会忽略的 confound**（比如 library-interaction effect）。
+**Positive case**
+- 对象层 (原 `cross_llm_distiller.py`): 3-flash 答卷 vs GPT-5.4 答卷 → 蒸馏 orientation
+- 架构层 (Exp 22 Phase A): Gate A (12/12) vs Gate B (4/12) → agent 独立命名 **"condition-stratified measurement"**
+- 方法层 (本 doc v1 → v2): scalar principle list vs conditioned list → 蒸馏出本 gap
 
----
+**Negative case**
+如果给 agent 只看 Gate A 自己的 failure，没给 Gate B 的 success 对照，
+它无法 distill missing move —— Exp 20 Phase 3 就是这种：没有"怎样算好"的对照，只输出 related design (sim=0.28)。对比 input 才让 Exp 22 Phase A 命中。
 
-### Pattern 6 — Bisection through bug layers
-
-**规则**：当 agent 生成的代码失败，不要直接 re-prompt 要求 rewrite。先 Read 实际代码，识别**具体哪一层**的 bug，一层层修。
-
-**实际应用（Exp 21 debug）**：
-```
-attempt 0   SyntaxError line 1       → code 开头带 ```python 没清理
-attempt 1   returncode 0, no output  → 代码 exit 0 但没写输出文件
-实际 Read 代码 →
-    发现 1: output path 写到了 generated/ 不是 autonomous/  (wrapper 加 adapter 搜索更多目录)
-    发现 2: tokenize 不切 CJK (sed patch)
-    发现 3: 字段名 prompt vs problem (sed patch 5 处)
-    发现 4: SubstantiveContentDelta 类只有 def 头没 body (truncated)
-    发现 5: 后两个 evaluator 根本没生成 (truncated)
-```
-
-**每一层的修复方式不同**：wrapper 改、sed replace、手动补写。盲目 re-prompt 会让 LLM 从头重写，可能换一套新 bug。
-
-**参考物**：每次 attempt 的 `stderr tail` + 手动 `head`/`tail`/`grep` 读生成的 .py。
+**Trigger signal**
+"我手上有 2+ 个做同样事的东西且知道哪个好" → 立刻套 distill recipe：
+1. 列两边结构差异
+2. 假设去掉每条差异，strong 会不会降级
+3. 找"单独移除就会塌"的那一条
+4. 抽象它为可复用 principle
 
 ---
 
-### Pattern 7 — Null results 认定为发现
+## 3. Pattern: Orthogonal falsification
 
-**规则**：不 discriminate、所有候选全过、cross-judge 全 flip 这类结果**本身就是发现**。要停下来命名这个发现，不要继续调参直到"看起来对"。
+**Applies WHEN**
+- 刚拿到一个 positive signal 且它 load-bearing
+- 项目里有 ≥ 2 个**数据流互不相交**的测量源
+- Compute budget 容许额外 1-3 个独立测量
 
-**实际应用**：
-- Exp 17 trigger-conditioned gate: 4/12 PASS → 停下来，这是第一次 discriminate，commit
-- Exp 21c agent-designed gate: 12/12 PASS → 停下来，这是 **"orthogonal decomposition 不够，还需要 conditioning"** 的发现
-- Exp 10 W076/W077/W078 在 n=100 都跌穿 → 停下来，这证实 Exp 3 meta-wisdom 的 falsifier
+**Does NOT apply WHEN**
+- 信号已从 redundant 渠道 confirm 过
+- 唯一数据源（无法 diversify）
+- 紧急决策不能等
+- 每个 intermediate computation 都 check 会 compute 爆炸
 
-**为什么有用**：chasing higher PASS 容易掉进"tune-until-green"。把 null result 当 finding 让 paper 每一步有硬 claim，不靠数字好看。
+**Positive case**
+W076 pair-wr=0.64 →
+- Exp 1 cross-family judge: 0.40 (FLIP)
+- Exp 5 side-shuffle: 0.41 (FLIP)
+- Exp 8 n=100 extension: 0.52 (跌穿)
+- Exp 9 embedding faithfulness: ≈ 0
+- Exp 13 LLM faithfulness: 5% YES
+6 个 orthogonal 维度都 FAIL → 确诊 false positive
 
----
+**Negative case**
+如果对 agent 每次 intermediate 推理都要 4 family judge × 3 side-shuffle，compute 炸。Orthogonal falsification 应 reserve 给**commit-level decision**, 不是每个 inner step。
 
-## 3. 具体参考过的文件清单
-
-**项目 md**：
-- `phase4_v3_directions.md` — Direction 1-4 + 12 脑洞 roadmap
-- `phase four/ARCHITECTURE.md` — 4-组件闭环设计
-- `manual/phase_four_dev_doc.md` — 原 3-stage 验证计划
-
-**MEMORY 文件**：
-- `project_mcwm_architecture_pivot.md` — SINDy 作 detector（不做 corrector）→ 直接启发 pair-wr 作 component（不做 gate）
-- `feedback_mcwm_strategy.md` — "module-by-module validation; rebuild after 2 fails"
-- `feedback_mvp_gap_criterion.md` — ">10% solid, <5% 可疑" 量级判断
-
-**已有代码**：
-- `phase four/cross_llm_distiller.py` — **最重要**，pattern 2 的原型
-- `phase four/validate_parallel.py` — 并行 v20 + cached judge infrastructure
-- `phase one/scripts/validation/cached_framework.py` — judge_pair + content cache
-- `phase one/scripts/validation/phase2_v20_framework.py` — Turn-0 meta schema
-- `phase zero/scripts/llm_client.py`, `gpt5_client.py`, `claude_proxy_client.py` — 三家族客户端
-
-**数据**：
-- `phase two/analysis/cache/answers/*_meta.json` — Turn-0 JSON (frame/critical_reframe/anti_patterns/what_changed)
-- `phase two/analysis/cache/answers/*_answers.json` — final answer text
-- `phase two/analysis/cache/judgments/*.json` — pair verdicts per pid (domain + difficulty)
-- `phase two/analysis/cache/sample_holdout_50.json` — 50 test problems (domain + difficulty labels)
-- `phase four/autonomous/success_distilled_candidates.json`, `cross_llm_candidates.json` — 12 candidate wisdoms 的元数据
-
-**每次失败 log**：
-- `phase four/logs/exp{N}_*.log` — 每个 exp 的 stdout/stderr tail，用于判断下一步
-- 每次 subprocess traceback — 决定哪个 bug 先修
+**Trigger signal**
+"我要 commit 一个 decision，基于一个 positive signal" → 至少跑 1 个 data-stream-disjoint 的再测一次。
 
 ---
 
-## 4. 从本 session 学到的可转写模板
+## 4. Pattern: Switch role when module fails (MC-WM)
 
-### Template A — Cross-artifact distill prompt (Pattern 2 instantiation)
+**Applies WHEN**
+- 某 module 在角色 X 上 ≥ 2 次失败
+- 同一 module 在其他场景 work（不是本质坏）
+- 能设计出新 module 接手 X
 
-```
-== 任务 ==
-你要对两个做 {same_task} 的产物做 cross-artifact distillation。
+**Does NOT apply WHEN**
+- Module 本质坏（输入 → 输出 map 就错）
+- 没有替代 module 可接手 X
+- 失败只是参数问题，调参就好（误用 switch）
 
-== Weak artifact ==
-{weak_spec}
-它在 {metric} 上得 {weak_score}。
+**Positive case**
+- pair-wr 作 "gate"：反复 fail → 让它作 "component of 4" (Exp 15)
+- MC-WM SINDy 作 "corrector"：OOD fail → 作 "detector"
+- single-family judge 作 "gate"：family bias → 作 "1/3 voter" in majority (Exp 7)
 
-== Strong artifact ==
-{strong_spec}
-它在 {metric} 上得 {strong_score}。
+**Negative case**
+pair-wr 如果让它作 "prior"、"normalizer"、"confidence regularizer" 等花式角色都不 work ——
+问题在于它本身是**混合多源噪声**的量。Switch role 不能救 "量本身是 noise" 的情况。
 
-== 你的推理步骤（按顺序）==
-1. 列出两个 artifact **结构上**的所有差异（不只是参数）
-2. 对每条差异，问：如果去掉这条差异，strong 还会 strong 吗？
-3. 找出**单独去掉会让 strong 降到 weak** 的那一条 → 它是 strong 的 active ingredient
-4. 把 active ingredient 抽象为 general principle（不限此任务）
-
-== 输出 JSON ==
-{{...schema...}}
-```
-
-### Template B — Self-rebuttal before validation (Pattern 5 instantiation)
-
-```
-你刚刚 commit 了 {thing}，证据是 {evidence}。
-在任何独立 validation 跑之前，列出 3 条**最强的反驳**：如果这个 commit 其实是假阳性，可能的原因是什么？
-
-每条反驳说明：
-- alt_hypothesis:
-- mechanism:   为什么这个机制能制造出 {evidence} 的假象
-- falsifier:   什么独立实验能明确证伪这条反驳
-- severity:    high / medium / low
-
-最后给 overall verdict: accept / further_test / reject
-```
-
-### Template C — Orthogonal measurement enumeration (Pattern 3 instantiation)
-
-```
-当前你只用了 {data_source_used} 来测量 {quantity}。
-枚举项目里其他**没被 gate 使用**的 data sources，对每个问：
-- 它能独立回答什么 validity 问题？
-- 它和当前 data source 在噪声层是否 disjoint？
-
-从最 disjoint 的至少 3 个里，每个设计一个测量，构造 {quantity} 的 3+ 维 orthogonal replacement。
-```
+**Trigger signal**
+"这个 module 在当前角色 ≥ 2 次 fail 了" → 问："它在别的角色上是否有结构性价值"。若有，switch；若没有，扔掉。
 
 ---
 
-## 5. 诚实说"我没做到"的
+## 5. Pattern: Agent self-rebuttal as prediction
 
-- **Agent 的 gate code 需要多轮修** — 不是 1-shot，实际是 3 次 attempt + 手工填 3 个 evaluator。agent-only 一次性实现 **没 demonstrate 出来**。
-- **n_sample 仍然偏小** — 12 candidates × 50 pids，统计功率对 +10pp 阈值勉强够。
-- **Conditioning 这一步 agent 最后 discover 了（Exp 22 Phase A）**，但是是在我喂"cross_llm_distiller 方法论"prompt 之后。**不是 zero-shot**。只能说 "agent 具备这个认知，需要正确的 teaching prompt 激活"。
-- **trigger label 本身由 Claude 给**，有单家族 bias 风险，尚未 audit。
+**Applies WHEN**
+- Agent 刚 commit 一个 hypothesis
+- 任何独立 validation 都**还没跑**
+- Budget 容许 1 个额外 LLM call
+
+**Does NOT apply WHEN**
+- Validation 已 done（rebuttal 变事后合理化）
+- Agent 无 introspection 能力（小模型）
+- 时间 critical 不能等 1 min extra call
+
+**Positive case**
+Exp 2 在 Exp 1 cross-judge 跑之前，agent 对 W076/W077/W078 提 3 条反驳，
+#1 均指向 judge-preference confound。Exp 1 确认 3/3 flip。agent 的 pre-committed 反驳 = 可验证的 prediction。
+
+**Negative case**
+若 rebuttal 每条都是泛泛 "further_test / small sample / judge noise"（无 specific mechanism / falsifier）→ 不可证伪，不是 prediction。需在 prompt 里强制**specific mechanism + specific falsifier experiment**。
+
+**Trigger signal**
+"刚 commit 一个 KEEP 决定" → 立刻跑 self-rebuttal，记下 #1 confound。后续 validation 看是否命中。
 
 ---
 
-## 6. 一句话总结方法论
+## 6. Pattern: Bisection through bug layers
 
-> **先读，再怀疑，测量用不相交的流，失败当数据，已有 primitive 升维用，role 能换就换，每次只修一层 bug，agent 自己的怀疑当 prediction**。
+**Applies WHEN**
+- Generated code 失败 (runtime error / silent fail)
+- 代码大小适中 (< 500 行)
+- 能从 stderr / stdout 定位 specific line
 
-这 8 条组合起来就是本 session 从"agent 随口提 W076"走到"agent 独立命名 condition-stratified measurement"的所有操作。每一条**都已在项目代码里实例化**，后续 session 复用成本 ≈ 0。
+**Does NOT apply WHEN**
+- 代码跨多文件 + 深调用栈，bisection 成本高于重写
+- 没有可 Read 的 generated artifact
+- LLM correction 明显能一次修好（simple typo etc.）
+
+**Positive case**
+Exp 21 attempt 2 `returncode=0 无输出` → Read code → 发现 3 层叠加 bug：
+1. 输出路径错 (`generated/` not `autonomous/`)
+2. tokenize 不切 CJK
+3. 字段名 `prompt` 应为 `problem`
+4. 2 个 evaluator 类被 truncated
+
+每层单独修，不盲目 re-prompt rewrite。
+
+**Negative case**
+如果 bug 在一个 100 行的 single function 且 traceback 直指 1 行 → 直接让 LLM 修那行即可，不用 bisection overhead。
+
+**Trigger signal**
+"LLM code returncode=0 但不产出期望 output" 或 "traceback 指向多处" → 停止 re-prompt 循环，Read 代码。
+
+---
+
+## 7. Pattern: Null results are findings
+
+**Applies WHEN**
+- 测量结果 trivial (all-PASS / all-FAIL / 无 discrimination)
+- 期望的是有差异的分布
+- 此类 null 可能暴露结构性问题
+
+**Does NOT apply WHEN**
+- 有 mixed 结果，只是单个 outlier
+- 期望答案本来就是 null（e.g. ablation 期望 "nothing changes"）
+- 过度 over-claim 每个 null 都是 finding
+
+**Positive case**
+- Exp 21c 12/12 PASS → 停下来命名"orthogonal 不够，需要 conditioning"
+- Exp 10 W076/W077/W078 n=100 都跌穿 → 确认 Exp 3 meta-wisdom falsifier
+
+**Negative case**
+如果每次 ablation 的 "no effect" 都拿来当 finding → paper 塞满 over-claim，失去 signal-to-noise。
+
+**Trigger signal**
+"结果明显缺 discrimination / 所有样本同一 verdict" → 不要调 threshold 让它好看，先诊断 why。
+
+---
+
+## 8. Pattern: Least-to-most construction（user insight）
+
+**Applies WHEN**
+- 有 ≥ 1 个现成 repo 和目标任务 ≥ 70% 相似
+- 新增贡献 ≤ 1 module 规模
+- 能 articulate "我要替换/添加的是哪一块"
+- 基线 repo 自己 pass baseline tests
+
+**Does NOT apply WHEN**
+- 核心算法前无古人，必须 from scratch
+- 所有候选 repo 架构 fundamentally 不同（改一块带动全身）
+- 说不清要改什么（需求自身模糊）
+- 基线 repo 自己 broken
+
+**Positive case**
+- 本 session 大量复用：`validate_parallel.py` 基础设施直接继承；`cached_framework.judge_pair` 直接用；`exp21_data_api.py` 写了个 thin adapter 让 agent 代码少造轮子
+- 给 agent 写 gate 时给 `exp21_data_api` 而不是让它从零读 file paths
+
+**Negative case**
+- 初始 `auto_recurse.py` 是从 ARCHITECTURE.md 规划的 4 组件**scratch 写**，如果先找 CBR / skill-library 类似 repo 作 base 会快不少
+- 如果把 "least-to-most" 误用到"需要新核心算法"场景（e.g. 新 distill algorithm），会被 constrained 到现成架构，扼杀创新
+
+**Trigger signal**
+"我要实现 {feature}" 时立刻问：
+1. 是否知道 ≥ 3 个 repo 做了**结构上**相似的事？
+2. 如果是，选最近的 1 个；明确 "我要换哪一块"；其他保留
+3. 如果答案是 "no existing repo"，换去 research path，不硬套
+
+---
+
+## 9. Pattern 本身的 trigger：选 pattern 的 meta-trigger
+
+以上 8 个 pattern 之间**也需要**一个 meta-routing：什么情况下该 reach for 哪个？
+
+快速索引：
+
+| 当下外显信号 | 该 reach for |
+|---|---|
+| 要开写新代码碰缓存文件 | Pattern 1 Read before write |
+| 面前有 2+ 个 artifact 且知道谁强谁弱 | Pattern 2 Cross-artifact distill |
+| 刚拿到一个 load-bearing positive signal | Pattern 3 Orthogonal falsification |
+| 某 module 在 X 角色 ≥ 2 次 fail | Pattern 4 Switch role |
+| 刚 commit 一个 KEEP 且还没跑 validation | Pattern 5 Self-rebuttal as prediction |
+| LLM code 失败且 traceback 指向多处 | Pattern 6 Bisection through bugs |
+| 结果 trivial / no discrimination | Pattern 7 Null as finding |
+| 要实现 feature 且知道 ≥ 3 相似 repo | Pattern 8 Least-to-most |
+
+这 8 个 trigger 是**互斥**的：每条针对一个特定 external signal。**选错 pattern 的根因通常是 misread signal**（把 "代码报错" 当 "要换整个方法"）。
+
+---
+
+## 10. 诚实说：v2 仍不是终点
+
+v2 给每条 pattern 配了 trigger-condition，但：
+
+1. **trigger-condition 本身也是 wisdom** —— 它们也是从 case 里归纳出来的，可能遗漏边界情况
+2. **case 库还小** —— 每条只有 1-2 个 positive + 1-2 个 negative。真正 robust 的 trigger boundary 需要 10+ cases
+3. **meta-trigger (第 9 节) 手写的** —— 严格讲应该像 Exp 20 那样让 agent 自己提，这一步**没做**
+
+下一步（v3 如果做）：
+- 每条 pattern 积累更多 (positive, negative) case
+- 对 case 做 cluster → trigger-condition emerge empirically (success_distiller 手法)
+- meta-trigger 也让 agent 提一次 → cross-check 和手写版差距（Exp 20 手法）
+
+此时 METHODOLOGY 本身就是一个**按自己规矩长大的 wisdom library**，每次 session 后 append 新 case。
+
+---
+
+## 附录 A — 本 session 每一步 reach for 了哪个 pattern
+
+| Step | External signal | Pattern used |
+|---|---|---|
+| 初次读 phase4 docs | 要整合已有 pipeline | 1 (Read) |
+| success_distiller + validate_parallel 跑 | 有现成 infrastructure | 8 (Least-to-most) |
+| 3 KEEPs 出来 user 问"确定 work 吗" | 刚 commit 且未独立 validation | 5 (Self-rebuttal) |
+| Exp 1 cross-judge | positive signal load-bearing | 3 (Orthogonal) |
+| Exp 7 majority-3 看起来 work 了 | 新 signal，需继续 falsification | 3 (Orthogonal again) |
+| Exp 15 trigger-conditioned | pair-wr 作 gate fails 多次 | 4 (Switch role) |
+| Exp 20 agent 独立设计 | 2 个 gate (weak/strong) 可对比 | 2 (Cross-artifact) |
+| Exp 21 agent code 失败 | LLM code traceback 多处 | 6 (Bisection) |
+| Exp 21c 12/12 PASS | trivial discrimination | 7 (Null as finding) |
+| Exp 22 agent 诊断 missing move | Gate A vs Gate B 现成对比 | 2 (Cross-artifact at arch layer) |
+| 本 v2 重写 METHODOLOGY | v1 scalar list 像 Exp 21c 失败 | 7 + 2 (null → distill) |
+
+每条 step 都能溯源到**哪个 external signal 触发了哪个 pattern**。这才是 "道理 → 每一步对齐" 的实际形态。
+
+---
+
+## 附录 B — 一句话总结
+
+> **Principle 只是一半。另一半是 trigger-condition。没有 trigger，principle 不自我应用。**
+>
+> METHODOLOGY.md v1 只写了一半，等于在 methodology library 层犯了 wisdom library 层早已诊断过的同一个错。v2 补上另一半。
