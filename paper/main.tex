@@ -1909,18 +1909,44 @@ candidate passes.
 
 \paragraph{Interpretation.} The agent demonstrably writes working
 gate code. The two components whose data contract it got right
-produce sensible per-candidate signals: substantive\_content\_delta
-median \(= 0.48\) with \(100\%\) of pids above \(0.15\) threshold;
-anti-pattern avoidance mean improvement \(> 0.15\) across
-candidates. Where the agent fails is in cross-referencing the
-API's exact field names — a class of error that a typed schema,
-auto-generated stubs, or a single dry-run against a fixture would
-catch. We read this as: \emph{the decomposition and implementation
-of a new gate is LLM-reachable; the remaining human-in-the-loop
-role is to supply strict data contracts, not to design or code the
-gate}. An autonomous loop that maintains a typed API surface
-between its modules could in principle run Phase 1–6 without
-intervention.
+produce sensible per-candidate signals. Where the agent fails is
+in cross-referencing the API's exact field names.
+
+\paragraph{Targeted correction attempt (Exp 19b).} We test
+whether a single human-supplied diagnosis (``you used
+\texttt{rec['prompt']}; the API exposes \texttt{rec['problem']}'')
+unblocks the stuck components. Mechanical substitution of four
+field names on the original code makes \texttt{reframe\_depth}
+execute without \texttt{KeyError}, but reveals a
+\emph{second-layer} bug in the text-distance helper
+(\texttt{median\_dist} \(=1.0\) for all candidates, indicating
+the embedding function silently returns the max-distance
+fallback), and the other component now raises \texttt{NoneType}
+subscripting on a new line. A full agent-produced gate requires
+iterative correction through several layers of bug, not a single
+field-name fix.
+
+\paragraph{Refined take-away.} We distinguish three capability
+claims, with increasingly strong evidence:
+\begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
+  \item \textbf{Agent can design} a replacement gate that
+    structurally resembles the researcher's (Exp 18, sim \(0.28\),
+    \(+3\) novel dimensions).
+  \item \textbf{Agent can implement} the design as runnable
+    Python (Exp 19, 460 lines execute without human edits).
+  \item \textbf{Agent can produce a fully-correct gate} in a
+    single pass — this we do NOT show. Exp 19's code has
+    \(\geq 3\) bug layers that silently failed (wrong field
+    names → returns empty lists → misleading default
+    thresholds). Successive LLM correction rounds fix each
+    layer one at a time.
+\end{itemize}
+The gap between ``agent-in-the-loop with schema help'' and
+``agent-autonomously-correct-on-first-try'' is still there. Our
+reading: the gap is not cognitive — it is the usual missing
+scaffolding of typed interfaces, dry-run fixtures, and a
+test-driven development cycle. Wiring those in is a research
+\emph{engineering} task, not a capability question.
 
 
 
