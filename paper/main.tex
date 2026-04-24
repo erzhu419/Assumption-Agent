@@ -1942,11 +1942,63 @@ claims, with increasingly strong evidence:
     layer one at a time.
 \end{itemize}
 The gap between ``agent-in-the-loop with schema help'' and
-``agent-autonomously-correct-on-first-try'' is still there. Our
-reading: the gap is not cognitive — it is the usual missing
-scaffolding of typed interfaces, dry-run fixtures, and a
-test-driven development cycle. Wiring those in is a research
-\emph{engineering} task, not a capability question.
+``agent-autonomously-correct-on-first-try'' is still there.
+
+\paragraph{Exp 19c — completing the gate honestly and running it.}
+We manually fill in the three missing evaluator bodies strictly
+from the agent's Phase-3 spec (the two truncated classes plus
+the never-written \texttt{antipattern\_avoidance}), keeping the
+spec's thresholds (\texttt{reframe\_depth} median\_dist $\geq
+0.25$; \texttt{substantive\_content\_delta} median\_dist $\geq
+0.20$ AND $60\%$ above $0.15$; \texttt{antipattern\_avoidance}
+median avoidance $\geq 0.60$; \texttt{wisdom\_problem\_alignment}
+we implemented via mean cosine $\geq 0.05$ AND $\geq 3$ pids
+above mean). The fully-implemented gate then produces:
+
+\begin{center}\small
+\begin{tabular}{l c c}
+  \toprule
+  Gate & PASS count & Discrimination \\
+  \midrule
+  Agent-designed, fully implemented & \textbf{12/12} & \textbf{none} \\
+  Researcher-designed (Exp 15, trigger-conditioned) & 4/12 & meaningful \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\emph{Every candidate passes every component of the agent's
+gate.} The agent's four axes
+(reframe-depth, content-delta, wisdom-alignment, antipattern
+avoidance) all measure properties that any retrieved wisdom
+trivially exhibits on the holdout: adding W to the library does
+perturb reasoning (large content-delta for all), the wisdom
+unpacked text does share some vocabulary with problems (non-zero
+alignment), and anti-patterns are mostly absent from answers by
+default. Without the trigger-conditioning split
+(SHOULD\_FIRE vs NO\_FIRE), orthogonality alone collapses into
+``yes everything differs in some way.''
+
+\paragraph{This is the actually interesting architectural
+lesson.} Orthogonal decomposition is \emph{necessary but not
+sufficient}. The researcher's gate (Exp 15) adds a separate
+ingredient the agent did not discover: \emph{conditioning on an
+externally-supplied trigger class} so that utility and
+citability are computed only on the subset where the wisdom
+claims to apply. That conditioning is what turns ``can measure
+4 things'' into ``can discriminate 4-from-12 candidates.''
+\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=1pt]
+  \item \textbf{Agent capability confirmed}: propose
+    orthogonal components, implement them.
+  \item \textbf{Agent capability missing}: propose
+    \emph{conditioning} — the architectural move of splitting
+    the evaluation population by a wisdom-specific trigger.
+  \item \textbf{Researcher contribution that was not
+    transferable}: the idea that some candidates are
+    \emph{conditional specialists}, not uniform activators,
+    and the gate must evaluate them in-class.
+\end{itemize}
+Teaching the agent \emph{conditioning} as a first-class design
+move — not just ``decompose'' — is the next L5 experiment.
 
 
 
