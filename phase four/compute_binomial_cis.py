@@ -24,9 +24,9 @@ def main():
         ("W076 L1 claude-opus", 0.40, 50),
         ("W077 L1 claude-opus", 0.47, 50),
         ("W078 L1 claude-opus", 0.51, 50),
-        # L3 n=100
-        ("W076 L3 extend n=100", 0.52, 100),
-        ("W077 L3 extend n=100", 0.57, 100),
+        # L3 n=100 (combined Exp 10 falsifier values: see exp10 log)
+        ("W076 L3 extend n=100", 0.57, 100),
+        ("W077 L3 extend n=100", 0.52, 100),
         ("W078 L3 extend n=100", 0.52, 100),
         # L4 cross-solver
         ("W076 L4 cross-solver mean", 0.41, 60),
@@ -40,8 +40,8 @@ def main():
     print("\n=== Binary composite claims ===\n")
     print(f"0/9 new candidates PASS vs 30% baseline: "
           f"one-sided p = {binomtest(0, 9, 0.3, alternative='less').pvalue:.4f}")
-    print(f"3/22 combined PASS vs 30% baseline: "
-          f"p = {binomtest(3, 22, 0.3, alternative='less').pvalue:.4f}")
+    print(f"3/21 combined PASS (12 inner-loop + 9 new) vs 30% baseline: "
+          f"p = {binomtest(3, 21, 0.3, alternative='less').pvalue:.4f}")
     print(f"0/3 KEEPs survive L1 under H0 p>=0.6: "
           f"p = {binomtest(0, 3, 0.6, alternative='less').pvalue:.4f}")
 

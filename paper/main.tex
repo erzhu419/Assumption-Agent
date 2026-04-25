@@ -50,7 +50,7 @@ and Evidence That a Default Single-Family Gate Is Judge-Fragile}
 whether self-improving LLM loops work.} The empirical headline is a
 \emph{null result}: after building and running a complete autonomous
 wisdom-curation loop, \emph{zero} of its committed wisdoms survive a
-six-layer independent audit. The scientific contribution is the audit
+six-layer conditionally-distinct audit. The scientific contribution is the audit
 stack itself, and a single-loop demonstration that on this specific
 Chinese open-ended wisdom-library setup, a naive single-family A/B
 gate is \emph{judge-fragile}: its decisions do not survive
@@ -79,14 +79,19 @@ nineteen stale entries deprecate. Only \(3/12\) proposals pass — the
 gate appears to be doing real work.
 
 \noindent\textbf{The six-layer audit stack.} We then stress-test each
-KEEP decision along six \emph{independent} axes: (L1)~cross-family
+KEEP decision along six \emph{conditionally distinct} axes: (L1)~cross-family
 re-judgment with a different LLM family; (L2)~side-randomization
 reseed at fixed content; (L3)~sample extension from \(n=50\) to
 \(n=100\); (L4)~cross-solver replication across three families;
 (L5)~fresh-domain cross-family re-test; (L6)~embedding-space and
-LLM-judged faithfulness of the perturbation direction. These layers
-share no data with one another by construction. A self-improvement
-claim that is real should survive all six.
+LLM-judged faithfulness of the perturbation direction. The layers
+intervene on different nuisance variables (judge family, position
+seed, sample size, solver family, problem distribution, and
+non-pair-wr measurement axis), but they reuse the same KEEPs, the
+same cached answer pairs (L1, L2), and overlap in solver and
+problem pool (L3, L4); we therefore describe them as conditionally
+distinct stress tests rather than as independent evidence streams.
+A self-improvement claim that is real should survive all six.
 
 \noindent\textbf{Audit verdict: \(\mathbf{0/3}\) KEEPs survive.}
 \(W_{076}\) falls from \(0.64\) (inner-loop) to \(0.40\) under
@@ -99,7 +104,7 @@ LLM-faithfulness both show wisdoms cause real perturbations
 to what the wisdom self-advertises. On 30 GSM8K problems,
 \(W_{078}\) actively \emph{harms} accuracy (29/30 vs 30/30 base).
 Scaling the L1 panel to expensive-tier judges (Claude Opus 4.6,
-GPT-5.4) on all three KEEPs gives six independent measurements
+GPT-5.4) on all three KEEPs gives six measurements
 with wr\_ext \(\in [0.43, 0.54]\); \emph{not one} CI upper bound
 reaches the \(0.60\) gate. Cohen's \(\kappa\) on the full
 \(5 \times 50\) cheap\(\cup\)expensive verdict matrix is
@@ -114,7 +119,7 @@ components — trigger-fit, conditional utility, citability — and
 combine them as a trigger-conditioned gate (Exp 15). On the original
 12 candidates this rescues \(4/12\) (vs \(3/12\) for the naive gate),
 including two REVERTs the naive gate missed. But scaling to
-\(22\) candidates (Exp 33) yields \(3/22\) PASS at the same
+\(21\) candidates (Exp 33) yields \(3/21\) PASS at the same
 threshold — below the \(30\%\) random-baseline rate. The
 architectural redesign recovers \emph{local} positive signal on
 the original 12 but does not generalize: a partial recovery,
@@ -123,15 +128,15 @@ not a fix.
 \noindent\textbf{Strict-reviewer closure (Exp 25--39).} Further
 experiments each target a specific publication objection with
 concrete evidence, including: 3-family labeling reliability
-(\(\kappa\)); cluster-threshold relaxation (12 \(\to\) 22
-candidates, 83\% increase); GSM8K standard-benchmark
+(\(\kappa\)); cluster-threshold relaxation (12 \(\to\) 21
+candidates, 75\% increase); GSM8K standard-benchmark
 portability; expensive-tier judge scale-up
 (Exp~35; cross-tier \(\kappa\) in Exp~37); structured non-panel
 rating by gpt-5.5 (Exp~38); and a minimal English-language
 replication on MT-Bench (Exp~39, 0/6 English wisdoms clear
 \(0.60\) under any family across two independent runs). The
-judge-fragility finding replicates across every independent axis
-we have run, and once across a language switch.
+judge-fragility finding replicates across every conditionally-distinct
+axis we have run, and once across a language switch.
 
 \noindent\textbf{Contribution.} (i)~The six-layer audit stack, each
 layer specified operationally enough to run against any future
@@ -140,7 +145,7 @@ setup studied here, the default inner-loop gate is judge-fragile:
 \(3/3\) of its decisions fail to survive cross-family re-judgment
 on identical content. We treat this as falsification of
 robustness, not falsification of the gate's underlying claim.
-(iii)~A concrete testbed (code, 22 candidates, 150 answer pairs,
+(iii)~A concrete testbed (code, 21 candidates, 150 answer pairs,
 cross-family logs) on which others can test alternative audit
 designs. (iv)~A partial architectural recovery (trigger-conditioned
 gate) that locally rescues signal but does not generalize,
@@ -162,14 +167,14 @@ items for any self-improvement claim.
     \(74\%\) baseline. \emph{Evolve}: a four-module orchestrator
     proposes \(12\) candidates; a \(+10\)pp held-out A/B gate
     commits three KEEPs (\(W_{076}, W_{077}, W_{078}\)).
-    \emph{Audit}: each KEEP faces a six-layer independent audit
-    stack (cross-family judge, side-reseed,
-    \(n{=}50 \to 100\), cross-solver, fresh-domain + GSM8K,
-    non-pair-wr faithfulness); \(0/3\) survive.
+    \emph{Audit}: each KEEP faces a six-layer audit stack along
+    conditionally-distinct nuisance axes (cross-family judge,
+    side-reseed, \(n{=}50 \to 100\), cross-solver, fresh-domain +
+    GSM8K, non-pair-wr faithfulness); \(0/3\) survive.
     \emph{Recover?}: a trigger-conditioned gate redesigned on the
     same \(12\) locally rescues \(4/12\) (tuning-set), but
     prospectively on \(9\) new candidates scores \(0/9\); combined
-    \(3/22\) sits below the \(30\%\) random-inclusion baseline.
+    \(4/21\) sits below the \(30\%\) random-inclusion baseline.
     \textbf{Final validated library delta on external data: \(+0\).
     The audit stack itself is the paper's contribution.}}
   \label{fig:overview}
@@ -294,14 +299,21 @@ GSM8K the strongest survivor (\(W_{078}\)) \emph{actively harms}
 accuracy. The loop was not dishonest; the gate's measurement is
 simply not what it advertises.
 
-\paragraph{Contribution 3 — A strong scaffold as instrument.} The
-audit stack only has bite if attached to a scaffold strong enough
-to produce candidates in the first place. Our v20 scaffold reaches
-\(+28\)pp vs.\ the v16 case-library champion on 100 problems and
-\(+76\)pp vs.\ a budget-matched baseline on 50 held-out, with
-held-out advantage \emph{larger} than training-split advantage. This
-is the substrate on which the audit stack is run; the audit claims
-are scaffold-independent.
+\paragraph{Contribution 3 — A strong scaffold as instrument
+(itself reported under same-family judging).} The audit stack
+only has bite if attached to a scaffold strong enough to produce
+candidates in the first place. Our v20 scaffold reaches \(+28\)pp
+vs.\ the v16 case-library champion on 100 problems and \(+76\)pp
+vs.\ a budget-matched baseline on 50 held-out, with held-out
+advantage \emph{larger} than training-split advantage. \textbf{We
+note that these scaffold-vs-baseline gains were themselves
+measured by a same-family pairwise LLM judge}; under this paper's
+own critique of same-family judging, they should be read as
+``produced under the standard reporting convention'' rather than
+as independently audited results. The audit-stack claims that
+follow are about the inner-loop wisdom-acceptance gate, not about
+v20-vs-baseline; we do not re-audit the scaffold comparisons in
+this paper.
 
 \paragraph{Contribution 4 — Evolution trajectory and its
 subsequent falsification by the audit stack.} The library moves through
@@ -319,8 +331,8 @@ it into three independent components (trigger-fit, conditional utility,
 citability) and build a trigger-conditioned replacement gate
 (\S\ref{sec:l1}). On the original 12 candidates this
 locally rescues \(4/12\), including two REVERTs the naive gate had
-missed. But when we scale to 22 candidates the same gate PASSes
-only \(3/22\) — below the random-baseline rate of \(\sim\!30\%\).
+missed. But when we scale to 21 candidates the same gate PASSes
+only \(3/21\) — below the random-baseline rate of \(\sim\!30\%\).
 The architectural redesign recovers signal on the seen set but not
 on a superset. \emph{The audit stack is harder to satisfy than a gate
 is to redesign.} The rescued \(4/12\) is therefore reported as
@@ -341,7 +353,7 @@ deliver: the loop can flag its own uncertainty but cannot resolve
 it in-house.
 
 \paragraph{Contribution 7 — Testbed and artifact release.} We release
-the full loop (four orchestrator modules, 22 candidates with their
+the full loop (four orchestrator modules, 21 candidates with their
 evidence trails, \(3 \times 50 = 150\) cross-family answer pairs,
 and the six-layer audit harness) so that alternative audit designs,
 stricter gates, or new self-improvement architectures can be
@@ -381,57 +393,63 @@ all close an outer loop at the \emph{weights} level. We close an outer
 loop at the \emph{retrieval corpus} level, which is orders of magnitude
 cheaper and allows the changes to be auditable.
 
-\paragraph{Audit practices across representative self-improvement
-papers.} Our central claim — that a single-family held-out A/B gate
-is the default in the current literature, and that this default is
-insufficient — rests on a simple observation about reported
-evaluation protocols. Table~\ref{tab:audit-practices} summarises
-the judge-to-solver family relationship and the audit layers each
-paper reports. The pattern we wish to flag is not that these papers
-are wrong; it is that none of them routinely runs a cross-family
-(L1) re-judgment of its committed outputs, and none reports a
-non-pair-wr faithfulness axis (L6).
+\paragraph{Audit practices in adjacent LLM-as-judge self-improvement
+papers.} Our recommendation --- that L1 cross-family re-judgment
+be reported as a default for retrieval-level self-improvement
+claims --- rests partly on the observation that this axis is not
+routinely reported in the works most directly adjacent to ours.
+Table~\ref{tab:audit-practices} restricts attention to
+LLM-judged self-improvement: works whose primary acceptance signal
+is a same-family LLM preference verdict on open-ended outputs.
+Papers that rely chiefly on environment rewards
+(e.g.\ Voyager's procedural success signal in Minecraft) or
+weight-level supervised/RL training signals (e.g.\ STaR's
+fine-tuning on filtered chain-of-thought rationales) do not face
+the same judge-fragility issue we describe and are listed with a
+``n/a'' rather than a missing-column dash.
 
 \begin{table}[h]
   \centering\small
   \setlength{\tabcolsep}{4pt}
-  \begin{tabular}{l c c c c c c}
+  \begin{tabular}{l l c c c c}
     \toprule
-    Paper (cite) & Solver & Judge & L1 & L3 & L4 & L6 \\
-                 & family & family & x-family & extend \(n\) & x-solver & faith. \\
+    Paper & Acceptance signal & L1 & L3 & L4 & L6 \\
+                 &  & x-family & extend \(n\) & x-solver & faith. \\
     \midrule
-    STaR \citep{zelikman2022star}            & LM & same / auto & --- & --- & --- & --- \\
-    Self-Rewarding \citep{yuan2024selfrewarding} & LM & same       & --- & --- & --- & --- \\
-    SPIN \citep{chen2024selfplay}            & LM & same          & --- & --- & --- & --- \\
-    Reflexion \citep{shinn2023reflexion}     & LM & same          & --- & --- & --- & --- \\
-    Self-Refine \citep{madaan2023selfrefine} & LM & same          & --- & --- & --- & --- \\
-    Voyager \citep{wang2023voyager}          & LM & env reward    & n/a & --- & --- & --- \\
-    AgentKB \citep{sumers2024agentkb}        & LM & same / auto   & --- & --- & --- & --- \\
-    PromptBreeder \citep{fernando2023promptbreeder} & LM & same   & --- & --- & --- & --- \\
+    \multicolumn{6}{l}{\emph{LLM-judged self-improvement (relevant comparison set)}}\\
+    Self-Rewarding \citep{yuan2024selfrewarding} & same-family LLM preference     & --- & --- & --- & --- \\
+    Reflexion \citep{shinn2023reflexion}     & same-family self-evaluation        & --- & --- & --- & --- \\
+    Self-Refine \citep{madaan2023selfrefine} & same-family self-evaluation        & --- & --- & --- & --- \\
+    AgentKB \citep{sumers2024agentkb}        & LLM-judged routine retention       & --- & --- & --- & --- \\
+    PromptBreeder \citep{fernando2023promptbreeder} & LLM-judged prompt fitness   & --- & --- & --- & --- \\
     \midrule
-    This work                                 & gemini & 3-family & \(\checkmark\) & \(\checkmark\) & \(\checkmark\) & \(\checkmark\) \\
+    \multicolumn{6}{l}{\emph{Different acceptance signal (weight-level / environment reward; tabulated for reference, not directly comparable)}}\\
+    STaR \citep{zelikman2022star}            & filtered fine-tune on rationales   & n/a & n/a & n/a & n/a \\
+    SPIN \citep{chen2024selfplay}            & weight-level self-play               & n/a & n/a & n/a & n/a \\
+    Voyager \citep{wang2023voyager}          & environment success signal           & n/a & n/a & n/a & n/a \\
+    \midrule
+    This work                                & 3-family LLM preference + 6-layer audit & \(\checkmark\) & \(\checkmark\) & \(\checkmark\) & \(\checkmark\) \\
     \bottomrule
   \end{tabular}
-  \caption{Audit practices in representative self-improvement
+  \caption{Audit practices in adjacent LLM-judged self-improvement
     papers. ``L1 x-family'' = re-judgment by a different-vendor LLM
     family on identical outputs. ``L3 extend \(n\)'' = sample
     extension beyond the gate's training \(n\). ``L4 x-solver'' =
     re-solving with a different solver family. ``L6 faith.'' =
-    faithfulness axis outside pair-wr. Dashes indicate the axis is
-    not reported in the paper's primary experimental protocol; this
-    is a statement about \emph{reporting}, not about whether the
-    authors could have run the axis.}
+    faithfulness axis outside pair-wr. Dashes denote ``not
+    reported in the paper's primary experimental protocol.''
+    ``n/a'' denotes ``acceptance signal differs in kind, so
+    cross-family judging is not directly the relevant audit axis.''
+    This is a statement about reporting, not about correctness.}
   \label{tab:audit-practices}
 \end{table}
 
-The reading we want this table to support is modest: across
-eight representative papers, the L1 cross-family column is
-uniformly empty. We do not claim these papers are wrong, nor that
-the gap is universal across self-improvement methods. We do
-observe that L1 is not a routine reporting item in this slice of
-the literature, and recommend, on the basis of our single-loop
-case study, that it be considered a default for
-retrieval-level self-improvement claims.
+The narrowed reading: across the five LLM-judged self-improvement
+works most adjacent to ours, the L1 cross-family column is
+empty. We do not claim these papers are wrong; we recommend, on
+the basis of our single-loop case study, that L1 be considered
+a default reporting item for self-improvement claims whose
+acceptance signal is itself an LLM preference verdict.
 
 \paragraph{Case-based reasoning and skill libraries.} Case-based
 reasoning~\citep{aamodt1994cbr} and skill-library
@@ -637,69 +655,68 @@ answer. The observed quantity is
     J(p, a_w(p), a_0(p)) = w\right\}\right].
 \]
 
-\begin{proposition}[pair-wr decomposition]
+\paragraph{Conceptual decomposition (informal, not a theorem).}
 Let \(Z_w(p) := \mathbb{1}\{J(p, a_w, a_0) = w\} - \tfrac12\). Then
-\(\mathrm{wr}_{\mathrm{ext}}(w) - \tfrac12 = \mathbb{E}_p Z_w(p)\)
-and \(Z_w(p)\) admits a decomposition
-\(Z_w = Z_w^{\mathrm{specific}} + Z_w^{\mathrm{generic}} +
-Z_w^{\mathrm{style}}\) where:
+\(\mathrm{wr}_{\mathrm{ext}}(w) - \tfrac12 = \mathbb{E}_p Z_w(p)\).
+We find it conceptually useful to think of three sources of lift
+that can drive \(\mathbb{E}_p Z_w\) above zero:
 \begin{description}[leftmargin=1.5em,topsep=2pt,itemsep=1pt]
   \item[\(Z_w^{\mathrm{specific}}\)] lift attributable to the
-    \emph{content} of \(w\) — the particular orientation \(w\)
+    \emph{content} of \(w\) --- the particular orientation \(w\)
     advertises, instantiated at \(p\).
   \item[\(Z_w^{\mathrm{generic}}\)] lift attributable to
     \emph{any} extra context of matching length and register
-    perturbing Turn-0 away from a default basin (measurable by
-    swapping \(w\) with a length-matched placebo).
+    perturbing Turn-0 away from a default basin (operationally:
+    what one would measure by swapping \(w\) with a
+    length-matched placebo wisdom).
   \item[\(Z_w^{\mathrm{style}}\)] lift attributable to \(w\)
     producing surface features (register shifts, phrase patterns)
-    that \(J\) happens to prefer, regardless of problem-specific
+    that \(J\) happens to prefer, independent of problem-specific
     fit.
 \end{description}
-\end{proposition}
+This is \emph{not} a unique algebraic decomposition, and we do
+not claim the three terms are estimable from any single
+experiment. Treating the labels as informal probes, the audit
+stack's interventions can each be argued to attack one term more
+than the others (judge swap stresses \(Z^{\mathrm{style}}\),
+length-matched placebo swap stresses \(Z^{\mathrm{generic}}\),
+faithfulness probes attempt to estimate \(Z^{\mathrm{specific}}\)
+directly). Below we use this informal labelling to motivate the
+audit layers, not to prove identifiability.
 
-The decomposition itself is an accounting identity under
-counterfactual interventions (length-matched placebo swap, judge
-swap, content shuffle), so we do not need to assume independence
-of the three terms for the decomposition to hold. The
-identifiability claim below, however, relies on a separate
-assumption which we state explicitly.
+\paragraph{What cross-family re-judgment can and cannot deliver.}
+A single-family \((S, J)\) measurement of
+\(\mathrm{wr}_{\mathrm{ext}}(w)\) at fixed \(n\) cannot
+distinguish \(Z_w^{\mathrm{specific}}\) from
+\(Z_w^{\mathrm{generic}} + Z_w^{\mathrm{style}}\). A measurement
+that swaps \(J\) for \(J'\) at fixed \(a_0, a_w\) attacks the
+\(J\)-specific style component but \emph{cannot} on its own
+identify \(Z_w^{\mathrm{specific}}\). Reasons: (a)~judge families
+differ in calibration, verbosity preferences, tie propensity, and
+competence on specific problem types, so a swap conflates
+``\(J\)-specific style'' with ``\(J\)-vs-\(J'\) full
+disagreement''; (b)~two families may share style preferences that
+a third would not; (c)~the swap leaves \(Z_w^{\mathrm{generic}}\)
+untouched (the generic ``any extra context'' lift is invariant to
+which family judges it). What cross-family re-judgment delivers
+is therefore a falsifier of the claim ``the original wr\_ext is
+robust to the choice of \(J\),'' which is what we use it for. We
+do not claim it identifies \(Z^{\mathrm{specific}}\).
 
-\begin{claim}[identifiability under stability]\label{claim:stability}
-Assume the two nuisance terms are approximately invariant under
-the audit interventions: for two judge families \(J, J'\) used in
-this paper,
-\(\bigl|\mathbb{E}[Z_w^{\mathrm{generic}}(J) -
-Z_w^{\mathrm{generic}}(J')]\bigr|\) and
-\(\bigl|\mathbb{E}[Z_w^{\mathrm{style}}(J) -
-Z_w^{\mathrm{style}}(J')]\bigr|\) are both small relative to the
-\(+10\)pp gate margin. Under this stability assumption, a
-single-family \((S, J)\) measurement of
-\(\mathrm{wr}_{\mathrm{ext}}(w)\) at fixed \(n\) cannot distinguish
-\(\mathbb{E}\,Z_w^{\mathrm{specific}}\) from
-\(\mathbb{E}(Z_w^{\mathrm{generic}} + Z_w^{\mathrm{style}})\); a
-different-family measurement \emph{does} identify
-\(Z^{\mathrm{specific}}\), up to a residual of size equal to the
-stability violation.
-\end{claim}
-
-\paragraph{On the stability assumption.} This is non-trivial.
-Judge families plausibly differ in style preferences
-(step-by-step vs.\ concise; investigate-first vs.\
-conclude-first), and a wisdom that activates one family's
-preferred phrasings may not activate another's. Exp~1, Exp~26,
-and Exp~34 test this assumption empirically: if stability held
-tightly, wr\_ext across families would agree within sampling
-noise. The observed spread for \(W_{078}\) at \(n = 50\) is
+\paragraph{Empirical use of the labelling.}
+\(W_{078}\) wr\_ext at \(n = 50\) across five judges:
 \(\{0.60, 0.51, 0.57, 0.43, 0.43\}\) (gemini, haiku, gpt-mini,
-opus, gpt-5.4) — a range of \(0.17\), wider than the
-sampling-CI width of \({\sim}0.13\). The stability residual is
-therefore non-zero. Our conservative reading: when the
-across-family spread is comparable to or larger than the lift
-claimed by any single family, cross-family re-judgment identifies
-\(Z^{\mathrm{specific}}\) \emph{up to that spread}. For the three
-KEEPs the residual consumes the entirety of the claimed signal —
-hence the null verdict is robust even under the weakened claim.
+opus, gpt-5.4) --- a spread of \(0.17\), wider than the sampling
+CI width of \({\sim}0.13\). With Cohen's \(\kappa\) fair-to-low
+across pairs (Exp~37, mean \(\approx 0.18\)--\(0.26\)),
+cross-family agreement is itself weak; conditions under which a
+strong identifiability claim about \(Z^{\mathrm{specific}}\)
+would hold are not met. We therefore use the decomposition as a
+conceptual organising frame for the audit stack and as a
+descriptive interpretation of the empirical findings, not as a
+formal identification result. The null verdict survives under
+this weaker reading because no audit layer at any threshold and
+no non-pair-wr measurement assigns lift to the three KEEPs.
 
 \begin{figure}[t]
   \centering
@@ -824,11 +841,27 @@ LLM judge family.
     frame-directive + problem-rewriting.
 \end{itemize}
 
-\paragraph{Measurement.} All experiments report pairwise win rates.
-\(N=100\) on \texttt{sample\_100} and \(N=50\) on
-\texttt{sample\_holdout\_50}. Standard error
-\(\sigma \approx \sqrt{p(1-p)/N}\); for \(p=0.6, N=50\) this is
-\(\approx 0.07\), which informs our \(+10\)pp threshold choice.
+\paragraph{Measurement.} All experiments report pairwise
+win rates. \(N=100\) on \texttt{sample\_100} and \(N=50\) on
+\texttt{sample\_holdout\_50}. Standard error \(\sigma \approx
+\sqrt{p(1-p)/N}\); for \(p=0.6, N=50\) this is \(\approx 0.07\),
+which informs our \(+10\)pp threshold choice.
+
+\paragraph{Tie handling and effective \(n\) (used uniformly).}
+Throughout the paper, \(\mathrm{wr}_{\mathrm{ext}}\) is computed
+as
+\[
+  \mathrm{wr}_{\mathrm{ext}} \;=\; \frac{\#\{\text{ext wins}\}}
+  {\#\{\text{ext wins}\} + \#\{\text{base wins}\}},
+\]
+i.e.\ \emph{ties are excluded from the denominator}, and
+confidence intervals (Wilson, 95\%) are computed against the
+non-tie effective \(n\). Tie counts are reported in the per-cell
+verdict tallies and in
+Table~\ref{tab:ci}. We use the pre-tie \(n=50\) only as a label
+for the original held-out set size; whenever an inferential claim
+is made, the effective \(n\) (after tie exclusion) is what
+appears in the CI.
 
 \subsection{Architecture ratchet: v13 \(\to\) v20}
 \label{sec:ratchet}
@@ -979,10 +1012,15 @@ the KEEP set} and the \emph{overlap of evidence}:
   \item W078 comes from mathematical hard-losses; its evidence is
     \(\{\mathrm{mathematics\_0243, mathematics\_0081}\}\).
   \item The pruner's 19 deprecations include \(14\) wisdoms that
-    \emph{no retrieval file has ever selected into top-2}—i.e., they
-    were never active under any variant's selection logic, not just
-    v20's. This is strong evidence the pruner is removing genuine dead
-    weight.
+    \emph{no retrieval file has ever selected into top-2}---i.e.,
+    they were never active under any variant's selection logic,
+    not just v20's, on the problem distributions and retriever
+    used in this paper. This shows the pruner removes entries
+    that are inactive under the current retriever and current
+    sample, not that those entries are useless under other
+    retrievers, future cycles, or different problem distributions.
+    We therefore call these entries \emph{inactive under the
+    current retriever and sample}, not \emph{dead weight}.
 \end{itemize}
 
 \noindent Evidence sets are disjoint by construction (success from
@@ -1299,10 +1337,20 @@ surfaced at the level of individual library-mutation decisions.
 
 \paragraph{Putting cross-family and side-stability together.} The
 original KEEP for W076 is fragile in \emph{at least three}
-independent dimensions:
+conditionally-distinct dimensions:
 \begin{enumerate}[leftmargin=*,topsep=2pt,itemsep=0pt]
-  \item \textbf{Side-order sensitivity.} Same judge, same content,
-    different presentation: \(0.64 \to 0.41\).
+  \item \textbf{Side-order sensitivity (with a temporal-drift
+    caveat).} Same judge family, same content, different
+    presentation seed: \(0.64 \to 0.41\). \textbf{Caveat:} the
+    side-reseed run was not in the same batch as the original
+    judging; \S\ref{sec:kappa} documents that the same gemini
+    family at \texttt{temperature}\(=0.0\) drifts wr by up to
+    \(\sim 0.17\) on identical content across re-runs. The
+    side-reseed effect therefore conflates side bias with
+    same-family temporal drift and should be read as ``the
+    original \(0.64\) is not stable to side shuffle \emph{or} to
+    re-running the same judge a second time,'' not as ``side
+    randomization alone explains the move.''
   \item \textbf{Cross-family sensitivity.} Different judge family,
     same content, same presentation: \(0.64 \to 0.40\)
     (Experiment 1).
@@ -1418,24 +1466,28 @@ outcomes, in increasing rigor:
 \end{tabular}
 \end{center}
 
-\paragraph{Validated claim.} The majority-of-3 gate is the first
-gate procedure in this study that we have empirical evidence
-\emph{for}, not just against. It rejects the two KEEPs that
-Experiment 1 revealed as gemini-specific artifacts (W076, W077),
-retains the one KEEP that two independent families endorse
-(W078), and rescues one REVERT (WCAND07 \emph{亲兄弟，明算账 (\emph{Brothers, clean accounts (folk)})})
-that Experiment 6 flagged as a likely false negative. The two
-survivors are the smallest set of wisdoms in our run supported
-by the reasonable evidentiary bar ``at least two independent
-vendor families disagree with the third.''
+\paragraph{Intermediate verdict (subsequently overturned).} At
+\(n = 50\) under majority-of-3, the gate rejects W076 and W077 as
+gemini-specific artifacts, retains W078 (two of three families
+\(\geq 0.55\)), and rescues WCAND07 (Claude-favoured). Read in
+isolation this would suggest \(\{W_{078}, \text{WCAND07}\}\) is a
+``triangulated'' positive set. \textbf{This intermediate verdict
+does not survive the rest of the audit stack.} \(W_{078}\) drops
+to \(\approx 0.52\) under L3 sample extension to \(n = 100\)
+(\S\ref{sec:exp8}) and to \(\approx 0.43\) under expensive-tier
+judges (Exp~34--35); \(W_{078}\) also actively harms accuracy on
+GSM8K (Exp~32). WCAND07 is not pursued through the full stack.
+We retain this section as the chronological record of an
+intermediate analysis, not as a result.
 
-\paragraph{A preliminary library picture at \(n = 50\).}
-Under majority-of-3 at \(n = 50\), the autonomous evolution's
-provisional net effect is \(+W_{078} + \text{WCAND07}\) with
-\(W_{076}, W_{077}\) withdrawn. We call this \emph{preliminary}
-because Experiment 8 (next) re-tests the same three KEEPs on a
-fresh 50-problem extension and reveals that even the
-triangulated verdict at \(n = 50\) is not stable at \(n = 100\).
+\paragraph{Provisional \(n = 50\) library picture, prior to
+audit.} Under majority-of-3 at \(n = 50\) alone, the loop's
+provisional net effect would have been
+\(+W_{078} + \text{WCAND07}\) with \(W_{076}, W_{077}\) withdrawn.
+This is the snapshot a self-improving loop with a 3-family panel
+gate would have committed at this point. The remaining audit
+layers (Exp~8 onward) overturn it; the final library delta in
+this paper is \(+0\), not \(+W_{078} + \text{WCAND07}\).
 
 \subsection{Experiment 8 — Falsifier of Experiment 3: extend the
 gray zone to \(n = 100\)}
@@ -1840,7 +1892,7 @@ candidates passing the 0.78 similarity filter:
 \emph{工欲善其事，必先利其器 (\emph{To do a job well, sharpen the tools first (Confucius)})}, \emph{临渊羡鱼，不如退而结网 (\emph{Better to go home and weave a net than stand at the cliff wishing for fish (Huainanzi)})},
 \emph{不以规矩，不能成方圆 (\emph{Without rule and compass, no squares or circles (Mencius)})}, \emph{整体大于部分之和 (\emph{The whole is greater than the sum of its parts (Aristotle)})},
 \emph{权，然后知轻重；度，然后知长短 (\emph{Weigh then know heavy/light; measure then know long/short (Mencius)})}, and others. Total available
-candidates: \(12 + 9 = 22\). We do not run these through the full
+candidates: \(12 + 9 = 21\). We do not run these through the full
 v20 ext gate (compute budget) but the pipeline scales in principle.
 
 \paragraph{Experiment 31 — Portability of W078 to fresh math domain
@@ -1929,9 +1981,10 @@ pids using gemini-3-flash solver + gemini judge:
 \end{tabular}
 \end{center}
 
-Combined with the original 12 candidates: \(3 / 22 = 13.6\%\) pass
-rate on the inner loop's own gate. This is \emph{lower} than a
-random-30\% baseline (expected 6.6/22) — the inner loop is not
+Combined with the original 12 candidates: \(3 / 21 \approx 14\%\)
+pass rate on the inner loop's own gate. This is \emph{lower} than a
+random-30\% baseline (expected \(\sim\!6.3 / 21\)) --- the inner
+loop is not
 overly permissive. The issue is the \emph{composition} of its 3
 accepts, not the count: what it accepts is spurious across all 6
 audit layers.
@@ -1967,8 +2020,8 @@ Five of six fatal objections are now closed experimentally
 (\#1, \#2, \#3, \#4, \#11):
 
 \begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
-  \item \#1 N: scaled to 22 candidates (Exp 29+33); all 9 new
-    fail at +10pp (0/9 pass), confirming 3/22 inner-loop pass rate
+  \item \#1 N: scaled to 21 candidates (Exp 29+33); all 9 new
+    fail at +10pp (0/9 pass), confirming 3/21 inner-loop pass rate
   \item \#2 solver family: W076 null across 3 solver families
     (Exp 26)
   \item \#3 labeler family: κ analysis + labeler-invariance
@@ -2122,10 +2175,12 @@ expensive judges, cross-tier \(\kappa\) would collapse; it does not.
 Within-cheap \(\kappa\) is in fact \emph{lower} (mean \(0.18\)) than
 cross-tier (\(0.25\)) — the three cheap judges do not even agree
 with each other more than they agree with an expensive judge. The
-stability assumption of Claim~\ref{claim:stability} therefore holds
-to the precision of this analysis: the non-specific lift terms do
-not shift systematically when judge family is swapped, within the
-range of families tested.
+``stability'' reading of cross-tier judging discussed in
+\S\ref{sec:theory} therefore holds to the precision of this
+analysis: cross-tier \(\kappa\) is not lower than within-tier
+\(\kappa\), so the non-specific lift terms do not shift
+\emph{more systematically} between tiers than within tier ---
+within the range of families and \(\kappa\) precision tested.
 
 \textbf{Bonus finding: the ``one-pair flip = \(\pm 0.02\)'' picture
 is optimistic.} When we compared Exp~36's re-run of the
@@ -2152,9 +2207,9 @@ intuition). Three observations follow directly.
 thin ground at \(n = 50\). \emph{(ii)} Every audit-stack measurement
 (L1, L3, L4, L6) produces CIs that \emph{also} include \(0.50\);
 there is no layer at which the three KEEPs collectively clear
-\(0.50\). \emph{(iii)} The binary composite result — \(3/22\)
+\(0.50\). \emph{(iii)} The binary composite result — \(3/21\)
 candidates PASS at the trigger-conditioned gate versus a random
-baseline of \(\sim 30\%\) — has one-sided \(p = 0.068\)
+baseline of \(\sim 30\%\) — has one-sided \(p = 0.086\)
 (near-significant null), and \(0/9\) new Exp~33 candidates PASS
 has \(p = 0.040\) (null confirmed).
 
@@ -2190,8 +2245,8 @@ has \(p = 0.040\) (null confirmed).
     \quad \(W_{078}\) & 0.51 & 50 & \([0.39,\ 0.65]\) \\
     \midrule
     \multicolumn{4}{l}{\emph{L3 sample extension (gemini, \(n=100\))}}\\
-    \quad \(W_{076}\) & 0.52 & 100 & \([0.42,\ 0.62]\) \\
-    \quad \(W_{077}\) & 0.57 & 100 & \([0.47,\ 0.66]\) \\
+    \quad \(W_{076}\) & 0.57 & 100 & \([0.47,\ 0.66]\) \\
+    \quad \(W_{077}\) & 0.52 & 100 & \([0.42,\ 0.62]\) \\
     \quad \(W_{078}\) & 0.52 & 100 & \([0.42,\ 0.62]\) \\
     \midrule
     \multicolumn{4}{l}{\emph{L4 cross-solver (3 families \(\times\) 20 pids)}}\\
@@ -2213,8 +2268,8 @@ has \(p = 0.040\) (null confirmed).
 
 Binary composite claims: \(0/9\) new Exp~33 candidates pass the
 \(+10\)pp gate vs.\ a baseline of \(30\%\) random PASS rate
-(one-sided exact binomial \(p = 0.040\)); \(3/22\) combined
-trigger-gate PASS vs.\ same baseline (\(p = 0.068\)). These are
+(one-sided exact binomial \(p = 0.040\)); \(3/21\) combined
+trigger-gate PASS vs.\ same baseline (\(p = 0.086\)). These are
 consistent with ``no candidate improves on the random-inclusion
 baseline.''
 
@@ -2306,8 +2361,10 @@ pair, identical side-randomization seed across all five judges):
 
 \paragraph{What this teaches.} Two cheap-tier families prefer the
 wisdom-augmented answer; both expensive-tier families prefer the
-cleaner baseline. This is exactly the pattern
-Claim~\ref{claim:stability} predicts: the wisdom \emph{does}
+cleaner baseline. This is the pattern the
+\(Z^{\mathrm{specific}} / Z^{\mathrm{generic}} / Z^{\mathrm{style}}\)
+labelling in \S\ref{sec:theory} is meant to organise: the wisdom
+\emph{does}
 inject substantive new content (a real \(Z^{\mathrm{specific}}\)
 component --- the priority ladder, the vertical focus, the KPI
 list), but it \emph{also} introduces stylistic features
@@ -2943,11 +3000,22 @@ it. Of the six layers, two carry the paper's methodological claim:
     decisions. L1 is cheap (the answer text is already cached) and
     specifiable enough to drop into any existing loop.
   \item[\textbf{L6 (faithfulness via non-pair-wr axes)}]
-    is the newest layer, and we acknowledge its operationalization
-    is not yet canonical: we use embedding-space direction
-    (Exp~9+10) and LLM-judged citation strictness (Exp~11+14). A
-    future version of this stack should settle on one primary and
-    one secondary faithfulness estimator.
+    is the newest layer and the most preliminary. Our two
+    operationalisations --- embedding-direction alignment
+    (Exp~9+10) and LLM-judged citation strictness (Exp~11+14) ---
+    are proxies, not validated faithfulness measures. Embedding
+    cosine between \(\Delta a\) and \texttt{unpacked\_for\_llm} is
+    a weak surrogate for ``the wisdom causally drove the answer's
+    reasoning''; a single-LLM PARTIAL/YES rubric on citation is
+    sensitive to prompt wording (Exp~17 boosts citation rate to
+    \(95\%\) by adding an explicit \texttt{used\_wisdoms} field,
+    without proving the wisdom \emph{caused} better reasoning).
+    A future version of this stack should validate L6 on
+    synthetic cases with a known inserted wisdom effect, include
+    human faithfulness labels, and add a placebo-wisdom and
+    length-matched-random-context control to estimate
+    false-positive / false-negative rates of the faithfulness
+    layer itself.
 \end{description}
 
 \noindent Layers L2 (side-reseed), L3 (sample extension), L4
@@ -2963,9 +3031,9 @@ evidence that the advocacy is needed}, not a new statistical
 method. We believe the field needs the advocacy, and the
 accompanying testbed, more than it needs another method.
 
-\paragraph{Objections we have \emph{not} closed.} Five further
-reasonable reviewer concerns remain open; we list them rather than
-leave them to footnotes.
+\paragraph{Objections we have \emph{not} closed.} Several
+reasonable reviewer concerns remain open; we list them rather
+than leave them to footnotes.
 
 \begin{itemize}[leftmargin=*,topsep=2pt,itemsep=2pt]
   \item \textbf{Gate-design freedom / hindsight.} We tried naive
@@ -2974,7 +3042,19 @@ leave them to footnotes.
     ordering was fixed is not zero, and Exp~15's thresholds were
     chosen with knowledge of the 12 verdicts. Exp~33's null on
     the 9 prospective candidates partially addresses this but a
-    proper pre-registered gate-design protocol is future work.
+    proper pre-registered gate-design protocol is future work
+    (a preregistration template is included in the supplementary;
+    see PREREGISTRATION\_v2.md).
+  \item \textbf{Audit stack itself is post-hoc.} Layers L1--L6
+    were added in order in response to reviewer-simulation
+    objections, not pre-registered. \S\ref{sec:experiments}
+    documents the order. Threshold values were chosen from
+    statistical defaults before each layer's data was observed,
+    bounding threshold-hindsight; layer-selection hindsight is
+    bounded only to the extent that each layer responded to an
+    external objection rather than a desired conclusion. A truly
+    pre-registered application of the stack to a fresh loop is
+    the strongest available correction and is future work.
   \item \textbf{Solver is always gemini-3-flash.} All answer
     texts come from one solver family. If the confound sits in
     the \emph{solver}'s answer-distribution rather than the
@@ -2983,21 +3063,43 @@ leave them to footnotes.
     wisdom; a full cross-solver re-run is future work.
   \item \textbf{One evolution cycle.} We ran the loop once. We
     have no data on whether a multi-cycle run converges, cycles,
-    or drifts — in particular, whether the audit stack's null
-    verdict remains stable across cycles.
+    or drifts.
+  \item \textbf{No human ground truth on the open-ended Chinese
+    pool.} Cross-family disagreement and gpt-5.5 structured
+    rating both substitute for, but do not match, human expert
+    annotation. It remains possible that the original gemini
+    judge preferred genuinely better answers and that
+    cross-family / expensive judges penalised useful but
+    stylistically different content. A representative human-
+    annotated subset would let us calibrate which judges are
+    closer to expert preference. Future work.
+  \item \textbf{No positive / negative controls for the audit
+    stack.} The audit demonstrates that the inner-loop gate's
+    KEEPs do not survive; it does not demonstrate that the audit
+    stack \emph{would} accept a genuinely useful library
+    addition. Without positive controls (placebo wisdoms,
+    length-matched random context, deliberately useful
+    task-specific hints, human-curated improvements) we cannot
+    estimate the audit's false-positive / false-negative rate.
+    Future work.
   \item \textbf{L6 operationalization is under-specified.}
-    Embedding cosine and citation strictness are two valid
-    proxies for faithfulness; they could in principle disagree.
-    On our 12 candidates they converge (both near-zero for all),
-    but this is a single data point of operationalization
-    agreement.
-  \item \textbf{Expensive-judge panel is partial.} Exp~34 runs
-    only 2 expensive judges on 1 candidate; a full
-    \(2 \times 22\) replication is deferred.
+    Embedding cosine and citation strictness are two proxies
+    for faithfulness; they could in principle disagree. On our
+    12 candidates they converge (both near-zero for all), but
+    this is a single data point of operationalization
+    agreement, and neither proxy is itself validated against
+    ground-truth faithfulness.
+  \item \textbf{Expensive-judge panel is partial.} Exp~34--35
+    cover \(2\) expensive judges on the \(3\) inner-loop KEEPs
+    (\(150\) judge calls); a full \(2 \times 21\) replication on
+    every candidate is deferred.
 \end{itemize}
 
-\noindent We regard (1)--(3) as the most consequential; (4)--(5)
-are resource-bounded rather than conceptually open.
+\noindent We regard the first three (gate-design hindsight,
+audit-stack post-hoc-ness, solver-family scope) plus the lack of
+human ground truth and positive controls as the most
+consequential; the others are resource-bounded rather than
+conceptually open.
 
 \section{Limitations}
 \label{sec:limitations}
