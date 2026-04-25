@@ -1098,13 +1098,1267 @@ two of the three candidates could fluctuate above the threshold;
 at \(n=100\) the noise band tightened around their true means,
 which sit just below \(0.50\).
 
+
 \medskip
 
-\noindent The remaining subsections of this section catalog every
-individual experiment in chronological order with full
-methodology, raw counts, and per-cell sensitivity. The five
-summary subsections above contain everything the rest of the
-paper depends on.
+\noindent A complete chronological catalog of every individual
+experiment with full methodology, raw counts, and per-cell
+sensitivity is in Appendix~\ref{app:exp-log}. The five summary
+subsections above contain everything the rest of the paper
+depends on.
+
+
+\section{Multi-step research-task pilot (summary;
+full in Appendix~\ref{app:multistep})}
+\label{sec:multistep}
+
+The audit stack is validated on single-advisory A/B pairs. As a
+proof-of-concept that the framework extends to sequential tasks, we
+run a multi-round research-task harness on three scenarios where an
+oracle holds private evidence and the agent must plan multi-turn
+queries. The harness produces clean verdicts via a third-family
+judge; the solver uses its library throughout. Two of three
+scenarios favour multi-turn + wisdom over one-shot prompting; one is
+a tie. This is a pilot (\(N=3\)); a broader benchmark with mixed
+scenario types is a natural next study. Full harness, scenarios, and
+verdicts in Appendix~\ref{app:multistep}.
+
+\section{Five-Stage Roadmap to a Self-Hypothesizing,
+Self-Validating Agent}
+\label{sec:roadmap}
+
+The empirical null in \S\ref{sec:experiments} is not just ``one
+loop did not work.'' It is a calibrated diagnostic of \emph{what
+is missing} from current LLM-as-judge self-improvement loops.
+This section sketches the architecture our null points toward.
+We describe it as five sequential stages so that each can be
+built and validated incrementally; each stage's output is the
+next stage's known-reliable component.
+
+\paragraph{Stage 0 --- The methodological-prior library.}
+The first thing missing is the equivalent of human education.
+Human researchers do not re-discover ``control of variables''
+from scratch every time; they were taught it, and they apply it
+when conditions warrant. A self-hypothesizing agent should start
+with 15--20 such priors --- divide-and-conquer, Occam's razor,
+``before arguing get the facts,'' analogy from a known case,
+counterexample search, dimensional analysis, increment-one-thing
+debugging, etc. --- each annotated with applicability conditions
+and historical examples. The current paper's wisdom library
+(\(75\) entries from the classical Chinese tradition) is one
+draft of this; a serious version would extend across cultures
+and add applicability conditions an LLM can pattern-match
+against. Stage 0 alone is not an agent; it is a substrate.
+
+\paragraph{Stage 0.5 --- A cheap world model for hypothesis
+testing.} The recursive hypothesis-test loop is unusable if every
+test costs hours of real execution. The agent needs a world
+model in which a candidate solution can be \emph{simulated} fast
+enough that the search can branch. This is the role current
+LLM-agent stacks try to play with chain-of-thought + tool use,
+but those stacks are not calibrated as predictors of execution
+outcomes; they are calibrated as plausibility generators. A
+proper world model is task-specific (a code-execution simulator
+for code tasks; a fluid-dynamics simulator for engineering
+tasks; a learned dynamics model for embodied tasks) and predicts
+``if I take action \(a\) in state \(s\), the next observation
+will be \(o\) with probability \(p\).'' Without this, the
+recursion's \emph{wall clock} is the verification bottleneck.
+
+\paragraph{Stage 1 --- A scheduler that maps problems to priors.}
+With Stage 0 as priors and Stage 0.5 as fast simulator, the
+agent needs to learn \emph{which} prior to invoke when. This is
+classic meta-RL on an action space whose actions are
+``invoke prior \(p_i\) on subproblem \(s\).'' Recent work
+(ReMA (Wan et al., 2025), Memory-R1 (Yan et al., 2025),
+EvolveR (Wang et al., 2025)) has built proxies for this in
+narrow domains. None pairs an explicit human-prior library with
+an explicit scheduler; doing so is the cheapest known way to
+inject the millennia of accumulated human methodology without
+re-deriving it from scratch.
+
+\paragraph{Stage 2 --- Experience feedback refines the priors'
+applicability conditions.} As the scheduler runs, it accumulates
+data on \emph{when} each prior fires successfully and when it
+fails. ``Control of variables fails when components are tightly
+coupled.'' ``Divide-and-conquer fails on problems where the
+sub-tasks share a hidden constraint.'' These applicability
+conditions are partly known to humans but rarely written down
+formally; the agent's job at Stage 2 is to discover and tighten
+them by gradient feedback from real outcomes. Recent work on
+metacognitive and meta-experience learning (MEL
+(Liang et al., 2026), lifelong-learning agent surveys
+(Liu et al., 2025)) has built half of this; the other half
+is the alignment layer below.
+
+\paragraph{Stage 3 --- Alignment of priors via category theory and
+information geometry.} Stages 0--2 produce a library of priors,
+each annotated with applicability conditions. As the library
+grows the agent will independently rediscover priors that are
+formally equivalent but stylistically different. Le Chatelier
+and Lenz, RC discharge and radioactive decay, logistic growth
+and saturating enzyme kinetics --- pairwise, these share a
+formal structure (an isomorphism in a Markov category, a
+Blackwell-equivalent statistical experiment) even though their
+surface descriptions look unrelated. A formal alignment layer
+detects these equivalences and merges the descriptions, so a
+prior validated in one domain can be transferred to another.
+This is where category-theoretic probability
+(Fritz, 2020) and information geometry
+(Ay et al., 2017) earn their keep, even though they cannot
+do the earlier stages' work.
+
+\paragraph{Stage 4 --- Generation of \emph{new} priors, validated
+by the rest of the architecture.} Once the agent has Stages
+0--3, it can recognise problems for which no existing prior
+applies. At that point the LLM's generative capacity proposes a
+\emph{new} candidate prior; the alignment layer (Stage 3) checks
+that it is not formally equivalent to an existing one; the
+scheduler (Stage 1) tries to apply it on a battery of test
+problems through the world model (Stage 0.5); the experience
+feedback (Stage 2) refines its applicability conditions. The
+prior is committed only when the entire stack agrees. This is
+the version of self-improvement that was the original target.
+
+\paragraph{Where this paper sits.}
+The wisdom-library case study tests Stage~0 only. The null at
+\(n=100\) is a quantitative argument that a same-family A/B at
+\(n=50\) cannot stand alone as the validation step. \emph{In a
+second campaign of 11 experiments (Exp~55--65, summarised below),
+we instantiate each remaining stage in the simplest plausible
+form and measure what each contributes.} The result is mixed and
+informative: three of the five stages work, one is conditional,
+one fails outright, and one (Stage~0.5 in its naive form) is
+dominated by Stage~1. This is the empirical content of the
+roadmap; the rest of this section explains the wins and the
+failures stage by stage.
+
+\subsection{Empirical validation of each stage}
+\label{sec:roadmap-validation}
+
+We set up a simple diagnostic environment: 60 problems across 4
+task families (multi-step arithmetic, CRT trick, Fermi estimation,
+logic puzzles), with a known-optimal prior per family. Each prior
+in our Stage~0 library is one sentence; the Stage~1 scheduler
+picks one prior per problem; the Stage~0.5 ``cheap world model'' is
+the simplest possible form, an LLM prompted to predict
+\(P(\text{success})\); the Stage~2 ``experience feedback'' is
+in-context retrieval of past (problem, prior, outcome) triples;
+the Stage~3 ``alignment'' is tested by translating problems into
+five languages and checking the scheduler's consistency; the
+Stage~4 ``new prior generation'' is leave-one-family-out and ask
+the LLM to invent a prior. Solver: gemini-3-flash unless noted.
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{p{2.6cm} l p{8cm}}
+  \toprule
+  \textbf{Stage} & \textbf{Verdict} & \textbf{Empirical evidence} \\
+  \midrule
+  0. Priors library & \cellcolor{green!18}\textbf{works}
+    & 4 priors instantiated; wrong prior on the wrong family
+      hurts \(10\)--\(20\)pp (Exp~56). The library is not a free
+      win --- mismatches actively damage the solver. \\
+  \midrule
+  0.5. Cheap world model
+   (LLM \(P(\text{success})\)) & \cellcolor{red!18}\textbf{fails}
+    & On Exp~56's verdict array: AUROC \(0.40\) (anti-correlated
+      with actual outcomes), Brier \(0.262\) (worse than uniform
+      \(0.25\)), top-1 argmax pick acc \(48\%\) vs random
+      \(25\%\) but vs Stage~1 LLM scheduler at \(85\%\) (Exp~57).
+      \emph{The simplest world-model prompt is dominated by
+      Stage~1 alone.} A useful Stage~0.5 will need calibration
+      training, not just a single prompt. \\
+  \midrule
+  1. Scheduler & \cellcolor{yellow!18}\textbf{conditional}
+    & Pick accuracy \(85\%\) on 4-family English / gemini
+      (Exp~56). Cross-language pick accuracy \(85\)--\(88\%\) on
+      Spanish / French / German / Japanese (Exp~61). Cross-
+      solver: scheduler-vs-best-fixed delta is
+      \(+0.017\) (gemini), \(0.000\) (claude-haiku), \(-0.017\)
+      (gpt-5.4-mini) (Exp~60). Harder tasks (Exp~62): scheduler
+      \(0.773 < \) best fixed \(0.800\). GSM8K: scheduler
+      \(0.97 \approx\) baseline \(0.98\) at ceiling (Exp~64).
+      \emph{Stage~1 picks are robust; the solver-end gain is
+      conditional on the gap between best and worst prior on the
+      task at hand.} \\
+  \midrule
+  2. Experience feedback & \cellcolor{green!18}\textbf{works}
+    & Pick accuracy on a held-out 20-problem test split rises
+      from \(45\%\) (naive scheduler) to \(80\%\) (in-context
+      experience-augmented scheduler with 15 (problem, prior,
+      outcome) examples), \(\Delta = +35\)pp (Exp~58).
+      \emph{Experience accumulation substantially improves
+      prior-selection.} \\
+  \midrule
+  3. Cross-language alignment
+    & \cellcolor{green!28}\textbf{strongly works}
+    & \(95\%\) mean pairwise pick agreement across English /
+      Spanish / French / German / Japanese on the same problems
+      (Exp~63). \(96.7\%\) mode-pick consistency. Per-family
+      mode-correct: A=100\%, B=93\%, C=93\%, D=60\%. \emph{The
+      scheduler operates on underlying problem structure, not
+      surface language --- which is what an alignment layer is
+      supposed to deliver.} \\
+  \midrule
+  4. New prior generation
+    & \cellcolor{red!18}\textbf{fails}
+    & Leave-one-family-out: ask the LLM to invent a new prior
+      for the held-out family given the other 4 families'
+      (problem, optimal prior) examples. Mean delta vs baseline:
+      \(-0.013\) over 5 hold-outs. Generated prior beats
+      baseline on \(0/5\) hold-outs (Exp~65). The generated prior
+      \emph{names} are reasonable (e.g.\
+      \texttt{test\_hypotheses}, \texttt{scale\_anchoring}) but
+      do not actually help. \emph{The simplest Stage~4 ---
+      ``ask the LLM for a new prior'' --- does not work.} \\
+  \bottomrule
+\end{tabular}
+\caption{Per-stage empirical verdict from Exp~55--65. Three
+stages (0, 2, 3) work in their simplest form. One (1) is
+conditional on the task's prior-sensitivity. Two (0.5, 4) fail
+in their simplest form and need substantively more sophisticated
+implementations than a single LLM prompt.}
+\label{tab:stage-verdicts}
+\end{table}
+
+\paragraph{What this calibrates.}
+The roadmap is not vapourware: each stage has a measurable
+operationalisation and produces a measurable result.
+\textbf{Three stages work} (priors library, experience feedback,
+alignment). \textbf{One stage is conditional} (scheduler picks
+robustly but the solver-end improvement depends on whether the
+task is far from ceiling). \textbf{Two stages fail in their
+simplest form} (cheap world model via single LLM prompt;
+new-prior generation via single LLM prompt). The two failures
+are informative: they tell us that the obvious shortcut
+(``just prompt the LLM to do it'') does not work for these two
+roles, and that real Stage~0.5 / Stage~4 implementations need
+calibration training data and explicit search procedures over the
+prior space respectively. This narrows the contribution of the
+roadmap: it is not ``five plug-and-play modules,'' it is ``three
+plug-and-play modules + two open research problems with
+characterised failure modes.''
+
+\paragraph{Comparison to closely related work.}
+\textbf{POPPER} (Huang et al., 2025) validates natural-language
+hypotheses with Type-I error control --- it is a Stage 1
+validator without Stages 0/2/3/4, and it has shown the same
+recurring weakness: the validator's null is only as strong as
+the language model's coverage of failure modes. \textbf{EvolveR}
+(Wang et al., 2025) runs the cycle ``act \(\to\) distil
+strategic principles \(\to\) reuse'' --- this is Stage 0+2
+without explicit human priors, and as our null suggests, it
+re-discovers slowly because it lacks the inductive bias humans
+already wrote down. \textbf{ReMA}, \textbf{Reflexion}, and
+\textbf{Voyager} are partial Stage 1+2 implementations on narrow
+task distributions; they confirm the recursion is implementable
+but do not provide the priors or the alignment layer. The
+Bayesian/categorical foundations (Perrone, 2024; Fritz, 2020;
+Ay et al., 2017) are Stage 3 in the absence of
+the rest of the architecture --- they are exactly the part that
+cannot stand alone, but is essential when the rest exists. Our
+contribution is the diagnostic that combines these into a single
+roadmap.
+
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{The single most important question: do the KEPT wisdoms
+have \emph{any} value?} Cross-family re-judgment says ``not as much
+as the inner loop thought.'' But it does not say ``zero.'' Claude's
+scores are $0.40, 0.47, 0.51$—one collapse and two near-parities.
+A future cycle could: (a)~commit wisdoms only if \emph{both} judges
+return $\geq 0.55$, turning the gate into an AND; (b)~commit only
+when the \emph{judge-family-average} wr
+$\bar{\text{wr}} \geq 0.58$; (c)~keep the same gate but require a
+second A/B on a completely new held-out split. Any of these would
+have rejected all three of our current KEEPs. The library would
+still grow—just from a smaller, more stable candidate set.
+
+\paragraph{What does this mean for the prior literature?} Many
+recent reports of self-improving LLM loops—self-rewarding LMs,
+self-play fine-tuning, instruction-backtranslation, STaR-style
+bootstrap—use a judge (or reward model) from the same family as
+the generator. Our experiment does not falsify these directly (they
+target the \emph{weights}, not a retrieval library), but it raises a
+specific testable question: are the reported gains intra-family
+judge-preference alignments or true capability gains? A drop-in
+cross-family re-judge, on the \emph{identical} generator outputs
+from the paper's most-improved checkpoint, is cheap and decisive.
+
+\paragraph{Why did the failure generator never fire?} The intended
+signal was ``judge gave B \(\geq\) 8-point margin, accumulate
+\(\geq 3\) such in a cluster.'' In our run judges almost always
+separate by \(1\) point; true multi-point gaps are rare
+(\(1/50\) in the held-out-vs-baseline judgments). Consequently the
+buffer fills slowly. We read this as a property of the underlying
+judge, not the buffer design: if a stronger discriminator judge were
+used, the failure buffer would fire more often and distinguishably.
+This is an empirical claim we can test in future work.
+
+\paragraph{The \(+10\)pp gate is strict by design.} A symmetric
+relaxation to \(+5\)pp would have kept \(6/11\) success-distilled
+candidates (see Figure~\ref{fig:distribution}); \(+8\)pp would have
+kept \(4/11\). We believe the tighter gate is the right setting for
+a library intended for long-horizon accumulation: a \(+5\)pp false
+positive is a candidate that is almost certainly inside the
+\(2\sigma\) noise band of a \(50\)-pair test. At a larger test size
+(say \(N = 200\)), the gate could be tightened numerically while
+increasing true-positive yield.
+
+\paragraph{Cross-LLM is a narrow lens, not a broad one.} W078's
+evidence set is \(\{2\) math problems\(\}\). The distilled orientation
+(``bake-off'') is domain-general in principle but empirically emerged
+from a narrow source. The held-out A/B verifies generality
+(\(\text{wr}_{\text{ext}} = 0.60\) across mixed domains), but this is
+exactly the kind of KEEP where a future cycle may override the earlier
+decision—which is, in turn, exactly why the registry tracks
+\texttt{contribution\_gain} and \texttt{activation\_count} on an
+ongoing basis.
+
+\paragraph{Is this a solution or an interesting artifact?} This is
+\emph{one cycle}, not steady-state forever-up. We showed the loop
+closes once; we did not show it keeps closing for \(K = 10\)
+cycles with monotone improvement. Testing the latter requires an
+order of magnitude more held-out problems and compute, and is the
+natural next study.
+
+\paragraph{What is actually novel in the audit stack, and what is
+not.} We are explicit about this so that reviewers need not infer
+it. Of the six layers, two carry the paper's methodological claim:
+
+\begin{description}[leftmargin=1.5em,topsep=2pt,itemsep=2pt]
+  \item[\textbf{L1 (cross-family re-judgment)}]
+    is non-trivial. The current self-improvement literature does
+    not routinely re-judge across judge families, and our empirical
+    finding is that doing so flips \(3/3\) of an inner loop's KEEP
+    decisions. L1 is cheap (the answer text is already cached) and
+    specifiable enough to drop into any existing loop.
+  \item[\textbf{L6 (faithfulness via non-pair-wr axes)}]
+    is the newest layer and the most preliminary. Our two
+    operationalisations --- embedding-direction alignment
+    (Exp~9+10) and LLM-judged citation strictness (Exp~11+14) ---
+    are proxies, not validated faithfulness measures. Embedding
+    cosine between \(\Delta a\) and \texttt{unpacked\_for\_llm} is
+    a weak surrogate for ``the wisdom causally drove the answer's
+    reasoning''; a single-LLM PARTIAL/YES rubric on citation is
+    sensitive to prompt wording (Exp~17 boosts citation rate to
+    \(95\%\) by adding an explicit \texttt{used\_wisdoms} field,
+    without proving the wisdom \emph{caused} better reasoning).
+    A future version of this stack should validate L6 on
+    synthetic cases with a known inserted wisdom effect, include
+    human faithfulness labels, and add a placebo-wisdom and
+    length-matched-random-context control to estimate
+    false-positive / false-negative rates of the faithfulness
+    layer itself.
+\end{description}
+
+\noindent Layers L2 (side-reseed), L3 (sample extension), L4
+(cross-solver), and L5 (fresh domain and standard-benchmark port)
+are \emph{standard statistical hygiene} — no individual layer is
+novel. What \emph{is} novel is their bundling into an audit stack
+whose layers are each specifiable operationally, each attach to a
+single non-specific term in the decomposition of
+\S\ref{sec:theory}, and are cheap enough to include as default
+reporting. Put bluntly: this paper's primary contribution is
+\emph{methodological advocacy with a concrete null result as
+evidence that the advocacy is needed}, not a new statistical
+method. We believe the field needs the advocacy, and the
+accompanying testbed, more than it needs another method.
+
+\paragraph{Objections we have \emph{not} closed.} Several
+reasonable reviewer concerns remain open; we list them rather
+than leave them to footnotes.
+
+\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=2pt]
+  \item \textbf{Gate-design freedom / hindsight.} We tried naive
+    pair-wr, three-tier pair-wr, then the trigger-conditioned
+    gate. The number of gate designs tried before the final
+    ordering was fixed is not zero, and Exp~15's thresholds were
+    chosen with knowledge of the 12 verdicts. Exp~33's null on
+    the 9 prospective candidates partially addresses this but a
+    proper pre-registered gate-design protocol is future work
+    (a preregistration template is included in the supplementary;
+    see PREREGISTRATION\_v2.md).
+  \item \textbf{Audit stack itself is post-hoc.} Layers L1--L6
+    were added in order in response to reviewer-simulation
+    objections, not pre-registered. \S\ref{sec:experiments}
+    documents the order. Threshold values were chosen from
+    statistical defaults before each layer's data was observed,
+    bounding threshold-hindsight; layer-selection hindsight is
+    bounded only to the extent that each layer responded to an
+    external objection rather than a desired conclusion. A truly
+    pre-registered application of the stack to a freshly-run
+    candidate-generation loop (i.e.\ rerunning candidate
+    generation, distillation, and pruning on fresh data, then
+    auditing the new KEEPs) is the strongest available correction
+    and is future work.
+  \item \textbf{Solver-family scope (partially closed by Exp~40).}
+    The original 12 inner-loop candidates were all judged on
+    gemini-solved answers. Exp~40 (\S\ref{sec:exp40}) re-runs the
+    full cross-solver L4 audit on the three KEEPs with
+    claude-haiku and gpt-5.4-mini as the SOLVER (not just judge),
+    on the same 50 holdout pids and with the 3-family cheap
+    panel: \(7/18\) (KEEP, judge) cells reach wr \(\geq 0.60\)
+    under at least one judge, but \(0/6\) (KEEP, solver)
+    combinations clear \(0.60\) under all three judges --- the
+    cross-family fragility persists across solver families.
+    A second \emph{full inner-loop cycle} on a non-gemini solver
+    (proposers, gate, audit) is still open.
+  \item \textbf{Uneven probe coverage across the audit layers.}
+    Several individual probes test only a subset of the 3 KEEPs:
+    Exp~26 (cross-solver, original L4) only \(W_{076}\); Exp~31
+    (fresh math) only \(W_{078}\); Exp~33 (\(9\) new candidates
+    prospective) gemini-only judging. The full panel (3 KEEPs
+    \(\times\) all relevant axes) is not balanced. Exp~35,
+    Exp~40, Exp~41, Exp~42 close most of these gaps for the 3
+    KEEPs, but a balanced factorial design (all KEEPs across
+    all solvers and all judges and all problem subsets at the
+    same \(n\)) is future work.
+  \item \textbf{One evolution cycle.} We ran the loop once. We
+    have no data on whether a multi-cycle run converges, cycles,
+    or drifts.
+  \item \textbf{No human ground truth on the open-ended Chinese
+    pool (partially mitigated by GSM8K + gpt-5.5 rating).}
+    Cross-family disagreement is not the same as
+    ``the wisdoms lack substantive utility.'' Two
+    LLM-substitute checks bound the alternative explanation:
+    Exp~41 (\S\ref{sec:exp41}) shows gpt-5.5 (a stronger
+    non-panel rater under structured 4-dim Likert) prefers base
+    over ext on all three KEEPs; Exp~32 + Exp~42
+    (\S\ref{sec:exp42}) show all three KEEPs give a small
+    negative point estimate on GSM8K objective accuracy
+    (\(1\)--\(2\) problems out of 30, direction uniform but not
+    individually McNemar-significant at this \(n\)). An
+    actual human study with \(n \geq 30\) raters across at
+    least two demographic backgrounds remains future work, but
+    the alternative explanation (``audit panel is wrong; original
+    judge was right'') is not supported by any of the available
+    LLM-substitute proxies.
+  \item \textbf{Positive controls remain unresolved
+    (Exp~44 + Exp~46).} Exp~44 (\S\ref{sec:exp44}) runs three
+    controls (placebo, random literary quote, generic-useful
+    hint); Exp~46 (\S\ref{sec:exp46}) adds three stronger
+    positive controls (math-specific, SCQA framework,
+    base-library duplicate). All \(6/6\) controls fail the gate
+    (wr \(\leq 0.25\)). The gate has very high specificity but
+    \emph{no positive control we constructed actually functions
+    as a positive}, so the audit's sensitivity remains untested.
+    Combined with Exp~45's selection-bias finding, the
+    parsimonious null model is now: the gate is structurally
+    anti-additive (adding any wisdom hurts), and the three
+    KEEPs are the lucky right-tail of 12 noisy gate measurements.
+    A genuinely positive control --- a synthetic task family
+    where a specific known-useful intervention deterministically
+    helps, or a human-curated wisdom validated independently
+    against task outcomes before insertion --- remains future
+    work and is the strongest single missing piece.
+  \item \textbf{L6 operationalization is under-specified.}
+    Embedding cosine and citation strictness are two proxies
+    for faithfulness; they could in principle disagree. On our
+    12 candidates they converge (both near-zero for all), but
+    this is a single data point of operationalization
+    agreement, and neither proxy is itself validated against
+    ground-truth faithfulness.
+  \item \textbf{Expensive-judge panel is partial.} Exp~34--35
+    cover \(2\) expensive judges on the \(3\) inner-loop KEEPs
+    (\(150\) judge calls); a full \(2 \times 21\) replication on
+    every candidate is deferred.
+\end{itemize}
+
+\noindent We regard the first three (gate-design hindsight,
+audit-stack post-hoc-ness, solver-family scope) plus the lack of
+human ground truth and positive controls as the most
+consequential; the others are resource-bounded rather than
+conceptually open.
+
+\section{Limitations}
+\label{sec:limitations}
+
+\textbf{Held-out exposure via dynamic same-domain exemplars
+(real but symmetric).} The v20 solver pipeline
+(\S\ref{sec:gate}, code at
+\texttt{phase one/scripts/validation/phase2\_v15\_exemplar\_framework.py})
+includes, at solve time, a same-domain exemplar dynamically
+selected from the evaluation pool's other pids: for evaluation
+on pid \(p\), the prompt is augmented with the most-similar
+in-pool pid in the same domain, with that pid's cached
+v15-class answer text. This is a real exposure to the
+evaluation distribution. \emph{Crucially, it applies symmetrically
+to the base condition (no-wisdom) and the ext condition
+(with-wisdom): both prompts have the same same-domain exemplar
+augmentation.} The relative measurement
+\(\mathrm{wr}_{\mathrm{ext}} = \mathrm{ext} / (\mathrm{ext}
++ \mathrm{base})\) is therefore approximately
+exposure-neutral, and we believe the comparison remains
+informative about whether the wisdom adds anything beyond the
+base condition under the same exposure. A separate
+cross-domain mining pass exists in
+\texttt{validate\_parallel.py:91--278}; it would have stored
+PID-bound exemplars in the candidate wisdom records under
+\texttt{wisdom\_diverse\_exemplars.json}. We verified
+empirically that for our 12 candidates, this file contains zero
+WCAND/WCROSS entries: the cross-domain mining was either skipped
+(the ``\(\geq 3\) exemplars'' guard branched out) or never run
+on this candidate set. The candidates' \texttt{cross\_domain\_examples}
+visible in the wisdom records (\texttt{success\_distilled\_candidates.json})
+are abstract scenarios generated by the success distiller, with
+no PID grounding; the v20 prompt formatter does not consume them.
+An earlier draft of this Limitations section described an
+exemplar mining leak as serious; that draft was based on a
+reading of the code path that was not actually exercised on
+our 12 candidates. We retain the symmetric same-domain
+exposure as the actual extent of held-out involvement.
+
+A clean re-run of the inner loop with strict pool separation
+(no same-domain exemplar from the eval pool) is straightforward
+to implement and remains future work; given the symmetry
+argument above we do not expect it to materially change the
+wr\_ext numbers on this candidate set.
+
+\textbf{Language scope: primarily Chinese open-ended problems.}
+The full pipeline (scaffold v20, 75-entry wisdom library, the
+1768-problem benchmark pool) is authored in Chinese and designed
+for \emph{open-ended, multi-domain} reasoning. Our audit stack's
+null verdict on the three KEEPs is established on this
+distribution. Exp~39 runs a minimal English-language replication
+on 30 MT-Bench prompts with a frozen 6-entry English-only wisdom
+library; \(0/6\) English wisdoms clear wr \(\geq 0.60\) under any
+single family across two independent runs, and all 3-family means
+sit below \(0.50\). We report this as one further language loop,
+not as cross-lingual generality. GSM8K (Exp~32) is included as a closed-form English
+portability probe, not as a representative test; the small
+negative point estimate on \(W_{078}\) GSM8K accuracy there
+(29/30 vs 30/30, not significant by McNemar) should be read as
+``the wisdom does not appear to transfer out of the Chinese
+open-ended scaffold,'' not as confident harm. A full English
+replication of the closed loop (English
+proposers, English wisdoms, English gate, English audit) remains
+future work.
+
+\textbf{Single LLM family for solver.} The solver is
+\emph{gemini-3-flash} throughout. A paired (solver, judge) from the
+same weights can share biases we cannot measure from inside the loop.
+Exp~26 partially probes this (same wisdom re-solved by three solver
+families: mean wr\_ext \(= 0.41\), no family \(\geq 0.50\)), but a full
+re-run with an Anthropic/OpenAI solver is the natural next step.
+
+\textbf{Judge budget.} The audit stack's three judges are in the cheap
+tier (gemini-3-flash, claude-haiku, gpt-5.4-mini). Exp~34 re-runs the
+L1 judge on W078 with expensive-tier judges (Claude Opus 4.6, GPT-5.4);
+see \S\ref{sec:exp34} for the result. This is one family combination
+on one candidate; a fuller judge-budget sweep is deferred.
+
+\textbf{Small held-out set per layer.} \(50\) problems per layer is
+enough to distinguish \(+10\)pp from noise but not to resolve finer
+gradations. We report binomial CIs in
+\S\ref{sec:stats} for core claims; stratified ROC analysis is deferred.
+
+\textbf{Reproducibility via third-party proxy.} API access to the
+three families is mediated by the \texttt{ruoli.dev} OpenAI-compatible
+proxy, not the official vendor endpoints. Temperatures and seeds are
+recorded in each log file; however, exact-token reproduction requires
+the proxy's routing state at run time, which is not under our control.
+The decision trajectory (pid $\to$ verdict $\to$ KEEP/REVERT) is
+deterministic given the cached answer text; re-runs against official
+endpoints are a pending replication.
+
+\textbf{Source-credentialed aphorisms.} Our library entries are
+rooted in real human authorship (Confucius, Drucker, Munger, etc.).
+The success distiller refuses to fabricate sources when asked. Whether
+the loop \emph{could} be run with fully self-authored aphorisms is an
+open question and probably deserves its own paper.
+
+\textbf{One evolution cycle.} We ran one cycle. A multi-cycle study
+with staged held-out splits is the natural continuation; our audit
+stack's operational specification does not change with the cycle count.
+
+\section{Appendix: Experiment 1 per-problem detail}
+\label{app:crossjudge}
+
+Full \texttt{\{pid \(\to\) verdict\}} maps for all three KEEP cases
+are stored in
+\texttt{phase four/autonomous/exp1\_cross\_judge\_log.json} and
+regenerated by
+\texttt{phase four/exp1\_cross\_judge.py}. The regenerator uses the
+\(+\)/- pair-side randomization rule inherited from
+\texttt{validate\_parallel.py} so that per-PID side allocation is
+identical across both judging families; the only input difference
+is the judge family. Problem-level audit: we observe no single
+pid that flipped in only one direction—the judges agree on the
+direction of individual pairs about as often as they disagree,
+but \emph{Claude's tie rate is materially higher} (14\% vs.\ 0\%
+for \emph{gemini-3-flash}) and its ext-advantage score is
+systematically lower. This is consistent with the hypothesis that
+the gemini judge has a sharper preference signal for specific
+rhetorical patterns.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We started from a long-standing target: an agent that
+\emph{proposes hypotheses about how to solve a problem and then
+validates them recursively}, the way humans do every day. The
+field's current proxy --- LLM-as-judge with same-family A/B
+gating --- imitates the surface form of this loop without any of
+the substance. To find out what is actually missing, we built
+the simplest possible instance: an autonomous Chinese
+``wisdom-library'' agent whose validator is a same-family
+\(+10\)pp test on \(n=50\) held-out problems, and we audited
+the result the way the rest of the architecture would audit it
+if it existed.
+
+The instance fails. The validator accepts \(3/12\) candidates;
+zero of those clear cross-family re-judgment on the cached
+pairs. The cached drops are statistically consistent with
+top-3-of-12 winner's curse on noisy \(n=50\) selections. A
+preregistered fresh-data evaluation at \(n=30\) gave a fleeting
+\(3/12\) that hierarchical Bayes already labelled
+weak-to-moderate; a follow-up at \(n=100\), with and without the
+solver's same-domain exemplar mechanism, returned \(0/12\) under
+both protocols. The cached signal decomposes cleanly into
+``in-pool exemplar boost \(\sim +0.10\)--\(0.20\) pp'' plus
+``selection bias on top-3-of-12''; neither component is the
+candidate's own utility.
+
+That null is informative. It says that a same-family A/B at
+\(n=50\) is the worst possible self-validator because it folds
+selection bias, judge stylistic preference, exemplar
+contamination, and small-sample noise into one number. Better
+audits cannot fix that --- they can only diagnose it, which is
+what ours did. The fix is the rest of the architecture
+(\S\ref{sec:roadmap}): a library of human-distilled
+methodological priors so the agent does not re-derive
+``increment one component at a time'' from scratch; a cheap
+world model so testing a hypothesis costs seconds rather than
+hours; a learned scheduler so the priors apply where they
+should; and a formal alignment layer so insights generalise
+across domains. None of these is optional.
+
+Concretely, we recommend that any future paper proposing
+retrieval-level self-improvement should report, jointly: (i)
+cross-family re-judgment, (ii) a selection-bias model on the
+candidate ranking, (iii) a preregistered fresh-data evaluation
+at \(n \geq 100\) under the original solver protocol, (iv) a
+hierarchical Bayesian posterior on the exact decision rule, and
+(v) a pool-separation sensitivity analysis. These five together
+are cheap; we ran them all on \({\sim}\$80\) of API spend. They
+will not save a broken loop, but they will tell you, calibrated,
+exactly which piece of the architecture you cannot get away
+without.
+
+\paragraph{Reproducibility.} All code
+(\texttt{wisdom\_registry.py}, \texttt{success\_distiller.py},
+\texttt{failure\_generator.py}, \texttt{cross\_llm\_distiller.py},
+\texttt{pruner.py}, \texttt{validate\_parallel.py}), all figures
+(\texttt{paper\_figures.py}), the full \(75\)-entry starter library,
+the \(100\)-problem training split, the \(50\)-problem held-out
+split, every judgment file, and the \texttt{wisdom\_registry.json}
+state at each version are bundled with the submission.
+
+% ---------------------------------------------------------------
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\appendix
+
+\section{Wisdom record schema and example}
+\label{app:schema}
+
+Every wisdom is a JSON record:
+\begin{verbatim}
+{
+  "id": "W077",
+  "aphorism": "没有调查，就没有发言权",
+  "source": "毛泽东《反对本本主义》",
+  "signal": "多因混杂、观察噪声大、没定位清楚就已经要决策时",
+  "unpacked_for_llm": "…",
+  "cross_domain_examples": [
+    {"domain": "software_engineering",
+     "scenario": "多方反馈互相打架，先建复现与归因链路，再决定修固件还是改流程"},
+    {"domain": "science",
+     "scenario": "亮度异常成因多解且观测噪声大，先设计鉴别观测而非仓促定性"}
+  ],
+  "status": "active",
+  "source": "success_distilled",
+  "created_at": "2026-04-23T15:54:56Z",
+  "keep_reason": "parallel validation wr_ext=0.60 on 50 holdout"
+}
+\end{verbatim}
+
+\emph{English gloss of the Chinese fields above.}
+\texttt{aphorism}: ``No investigation, no right to speak.''
+\texttt{source}: Mao Zedong, \emph{Oppose Book Worship}.
+\texttt{signal}: ``When multiple causes are entangled, observations
+are noisy, and the situation has not been localised yet decisions
+are already due.''
+\texttt{cross\_domain\_examples}: (\emph{software engineering})
+``when multi-party feedback conflicts, first build a reproduction
+and attribution chain before deciding whether to fix firmware or
+change process''; (\emph{science}) ``when the cause of a brightness
+anomaly has multiple explanations and observation noise is high,
+first design discriminating observations rather than rushing to
+classify.''
+
+\section{Full prompt templates}
+\label{app:prompts}
+
+All prompts used by the four orchestrator components are reproduced
+verbatim in the supplementary code. We list the section headers here
+for navigation:
+
+\begin{itemize}[leftmargin=*]
+  \item \texttt{success\_distiller.py}: \texttt{DISTILL\_PROMPT}
+  \item \texttt{failure\_generator.py}: \texttt{PROPOSE\_PROMPT}
+  \item \texttt{cross\_llm\_distiller.py}:
+    \texttt{SOLVE\_PROMPT}, \texttt{DISTILL\_PROMPT}
+  \item \texttt{validate\_parallel.py}: \texttt{EXEMPLAR\_PROMPT}
+  \item \texttt{phase2\_v20\_framework.py}:
+    \texttt{FRAME\_REWRITE\_PROMPT}, \texttt{EXECUTE\_V20},
+    \texttt{REFLECT\_PROMPT\_V20}
+\end{itemize}
+
+\section{Additional evolution statistics}
+\label{app:stats}
+
+Table~\ref{tab:kepts} expands on the three KEEP events.
+Table~\ref{tab:deprecated} lists the deprecated IDs.
+
+\begin{table}[h]
+  \centering\small
+  \begin{tabular}{l l r l l}
+    \toprule
+    ID & Aphorism & wr\(_{\text{ext}}\) & Source of signal & Provenance \\
+    \midrule
+    W076 & 凡益之道，与时偕行 \emph{(Change with the times)} & 0.64
+      & Turn-0 cluster \(n=9\) & success\_distilled \\
+    W077 & 没有调查，就没有发言权 \emph{(No investigation, no right to speak)} & 0.60
+      & Turn-0 cluster \(n=6\) & success\_distilled \\
+    W078 & 是骡子是马，拉出来遛遛 \emph{(Mule or horse---take it out for a test)} & 0.60
+      & 2 GPT-5.4-win math losses & cross\_llm \\
+    \bottomrule
+  \end{tabular}
+  \caption{Three KEEP events this cycle.}
+  \label{tab:kepts}
+\end{table}
+
+\begin{table}[h]
+  \centering\small
+  \begin{tabular}{p{0.95\linewidth}}
+    \toprule
+    Deprecated in v20.3 scan (\(0\) activations across \(5\) selection
+    files, \(1000\) top-2 slots): \\
+    W005, W008, W014, W017, W018, W021, W027, W038, W053, W054, W055,
+    W056, W061, W069, W071, W072, W073, W074, W075. \\
+    \bottomrule
+  \end{tabular}
+  \caption{The pruner's first-scan output.}
+  \label{tab:deprecated}
+\end{table}
+
+\section{Reproducibility appendix}
+\label{app:repro}
+
+\paragraph{Model identities.} All API calls flow through the
+\texttt{ruoli.dev} OpenAI-compatible proxy, with three family routes:
+Google (model \texttt{gemini-3-flash}), Anthropic (models
+\texttt{claude-haiku-4-5-20251001}, \texttt{claude-opus-4-6}), OpenAI
+(models \texttt{gpt-5.4-mini}, \texttt{gpt-5.4}). The proxy is used
+uniformly for both solver and judge roles across every experiment;
+no experiment mixes proxy and direct vendor access.
+
+\paragraph{Temperature and sampling.} Solver Turn-0 (frame + rewrite)
+and Turn-1 (execute): \texttt{temperature} \(= 0.2\text{--}0.3\),
+\texttt{max\_tokens} \(= 500\) (frame) / \(1000\) (execute). Judge
+calls: \texttt{temperature} \(= 0.0\), \texttt{max\_tokens} \(= 300\).
+These values are constants in the experiment scripts and not
+hyperparameter-tuned.
+
+\paragraph{Random seeds.} The A/B side-randomization uses
+\texttt{random.Random(hash(pid) \% 2**32)} with the problem\_id as
+seed key, giving deterministic per-pid allocation across re-runs of
+the same experiment. The side-shuffle audit layer (Exp~5) changes
+the seed offset to \texttt{hash(pid) + 17} to decouple from the
+original run. Problem-subset sampling (Exp~31) uses
+\texttt{random.Random(2028)} as the global seed. All seeds are
+recorded in the script header and carried into log JSON.
+
+\paragraph{Data sources and cached artifacts.} The 1768-problem pool
+lives in \texttt{phase zero/benchmark/problems/\{mathematics,
+science, business, software\_engineering\}.json}. Cached answers
+per-experiment sit under \texttt{phase two/analysis/cache/answers/};
+cross-family judge logs under \texttt{phase four/autonomous/}.
+Every audit layer's verdict is recoverable from its log file alone:
+\{pid\(\to\)winner\} maps are preserved end-to-end, so the exact
+decision trajectory is deterministic given the cached answer text.
+
+\paragraph{What is \emph{not} reproducible.} Exact output tokens
+depend on the proxy's routing state at call time; re-running the
+same prompt two weeks later is not token-identical even with fixed
+temperature and seed. This is an inherent property of hosted LLM
+APIs, not specific to our setup. Our reproducibility target is one
+level up: given the cached answer text (\texttt{.../answers/*.json}),
+every audit-layer verdict in the paper is exactly reproducible.
+
+\paragraph{Supplementary archive.} Code, prompts, cached answers,
+and log JSONs are bundled in the supplementary tarball. A single
+entry point, \texttt{phase four/run\_audit\_stack.sh}, reproduces
+Tables~\ref{tab:ci} and the six-layer audit table given the cached
+answers.
+
+\section{Compute and cost}
+\label{app:compute}
+
+Table~\ref{tab:compute} consolidates the per-experiment compute and
+cost figures scattered through the paper. All API costs are computed
+at the per-call price of the corresponding model on the
+\texttt{ruoli.dev} proxy; wall times reported with the parallelism
+in the actual run.
+
+\begin{table}[h]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{l l l r l}
+\toprule
+Stage & Experiment & Calls & \multicolumn{1}{c}{Wall} & API cost \\
+\midrule
+\multicolumn{5}{l}{\emph{Phase 1 — build}}\\
+\quad scaffolded solver dev (v13--v20)
+  & --- & ${\sim}50$k gen+judge & 4--6\,d & \(\sim\$80\) \\
+\midrule
+\multicolumn{5}{l}{\emph{Phase 2 — evolve (one inner-loop cycle)}}\\
+\quad failure / success / cross-LLM proposers
+  & §3 modules & ${\sim}300$ gen & 30\,min & \(\sim\$3\) \\
+\quad 12-candidate $+10$pp held-out A/B at $n=50$
+  & §4 inner loop & 600 gen + 600 judge & 1.5\,h & \(\sim\$8\) \\
+\midrule
+\multicolumn{5}{l}{\emph{Phase 3 — audit (per-layer)}}\\
+\quad L1 cross-family (Opus) on 3 KEEPs
+  & Exp~1 & 150 judge (Opus) & 12\,min & \(\sim\$12\) \\
+\quad L2 side-shuffle reseed
+  & Exp~5 & 150 judge (gemini) & 8\,min & \(\sim\$1\) \\
+\quad L3 sample extension to $n{=}100$
+  & Exp~8 & 600 gen + 300 judge & 1\,h & \(\sim\$6\) \\
+\quad L4 cross-solver, 1 KEEP
+  & Exp~26 & 60 gen + 180 judge & 30\,min & \(\sim\$3\) \\
+\quad L5 fresh-domain + GSM8K
+  & Exp~31--32 & 100 gen + 150 judge & 35\,min & \(\sim\$3\) \\
+\quad L6 faithfulness (LLM-judged citation)
+  & Exp~14 & 240 judge (Claude) & 25\,min & \(\sim\$10\) \\
+\midrule
+\multicolumn{5}{l}{\emph{Phase 4 — recovery and statistics}}\\
+\quad trigger-conditioned gate dev
+  & Exp~15 & 600 label calls & 50\,min & \(\sim\$5\) \\
+\quad 9 new candidates prospective
+  & Exp~33 & 360 gen + 360 judge & 1.2\,h & \(\sim\$5\) \\
+\midrule
+\multicolumn{5}{l}{\emph{Robustness add-ons}}\\
+\quad Exp~34 (W078, 2 expensive judges)
+  & Exp~34 & 100 judge (Opus + GPT-5.4) & 4\,min & \(\sim\$6.5\) \\
+\quad Exp~35 (3 KEEPs $\times$ 2 expensive judges)
+  & Exp~35 & 300 judge & 12\,min & \(\sim\$25\) \\
+\quad Exp~36 (3 KEEPs $\times$ 3 cheap judges, $\kappa$)
+  & Exp~36 & 450 judge & 10\,min & \(\sim\$5\) \\
+\midrule
+\multicolumn{4}{l}{\textbf{Total budget for the full paper}} & \(\sim\$170\) \\
+\bottomrule
+\end{tabular}
+\caption{Per-experiment compute and API-cost breakdown. The full
+six-layer audit on three KEEPs (Phase 3, the paper's main
+methodological contribution) costs roughly \(\$35\) and runs in
+\({\sim}3\) hours wall time at researcher-laptop parallelism. The
+robustness add-ons at the bottom (Exp~34--36, scaling and
+\(\kappa\)) are deliberately small relative to the audit's primary
+cost so that the stack is replicable on a graduate-student
+budget.}
+\label{tab:compute}
+\end{table}
+
+A typical reader can read this table as: \emph{the audit stack is
+not the expensive part of the paper.} The expensive part is the
+six-month scaffold-development effort (Phase 1) that produced the
+v20 solver these audits were applied to. Anyone who has already
+built a self-improvement loop should be able to attach the audit
+stack to their existing artefacts with a budget under \(\$50\).
+
+
+\section{Experiments 18--19 — Agent-designed replacement gate (full)}
+\label{app:agent-gate}
+
+\subsection{Experiment 18 — Can the agent design the
+replacement gate?}
+\label{sec:meta}
+
+So far in this paper the replacement gate (Experiment 15) was
+designed \emph{by the researcher} — we identified the confound,
+chose the decomposition, and wrote the validator. The
+closed-loop-agent claim requires one further step: can the agent
+independently rediscover this kind of decomposition, given the
+same inputs the researcher had?
+
+We test this with a pilot. The agent is Claude Opus 4.6
+(cross-family to the solver, so not the same model doing the
+validation). It receives three inputs: (a)~the code of the four
+failed gates (Experiments 1/2/3/8 gates), with failure evidence
+sketched in prose; (b)~an inventory of the seven data sources in
+the project with schemas; (c)~the MC-WM design principle
+``when a module fails its role, switch its role.'' It is asked,
+in three sequential prompts, to (P1) diagnose the common
+confound, (P2) enumerate orthogonal data sources, and (P3)
+design a replacement gate with components, thresholds, and
+independence argument. Experiment 15's design is \emph{withheld}
+from its context. A third-family judge (GPT-5.4) then scores
+the agent's output against Experiment 15's design.
+
+\paragraph{Phase 1 — Diagnosis.} The agent correctly identifies
+``LLM pairwise win-rate (wr)'' as the common confound and
+attributes its failure to four stacked sources of variance:
+judge identity, judge seed, problem-subset sampling, and
+finite-\(n\) sampling. This matches our own diagnosis.
+
+\paragraph{Phase 2 — Orthogonal sources.} The agent produces
+six candidate sources, of which three coincide with ones we
+used and three are ones we did \emph{not} use:
+
+\begin{center}\small
+\begin{tabular}{p{4.5cm} p{3.5cm} p{3cm}}
+  \toprule
+  Agent-proposed source & Overlap with researcher & Novel? \\
+  \midrule
+  reframe meta-cognition records &  our Stage C (Exp 9)   & — \\
+  wisdom–problem semantic alignment & our Stage B (Exp 9) & — \\
+  holdout difficulty stratification & our Stage 3 (Exp 5) & — \\
+  \textbf{answer-level textual diff}
+    & — & \textbf{new}\\
+  \textbf{anti-pattern structural coverage}
+    & — & \textbf{new}\\
+  \textbf{cross-LLM judge agreement ($\kappa$)}
+    & similar to Exp 1 but formalised & \textbf{refined}\\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Phase 3 — Design.} The agent produces
+\texttt{orthogonal\_decomposition\_gate\_v1} with 4 components:
+
+\begin{description}[leftmargin=1.4em, topsep=2pt, itemsep=1pt]
+  \item[\texttt{reframe\_depth}] ``median reframe distance \(\geq 0.25\)''
+    (Stage-C analogue)
+  \item[\texttt{substantive\_content\_delta}] ``median content delta
+    \(\geq 0.20\)'' — novel: explicit answer-text diff threshold
+  \item[\texttt{wisdom\_problem\_alignment}] ``median alignment z
+    \(\geq 1.5\)'' (closest to our trigger\_fit\_rate)
+  \item[\texttt{antipattern\_avoidance}] ``median avoidance improvement
+    \(\geq 0.15\)'' — novel: check anti\_patterns listed in Turn-0
+    are actually avoided in Turn-1 answer
+\end{description}
+
+\paragraph{Phase 5 — Alignment with researcher design (GPT-5.4
+judge).} The third-family judge's verdict is \textbf{AGENT\_REACHED\_RELATED\_DESIGN}
+with structural-similarity \(0.28\). Component-level matches:
+
+\begin{center}\small
+\begin{tabular}{l l c}
+  \toprule
+  Researcher component & Agent component & Level \\
+  \midrule
+  \texttt{trigger\_fit\_rate} & \texttt{wisdom\_problem\_alignment}
+    & WEAK\_MATCH \\
+  \texttt{util\_when\_fires}  & \texttt{antipattern\_avoidance}
+    & WEAK\_MATCH \\
+  \texttt{cite\_when\_fires}  & (none)
+    & NO\_MATCH \\
+  \texttt{harm\_when\_absent} & (none)
+    & NO\_MATCH \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+The agent's design is \emph{not a copy} of the researcher's.
+It recovers the decomposition principle (2/4 components
+match weakly), but offers three independently-motivated
+dimensions (\texttt{reframe\_depth}, \texttt{substantive\_content\_delta},
+\texttt{antipattern\_avoidance}) that the researcher did not
+include, while missing two the researcher did
+(\texttt{cite\_when\_fires}, \texttt{harm\_when\_absent}).
+
+\paragraph{What this establishes and what it does not.}
+\emph{Establishes}: (i)~the design \emph{process} of
+decomposing a confounded scalar into orthogonal components is
+transferable to an LLM agent given the same inputs; (ii)~the
+agent does not merely mimic—its output contains novel
+axes—so it is exercising independent design judgment, not
+pattern-matching on the researcher's artefacts; (iii)~the
+combined researcher + agent design is a strict superset, not
+a zero-sum disagreement.
+\emph{Does not establish}: whether the agent's gate would
+empirically out-perform the researcher's when run on the same
+12 candidates (Phase 4–6 of the full protocol — code
+generation, execution, and comparative verdict — were scoped
+out as stretch goals). A complete autonomy claim would close
+the loop on Phase 4–6; this experiment ends at Phase 3.
+
+\paragraph{Implication for autonomy.} The earlier closed-loop
+agent (\S\ref{sec:orchestrator}) could \emph{propose and
+validate object-level wisdoms} under a fixed gate. It could not
+replace that gate. Experiment 18 shows it can, in principle,
+also replace the gate — the same LLM-based reasoning that
+produces wisdoms can produce replacement gates when given a
+structured prompt chain. Experiment 19 (below) closes Phase 4–6.
+
+\subsection{Experiment 19 — Phase 4–6: the agent writes,
+executes, and commits its own gate code}
+\label{sec:meta-exec}
+
+Exp 18 stopped at Phase 3 (design spec). Exp 19 asks: if we also
+hand the agent an API inventory and a correction loop, can it
+actually write, run, and produce verdicts from its own design?
+
+\paragraph{Protocol.}
+\emph{Phase 4}: the agent is shown (i) its Phase 3 design spec,
+(ii) a \(\approx 50\)-line clean data API
+(\texttt{exp21\_data\_api.list\_candidates}, \texttt{candidate\_info},
+\texttt{per\_pid\_records}), and (iii) the project path. It must
+emit one code block implementing the spec.
+\emph{Phase 5}: the script is saved and executed. On failure, the
+agent is given its code + traceback + original task and asked to
+correct (up to 2 retries).
+\emph{Phase 6}: the produced verdicts are normalised and
+overlap-compared with Exp 15's trigger-conditioned gate on the
+same 12 candidates.
+
+\paragraph{Result.} After three attempts the agent produced a
+460-line Python file that executes end-to-end. Two of its four
+components extract data correctly (\texttt{substantive\_content\_delta},
+\texttt{antipattern\_avoidance}); the other two
+(\texttt{reframe\_depth}, \texttt{wisdom\_problem\_alignment})
+use field names (\texttt{prompt}, \texttt{reframe}) that do not
+exist in the provided API (which uses \texttt{problem} and
+\texttt{critical\_reframe})—a documentation-contract slip, not a
+reasoning failure. The gate's verdict is therefore overly strict:
+with two components mechanically stuck at \texttt{False}, no
+candidate passes.
+
+\begin{center}\small
+\begin{tabular}{l r r}
+  \toprule
+  Metric & value & note \\
+  \midrule
+  Agent-generated code & 460 lines & 3 attempts \\
+  Components that executed correctly & 2/4 & by inspection \\
+  Components with data-contract bugs & 2/4 & field-name slips \\
+  Agent gate PASS on 12 & 0 & over-strict (bugs force FAIL) \\
+  Exp 15 gate PASS on 12 & 4 & W077, W078, WCAND01, WCAND02 \\
+  Agreement rate (PASS=PASS $\vee$ FAIL=FAIL) & 0.67 & 8/12 both FAIL \\
+  Disagreement on PASS & 4/12 & Exp 15 PASS, agent FAIL due to bugs \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Interpretation.} The agent demonstrably writes working
+gate code. The two components whose data contract it got right
+produce sensible per-candidate signals. Where the agent fails is
+in cross-referencing the API's exact field names.
+
+\paragraph{Targeted correction attempt (Exp 19b).} We test
+whether a single human-supplied diagnosis (``you used
+\texttt{rec['prompt']}; the API exposes \texttt{rec['problem']}'')
+unblocks the stuck components. Mechanical substitution of four
+field names on the original code makes \texttt{reframe\_depth}
+execute without \texttt{KeyError}, but reveals a
+\emph{second-layer} bug in the text-distance helper
+(\texttt{median\_dist} \(=1.0\) for all candidates, indicating
+the embedding function silently returns the max-distance
+fallback), and the other component now raises \texttt{NoneType}
+subscripting on a new line. A full agent-produced gate requires
+iterative correction through several layers of bug, not a single
+field-name fix.
+
+\paragraph{Refined take-away.} We distinguish three capability
+claims, with increasingly strong evidence:
+\begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
+  \item \textbf{Agent can design} a replacement gate that
+    structurally resembles the researcher's (Exp 18, sim \(0.28\),
+    \(+3\) novel dimensions).
+  \item \textbf{Agent can implement} the design as runnable
+    Python (Exp 19, 460 lines execute without human edits).
+  \item \textbf{Agent can produce a fully-correct gate} in a
+    single pass — this we do NOT show. Exp 19's code has
+    \(\geq 3\) bug layers that silently failed (wrong field
+    names → returns empty lists → misleading default
+    thresholds). Successive LLM correction rounds fix each
+    layer one at a time.
+\end{itemize}
+The gap between ``agent-in-the-loop with schema help'' and
+``agent-autonomously-correct-on-first-try'' is still there.
+
+\paragraph{Exp 19c — completing the gate strictly per the
+agent's spec and running it.}
+We manually fill in the three missing evaluator bodies strictly
+from the agent's Phase-3 spec (the two truncated classes plus
+the never-written \texttt{antipattern\_avoidance}), keeping the
+spec's thresholds (\texttt{reframe\_depth} median\_dist $\geq
+0.25$; \texttt{substantive\_content\_delta} median\_dist $\geq
+0.20$ AND $60\%$ above $0.15$; \texttt{antipattern\_avoidance}
+median avoidance $\geq 0.60$; \texttt{wisdom\_problem\_alignment}
+we implemented via mean cosine $\geq 0.05$ AND $\geq 3$ pids
+above mean). The fully-implemented gate then produces:
+
+\begin{center}\small
+\begin{tabular}{l c c}
+  \toprule
+  Gate & PASS count & Discrimination \\
+  \midrule
+  Agent-designed, fully implemented & \textbf{12/12} & \textbf{none} \\
+  Researcher-designed (Exp 15, trigger-conditioned) & 4/12 & meaningful \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\emph{Every candidate passes every component of the agent's
+gate.} The agent's four axes
+(reframe-depth, content-delta, wisdom-alignment, antipattern
+avoidance) all measure properties that any retrieved wisdom
+trivially exhibits on the holdout: adding W to the library does
+perturb reasoning (large content-delta for all), the wisdom
+unpacked text does share some vocabulary with problems (non-zero
+alignment), and anti-patterns are mostly absent from answers by
+default. Without the trigger-conditioning split
+(SHOULD\_FIRE vs NO\_FIRE), orthogonality alone collapses into
+``yes everything differs in some way.''
+
+\paragraph{This is the actually interesting architectural
+lesson.} Orthogonal decomposition is \emph{necessary but not
+sufficient}. The researcher's gate (Exp 15) adds a separate
+ingredient the agent did not discover: \emph{conditioning on an
+externally-supplied trigger class} so that utility and
+citability are computed only on the subset where the wisdom
+claims to apply. That conditioning is what turns ``can measure
+4 things'' into ``can discriminate 4-from-12 candidates.''
+\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=1pt]
+  \item \textbf{Agent capability confirmed}: propose
+    orthogonal components, implement them.
+  \item \textbf{Agent capability missing}: propose
+    \emph{conditioning} — the architectural move of splitting
+    the evaluation population by a wisdom-specific trigger.
+  \item \textbf{Researcher contribution that was not
+    transferable}: the idea that some candidates are
+    \emph{conditional specialists}, not uniform activators,
+    and the gate must evaluate them in-class.
+\end{itemize}
+Teaching the agent \emph{conditioning} as a first-class design
+move — not just ``decompose'' — is the next L5 experiment.
+
+
+
+
+\section{Multi-step research-task pilot (full)}
+\label{app:multistep}
+
+The 100-problem benchmark exercised throughout \S\ref{sec:experiments}
+is fundamentally \emph{single-advisory}: one problem, one answer,
+one judge verdict. Many research and engineering workflows, however,
+demand \emph{multi-round} assumption-revision: propose hypotheses,
+gather evidence, update beliefs, re-propose. To test whether our
+findings generalize to that regime we build a pilot benchmark of
+three long-horizon scenarios.
+
+\paragraph{Benchmark.} Each scenario specifies a \emph{briefing}
+(visible to the agent), a \emph{hidden ground-truth mechanism}, a
+list of \emph{critical facts} the environment may reveal on demand,
+and a list of \emph{plausible red-herrings} also consistent with
+surface observations. The three scenarios span domains where
+root-cause diagnosis requires targeted investigation rather than
+pattern matching:
+
+\begin{center}\small
+\begin{tabular}{l l p{4.5cm}}
+  \toprule
+  Scenario & Domain & Ground-truth root cause (hidden) \\
+  \midrule
+  Clinical trial & Medicine &
+    Drug--drug interaction with warfarin (CYP2C9), amplified by
+    chronic kidney disease \\
+  ML CTR regression & ML engineering &
+    Feature-store schema migration silently renamed a high-importance
+    categorical column; serving stack continues to read the old
+    column and gets \(0\) \\
+  DB slowdown & Systems &
+    Postgres minor-version upgrade changed planner statistics;
+    a hot query regressed from \texttt{IndexScan} to \texttt{SeqScan} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Oracle and judge.} To avoid the same-family contamination
+identified in \S\ref{sec:selfaudit}, the \emph{oracle} (simulating the
+experimental environment) is GPT-5.4, the \emph{solver} is
+gemini-3-flash, and the \emph{judge} is Claude Opus 4.6
+(three different vendor families). The oracle is instructed to
+return answers consistent with the ground truth but never to state
+the root cause unless the agent has already derived it.
+
+\paragraph{Agent strategies.} Two baselines are compared:
+\begin{description}[leftmargin=1.5em, topsep=2pt, itemsep=1pt]
+  \item[\textbf{single\_pass}:] The solver reads the briefing and
+    writes a final diagnosis with no oracle interaction.
+  \item[\textbf{belief\_track}:] The solver maintains an explicit
+    hypothesis state (\(\leq 3\) hypotheses with explicit
+    confidences) across \(3\) rounds. Each round it proposes
+    \(1\text{--}3\) targeted investigations; the oracle answers;
+    the agent updates hypotheses in light of the answers. A final
+    diagnosis is committed after round \(3\).
+\end{description}
+
+\paragraph{Result.} On this small benchmark,
+\texttt{belief\_track} converges on all three scenarios; the
+single-pass baseline misses the mechanism in the ML-regression
+scenario:
+
+\begin{center}\small
+\begin{tabular}{l c c}
+  \toprule
+  Scenario & single\_pass & belief\_track \\
+  \midrule
+  Clinical trial    & CONVERGED & CONVERGED \\
+  ML CTR regression & PARTIAL   & \textbf{CONVERGED} \\
+  DB slowdown       & CONVERGED & CONVERGED \\
+  \midrule
+  Total CONVERGED   & \(2/3\)   & \(\mathbf{3/3}\) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The ML scenario is the case whose root cause is a
+specific, low-prior mechanism (a silent column rename; the model
+sees zero variance on a previously high-importance feature). Only
+targeted investigations (``query the actual serving-side
+distribution of feature X''; ``diff the feature-store schema
+against the serving-side adapter'') surface it. \texttt{single\_pass}
+returns a plausible but under-specified ``feature-store issue''
+verdict; \texttt{belief\_track} queries the oracle with the
+specific diagnostic, receives ``\(user\_category\_id = 0\) for
+\(100\%\) of inference requests,'' and commits to the correct
+mechanism.
+
+\paragraph{Scope.} \(N = 3\) is a pilot. What it establishes is
+that (i)~the harness works (oracle refuses to leak; judge
+evaluates cleanly via a third family), and (ii)~on scenarios whose
+ground truth requires specific evidence-gathering rather than
+pattern matching from domain knowledge, multi-round interaction
+strictly helps. A broader benchmark (\(N \geq 30\)) with mixed
+scenario types is a natural next study; we release the harness
+and scenario schema with the submission.
+
+\section{Detailed experiment log (chronological lab notebook)}
+\label{app:exp-log}
+
+\noindent This appendix contains the full chronological log of every
+experiment run during this study, retained so that any specific cell
+or sensitivity can be checked against the source. The five summary
+subsections of \S\ref{sec:experiments} contain everything the main
+claims of the paper depend on; the entries below are reference only.
 
 \subsection{Setup}
 \label{sec:setup}
@@ -4624,1248 +5878,6 @@ wisdom-specific trigger class. Full protocol, agent outputs, code
 traces in Appendix~\ref{app:agent-gate}.
 
 
-\section{Multi-step research-task pilot (summary;
-full in Appendix~\ref{app:multistep})}
-\label{sec:multistep}
-
-The audit stack is validated on single-advisory A/B pairs. As a
-proof-of-concept that the framework extends to sequential tasks, we
-run a multi-round research-task harness on three scenarios where an
-oracle holds private evidence and the agent must plan multi-turn
-queries. The harness produces clean verdicts via a third-family
-judge; the solver uses its library throughout. Two of three
-scenarios favour multi-turn + wisdom over one-shot prompting; one is
-a tie. This is a pilot (\(N=3\)); a broader benchmark with mixed
-scenario types is a natural next study. Full harness, scenarios, and
-verdicts in Appendix~\ref{app:multistep}.
-
-\section{Five-Stage Roadmap to a Self-Hypothesizing,
-Self-Validating Agent}
-\label{sec:roadmap}
-
-The empirical null in \S\ref{sec:experiments} is not just ``one
-loop did not work.'' It is a calibrated diagnostic of \emph{what
-is missing} from current LLM-as-judge self-improvement loops.
-This section sketches the architecture our null points toward.
-We describe it as five sequential stages so that each can be
-built and validated incrementally; each stage's output is the
-next stage's known-reliable component.
-
-\paragraph{Stage 0 --- The methodological-prior library.}
-The first thing missing is the equivalent of human education.
-Human researchers do not re-discover ``control of variables''
-from scratch every time; they were taught it, and they apply it
-when conditions warrant. A self-hypothesizing agent should start
-with 15--20 such priors --- divide-and-conquer, Occam's razor,
-``before arguing get the facts,'' analogy from a known case,
-counterexample search, dimensional analysis, increment-one-thing
-debugging, etc. --- each annotated with applicability conditions
-and historical examples. The current paper's wisdom library
-(\(75\) entries from the classical Chinese tradition) is one
-draft of this; a serious version would extend across cultures
-and add applicability conditions an LLM can pattern-match
-against. Stage 0 alone is not an agent; it is a substrate.
-
-\paragraph{Stage 0.5 --- A cheap world model for hypothesis
-testing.} The recursive hypothesis-test loop is unusable if every
-test costs hours of real execution. The agent needs a world
-model in which a candidate solution can be \emph{simulated} fast
-enough that the search can branch. This is the role current
-LLM-agent stacks try to play with chain-of-thought + tool use,
-but those stacks are not calibrated as predictors of execution
-outcomes; they are calibrated as plausibility generators. A
-proper world model is task-specific (a code-execution simulator
-for code tasks; a fluid-dynamics simulator for engineering
-tasks; a learned dynamics model for embodied tasks) and predicts
-``if I take action \(a\) in state \(s\), the next observation
-will be \(o\) with probability \(p\).'' Without this, the
-recursion's \emph{wall clock} is the verification bottleneck.
-
-\paragraph{Stage 1 --- A scheduler that maps problems to priors.}
-With Stage 0 as priors and Stage 0.5 as fast simulator, the
-agent needs to learn \emph{which} prior to invoke when. This is
-classic meta-RL on an action space whose actions are
-``invoke prior \(p_i\) on subproblem \(s\).'' Recent work
-(ReMA (Wan et al., 2025), Memory-R1 (Yan et al., 2025),
-EvolveR (Wang et al., 2025)) has built proxies for this in
-narrow domains. None pairs an explicit human-prior library with
-an explicit scheduler; doing so is the cheapest known way to
-inject the millennia of accumulated human methodology without
-re-deriving it from scratch.
-
-\paragraph{Stage 2 --- Experience feedback refines the priors'
-applicability conditions.} As the scheduler runs, it accumulates
-data on \emph{when} each prior fires successfully and when it
-fails. ``Control of variables fails when components are tightly
-coupled.'' ``Divide-and-conquer fails on problems where the
-sub-tasks share a hidden constraint.'' These applicability
-conditions are partly known to humans but rarely written down
-formally; the agent's job at Stage 2 is to discover and tighten
-them by gradient feedback from real outcomes. Recent work on
-metacognitive and meta-experience learning (MEL
-(Liang et al., 2026), lifelong-learning agent surveys
-(Liu et al., 2025)) has built half of this; the other half
-is the alignment layer below.
-
-\paragraph{Stage 3 --- Alignment of priors via category theory and
-information geometry.} Stages 0--2 produce a library of priors,
-each annotated with applicability conditions. As the library
-grows the agent will independently rediscover priors that are
-formally equivalent but stylistically different. Le Chatelier
-and Lenz, RC discharge and radioactive decay, logistic growth
-and saturating enzyme kinetics --- pairwise, these share a
-formal structure (an isomorphism in a Markov category, a
-Blackwell-equivalent statistical experiment) even though their
-surface descriptions look unrelated. A formal alignment layer
-detects these equivalences and merges the descriptions, so a
-prior validated in one domain can be transferred to another.
-This is where category-theoretic probability
-(Fritz, 2020) and information geometry
-(Ay et al., 2017) earn their keep, even though they cannot
-do the earlier stages' work.
-
-\paragraph{Stage 4 --- Generation of \emph{new} priors, validated
-by the rest of the architecture.} Once the agent has Stages
-0--3, it can recognise problems for which no existing prior
-applies. At that point the LLM's generative capacity proposes a
-\emph{new} candidate prior; the alignment layer (Stage 3) checks
-that it is not formally equivalent to an existing one; the
-scheduler (Stage 1) tries to apply it on a battery of test
-problems through the world model (Stage 0.5); the experience
-feedback (Stage 2) refines its applicability conditions. The
-prior is committed only when the entire stack agrees. This is
-the version of self-improvement that was the original target.
-
-\paragraph{Where this paper sits.}
-The wisdom-library case study tests Stage~0 only. The null at
-\(n=100\) is a quantitative argument that a same-family A/B at
-\(n=50\) cannot stand alone as the validation step. \emph{In a
-second campaign of 11 experiments (Exp~55--65, summarised below),
-we instantiate each remaining stage in the simplest plausible
-form and measure what each contributes.} The result is mixed and
-informative: three of the five stages work, one is conditional,
-one fails outright, and one (Stage~0.5 in its naive form) is
-dominated by Stage~1. This is the empirical content of the
-roadmap; the rest of this section explains the wins and the
-failures stage by stage.
-
-\subsection{Empirical validation of each stage}
-\label{sec:roadmap-validation}
-
-We set up a simple diagnostic environment: 60 problems across 4
-task families (multi-step arithmetic, CRT trick, Fermi estimation,
-logic puzzles), with a known-optimal prior per family. Each prior
-in our Stage~0 library is one sentence; the Stage~1 scheduler
-picks one prior per problem; the Stage~0.5 ``cheap world model'' is
-the simplest possible form, an LLM prompted to predict
-\(P(\text{success})\); the Stage~2 ``experience feedback'' is
-in-context retrieval of past (problem, prior, outcome) triples;
-the Stage~3 ``alignment'' is tested by translating problems into
-five languages and checking the scheduler's consistency; the
-Stage~4 ``new prior generation'' is leave-one-family-out and ask
-the LLM to invent a prior. Solver: gemini-3-flash unless noted.
-
-\begin{table}[h]
-\centering\small
-\begin{tabular}{p{2.6cm} l p{8cm}}
-  \toprule
-  \textbf{Stage} & \textbf{Verdict} & \textbf{Empirical evidence} \\
-  \midrule
-  0. Priors library & \cellcolor{green!18}\textbf{works}
-    & 4 priors instantiated; wrong prior on the wrong family
-      hurts \(10\)--\(20\)pp (Exp~56). The library is not a free
-      win --- mismatches actively damage the solver. \\
-  \midrule
-  0.5. Cheap world model
-   (LLM \(P(\text{success})\)) & \cellcolor{red!18}\textbf{fails}
-    & On Exp~56's verdict array: AUROC \(0.40\) (anti-correlated
-      with actual outcomes), Brier \(0.262\) (worse than uniform
-      \(0.25\)), top-1 argmax pick acc \(48\%\) vs random
-      \(25\%\) but vs Stage~1 LLM scheduler at \(85\%\) (Exp~57).
-      \emph{The simplest world-model prompt is dominated by
-      Stage~1 alone.} A useful Stage~0.5 will need calibration
-      training, not just a single prompt. \\
-  \midrule
-  1. Scheduler & \cellcolor{yellow!18}\textbf{conditional}
-    & Pick accuracy \(85\%\) on 4-family English / gemini
-      (Exp~56). Cross-language pick accuracy \(85\)--\(88\%\) on
-      Spanish / French / German / Japanese (Exp~61). Cross-
-      solver: scheduler-vs-best-fixed delta is
-      \(+0.017\) (gemini), \(0.000\) (claude-haiku), \(-0.017\)
-      (gpt-5.4-mini) (Exp~60). Harder tasks (Exp~62): scheduler
-      \(0.773 < \) best fixed \(0.800\). GSM8K: scheduler
-      \(0.97 \approx\) baseline \(0.98\) at ceiling (Exp~64).
-      \emph{Stage~1 picks are robust; the solver-end gain is
-      conditional on the gap between best and worst prior on the
-      task at hand.} \\
-  \midrule
-  2. Experience feedback & \cellcolor{green!18}\textbf{works}
-    & Pick accuracy on a held-out 20-problem test split rises
-      from \(45\%\) (naive scheduler) to \(80\%\) (in-context
-      experience-augmented scheduler with 15 (problem, prior,
-      outcome) examples), \(\Delta = +35\)pp (Exp~58).
-      \emph{Experience accumulation substantially improves
-      prior-selection.} \\
-  \midrule
-  3. Cross-language alignment
-    & \cellcolor{green!28}\textbf{strongly works}
-    & \(95\%\) mean pairwise pick agreement across English /
-      Spanish / French / German / Japanese on the same problems
-      (Exp~63). \(96.7\%\) mode-pick consistency. Per-family
-      mode-correct: A=100\%, B=93\%, C=93\%, D=60\%. \emph{The
-      scheduler operates on underlying problem structure, not
-      surface language --- which is what an alignment layer is
-      supposed to deliver.} \\
-  \midrule
-  4. New prior generation
-    & \cellcolor{red!18}\textbf{fails}
-    & Leave-one-family-out: ask the LLM to invent a new prior
-      for the held-out family given the other 4 families'
-      (problem, optimal prior) examples. Mean delta vs baseline:
-      \(-0.013\) over 5 hold-outs. Generated prior beats
-      baseline on \(0/5\) hold-outs (Exp~65). The generated prior
-      \emph{names} are reasonable (e.g.\
-      \texttt{test\_hypotheses}, \texttt{scale\_anchoring}) but
-      do not actually help. \emph{The simplest Stage~4 ---
-      ``ask the LLM for a new prior'' --- does not work.} \\
-  \bottomrule
-\end{tabular}
-\caption{Per-stage empirical verdict from Exp~55--65. Three
-stages (0, 2, 3) work in their simplest form. One (1) is
-conditional on the task's prior-sensitivity. Two (0.5, 4) fail
-in their simplest form and need substantively more sophisticated
-implementations than a single LLM prompt.}
-\label{tab:stage-verdicts}
-\end{table}
-
-\paragraph{What this calibrates.}
-The roadmap is not vapourware: each stage has a measurable
-operationalisation and produces a measurable result.
-\textbf{Three stages work} (priors library, experience feedback,
-alignment). \textbf{One stage is conditional} (scheduler picks
-robustly but the solver-end improvement depends on whether the
-task is far from ceiling). \textbf{Two stages fail in their
-simplest form} (cheap world model via single LLM prompt;
-new-prior generation via single LLM prompt). The two failures
-are informative: they tell us that the obvious shortcut
-(``just prompt the LLM to do it'') does not work for these two
-roles, and that real Stage~0.5 / Stage~4 implementations need
-calibration training data and explicit search procedures over the
-prior space respectively. This narrows the contribution of the
-roadmap: it is not ``five plug-and-play modules,'' it is ``three
-plug-and-play modules + two open research problems with
-characterised failure modes.''
-
-\paragraph{Comparison to closely related work.}
-\textbf{POPPER} (Huang et al., 2025) validates natural-language
-hypotheses with Type-I error control --- it is a Stage 1
-validator without Stages 0/2/3/4, and it has shown the same
-recurring weakness: the validator's null is only as strong as
-the language model's coverage of failure modes. \textbf{EvolveR}
-(Wang et al., 2025) runs the cycle ``act \(\to\) distil
-strategic principles \(\to\) reuse'' --- this is Stage 0+2
-without explicit human priors, and as our null suggests, it
-re-discovers slowly because it lacks the inductive bias humans
-already wrote down. \textbf{ReMA}, \textbf{Reflexion}, and
-\textbf{Voyager} are partial Stage 1+2 implementations on narrow
-task distributions; they confirm the recursion is implementable
-but do not provide the priors or the alignment layer. The
-Bayesian/categorical foundations (Perrone, 2024; Fritz, 2020;
-Ay et al., 2017) are Stage 3 in the absence of
-the rest of the architecture --- they are exactly the part that
-cannot stand alone, but is essential when the rest exists. Our
-contribution is the diagnostic that combines these into a single
-roadmap.
-
-\section{Discussion}
-\label{sec:discussion}
-
-\paragraph{The single most important question: do the KEPT wisdoms
-have \emph{any} value?} Cross-family re-judgment says ``not as much
-as the inner loop thought.'' But it does not say ``zero.'' Claude's
-scores are $0.40, 0.47, 0.51$—one collapse and two near-parities.
-A future cycle could: (a)~commit wisdoms only if \emph{both} judges
-return $\geq 0.55$, turning the gate into an AND; (b)~commit only
-when the \emph{judge-family-average} wr
-$\bar{\text{wr}} \geq 0.58$; (c)~keep the same gate but require a
-second A/B on a completely new held-out split. Any of these would
-have rejected all three of our current KEEPs. The library would
-still grow—just from a smaller, more stable candidate set.
-
-\paragraph{What does this mean for the prior literature?} Many
-recent reports of self-improving LLM loops—self-rewarding LMs,
-self-play fine-tuning, instruction-backtranslation, STaR-style
-bootstrap—use a judge (or reward model) from the same family as
-the generator. Our experiment does not falsify these directly (they
-target the \emph{weights}, not a retrieval library), but it raises a
-specific testable question: are the reported gains intra-family
-judge-preference alignments or true capability gains? A drop-in
-cross-family re-judge, on the \emph{identical} generator outputs
-from the paper's most-improved checkpoint, is cheap and decisive.
-
-\paragraph{Why did the failure generator never fire?} The intended
-signal was ``judge gave B \(\geq\) 8-point margin, accumulate
-\(\geq 3\) such in a cluster.'' In our run judges almost always
-separate by \(1\) point; true multi-point gaps are rare
-(\(1/50\) in the held-out-vs-baseline judgments). Consequently the
-buffer fills slowly. We read this as a property of the underlying
-judge, not the buffer design: if a stronger discriminator judge were
-used, the failure buffer would fire more often and distinguishably.
-This is an empirical claim we can test in future work.
-
-\paragraph{The \(+10\)pp gate is strict by design.} A symmetric
-relaxation to \(+5\)pp would have kept \(6/11\) success-distilled
-candidates (see Figure~\ref{fig:distribution}); \(+8\)pp would have
-kept \(4/11\). We believe the tighter gate is the right setting for
-a library intended for long-horizon accumulation: a \(+5\)pp false
-positive is a candidate that is almost certainly inside the
-\(2\sigma\) noise band of a \(50\)-pair test. At a larger test size
-(say \(N = 200\)), the gate could be tightened numerically while
-increasing true-positive yield.
-
-\paragraph{Cross-LLM is a narrow lens, not a broad one.} W078's
-evidence set is \(\{2\) math problems\(\}\). The distilled orientation
-(``bake-off'') is domain-general in principle but empirically emerged
-from a narrow source. The held-out A/B verifies generality
-(\(\text{wr}_{\text{ext}} = 0.60\) across mixed domains), but this is
-exactly the kind of KEEP where a future cycle may override the earlier
-decision—which is, in turn, exactly why the registry tracks
-\texttt{contribution\_gain} and \texttt{activation\_count} on an
-ongoing basis.
-
-\paragraph{Is this a solution or an interesting artifact?} This is
-\emph{one cycle}, not steady-state forever-up. We showed the loop
-closes once; we did not show it keeps closing for \(K = 10\)
-cycles with monotone improvement. Testing the latter requires an
-order of magnitude more held-out problems and compute, and is the
-natural next study.
-
-\paragraph{What is actually novel in the audit stack, and what is
-not.} We are explicit about this so that reviewers need not infer
-it. Of the six layers, two carry the paper's methodological claim:
-
-\begin{description}[leftmargin=1.5em,topsep=2pt,itemsep=2pt]
-  \item[\textbf{L1 (cross-family re-judgment)}]
-    is non-trivial. The current self-improvement literature does
-    not routinely re-judge across judge families, and our empirical
-    finding is that doing so flips \(3/3\) of an inner loop's KEEP
-    decisions. L1 is cheap (the answer text is already cached) and
-    specifiable enough to drop into any existing loop.
-  \item[\textbf{L6 (faithfulness via non-pair-wr axes)}]
-    is the newest layer and the most preliminary. Our two
-    operationalisations --- embedding-direction alignment
-    (Exp~9+10) and LLM-judged citation strictness (Exp~11+14) ---
-    are proxies, not validated faithfulness measures. Embedding
-    cosine between \(\Delta a\) and \texttt{unpacked\_for\_llm} is
-    a weak surrogate for ``the wisdom causally drove the answer's
-    reasoning''; a single-LLM PARTIAL/YES rubric on citation is
-    sensitive to prompt wording (Exp~17 boosts citation rate to
-    \(95\%\) by adding an explicit \texttt{used\_wisdoms} field,
-    without proving the wisdom \emph{caused} better reasoning).
-    A future version of this stack should validate L6 on
-    synthetic cases with a known inserted wisdom effect, include
-    human faithfulness labels, and add a placebo-wisdom and
-    length-matched-random-context control to estimate
-    false-positive / false-negative rates of the faithfulness
-    layer itself.
-\end{description}
-
-\noindent Layers L2 (side-reseed), L3 (sample extension), L4
-(cross-solver), and L5 (fresh domain and standard-benchmark port)
-are \emph{standard statistical hygiene} — no individual layer is
-novel. What \emph{is} novel is their bundling into an audit stack
-whose layers are each specifiable operationally, each attach to a
-single non-specific term in the decomposition of
-\S\ref{sec:theory}, and are cheap enough to include as default
-reporting. Put bluntly: this paper's primary contribution is
-\emph{methodological advocacy with a concrete null result as
-evidence that the advocacy is needed}, not a new statistical
-method. We believe the field needs the advocacy, and the
-accompanying testbed, more than it needs another method.
-
-\paragraph{Objections we have \emph{not} closed.} Several
-reasonable reviewer concerns remain open; we list them rather
-than leave them to footnotes.
-
-\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=2pt]
-  \item \textbf{Gate-design freedom / hindsight.} We tried naive
-    pair-wr, three-tier pair-wr, then the trigger-conditioned
-    gate. The number of gate designs tried before the final
-    ordering was fixed is not zero, and Exp~15's thresholds were
-    chosen with knowledge of the 12 verdicts. Exp~33's null on
-    the 9 prospective candidates partially addresses this but a
-    proper pre-registered gate-design protocol is future work
-    (a preregistration template is included in the supplementary;
-    see PREREGISTRATION\_v2.md).
-  \item \textbf{Audit stack itself is post-hoc.} Layers L1--L6
-    were added in order in response to reviewer-simulation
-    objections, not pre-registered. \S\ref{sec:experiments}
-    documents the order. Threshold values were chosen from
-    statistical defaults before each layer's data was observed,
-    bounding threshold-hindsight; layer-selection hindsight is
-    bounded only to the extent that each layer responded to an
-    external objection rather than a desired conclusion. A truly
-    pre-registered application of the stack to a freshly-run
-    candidate-generation loop (i.e.\ rerunning candidate
-    generation, distillation, and pruning on fresh data, then
-    auditing the new KEEPs) is the strongest available correction
-    and is future work.
-  \item \textbf{Solver-family scope (partially closed by Exp~40).}
-    The original 12 inner-loop candidates were all judged on
-    gemini-solved answers. Exp~40 (\S\ref{sec:exp40}) re-runs the
-    full cross-solver L4 audit on the three KEEPs with
-    claude-haiku and gpt-5.4-mini as the SOLVER (not just judge),
-    on the same 50 holdout pids and with the 3-family cheap
-    panel: \(7/18\) (KEEP, judge) cells reach wr \(\geq 0.60\)
-    under at least one judge, but \(0/6\) (KEEP, solver)
-    combinations clear \(0.60\) under all three judges --- the
-    cross-family fragility persists across solver families.
-    A second \emph{full inner-loop cycle} on a non-gemini solver
-    (proposers, gate, audit) is still open.
-  \item \textbf{Uneven probe coverage across the audit layers.}
-    Several individual probes test only a subset of the 3 KEEPs:
-    Exp~26 (cross-solver, original L4) only \(W_{076}\); Exp~31
-    (fresh math) only \(W_{078}\); Exp~33 (\(9\) new candidates
-    prospective) gemini-only judging. The full panel (3 KEEPs
-    \(\times\) all relevant axes) is not balanced. Exp~35,
-    Exp~40, Exp~41, Exp~42 close most of these gaps for the 3
-    KEEPs, but a balanced factorial design (all KEEPs across
-    all solvers and all judges and all problem subsets at the
-    same \(n\)) is future work.
-  \item \textbf{One evolution cycle.} We ran the loop once. We
-    have no data on whether a multi-cycle run converges, cycles,
-    or drifts.
-  \item \textbf{No human ground truth on the open-ended Chinese
-    pool (partially mitigated by GSM8K + gpt-5.5 rating).}
-    Cross-family disagreement is not the same as
-    ``the wisdoms lack substantive utility.'' Two
-    LLM-substitute checks bound the alternative explanation:
-    Exp~41 (\S\ref{sec:exp41}) shows gpt-5.5 (a stronger
-    non-panel rater under structured 4-dim Likert) prefers base
-    over ext on all three KEEPs; Exp~32 + Exp~42
-    (\S\ref{sec:exp42}) show all three KEEPs give a small
-    negative point estimate on GSM8K objective accuracy
-    (\(1\)--\(2\) problems out of 30, direction uniform but not
-    individually McNemar-significant at this \(n\)). An
-    actual human study with \(n \geq 30\) raters across at
-    least two demographic backgrounds remains future work, but
-    the alternative explanation (``audit panel is wrong; original
-    judge was right'') is not supported by any of the available
-    LLM-substitute proxies.
-  \item \textbf{Positive controls remain unresolved
-    (Exp~44 + Exp~46).} Exp~44 (\S\ref{sec:exp44}) runs three
-    controls (placebo, random literary quote, generic-useful
-    hint); Exp~46 (\S\ref{sec:exp46}) adds three stronger
-    positive controls (math-specific, SCQA framework,
-    base-library duplicate). All \(6/6\) controls fail the gate
-    (wr \(\leq 0.25\)). The gate has very high specificity but
-    \emph{no positive control we constructed actually functions
-    as a positive}, so the audit's sensitivity remains untested.
-    Combined with Exp~45's selection-bias finding, the
-    parsimonious null model is now: the gate is structurally
-    anti-additive (adding any wisdom hurts), and the three
-    KEEPs are the lucky right-tail of 12 noisy gate measurements.
-    A genuinely positive control --- a synthetic task family
-    where a specific known-useful intervention deterministically
-    helps, or a human-curated wisdom validated independently
-    against task outcomes before insertion --- remains future
-    work and is the strongest single missing piece.
-  \item \textbf{L6 operationalization is under-specified.}
-    Embedding cosine and citation strictness are two proxies
-    for faithfulness; they could in principle disagree. On our
-    12 candidates they converge (both near-zero for all), but
-    this is a single data point of operationalization
-    agreement, and neither proxy is itself validated against
-    ground-truth faithfulness.
-  \item \textbf{Expensive-judge panel is partial.} Exp~34--35
-    cover \(2\) expensive judges on the \(3\) inner-loop KEEPs
-    (\(150\) judge calls); a full \(2 \times 21\) replication on
-    every candidate is deferred.
-\end{itemize}
-
-\noindent We regard the first three (gate-design hindsight,
-audit-stack post-hoc-ness, solver-family scope) plus the lack of
-human ground truth and positive controls as the most
-consequential; the others are resource-bounded rather than
-conceptually open.
-
-\section{Limitations}
-\label{sec:limitations}
-
-\textbf{Held-out exposure via dynamic same-domain exemplars
-(real but symmetric).} The v20 solver pipeline
-(\S\ref{sec:gate}, code at
-\texttt{phase one/scripts/validation/phase2\_v15\_exemplar\_framework.py})
-includes, at solve time, a same-domain exemplar dynamically
-selected from the evaluation pool's other pids: for evaluation
-on pid \(p\), the prompt is augmented with the most-similar
-in-pool pid in the same domain, with that pid's cached
-v15-class answer text. This is a real exposure to the
-evaluation distribution. \emph{Crucially, it applies symmetrically
-to the base condition (no-wisdom) and the ext condition
-(with-wisdom): both prompts have the same same-domain exemplar
-augmentation.} The relative measurement
-\(\mathrm{wr}_{\mathrm{ext}} = \mathrm{ext} / (\mathrm{ext}
-+ \mathrm{base})\) is therefore approximately
-exposure-neutral, and we believe the comparison remains
-informative about whether the wisdom adds anything beyond the
-base condition under the same exposure. A separate
-cross-domain mining pass exists in
-\texttt{validate\_parallel.py:91--278}; it would have stored
-PID-bound exemplars in the candidate wisdom records under
-\texttt{wisdom\_diverse\_exemplars.json}. We verified
-empirically that for our 12 candidates, this file contains zero
-WCAND/WCROSS entries: the cross-domain mining was either skipped
-(the ``\(\geq 3\) exemplars'' guard branched out) or never run
-on this candidate set. The candidates' \texttt{cross\_domain\_examples}
-visible in the wisdom records (\texttt{success\_distilled\_candidates.json})
-are abstract scenarios generated by the success distiller, with
-no PID grounding; the v20 prompt formatter does not consume them.
-An earlier draft of this Limitations section described an
-exemplar mining leak as serious; that draft was based on a
-reading of the code path that was not actually exercised on
-our 12 candidates. We retain the symmetric same-domain
-exposure as the actual extent of held-out involvement.
-
-A clean re-run of the inner loop with strict pool separation
-(no same-domain exemplar from the eval pool) is straightforward
-to implement and remains future work; given the symmetry
-argument above we do not expect it to materially change the
-wr\_ext numbers on this candidate set.
-
-\textbf{Language scope: primarily Chinese open-ended problems.}
-The full pipeline (scaffold v20, 75-entry wisdom library, the
-1768-problem benchmark pool) is authored in Chinese and designed
-for \emph{open-ended, multi-domain} reasoning. Our audit stack's
-null verdict on the three KEEPs is established on this
-distribution. Exp~39 runs a minimal English-language replication
-on 30 MT-Bench prompts with a frozen 6-entry English-only wisdom
-library; \(0/6\) English wisdoms clear wr \(\geq 0.60\) under any
-single family across two independent runs, and all 3-family means
-sit below \(0.50\). We report this as one further language loop,
-not as cross-lingual generality. GSM8K (Exp~32) is included as a closed-form English
-portability probe, not as a representative test; the small
-negative point estimate on \(W_{078}\) GSM8K accuracy there
-(29/30 vs 30/30, not significant by McNemar) should be read as
-``the wisdom does not appear to transfer out of the Chinese
-open-ended scaffold,'' not as confident harm. A full English
-replication of the closed loop (English
-proposers, English wisdoms, English gate, English audit) remains
-future work.
-
-\textbf{Single LLM family for solver.} The solver is
-\emph{gemini-3-flash} throughout. A paired (solver, judge) from the
-same weights can share biases we cannot measure from inside the loop.
-Exp~26 partially probes this (same wisdom re-solved by three solver
-families: mean wr\_ext \(= 0.41\), no family \(\geq 0.50\)), but a full
-re-run with an Anthropic/OpenAI solver is the natural next step.
-
-\textbf{Judge budget.} The audit stack's three judges are in the cheap
-tier (gemini-3-flash, claude-haiku, gpt-5.4-mini). Exp~34 re-runs the
-L1 judge on W078 with expensive-tier judges (Claude Opus 4.6, GPT-5.4);
-see \S\ref{sec:exp34} for the result. This is one family combination
-on one candidate; a fuller judge-budget sweep is deferred.
-
-\textbf{Small held-out set per layer.} \(50\) problems per layer is
-enough to distinguish \(+10\)pp from noise but not to resolve finer
-gradations. We report binomial CIs in
-\S\ref{sec:stats} for core claims; stratified ROC analysis is deferred.
-
-\textbf{Reproducibility via third-party proxy.} API access to the
-three families is mediated by the \texttt{ruoli.dev} OpenAI-compatible
-proxy, not the official vendor endpoints. Temperatures and seeds are
-recorded in each log file; however, exact-token reproduction requires
-the proxy's routing state at run time, which is not under our control.
-The decision trajectory (pid $\to$ verdict $\to$ KEEP/REVERT) is
-deterministic given the cached answer text; re-runs against official
-endpoints are a pending replication.
-
-\textbf{Source-credentialed aphorisms.} Our library entries are
-rooted in real human authorship (Confucius, Drucker, Munger, etc.).
-The success distiller refuses to fabricate sources when asked. Whether
-the loop \emph{could} be run with fully self-authored aphorisms is an
-open question and probably deserves its own paper.
-
-\textbf{One evolution cycle.} We ran one cycle. A multi-cycle study
-with staged held-out splits is the natural continuation; our audit
-stack's operational specification does not change with the cycle count.
-
-\section{Appendix: Experiment 1 per-problem detail}
-\label{app:crossjudge}
-
-Full \texttt{\{pid \(\to\) verdict\}} maps for all three KEEP cases
-are stored in
-\texttt{phase four/autonomous/exp1\_cross\_judge\_log.json} and
-regenerated by
-\texttt{phase four/exp1\_cross\_judge.py}. The regenerator uses the
-\(+\)/- pair-side randomization rule inherited from
-\texttt{validate\_parallel.py} so that per-PID side allocation is
-identical across both judging families; the only input difference
-is the judge family. Problem-level audit: we observe no single
-pid that flipped in only one direction—the judges agree on the
-direction of individual pairs about as often as they disagree,
-but \emph{Claude's tie rate is materially higher} (14\% vs.\ 0\%
-for \emph{gemini-3-flash}) and its ext-advantage score is
-systematically lower. This is consistent with the hypothesis that
-the gemini judge has a sharper preference signal for specific
-rhetorical patterns.
-
-\section{Conclusion}
-\label{sec:conclusion}
-
-We started from a long-standing target: an agent that
-\emph{proposes hypotheses about how to solve a problem and then
-validates them recursively}, the way humans do every day. The
-field's current proxy --- LLM-as-judge with same-family A/B
-gating --- imitates the surface form of this loop without any of
-the substance. To find out what is actually missing, we built
-the simplest possible instance: an autonomous Chinese
-``wisdom-library'' agent whose validator is a same-family
-\(+10\)pp test on \(n=50\) held-out problems, and we audited
-the result the way the rest of the architecture would audit it
-if it existed.
-
-The instance fails. The validator accepts \(3/12\) candidates;
-zero of those clear cross-family re-judgment on the cached
-pairs. The cached drops are statistically consistent with
-top-3-of-12 winner's curse on noisy \(n=50\) selections. A
-preregistered fresh-data evaluation at \(n=30\) gave a fleeting
-\(3/12\) that hierarchical Bayes already labelled
-weak-to-moderate; a follow-up at \(n=100\), with and without the
-solver's same-domain exemplar mechanism, returned \(0/12\) under
-both protocols. The cached signal decomposes cleanly into
-``in-pool exemplar boost \(\sim +0.10\)--\(0.20\) pp'' plus
-``selection bias on top-3-of-12''; neither component is the
-candidate's own utility.
-
-That null is informative. It says that a same-family A/B at
-\(n=50\) is the worst possible self-validator because it folds
-selection bias, judge stylistic preference, exemplar
-contamination, and small-sample noise into one number. Better
-audits cannot fix that --- they can only diagnose it, which is
-what ours did. The fix is the rest of the architecture
-(\S\ref{sec:roadmap}): a library of human-distilled
-methodological priors so the agent does not re-derive
-``increment one component at a time'' from scratch; a cheap
-world model so testing a hypothesis costs seconds rather than
-hours; a learned scheduler so the priors apply where they
-should; and a formal alignment layer so insights generalise
-across domains. None of these is optional.
-
-Concretely, we recommend that any future paper proposing
-retrieval-level self-improvement should report, jointly: (i)
-cross-family re-judgment, (ii) a selection-bias model on the
-candidate ranking, (iii) a preregistered fresh-data evaluation
-at \(n \geq 100\) under the original solver protocol, (iv) a
-hierarchical Bayesian posterior on the exact decision rule, and
-(v) a pool-separation sensitivity analysis. These five together
-are cheap; we ran them all on \({\sim}\$80\) of API spend. They
-will not save a broken loop, but they will tell you, calibrated,
-exactly which piece of the architecture you cannot get away
-without.
-
-\paragraph{Reproducibility.} All code
-(\texttt{wisdom\_registry.py}, \texttt{success\_distiller.py},
-\texttt{failure\_generator.py}, \texttt{cross\_llm\_distiller.py},
-\texttt{pruner.py}, \texttt{validate\_parallel.py}), all figures
-(\texttt{paper\_figures.py}), the full \(75\)-entry starter library,
-the \(100\)-problem training split, the \(50\)-problem held-out
-split, every judgment file, and the \texttt{wisdom\_registry.json}
-state at each version are bundled with the submission.
-
-% ---------------------------------------------------------------
-\bibliographystyle{plainnat}
-\bibliography{references}
-
-\appendix
-
-\section{Wisdom record schema and example}
-\label{app:schema}
-
-Every wisdom is a JSON record:
-\begin{verbatim}
-{
-  "id": "W077",
-  "aphorism": "没有调查，就没有发言权",
-  "source": "毛泽东《反对本本主义》",
-  "signal": "多因混杂、观察噪声大、没定位清楚就已经要决策时",
-  "unpacked_for_llm": "…",
-  "cross_domain_examples": [
-    {"domain": "software_engineering",
-     "scenario": "多方反馈互相打架，先建复现与归因链路，再决定修固件还是改流程"},
-    {"domain": "science",
-     "scenario": "亮度异常成因多解且观测噪声大，先设计鉴别观测而非仓促定性"}
-  ],
-  "status": "active",
-  "source": "success_distilled",
-  "created_at": "2026-04-23T15:54:56Z",
-  "keep_reason": "parallel validation wr_ext=0.60 on 50 holdout"
-}
-\end{verbatim}
-
-\emph{English gloss of the Chinese fields above.}
-\texttt{aphorism}: ``No investigation, no right to speak.''
-\texttt{source}: Mao Zedong, \emph{Oppose Book Worship}.
-\texttt{signal}: ``When multiple causes are entangled, observations
-are noisy, and the situation has not been localised yet decisions
-are already due.''
-\texttt{cross\_domain\_examples}: (\emph{software engineering})
-``when multi-party feedback conflicts, first build a reproduction
-and attribution chain before deciding whether to fix firmware or
-change process''; (\emph{science}) ``when the cause of a brightness
-anomaly has multiple explanations and observation noise is high,
-first design discriminating observations rather than rushing to
-classify.''
-
-\section{Full prompt templates}
-\label{app:prompts}
-
-All prompts used by the four orchestrator components are reproduced
-verbatim in the supplementary code. We list the section headers here
-for navigation:
-
-\begin{itemize}[leftmargin=*]
-  \item \texttt{success\_distiller.py}: \texttt{DISTILL\_PROMPT}
-  \item \texttt{failure\_generator.py}: \texttt{PROPOSE\_PROMPT}
-  \item \texttt{cross\_llm\_distiller.py}:
-    \texttt{SOLVE\_PROMPT}, \texttt{DISTILL\_PROMPT}
-  \item \texttt{validate\_parallel.py}: \texttt{EXEMPLAR\_PROMPT}
-  \item \texttt{phase2\_v20\_framework.py}:
-    \texttt{FRAME\_REWRITE\_PROMPT}, \texttt{EXECUTE\_V20},
-    \texttt{REFLECT\_PROMPT\_V20}
-\end{itemize}
-
-\section{Additional evolution statistics}
-\label{app:stats}
-
-Table~\ref{tab:kepts} expands on the three KEEP events.
-Table~\ref{tab:deprecated} lists the deprecated IDs.
-
-\begin{table}[h]
-  \centering\small
-  \begin{tabular}{l l r l l}
-    \toprule
-    ID & Aphorism & wr\(_{\text{ext}}\) & Source of signal & Provenance \\
-    \midrule
-    W076 & 凡益之道，与时偕行 \emph{(Change with the times)} & 0.64
-      & Turn-0 cluster \(n=9\) & success\_distilled \\
-    W077 & 没有调查，就没有发言权 \emph{(No investigation, no right to speak)} & 0.60
-      & Turn-0 cluster \(n=6\) & success\_distilled \\
-    W078 & 是骡子是马，拉出来遛遛 \emph{(Mule or horse---take it out for a test)} & 0.60
-      & 2 GPT-5.4-win math losses & cross\_llm \\
-    \bottomrule
-  \end{tabular}
-  \caption{Three KEEP events this cycle.}
-  \label{tab:kepts}
-\end{table}
-
-\begin{table}[h]
-  \centering\small
-  \begin{tabular}{p{0.95\linewidth}}
-    \toprule
-    Deprecated in v20.3 scan (\(0\) activations across \(5\) selection
-    files, \(1000\) top-2 slots): \\
-    W005, W008, W014, W017, W018, W021, W027, W038, W053, W054, W055,
-    W056, W061, W069, W071, W072, W073, W074, W075. \\
-    \bottomrule
-  \end{tabular}
-  \caption{The pruner's first-scan output.}
-  \label{tab:deprecated}
-\end{table}
-
-\section{Reproducibility appendix}
-\label{app:repro}
-
-\paragraph{Model identities.} All API calls flow through the
-\texttt{ruoli.dev} OpenAI-compatible proxy, with three family routes:
-Google (model \texttt{gemini-3-flash}), Anthropic (models
-\texttt{claude-haiku-4-5-20251001}, \texttt{claude-opus-4-6}), OpenAI
-(models \texttt{gpt-5.4-mini}, \texttt{gpt-5.4}). The proxy is used
-uniformly for both solver and judge roles across every experiment;
-no experiment mixes proxy and direct vendor access.
-
-\paragraph{Temperature and sampling.} Solver Turn-0 (frame + rewrite)
-and Turn-1 (execute): \texttt{temperature} \(= 0.2\text{--}0.3\),
-\texttt{max\_tokens} \(= 500\) (frame) / \(1000\) (execute). Judge
-calls: \texttt{temperature} \(= 0.0\), \texttt{max\_tokens} \(= 300\).
-These values are constants in the experiment scripts and not
-hyperparameter-tuned.
-
-\paragraph{Random seeds.} The A/B side-randomization uses
-\texttt{random.Random(hash(pid) \% 2**32)} with the problem\_id as
-seed key, giving deterministic per-pid allocation across re-runs of
-the same experiment. The side-shuffle audit layer (Exp~5) changes
-the seed offset to \texttt{hash(pid) + 17} to decouple from the
-original run. Problem-subset sampling (Exp~31) uses
-\texttt{random.Random(2028)} as the global seed. All seeds are
-recorded in the script header and carried into log JSON.
-
-\paragraph{Data sources and cached artifacts.} The 1768-problem pool
-lives in \texttt{phase zero/benchmark/problems/\{mathematics,
-science, business, software\_engineering\}.json}. Cached answers
-per-experiment sit under \texttt{phase two/analysis/cache/answers/};
-cross-family judge logs under \texttt{phase four/autonomous/}.
-Every audit layer's verdict is recoverable from its log file alone:
-\{pid\(\to\)winner\} maps are preserved end-to-end, so the exact
-decision trajectory is deterministic given the cached answer text.
-
-\paragraph{What is \emph{not} reproducible.} Exact output tokens
-depend on the proxy's routing state at call time; re-running the
-same prompt two weeks later is not token-identical even with fixed
-temperature and seed. This is an inherent property of hosted LLM
-APIs, not specific to our setup. Our reproducibility target is one
-level up: given the cached answer text (\texttt{.../answers/*.json}),
-every audit-layer verdict in the paper is exactly reproducible.
-
-\paragraph{Supplementary archive.} Code, prompts, cached answers,
-and log JSONs are bundled in the supplementary tarball. A single
-entry point, \texttt{phase four/run\_audit\_stack.sh}, reproduces
-Tables~\ref{tab:ci} and the six-layer audit table given the cached
-answers.
-
-\section{Compute and cost}
-\label{app:compute}
-
-Table~\ref{tab:compute} consolidates the per-experiment compute and
-cost figures scattered through the paper. All API costs are computed
-at the per-call price of the corresponding model on the
-\texttt{ruoli.dev} proxy; wall times reported with the parallelism
-in the actual run.
-
-\begin{table}[h]
-\centering\small
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{l l l r l}
-\toprule
-Stage & Experiment & Calls & \multicolumn{1}{c}{Wall} & API cost \\
-\midrule
-\multicolumn{5}{l}{\emph{Phase 1 — build}}\\
-\quad scaffolded solver dev (v13--v20)
-  & --- & ${\sim}50$k gen+judge & 4--6\,d & \(\sim\$80\) \\
-\midrule
-\multicolumn{5}{l}{\emph{Phase 2 — evolve (one inner-loop cycle)}}\\
-\quad failure / success / cross-LLM proposers
-  & §3 modules & ${\sim}300$ gen & 30\,min & \(\sim\$3\) \\
-\quad 12-candidate $+10$pp held-out A/B at $n=50$
-  & §4 inner loop & 600 gen + 600 judge & 1.5\,h & \(\sim\$8\) \\
-\midrule
-\multicolumn{5}{l}{\emph{Phase 3 — audit (per-layer)}}\\
-\quad L1 cross-family (Opus) on 3 KEEPs
-  & Exp~1 & 150 judge (Opus) & 12\,min & \(\sim\$12\) \\
-\quad L2 side-shuffle reseed
-  & Exp~5 & 150 judge (gemini) & 8\,min & \(\sim\$1\) \\
-\quad L3 sample extension to $n{=}100$
-  & Exp~8 & 600 gen + 300 judge & 1\,h & \(\sim\$6\) \\
-\quad L4 cross-solver, 1 KEEP
-  & Exp~26 & 60 gen + 180 judge & 30\,min & \(\sim\$3\) \\
-\quad L5 fresh-domain + GSM8K
-  & Exp~31--32 & 100 gen + 150 judge & 35\,min & \(\sim\$3\) \\
-\quad L6 faithfulness (LLM-judged citation)
-  & Exp~14 & 240 judge (Claude) & 25\,min & \(\sim\$10\) \\
-\midrule
-\multicolumn{5}{l}{\emph{Phase 4 — recovery and statistics}}\\
-\quad trigger-conditioned gate dev
-  & Exp~15 & 600 label calls & 50\,min & \(\sim\$5\) \\
-\quad 9 new candidates prospective
-  & Exp~33 & 360 gen + 360 judge & 1.2\,h & \(\sim\$5\) \\
-\midrule
-\multicolumn{5}{l}{\emph{Robustness add-ons}}\\
-\quad Exp~34 (W078, 2 expensive judges)
-  & Exp~34 & 100 judge (Opus + GPT-5.4) & 4\,min & \(\sim\$6.5\) \\
-\quad Exp~35 (3 KEEPs $\times$ 2 expensive judges)
-  & Exp~35 & 300 judge & 12\,min & \(\sim\$25\) \\
-\quad Exp~36 (3 KEEPs $\times$ 3 cheap judges, $\kappa$)
-  & Exp~36 & 450 judge & 10\,min & \(\sim\$5\) \\
-\midrule
-\multicolumn{4}{l}{\textbf{Total budget for the full paper}} & \(\sim\$170\) \\
-\bottomrule
-\end{tabular}
-\caption{Per-experiment compute and API-cost breakdown. The full
-six-layer audit on three KEEPs (Phase 3, the paper's main
-methodological contribution) costs roughly \(\$35\) and runs in
-\({\sim}3\) hours wall time at researcher-laptop parallelism. The
-robustness add-ons at the bottom (Exp~34--36, scaling and
-\(\kappa\)) are deliberately small relative to the audit's primary
-cost so that the stack is replicable on a graduate-student
-budget.}
-\label{tab:compute}
-\end{table}
-
-A typical reader can read this table as: \emph{the audit stack is
-not the expensive part of the paper.} The expensive part is the
-six-month scaffold-development effort (Phase 1) that produced the
-v20 solver these audits were applied to. Anyone who has already
-built a self-improvement loop should be able to attach the audit
-stack to their existing artefacts with a budget under \(\$50\).
-
-
-\section{Experiments 18--19 — Agent-designed replacement gate (full)}
-\label{app:agent-gate}
-
-\subsection{Experiment 18 — Can the agent design the
-replacement gate?}
-\label{sec:meta}
-
-So far in this paper the replacement gate (Experiment 15) was
-designed \emph{by the researcher} — we identified the confound,
-chose the decomposition, and wrote the validator. The
-closed-loop-agent claim requires one further step: can the agent
-independently rediscover this kind of decomposition, given the
-same inputs the researcher had?
-
-We test this with a pilot. The agent is Claude Opus 4.6
-(cross-family to the solver, so not the same model doing the
-validation). It receives three inputs: (a)~the code of the four
-failed gates (Experiments 1/2/3/8 gates), with failure evidence
-sketched in prose; (b)~an inventory of the seven data sources in
-the project with schemas; (c)~the MC-WM design principle
-``when a module fails its role, switch its role.'' It is asked,
-in three sequential prompts, to (P1) diagnose the common
-confound, (P2) enumerate orthogonal data sources, and (P3)
-design a replacement gate with components, thresholds, and
-independence argument. Experiment 15's design is \emph{withheld}
-from its context. A third-family judge (GPT-5.4) then scores
-the agent's output against Experiment 15's design.
-
-\paragraph{Phase 1 — Diagnosis.} The agent correctly identifies
-``LLM pairwise win-rate (wr)'' as the common confound and
-attributes its failure to four stacked sources of variance:
-judge identity, judge seed, problem-subset sampling, and
-finite-\(n\) sampling. This matches our own diagnosis.
-
-\paragraph{Phase 2 — Orthogonal sources.} The agent produces
-six candidate sources, of which three coincide with ones we
-used and three are ones we did \emph{not} use:
-
-\begin{center}\small
-\begin{tabular}{p{4.5cm} p{3.5cm} p{3cm}}
-  \toprule
-  Agent-proposed source & Overlap with researcher & Novel? \\
-  \midrule
-  reframe meta-cognition records &  our Stage C (Exp 9)   & — \\
-  wisdom–problem semantic alignment & our Stage B (Exp 9) & — \\
-  holdout difficulty stratification & our Stage 3 (Exp 5) & — \\
-  \textbf{answer-level textual diff}
-    & — & \textbf{new}\\
-  \textbf{anti-pattern structural coverage}
-    & — & \textbf{new}\\
-  \textbf{cross-LLM judge agreement ($\kappa$)}
-    & similar to Exp 1 but formalised & \textbf{refined}\\
-  \bottomrule
-\end{tabular}
-\end{center}
-
-\paragraph{Phase 3 — Design.} The agent produces
-\texttt{orthogonal\_decomposition\_gate\_v1} with 4 components:
-
-\begin{description}[leftmargin=1.4em, topsep=2pt, itemsep=1pt]
-  \item[\texttt{reframe\_depth}] ``median reframe distance \(\geq 0.25\)''
-    (Stage-C analogue)
-  \item[\texttt{substantive\_content\_delta}] ``median content delta
-    \(\geq 0.20\)'' — novel: explicit answer-text diff threshold
-  \item[\texttt{wisdom\_problem\_alignment}] ``median alignment z
-    \(\geq 1.5\)'' (closest to our trigger\_fit\_rate)
-  \item[\texttt{antipattern\_avoidance}] ``median avoidance improvement
-    \(\geq 0.15\)'' — novel: check anti\_patterns listed in Turn-0
-    are actually avoided in Turn-1 answer
-\end{description}
-
-\paragraph{Phase 5 — Alignment with researcher design (GPT-5.4
-judge).} The third-family judge's verdict is \textbf{AGENT\_REACHED\_RELATED\_DESIGN}
-with structural-similarity \(0.28\). Component-level matches:
-
-\begin{center}\small
-\begin{tabular}{l l c}
-  \toprule
-  Researcher component & Agent component & Level \\
-  \midrule
-  \texttt{trigger\_fit\_rate} & \texttt{wisdom\_problem\_alignment}
-    & WEAK\_MATCH \\
-  \texttt{util\_when\_fires}  & \texttt{antipattern\_avoidance}
-    & WEAK\_MATCH \\
-  \texttt{cite\_when\_fires}  & (none)
-    & NO\_MATCH \\
-  \texttt{harm\_when\_absent} & (none)
-    & NO\_MATCH \\
-  \bottomrule
-\end{tabular}
-\end{center}
-
-The agent's design is \emph{not a copy} of the researcher's.
-It recovers the decomposition principle (2/4 components
-match weakly), but offers three independently-motivated
-dimensions (\texttt{reframe\_depth}, \texttt{substantive\_content\_delta},
-\texttt{antipattern\_avoidance}) that the researcher did not
-include, while missing two the researcher did
-(\texttt{cite\_when\_fires}, \texttt{harm\_when\_absent}).
-
-\paragraph{What this establishes and what it does not.}
-\emph{Establishes}: (i)~the design \emph{process} of
-decomposing a confounded scalar into orthogonal components is
-transferable to an LLM agent given the same inputs; (ii)~the
-agent does not merely mimic—its output contains novel
-axes—so it is exercising independent design judgment, not
-pattern-matching on the researcher's artefacts; (iii)~the
-combined researcher + agent design is a strict superset, not
-a zero-sum disagreement.
-\emph{Does not establish}: whether the agent's gate would
-empirically out-perform the researcher's when run on the same
-12 candidates (Phase 4–6 of the full protocol — code
-generation, execution, and comparative verdict — were scoped
-out as stretch goals). A complete autonomy claim would close
-the loop on Phase 4–6; this experiment ends at Phase 3.
-
-\paragraph{Implication for autonomy.} The earlier closed-loop
-agent (\S\ref{sec:orchestrator}) could \emph{propose and
-validate object-level wisdoms} under a fixed gate. It could not
-replace that gate. Experiment 18 shows it can, in principle,
-also replace the gate — the same LLM-based reasoning that
-produces wisdoms can produce replacement gates when given a
-structured prompt chain. Experiment 19 (below) closes Phase 4–6.
-
-\subsection{Experiment 19 — Phase 4–6: the agent writes,
-executes, and commits its own gate code}
-\label{sec:meta-exec}
-
-Exp 18 stopped at Phase 3 (design spec). Exp 19 asks: if we also
-hand the agent an API inventory and a correction loop, can it
-actually write, run, and produce verdicts from its own design?
-
-\paragraph{Protocol.}
-\emph{Phase 4}: the agent is shown (i) its Phase 3 design spec,
-(ii) a \(\approx 50\)-line clean data API
-(\texttt{exp21\_data\_api.list\_candidates}, \texttt{candidate\_info},
-\texttt{per\_pid\_records}), and (iii) the project path. It must
-emit one code block implementing the spec.
-\emph{Phase 5}: the script is saved and executed. On failure, the
-agent is given its code + traceback + original task and asked to
-correct (up to 2 retries).
-\emph{Phase 6}: the produced verdicts are normalised and
-overlap-compared with Exp 15's trigger-conditioned gate on the
-same 12 candidates.
-
-\paragraph{Result.} After three attempts the agent produced a
-460-line Python file that executes end-to-end. Two of its four
-components extract data correctly (\texttt{substantive\_content\_delta},
-\texttt{antipattern\_avoidance}); the other two
-(\texttt{reframe\_depth}, \texttt{wisdom\_problem\_alignment})
-use field names (\texttt{prompt}, \texttt{reframe}) that do not
-exist in the provided API (which uses \texttt{problem} and
-\texttt{critical\_reframe})—a documentation-contract slip, not a
-reasoning failure. The gate's verdict is therefore overly strict:
-with two components mechanically stuck at \texttt{False}, no
-candidate passes.
-
-\begin{center}\small
-\begin{tabular}{l r r}
-  \toprule
-  Metric & value & note \\
-  \midrule
-  Agent-generated code & 460 lines & 3 attempts \\
-  Components that executed correctly & 2/4 & by inspection \\
-  Components with data-contract bugs & 2/4 & field-name slips \\
-  Agent gate PASS on 12 & 0 & over-strict (bugs force FAIL) \\
-  Exp 15 gate PASS on 12 & 4 & W077, W078, WCAND01, WCAND02 \\
-  Agreement rate (PASS=PASS $\vee$ FAIL=FAIL) & 0.67 & 8/12 both FAIL \\
-  Disagreement on PASS & 4/12 & Exp 15 PASS, agent FAIL due to bugs \\
-  \bottomrule
-\end{tabular}
-\end{center}
-
-\paragraph{Interpretation.} The agent demonstrably writes working
-gate code. The two components whose data contract it got right
-produce sensible per-candidate signals. Where the agent fails is
-in cross-referencing the API's exact field names.
-
-\paragraph{Targeted correction attempt (Exp 19b).} We test
-whether a single human-supplied diagnosis (``you used
-\texttt{rec['prompt']}; the API exposes \texttt{rec['problem']}'')
-unblocks the stuck components. Mechanical substitution of four
-field names on the original code makes \texttt{reframe\_depth}
-execute without \texttt{KeyError}, but reveals a
-\emph{second-layer} bug in the text-distance helper
-(\texttt{median\_dist} \(=1.0\) for all candidates, indicating
-the embedding function silently returns the max-distance
-fallback), and the other component now raises \texttt{NoneType}
-subscripting on a new line. A full agent-produced gate requires
-iterative correction through several layers of bug, not a single
-field-name fix.
-
-\paragraph{Refined take-away.} We distinguish three capability
-claims, with increasingly strong evidence:
-\begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
-  \item \textbf{Agent can design} a replacement gate that
-    structurally resembles the researcher's (Exp 18, sim \(0.28\),
-    \(+3\) novel dimensions).
-  \item \textbf{Agent can implement} the design as runnable
-    Python (Exp 19, 460 lines execute without human edits).
-  \item \textbf{Agent can produce a fully-correct gate} in a
-    single pass — this we do NOT show. Exp 19's code has
-    \(\geq 3\) bug layers that silently failed (wrong field
-    names → returns empty lists → misleading default
-    thresholds). Successive LLM correction rounds fix each
-    layer one at a time.
-\end{itemize}
-The gap between ``agent-in-the-loop with schema help'' and
-``agent-autonomously-correct-on-first-try'' is still there.
-
-\paragraph{Exp 19c — completing the gate strictly per the
-agent's spec and running it.}
-We manually fill in the three missing evaluator bodies strictly
-from the agent's Phase-3 spec (the two truncated classes plus
-the never-written \texttt{antipattern\_avoidance}), keeping the
-spec's thresholds (\texttt{reframe\_depth} median\_dist $\geq
-0.25$; \texttt{substantive\_content\_delta} median\_dist $\geq
-0.20$ AND $60\%$ above $0.15$; \texttt{antipattern\_avoidance}
-median avoidance $\geq 0.60$; \texttt{wisdom\_problem\_alignment}
-we implemented via mean cosine $\geq 0.05$ AND $\geq 3$ pids
-above mean). The fully-implemented gate then produces:
-
-\begin{center}\small
-\begin{tabular}{l c c}
-  \toprule
-  Gate & PASS count & Discrimination \\
-  \midrule
-  Agent-designed, fully implemented & \textbf{12/12} & \textbf{none} \\
-  Researcher-designed (Exp 15, trigger-conditioned) & 4/12 & meaningful \\
-  \bottomrule
-\end{tabular}
-\end{center}
-
-\emph{Every candidate passes every component of the agent's
-gate.} The agent's four axes
-(reframe-depth, content-delta, wisdom-alignment, antipattern
-avoidance) all measure properties that any retrieved wisdom
-trivially exhibits on the holdout: adding W to the library does
-perturb reasoning (large content-delta for all), the wisdom
-unpacked text does share some vocabulary with problems (non-zero
-alignment), and anti-patterns are mostly absent from answers by
-default. Without the trigger-conditioning split
-(SHOULD\_FIRE vs NO\_FIRE), orthogonality alone collapses into
-``yes everything differs in some way.''
-
-\paragraph{This is the actually interesting architectural
-lesson.} Orthogonal decomposition is \emph{necessary but not
-sufficient}. The researcher's gate (Exp 15) adds a separate
-ingredient the agent did not discover: \emph{conditioning on an
-externally-supplied trigger class} so that utility and
-citability are computed only on the subset where the wisdom
-claims to apply. That conditioning is what turns ``can measure
-4 things'' into ``can discriminate 4-from-12 candidates.''
-\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=1pt]
-  \item \textbf{Agent capability confirmed}: propose
-    orthogonal components, implement them.
-  \item \textbf{Agent capability missing}: propose
-    \emph{conditioning} — the architectural move of splitting
-    the evaluation population by a wisdom-specific trigger.
-  \item \textbf{Researcher contribution that was not
-    transferable}: the idea that some candidates are
-    \emph{conditional specialists}, not uniform activators,
-    and the gate must evaluate them in-class.
-\end{itemize}
-Teaching the agent \emph{conditioning} as a first-class design
-move — not just ``decompose'' — is the next L5 experiment.
-
-
-
-
-\section{Multi-step research-task pilot (full)}
-\label{app:multistep}
-
-The 100-problem benchmark exercised throughout \S\ref{sec:experiments}
-is fundamentally \emph{single-advisory}: one problem, one answer,
-one judge verdict. Many research and engineering workflows, however,
-demand \emph{multi-round} assumption-revision: propose hypotheses,
-gather evidence, update beliefs, re-propose. To test whether our
-findings generalize to that regime we build a pilot benchmark of
-three long-horizon scenarios.
-
-\paragraph{Benchmark.} Each scenario specifies a \emph{briefing}
-(visible to the agent), a \emph{hidden ground-truth mechanism}, a
-list of \emph{critical facts} the environment may reveal on demand,
-and a list of \emph{plausible red-herrings} also consistent with
-surface observations. The three scenarios span domains where
-root-cause diagnosis requires targeted investigation rather than
-pattern matching:
-
-\begin{center}\small
-\begin{tabular}{l l p{4.5cm}}
-  \toprule
-  Scenario & Domain & Ground-truth root cause (hidden) \\
-  \midrule
-  Clinical trial & Medicine &
-    Drug--drug interaction with warfarin (CYP2C9), amplified by
-    chronic kidney disease \\
-  ML CTR regression & ML engineering &
-    Feature-store schema migration silently renamed a high-importance
-    categorical column; serving stack continues to read the old
-    column and gets \(0\) \\
-  DB slowdown & Systems &
-    Postgres minor-version upgrade changed planner statistics;
-    a hot query regressed from \texttt{IndexScan} to \texttt{SeqScan} \\
-  \bottomrule
-\end{tabular}
-\end{center}
-
-\paragraph{Oracle and judge.} To avoid the same-family contamination
-identified in \S\ref{sec:selfaudit}, the \emph{oracle} (simulating the
-experimental environment) is GPT-5.4, the \emph{solver} is
-gemini-3-flash, and the \emph{judge} is Claude Opus 4.6
-(three different vendor families). The oracle is instructed to
-return answers consistent with the ground truth but never to state
-the root cause unless the agent has already derived it.
-
-\paragraph{Agent strategies.} Two baselines are compared:
-\begin{description}[leftmargin=1.5em, topsep=2pt, itemsep=1pt]
-  \item[\textbf{single\_pass}:] The solver reads the briefing and
-    writes a final diagnosis with no oracle interaction.
-  \item[\textbf{belief\_track}:] The solver maintains an explicit
-    hypothesis state (\(\leq 3\) hypotheses with explicit
-    confidences) across \(3\) rounds. Each round it proposes
-    \(1\text{--}3\) targeted investigations; the oracle answers;
-    the agent updates hypotheses in light of the answers. A final
-    diagnosis is committed after round \(3\).
-\end{description}
-
-\paragraph{Result.} On this small benchmark,
-\texttt{belief\_track} converges on all three scenarios; the
-single-pass baseline misses the mechanism in the ML-regression
-scenario:
-
-\begin{center}\small
-\begin{tabular}{l c c}
-  \toprule
-  Scenario & single\_pass & belief\_track \\
-  \midrule
-  Clinical trial    & CONVERGED & CONVERGED \\
-  ML CTR regression & PARTIAL   & \textbf{CONVERGED} \\
-  DB slowdown       & CONVERGED & CONVERGED \\
-  \midrule
-  Total CONVERGED   & \(2/3\)   & \(\mathbf{3/3}\) \\
-  \bottomrule
-\end{tabular}
-\end{center}
-
-\noindent The ML scenario is the case whose root cause is a
-specific, low-prior mechanism (a silent column rename; the model
-sees zero variance on a previously high-importance feature). Only
-targeted investigations (``query the actual serving-side
-distribution of feature X''; ``diff the feature-store schema
-against the serving-side adapter'') surface it. \texttt{single\_pass}
-returns a plausible but under-specified ``feature-store issue''
-verdict; \texttt{belief\_track} queries the oracle with the
-specific diagnostic, receives ``\(user\_category\_id = 0\) for
-\(100\%\) of inference requests,'' and commits to the correct
-mechanism.
-
-\paragraph{Scope.} \(N = 3\) is a pilot. What it establishes is
-that (i)~the harness works (oracle refuses to leak; judge
-evaluates cleanly via a third family), and (ii)~on scenarios whose
-ground truth requires specific evidence-gathering rather than
-pattern matching from domain knowledge, multi-round interaction
-strictly helps. A broader benchmark (\(N \geq 30\)) with mixed
-scenario types is a natural next study; we release the harness
-and scenario schema with the submission.
-
 \end{CJK*}
+
 \end{document}
