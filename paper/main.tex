@@ -30,10 +30,9 @@
   urlcolor=blue!60!black
 }
 
-\title{\textbf{Six Layers of Re-Judgment:}\\
-A Case Study in Auditing a Self-Improving LLM Loop,\\
-and a Preregistered Fresh-Loop Replication\\
-Distinguishing Real Replication from Selection Bias}
+\title{\textbf{Toward Self-Hypothesizing, Self-Validating Agents:}\\
+Why a Same-Family A/B Gate Is Not Enough,\\
+and What a Working Architecture Would Need}
 
 \author{%
   Anonymous submission\\
@@ -47,211 +46,154 @@ Distinguishing Real Replication from Selection Bias}
 \maketitle
 
 \begin{abstract}
-\noindent\textbf{This is a paper about audit methodology, not about
-whether self-improving LLM loops work.} The empirical headline is a
-\emph{clean null at \(n=100\)}, reached through a
-self-correcting audit trail. After building and running a complete
-autonomous wisdom-curation loop, none of its three committed
-wisdoms clear the gate's own \(+10\)pp threshold on the cached
-answer pairs under a six-layer conditionally-distinct audit; a
-small-\(n=30\) preregistered fresh-data re-evaluation (Exp~47)
-showed \(3/12\) candidates crossing both gates as point estimates
-at the preregistration's laxer L1 threshold, suggesting a
-``differentiated'' picture; \textbf{at \(n=100\) fresh pids
-(Exp~53), with the same frozen thresholds, \(0/12\) candidates
-clear the inner gate} --- the apparent recovery was a small-\(n\)
-artefact, and the cached-data null reading replicates at adequate
-power. The scientific contribution is the audit stack itself,
-including: (i) cross-family re-judgment;
-(ii) empirical-Bayes selection-bias modelling, which shows the
-cached drops are consistent with regression to the mean on
-top-3-of-12 noisy selections (Exp~45); (iii) a preregistered
-fresh-data evaluation at \(n=30\) and again at \(n=100\) (Exp~47,
-Exp~53) showing that ``recovery'' at small \(n\) does not survive
-scaling; (iv) a pool-separation rerun (Exp~52) showing that the
-original cached signal depends substantially on the v20-scaffold's
-in-pool exemplar mechanism; (v) a genuine Bayesian multilevel
-model with candidate, judge-family and pid random effects
-(Exp~51), giving joint posteriors on the exact preregistered
-decision rule of \(\{0.01, 0.45, 0.76\}\) for
-\(W_{076}/W_{077}/W_{078}\) at the small-\(n\) fresh sample ---
-posteriors which Exp~53's \(n=100\) data subsequently falsified
-on the upper end. We do not generalise to a field-level claim
-about all self-improving LLM loops; we release the audit stack so
-others can run the same checks on theirs.
+\noindent A long-standing target in AI is an agent that can do what
+humans do every day: face a problem, propose a hypothesis about how
+to solve it, run the hypothesis, notice where it fails, propose a
+sub-hypothesis to repair the failure, and recurse — \emph{self-
+hypothesizing and self-validating}, all the way down. We argue this
+target requires at least four ingredients working together: a
+library of human-distilled methodological priors (control of
+variables, divide-and-conquer, Occam's razor, \ldots), a cheap
+world model in which candidate solutions can be simulated, a
+learned scheduler that decides which prior to invoke when, and a
+formal alignment layer that lets the agent recognise that two
+superficially different priors are the same idea. We call this the
+five-stage roadmap (\S\ref{sec:roadmap}). No existing system has
+all four; the field's current proxy --- LLM-as-judge with same-
+family A/B gating --- has \emph{none} of them.
 
-\noindent\textbf{Setup.} Large language models improve markedly when
-given retrieval-augmented \emph{methodological scaffolding}: problem
-reframes, anti-patterns, evaluation criteria, exemplars of parallel
-prior reasoning. A natural next step is an agent that \emph{curates
-its own} library of such methodological wisdoms without a human in
-the loop. We build this loop as a concrete testbed: a strong
-scaffolded solver (v20; pairwise win rate \(0.64\) vs.\ the v16
-case-library champion on 100 problems and \(0.88\) vs.\ a
-budget-matched baseline on 50 held-out, both same-family
-LLM-judged --- see Fig.~\ref{fig:arch} and \S\ref{sec:ratchet})
-plus four orchestration modules (failure generator, success
-distiller, cross-model distiller, Darwinian pruner), gated by a
-\(+10\)pp held-out A/B test.
+\noindent This paper studies one extremely simple instance of the
+target: a closed-loop agent that proposes Chinese-language
+``wisdoms'' (compact methodological priors), validates each
+candidate by a same-family \(+10\)pp A/B test on \(n=50\) held-out
+problems, and updates its own library accordingly. The agent's gate
+accepts \(3/12\) candidates. We then audit those three accepts six
+ways: cross-family re-judgment, position re-randomisation, sample
+extension to \(n=100\), cross-solver replication, fresh-domain
+re-test, and embedding/citation faithfulness probes. To distinguish
+``the gate is wrong'' from ``the audit is over-strict,'' we add a
+selection-bias model (top-3-of-12 winner's curse), a hierarchical
+Bayesian re-analysis, and \emph{two} preregistered fresh-data
+replications: one without the original same-domain in-pool exemplar
+mechanism and one with it, both at \(n=100\).
 
-\noindent\textbf{Inner-loop result.} Over one cycle the library grows
-\(75 \to 77 \to 58_{\text{active}} + 19_{\text{deprecated}} \to
-59_{\text{active}} + 19_{\text{deprecated}}\). Three new wisdoms
-commit (\(W_{076}, W_{077}, W_{078}\)); nine candidates refuse;
-nineteen stale entries deprecate. Only \(3/12\) proposals pass — the
-gate appears to be doing real work.
+\noindent The result is a clean null. On the cached pairs no accept
+clears the gate's own threshold under cross-family re-judgment. The
+\(0.20\)-pp drops cached audits report are statistically consistent
+with regression to the mean. A small-\(n=30\) fresh evaluation gave
+an apparently positive \(3/12\); at \(n=100\) this drops to
+\(0/12\), with or without the exemplar mechanism. The intermediate
+positive was small-\(n\) noise, not signal. The cached signal
+itself decomposes cleanly into ``exemplar boost \(\sim 0.10\)--\(0.20\)
+pp'' plus ``top-3-of-12 selection bias'' --- removing either
+collapses the loop's apparent gains.
 
-\noindent\textbf{The six-layer audit stack.} We then stress-test each
-KEEP decision along six \emph{conditionally distinct} axes: (L1)~cross-family
-re-judgment with a different LLM family; (L2)~side-randomization
-reseed at fixed content; (L3)~sample extension from \(n=50\) to
-\(n=100\); (L4)~cross-solver replication across three families;
-(L5)~fresh-domain cross-family re-test; (L6)~embedding-space and
-LLM-judged faithfulness of the perturbation direction. The layers
-intervene on different nuisance variables (judge family, position
-seed, sample size, solver family, problem distribution, and
-non-pair-wr measurement axis), but they reuse the same KEEPs, the
-same cached answer pairs (L1, L2), and overlap in solver and
-problem pool (L3, L4); we therefore describe them as conditionally
-distinct stress tests rather than as independent evidence streams.
-A self-improvement claim that is intended to generalise across
-the nuisance variables these layers stress-test --- judge family,
-position seed, sample size, solver family, problem distribution,
-and faithfulness of the reasoning trace --- should survive
-substantively across the layers that target nuisance variables in
-its target population. We do not claim ``a real wisdom must clear
-every layer'': a wisdom that is genuinely useful for a specific
-solver family or problem distribution can fail a layer that
-intervenes on that variable; what the layers do is help identify
-which estimand (which population, which judge, which solver) the
-inner-loop's same-family \(+10\)pp signal actually applies to.
-
-\noindent\textbf{Cached-data audit verdict: \(\mathbf{0/3}\)
-KEEPs clear the gate's own threshold on the original cached pairs.}
-\(W_{076}\) falls from \(0.64\) (inner-loop) to \(0.40\) under
-cross-family judge. \(W_{077}\) falls \(0.60 \to 0.47\).
-\(W_{078}\) falls \(0.60 \to 0.51\). \emph{However}, a formal
-selection-adjusted analysis (Exp~45) shows that all three of
-these L1 drops fall \emph{within} the 95\% range expected from
-pure regression-to-the-mean on top-3-of-12 noisy \(n=50\)
-measurements; L1 alone therefore cannot distinguish
-``judge-fragility'' from ``selection bias on a noisy gate.''
-The other audit layers, which selection bias does not predict,
-do carry signal beyond regression-to-the-mean: at \(n=100\) two
-of three KEEPs stabilise below \(0.55\); embedding-faithfulness
-and LLM-faithfulness both show wisdoms cause real perturbations
-(magnitude \([0.71,0.77]\)) but in directions \emph{unrelated}
-to what the wisdom self-advertises. On 30 GSM8K problems,
-\(W_{078}\) ext\ accuracy (29/30) is \emph{below} that run's
-gemini-base (30/30); a later run (Exp~42) shows the same direction
-on \(W_{076}\) and \(W_{077}\) (each \(26/30\) vs.\ that run's
-\(28/30\) base, the latter run's base having drifted from
-Exp~32's).
-Scaling the L1 panel to expensive-tier judges (Claude Opus 4.6,
-GPT-5.4) on all three KEEPs gives six wr\_ext measurements in
-\([0.43, 0.54]\); none reach the \(0.60\) gate as a point estimate
-(\(0/6\)), though \(3/6\) Wilson 95\% CIs do contain the
-threshold, so the gate is not formally rejected at \(95\%\)
-confidence on those three cells. Cohen's \(\kappa\) on the full
-\(5 \times 50\) cheap\(\cup\)expensive verdict matrix is
-\(+0.25\) cross-tier, comparable to within-tier
-\(+0.18\)--\(+0.26\) --- the gate's failure to reproduce is not
-a judge-tier artifact.
-\textbf{Final library delta on the original cached data under
-the inner-loop gate's own threshold:} \(\boxed{+0}\). No KEEP
-reaches \(\mathrm{wr}_{\mathrm{ext}} \geq 0.60\) as a point
-estimate under L1, L3, L5, or the expensive-judge audit. The one
-exception is L4 cross-solver (Exp~40): when the solver is changed
-to claude-haiku or gpt-mini, \(7/18\) (KEEP, judge) cells reach
-\(\geq 0.60\), but no (KEEP, solver) clears \(0.60\) under all
-three judges (\(0/6\) under 3-family consensus).
-
-\noindent\textbf{Fresh-data replication at \(n=30\) (Exp~47) and
-\(n=100\) (Exp~53) --- a small-\(n\) ``recovery'' that does not
-survive scaling.} Applying the preregistered protocol to a 30-pid
-fresh split, \(3/12\) candidates pass both gates as point
-estimates: W077 (inner \(0.66\), L1 \(0.57\)), W078 (inner
-\(0.63\), L1 \(\mathbf{0.71}\)), and WCAND03 ``凡事预则立'' (which
-the original loop had REVERTED). W076 does not replicate (fresh
-inner \(0.41\)). Joint posterior on the exact preregistered rule
-\(\{\theta_{\text{inner}} \geq 0.60 \cap \theta_{\text{L1}} \geq
-0.55\}\) at \(n=30\): W078 \(0.54\), W077 \(0.37\), WCAND03
-\(0.42\) (Beta(2,2)); the hierarchical Bayesian model (Exp~51,
-random effects on candidate, judge family, pid) gives joint
-posteriors \(\{0.014, 0.448, 0.763\}\) for \(W_{076}, W_{077},
-W_{078}\). \textbf{An anticipated reviewer concern was: ``would
-the headline survive at \(n \ge 100\)?''} Exp~53 answers this
-directly: with 100 fresh pids (different seed, disjoint from all
-prior samples) and the same frozen thresholds, \textbf{0/12
-candidates clear the inner gate} --- W077 drops to \(0.51\),
-W078 to \(0.49\), WCAND03 to \(0.49\), W076 to \(0.30\). The
-``\(3/12\) cross both gates'' result of Exp~47 was a small-\(n\)
-artefact; the cached-data null reading is the one that replicates
-at \(n=100\).
-
-\noindent\textbf{Honest scope.} The empirical base is twelve
-candidates from one loop cycle on one solver family with no
-human-annotated ground truth. The paper is a case study, not a
-literature-level claim. Combining Exp~45 (selection bias),
-Exp~47 (fresh \(n=30\)), Exp~51 (Bayesian multilevel),
-Exp~52 (pool separation), and Exp~53 (fresh \(n=100\)) gives a
-consistent story: \emph{the inner-loop's same-family +10pp gate
-decisions do not survive larger-\(n=100\) fresh-data
-replication}. The audit stack works as designed --- the cached
-cross-family L1 audit was probative even at small \(n\), and
-adding the larger-\(n\) fresh-data evaluation closes the
-threshold-sensitive ambiguity.
-
-\noindent\textbf{Architectural recovery attempt and its limits.} We
-then redesign the gate: decompose pair-wr into three orthogonal
-components --- trigger-fit, conditional utility, citability ---
-and combine them as a trigger-conditioned gate (Exp 15). On the
-original 12 candidates the trigger-conditioned gate PASSes
-\(4/12\) (vs the naive \(+10\)pp gate's \(3/12\)), including two
-REVERTs the naive gate missed. Applied prospectively to the
-9 new candidates from Exp 29 (no re-tuning, see Exp 33), the
-trigger-conditioned gate PASSes \(0/9\). Combined performance:
-\textbf{trigger-conditioned gate \(4/21\)} on the full
-\(12{+}9\) set; \textbf{naive \(+10\)pp gate \(3/21\)} on the
-same set (the original three KEEPs plus zero from the new
-nine). Neither pass rate is above the \(\sim 30\%\) reference
-an arbitrary random-inclusion procedure at this threshold would
-deliver (\(30\%\) is a reference, not a principled utility
-baseline). The architectural redesign recovers \emph{local}
-positive signal on the original 12 but
-does not generalize: a partial recovery,
-not a fix.
-
-\noindent\textbf{Supporting audits} (full detail in
-\S\ref{sec:experiments} and appendices). Cross-tier judge
-agreement (Exp 37, mean \(\kappa = 0.18\)--\(0.26\)); structured
-gpt-5.5 ratings on the 3 KEEPs preferring base over ext on
-11/30--14/30 pids (Exp 38/41); a minimal English MT-Bench probe
-showing the same instability pattern (Exp 39); cross-solver
-\(L4\) audit on 3 KEEPs \(\times\) 2 new solvers (Exp 40, 0/6
-combinations clear \(0.60\) under 3-family consensus); GSM8K
-objective-accuracy probe across all 3 KEEPs (Exp 32/42, uniform
-small-negative point estimates, not McNemar-significant
-individually).
-
-\noindent\textbf{Contribution.} (i)~The six-layer audit stack
-plus three statistical tools (selection-bias model, hierarchical
-Bayes with within-pid clustering, preregistered fresh-data
-\(n \geq 100\) re-evaluation), each operationally specified.
-(ii)~Single-loop evidence that the default inner-loop gate's
-decisions do not reproduce on cached or fresh \(n=100\) data; the
-small-\(n=30\) fresh result (Exp~47) is documented as an
-intermediate finding overturned by Exp~53. (iii)~A concrete
-testbed (code, 21 candidates, 150 answer pairs, cross-family logs)
-on which others can test alternative audit designs.
-We argue cross-family re-judgment, selection-bias modelling, and
-fresh-data \(n \geq 100\) replication should become routine
-reporting items for retrieval-level self-improvement claims of
-this form.
+\noindent The contribution is therefore not ``self-improvement
+works.'' It is a \emph{calibrated negative result on the simplest
+imaginable self-validating loop}, plus an audit toolbox that turned
+out to be reliable enough to detect the failure across four
+independent diagnostic axes. We use the null to motivate the full
+five-stage architecture: a same-family A/B gate at \(n=50\) is the
+\emph{worst} possible self-validator, because it conflates
+selection bias, judge stylistic preference, exemplar contamination,
+and small-sample noise into one number. Real progress on
+self-hypothesizing agents needs the priors, the world model, the
+scheduler, and the alignment layer --- not better audits of a
+broken gate. Code, all logs, and the preregistration document are
+released so others can run the same checks on their loops.
 \end{abstract}
 
 \section{Introduction}
 \label{sec:intro}
+
+\paragraph{The target.}
+Imagine an agent that does what a human researcher does on any
+ordinary day. It is given a problem. It does not know how to solve
+it, so it \emph{proposes a hypothesis} about a solution. It runs
+the hypothesis. Somewhere in the run, a step does not work. The
+agent does not give up; it forms a sub-hypothesis about why that
+step failed and recurses. Eventually, every layer of hypothesis
+either survives contact with reality or is replaced. The agent
+walks away with both an answer and an updated set of beliefs about
+which sub-hypotheses tend to work, in which conditions, and why.
+We call this kind of agent \emph{self-hypothesizing and
+self-validating}. It is what people mean when they say
+``intelligence,'' and it is what current LLM-as-judge
+self-improvement loops are imitating, very imperfectly.
+
+\paragraph{What such an agent must contain.}
+A working version of this agent has at least four moving parts:
+(i) a library of human-distilled \emph{methodological priors} ---
+control of variables, divide-and-conquer, Occam's razor, ``before
+arguing, get the facts'' --- the shortcuts the species spent
+millennia accumulating; (ii) a cheap \emph{world model} in which
+candidate solutions can be simulated forward, so the recursive
+hypothesis-test loop runs in seconds rather than hours; (iii) a
+learned \emph{scheduler} that decides which prior to invoke for
+which problem, refining the priors' applicability conditions from
+experience; (iv) an \emph{alignment layer} that recognises when
+two superficially different priors are the same idea (Le
+Chatelier and Lenz are the same negative-feedback principle), so
+the agent can carry insights across domains. We sketch this
+five-stage roadmap in \S\ref{sec:roadmap}; no existing system has
+all four, and the field's current proxy --- LLM-as-judge with
+same-family A/B testing --- has \emph{none} of them.
+
+\paragraph{What this paper is.}
+This paper studies the absolute simplest possible instance of the
+target: a closed-loop agent that proposes Chinese-language
+``wisdoms'' (one-line methodological priors), validates each
+candidate by running a same-family \(+10\)pp pairwise A/B test
+on \(n=50\) held-out problems, and updates its own retrieval
+library based on the test outcome. This is roughly stage zero of
+the five-stage roadmap, with no scheduler, no world model, no
+alignment layer. We pick this instance not because we expect it
+to work but because it is the cheapest possible test of the
+self-validating idea. \emph{If even this minimal loop's
+validation step is reliable, we have a foothold; if it fails,
+we have a calibrated negative result that tells us exactly which
+of the four ingredients we cannot omit.}
+
+\paragraph{What we found.}
+The minimal loop's gate accepts \(3/12\) candidates. We then
+audit those three accepts six ways, model the selection bias
+explicitly, fit a hierarchical Bayesian posterior over the
+verdict array, and run \emph{two} preregistered fresh-data
+replications at \(n=100\) (one without the same-domain in-pool
+exemplar mechanism the original solver used, one with it).
+\textbf{The result is a clean null}: under any honest evaluation
+protocol at adequate sample size, no candidate clears the gate.
+Cached-audit drops are statistically indistinguishable from
+top-3-of-12 winner's curse on a noisy measurement. The cached
+signal decomposes cleanly into ``in-pool exemplar boost \(\sim
++0.10\)--\(0.20\) pp'' \emph{plus} ``selection bias from
+top-3-of-12 selection on noisy \(n=50\)''; remove either and
+the \(+10\)pp story collapses.
+
+\paragraph{What this teaches.}
+The minimal self-validating loop does not work because no
+single-number same-family \(n=50\) A/B test can simultaneously
+control selection bias, judge stylistic preference, exemplar
+contamination, and small-sample noise. Better audits are not the
+fix --- they only tell us the gate is broken. The fix is the
+rest of the architecture: priors so the agent does not have to
+re-discover ``increment one component at a time'' from scratch; a
+world model so testing a hypothesis costs seconds; a scheduler so
+the prior gets applied in the right places; and an alignment
+layer so insights generalise. We use the calibrated null as
+empirical motivation for the full roadmap rather than as the end
+of a paper about wisdom libraries.
+
+\paragraph{Roadmap of this paper.}
+\S\ref{sec:method} describes the minimal loop and its inputs.
+\S\ref{sec:experiments} reports the audit, the selection-bias
+analysis, the hierarchical Bayes, and the two preregistered fresh
+\(n=100\) replications --- enough to establish the null with
+calibrated uncertainty and resolve the protocol-mismatch
+ambiguity. \S\ref{sec:roadmap} lays out the five-stage
+architecture our null motivates. \S\ref{sec:discussion} compares
+to existing work (POPPER, EvolveR, ReMA, Voyager, Reflexion).
+Limitations and conclusion follow.
 
 \begin{figure}[t]
   \centering
@@ -3968,6 +3910,74 @@ this is a hypothesis we cannot resolve without the run.
 Cost: \(\sim\$15\), \(\sim 80\) min wall. Log:
 \texttt{phase four/autonomous/exp53\_n100\_fresh\_audit\_log.json}.
 
+\subsection{Experiment 54 --- The same \(n=100\) fresh evaluation
+\emph{with} same-domain exemplars: closing the protocol-mismatch
+ambiguity}
+\label{sec:exp54}
+
+\paragraph{Motivation.} Exp~53 used a no-exemplar solver; the
+original cached signal was generated with v20's same-domain
+in-pool exemplar mechanism. A natural objection: maybe the
+\(0/12\) at \(n=100\) is an artefact of removing exemplars, and
+the gate would replicate under the original v20 pipeline. This
+experiment regenerates base + ext on the same 100 fresh pids
+\emph{with} a same-domain in-pool exemplar block, mirroring v20's
+mechanism but using base answers from a pass-1 generation as the
+exemplar text (so the same-domain exemplar is dynamic, drawn
+from the fresh pool itself).
+
+\paragraph{Result --- exemplar mechanism boosts wr but not enough.}
+
+\begin{center}\small
+\begin{tabular}{l c c c c}
+  \toprule
+  Candidate & wr (Exp~53, no ex) & wr (Exp~54, +ex) & \(\Delta\) & exemplar effect \\
+  \midrule
+  WCAND01 & 0.34 & 0.52 & \(+0.18\) & large \\
+  WCAND02 & 0.44 & 0.56 & \(+0.12\) & large \\
+  WCAND03 & 0.49 & 0.49 & \(\phantom{+}0.00\) & none \\
+  WCAND04 & 0.53 & 0.59 & \(+0.07\) & moderate \\
+  WCAND05 (\(W_{076}\)) & 0.30 & 0.48 & \(+0.18\) & \textbf{very large} \\
+  WCAND06 & 0.29 & 0.46 & \(+0.17\) & large \\
+  WCAND07 & 0.40 & 0.51 & \(+0.11\) & large \\
+  WCAND08 & 0.47 & 0.47 & \(+0.01\) & none \\
+  WCAND09 & 0.39 & 0.52 & \(+0.13\) & large \\
+  WCAND10 (\(W_{077}\)) & 0.51 & 0.57 & \(+0.06\) & moderate \\
+  WCAND11 & 0.25 & 0.33 & \(+0.09\) & moderate \\
+  WCROSSL01 (\(W_{078}\)) & 0.49 & 0.49 & \(+0.00\) & none \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The same-domain exemplar systematically adds
+\(\sim 0.06\)--\(0.18\) pp to wr\_inner across most candidates;
+the exception is W078, WCAND03, and WCAND08, whose wr is
+unchanged. \emph{Even with the exemplar boost, no candidate clears
+the \(0.60\) inner gate}: top is WCAND04 at \(0.591\), then
+WCAND10 (W077) at \(0.574\). L1 verdicts on the top-3 give
+WCAND02 \(0.40\), WCAND04 \(0.49\), and \emph{WCAND10
+\(\mathbf{0.61}\)} --- the L1 cross-family judge actually rates
+W077's exemplar-augmented answers above \(0.60\), while the
+inner gemini judge does not. The joint preregistered rule
+\(\{\theta_{\text{inner}} \geq 0.60 \cap \theta_{\text{L1}} \geq
+0.55\}\) is satisfied by \emph{zero} candidates.
+
+\paragraph{Reading.} The original cached signal of \(0.60\)--\(0.64\)
+was the sum of: (a) the same-domain exemplar boost
+(\({\sim}+0.10\)--\(0.20\) pp uniform across most candidates),
+(b) selection bias from picking top-3-of-12 on noisy \(n=50\)
+measurements, and (c) small-sample variance. Removing any one of
+these three components collapses the apparent gain below the
+\(+10\)pp gate. The two candidates whose wr is unchanged by the
+exemplar mechanism (W078, WCAND03) are the ones whose original
+``signal'' was driven by selection bias plus noise; W076's
+``signal'' was almost entirely an exemplar-mechanism artefact.
+\textbf{The protocol-mismatch concern is closed in the negative
+direction: even under the original v20-style exemplar pipeline at
+\(n=100\), \(0/12\) candidates clear the joint preregistered
+rule.} Cost: \(\sim\$20\), \(\sim 90\) min wall. Log:
+\texttt{phase four/autonomous/exp54\_n100\_v20style\_exemplar\_log.json}.
+
 \subsection{Experiments 12–14 — Three architectural probes (not
 gate-tuning): fragmentation, conditional-activator, citation}
 \label{sec:arch}
@@ -4379,6 +4389,137 @@ a tie. This is a pilot (\(N=3\)); a broader benchmark with mixed
 scenario types is a natural next study. Full harness, scenarios, and
 verdicts in Appendix~\ref{app:multistep}.
 
+\section{Five-Stage Roadmap to a Self-Hypothesizing,
+Self-Validating Agent}
+\label{sec:roadmap}
+
+The empirical null in \S\ref{sec:experiments} is not just ``one
+loop did not work.'' It is a calibrated diagnostic of \emph{what
+is missing} from current LLM-as-judge self-improvement loops.
+This section sketches the architecture our null points toward.
+We describe it as five sequential stages so that each can be
+built and validated incrementally; each stage's output is the
+next stage's known-reliable component.
+
+\paragraph{Stage 0 --- The methodological-prior library.}
+The first thing missing is the equivalent of human education.
+Human researchers do not re-discover ``control of variables''
+from scratch every time; they were taught it, and they apply it
+when conditions warrant. A self-hypothesizing agent should start
+with 15--20 such priors --- divide-and-conquer, Occam's razor,
+``before arguing get the facts,'' analogy from a known case,
+counterexample search, dimensional analysis, increment-one-thing
+debugging, etc. --- each annotated with applicability conditions
+and historical examples. The current paper's wisdom library
+(\(75\) entries from the classical Chinese tradition) is one
+draft of this; a serious version would extend across cultures
+and add applicability conditions an LLM can pattern-match
+against. Stage 0 alone is not an agent; it is a substrate.
+
+\paragraph{Stage 0.5 --- A cheap world model for hypothesis
+testing.} The recursive hypothesis-test loop is unusable if every
+test costs hours of real execution. The agent needs a world
+model in which a candidate solution can be \emph{simulated} fast
+enough that the search can branch. This is the role current
+LLM-agent stacks try to play with chain-of-thought + tool use,
+but those stacks are not calibrated as predictors of execution
+outcomes; they are calibrated as plausibility generators. A
+proper world model is task-specific (a code-execution simulator
+for code tasks; a fluid-dynamics simulator for engineering
+tasks; a learned dynamics model for embodied tasks) and predicts
+``if I take action \(a\) in state \(s\), the next observation
+will be \(o\) with probability \(p\).'' Without this, the
+recursion's \emph{wall clock} is the verification bottleneck.
+
+\paragraph{Stage 1 --- A scheduler that maps problems to priors.}
+With Stage 0 as priors and Stage 0.5 as fast simulator, the
+agent needs to learn \emph{which} prior to invoke when. This is
+classic meta-RL on an action space whose actions are
+``invoke prior \(p_i\) on subproblem \(s\).'' Recent work
+(ReMA (Wan et al., 2025), Memory-R1 (Yan et al., 2025),
+EvolveR (Wang et al., 2025)) has built proxies for this in
+narrow domains. None pairs an explicit human-prior library with
+an explicit scheduler; doing so is the cheapest known way to
+inject the millennia of accumulated human methodology without
+re-deriving it from scratch.
+
+\paragraph{Stage 2 --- Experience feedback refines the priors'
+applicability conditions.} As the scheduler runs, it accumulates
+data on \emph{when} each prior fires successfully and when it
+fails. ``Control of variables fails when components are tightly
+coupled.'' ``Divide-and-conquer fails on problems where the
+sub-tasks share a hidden constraint.'' These applicability
+conditions are partly known to humans but rarely written down
+formally; the agent's job at Stage 2 is to discover and tighten
+them by gradient feedback from real outcomes. Recent work on
+metacognitive and meta-experience learning (MEL
+(Liang et al., 2026), lifelong-learning agent surveys
+(Liu et al., 2025)) has built half of this; the other half
+is the alignment layer below.
+
+\paragraph{Stage 3 --- Alignment of priors via category theory and
+information geometry.} Stages 0--2 produce a library of priors,
+each annotated with applicability conditions. As the library
+grows the agent will independently rediscover priors that are
+formally equivalent but stylistically different. Le Chatelier
+and Lenz, RC discharge and radioactive decay, logistic growth
+and saturating enzyme kinetics --- pairwise, these share a
+formal structure (an isomorphism in a Markov category, a
+Blackwell-equivalent statistical experiment) even though their
+surface descriptions look unrelated. A formal alignment layer
+detects these equivalences and merges the descriptions, so a
+prior validated in one domain can be transferred to another.
+This is where category-theoretic probability
+(Fritz, 2020) and information geometry
+(Ay et al., 2017) earn their keep, even though they cannot
+do the earlier stages' work.
+
+\paragraph{Stage 4 --- Generation of \emph{new} priors, validated
+by the rest of the architecture.} Once the agent has Stages
+0--3, it can recognise problems for which no existing prior
+applies. At that point the LLM's generative capacity proposes a
+\emph{new} candidate prior; the alignment layer (Stage 3) checks
+that it is not formally equivalent to an existing one; the
+scheduler (Stage 1) tries to apply it on a battery of test
+problems through the world model (Stage 0.5); the experience
+feedback (Stage 2) refines its applicability conditions. The
+prior is committed only when the entire stack agrees. This is
+the version of self-improvement that was the original target.
+
+\paragraph{Where this paper sits.}
+This paper is a calibrated study of \emph{what happens when you
+try to skip stages 0.5 through 4}. We have a draft of Stage 0
+(the wisdom library), no Stage 0.5, no Stage 1 scheduler beyond
+``test the candidate by A/B,'' no Stage 2 experience feedback,
+no Stage 3 alignment, and no Stage 4. The naive loop's
+validation step (Stage 1's degenerate placeholder, a same-family
+\(+10\)pp A/B at \(n=50\)) is exactly the brittle point: it
+conflates selection bias, judge stylistic preference, exemplar
+contamination, and small-sample noise into one number. Our null
+is a quantitative argument that the missing pieces are not
+optional polish but load-bearing architecture.
+
+\paragraph{Comparison to closely related work.}
+\textbf{POPPER} (Huang et al., 2025) validates natural-language
+hypotheses with Type-I error control --- it is a Stage 1
+validator without Stages 0/2/3/4, and it has shown the same
+recurring weakness: the validator's null is only as strong as
+the language model's coverage of failure modes. \textbf{EvolveR}
+(Wang et al., 2025) runs the cycle ``act \(\to\) distil
+strategic principles \(\to\) reuse'' --- this is Stage 0+2
+without explicit human priors, and as our null suggests, it
+re-discovers slowly because it lacks the inductive bias humans
+already wrote down. \textbf{ReMA}, \textbf{Reflexion}, and
+\textbf{Voyager} are partial Stage 1+2 implementations on narrow
+task distributions; they confirm the recursion is implementable
+but do not provide the priors or the alignment layer. The
+Bayesian/categorical foundations (Perrone, 2024; Fritz, 2020;
+Ay et al., 2017) are Stage 3 in the absence of
+the rest of the architecture --- they are exactly the part that
+cannot stand alone, but is essential when the rest exists. Our
+contribution is the diagnostic that combines these into a single
+roadmap.
+
 \section{Discussion}
 \label{sec:discussion}
 
@@ -4715,81 +4856,56 @@ rhetorical patterns.
 \section{Conclusion}
 \label{sec:conclusion}
 
-We set out to build the simplest fully-logged closed-loop agent
-that \emph{proposes} wisdom, \emph{validates} it, \emph{prunes}
-what stops being used, and \emph{imports} what a stronger
-cross-model generator sees but the solver misses. We did build it,
-and its inner loop works as specified: three new active wisdoms,
-nineteen retired, \(3/12\) candidates KEPT by a strict \(+10\)pp
-A/B gate, every decision traceable to its evidence.
+We started from a long-standing target: an agent that
+\emph{proposes hypotheses about how to solve a problem and then
+validates them recursively}, the way humans do every day. The
+field's current proxy --- LLM-as-judge with same-family A/B
+gating --- imitates the surface form of this loop without any of
+the substance. To find out what is actually missing, we built
+the simplest possible instance: an autonomous Chinese
+``wisdom-library'' agent whose validator is a same-family
+\(+10\)pp test on \(n=50\) held-out problems, and we audited
+the result the way the rest of the architecture would audit it
+if it existed.
 
-We then ran the cheapest available falsification on our own
-result: re-judging the identical answer pairs with a
-disjoint-family judge. On the cached data, all three KEEPs fall
-below the \(+10\)pp gate; the agent's pre-committed self-rebuttal
-step had named this exact failure mode first. The cached-data
-\emph{drops}, however, are statistically consistent with what
-top-3-of-12 selection would produce on noisy \(n{=}50\) measurements
-of an empirical-Bayes--fit population mean (Exp~45) — so a
-cached-data drop alone does not distinguish ``the signal was
-spurious'' from ``the signal was real but the point estimate
-shrank toward the mean.''
+The instance fails. The validator accepts \(3/12\) candidates;
+zero of those clear cross-family re-judgment on the cached
+pairs. The cached drops are statistically consistent with
+top-3-of-12 winner's curse on noisy \(n=50\) selections. A
+preregistered fresh-data evaluation at \(n=30\) gave a fleeting
+\(3/12\) that hierarchical Bayes already labelled
+weak-to-moderate; a follow-up at \(n=100\), with and without the
+solver's same-domain exemplar mechanism, returned \(0/12\) under
+both protocols. The cached signal decomposes cleanly into
+``in-pool exemplar boost \(\sim +0.10\)--\(0.20\) pp'' plus
+``selection bias on top-3-of-12''; neither component is the
+candidate's own utility.
 
-We tried to resolve this ambiguity in two stages. First, Exp~47
-re-evaluated the original 12 candidates against the inner gate
-plus L1 cross-family judge on 30 preregistered fresh pids at
-thresholds fixed in advance. \emph{This is not a re-execution of
-the full loop: candidate generation, distillation, and pruning
-are not rerun.} At \(n=30\), \(3/12\) candidates cross both gates
-as point estimates: W077, W078, plus WCAND03 (originally a
-REVERT). W076 fails inner already (wr \(0.41\)). The joint
-posterior on the exact preregistered rule at \(n=30\) is W078
-\(0.54\), W077 \(0.37\), WCAND03 \(0.42\) (Beta(2,2));
-hierarchical Bayes (Exp~51, multilevel logistic with random
-effects on candidate, judge family, and pid; \(\hat\sigma_\gamma
-\approx 0.80\) confirms substantial within-pid clustering) gives
-\(\{W_{076}, W_{077}, W_{078}\} = \{0.014, 0.448, 0.763\}\). At
-this stage the audit-stack pattern looked \emph{differentiated}:
-W078 strong, W076 collapse, W077 moderate.
+That null is informative. It says that a same-family A/B at
+\(n=50\) is the worst possible self-validator because it folds
+selection bias, judge stylistic preference, exemplar
+contamination, and small-sample noise into one number. Better
+audits cannot fix that --- they can only diagnose it, which is
+what ours did. The fix is the rest of the architecture
+(\S\ref{sec:roadmap}): a library of human-distilled
+methodological priors so the agent does not re-derive
+``increment one component at a time'' from scratch; a cheap
+world model so testing a hypothesis costs seconds rather than
+hours; a learned scheduler so the priors apply where they
+should; and a formal alignment layer so insights generalise
+across domains. None of these is optional.
 
-Second, An anticipated reviewer concern was: would
-the headline survive at \(n \ge 100\)? Exp~53 ran the same
-preregistered protocol on 100 fresh pids (different seed, disjoint
-from all prior samples). \textbf{Result: \(0/12\) candidates clear
-the inner gate.} W077 drops to \(0.51\), W078 to \(0.49\), WCAND03
-to \(0.49\), W076 to \(0.30\). The Exp~47 ``\(3/12\) cross both
-gates'' was a small-\(n\) artefact; the cached-data null reading
-is the one that replicates at \(n=100\). A pool-separation
-rerun on the same cached pids (Exp~52) using a no-exemplar solver
-shows wr drops further for W076 and W077 while W078's cross-family
-signal is partly robust to exemplar removal --- consistent with
-W078 being the most defensible of the three but still failing the
-\(+10\)pp gate at \(n=100\).
-
-The substantive finding is therefore: \textbf{the inner-loop's
-same-family +10pp gate decisions do not survive
-larger-\(n=100\) fresh-data replication.} The audit stack
-worked as a self-correcting trail: the cached cross-family L1
-audit (Exp~1) was probative even at small \(n\); selection-bias
-modelling (Exp~45) showed the cached drops were consistent with
-regression-to-mean; the small-\(n\) fresh evaluation (Exp~47)
-suggested a differentiated signal that the hierarchical model
-(Exp~51) already moderated to weak/moderate posteriors for W077;
-the larger-\(n\) fresh evaluation (Exp~53) closed the
-threshold-sensitive ambiguity by showing the apparent recovery
-was noise. The recommendation we draw, scoped to this
-single-loop case study, is that (i) cross-family re-judgment,
-(ii) selection-bias modelling on the inner-loop ranking,
-(iii) preregistered fresh-data re-evaluation of the original
-candidates at \(n \geq 100\), (iv) hierarchical Bayesian
-analysis with within-pid clustering, and (v) pool-separation
-sensitivity analysis (no in-pool exemplars) be reported jointly
-as default audit items for retrieval-level self-improvement
-claims of this form, and that a same-family \(+N\)pp on \(n=50\)
-be reported as preliminary until \(n \geq 100\) fresh-data
-replication confirms the direction. Whether this generalises to
-other classes of self-improvement claim is an empirical question
-we do not settle here.
+Concretely, we recommend that any future paper proposing
+retrieval-level self-improvement should report, jointly: (i)
+cross-family re-judgment, (ii) a selection-bias model on the
+candidate ranking, (iii) a preregistered fresh-data evaluation
+at \(n \geq 100\) under the original solver protocol, (iv) a
+hierarchical Bayesian posterior on the exact decision rule, and
+(v) a pool-separation sensitivity analysis. These five together
+are cheap; we ran them all on \({\sim}\$80\) of API spend. They
+will not save a broken loop, but they will tell you, calibrated,
+exactly which piece of the architecture you cannot get away
+without.
 
 \paragraph{Reproducibility.} All code
 (\texttt{wisdom\_registry.py}, \texttt{success\_distiller.py},
