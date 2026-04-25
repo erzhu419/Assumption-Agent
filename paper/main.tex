@@ -14,7 +14,7 @@
 \newtheorem{claim}{Claim}
 \usepackage{url}
 \usepackage{hyperref}
-\usepackage{xcolor}
+\usepackage[table]{xcolor}
 \usepackage{caption}
 \usepackage{subcaption}
 \usepackage{algorithm}
@@ -92,14 +92,25 @@ collapses the loop's apparent gains.
 works.'' It is a \emph{calibrated negative result on the simplest
 imaginable self-validating loop}, plus an audit toolbox that turned
 out to be reliable enough to detect the failure across four
-independent diagnostic axes. We use the null to motivate the full
-five-stage architecture: a same-family A/B gate at \(n=50\) is the
-\emph{worst} possible self-validator, because it conflates
-selection bias, judge stylistic preference, exemplar contamination,
-and small-sample noise into one number. Real progress on
-self-hypothesizing agents needs the priors, the world model, the
-scheduler, and the alignment layer --- not better audits of a
-broken gate. Code, all logs, and the preregistration document are
+independent diagnostic axes. We use the null to motivate a
+five-stage architecture (priors~/ world model~/ scheduler~/
+experience~/ alignment) and \emph{empirically validate each stage}
+in a separate campaign of 11 diagnostic experiments
+(Exp~55--65, \S\ref{sec:roadmap-validation}) on a synthetic
+4-task-family environment, 5 languages, and 3 LLM solver
+families. Result: three stages work in their simplest form
+(priors library; in-context experience feedback;
+cross-language alignment, \(95\%\) pairwise pick agreement); one
+is conditional on the task's prior-sensitivity (the scheduler
+picks robustly but solver-end gain depends on the gap between
+best and worst prior); two fail in their simplest form (a
+naive LLM-prompted ``cheap world model'' has AUROC \(0.40\); a
+naive LLM-prompted ``new prior generator'' beats baseline on
+\(0/5\) hold-outs). The honest reading: real progress needs
+\emph{three} of the four ingredients to work cheaply, plus
+non-trivial calibration training for the other two. A same-
+family A/B gate at \(n=50\) is the \emph{worst} possible
+substitute. Code, all logs, and the preregistration document are
 released so others can run the same checks on their loops.
 \end{abstract}
 
@@ -4649,17 +4660,124 @@ prior is committed only when the entire stack agrees. This is
 the version of self-improvement that was the original target.
 
 \paragraph{Where this paper sits.}
-This paper is a calibrated study of \emph{what happens when you
-try to skip stages 0.5 through 4}. We have a draft of Stage 0
-(the wisdom library), no Stage 0.5, no Stage 1 scheduler beyond
-``test the candidate by A/B,'' no Stage 2 experience feedback,
-no Stage 3 alignment, and no Stage 4. The naive loop's
-validation step (Stage 1's degenerate placeholder, a same-family
-\(+10\)pp A/B at \(n=50\)) is exactly the brittle point: it
-conflates selection bias, judge stylistic preference, exemplar
-contamination, and small-sample noise into one number. Our null
-is a quantitative argument that the missing pieces are not
-optional polish but load-bearing architecture.
+The wisdom-library case study tests Stage~0 only. The null at
+\(n=100\) is a quantitative argument that a same-family A/B at
+\(n=50\) cannot stand alone as the validation step. \emph{In a
+second campaign of 11 experiments (Exp~55--65, summarised below),
+we instantiate each remaining stage in the simplest plausible
+form and measure what each contributes.} The result is mixed and
+informative: three of the five stages work, one is conditional,
+one fails outright, and one (Stage~0.5 in its naive form) is
+dominated by Stage~1. This is the empirical content of the
+roadmap; the rest of this section explains the wins and the
+failures stage by stage.
+
+\subsection{Empirical validation of each stage}
+\label{sec:roadmap-validation}
+
+We set up a simple diagnostic environment: 60 problems across 4
+task families (multi-step arithmetic, CRT trick, Fermi estimation,
+logic puzzles), with a known-optimal prior per family. Each prior
+in our Stage~0 library is one sentence; the Stage~1 scheduler
+picks one prior per problem; the Stage~0.5 ``cheap world model'' is
+the simplest possible form, an LLM prompted to predict
+\(P(\text{success})\); the Stage~2 ``experience feedback'' is
+in-context retrieval of past (problem, prior, outcome) triples;
+the Stage~3 ``alignment'' is tested by translating problems into
+five languages and checking the scheduler's consistency; the
+Stage~4 ``new prior generation'' is leave-one-family-out and ask
+the LLM to invent a prior. Solver: gemini-3-flash unless noted.
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{p{2.6cm} l p{8cm}}
+  \toprule
+  \textbf{Stage} & \textbf{Verdict} & \textbf{Empirical evidence} \\
+  \midrule
+  0. Priors library & \cellcolor{green!18}\textbf{works}
+    & 4 priors instantiated; wrong prior on the wrong family
+      hurts \(10\)--\(20\)pp (Exp~56). The library is not a free
+      win --- mismatches actively damage the solver. \\
+  \midrule
+  0.5. Cheap world model
+   (LLM \(P(\text{success})\)) & \cellcolor{red!18}\textbf{fails}
+    & On Exp~56's verdict array: AUROC \(0.40\) (anti-correlated
+      with actual outcomes), Brier \(0.262\) (worse than uniform
+      \(0.25\)), top-1 argmax pick acc \(48\%\) vs random
+      \(25\%\) but vs Stage~1 LLM scheduler at \(85\%\) (Exp~57).
+      \emph{The simplest world-model prompt is dominated by
+      Stage~1 alone.} A useful Stage~0.5 will need calibration
+      training, not just a single prompt. \\
+  \midrule
+  1. Scheduler & \cellcolor{yellow!18}\textbf{conditional}
+    & Pick accuracy \(85\%\) on 4-family English / gemini
+      (Exp~56). Cross-language pick accuracy \(85\)--\(88\%\) on
+      Spanish / French / German / Japanese (Exp~61). Cross-
+      solver: scheduler-vs-best-fixed delta is
+      \(+0.017\) (gemini), \(0.000\) (claude-haiku), \(-0.017\)
+      (gpt-5.4-mini) (Exp~60). Harder tasks (Exp~62): scheduler
+      \(0.773 < \) best fixed \(0.800\). GSM8K: scheduler
+      \(0.97 \approx\) baseline \(0.98\) at ceiling (Exp~64).
+      \emph{Stage~1 picks are robust; the solver-end gain is
+      conditional on the gap between best and worst prior on the
+      task at hand.} \\
+  \midrule
+  2. Experience feedback & \cellcolor{green!18}\textbf{works}
+    & Pick accuracy on a held-out 20-problem test split rises
+      from \(45\%\) (naive scheduler) to \(80\%\) (in-context
+      experience-augmented scheduler with 15 (problem, prior,
+      outcome) examples), \(\Delta = +35\)pp (Exp~58).
+      \emph{Experience accumulation substantially improves
+      prior-selection.} \\
+  \midrule
+  3. Cross-language alignment
+    & \cellcolor{green!28}\textbf{strongly works}
+    & \(95\%\) mean pairwise pick agreement across English /
+      Spanish / French / German / Japanese on the same problems
+      (Exp~63). \(96.7\%\) mode-pick consistency. Per-family
+      mode-correct: A=100\%, B=93\%, C=93\%, D=60\%. \emph{The
+      scheduler operates on underlying problem structure, not
+      surface language --- which is what an alignment layer is
+      supposed to deliver.} \\
+  \midrule
+  4. New prior generation
+    & \cellcolor{red!18}\textbf{fails}
+    & Leave-one-family-out: ask the LLM to invent a new prior
+      for the held-out family given the other 4 families'
+      (problem, optimal prior) examples. Mean delta vs baseline:
+      \(-0.013\) over 5 hold-outs. Generated prior beats
+      baseline on \(0/5\) hold-outs (Exp~65). The generated prior
+      \emph{names} are reasonable (e.g.\
+      \texttt{test\_hypotheses}, \texttt{scale\_anchoring}) but
+      do not actually help. \emph{The simplest Stage~4 ---
+      ``ask the LLM for a new prior'' --- does not work.} \\
+  \bottomrule
+\end{tabular}
+\caption{Per-stage empirical verdict from Exp~55--65. Three
+stages (0, 2, 3) work in their simplest form. One (1) is
+conditional on the task's prior-sensitivity. Two (0.5, 4) fail
+in their simplest form and need substantively more sophisticated
+implementations than a single LLM prompt.}
+\label{tab:stage-verdicts}
+\end{table}
+
+\paragraph{What this calibrates.}
+The roadmap is not vapourware: each stage has a measurable
+operationalisation and produces a measurable result.
+\textbf{Three stages work} (priors library, experience feedback,
+alignment). \textbf{One stage is conditional} (scheduler picks
+robustly but the solver-end improvement depends on whether the
+task is far from ceiling). \textbf{Two stages fail in their
+simplest form} (cheap world model via single LLM prompt;
+new-prior generation via single LLM prompt). The two failures
+are informative: they tell us that the obvious shortcut
+(``just prompt the LLM to do it'') does not work for these two
+roles, and that real Stage~0.5 / Stage~4 implementations need
+calibration training data and explicit search procedures over the
+prior space respectively. This narrows the contribution of the
+roadmap: it is not ``five plug-and-play modules,'' it is ``three
+plug-and-play modules + two open research problems with
+characterised failure modes.''
 
 \paragraph{Comparison to closely related work.}
 \textbf{POPPER} (Huang et al., 2025) validates natural-language
