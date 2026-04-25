@@ -462,15 +462,21 @@ follow are about the inner-loop wisdom-acceptance gate, not about
 v20-vs-baseline; we do not re-audit the scaffold comparisons in
 this paper.
 
-\paragraph{Contribution 4 — Evolution trajectory and its
-subsequent falsification by the audit stack.} The library moves through
+\paragraph{Contribution 4 — Evolution trajectory and the
+differentiated audit verdict.} The library moves through
 \(75 \to 77 \to 58_{\text{active}} + 19_{\text{deprecated}} \to
 59_{\text{active}} + 19_{\text{deprecated}}\) producing three new
 wisdoms (W076 \emph{Change with the times}, W077 \emph{No
 investigation, no right to speak}, W078 \emph{Is it a mule or a
 horse—take it out for a test}). Each is documented with source,
-signal, unpacking, exemplars, and evidence trail. Each is
-subsequently falsified by the audit stack.
+signal, unpacking, exemplars, and evidence trail. On the cached
+audit, none of the three clears the original \(0.60\) gate as a
+point estimate; on Exp~47's preregistered fresh-data
+re-evaluation at the laxer L1 \(\geq 0.55\), W077 and W078 recover
+while W076 collapses. The audit verdict is therefore
+\emph{differentiated}, not a uniform falsification --- W076 is
+the cleanest non-replicating cell, W078 clears both thresholds
+on fresh data, and W077 clears only the laxer L1 threshold.
 
 \paragraph{Contribution 5 — A partial architectural recovery that does
 not generalize.} Having destabilised the naive pair-wr gate, we
@@ -866,9 +872,16 @@ strong identifiability claim about \(Z^{\mathrm{specific}}\)
 would hold are not met. We therefore use the decomposition as a
 conceptual organising frame for the audit stack and as a
 descriptive interpretation of the empirical findings, not as a
-formal identification result. The null verdict survives under
-this weaker reading because no audit layer at any threshold and
-no non-pair-wr measurement assigns lift to the three KEEPs.
+formal identification result. The cached-data null at the
+original \(0.60\) threshold survives under this weaker reading
+because no audit layer at any threshold assigns a cached-data
+\(\mathrm{wr} \geq 0.60\) point estimate to the three KEEPs.
+\emph{The fresh-data result (Exp~47) is different}: W078
+recovers cleanly at both \(0.55\) and \(0.60\) thresholds, W077
+recovers at the preregistration's \(0.55\) but not the original
+\(0.60\), and W076 fails on fresh data as well. The full
+qualitative picture --- not just the cached-data null --- is
+documented in the \emph{differentiated finding} of \S Conclusion.
 
 \begin{figure}[t]
   \centering
@@ -3333,6 +3346,44 @@ the primary reporting choice (it was committed before the
 experiment, and the inner gate was made strictly stricter at
 \(0.60\) to preserve specificity on candidate generation), but
 both readings are reported here for transparency.
+
+\paragraph{Joint posterior on the exact preregistered decision
+rule (R10/R11 Question~3).} The decision rule for replication
+under the preregistration is \emph{simultaneously} clearing the
+inner gate at \(\theta_{\text{inner}} \geq 0.60\) and L1 at
+\(\theta_{\text{L1}} \geq 0.55\). Treating inner-gemini and
+L1-claude-haiku as independent judges (different families on the
+same answer pairs), with a Beta(2, 2) prior, the joint posterior
+on this exact rule is:
+
+\begin{center}\small
+\begin{tabular}{l c c c c c}
+  \toprule
+  & \(P(\theta_{\text{inner}} > 0.60)\) & \(P(\theta_{\text{L1}} > 0.55)\) & \(P(\theta_{\text{L1}} > 0.60)\) & \multicolumn{2}{c}{Joint posterior} \\
+  \cmidrule(lr){5-6}
+  Candidate (KEEP) & & & & \(\text{inner} {>} .60 \land \text{L1} {>} .55\) & \(\text{inner} {>} .60 \land \text{L1} {>} .60\) \\
+  \midrule
+  WCROSSL01 (\(W_{078}\)) & 0.569 & 0.948 & 0.857 & \textbf{0.539} & \textbf{0.487} \\
+  WCAND10  (\(W_{077}\))  & 0.677 & 0.546 & 0.319 & 0.370          & 0.216 \\
+  WCAND03  (recovered)    & 0.755 & 0.562 & 0.340 & 0.424          & 0.256 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\noindent At the preregistered \(0.60/0.55\) policy, only W078
+exceeds 50\% joint posterior; W077 and WCAND03 sit at \(0.37\)
+and \(0.42\). At the stricter \(0.60/0.60\), all three drop
+below 50\%. \emph{This is the most honest reading of the fresh
+data on the exact decision rule}: at the preregistered policy
+the audit-stack pattern is consistent with a differentiated
+verdict (W076 collapses cleanly, W078 has the strongest joint
+support, W077 and WCAND03 are moderate), but the joint
+posteriors do not exceed 0.95 for any candidate at this fresh
+\(n\). The audit stack does not deliver a confident binary
+classification at \(n=30\); what it provides is a probabilistic
+ordering: W078 \(>\) WCAND03 \(\approx\) W077 \(\gg\) W076.
+Reaching individually-confident classifications would require
+\(n \geq 100\) on the fresh split, which is future work.
 
 \paragraph{Headline.}
 \textbf{Three of twelve candidates pass both the inner-loop
