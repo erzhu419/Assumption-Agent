@@ -32,7 +32,8 @@
 
 \title{\textbf{Six Layers of Re-Judgment:}\\
 A Case Study in Auditing a Self-Improving LLM Loop,\\
-and Evidence That a Default Single-Family Gate Is Judge-Fragile}
+and Evidence That a Default Single-Family Gate's Decisions\\
+Do Not Reproduce Under the Audit Stack}
 
 \author{%
   Anonymous submission\\
@@ -53,12 +54,17 @@ wisdom-curation loop, \emph{zero} of its committed wisdoms survive a
 six-layer conditionally-distinct audit. The scientific contribution is the audit
 stack itself, and a single-loop demonstration that on this specific
 Chinese open-ended wisdom-library setup, a naive single-family A/B
-gate is \emph{judge-fragile}: its decisions do not survive
-re-judgment by a different LLM family on identical content. We do
-not generalise this to a field-level claim about all self-improving
-LLM loops; we report it as a methodological cautionary tale on one
-loop and release the audit stack so that others can run the same
-checks on theirs.
+gate's KEEP decisions \emph{do not reproduce} as point estimates
+under the audit-stack measurements: cross-family re-judgment, sample
+extension, cross-solver, fresh-domain, and non-pair-wr faithfulness.
+We do not claim L1 cross-family disagreement alone is the
+explanation: a formal selection-adjusted analysis (Exp~45) shows
+that the L1 drops are statistically consistent with regression to
+the mean on top-3-of-12 noisy gate selections. The combined
+non-reproduction across multiple distinct measurements (not L1
+alone) is what we report. We do not generalise to a field-level
+claim about all self-improving LLM loops; we release the audit
+stack so others can run the same checks on theirs.
 
 \noindent\textbf{Setup.} Large language models improve markedly when
 given retrieval-augmented \emph{methodological scaffolding}: problem
@@ -152,16 +158,21 @@ not a literature-level claim.
 
 \noindent\textbf{Architectural recovery attempt and its limits.} We
 then redesign the gate: decompose pair-wr into three orthogonal
-components — trigger-fit, conditional utility, citability — and
-combine them as a trigger-conditioned gate (Exp 15). On the original
-12 candidates this rescues \(4/12\) (vs \(3/12\) for the naive gate),
-including two REVERTs the naive gate missed. But scaling to
-\(21\) candidates (Exp 33) yields \(3/21\) PASS at the same
-threshold --- a pass rate that is not above what a
-random-inclusion procedure at \(\sim 30\%\) would deliver
-(we use \(30\%\) only as an arbitrary reference point, not as
-a principled utility baseline). The architectural redesign
-recovers \emph{local} positive signal on the original 12 but
+components --- trigger-fit, conditional utility, citability ---
+and combine them as a trigger-conditioned gate (Exp 15). On the
+original 12 candidates the trigger-conditioned gate PASSes
+\(4/12\) (vs the naive \(+10\)pp gate's \(3/12\)), including two
+REVERTs the naive gate missed. Applied prospectively to the
+9 new candidates from Exp 29 (no re-tuning, see Exp 33), the
+trigger-conditioned gate PASSes \(0/9\). Combined performance:
+\textbf{trigger-conditioned gate \(4/21\)} on the full
+\(12{+}9\) set; \textbf{naive \(+10\)pp gate \(3/21\)} on the
+same set (the original three KEEPs plus zero from the new
+nine). Neither pass rate is above the \(\sim 30\%\) reference
+an arbitrary random-inclusion procedure at this threshold would
+deliver (\(30\%\) is a reference, not a principled utility
+baseline). The architectural redesign recovers \emph{local}
+positive signal on the original 12 but
 does not generalize: a partial recovery,
 not a fix.
 
@@ -172,8 +183,10 @@ concrete evidence, including: 3-family labeling reliability
 candidates); expensive-tier judge scale-up (Exp~35;
 cross-tier \(\kappa\) in Exp~37); structured non-panel rating by
 gpt-5.5 on \emph{all three KEEPs} (Exp~38, Exp~41 --- 4-dim
-Likert preference base \(>\) ext on every dimension and every
-candidate); minimal English-language replication on MT-Bench
+Likert: combined-mean preference base \(>\) ext on \(11/30\),
+\(13/30\), \(14/30\) for W078/W077/W076 respectively, with three
+of twelve dim-candidate cells slightly above zero, the rest below);
+minimal English-language replication on MT-Bench
 (Exp~39, 0/6 English wisdoms clear \(0.60\) under any family
 across two independent runs); cross-solver L4 full audit
 (Exp~40, three KEEPs across two new solver families: 7/18 cells
@@ -2159,10 +2172,16 @@ loop. Total: 300 new API calls at expensive tier (cost
   \end{tabular}
   \caption{Expensive-judge audit extended to all three KEEPs.
     wr\_ext with 95\% Wilson CI. No \((\text{KEEP, expensive-judge})\)
-    combination's CI upper bound reaches the \(0.60\) gate; four of
-    six lower bounds sit at or below \(0.32\). The null verdict now
-    holds under 6 independent expensive-judge measurements across
-    the three KEEPs, at \(\sim\$25\) total compute.}
+    combination's \emph{point estimate} reaches the \(0.60\) gate
+    (\(0/6\)); however, three of six CIs (W076 opus
+    \([0.32, 0.60]\) at the boundary, W076 gpt-5.4 \([0.40, 0.67]\),
+    W077 opus \([0.39, 0.67]\)) include or extend past the
+    threshold, so the formal \(95\%\) rejection of the gate holds
+    on only three of six cells. Four of six lower bounds sit at
+    or below \(0.32\). The audit-stack reading is non-reproduction
+    of the gate's threshold \emph{as a point estimate}; the
+    formal-significance reading is more conservative on three of
+    the six cells.}
   \label{tab:exp35-expensive-extended}
 \end{table}
 
@@ -2268,11 +2287,16 @@ intuition). Three observations follow directly.
 thin ground at \(n = 50\). \emph{(ii)} Every audit-stack measurement
 (L1, L3, L4, L6) produces CIs that \emph{also} include \(0.50\);
 there is no layer at which the three KEEPs collectively clear
-\(0.50\). \emph{(iii)} The binary composite result — \(3/21\)
-candidates PASS at the trigger-conditioned gate versus a random
-baseline of \(\sim 30\%\) — has one-sided \(p = 0.086\)
-(near-significant null), and \(0/9\) new Exp~33 candidates PASS
-has \(p = 0.040\) (null confirmed).
+\(0.50\). \emph{(iii)} The binary composite results: under the
+\emph{naive \(+10\)pp inner-loop gate}, \(3/21\) candidates PASS
+(one-sided \(p = 0.086\) against an arbitrary \(p_0 = 0.30\)
+reference); under the \emph{trigger-conditioned gate} (Exp~15),
+\(4/21\) candidates PASS (\(p = 0.198\) against the same
+reference), and \(0/9\) new Exp~33 candidates PASS the
+trigger-conditioned gate (\(p = 0.040\)). We do not claim these
+``confirm a null'' --- the \(0.30\) reference is an arbitrary
+calibration point, not a principled utility baseline ---
+only that the observed pass rates are not above this reference.
 
 \begin{figure}[t]
   \centering
@@ -2912,6 +2936,85 @@ distinguishable from selection bias} on a single noisy gate.
 Cost: \({\sim}\$5\), \({\sim}30\) min. Log:
 \texttt{phase four/autonomous/exp44\_positive\_negative\_controls\_log.json}.
 
+\subsection{Experiment 46 --- Stronger positive controls, including
+a base-library duplicate}
+\label{sec:exp46}
+
+Exp~44's three controls were a placebo, a literary quote, and a
+generic methodological hint --- all three failed the gate, which
+established \emph{specificity} but did not test \emph{sensitivity}
+(would the gate accept a known-useful addition?). Exp~46
+constructs three stronger positive controls and runs them through
+the same protocol:
+
+\begin{description}[leftmargin=1.5em,topsep=2pt,itemsep=2pt]
+  \item[\(C\)-\textsc{math-numeric}] a math/quant-specific hint
+    (``track units; sanity-check order of magnitude before
+    final number''), evaluated only on
+    \{\texttt{mathematics, science, engineering}\} domains where
+    the hint is plausibly useful.
+  \item[\(C\)-\textsc{scqa}] the well-documented SCQA framework
+    from Barbara Minto's Pyramid Principle (situation /
+    complication / question / answer), generic but operational.
+  \item[\(C\)-\textsc{library-dup}] a deliberate duplicate of an
+    existing base-library wisdom (W016 \emph{兼听则明，偏信则暗}
+    --- already part of v20's \(0.86\) win-rate library).
+\end{description}
+
+\begin{center}\small
+\begin{tabular}{l c c c c}
+  \toprule
+  Control & gemini & haiku & gpt-mini & 3-fam mean \\
+  \midrule
+  \(C\)-\textsc{math-numeric} (math/sci/eng pids) & \(0.47\) & \(0.12\) & \(0.15\) & \(0.25\) \\
+  \(C\)-\textsc{scqa} (all domains)               & \(0.11\) & \(0.09\) & \(0.15\) & \(0.12\) \\
+  \(C\)-\textsc{library-dup} (W016 duplicate)     & \(0.17\) & \(0.13\) & \(0.12\) & \(0.14\) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{All three stronger controls also fail the gate.} No
+control reaches \(\mathrm{wr}_{\mathrm{ext}} \geq 0.60\) under any
+single judge in the panel; mean wrs are \(0.12\)--\(0.25\). This
+includes the \emph{base-library duplicate} --- a wisdom already
+known to be active in v20's library. Combined with Exp~44, all
+\(6/6\) controls we constructed are rejected. The audit's
+specificity is therefore \(100\%\) on this control set; its
+\emph{sensitivity} remains untested because none of our
+constructed positive controls actually function as positives in
+this pipeline.
+
+\paragraph{What this teaches about the gate.} The gate has very
+high specificity (it correctly rejects placebo, random,
+generic-useful, math-specific, SCQA, and library-duplicate
+wisdoms), but the absence of any positive control that the gate
+\emph{accepts} strongly suggests a structural property of the
+pipeline: \emph{adding any new wisdom record at solve time
+generally hurts answers vs.\ the base library on this evaluation
+distribution}. The exceptions are the three KEEPs that scored
+\(0.60\)--\(0.64\) by passing the gate in the first place. The
+combined Exp~45 + Exp~46 reading: those three exceptions are
+consistent with regression-to-the-mean-on-12-noisy-gate-scores
+(Exp~45) plus the structural anti-additivity bias (Exp~46) ---
+\emph{i.e.\ the lucky right-tail of an inherently
+add-anything-hurts gate}. We do not claim this proves the
+KEEPs lack utility; we claim the conjunction of selection bias
+and gate-anti-additivity provides a sufficient null model for
+the observed pattern.
+
+\paragraph{Caveat.} \(C\)-\textsc{library-dup} is an imperfect
+test: it duplicates a wisdom already in v20's library, so the
+ext-condition prompt has W016 mentioned twice. A cleaner test
+would remove W016 from the base library and reinstate it as a
+candidate; we did not do this because it requires re-running v20
+with a modified base library, which falls outside the audit-stack
+methodology this paper formalises. The negative result
+nevertheless suggests adding the same wisdom \emph{again} cannot
+move the gate, which is informative.
+
+Cost: \({\sim}\$8\), \({\sim}30\) min. Log:
+\texttt{phase four/autonomous/exp46\_stronger\_positive\_controls\_log.json}.
+
 \subsection{Experiments 12–14 — Three architectural probes (not
 gate-tuning): fragmentation, conditional-activator, citation}
 \label{sec:arch}
@@ -3493,21 +3596,24 @@ than leave them to footnotes.
     the alternative explanation (``audit panel is wrong; original
     judge was right'') is not supported by any of the available
     LLM-substitute proxies.
-  \item \textbf{Positive / negative controls (partially closed
-    by Exp~44).} Exp~44 (\S\ref{sec:exp44}) runs three controls
-    --- a vacuous placebo aphorism, a non-methodological literary
-    quote, and a deliberately useful methodological hint ---
-    through the same inner-loop \(+10\)pp gate. All three score
-    wr \(\leq 0.18\); the \(+10\)pp gate's specificity (correctly
-    refusing all three) is therefore high. Two unresolved items
-    remain: (a) the \emph{deliberately-useful} control failed
-    too, possibly because v20's frame step already elicits
-    structured premises, so we have not yet shown the audit stack
-    accepts \emph{anything} positive; (b) human-curated library
-    additions and length-matched random context (i.e.\ same
-    length, same register, no methodological content) are not
-    tested. False-positive / false-negative rates of the full
-    audit stack on a richer control set is future work.
+  \item \textbf{Positive controls remain unresolved
+    (Exp~44 + Exp~46).} Exp~44 (\S\ref{sec:exp44}) runs three
+    controls (placebo, random literary quote, generic-useful
+    hint); Exp~46 (\S\ref{sec:exp46}) adds three stronger
+    positive controls (math-specific, SCQA framework,
+    base-library duplicate). All \(6/6\) controls fail the gate
+    (wr \(\leq 0.25\)). The gate has very high specificity but
+    \emph{no positive control we constructed actually functions
+    as a positive}, so the audit's sensitivity remains untested.
+    Combined with Exp~45's selection-bias finding, the
+    parsimonious null model is now: the gate is structurally
+    anti-additive (adding any wisdom hurts), and the three
+    KEEPs are the lucky right-tail of 12 noisy gate measurements.
+    A genuinely positive control --- a synthetic task family
+    where a specific known-useful intervention deterministically
+    helps, or a human-curated wisdom validated independently
+    against task outcomes before insertion --- remains future
+    work and is the strongest single missing piece.
   \item \textbf{L6 operationalization is under-specified.}
     Embedding cosine and citation strictness are two proxies
     for faithfulness; they could in principle disagree. On our
