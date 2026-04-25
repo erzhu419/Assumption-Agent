@@ -1,5 +1,88 @@
 # 阶段二：经验反馈与规则演化——完整开发文档 (v1)
 
+---
+
+## 🏁 2026-04-23 v16 里程碑回看
+
+**写于**: v16 架构验证完成后。**这是 v16 全部工作的主战场**，覆盖度最高但也方向最大改造。
+
+### 原意 → v16 实际覆盖
+
+| 原设计模块 | 原意 | v16 实际路径 | 状态 |
+|---|---|---|---|
+| 经验评估器 | 判断每条执行经验是否值得记录（信息量） | v6 的 "从 v5 losses 挖 triggers" 是粗粒度版——只看"输了就记"，不算 entropy | 🟡 简化版 |
+| 经验蒸馏器 | 从成功/失败对比中提取 KB 更新候选 | v6 的 `mine_v5_losses.py` = 这个的简化实现 (140 条新 triggers) | ✅ 实现 (一次性) |
+| 知识整合器 | 冲突检测 + 置信度更新 + 质量门控 | ❌ 完全没做；v6 直接 append 新 triggers | ❌ **gap** |
+| "不 fine-tune LLM" 设计约束 | 学习发生在 KB JSON 中，非权重 | ✅ 完全遵守（v16 也零训练） | ✅ 持守 |
+
+### v16 的实际 "Phase 2 架构演化" 路径 (全新发现)
+
+**原设计没预料到的 3 个突破层**:
+
+1. **Wisdom library 层** (v3, 75 条 + v2 扩到 105): 跨文明非虚构智慧，不是从自己 losses 挖的，是从人类千年文献里提取的
+2. **Trigger compression 层** (v11, 40-80字 → 22-30字): GenericAgent paper 的 "information density > volume" 验证
+3. **Case-backed reasoning 层** (v15/v16, cross-domain exemplars + same-domain bridge + audit pass): 用户类比"判例法"的架构突破
+
+**每一层都在"知识库如何被 LLM 消化"上有进化**:
+```
+v1 (161 triggers flat)  →  v5 (priors + triggers + wisdom stacked)
+                           ↓
+                       v11 (compressed triggers, density > volume)
+                           ↓
+                       v13 (audit + revise, 2-pass)
+                           ↓
+                       v15 (cross-domain cases, abstraction via diversity)
+                           ↓
+                       v16 (cases + same-domain bridge + audit)
+```
+
+### 14 轮迭代的总学习清单
+
+参见 `phase2_final_state_report.md` 的完整记录。以下是**超出原设计设想**的关键发现：
+
+1. **"加内容"路线 (v1→v12c) 撞到 ceiling**: ~54% vs baseline，再加 triggers/wisdom 几乎全部打平或变差
+2. **"给足 budget 不干扰 LLM" (baseline_long) 比 scaffolding 好 +20pp**: 原设计假设 LLM 需要外部 KB 引导，事实上大部分情况它自己推理更好
+3. **2-pass audit 是关键突破** (v13-reflect 平 Self-Discover): 不是 "塞什么内容"，而是 "让 LLM 停下来自检"
+4. **判例 > 哲理 (v15/v16)**: 用户的"大陆法判例"类比——只给 wisdom 文字是法条无判例，太模糊。加上跨域 exemplars + 同域 bridge 才激活
+
+### 仍未做到的原意
+
+- ❌ **持续演化**: v6 的 mining 是一次性事件，没有 online 反馈循环
+- ❌ **置信度跟踪**: 每条 trigger/wisdom 没有历史成功率分数
+- ❌ **冲突检测**: "先发制人" vs "三思后行" 这种 tension 系统不识别
+- ❌ **质量门控**: 新挖 triggers 直接 append，没有 gate
+- ❌ **人类审核流程**: changelog 系统没用上
+- ❌ **MEL 论文的 bifurcation point 分析**: 从成功/失败对找"推理开始偏离那一步"未实现
+
+### 原设计最大误判
+
+**原设计假设: "发现策略的定量适用边界" 是 Phase 2 的主要贡献**  
+(比如 "控制变量法在耦合度 > 0.6 时失效" 这种)
+
+**v16 发现: 这种适用边界其实用处有限**
+- v7b (domain-gated thin mode) 失败证明了"按 domain/difficulty 切换策略"信号不强
+- 真正有用的 gating 是 v12c 的 "math/science → hygiene"，但这是凭经验而不是通过 MEL-style bifurcation 发现的
+- **更重要的反而是"KB 如何呈现给 LLM"**（密度、案例、审查）这一主题
+
+这个 pivot 原 dev doc 完全没预料到。
+
+### 启示
+
+原 dev doc 是"**拿 MEL 论文的思路套在 KB 更新上**"。v16 实际走的路是"**在 KB 的表征/呈现层找信号**"。这两个主题都是 Phase 2 范畴的，但重点不同。
+
+**如果重写这份 dev doc**:
+- 保留 "KB 可演化" 原则
+- 把"定量适用边界发现"降级为次要（Phase 2 的 exit stretch goal）
+- 升级"KB 表征 + LLM 消化方式"为 Phase 2 核心（已用 v16 验证）
+- 新增第 4 个核心模块："Exemplar Library 构建"（v16 的 `wisdom_diverse_exemplars.json`）
+
+**v16 artifact 索引**:
+- Code: `mine_v5_losses.py`, `compress_triggers_v11.py`, `build_wisdom_extension.py`, `build_diverse_exemplars_v15.py`, `phase2_v11/v13/v15/v16_framework.py`
+- Data: `trigger_library_v6/v11.json`, `wisdom_library_v2.json`, `wisdom_diverse_exemplars.json`
+- Results: `v16_final_results.md`, `phase2_final_state_report.md`, `v13_final_results.md`
+
+---
+
 ## 0. 文档概述
 
 ### 0.1 本阶段在整体架构中的位置

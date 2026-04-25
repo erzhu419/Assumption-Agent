@@ -75,12 +75,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", default="baseline_long")
     ap.add_argument("--n", type=int, default=100)
+    ap.add_argument("--sample", default="sample_100.json")
     args = ap.parse_args()
 
     answers_path = ANSWERS_DIR / f"{args.variant}_answers.json"
     answers = cache_load(answers_path)
 
-    sample = json.loads((CACHE / "sample_100.json").read_text(encoding="utf-8"))[: args.n]
+    sample = json.loads((CACHE / args.sample).read_text(encoding="utf-8"))[: args.n]
 
     client = create_client()
     t0 = time.time()

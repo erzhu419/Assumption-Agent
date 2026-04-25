@@ -1,5 +1,72 @@
 # 阶段一：策略调度器——完整开发文档 (v1)
 
+---
+
+## 🏁 2026-04-23 v16 里程碑回看
+
+**写于**: v16 架构验证完成后。
+
+### 原意 → v16 实际覆盖
+
+原计划：RL 训练（PPO/DPO）一个 learned dispatcher，输入 problem features，输出 strategy ID + confidence。
+
+**v16 实际走的路：**
+
+| 原设计组件 | v16 实际做法 | 状态 |
+|---|---|---|
+| RL-trained dispatcher | ❌ 未训练任何 RL | **放弃 RL 路径** |
+| 问题特征提取器 | `signal_embeddings.npz`: sentence-transformer 嵌入 (multilingual MiniLM) | ✅ 有，但不是 learned feature |
+| 策略选择 | 1) **硬编码 domain router** (math/sci → hygiene, else → case+reflect)<br>2) **LLM 语义选择** (v3 wisdom selections: 75 中选 3-5 条 per problem) | ✅ 两层 rule + LLM，非 RL |
+| 置信度输出 | ❌ 没有显式 confidence | ❌ 放弃 |
+| 策略-条件可视化 | ❌ 没做 | ❌ 放弃 |
+
+### 为什么 RL 路径被放弃
+
+1. **`7e353ed` commit (Phase 1 改造)** 的结论: Polya/Popper orientation restoration 带来 INCONCLUSIVE 信号 → RL learned dispatcher 成本高，预期增益低
+2. **Self-Discover (`ours_27`) 对比** 显示: 即使非常好的 strategy library，单次 execute 在 3-flash 上只比 baseline 高 ~4pp (因为 LLM 内部推理已经很强)
+3. **v16 的 route + LLM-select 组合 (rule-based)** 已经把 dispatcher 的信号价值榨出来了，**进一步用 RL 训练 unlikely to payoff**
+
+### 实际起作用的 "dispatcher-like" 机制
+
+1. **Domain router** (`phase2_v12_framework.py:MATH_SCI`): 硬编码 if-else
+2. **v3 selections** (`phase2_v3_selections.json`): 每问题 Flash 从 75 wisdom 中选 3-5 条，冻结为静态缓存
+3. **同域判例检索** (`phase2_v15_exemplar_framework.py:build_same_domain_exemplar`): 运行时 embedding cosine similarity
+
+这三个组合起来 = **"零训练的 dispatcher"**，比原设计简单很多但有效。
+
+### 仍未做到的原意
+
+- ❌ **RL 训练循环**: 无 reward model、无 policy gradient、无经验回放
+- ❌ **learned feature extractor**: 用的是 off-the-shelf sentence-transformer
+- ❌ **调度器可训练 RL baseline 对比**: 因为从来没训，没法对比
+- ❌ **多领域 benchmark 评估论文**: 我们跑的是 100 题 + 50 held-out，远小于原设计的 benchmark_problems.json
+
+### 如果重启这份 dev doc 应该做什么
+
+**两条路**:
+
+1. **接受 v16 的 zero-training 架构为 Phase 1 的实际产物** (推荐)
+   - 把原 RL 规划重写为 "rule-based routing + LLM semantic selection"
+   - 论文 framing: "when does RL dispatcher worth training?" 答: 不在这个问题域
+   
+2. **尝试 RL as future work**: v16 仍然有部分域（如 math 33%）表现弱，可能 RL 能在这些痛点上找到更好的 routing
+   - 但需要 reward model（目前依赖 LLM judge，不是 scalar reward）
+
+### 启示
+
+**原设计的最大假设错了**: 假设"LLM 不会主动调用哲学方法论"。事实是：
+- 3-flash 内部的 CoT thinking 已经做了很多方法论工作（thinking tokens ~1000 个）
+- 外部给策略反而稀释它的自主推理空间
+
+**v16 的成功路径是不同的**: 不"选策略给它"，而是"**给它案例让它抽象**"（判例法原则）。
+
+**v16 artifact 索引**:
+- Code: `phase one/scripts/validation/phase2_v12_framework.py` (domain router), `phase2_v15_exemplar_framework.py` (same-domain retrieval)
+- Data: `signal_embeddings.npz`, `phase2_v3_selections.json`
+- Result: `v16_final_results.md`
+
+---
+
 ## 0. 文档概述
 
 ### 0.1 本阶段在整体架构中的位置

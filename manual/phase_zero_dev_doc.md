@@ -1,5 +1,48 @@
 # 阶段零：哲学方法论知识库——完整开发文档 (v2)
 
+---
+
+## 🏁 2026-04-23 v16 里程碑回看
+
+**写于**: v16 架构验证完成后（cases+reflect 胜 Self-Discover +22pp，胜 baseline_long +72pp）。
+
+### 原意 → v16 实际覆盖
+
+| 原设计目标 | v16 实际路径 | 状态 |
+|---|---|---|
+| 15-20 条元策略 KB | 27 策略 KB 建成；**但 v1-v16 大部分实验绕开 27 策略，用 75 条 wisdom library** | 🔄 **形式保留，内容替换** |
+| Markov 核 / 可演化 schema | 保留了 schema，实际演化路径是"mine → library → exemplar"三层，而非修改原策略 | 🟡 替换式演化 |
+| 对比式适用条件精炼（ExpeL） | 被 v6 的"从 v5 losses 挖 140 条新 triggers"落实（161 → 301），但是一次性非持续 | ✅ 实现但非在线 |
+| 人类标注 1-5 条策略-问题匹配 | 标注存在（`kb/` 下 27 × 6 domain），但 v16 最终用了 LLM 选择（v3 selections），不是人类标注映射 | 🟡 被 LLM 选择替代 |
+
+### v16 新产出的 KB 层（原设计没有）
+
+1. **`wisdom_library.json` (75 条 + v2 扩到 105)**: 跨文明非虚构智慧（传道书/孙子/Russell/Popper/Kahneman 等），每条 5 字段（aphorism / source / signal / unpacked_for_llm / cross_domain_examples）
+2. **`wisdom_diverse_exemplars.json`**: 每条 wisdom × 3 个跨域最远的判例，GPT-5.4 挑选，100% 达到 3-domain spread
+3. **`trigger_library_v11.json`**: 161 条压缩触发器（40-80 字 → 22-30 字）
+4. **`signal_embeddings.npz`**: sentence-transformer 预计算问题 embeddings，用于运行时同域判例检索
+
+### 仍未做到的原意
+
+- ❌ **知识库在线演化**: v6 一次性从 losses 挖新 triggers 后就冻结；原设计的阶段二持续反馈没实现
+- ❌ **人类评审者一致性**: Fleiss' κ 标注可靠性分析未做
+- ❌ **可更新性测试报告**: update → rollback → recovery 流程未验证
+- ❌ **Confidence score 跟踪**: 每条 wisdom / trigger 应该有"历史成功率"，目前都是等权
+- ❌ **冲突检测**: 当 wisdom 互相矛盾时（如"先发制人 vs 三思后行"），系统不知道
+
+### 启示
+
+- **原策略提取规则（跨领域 + 可操作 + 可区分 + 可验证）是对的**，v16 的 wisdom library 也实质遵循这 4 条
+- **但"15-20 条"数量规划太保守**——v16 用 75-105 条才覆盖，说明知识宽度低估了
+- **"机器可读 + 人类可审计"的目标被 v16 的 `wisdom_diverse_exemplars.json` 扩展了一层**（原设计只到 aphorism 文字，v16 加了"判例锚定"）
+
+**v16 artifact 索引**:
+- Code: `phase zero/scripts/build_wisdom_library.py`, `build_wisdom_extension.py`, `phase one/scripts/validation/build_diverse_exemplars_v15.py`
+- Data: `wisdom_library.json`, `wisdom_library_v2.json`, `wisdom_diverse_exemplars.json`, `trigger_library_v11.json`
+- Results: `v16_final_results.md`
+
+---
+
 ## 0. 文档概述
 
 ### 0.1 本阶段在整体架构中的位置

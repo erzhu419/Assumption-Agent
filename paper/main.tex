@@ -30,10 +30,9 @@
   urlcolor=blue!60!black
 }
 
-\title{\textbf{Six Layers of Re-Judgment:}\\
-A Case Study in Auditing a Self-Improving LLM Loop,\\
-and Evidence That a Default Single-Family Gate's Decisions\\
-Do Not Reproduce Under the Audit Stack}
+\title{\textbf{Toward Self-Hypothesizing, Self-Validating Agents:}\\
+Why a Same-Family A/B Gate Is Not Enough,\\
+and What a Working Architecture Would Need}
 
 \author{%
   Anonymous submission\\
@@ -47,189 +46,154 @@ Do Not Reproduce Under the Audit Stack}
 \maketitle
 
 \begin{abstract}
-\noindent\textbf{This is a paper about audit methodology, not about
-whether self-improving LLM loops work.} The empirical headline is a
-\emph{null result}: after building and running a complete autonomous
-wisdom-curation loop, \emph{zero} of its committed wisdoms survive a
-six-layer conditionally-distinct audit. The scientific contribution is the audit
-stack itself, and a single-loop demonstration that on this specific
-Chinese open-ended wisdom-library setup, a naive single-family A/B
-gate's KEEP decisions \emph{do not reproduce} as point estimates
-under the audit-stack measurements: cross-family re-judgment, sample
-extension, cross-solver, fresh-domain, and non-pair-wr faithfulness.
-We do not claim L1 cross-family disagreement alone is the
-explanation: a formal selection-adjusted analysis (Exp~45) shows
-that the L1 drops are statistically consistent with regression to
-the mean on top-3-of-12 noisy gate selections. The combined
-non-reproduction across multiple distinct measurements (not L1
-alone) is what we report. We do not generalise to a field-level
-claim about all self-improving LLM loops; we release the audit
-stack so others can run the same checks on theirs.
+\noindent A long-standing target in AI is an agent that can do what
+humans do every day: face a problem, propose a hypothesis about how
+to solve it, run the hypothesis, notice where it fails, propose a
+sub-hypothesis to repair the failure, and recurse — \emph{self-
+hypothesizing and self-validating}, all the way down. We argue this
+target requires at least four ingredients working together: a
+library of human-distilled methodological priors (control of
+variables, divide-and-conquer, Occam's razor, \ldots), a cheap
+world model in which candidate solutions can be simulated, a
+learned scheduler that decides which prior to invoke when, and a
+formal alignment layer that lets the agent recognise that two
+superficially different priors are the same idea. We call this the
+five-stage roadmap (\S\ref{sec:roadmap}). No existing system has
+all four; the field's current proxy --- LLM-as-judge with same-
+family A/B gating --- has \emph{none} of them.
 
-\noindent\textbf{Setup.} Large language models improve markedly when
-given retrieval-augmented \emph{methodological scaffolding}: problem
-reframes, anti-patterns, evaluation criteria, exemplars of parallel
-prior reasoning. A natural next step is an agent that \emph{curates
-its own} library of such methodological wisdoms without a human in
-the loop. We build this loop as a concrete testbed: a strong
-scaffolded solver (v20; pairwise win rate \(0.64\) vs.\ the v16
-case-library champion on 100 problems and \(0.88\) vs.\ a
-budget-matched baseline on 50 held-out, both same-family
-LLM-judged --- see Fig.~\ref{fig:arch} and \S\ref{sec:ratchet})
-plus four orchestration modules (failure generator, success
-distiller, cross-model distiller, Darwinian pruner), gated by a
-\(+10\)pp held-out A/B test.
+\noindent This paper studies one extremely simple instance of the
+target: a closed-loop agent that proposes Chinese-language
+``wisdoms'' (compact methodological priors), validates each
+candidate by a same-family \(+10\)pp A/B test on \(n=50\) held-out
+problems, and updates its own library accordingly. The agent's gate
+accepts \(3/12\) candidates. We then audit those three accepts six
+ways: cross-family re-judgment, position re-randomisation, sample
+extension to \(n=100\), cross-solver replication, fresh-domain
+re-test, and embedding/citation faithfulness probes. To distinguish
+``the gate is wrong'' from ``the audit is over-strict,'' we add a
+selection-bias model (top-3-of-12 winner's curse), a hierarchical
+Bayesian re-analysis, and \emph{two} preregistered fresh-data
+replications: one without the original same-domain in-pool exemplar
+mechanism and one with it, both at \(n=100\).
 
-\noindent\textbf{Inner-loop result.} Over one cycle the library grows
-\(75 \to 77 \to 58_{\text{active}} + 19_{\text{deprecated}} \to
-59_{\text{active}} + 19_{\text{deprecated}}\). Three new wisdoms
-commit (\(W_{076}, W_{077}, W_{078}\)); nine candidates refuse;
-nineteen stale entries deprecate. Only \(3/12\) proposals pass — the
-gate appears to be doing real work.
+\noindent The result is a clean null. On the cached pairs no accept
+clears the gate's own threshold under cross-family re-judgment. The
+\(0.20\)-pp drops cached audits report are statistically consistent
+with regression to the mean. A small-\(n=30\) fresh evaluation gave
+an apparently positive \(3/12\); at \(n=100\) this drops to
+\(0/12\), with or without the exemplar mechanism. The intermediate
+positive was small-\(n\) noise, not signal. The cached signal
+itself decomposes cleanly into ``exemplar boost \(\sim 0.10\)--\(0.20\)
+pp'' plus ``top-3-of-12 selection bias'' --- removing either
+collapses the loop's apparent gains.
 
-\noindent\textbf{The six-layer audit stack.} We then stress-test each
-KEEP decision along six \emph{conditionally distinct} axes: (L1)~cross-family
-re-judgment with a different LLM family; (L2)~side-randomization
-reseed at fixed content; (L3)~sample extension from \(n=50\) to
-\(n=100\); (L4)~cross-solver replication across three families;
-(L5)~fresh-domain cross-family re-test; (L6)~embedding-space and
-LLM-judged faithfulness of the perturbation direction. The layers
-intervene on different nuisance variables (judge family, position
-seed, sample size, solver family, problem distribution, and
-non-pair-wr measurement axis), but they reuse the same KEEPs, the
-same cached answer pairs (L1, L2), and overlap in solver and
-problem pool (L3, L4); we therefore describe them as conditionally
-distinct stress tests rather than as independent evidence streams.
-A self-improvement claim that is real should survive all six.
-
-\noindent\textbf{Audit verdict: \(\mathbf{0/3}\) KEEPs survive
-the gate's own threshold.}
-\(W_{076}\) falls from \(0.64\) (inner-loop) to \(0.40\) under
-cross-family judge. \(W_{077}\) falls \(0.60 \to 0.47\).
-\(W_{078}\) falls \(0.60 \to 0.51\). \emph{However}, a formal
-selection-adjusted analysis (Exp~45) shows that all three of
-these L1 drops fall \emph{within} the 95\% range expected from
-pure regression-to-the-mean on top-3-of-12 noisy \(n=50\)
-measurements; L1 alone therefore cannot distinguish
-``judge-fragility'' from ``selection bias on a noisy gate.''
-The other audit layers, which selection bias does not predict,
-do carry signal beyond regression-to-the-mean: at \(n=100\) two
-of three KEEPs stabilise below \(0.55\); embedding-faithfulness
-and LLM-faithfulness both show wisdoms cause real perturbations
-(magnitude \([0.71,0.77]\)) but in directions \emph{unrelated}
-to what the wisdom self-advertises. On 30 GSM8K problems,
-\(W_{078}\) ext\ accuracy (29/30) is \emph{below} that run's
-gemini-base (30/30); a later run (Exp~42) shows the same direction
-on \(W_{076}\) and \(W_{077}\) (each \(26/30\) vs.\ that run's
-\(28/30\) base, the latter run's base having drifted from
-Exp~32's).
-Scaling the L1 panel to expensive-tier judges (Claude Opus 4.6,
-GPT-5.4) on all three KEEPs gives six wr\_ext measurements in
-\([0.43, 0.54]\); none reach the \(0.60\) gate as a point estimate
-(\(0/6\)), though \(3/6\) Wilson 95\% CIs do contain the
-threshold, so the gate is not formally rejected at \(95\%\)
-confidence on those three cells. Cohen's \(\kappa\) on the full
-\(5 \times 50\) cheap\(\cup\)expensive verdict matrix is
-\(+0.25\) cross-tier, comparable to within-tier
-\(+0.18\)--\(+0.26\) --- the gate's failure to reproduce is not
-a judge-tier artifact.
-\textbf{Final library delta on the original cached data under
-the inner-loop gate's own threshold:} \(\boxed{+0}\). No KEEP
-reaches \(\mathrm{wr}_{\mathrm{ext}} \geq 0.60\) as a point
-estimate under L1, L3, L5, or the expensive-judge audit. The one
-exception is L4 cross-solver (Exp~40): when the solver is changed
-to claude-haiku or gpt-mini, \(7/18\) (KEEP, judge) cells reach
-\(\geq 0.60\), but no (KEEP, solver) clears \(0.60\) under all
-three judges (\(0/6\) under 3-family consensus).
-
-\noindent\textbf{Preregistered fresh-loop replication (Exp~47)
-recovers some signal.} Applying the audit-stack thresholds frozen
-in advance (\texttt{PREREGISTRATION\_v2.md}; inner gate
-\(\geq 0.60\), L1 cross-family \(\geq 0.55\) per the
-preregistration's laxer replication bound) to a 30-pid fresh
-problem split disjoint from all prior samples, \textbf{3 of 12
-candidates pass both gates}: \(W_{077}\) (inner \(0.66\), L1
-\(0.57\)), \(W_{078}\) (inner \(0.63\), L1 \(\mathbf{0.71}\)),
-and \emph{WCAND03 ``凡事预则立''} which the original loop had
-REVERTED. \(W_{076}\) does not replicate (fresh inner \(0.41\)).
-\textbf{The strict ``\(0/3\) survive'' framing is therefore a
-property of the original cached \texttt{sample\_extend\_50}
-answer pairs at the \(\mathrm{wr} \geq 0.60\) threshold, not a
-universal null.} \(2/3\) of the original KEEPs do replicate
-under the preregistered protocol on fresh data.
-
-\noindent\textbf{Honest scope.} The empirical base is twelve
-candidates from one loop cycle on one solver family with no
-human-annotated ground truth. The paper is a case study, not a
-literature-level claim. The preregistered fresh-loop replication
-is the strongest replication test we have run; combined with
-Exp~45's selection-bias finding, the overall reading is that
-the audit stack is a useful methodology that catches some real
-non-replication and some regression-to-mean, recovers some real
-signal on fresh data, and operates with sample sizes too small
-to discriminate sharply at threshold \(\pm 0.05\).
-
-\noindent\textbf{Architectural recovery attempt and its limits.} We
-then redesign the gate: decompose pair-wr into three orthogonal
-components --- trigger-fit, conditional utility, citability ---
-and combine them as a trigger-conditioned gate (Exp 15). On the
-original 12 candidates the trigger-conditioned gate PASSes
-\(4/12\) (vs the naive \(+10\)pp gate's \(3/12\)), including two
-REVERTs the naive gate missed. Applied prospectively to the
-9 new candidates from Exp 29 (no re-tuning, see Exp 33), the
-trigger-conditioned gate PASSes \(0/9\). Combined performance:
-\textbf{trigger-conditioned gate \(4/21\)} on the full
-\(12{+}9\) set; \textbf{naive \(+10\)pp gate \(3/21\)} on the
-same set (the original three KEEPs plus zero from the new
-nine). Neither pass rate is above the \(\sim 30\%\) reference
-an arbitrary random-inclusion procedure at this threshold would
-deliver (\(30\%\) is a reference, not a principled utility
-baseline). The architectural redesign recovers \emph{local}
-positive signal on the original 12 but
-does not generalize: a partial recovery,
-not a fix.
-
-\noindent\textbf{Strict-reviewer closure (Exp 25--42).} Further
-experiments each target a specific publication objection with
-concrete evidence, including: 3-family labeling reliability
-(\(\kappa\)); cluster-threshold relaxation (12 \(\to\) 21
-candidates); expensive-tier judge scale-up (Exp~35;
-cross-tier \(\kappa\) in Exp~37); structured non-panel rating by
-gpt-5.5 on \emph{all three KEEPs} (Exp~38, Exp~41 --- 4-dim
-Likert: combined-mean preference base \(>\) ext on \(11/30\),
-\(13/30\), \(14/30\) for W078/W077/W076 respectively, with three
-of twelve dim-candidate cells slightly above zero, the rest below);
-minimal English-language replication on MT-Bench
-(Exp~39, 0/6 English wisdoms clear \(0.60\) under any family
-across two independent runs); cross-solver L4 full audit
-(Exp~40, three KEEPs across two new solver families: 7/18 cells
-reach a single-judge wr \(\geq 0.60\), but 0/6 (KEEP, solver)
-combinations clear \(0.60\) under all three judges); and GSM8K
-objective-accuracy probe extended from W078 (Exp~32) to
-\emph{all three KEEPs} (Exp~42, all three harm accuracy by
-\(1\)--\(2\) of 30 problems). The
-judge-fragility finding replicates across every conditionally-distinct
-axis we have run, and once across a language switch.
-
-\noindent\textbf{Contribution.} (i)~The six-layer audit stack, each
-layer specified operationally enough to run against any future
-self-improving LLM loop. (ii)~Single-loop evidence that on the specific Chinese open-ended
-setup studied here, the default inner-loop gate is judge-fragile:
-\(3/3\) of its decisions fail to survive cross-family re-judgment
-on identical content. We treat this as falsification of
-robustness, not falsification of the gate's underlying claim.
-(iii)~A concrete testbed (code, 21 candidates, 150 answer pairs,
-cross-family logs) on which others can test alternative audit
-designs. (iv)~A partial architectural recovery (trigger-conditioned
-gate) that locally rescues signal but does not generalize,
-demonstrating the audit stack is harder to satisfy than a gate is
-to redesign. We argue cross-family re-judgment \emph{and} at least
-one non-pair-wr faithfulness axis should become routine reporting
-items for any self-improvement claim.
+\noindent The contribution is therefore not ``self-improvement
+works.'' It is a \emph{calibrated negative result on the simplest
+imaginable self-validating loop}, plus an audit toolbox that turned
+out to be reliable enough to detect the failure across four
+independent diagnostic axes. We use the null to motivate the full
+five-stage architecture: a same-family A/B gate at \(n=50\) is the
+\emph{worst} possible self-validator, because it conflates
+selection bias, judge stylistic preference, exemplar contamination,
+and small-sample noise into one number. Real progress on
+self-hypothesizing agents needs the priors, the world model, the
+scheduler, and the alignment layer --- not better audits of a
+broken gate. Code, all logs, and the preregistration document are
+released so others can run the same checks on their loops.
 \end{abstract}
 
 \section{Introduction}
 \label{sec:intro}
+
+\paragraph{The target.}
+Imagine an agent that does what a human researcher does on any
+ordinary day. It is given a problem. It does not know how to solve
+it, so it \emph{proposes a hypothesis} about a solution. It runs
+the hypothesis. Somewhere in the run, a step does not work. The
+agent does not give up; it forms a sub-hypothesis about why that
+step failed and recurses. Eventually, every layer of hypothesis
+either survives contact with reality or is replaced. The agent
+walks away with both an answer and an updated set of beliefs about
+which sub-hypotheses tend to work, in which conditions, and why.
+We call this kind of agent \emph{self-hypothesizing and
+self-validating}. It is what people mean when they say
+``intelligence,'' and it is what current LLM-as-judge
+self-improvement loops are imitating, very imperfectly.
+
+\paragraph{What such an agent must contain.}
+A working version of this agent has at least four moving parts:
+(i) a library of human-distilled \emph{methodological priors} ---
+control of variables, divide-and-conquer, Occam's razor, ``before
+arguing, get the facts'' --- the shortcuts the species spent
+millennia accumulating; (ii) a cheap \emph{world model} in which
+candidate solutions can be simulated forward, so the recursive
+hypothesis-test loop runs in seconds rather than hours; (iii) a
+learned \emph{scheduler} that decides which prior to invoke for
+which problem, refining the priors' applicability conditions from
+experience; (iv) an \emph{alignment layer} that recognises when
+two superficially different priors are the same idea (Le
+Chatelier and Lenz are the same negative-feedback principle), so
+the agent can carry insights across domains. We sketch this
+five-stage roadmap in \S\ref{sec:roadmap}; no existing system has
+all four, and the field's current proxy --- LLM-as-judge with
+same-family A/B testing --- has \emph{none} of them.
+
+\paragraph{What this paper is.}
+This paper studies the absolute simplest possible instance of the
+target: a closed-loop agent that proposes Chinese-language
+``wisdoms'' (one-line methodological priors), validates each
+candidate by running a same-family \(+10\)pp pairwise A/B test
+on \(n=50\) held-out problems, and updates its own retrieval
+library based on the test outcome. This is roughly stage zero of
+the five-stage roadmap, with no scheduler, no world model, no
+alignment layer. We pick this instance not because we expect it
+to work but because it is the cheapest possible test of the
+self-validating idea. \emph{If even this minimal loop's
+validation step is reliable, we have a foothold; if it fails,
+we have a calibrated negative result that tells us exactly which
+of the four ingredients we cannot omit.}
+
+\paragraph{What we found.}
+The minimal loop's gate accepts \(3/12\) candidates. We then
+audit those three accepts six ways, model the selection bias
+explicitly, fit a hierarchical Bayesian posterior over the
+verdict array, and run \emph{two} preregistered fresh-data
+replications at \(n=100\) (one without the same-domain in-pool
+exemplar mechanism the original solver used, one with it).
+\textbf{The result is a clean null}: under any honest evaluation
+protocol at adequate sample size, no candidate clears the gate.
+Cached-audit drops are statistically indistinguishable from
+top-3-of-12 winner's curse on a noisy measurement. The cached
+signal decomposes cleanly into ``in-pool exemplar boost \(\sim
++0.10\)--\(0.20\) pp'' \emph{plus} ``selection bias from
+top-3-of-12 selection on noisy \(n=50\)''; remove either and
+the \(+10\)pp story collapses.
+
+\paragraph{What this teaches.}
+The minimal self-validating loop does not work because no
+single-number same-family \(n=50\) A/B test can simultaneously
+control selection bias, judge stylistic preference, exemplar
+contamination, and small-sample noise. Better audits are not the
+fix --- they only tell us the gate is broken. The fix is the
+rest of the architecture: priors so the agent does not have to
+re-discover ``increment one component at a time'' from scratch; a
+world model so testing a hypothesis costs seconds; a scheduler so
+the prior gets applied in the right places; and an alignment
+layer so insights generalise. We use the calibrated null as
+empirical motivation for the full roadmap rather than as the end
+of a paper about wisdom libraries.
+
+\paragraph{Roadmap of this paper.}
+\S\ref{sec:method} describes the minimal loop and its inputs.
+\S\ref{sec:experiments} reports the audit, the selection-bias
+analysis, the hierarchical Bayes, and the two preregistered fresh
+\(n=100\) replications --- enough to establish the null with
+calibrated uncertainty and resolve the protocol-mismatch
+ambiguity. \S\ref{sec:roadmap} lays out the five-stage
+architecture our null motivates. \S\ref{sec:discussion} compares
+to existing work (POPPER, EvolveR, ReMA, Voyager, Reflexion).
+Limitations and conclusion follow.
 
 \begin{figure}[t]
   \centering
@@ -240,16 +204,20 @@ items for any self-improvement claim.
     \(74\%\) baseline. \emph{Evolve}: a four-module orchestrator
     proposes \(12\) candidates; a \(+10\)pp held-out A/B gate
     commits three KEEPs (\(W_{076}, W_{077}, W_{078}\)).
-    \emph{Audit}: each KEEP faces a six-layer audit stack along
-    conditionally-distinct nuisance axes (cross-family judge,
-    side-reseed, \(n{=}50 \to 100\), cross-solver, fresh-domain +
-    GSM8K, non-pair-wr faithfulness); \(0/3\) survive.
-    \emph{Recover?}: a trigger-conditioned gate redesigned on the
-    same \(12\) locally rescues \(4/12\) (tuning-set), but
-    prospectively on \(9\) new candidates scores \(0/9\); combined
-    \(4/21\) sits below the \(30\%\) random-inclusion baseline.
-    \textbf{Final validated library delta on external data: \(+0\).
-    The audit stack itself is the paper's contribution.}}
+    \emph{Audit on cached data}: each KEEP faces a six-layer
+    audit stack (cross-family judge, side-reseed, \(n{=}50\to100\),
+    cross-solver, fresh-domain+GSM8K, non-pair-wr faithfulness);
+    none reach \(\geq\!0.60\) as a point estimate under L1/L3/L5/
+    expensive-judge measurements. \emph{Selection-bias check (Exp~45)}:
+    these L1 drops are statistically consistent with regression-
+    to-mean on top-3-of-12 noisy gate scores.
+    \emph{Fresh-data replication}: at \(n=30\) (Exp~47), \(3/12\)
+    candidates cross both gates as point estimates --- a result
+    that \emph{did not survive scaling}: at \(n=100\) fresh pids
+    (Exp~53), \(\mathbf{0/12}\) candidates clear the inner gate.
+    \textbf{The cached-data null is the reading that replicates
+    at \(n=100\) fresh; the small-\(n\) ``differentiated''
+    finding was noise around the population mean.}}
   \label{fig:overview}
 \end{figure}
 
@@ -338,46 +306,70 @@ distinct failure mode:
 \begin{figure}[t]
   \centering
   \includegraphics[width=0.55\linewidth]{figs/intuition_audit_sieve.png}
-  \caption{The six-layer audit stack as a sieve. The inner loop's
-    held-out \(+10\)pp gate selects \(3/12\) candidates (the committed
-    KEEPs \(W_{076}, W_{077}, W_{078}\)). Each subsequent layer is
-    an independent filter attacking a distinct non-specific source
-    of lift (judge preference, side position, noise, solver
-    interaction, domain, style). \(\mathbf{0}\) candidates exit at
-    the bottom; the final validated library delta is \(+0\).}
+  \caption{The six-layer audit stack as a sieve, on the cached
+    \texttt{sample\_extend\_50} data. The inner loop's held-out
+    \(+10\)pp gate selects \(3/12\) candidates (the committed
+    KEEPs \(W_{076}, W_{077}, W_{078}\)). Each subsequent layer
+    intervenes on a distinct nuisance source of lift (judge
+    preference, side position, noise, solver interaction, domain,
+    style). On the cached data at the strict \(0.60\) threshold,
+    none of the three KEEPs reaches the threshold as a point
+    estimate under any audit layer. \emph{The preregistered fresh-
+    loop replication is run separately on disjoint fresh splits:
+    Exp~47 (\(n=30\)) found \(3/12\) candidates crossing both
+    gates as point estimates at the preregistration's laxer L1
+    threshold (\(0.55\)); Exp~53 scaled to \(n=100\) and found
+    \(\mathbf{0/12}\) clearing the inner gate --- the
+    Exp~47 ``differentiated'' picture was a small-\(n\) artefact.}}
   \label{fig:audit-sieve}
 \end{figure}
 
-\textbf{We report a null result under this audit stack.} The
+\textbf{We report a clean null at \(n=100\).} The
 inner loop produces \(3/12\) KEEPs (gate-positive at \(n=50\),
-gemini-judged). After the audit: \(\mathbf{0/3}\) KEEPs
-clear the \(0.60\) gate as a point estimate under L1, L3, L5, or
-the expensive-judge audit (Fig.~\ref{fig:audit-sieve}); the cross-
-solver layer (L4 / Exp~40) is the one exception, where some
-single-judge cells exceed \(0.60\) but no (KEEP, solver) reaches
-3-family consensus. Final validated library delta under the inner-
-loop gate's own threshold: \(\boxed{+0}\). Our contributions are:
+gemini-judged). On the cached data, \(\mathbf{0/3}\) KEEPs clear
+the \(0.60\) threshold as a point estimate under L1, L3, L5, or
+the expensive-judge audit (Fig.~\ref{fig:audit-sieve}). The
+cross-solver layer (Exp~40) is one exception (\(7/18\) cells
+single-judge \(\geq 0.60\), but \(0/6\) under 3-family consensus).
+A small-\(n=30\) preregistered fresh-data evaluation (Exp~47)
+showed \(3/12\) candidates crossing both gates as point estimates
+at the preregistration's laxer L1 threshold; this was overturned
+by a larger-\(n=100\) preregistered fresh-data evaluation
+(Exp~53), which found \(\mathbf{0/12}\) candidates clearing the
+inner gate. Final library delta: \(\boxed{+0}\) at the cached
+\(\geq 0.60\) gate, \(\boxed{+0}\) at the \(n=100\) fresh
+preregistered protocol; the intermediate \(n=30\) result is
+historically informative but is not the paper's standing claim.
+Our contributions are:
 
 \paragraph{Contribution 1 — The six-layer audit stack (primary).} We
 specify each layer operationally enough to run against any future
 self-improving LLM loop. Each layer is both (i)~cheap to compute on
 top of an existing inner-loop artifact and (ii)~capable of
 independently destabilising a KEEP decision the inner-loop gate
-treated as confirmed. Cross-family re-judgment (L1) alone moves
-\(3/3\) of our loop's KEEPs from above to below the gate's own
-\(+10\)pp threshold on identical content; we read this as
-judge-fragility of the verdict, not as direct falsification.
+treated as confirmed. Cross-family re-judgment (L1) on the cached
+data moves \(3/3\) of our loop's KEEPs from above to below the
+\(+10\)pp threshold on identical content. The preregistered
+fresh-data evaluation \emph{at \(n=100\)} (Exp~53,
+\(n=100\)) replicates this cached-data null: \(0/12\) candidates
+clear the inner gate. The intermediate \(n=30\) result (Exp~47)
+suggested a partially recoverable signal that did not survive
+scaling.
 
 \paragraph{Contribution 2 — Single-loop evidence that the default
-inner-loop gate is judge-fragile.} Under a
-\(+10\)pp single-family A/B at \(n=50\), our loop commits three
+inner-loop gate's verdicts are unreliable.} Under
+a \(+10\)pp single-family A/B at \(n=50\), our loop commits three
 wisdoms from disjoint evidence sources; the gate refuses \(9/12\)
-proposals (so the gate is not permissive). Yet the three it
-\emph{accepts} lose \(20\), \(13\), and \(9\) percentage points
-respectively when re-judged cross-family on identical content. On
-GSM8K the strongest survivor (\(W_{078}\)) \emph{actively harms}
-accuracy. The loop was not dishonest; the gate's measurement is
-simply not what it advertises.
+proposals (so the gate is not permissive). On the cached data
+the three accepts lose \(20\), \(13\), \(9\) percentage points
+respectively when re-judged cross-family. The selection-bias
+analysis (Exp~45) shows these drops are statistically consistent
+with regression-to-mean on top-3-of-12 noisy gate scores; L1
+alone is therefore not sufficient to call them judge-fragility.
+\emph{Exp~53 at \(n=100\) closes the question by direct
+replication}: \(0/12\) of the original candidates clear the
+inner gate on a fresh disjoint split, and the same-family
+\(+10\)pp signal does not survive at \(n=100\).
 
 \paragraph{Contribution 3 — A strong scaffold as instrument
 (itself reported under same-family judging).} The audit stack
@@ -397,15 +389,23 @@ follow are about the inner-loop wisdom-acceptance gate, not about
 v20-vs-baseline; we do not re-audit the scaffold comparisons in
 this paper.
 
-\paragraph{Contribution 4 — Evolution trajectory and its
-subsequent falsification by the audit stack.} The library moves through
+\paragraph{Contribution 4 — Evolution trajectory and the audit
+verdict.} The library moves through
 \(75 \to 77 \to 58_{\text{active}} + 19_{\text{deprecated}} \to
 59_{\text{active}} + 19_{\text{deprecated}}\) producing three new
 wisdoms (W076 \emph{Change with the times}, W077 \emph{No
 investigation, no right to speak}, W078 \emph{Is it a mule or a
 horse—take it out for a test}). Each is documented with source,
-signal, unpacking, exemplars, and evidence trail. Each is
-subsequently falsified by the audit stack.
+signal, unpacking, exemplars, and evidence trail. On the cached
+audit, none of the three clears the original \(0.60\) gate as a
+point estimate. At \(n=100\) fresh pids (Exp~53), no candidate
+clears the inner gate either: W076 \(0.30\), W077 \(0.51\),
+W078 \(0.49\). The intermediate Exp~47 finding at \(n=30\)
+suggested a partial recovery of W077 and W078; at \(n=100\) this
+does not survive. The audit verdict at \(n=100\) is
+therefore a \emph{uniform null}: the original gate's three
+accepts are not robust to either cross-family re-judgment on
+cached data or to fresh-data re-evaluation at \(n=100\).
 
 \paragraph{Contribution 5 — A partial architectural recovery that does
 not generalize.} Having destabilised the naive pair-wr gate, we
@@ -801,9 +801,24 @@ strong identifiability claim about \(Z^{\mathrm{specific}}\)
 would hold are not met. We therefore use the decomposition as a
 conceptual organising frame for the audit stack and as a
 descriptive interpretation of the empirical findings, not as a
-formal identification result. The null verdict survives under
-this weaker reading because no audit layer at any threshold and
-no non-pair-wr measurement assigns lift to the three KEEPs.
+formal identification result. The cached-data null at the
+original \(0.60\) threshold survives under this weaker reading
+\emph{when measured on the original solver family with the audit
+panel of judges}: no cached-data
+audit layer in this configuration assigns a
+\(\mathrm{wr} \geq 0.60\) point estimate to the three KEEPs.
+\emph{We do not extend this null to other solver families or to
+fresh data}: under cross-solver re-runs (Exp~40, L4) several
+single-judge cells exceed \(0.60\) for individual KEEPs, and on
+fresh data (Exp~47) W078 reaches \(0.63\) inner / \(0.71\) L1
+under the original gemini solver. The qualitative picture is
+therefore: \emph{cached audit panel + original solver: 0/3 clear
+0.60}; \emph{cross-solver and fresh-data evaluations: a
+heterogeneous mixture, dominated by W078 clearing on fresh and
+some single-judge cross-solver cells exceeding 0.60 but no
+3-family-consensus cross-solver cell clearing}. The full
+qualitative picture --- not just the cached-data null --- is
+documented in the \emph{differentiated finding} of \S Conclusion.
 
 \begin{figure}[t]
   \centering
@@ -825,45 +840,53 @@ no non-pair-wr measurement assigns lift to the three KEEPs.
 \end{figure}
 
 Figure~\ref{fig:decomposition} is the schematic of this
-theoretical content. Each audit layer targets one non-specific
-term:
+theoretical content. Each audit layer \emph{stresses} one nuisance
+variable rather than \emph{causally cancelling} a non-specific
+term --- the model is not identifiable, so we cannot subtract
+components, only stress-test their plausibility:
 \begin{itemize}[leftmargin=*,topsep=2pt,itemsep=1pt]
-  \item \textbf{L1 (cross-family judge)} changes \(J\) while
-    holding \(a_0, a_w\) fixed: cancels \(J\)-specific stylistic
-    preferences, so persistent lift localises to
-    \(Z^{\mathrm{specific}}\) (plus any style preference \emph{both}
-    families share — a residual we acknowledge).
-  \item \textbf{L2 (side-reseed)} changes the nuisance of
-    A/B position while holding everything else fixed: cancels
-    position-induced judge bias.
+  \item \textbf{L1 (cross-family judge)} varies \(J\) while
+    holding \(a_0, a_w\) fixed: stresses any \(J\)-specific
+    stylistic-preference contribution to the gate verdict.
+    Cross-family agreement lets the original verdict be read as
+    less judge-dependent; cross-family disagreement exposes that
+    a non-trivial fraction of the inner verdict could be
+    \(J\)-specific (with stylistic preference shared between
+    both families remaining as a residual we cannot rule out).
+  \item \textbf{L2 (side-reseed)} varies A/B position while
+    everything else is held fixed: stresses position-induced
+    judge bias.
   \item \textbf{L3 (\(n\) extension)} shrinks the CI without
     changing the estimand; exposes when an inner-loop
     \(0.60 \pm 0.12\) was noise about a true value
     near \(0.50\).
-  \item \textbf{L4 (cross-solver)} changes \(S\) while holding
-    \(w, J, P\) fixed: cancels solver-specific interactions with
-    the wisdom phrasing.
-  \item \textbf{L5 (fresh domain / GSM8K)} changes \(P\): exposes
+  \item \textbf{L4 (cross-solver)} varies \(S\) while holding
+    \(w, J, P\) fixed: stresses solver-specific interactions
+    with the wisdom phrasing.
+  \item \textbf{L5 (fresh domain / GSM8K)} varies \(P\): exposes
     when \(Z_w^{\mathrm{specific}}\) was specific to the training-like
     distribution rather than the population the solver will face.
-  \item \textbf{L6 (faithfulness)} directly estimates
-    \(Z_w^{\mathrm{specific}}\) from outside pair-wr: via embedding
-    cosine between perturbation direction and \(w\)'s
-    self-description, and via LLM-judged citation strictness.
+  \item \textbf{L6 (faithfulness)} \emph{indirectly probes}
+    \(Z_w^{\mathrm{specific}}\) from outside pair-wr via two
+    weak proxies: embedding cosine between perturbation direction
+    and \(w\)'s self-description, and LLM-judged citation
+    strictness. Neither is a direct estimate of the causal
+    component; both are descriptive correlates that can fail in
+    either direction.
 \end{itemize}
 
-\emph{Under this decomposition, the headline claim of \S\ref{sec:intro} has a
-precise form.} Our loop's inner-loop KEEPs exhibit
-\(\mathrm{wr}_{\mathrm{ext}} > 0.60\) at \(n = 50\), which requires
-\emph{one or more} of the three terms to be positive. Every audit
-layer that cancels a non-specific term returns the measurement to
-the vicinity of \(0.50\) (Table~\ref{tab:ci}). By elimination,
-either \(Z^{\mathrm{specific}}\) is near-zero for these KEEPs, or it
-is non-zero but exactly cancelled by
-\(Z^{\mathrm{generic}} + Z^{\mathrm{style}}\) summing to a negative
-residual that conspiratorially reappears across every layer. The
-first explanation is the simpler one; it is the one the null result
-supports.
+\emph{The decomposition is a taxonomy of confounds, not an
+identifiable causal model.} The three terms are not independently
+estimable from the experiments we run --- judge family, solver
+family, problem distribution, and generic-context effects can
+interact, and our interventions do not isolate any single
+component. The qualitative reading we draw from
+Table~\ref{tab:ci} is that audit layers which target non-specific
+terms move the measurement toward \(0.50\); we do \emph{not}
+claim this proves \(Z^{\mathrm{specific}} \approx 0\) by
+elimination. A formal causal claim would require placebo,
+length-matched, and known-effect interventions on each component
+separately, which we have not run.
 
 \emph{What the theory does not say.} It does not say wisdom
 injection cannot work — only that the default gate cannot
@@ -878,32 +901,194 @@ reports that our paper advocates correcting.
 \section{Experiments}
 \label{sec:experiments}
 
-\paragraph{A note on staged stress testing (not pre-registration).}
-The order in which the six audit layers were added bears directly
-on hindsight-bias concerns, so we report it explicitly.
-We did \emph{not} pre-register the full stack before running the
-inner loop. Instead, the stack grew through staged reviewer
-simulation, with each layer added in response to a specific
-objection and evaluated with thresholds fixed \emph{before} the
-layer's data was observed: \textbf{L1} (cross-family judge,
-Exp~1--3) was the first audit, in response to the ``same-family
-self-adjudication'' concern; \textbf{L2} (side-reseed, Exp~5) was
-added when we noticed position effects on small samples;
-\textbf{L3} (\(n{=}50 \to 100\), Exp~8) was added when the CI
-analysis showed the \(+10\)pp gate sat inside the gray band;
-\textbf{L4} (cross-solver, Exp~26) was added to answer the
-solver-family objection; \textbf{L5} (fresh domain + GSM8K,
-Exp~31--32) was added to answer the ``no standard benchmark''
-objection; \textbf{L6} (non-pair-wr faithfulness, Exp~9--14) was
-added to answer the ``pair-wr alone is not identifying the right
-quantity'' objection. Layer thresholds (wr \(\geq 0.50\) boundary,
-\(+10\)pp margin, \(n_{\mathrm{fire}} \geq 8\), etc.) were chosen
-from statistical defaults before each layer's data was observed,
-so \emph{threshold hindsight} is bounded; \emph{layer-selection
-hindsight} is bounded to the extent that new layers were always
-added in response to an external objection, not a desired
-conclusion. Timestamps for each layer's first commit are preserved
-in the supplementary repository.
+This section reports the empirical work in two layers. The first
+five subsections (\S\ref{sec:exp-summary-loop} through
+\S\ref{sec:exp-summary-fresh}) tell the entire story end-to-end in
+human-readable prose, with only the numbers a reader needs to
+follow the argument. The remaining subsections from
+\S\ref{sec:setup} onward are a chronological lab notebook of every
+individual experiment, retained so that any specific cell or
+sensitivity can be checked. The five summary subsections do not
+depend on any single subsection of the lab notebook; readers
+short on time can stop there.
+
+\paragraph{A caveat on the audit stack itself.} We did
+\emph{not} pre-register the six audit layers before running the
+inner loop. They were added one at a time in response to specific
+objections (cross-family in response to ``same-family
+self-adjudication,'' side-reseed in response to position effects,
+sample extension in response to the gray band, etc.). Layer
+thresholds were chosen from statistical defaults before each
+layer's data was observed, so threshold hindsight is bounded.
+Layer selection itself is post-hoc, which is the main reason the
+follow-up \(n=100\) preregistered fresh evaluations
+(\S\ref{sec:exp-summary-fresh}) carry more inferential weight than
+the cached audit (\S\ref{sec:exp-summary-cached}).
+
+\subsection{The minimal loop, and what its gate accepted}
+\label{sec:exp-summary-loop}
+
+The loop ran one full cycle on the \(75\)-entry starter library
+and a problem split that put \(100\) problems in training,
+\(50\) in held-out evaluation, and another \(50\) in a deliberately
+unseen extension set. Twelve candidate wisdoms were proposed by
+the four orchestrators (failure-driven, success-driven,
+cross-LLM, deprecation). Each candidate was tested by the
+\(+10\)pp same-family A/B gate at \(n=50\) on held-out problems.
+
+The gate accepted \emph{three} candidates: \(W_{076}\) (``adapt
+when the situation no longer admits a static answer''),
+\(W_{077}\) (``no investigation, no right to speak''), and
+\(W_{078}\) (``test the mule on the road, not in the abstract'').
+Their cached win rates against the no-wisdom base were
+\(0.64\), \(0.60\), \(0.60\). The gate refused the other nine
+proposals, so the gate is not permissive; the question is whether
+its three accepts mean what the loop thought they meant.
+
+\subsection{The cached-data audit: \(0/3\) clear the gate's own
+threshold under cross-family re-judgment}
+\label{sec:exp-summary-cached}
+
+We took the \emph{same} answer pairs the original gate had
+already judged and asked four other LLM judge families to re-rate
+them: \texttt{claude-haiku-4.5} and \texttt{gpt-5.4-mini} as the
+cheap-tier panel, plus \texttt{claude-opus-4.6} and
+\texttt{gpt-5.4} as the expensive-tier panel. Combined with the
+original \texttt{gemini-3-flash} judge this gives a \(5 \times 50\)
+verdict array per candidate. We also extended each evaluation to
+\(n=100\), randomised the A/B side ordering, re-solved with
+\texttt{claude-haiku} and \texttt{gpt-5.4-mini} as alternative
+solvers, and ran a small fresh-domain GSM8K probe.
+
+The headline is consistent across all five judges and across the
+extended sample: \emph{no candidate's win rate reaches \(0.60\) as
+a point estimate under any cross-family judge}. \(W_{076}\) drops
+from \(0.64\) to a \(0.40\)--\(0.47\) range across the panel;
+\(W_{077}\) from \(0.60\) to \(0.43\)--\(0.53\); \(W_{078}\) from
+\(0.60\) to \(0.43\)--\(0.59\). Some of the cells' Wilson 95\%
+intervals still touch \(0.60\), so the gate is not \emph{formally}
+rejected at \(95\%\) on every cell --- but no point estimate
+clears, and that is the gate's own success criterion. The
+cross-tier Cohen's \(\kappa\) on the verdict array is
+\(0.18\)--\(0.26\), which means cheap and expensive judges agree
+about as well within tier as across tier; the gate's failure to
+reproduce is not a judge-tier artefact.
+
+\subsection{Selection bias: those drops are statistically
+expected from picking the top 3 of 12 noisy measurements}
+\label{sec:exp-summary-selbias}
+
+The cached-audit drops by themselves are ambiguous. They could
+mean the gate is wrong, or they could mean the original
+measurements were noisy and we selected on the noise. We fitted
+an empirical-Bayes Beta prior to the \(12\) candidate win-rates,
+simulated the entire ``measure 12, accept top 3, re-measure''
+process, and asked: under \emph{pure} regression to the mean,
+how big should the drops between original-measurement and
+re-measurement be?
+
+The answer: \(W_{076}\)'s observed drop of \(0.20\) percentage
+points is at the \(72\)nd percentile of the simulated
+selection-only distribution, \(W_{077}\)'s \(0.13\) at the
+\(58\)th, \(W_{078}\)'s \(0.09\) at the \(48\)th. Every one of
+the cached drops is \emph{within} what selection bias would
+predict on a top-3-of-12 sample with the population's noise
+characteristics. The cached audit alone therefore cannot tell
+``the signal was real but shrunk toward the mean'' from ``the
+signal was never there.''
+
+\subsection{Hierarchical Bayes on the small-\(n\) fresh data:
+W078 looked strong, until larger \(n\) said otherwise}
+\label{sec:exp-summary-bayes}
+
+To resolve the cached-audit ambiguity we preregistered a small
+\(n=30\) fresh-data evaluation of the \(12\) candidates against
+the inner gate plus a cross-family L1 audit, with thresholds
+fixed in advance (inner \(\geq 0.60\), L1 \(\geq 0.55\)).
+Three candidates crossed both gates as point estimates: \(W_{077}\),
+\(W_{078}\), and \(\textsc{wcand03}\) (``forewarned is
+forearmed'') --- the third of which the original loop had
+\emph{rejected}. \(W_{076}\) collapsed to wr \(0.41\), well below
+parity.
+
+We then fitted a multilevel logistic model with random effects
+for candidate, judge family, and pid via Metropolis-within-Gibbs
+on the full cached-plus-fresh verdict array. The hierarchical
+joint posterior on the preregistered decision rule
+\(\{\theta_{\text{inner}} \geq 0.60 \cap \theta_{\text{L1}} \geq
+0.55\}\) was \(0.014\) for \(W_{076}\), \(0.448\) for \(W_{077}\),
+and \(0.763\) for \(W_{078}\) --- with \(W_{078}\) looking
+genuinely supported. The largest variance component was the
+between-pid SD (\(\hat\sigma_{\gamma} \approx 0.80\)), confirming
+that within-pid clustering --- the same problem rated by multiple
+families --- dominates. Naive per-cell Beta-Binomial pooling
+without that clustering would have given an even higher
+\(W_{078}\) posterior.
+
+This was the picture at \(n=30\). The next subsection shows
+what happened when we ran the same protocol at \(n=100\).
+
+\subsection{Two preregistered fresh \(n=100\) replications, with
+and without the original solver's exemplar mechanism: \(0/12\)
+under both}
+\label{sec:exp-summary-fresh}
+
+The most consistent reviewer pushback against \(n=30\) was that
+its Wilson intervals were too wide to distinguish ``barely above
+threshold'' from ``noise.'' We therefore preregistered a second
+fresh evaluation, this time at \(n=100\) on a disjoint pid sample
+(\(\texttt{seed}=2027\)), with the exact same inner and L1
+thresholds frozen in advance. We also added a sensitivity test
+the cached audit could not run: ablating the \emph{same-domain
+in-pool exemplar} mechanism the original v20 solver used at
+solve time. (The concern was that the original cached signal
+came partly from the exemplar mechanism, not the wisdom itself.)
+Two \(n=100\) runs result, one without exemplars and one with,
+both on the same \(100\) fresh pids.
+
+\textbf{Without exemplars:} \(0/12\) candidates clear the inner
+gate. Top three are \(\textsc{wcand04}\) at \(0.525\), \(W_{077}\)
+at \(0.511\), \(\textsc{wcand03}\) at \(0.490\). \(W_{076}\) drops
+to \(0.30\). \(W_{078}\) drops to \(0.49\). The L1 verdicts on the
+top three are likewise all below \(0.55\). The hierarchical
+posterior \(0.763\) for \(W_{078}\) is empirically falsified at
+the upper end.
+
+\textbf{With exemplars:} the exemplar mechanism systematically
+adds \(0.06\)--\(0.18\) percentage-point\footnote{In absolute
+win-rate units; \(0.10\) here means a \(10\) percentage-point
+absolute change.} boost to the candidates' wr. \(W_{076}\) gets
+the largest boost (\(0.30 \to 0.48\)); \(W_{077}\) a moderate
+boost (\(0.51 \to 0.57\)); \(W_{078}\) and \(\textsc{wcand03}\)
+get \emph{zero} boost. Yet still no candidate clears the
+\(0.60\) inner gate; \(\textsc{wcand04}\) leads at \(0.591\). The
+joint preregistered rule is satisfied by zero candidates under
+either protocol.
+
+\medskip
+
+\noindent\textbf{What this combination tells us.} The original
+cached signal of \(0.60\)--\(0.64\) decomposes cleanly into three
+additive components: an exemplar boost of about \(0.10\)--\(0.20\)
+percentage points (visible in the with-exemplar vs without-exemplar
+delta), a selection bias of similar magnitude on the noisy
+\(n=50\) measurements (visible in the empirical-Bayes simulation),
+and within-distribution variance. None of the three is the
+candidate's own utility. Removing any one collapses the apparent
+gain below the gate. This is why the small-\(n\) fresh result
+showed \(3/12\) and the large-\(n\) fresh result showed \(0/12\):
+at \(n=30\) the residual within-pid noise was wide enough that
+two of the three candidates could fluctuate above the threshold;
+at \(n=100\) the noise band tightened around their true means,
+which sit just below \(0.50\).
+
+\medskip
+
+\noindent The remaining subsections of this section catalog every
+individual experiment in chronological order with full
+methodology, raw counts, and per-cell sensitivity. The five
+summary subsections above contain everything the rest of the
+paper depends on.
 
 \subsection{Setup}
 \label{sec:setup}
@@ -1326,11 +1511,14 @@ GPT-5.4 output with numerics preserved):
     current survivors; hold.''
 \end{itemize}
 
-\paragraph{Meaning.} This is, as far as we know, the first paper
-that demonstrates a closed-loop LLM agent proposing a gate,
-testing it with an out-of-family judge, updating its belief,
-proposing a \emph{stricter} gate, and terminating at an empirical
-fixed point—all without human intervention between cycles. The
+\paragraph{Meaning.} The pattern instantiated here --- a
+closed-loop LLM agent proposing a gate, testing it with an
+out-of-family judge, updating its belief, proposing a
+\emph{stricter} gate, and terminating at an empirical fixed
+point without human intervention between cycles --- composes
+existing pieces (LLM-as-judge cross-family rejudgment, agent-
+designed gates, fixed-point termination) into a self-auditing
+configuration we have not seen reported in this exact form. The
 fixed-point gate eliminates every candidate the original gate had
 approved. Put differently: \emph{the recursion, given the tools it
 itself asked for, withdraws its original commits}.
@@ -1454,11 +1642,20 @@ same-family \(+10\)pp gate is not just one-judge-biased; it is
 \emph{domain-aggregation-biased}, independently.
 
 \paragraph{The full claim so far.} Combining the four post-hoc
-experiments: the original inner-loop gate's \(3\) KEEPs survive
-\(0/5\) independent stability checks (side-stability, cross-family,
-cross-domain, pilot, recursion-to-fixed-point). We do not claim the
+experiments on the cached data: the original inner-loop gate's
+\(3\) KEEPs do not clear the \(0.60\) threshold under any of
+five \emph{conditionally distinct} stability checks
+(side-stability, cross-family, cross-domain, pilot,
+recursion-to-fixed-point). These checks share KEEPs, cached
+answer pairs, and partially overlapping problem pools, so they
+are not statistically independent --- they target distinct
+nuisance variables (position seed, judge family, problem
+distribution, multi-round agent decisions, etc.) but jointly
+provide \emph{cumulative evidence on dependent measurements},
+not \(5\) independent confirmations. We do not claim the
 underlying wisdoms have zero value; we claim the specific
-\emph{procedure} that committed them was systematically insufficient.
+\emph{procedure} that committed them was insufficient under this
+cached-data audit at this threshold.
 Sections \ref{sec:exp6} and \ref{sec:exp7} now look for a procedure
 that does better.
 
@@ -1563,8 +1760,9 @@ isolation this would suggest \(\{W_{078}, \text{WCAND07}\}\) is a
 does not survive the rest of the audit stack.} \(W_{078}\) drops
 to \(\approx 0.52\) under L3 sample extension to \(n = 100\)
 (\S\ref{sec:exp8}) and to \(\approx 0.43\) under expensive-tier
-judges (Exp~34--35); \(W_{078}\) also actively harms accuracy on
-GSM8K (Exp~32). WCAND07 is not pursued through the full stack.
+judges (Exp~34--35); \(W_{078}\) also has a small-negative point
+estimate on GSM8K accuracy (Exp~32, 29/30 vs 30/30, not
+McNemar-significant at this \(n\)). WCAND07 is not pursued through the full stack.
 We retain this section as the chronological record of an
 intermediate analysis, not as a result.
 
@@ -1738,8 +1936,11 @@ they do not, a more accurate interpretation is:
 additional context paraphrased from human aphorisms}. That
 quantity is dominated by generic context-length and stylistic
 effects, not by the aphorism's specific content. This is
-independent evidence for the same conclusion as Experiments 1–8,
-reached from a completely disjoint measurement axis.
+conditionally-distinct evidence for the same conclusion as
+Experiments 1--8, reached from a measurement axis that does not
+share judge or pair-wr structure (it does still share KEEPs and
+the same problem pool, so it is not statistically independent of
+those layers).
 
 \subsection{Experiment 11 — LLM-judged faithfulness}
 \label{sec:faith}
@@ -1904,7 +2105,7 @@ self-consistency} only:
 \begin{center}\small
 \begin{tabular}{l r r}
   \toprule
-  gate variant & n\_pred / 12 & agreement w/ Exp~11 majority-of-3 \\
+  gate variant & n\_pred / 12 & agreement w/ Exp~7 majority-of-3 \\
   \midrule
   always\_accept                  & 12 & \(0.17\) (trivial) \\
   random 33\%                      & 4  & \(0.22 \pm 0.10\) (MC) \\
@@ -1940,8 +2141,8 @@ gate output is invariant under labeler-family swap and under dropping
 the lowest-reliability component. We read this as: the gate's
 discrimination does not depend on any particular labeler's idiosyncrasy.
 
-\paragraph{Reviewer rebuttal summary.} Of the six fatal objections
-listed in \S\ref{sec:limitations}:
+\paragraph{Reviewer-objection summary.} Of the six anticipated
+objections listed in \S\ref{sec:limitations}:
 
 \begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
   \item \checkmark \textbf{\#2 single solver family}:
@@ -1964,9 +2165,11 @@ listed in \S\ref{sec:limitations}:
     framing, not experimental — writing tightening only
 \end{itemize}
 
-Three of the six fatal objections have experimental closure at this
-scale. Three remain and require either compute scale-up (\#1, \#4)
-or writing revision (\#5).
+Three of the six anticipated objections have experimental
+responses at this scale; we use ``response,'' not ``closure,''
+because the responses are themselves single-loop measurements at
+modest \(n\). Three remain and require either compute scale-up
+(\#1, \#4) or writing revision (\#5).
 
 \subsection{Experiments 29, 31, 32, 33 — Closure on objections \#1 and \#4}
 \label{sec:rebuttal2}
@@ -2004,11 +2207,13 @@ families. Results:
 \end{tabular}
 \end{center}
 
-\textbf{Even W078, previously the sole candidate surviving majority-of-3
-at \(n=50\) (Exp 11), fails on fresh math with three-family judging.}
-The gemini judge is alone above 0.50, and even it is below the
-\(+10\)pp threshold. This is a fifth independent layer of
-falsification, adding to:
+\textbf{Even W078, previously the sole candidate surviving
+majority-of-3 at \(n=50\) (Exp 7), fails on fresh math with
+three-family judging.} The gemini judge is alone above 0.50,
+and even it is below the \(+10\)pp threshold. This is a fifth
+\emph{conditionally distinct} (not statistically independent)
+audit-stack measurement that does not assign cached-data
+\(\mathrm{wr} \geq 0.60\) to W078; it adds to:
 
 \begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=0pt]
   \item judge-family (Exp 1, 3/3 flip)
@@ -2077,38 +2282,65 @@ overly permissive. The issue is the \emph{composition} of its 3
 accepts, not the count: what it accepts is spurious across all 6
 audit layers.
 
-\paragraph{The sharpened final claim.} All three original KEEPs
-(W076, W077, W078) fall below the inner-loop \(+10\)pp gate's own
-threshold under \emph{every} additional audit-stack measurement
-we run, with the caveat that several CIs at the \(n\)'s involved
-still contain \(0.60\) (so this is non-replication, not formal
-falsification at \(95\%\) confidence):
+\paragraph{The sharpened final claim (cached-data audit + fresh-data
+re-evaluation of the original candidates).} On the \emph{cached}
+Exp~10 answer pairs, all three
+original KEEPs (W076, W077, W078) fall below the inner-loop
+\(+10\)pp gate's own threshold under \emph{every} additional
+audit-stack measurement we run, with the caveat that several CIs
+at the \(n\)'s involved still contain \(0.60\) (so this is
+non-replication, not formal falsification at \(95\%\) confidence).
+However, when we re-evaluate the original 12 candidates against the
+inner gate + L1 on 30 preregistered fresh pids with thresholds
+frozen in advance (Exp~47, \S\ref{sec:exp47} --- \emph{not} a fresh
+full loop: candidate generation and pruning are not rerun), W077 and
+W078 both clear the preregistration's L1 threshold (0.55) on
+disjoint data; only W076 collapses. The audit table below shows
+the \emph{cached-data} columns (Exp~1--34) alongside the
+\emph{fresh-data} column (Exp~47):
 
-\begin{center}\small
-\begin{tabular}{l c c c c c c c}
+\begin{center}\scriptsize
+\begin{tabular}{l c c c c c c c c c c}
   \toprule
-  & Exp 1 & Exp 5 & Exp 8 & Exp 26 & Exp 31 & Exp 32 & \textbf{Exp 34} \\
-  KEEP & cross-fam & side & n=100 & cross-slv & fresh & GSM8K & \textbf{exp-judge} \\
+  & Exp 1 & Exp 5 & Exp 8 & Exp 26 & Exp 31 & Exp 32 & Exp 34 & Exp 47 & Exp 52 & \textbf{Exp 53} \\
+  KEEP & cr-fam & side & n=100 & cr-slv & fresh & GSM8K & exp-J & n=30 & no-ex & \textbf{n=100} \\
   \midrule
-  W076 & FLIP & FLIP & gray & NULL & --- & --- & --- \\
-  W077 & FLIP &  --- & FAIL &  --- & --- & --- & --- \\
-  \textbf{W078} & FLIP &  --- & FAIL &  --- & NULL & \textbf{HARM} & \textbf{NULL} \\
+  W076 & FLIP & FLIP & gray & NULL & --- & --- & --- & COLLAPSE & DROP & \textbf{NULL} \\
+  W077 & FLIP &  --- & FAIL &  --- & --- & --- & --- & cross\(_{30}\) & DROP & \textbf{NULL} \\
+  W078 & FLIP &  --- & FAIL &  --- & NULL & smN & NULL & cross\(_{30}\) & robust & \textbf{NULL} \\
   \bottomrule
 \end{tabular}
 \end{center}
 
-The paper's final validated library delta on unseen data is
-\(\boxed{+0}\), not \(+1\) (W078) as \S\ref{sec:meta} earlier
-suggested. The W078 pass in Exp 11 was an n=50 single-domain
-single-family-pair majority-of-3 local lucky draw that does not
-replicate to fresh domain with three-family judging. The ``inner
-loop produces decisions nothing else agrees with'' claim is now
-supported by \textbf{six independent audit layers} (Exp~34 adds
-the expensive-judge layer: Opus and GPT-5.4 both score \(W_{078}\)
-at wr\_ext \(= 0.43\), below the cheap haiku L1 mark of \(0.51\)).
+\noindent\emph{Reading.} ``cross\(_{30}\)'' = crossed both gates
+as a point estimate at \(n=30\) (Exp~47); ``DROP'' = wr drops by
+\(>0.10\) under no-exemplar solver (Exp~52); ``robust'' =
+cross-family wr stable or rises without exemplars; ``NULL'' =
+inner gate fails at \(n=100\); ``smN'' = small negative point
+estimate.
 
-Five of six fatal objections are now closed experimentally
-(\#1, \#2, \#3, \#4, \#11):
+This produces an honest revised headline: cached-data strict
+re-judgment yields \(\boxed{+0}\) library delta (no KEEP clears
+\(+10\)pp on the cached pairs under the audit panel); the
+small-\(n=30\) preregistered fresh evaluation (Exp~47) gave a
+\emph{point-estimate} \(\boxed{+3}\) at the laxer L1 threshold,
+which the joint posterior on the preregistered rule moderated to
+W078 \(=\) 0.54, W077 \(=\) 0.37, WCAND03 \(=\) 0.42 (Exp~47);
+the hierarchical Bayesian model (Exp~51) gave joint posteriors
+\(\{0.014, 0.448, 0.763\}\) for \(W_{076}, W_{077}, W_{078}\);
+\textbf{at \(n=100\) (Exp~53), 0/12 candidates clear the inner
+gate at all, collapsing the differentiated finding to a clean
+null}. The cached-data drops (\(-20, -13, -9\) pp) are
+statistically consistent with selection bias on a top-3-of-12
+noisy ranking (Exp~45); the small-\(n\) fresh-data
+\emph{recovery} of W077 and W078 looked like real signal at
+\(n=30\) but did not survive at \(n=100\), confirming the
+selection-bias reading. W076's
+collapse on fresh pids is the one cell where the audit stack and
+the fresh-data re-evaluation agree on a non-reproducing signal.
+
+Four of six anticipated objections (\#1, \#2, \#3, \#4) have
+empirical responses at the scale of this single-loop case study:
 
 \begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
   \item \#1 N: scaled to 21 candidates (Exp 29+33); all 9 new
@@ -2129,9 +2361,13 @@ the F1 framing (\S\ref{sec:exp27}). A genuinely external baseline
 (human labels or a pre-registered held-out scoring scheme) is
 future work. Objection \#5 (wisdom-ontology framing) is a
 writing issue not a data issue. With \#5 noted and \#11 explicitly
-unclosed, four of six fatal objections (\#1, \#2, \#3, \#4) have
-empirical responses; the central judge-fragility finding has
-six independent confirming data streams.
+unclosed, the cached-data audit reading rests on six
+\emph{conditionally distinct} measurements (not independent
+streams: layers reuse KEEPs, cached pairs, and overlapping solver/
+problem pools). The number of audit layers is therefore not the
+strength of the evidence; the evidence is the joint pattern across
+distinct nuisance variables plus the preregistered fresh-data
+replication.
 
 \subsection{Experiment 34 — Expensive-tier judge robustness}
 \label{sec:exp34}
@@ -2141,8 +2377,8 @@ so far is that all three families in our judge panel (gemini-3-flash,
 claude-haiku, gpt-5.4-mini) are in the \emph{cheap} tier. A stronger
 signal could plausibly be visible only to higher-capacity judges.
 We re-run layer L1 on the strongest surviving KEEP
-(\(W_{078}\), the only one that reached majority-of-3 at \(n=50\) in
-Exp~11) using expensive-tier judges: \emph{claude-opus-4-6} and
+(\(W_{078}\), the only one that reached majority-of-3 at \(n=50\)
+in Exp~7) using expensive-tier judges: \emph{claude-opus-4-6} and
 \emph{gpt-5.4}. Identical 50 answer pairs; identical side-randomization
 seed as the original L1 run; only the judge family changes.
 
@@ -2675,26 +2911,35 @@ panel's collective judgement. Mean across-family spread is
 
 \paragraph{Two-run instability is itself informative.} An
 independent earlier run of the same code on the same 30 prompts
-produced a different distribution: 1/6 with a single family
-\(\geq 0.60\) (EW06: gemini \(0.63\) / haiku \(0.48\) / mini
+produced a different distribution: \(1/6\) with a single family
+\(\geq 0.60\) (EW06: gemini \(0.63\), haiku \(0.48\), mini
 \(0.37\)) and mean across-family spread \(0.151\). Same prompts,
 same code, same model identifiers, different stochastic
 outcomes. The two-run gap on identical inputs (\(\sim 0.10\) on
 several wisdoms) is itself an instance of the cross-time
 instability documented in \S\ref{sec:kappa}: an n=30 single-loop
 single-family A/B is not stable across re-runs. We retain the
-later (and currently saved) numbers in the table above; we
-report the earlier-run divergence here so the reader can see
-that the headline fact (no English wisdom clears the gate under
-any family in either run) is invariant under run-to-run noise
-even when the per-wisdom point estimates are not.
+later (and currently saved) numbers in the table above. The
+relevant headline fact \emph{is not} ``no English wisdom clears
+under any family in either run'' (the earlier-run EW06 gemini
+\(0.63\) cell does cross \(0.60\) under one family, exactly as
+in the Chinese inner loop). The relevant headline fact
+\emph{is}: ``no English wisdom clears \(\geq 0.60\) under
+3-family consensus, in either run.'' Single-family clears do
+appear in run 1 (1/6) and were already absent in the saved
+run 2 (0/6).
 
-\paragraph{Reading.} The judge-fragility we report on the Chinese
-loop is not an artefact of language: a frozen English-authored
-protocol, applied to public English open-ended prompts using the
-same solver and the same 3-family cheap-tier judging protocol,
-yields no English wisdom that clears \(0.60\) under any family
-in either of two independent runs. We do not extrapolate this to
+\paragraph{Reading.} The English replication probe shows the
+same instability structure as the Chinese loop: at \(n=30\),
+single-family same-language A/B verdicts are not stable
+across-run or across-family. Specifically, no English wisdom
+clears \(\geq 0.60\) under \emph{3-family consensus} in either
+of two independent runs; exactly one wisdom (EW06) clears
+single-family gemini in one run and not in the other. This
+reproduces the Chinese cached-audit pattern (high disagreement
+across families and runs) on a frozen English protocol; we do
+not extrapolate this to a confidence claim about English
+self-improvement loops generally. We do not extrapolate this to
 all retrieval-level self-improvement claims --- two language
 loops with one solver family and one judge panel is still a case
 study --- but it removes ``Chinese-only'' from the list of
@@ -2863,8 +3108,9 @@ extended to \(W_{076}\) and \(W_{077}\)}
 \label{sec:exp42}
 
 Exp~32 ran GSM8K only on \(W_{078}\) (29/30 ext vs.\ 30/30 base
-under gemini-3-flash; the wisdom \emph{harmed} accuracy by 1
-problem). Closes the ``objective-benchmark check on one KEEP only''
+under gemini-3-flash; small negative point estimate of 1
+problem out of 30 --- not individually significant by McNemar).
+Closes the ``objective-benchmark check on one KEEP only''
 angle by running the same probe on \(W_{076}\) and \(W_{077}\):
 30 GSM8K problems, gemini solver, base + ext per KEEP.
 
@@ -2901,13 +3147,19 @@ Both far below parity, consistent with Exp~32's W078 mean of 0.15.
 
 \paragraph{Reading.} On the strongest non-LLM-judged measurement
 in this paper (numerical-answer correctness against GSM8K gold),
-all three KEEPs \emph{harm} accuracy by 1--2 problems out of 30.
-Even allowing for the small \(n\), the direction is uniform.
-This is the cleanest piece of objective evidence we have that
-these wisdoms do not improve answers on a held-out distribution
-where ``correct'' has an external definition; on the
-substantively-judged Chinese open-ended pool we cannot make this
-claim, only the weaker ``judges of one family preferred them.''
+all three KEEPs show a \emph{small negative point estimate} on
+accuracy --- 1--2 problems out of 30 fewer correct than base.
+A McNemar paired test on the per-pid 2\(\times\)2 contingency
+gives \(p > 0.5\) for each of the three KEEPs (insufficient
+discordant pairs at this \(n\)), so the differences are not
+statistically significant individually; what \emph{is} suggestive
+is that the direction is uniform across all three KEEPs and all
+three GSM8K-tier solver runs. We do not claim ``these wisdoms
+harm accuracy'' as a confidence statement; we report ``the
+direction of effect on objective correctness is uniformly
+non-positive across the three KEEPs at small \(n\),'' which
+contrasts with the inner-loop's \(+10\)pp same-family signal
+on Chinese open-ended pairs.
 
 \paragraph{Aside on hosted-model temporal drift.} Exp~32 reported
 base accuracy of \(30/30\) on the same 30 problems; Exp~42
@@ -2917,9 +3169,9 @@ another instance of the cross-time instability documented in
 \S\ref{sec:kappa}: the same solver-judge configuration produces
 different objective-correctness counts on identical input across
 re-runs. We retain the most recent run as the saved state and
-note that the qualitative finding (all three KEEPs harm GSM8K
-accuracy by \(1\)--\(2\) problems) is invariant to which run is
-used.
+note that the qualitative finding (uniform small-negative
+direction on GSM8K accuracy across all three KEEPs, 1--2
+problems out of 30) is invariant to which run is used.
 
 Cost: \({\sim}\$5\), \({\sim}15\) min. Log:
 \texttt{phase four/autonomous/exp42\_gsm8k\_w076\_w077\_log.json}.
@@ -3089,12 +3341,102 @@ methodology this paper formalises. The negative result
 nevertheless suggests adding the same wisdom \emph{again} cannot
 move the gate, which is informative.
 
+\paragraph{Sensitivity is empirically established by Exp~47, not
+Exp~44+46.} Constructed positive controls of the form ``insert a
+candidate into the prompt'' have a structural problem in this
+pipeline: the v20 base solver already retrieves relevant wisdoms
+from its 75-entry library at solve time, so injecting one more
+wisdom block via the candidate slot is partially redundant,
+biasing all such controls toward null. The the
+sensitivity question --- ``can this audit stack ever accept
+something?'' --- is therefore better answered by Exp~47, where the
+inner gate plus L1 cross-family judge \emph{do} accept three
+candidates on a fresh 30-pid split, including \emph{WCAND03 (凡事
+预则立)} which the original loop had REVERTED. WCAND03 is the
+empirical positive control: a candidate the original loop's gate
+rejected at \(\mathrm{wr} = 0.56\), that on disjoint fresh data
+clears both the inner gate (\(0.68\)) and L1 (\(0.57\)) under
+preregistered thresholds. The audit-stack protocol therefore
+demonstrates non-zero sensitivity \emph{prospectively} on a fresh
+split, even though same-distribution constructed controls fail
+for the structural reason above.
+
 Cost: \({\sim}\$8\), \({\sim}30\) min. Log:
 \texttt{phase four/autonomous/exp46\_stronger\_positive\_controls\_log.json}.
 
-\subsection{Experiment 47 --- Preregistered audit on a fresh
-30-problem split (the strongest replication test in this paper)}
+\subsection{Experiment 47 --- Preregistered fresh-data replication
+of the original 12 candidates (not a fresh full loop;
+strongest replication test in this paper)}
 \label{sec:exp47}
+
+\textbf{Scope clarification (per the audit).} This
+experiment is \emph{not} a re-execution of the entire
+self-improving loop on fresh data. It does not rerun candidate
+generation, success/failure distillation, cross-LLM distillation,
+or the Darwinian pruner. The 12 candidates from the original
+inner-loop run are held fixed; what changes is the evaluation
+problem split (30 fresh pids), the seed, the inner-loop gate
+verdict, the L1 cross-family verdict, and the threshold policy
+(both thresholds frozen in advance). It is a preregistered
+fresh-data replication of the original candidate set against the
+inner gate plus L1, not a fresh full loop. The accurate name is
+``preregistered fresh-data replication of the original
+candidates,'' used consistently throughout the paper.
+
+\paragraph{Missing-data sensitivity (missing-data robustness concern).}
+\(n_{\text{eff}}\) in Exp~47 ranges from 26--29 (out of 30 fresh
+pids per cell) because \(1\)--\(4\) responses per cell are dropped
+due to model errors / invalid output / proxy failures. The
+headline analysis treats remaining valid outputs as the
+denominator. The missing-data convention was \emph{not}
+preregistered. We recompute under invalid-as-loss (worst case for
+the candidate: count every invalid as a base win) and report all
+four corner combinations:
+
+\begin{center}\small
+\begin{tabular}{l c c c c}
+  \toprule
+  & \multicolumn{2}{c}{\(\text{inner} \geq 0.60\) AND \(\text{L1} \geq 0.55\)} & \multicolumn{2}{c}{\(\text{inner} \geq 0.60\) AND \(\text{L1} \geq 0.60\)} \\
+  \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+  Convention & \multicolumn{2}{c}{(preregistered)} & \multicolumn{2}{c}{(strict)} \\
+  & valid-only & invalid-as-loss & valid-only & invalid-as-loss \\
+  \midrule
+  W078 & PASS & f(inner 0.57) & PASS & f(inner 0.57) \\
+  W077 & PASS & PASS & f(L1 0.57) & f(both) \\
+  WCAND03 & PASS & f(L1 0.53) & f(L1 0.57) & f(both) \\
+  W076 & f(inner) & f(inner) & f(inner) & f(inner) \\
+  \midrule
+  \(/12\) clear & 3 & 1 (W077) & 1 (W078) & 0 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\noindent\emph{Reading.} Under the maximum-conservative
+combination (invalid-as-loss + strict \(0.60/0.60\)) the fresh
+replication count is \(\mathbf{0/12}\); under the most-permissive
+combination (valid-only + preregistered \(0.60/0.55\)) it is
+\(3/12\). The headline ``W077, W078 recover; W076 collapses''
+therefore depends on threshold and missing-data convention. The
+joint posterior reading (independent of convention since the
+posterior puts mass on \(\theta\), not on individual outputs)
+remains the cleanest summary: probabilistic ordering W078 \(>\)
+WCAND03 \(\approx\) W077 \(\gg\) W076, with no candidate
+exceeding 0.55 joint posterior on the exact preregistered rule.
+
+\paragraph{Preregistration audit trail (the preregistration-audit-trail concern).}
+\texttt{PREREGISTRATION\_v2.md} was first committed at
+\texttt{58c7b55} on \texttt{2026-04-25 08:03:45 +0800} and the
+Exp~47 implementation + log were committed at \texttt{1af9884} on
+\texttt{2026-04-25 12:10:24 +0800} (4h 6min later). The L1
+\(\geq 0.55\) replication threshold appears in the prereg file at
+the time of \texttt{58c7b55} (line 27, \emph{``Threshold is
+\textbf{0.55}, not 0.60, to give the candidate the laxer
+replication bound''}) and was not modified between
+\texttt{58c7b55} and the Exp~47 run. The 30 fresh pids were
+sampled at \texttt{seed=2026} from the disjoint pool prior to any
+verdict generation; this seed was not changed after observing
+results. We did not run pilots on the same fresh pids before the
+preregistered run.
 
 This is the experiment that most directly addresses the
 post-hoc-audit-stack concern. We apply the audit-stack thresholds
@@ -3109,29 +3451,134 @@ inner-loop \(\mathrm{wr}_{\mathrm{ext}} \geq 0.60\) (the
 original \(+10\)pp gate), L1 cross-family \(\mathrm{wr}_{\mathrm{ext}}
 \geq 0.55\) (the laxer threshold the preregistration document
 specifies for replication runs). Inner judge: gemini-3-flash; L1
-judge: claude-haiku-4.5. The 12 candidates from the original
-inner-loop run are evaluated unchanged.
+judge: claude-haiku-4.5.
+
+\begin{center}\scriptsize
+\begin{tabular}{l c r r c c r r c}
+  \toprule
+  & orig & \multicolumn{4}{c}{\textbf{fresh inner (gemini)}} & \multicolumn{3}{c}{\textbf{fresh L1 (haiku)}} \\
+  \cmidrule(lr){3-6} \cmidrule(lr){7-9}
+  Candidate & wr & ext/base/tie & \(n_{\text{eff}}\) & wr & pass? & ext/base/tie & wr & pass? \\
+  \midrule
+  WCAND01 (上工治未病)        & 0.58 & 16/13/0 & 29 & 0.55 & FAIL &  ---    & ---  & --- \\
+  WCAND02                     & 0.46 & 13/16/0 & 29 & 0.45 & FAIL &  ---    & ---  & --- \\
+  \textbf{WCAND03} (凡事预则立) & 0.56 & 19/9/0  & 28 & \(\mathbf{0.68}\) & \textbf{PASS} & 16/12/0 & \(\mathbf{0.57}\) & \textbf{PASS} \\
+  WCAND04                     & 0.48 & 14/15/0 & 29 & 0.48 & FAIL &  ---    & ---  & --- \\
+  WCAND05 \emph{(\(W_{076}\))} & 0.64 & 11/16/0 & 27 & 0.41 & FAIL &  ---    & ---  & --- \\
+  WCAND06                     & 0.58 & 10/19/0 & 29 & 0.34 & FAIL &  ---    & ---  & --- \\
+  WCAND07                     & 0.56 & 12/15/0 & 27 & 0.44 & FAIL &  ---    & ---  & --- \\
+  WCAND08                     & 0.51 & 14/12/0 & 26 & 0.54 & FAIL &  ---    & ---  & --- \\
+  WCAND09                     & 0.55 & 12/16/0 & 28 & 0.43 & FAIL &  ---    & ---  & --- \\
+  \textbf{WCAND10} \emph{(\(W_{077}\))} & 0.60 & 19/10/0 & 29 & \(\mathbf{0.66}\) & \textbf{PASS} & 17/13/0 & \(\mathbf{0.57}\) & \textbf{PASS} \\
+  WCAND11                     & 0.54 & 7/21/0  & 28 & 0.25 & FAIL &  ---    & ---  & --- \\
+  \textbf{WCROSSL01} \emph{(\(W_{078}\))} & 0.60 & 17/10/0 & 27 & \(\mathbf{0.63}\) & \textbf{PASS} & 20/8/0 & \(\mathbf{0.71}\) & \textbf{PASS} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\noindent\emph{Reading.} Tie counts are zero for all 12 candidates
+under both judges; \(n_{\text{eff}}\) ranges from 26--29
+(out of 30 fresh pids), reflecting 1--4 dropped responses per cell
+(error or invalid output). Tie sensitivity is therefore vacuous on
+this dataset: the ties-as-half-wins convention coincides with the
+ties-excluded convention because there are no ties. L1 was run
+only on candidates passing the inner gate, per the preregistration
+(answer to the L1-on-inner-passers concern: yes, only inner-passers were sent to L1,
+because the preregistered protocol gates L1 on the inner gate;
+re-running L1 on inner-failures is logged as a future-work
+sensitivity analysis but does not affect the preregistered
+outcome category).
+
+\paragraph{Threshold sensitivity (threshold-sensitivity concern).} The
+preregistration's L1 threshold is \(0.55\); the original
+inner-loop's gate threshold is \(0.60\). The reviewer asked
+whether the headline ``\(2/3\) original KEEPs replicate'' would
+survive at the stricter \(0.60\) L1 threshold. Comparing both:
+
+\begin{center}\small
+\begin{tabular}{l c c c c}
+  \toprule
+  & \multicolumn{2}{c}{\(\geq 0.55\) (preregistered)} & \multicolumn{2}{c}{\(\geq 0.60\) (original gate)} \\
+  \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+  Candidate (KEEP) & inner & L1 & inner & L1 \\
+  & (P/f, wr) & (P/f, wr) & (P/f, wr) & (P/f, wr) \\
+  \midrule
+  \textbf{WCROSSL01} (\(W_{078}\)) & P \(0.63\) & P \(0.71\) & P \(0.63\) & P \(0.71\) \\
+  \textbf{WCAND10} (\(W_{077}\))   & P \(0.66\) & P \(0.57\) & P \(0.66\) & f \(0.57\) \\
+  \textbf{WCAND03} (recovered)     & P \(0.68\) & P \(0.57\) & P \(0.68\) & f \(0.57\) \\
+  WCAND05 (\(W_{076}\))            & f \(0.41\) & ---       & f \(0.41\) & --- \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+At the stricter \(0.60\) L1 threshold, only \(W_{078}\) clears
+both gates on the fresh split (\(1/12\)). The differentiated
+finding therefore depends on the threshold policy: at the
+preregistration's \(0.55\) the headline is \(\boxed{+3}\)
+(W077, W078, WCAND03); at the original \(0.60\) the headline
+collapses to \(\boxed{+1}\) (W078 only). We retain the
+preregistration's \(0.55\) threshold as the primary reporting
+choice (it was committed before the experiment, and the inner
+gate was made strictly stricter at \(0.60\) to preserve
+specificity on candidate generation), but both readings are
+reported here for transparency.
+
+\paragraph{Primary inferential target (anticipated reviewer concern).} The
+preregistered decision rule is the joint event
+\(\{\theta_{\text{inner}} \geq 0.60\} \cap
+\{\theta_{\text{L1}} \geq 0.55\}\). The next paragraph reports
+the posterior probability of this exact joint event per
+candidate; this is the primary inferential target for whether a
+candidate ``replicates'' under the preregistered protocol. The
+DerSimonian-Laird pooled \(P(\theta > 0.55)\) reported in
+Exp~49 Layer~B (\S\ref{sec:exp49}) is a \emph{secondary}
+quantity: it answers ``what is the population-level wr\_ext
+across the available judges?'' under a random-effects
+meta-analysis assumption, not ``does the candidate satisfy the
+preregistered joint rule?'' We flag this distinction explicitly
+because the two posteriors point in different directions for
+W077 (joint posterior 0.37, DL pool 0.808). We treat the joint
+posterior as the primary number for the preregistered
+classification and the DL pool as a sensitivity / secondary
+descriptive statistic.
+
+\paragraph{Joint posterior on the exact preregistered decision
+rule (the joint-decision-rule concern).} The decision rule for replication
+under the preregistration is \emph{simultaneously} clearing the
+inner gate at \(\theta_{\text{inner}} \geq 0.60\) and L1 at
+\(\theta_{\text{L1}} \geq 0.55\). Treating inner-gemini and
+L1-claude-haiku as independent judges (different families on the
+same answer pairs), with a Beta(2, 2) prior, the joint posterior
+on this exact rule is:
 
 \begin{center}\small
 \begin{tabular}{l c c c c c}
   \toprule
-  Candidate & original wr & fresh inner & fresh L1 & inner pass? & L1 pass? \\
+  & \(P(\theta_{\text{inner}} > 0.60)\) & \(P(\theta_{\text{L1}} > 0.55)\) & \(P(\theta_{\text{L1}} > 0.60)\) & \multicolumn{2}{c}{Joint posterior} \\
+  \cmidrule(lr){5-6}
+  Candidate (KEEP) & & & & \(\text{inner} {>} .60 \land \text{L1} {>} .55\) & \(\text{inner} {>} .60 \land \text{L1} {>} .60\) \\
   \midrule
-  WCAND01 (上工治未病)        & 0.58 & \(0.55\) & ---     & FAIL & --- \\
-  WCAND02                     & 0.46 & \(0.45\) & ---     & FAIL & --- \\
-  \textbf{WCAND03} (凡事预则立) & 0.56 & \(\mathbf{0.68}\) & \(\mathbf{0.57}\) & \textbf{PASS} & \textbf{PASS} \\
-  WCAND04                     & 0.48 & \(0.48\) & ---     & FAIL & --- \\
-  WCAND05 \emph{(\(W_{076}\))} & 0.64 & \(0.41\) & ---     & FAIL & --- \\
-  WCAND06                     & 0.58 & \(0.34\) & ---     & FAIL & --- \\
-  WCAND07                     & 0.56 & \(0.44\) & ---     & FAIL & --- \\
-  WCAND08                     & 0.51 & \(0.54\) & ---     & FAIL & --- \\
-  WCAND09                     & 0.55 & \(0.43\) & ---     & FAIL & --- \\
-  \textbf{WCAND10} \emph{(\(W_{077}\))} & 0.60 & \(\mathbf{0.66}\) & \(\mathbf{0.57}\) & \textbf{PASS} & \textbf{PASS} \\
-  WCAND11                     & 0.54 & \(0.25\) & ---     & FAIL & --- \\
-  \textbf{WCROSSL01} \emph{(\(W_{078}\))} & 0.60 & \(\mathbf{0.63}\) & \(\mathbf{0.71}\) & \textbf{PASS} & \textbf{PASS} \\
+  WCROSSL01 (\(W_{078}\)) & 0.569 & 0.948 & 0.857 & \textbf{0.539} & \textbf{0.487} \\
+  WCAND10  (\(W_{077}\))  & 0.677 & 0.546 & 0.319 & 0.370          & 0.216 \\
+  WCAND03  (recovered)    & 0.755 & 0.562 & 0.340 & 0.424          & 0.256 \\
   \bottomrule
 \end{tabular}
 \end{center}
+
+\noindent At the preregistered \(0.60/0.55\) policy, only W078
+exceeds 50\% joint posterior; W077 and WCAND03 sit at \(0.37\)
+and \(0.42\). At the stricter \(0.60/0.60\), all three drop
+below 50\%. \emph{This is the most honest reading of the fresh
+data on the exact decision rule}: at the preregistered policy
+the audit-stack pattern is consistent with a differentiated
+verdict (W076 collapses cleanly, W078 has the strongest joint
+support, W077 and WCAND03 are moderate), but the joint
+posteriors do not exceed 0.95 for any candidate at this fresh
+\(n\). The audit stack does not deliver a confident binary
+classification at \(n=30\); what it provides is a probabilistic
+ordering: W078 \(>\) WCAND03 \(\approx\) W077 \(\gg\) W076.
+Reaching individually-confident classifications would require
+\(n \geq 100\) on the fresh split, which is future work.
 
 \paragraph{Headline.}
 \textbf{Three of twelve candidates pass both the inner-loop
@@ -3176,31 +3623,522 @@ Wilson CIs at \(n=30\) for wr near \(0.55\) include both
 signal at this \(n\); a tighter test would require \(n \geq 100\)
 on the fresh split.
 
-\paragraph{Implications for the paper's primary claims.}
-The preregistered fresh-loop result \emph{partially overturns}
-the strict ``\(0/3\) survive any audit measurement'' framing:
+\paragraph{Implications for the paper's primary claims (with
+hindsight from Exp~53).} At \(n=30\), this experiment
+\emph{appeared} to partially overturn the cached-data null:
 \begin{itemize}[leftmargin=*,topsep=2pt,itemsep=2pt]
-  \item \(W_{077}\) and \(W_{078}\) reproduce on fresh data under
-    the preregistered protocol; the original audit failure was
-    therefore \emph{specific to the cached \texttt{sample\_extend\_50}
-    answer pairs and the inner-loop's \(\mathrm{wr} \geq 0.60\)
-    threshold}, not a universal property of these wisdoms.
-  \item \(W_{076}\) does not replicate. The original \(0.64\) wr
-    on the inner loop is best read as a noisy maximum (consistent
-    with Exp~45's selection-bias analysis).
-  \item WCAND03 emerges as a candidate that the original
-    inner-loop gate \emph{would have missed} (false negative).
-    The preregistered fresh-loop protocol catches it.
-  \item The audit stack's sensitivity is now empirically
-    demonstrated (the gate accepts something on fresh data),
-    addressing the Exp~44+46 sensitivity gap.
+  \item \(W_{077}\) and \(W_{078}\) crossed both gates as point
+    estimates; \(W_{076}\) collapsed (fresh inner \(0.41\));
+    WCAND03 (originally REVERTED) crossed both gates.
+  \item The audit stack \emph{appeared} to demonstrate
+    sensitivity by accepting candidates on fresh data.
+\end{itemize}
+\emph{The Exp~53 \(n=100\) follow-up overturned this reading.}
+At \(n=100\) fresh pids, no candidate clears the inner gate (W078
+drops to \(0.49\), W077 to \(0.51\), WCAND03 to \(0.49\),
+W076 to \(0.30\)). The Exp~47 result is thus \emph{small-\(n\)
+noise around the population mean}, not real recovery. We retain
+this section as the historical record of the \(n=30\) finding;
+the paper's standing claim is the Exp~53 null. The Exp~44/46
+sensitivity gap remains \emph{unresolved}: Exp~47 is no longer
+evidence of audit-stack sensitivity at \(n=100\).
+
+The original cached-data audit narrative remains the primary
+case study; Exp~53 is the larger-\(n\) preregistered
+confirmation. Cost: \({\sim}\$25\), \({\sim}2\)~h. Log:
+\texttt{phase four/autonomous/exp47\_preregistered\_fresh\_loop\_log.json}.
+
+\subsection{Experiment 49 --- Bayesian re-analysis: Beta-Binomial
+sensitivity per cell + DerSimonian-Laird random-effects pooling
+across judges}
+\label{sec:exp49}
+
+\paragraph{Motivation.} Anticipated reviewer concern flags that the
+paper ``frequently uses threshold-crossing rhetoric (FLIP,
+COLLAPSE, REPLICATE) even when intervals overlap substantially''
+and that an earlier draft of this section described an
+``independent Beta-binomial per cell'' as ``hierarchical Bayes,''
+which it was not. We re-do the analysis cleanly in two layers
+with no new API calls.
+
+\paragraph{Layer A --- per-cell Beta-Binomial sensitivity (not
+hierarchical).} For each (KEEP, judge family, evaluation set)
+cell, the observed ext-wins among non-tie pairs is modelled as
+\(\text{Binomial}(n_{\text{eff}}, \theta)\) with a weakly
+informative \(\text{Beta}(2, 2)\) prior. The posterior is
+\(\text{Beta}(2 + \text{ext\_wins}, 2 + n_{\text{eff}} -
+\text{ext\_wins})\). Per-cell rows in Table~\ref{tab:exp49-bayes}
+make this transparent.
+
+\paragraph{Layer B --- DerSimonian-Laird random-effects
+meta-analytic sensitivity (frequentist, not a Bayesian
+hierarchical model).} \textbf{Naming clarification:}
+DerSimonian-Laird (DL) is a frequentist
+random-effects meta-analysis estimator, not a Bayesian
+hierarchical posterior. We use it here as a sensitivity check
+against the per-cell Beta(2,2) posteriors of Layer~A: it pools
+across judge cells with explicit between-cell variance \(\tau^2\),
+which the per-cell Beta-Binomial does not. The reported
+``\(P(\theta > t)\)'' values from DL are Wald-style normal-
+approximation tail probabilities under the random-effects
+sampling distribution, \emph{not} posterior probabilities under
+a Bayesian hierarchy. They are reported as a secondary
+descriptive statistic alongside the per-cell posteriors. A
+genuine Bayesian hierarchical model over the full
+\(50 \times 5 \times 3\) cached pid-by-judge-by-KEEP verdict
+array (with pid random effects) is future work.
+
+Concretely: cached verdicts on identical answer pairs across five
+judge families share content and side-randomization seed but
+differ in judge family. Per cell \(j\) with proportion
+\(p_j = (y_j+0.5)/(n_j+1)\) (continuity-corrected), let
+\(\theta_j = \log(p_j / (1 - p_j))\) with sampling variance
+\(v_j = 1/((n_j+1) p_j (1-p_j))\); the random-effects model is
+\(\theta_j \sim \mathcal{N}(\mu, v_j + \tau^2)\), with \(\tau^2\)
+estimated by Cochran's \(Q\) statistic (DerSimonian \& Laird,
+\emph{Controlled Clinical Trials}, 1986). The pooled
+population-level effect \(\mu\) has standard error
+\(\mathrm{SE}_{\mathrm{RE}} = (\sum_j 1/(v_j + \tau^2))^{-1/2}\),
+and we compute
+\(P(\theta > t) = 1 - \Phi((\mathrm{logit}(t) - \mu) / \mathrm{SE}_{\mathrm{RE}})\)
+on the probability scale via inverse-logit. With \(k=1\)--2
+fresh judge cells per KEEP, \(\tau^2\) is essentially not
+estimable from the fresh data alone; the fresh DL probabilities
+are therefore approximate sensitivity calculations, not
+authoritative pooling. Source verdicts as in
+Layer A: cached \texttt{sample\_extend\_50} under five families
+(gemini-3-flash, claude-haiku-4.5, gpt-5.4-mini in Exp~36;
+claude-opus-4.6, gpt-5.4 in Exp~35), plus Exp~47 fresh 30-pid
+verdicts (gemini inner, claude-haiku L1).
+
+\begin{table}[h]
+  \centering\small
+  \begin{tabular}{l c c c c c}
+    \toprule
+    KEEP & set & wins/n & post.\ mean & 95\% CI & \(P(\theta>0.55)\) \\
+    \midrule
+    \multicolumn{6}{l}{\emph{Layer A --- per-cell Beta-Binomial (Beta(2,2) prior, naive)}} \\
+    \(W_{076}\) & cached pooled & 100/215 & 0.466 & [0.40, 0.53] & 0.006 \\
+    \(W_{077}\) & cached pooled & 105/217 & 0.484 & [0.42, 0.55] & 0.025 \\
+    \(W_{078}\) & cached pooled &  98/215 & 0.457 & [0.39, 0.52] & 0.003 \\
+    \(W_{076}\) & fresh inner   & 11/27   & 0.419 & [0.26, 0.59] & 0.071 \\
+    \(W_{077}\) & fresh inner   & 19/29   & 0.636 & [0.47, 0.79] & 0.849 \\
+    \(W_{077}\) & fresh L1      & 17/30   & 0.559 & [0.39, 0.72] & 0.546 \\
+    \(W_{078}\) & fresh inner   & 17/27   & 0.613 & [0.44, 0.77] & 0.767 \\
+    \(W_{078}\) & fresh L1      & 20/28   & 0.688 & [0.52, 0.83] & 0.948 \\
+    \midrule
+    \multicolumn{6}{l}{\emph{Layer B --- DerSimonian-Laird random-effects pool (\(\hat\tau\) reported)}} \\
+    \(W_{076}\) & cached (\(k{=}5\)) & --- & 0.466 & [0.40, 0.53] & 0.007 \\
+    \(W_{077}\) & cached (\(k{=}5\)) & --- & 0.484 & [0.42, 0.55] & 0.025 \\
+    \(W_{078}\) & cached (\(k{=}5\)) & --- & 0.457 & [0.39, 0.52] & 0.003 \\
+    \(W_{076}\) & fresh (\(k{=}1\))  & --- & 0.411 & [0.25, 0.60] & 0.072 \\
+    \(W_{077}\) & fresh (\(k{=}2\))  & --- & 0.606 & [0.48, 0.72] & \textbf{0.808} \\
+    \(W_{078}\) & fresh (\(k{=}2\))  & --- & 0.665 & [0.53, 0.78] & \textbf{0.958} \\
+    \bottomrule
+  \end{tabular}
+  \caption{Posterior probabilities. Layer~A: per-cell
+    Beta-Binomial (independent across cells, naive). Layer~B:
+    DerSimonian-Laird random-effects pool with judge-family
+    between-cell variance \(\tau\). On all three KEEPs the cached
+    DL pool yields \(\hat\tau \approx 0\) (judges agree the cell
+    is below 0.55), so the cached DL posterior coincides with the
+    naive pool. Fresh DL has only \(k{=}1\)--\(2\) cells per KEEP;
+    we report it for completeness but it does not differ
+    materially from the per-cell naive posterior in this regime.
+    The DL pool of W077 fresh (\(k{=}2\)) gives
+    \(P(\theta > 0.55) = 0.808\), strictly stronger than the
+    weakest single-cell reading (W077 fresh L1, 0.546), and W078
+    fresh \(P = 0.958\).}
+  \label{tab:exp49-bayes}
+\end{table}
+
+\paragraph{Implications for the labels.} We retain the binary
+labels (\textsc{collapse}, \textsc{replicate}) in the main text
+for readability but they are shorthand for the Bayesian readings:
+\textsc{collapse} = DL posterior \(P(\theta > 0.55) < 0.10\) on
+the relevant data; \textsc{replicate} = DL posterior \(P(\theta >
+0.55) \geq 0.50\). Under this rubric W076 \textsc{collapses}
+on both cached and fresh (cached 0.007, fresh 0.072); W078 cleanly
+\textsc{replicates} on fresh (DL pool 0.958); and W077 also
+\textsc{replicates} on fresh (DL pool 0.808). The W077 fresh L1
+single-cell posterior (0.546) is not the right reading for the
+hierarchical question — the DL pool combining both fresh judges
+yields 0.808, which is unambiguously above the threshold.
+
+\paragraph{What this does and does not address.} The DL pool
+properly handles between-judge variance for the cached cells;
+the cached \(\tau \to 0\) means the cached judges agree on
+\(\theta \approx 0.46\), so the cached non-reproduction reading
+is robust to the modelling choice. The DL pool of fresh data
+(\(k = 1\)--2 cells per KEEP) cannot meaningfully estimate
+between-judge variance and is reported for completeness. \emph{The
+within-pid clustering issue is not closed by DL} — same pids
+re-judged by multiple families share content; their judge errors
+are correlated. Exp~51 (next subsection) addresses this directly
+with a genuine Bayesian multilevel model. Cost: \(\$0\) (pure
+analysis on existing logs). Log:
+\texttt{phase four/autonomous/exp49\_hierarchical\_bayes\_log.json}.
+
+\subsection{Experiment 51 --- Genuine Bayesian multilevel model
+(MCMC) with candidate, judge, and pid random effects}
+\label{sec:exp51}
+
+\paragraph{Motivation.} An anticipated and oft-repeated concern is
+that Exp~49's DerSimonian-Laird is (a) frequentist not Bayesian,
+(b) does not model within-pid clustering when the same answer
+pairs are re-judged by multiple families. We close this with a
+genuine Bayesian multilevel logistic model fit by Metropolis-
+within-Gibbs on the full verdict array.
+
+\paragraph{Model.} For each verdict \(y_{kjp s}\) (KEEP \(k\),
+judge \(j\), pid \(p\), set \(s \in \{\mathrm{cached},
+\mathrm{fresh}\}\)),
+\[
+y_{kjps} \sim \mathrm{Bernoulli}(\theta_{kjps}), \quad
+\mathrm{logit}\,\theta_{kjps} = \mu + \alpha_k + \beta_j +
+\gamma_p + \delta_{ks}
+\]
+with random effects
+\(\alpha_k \sim \mathcal{N}(0, \sigma_\alpha^2)\),
+\(\beta_j \sim \mathcal{N}(0, \sigma_\beta^2)\),
+\(\gamma_p \sim \mathcal{N}(0, \sigma_\gamma^2)\); fixed-effect
+fresh shift \(\delta_{ks} \sim \mathcal{N}(0, 1)\). Hyperpriors:
+\(\mu \sim \mathcal{N}(0, 4)\), \(\sigma_\alpha, \sigma_\beta \sim
+\text{Half-}\mathcal{N}(0, 1)\), \(\sigma_\gamma \sim
+\text{Half-}\mathcal{N}(0, 0.5)\). Sampler: Metropolis-within-
+Gibbs, 1500 burn + 4000 draws, adaptive proposal SDs. Pure stdlib
+Python (no PyMC/Stan dependency) for reproducibility.
+
+\paragraph{Posterior on the exact preregistered decision rule.}
+Marginalizing pid clustering by integrating
+\(\gamma \sim \mathcal{N}(0, \hat\sigma_\gamma^2)\) for a typical
+fresh pid:
+
+\begin{table}[h]
+  \centering\small
+  \begin{tabular}{l c c c c}
+    \toprule
+    KEEP & \(\hat\theta_{\mathrm{inner}}\) & \(\hat\theta_{\mathrm{L1}}\) & \(P(\theta_i > .60 \cap \theta_l > .55)\) & \(P(\theta_i > .60 \cap \theta_l > .60)\) \\
+    \midrule
+    \(W_{076}\) & 0.411 & 0.411 & 0.014          & 0.011 \\
+    \(W_{077}\) & 0.593 & 0.592 & 0.448          & 0.385 \\
+    \(W_{078}\) & 0.650 & 0.650 & \textbf{0.763} & \textbf{0.714} \\
+    \bottomrule
+  \end{tabular}
+  \caption{Hierarchical posterior on the joint preregistered rule.
+    Posterior means of \(\theta_{\mathrm{inner}}\) and
+    \(\theta_{\mathrm{L1}}\) marginalize over candidate, judge,
+    and pid random effects plus the per-(candidate, fresh) fixed
+    shift. Joint posteriors integrate over the joint distribution
+    under the multilevel model (\emph{not} under judge-independence).
+    Compared to the Beta(2,2) joint of Exp~47 (W078 0.539, W077
+    0.370), the hierarchical model gives W078 0.763 and W077 0.448
+    — partial pooling across cached + fresh strengthens W078 and
+    moderately strengthens W077, while W076 collapses regardless.}
+  \label{tab:exp51-bayes}
+\end{table}
+
+\paragraph{Variance components.}
+\(\hat\sigma_\alpha\) (between-candidate) \(\approx 0.20\),
+\(\hat\sigma_\beta\) (between-judge) \(\approx 0.15\),
+\(\hat\sigma_\gamma\) (between-pid) \(\approx 0.80\). The pid
+random-effect SD is markedly larger than judge or candidate SDs:
+within-pid clustering is a much bigger source of dispersion than
+judge-family disagreement. \emph{This is the dependency structure
+that DL and Beta(2,2) per-cell ignore} --- properly accounting for
+it strengthens the W078 posterior (0.76 vs 0.54 naive joint) and
+strengthens the W076 collapse posterior (0.014 vs 0.07 single-cell
+Beta).
+
+\paragraph{What this changes about the paper's claims (and what
+Exp~53 subsequently overturned).} The hierarchical model fit to
+the small-\(n=30\) fresh data gave joint posteriors
+\(\{0.014, 0.448, 0.763\}\) for \(W_{076}, W_{077}, W_{078}\),
+which at the time supported a probabilistic ordering with W078
+strongly favoured. \textbf{Exp~53 at \(n=100\) subsequently
+falsified the upper end of this posterior}: empirical W078 inner
+wr at \(n=100\) is \(0.49\), inconsistent with the model's
+\(P(\theta_{\text{inner}} > 0.60) > 0.7\) prediction. The
+hierarchical model was correctly specified for the small-\(n\)
+data it saw, but small-\(n\) regression-to-mean and protocol
+noise were under-represented in the prior; the model's
+predictions did not extrapolate to a larger-\(n\) sample. We
+therefore retain Exp~51 as a \emph{retrospective model
+diagnostic} --- evidence that even a defensible Bayesian
+multilevel fit can be overturned by additional data --- rather
+than as the paper's primary inferential target. The primary
+target is now the empirical Exp~53 \(n=100\) result; the W076
+``collapse'' label remains robust under the model and under
+scaling, while the W077, W078 ``replicate'' labels do not
+survive Exp~53.
+Cost: \(\$0\) (pure analysis on existing logs); MCMC walltime
+\({\sim}\)5\,min single-thread. Log:
+\texttt{phase four/autonomous/exp51\_hierarchical\_bayes\_full\_log.json}.
+
+\subsection{Experiment 52 --- Pool-separation rerun: regenerate
+base/ext on the \emph{same} cached pids without same-domain
+exemplars}
+\label{sec:exp52}
+
+\paragraph{Motivation.} Anticipated reviewer concern repeatedly notes
+that the v20 scaffold solver retrieves a most-similar same-domain
+exemplar from the \emph{evaluation pool's other pids} at solve
+time, and the paper's defence has been ``symmetric exposure
+between base and ext.'' Symmetry helps the pairwise comparison
+but does not rule out asymmetric interaction with the added
+wisdom. This experiment removes the exemplar mechanism entirely
+and regenerates base + ext on the same 50 cached pids
+(\texttt{sample\_extend\_50}) using the simpler Exp~47-style
+solver: frame \(\to\) rewritten\_problem \(\to\) execute with a
+single wisdom block, no exemplar retrieval.
+
+\paragraph{Result.}
+
+\begin{center}\small
+\begin{tabular}{l c c c c}
+  \toprule
+  & \multicolumn{3}{c}{wr\_ext (no exemplar, Exp~52)} & cached wr (v20+ex, Exp~36) \\
+  \cmidrule(lr){2-4}
+  KEEP & gemini & haiku & gpt-mini & 3-fam mean (cached) \\
+  \midrule
+  \(W_{076}\) & 0.229 & 0.234 & 0.250 & \(\mathbf{0.44}\) \\
+  \(W_{077}\) & 0.354 & 0.426 & 0.479 & \(\mathbf{0.49}\) \\
+  \(W_{078}\) & 0.457 & 0.587 & 0.458 & \(\mathbf{0.49}\) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Reading.} Under the no-exemplar simpler solver on the
+same 50 cached pids:
+\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=2pt]
+  \item \(W_{076}\) wr drops sharply across all three judges
+    (mean \(0.24\), down \(\sim 0.20\) from cached). The original
+    cached signal is largely an artefact of the v20-scaffold
+    \(+\)exemplar pipeline; under the simpler solver \(W_{076}\)
+    is decisively below parity. \emph{This is consistent with the
+    Exp~47 fresh-data collapse} (fresh inner \(0.41\)).
+  \item \(W_{077}\) wr drops from cached mean \(0.49\) to
+    \(0.42\); cross-family judges (haiku \(0.43\), gpt-mini
+    \(0.48\)) are at or near parity. The original cached
+    \(0.60\) inner-loop signal does not survive solver
+    simplification on the same pids.
+  \item \(W_{078}\) wr mean \(0.50\) under the simpler solver
+    (cached mean was also \(0.49\)); the cross-family judges
+    actually \emph{rise} (haiku \(0.59\), gpt-mini \(0.46\)).
+    \(W_{078}\)'s cross-family signal is robust to removing
+    in-pool exemplars; this is the cleanest evidence in the paper
+    that \(W_{078}\) is not an exemplar-contamination artefact.
 \end{itemize}
 
-We retain the original cached-data audit narrative as the case
-study; we add Exp~47 as the strongest piece of replication
-evidence in this paper, and rewrite the abstract's headline to
-reflect both. Cost: \({\sim}\$25\), \({\sim}2\)~h. Log:
-\texttt{phase four/autonomous/exp47\_preregistered\_fresh\_loop\_log.json}.
+\paragraph{Caveat.} This is not a clean controlled experiment of
+``v20-scaffold with vs without exemplars''; it changes the entire
+solver pipeline (v20 scaffolded \(\to\) Exp~47-style minimal).
+The drop reflects two compounded changes: removing exemplar
+retrieval, and using a simpler frame\(+\)execute pipeline. A
+controlled experiment isolating only the exemplar mechanism
+within v20 is future work. What this experiment \emph{does}
+show: the \(W_{076}\) and \(W_{077}\) original cached signals are
+not robust to solver simplification, while \(W_{078}\)'s
+cross-family pattern is. This pattern is consistent with the
+hierarchical-model joint posteriors of Exp~51
+(W078 \(0.76 \gg\) W077 \(0.45 \gg\) W076 \(0.01\)). Cost:
+\(\sim\$10\), \(\sim 12\) min wall. Log:
+\texttt{phase four/autonomous/exp52\_pool\_separation\_log.json}.
+
+\subsection{Experiment 53 --- Scaling to \(n=100\) fresh pids
+(addresses the underpower concern directly: ``does the headline survive
+larger \(n\)?'' --- a clean null at \(n=100\))}
+\label{sec:exp53}
+
+\paragraph{Motivation.} The Anticipated reviewer concern consistently flags
+Exp~47's \(n=30\) as underpowered. A natural follow-up question was:
+``If Exp 47 were repeated with \(n \ge 100\) fresh pids and the
+stricter \(0.60\) L1 threshold, would the claimed `2/3 original
+KEEPs replicate' still hold? This is the single most important
+empirical question for the paper's revised headline.'' This
+experiment answers that directly.
+
+\paragraph{Protocol.} Identical to Exp~47, scaled up:
+\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=2pt]
+  \item 100 fresh pids sampled at \texttt{seed=2027} disjoint
+    from \texttt{sample\_100}, \texttt{sample\_holdout\_50},
+    \texttt{sample\_extend\_50} \emph{and} from Exp~47's 30 fresh
+    pids. Same domain mix.
+  \item Same 12 original candidates held fixed.
+  \item Same simpler Exp~47-style solver --- frame, then execute
+    on the rewritten problem with a single wisdom block, with
+    \emph{no in-pool exemplar retrieval}. This differs from the
+    original v20 inner-loop solver, which retrieves a same-domain
+    exemplar from the evaluation pool's other pids. The result is
+    therefore a fresh-data evaluation \emph{under the corrected
+    no-exemplar protocol}, not under the original v20+exemplar
+    protocol. We use the corrected protocol because the
+    in-pool-exemplar mechanism is itself the audit-stack concern
+    (\S\ref{sec:exp52}); rerunning Exp~53 under the original v20
+    pipeline is logged as a follow-up in Limitations.
+  \item Same frozen thresholds:
+    \(\theta_{\mathrm{inner}} \geq 0.60\) (gemini-3-flash) and
+    \(\theta_{\mathrm{L1}} \geq 0.55\) (claude-haiku-4.5).
+  \item Total: 2700 cheap-tier API calls, \({\sim}\$15\),
+    \({\sim}\)80 min wall.
+\end{itemize}
+
+\paragraph{Result --- the differentiated finding does not survive
+\(n=100\).}
+
+\begin{center}\small
+\begin{tabular}{l c c c c c}
+  \toprule
+  & \multicolumn{2}{c}{Exp~47 (n=30)} & \multicolumn{2}{c}{Exp~53 (n=100)} \\
+  \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+  Candidate & wr\_inner & wr\_L1 & wr\_inner & wr\_L1 \\
+  \midrule
+  WCAND01 (上工治未病)    & 0.55 & ---  & 0.34 & --- \\
+  WCAND02                 & 0.45 & ---  & 0.44 & --- \\
+  \textbf{WCAND03} (recovered) & \textbf{0.68} & \textbf{0.57} & 0.49 & 0.54 \\
+  WCAND04                 & 0.48 & ---  & 0.52 & 0.45 \\
+  WCAND05 \(\equiv W_{076}\) & 0.41 & --- & 0.30 & --- \\
+  WCAND06                 & 0.34 & ---  & 0.29 & --- \\
+  WCAND07                 & 0.44 & ---  & 0.40 & --- \\
+  WCAND08                 & 0.54 & ---  & 0.47 & --- \\
+  WCAND09                 & 0.43 & ---  & 0.39 & --- \\
+  \textbf{WCAND10} \(\equiv W_{077}\) & \textbf{0.66} & \textbf{0.57} & 0.51 & 0.48 \\
+  WCAND11                 & 0.25 & ---  & 0.25 & --- \\
+  \textbf{WCROSSL01} \(\equiv W_{078}\) & \textbf{0.63} & \textbf{0.71} & 0.49 & --- \\
+  \midrule
+  pass count (inner \(\geq .60\)) & \multicolumn{2}{c}{\textbf{3/12}} & \multicolumn{2}{c}{\textbf{0/12}} \\
+  pass count (joint .60/.55)  & \multicolumn{2}{c}{\textbf{3/12}} & \multicolumn{2}{c}{\textbf{0/12}} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Headline.}
+\textbf{At \(n=100\) under the corrected no-exemplar protocol,
+no candidate clears the inner-loop \(+10\)pp gate, and no
+candidate satisfies the joint preregistered rule under either
+threshold policy (\(0/12\) at \(0.60\)/\(0.55\); \(0/12\) at
+\(0.60\)/\(0.60\)).} The Exp~47 ``\(3/12\) cross both gates as
+point estimates'' result was a small-\(n\) artefact: each of
+W077, W078, and WCAND03 drops back to \(0.49\)--\(0.51\) at
+\(n=100\), well below \(0.60\), and W076 drops further to
+\(0.30\). The L1 verdicts on the \(n=100\) top-3
+(WCAND04 \(0.45\), WCAND10 \(0.48\), WCAND03 \(0.54\)) are also
+all below the preregistered \(0.55\) replication threshold.
+
+\noindent\emph{Solver-protocol caveat.} Strictly, this is a fresh
+\(n=100\) replication of the gate decision \emph{under the
+no-exemplar evaluation protocol}, not under the original
+v20+exemplar pipeline that produced the cached signal. The
+no-exemplar protocol is the corrected protocol per the
+pool-separation concern (\S\ref{sec:exp52}); under the original
+v20 pipeline, in-pool exemplars contribute substantially to the
+cached signal (Exp~52 shows W076 wr drops from 0.44 to 0.24, W077
+from 0.49 to 0.42 without exemplars on the same pids). A
+\(n=100\) fresh evaluation under the original v20+exemplar
+pipeline would be a useful follow-up; we expect that, given the
+exemplar mechanism's effect size from Exp~52, it could push wr
+back closer to but not above \(0.60\) for some candidates ---
+this is a hypothesis we cannot resolve without the run.
+
+\paragraph{Implications.}
+\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=2pt]
+  \item The Exp~47 differentiated finding (W076 collapses,
+    W077/W078 recover) does \emph{not} survive scaling. Exp~53
+    is the answer to ``what happens at \(n=100\)?'' and the
+    answer is a clean null.
+  \item The Exp~51 hierarchical posteriors had already given
+    moderate (W077, 0.45) to strong (W078, 0.76) probability of
+    clearing the joint preregistered rule; Exp~53's empirical
+    result at \(n=100\) is consistent with the lower end of those
+    posteriors and falsifies the higher end. The Bayesian model
+    used the small-\(n\) data and could not anticipate the
+    regression-to-mean visible at larger \(n\).
+  \item The honest revised headline is: \emph{across the full
+    audit stack --- cached audit panel (\(0/3\) clear 0.60),
+    selection-bias modelling (drops consistent with
+    regression-to-mean), pool-separation (Exp~52: W076 / W077
+    drop further without in-pool exemplars), and \(n=100\) fresh
+    data with frozen thresholds (\(0/12\)) --- the inner-loop's
+    same-family +10pp gate decisions do not survive
+    larger-\(n=100\) fresh-data replication.}
+  \item The audit stack works as designed: at \(n=30\) the
+    audit-stack labels (W076 collapse vs W077/W078 recover) were
+    threshold-sensitive and underpowered; at \(n=100\), the
+    audit stack converges on the same null that the cached panel
+    suggested. This is consistent with the methodology's claim
+    that the cached cross-family audit was probative even at
+    small \(n\).
+\end{itemize}
+Cost: \(\sim\$15\), \(\sim 80\) min wall. Log:
+\texttt{phase four/autonomous/exp53\_n100\_fresh\_audit\_log.json}.
+
+\subsection{Experiment 54 --- The same \(n=100\) fresh evaluation
+\emph{with} same-domain exemplars: closing the protocol-mismatch
+ambiguity}
+\label{sec:exp54}
+
+\paragraph{Motivation.} Exp~53 used a no-exemplar solver; the
+original cached signal was generated with v20's same-domain
+in-pool exemplar mechanism. A natural objection: maybe the
+\(0/12\) at \(n=100\) is an artefact of removing exemplars, and
+the gate would replicate under the original v20 pipeline. This
+experiment regenerates base + ext on the same 100 fresh pids
+\emph{with} a same-domain in-pool exemplar block, mirroring v20's
+mechanism but using base answers from a pass-1 generation as the
+exemplar text (so the same-domain exemplar is dynamic, drawn
+from the fresh pool itself).
+
+\paragraph{Result --- exemplar mechanism boosts wr but not enough.}
+
+\begin{center}\small
+\begin{tabular}{l c c c c}
+  \toprule
+  Candidate & wr (Exp~53, no ex) & wr (Exp~54, +ex) & \(\Delta\) & exemplar effect \\
+  \midrule
+  WCAND01 & 0.34 & 0.52 & \(+0.18\) & large \\
+  WCAND02 & 0.44 & 0.56 & \(+0.12\) & large \\
+  WCAND03 & 0.49 & 0.49 & \(\phantom{+}0.00\) & none \\
+  WCAND04 & 0.53 & 0.59 & \(+0.07\) & moderate \\
+  WCAND05 (\(W_{076}\)) & 0.30 & 0.48 & \(+0.18\) & \textbf{very large} \\
+  WCAND06 & 0.29 & 0.46 & \(+0.17\) & large \\
+  WCAND07 & 0.40 & 0.51 & \(+0.11\) & large \\
+  WCAND08 & 0.47 & 0.47 & \(+0.01\) & none \\
+  WCAND09 & 0.39 & 0.52 & \(+0.13\) & large \\
+  WCAND10 (\(W_{077}\)) & 0.51 & 0.57 & \(+0.06\) & moderate \\
+  WCAND11 & 0.25 & 0.33 & \(+0.09\) & moderate \\
+  WCROSSL01 (\(W_{078}\)) & 0.49 & 0.49 & \(+0.00\) & none \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The same-domain exemplar systematically adds
+\(\sim 0.06\)--\(0.18\) pp to wr\_inner across most candidates;
+the exception is W078, WCAND03, and WCAND08, whose wr is
+unchanged. \emph{Even with the exemplar boost, no candidate clears
+the \(0.60\) inner gate}: top is WCAND04 at \(0.591\), then
+WCAND10 (W077) at \(0.574\). L1 verdicts on the top-3 give
+WCAND02 \(0.40\), WCAND04 \(0.49\), and \emph{WCAND10
+\(\mathbf{0.61}\)} --- the L1 cross-family judge actually rates
+W077's exemplar-augmented answers above \(0.60\), while the
+inner gemini judge does not. The joint preregistered rule
+\(\{\theta_{\text{inner}} \geq 0.60 \cap \theta_{\text{L1}} \geq
+0.55\}\) is satisfied by \emph{zero} candidates.
+
+\paragraph{Reading.} The original cached signal of \(0.60\)--\(0.64\)
+was the sum of: (a) the same-domain exemplar boost
+(\({\sim}+0.10\)--\(0.20\) pp uniform across most candidates),
+(b) selection bias from picking top-3-of-12 on noisy \(n=50\)
+measurements, and (c) small-sample variance. Removing any one of
+these three components collapses the apparent gain below the
+\(+10\)pp gate. The two candidates whose wr is unchanged by the
+exemplar mechanism (W078, WCAND03) are the ones whose original
+``signal'' was driven by selection bias plus noise; W076's
+``signal'' was almost entirely an exemplar-mechanism artefact.
+\textbf{The protocol-mismatch concern is closed in the negative
+direction: even under the original v20-style exemplar pipeline at
+\(n=100\), \(0/12\) candidates clear the joint preregistered
+rule.} Cost: \(\sim\$20\), \(\sim 90\) min wall. Log:
+\texttt{phase four/autonomous/exp54\_n100\_v20style\_exemplar\_log.json}.
 
 \subsection{Experiments 12–14 — Three architectural probes (not
 gate-tuning): fragmentation, conditional-activator, citation}
@@ -3613,6 +4551,137 @@ a tie. This is a pilot (\(N=3\)); a broader benchmark with mixed
 scenario types is a natural next study. Full harness, scenarios, and
 verdicts in Appendix~\ref{app:multistep}.
 
+\section{Five-Stage Roadmap to a Self-Hypothesizing,
+Self-Validating Agent}
+\label{sec:roadmap}
+
+The empirical null in \S\ref{sec:experiments} is not just ``one
+loop did not work.'' It is a calibrated diagnostic of \emph{what
+is missing} from current LLM-as-judge self-improvement loops.
+This section sketches the architecture our null points toward.
+We describe it as five sequential stages so that each can be
+built and validated incrementally; each stage's output is the
+next stage's known-reliable component.
+
+\paragraph{Stage 0 --- The methodological-prior library.}
+The first thing missing is the equivalent of human education.
+Human researchers do not re-discover ``control of variables''
+from scratch every time; they were taught it, and they apply it
+when conditions warrant. A self-hypothesizing agent should start
+with 15--20 such priors --- divide-and-conquer, Occam's razor,
+``before arguing get the facts,'' analogy from a known case,
+counterexample search, dimensional analysis, increment-one-thing
+debugging, etc. --- each annotated with applicability conditions
+and historical examples. The current paper's wisdom library
+(\(75\) entries from the classical Chinese tradition) is one
+draft of this; a serious version would extend across cultures
+and add applicability conditions an LLM can pattern-match
+against. Stage 0 alone is not an agent; it is a substrate.
+
+\paragraph{Stage 0.5 --- A cheap world model for hypothesis
+testing.} The recursive hypothesis-test loop is unusable if every
+test costs hours of real execution. The agent needs a world
+model in which a candidate solution can be \emph{simulated} fast
+enough that the search can branch. This is the role current
+LLM-agent stacks try to play with chain-of-thought + tool use,
+but those stacks are not calibrated as predictors of execution
+outcomes; they are calibrated as plausibility generators. A
+proper world model is task-specific (a code-execution simulator
+for code tasks; a fluid-dynamics simulator for engineering
+tasks; a learned dynamics model for embodied tasks) and predicts
+``if I take action \(a\) in state \(s\), the next observation
+will be \(o\) with probability \(p\).'' Without this, the
+recursion's \emph{wall clock} is the verification bottleneck.
+
+\paragraph{Stage 1 --- A scheduler that maps problems to priors.}
+With Stage 0 as priors and Stage 0.5 as fast simulator, the
+agent needs to learn \emph{which} prior to invoke when. This is
+classic meta-RL on an action space whose actions are
+``invoke prior \(p_i\) on subproblem \(s\).'' Recent work
+(ReMA (Wan et al., 2025), Memory-R1 (Yan et al., 2025),
+EvolveR (Wang et al., 2025)) has built proxies for this in
+narrow domains. None pairs an explicit human-prior library with
+an explicit scheduler; doing so is the cheapest known way to
+inject the millennia of accumulated human methodology without
+re-deriving it from scratch.
+
+\paragraph{Stage 2 --- Experience feedback refines the priors'
+applicability conditions.} As the scheduler runs, it accumulates
+data on \emph{when} each prior fires successfully and when it
+fails. ``Control of variables fails when components are tightly
+coupled.'' ``Divide-and-conquer fails on problems where the
+sub-tasks share a hidden constraint.'' These applicability
+conditions are partly known to humans but rarely written down
+formally; the agent's job at Stage 2 is to discover and tighten
+them by gradient feedback from real outcomes. Recent work on
+metacognitive and meta-experience learning (MEL
+(Liang et al., 2026), lifelong-learning agent surveys
+(Liu et al., 2025)) has built half of this; the other half
+is the alignment layer below.
+
+\paragraph{Stage 3 --- Alignment of priors via category theory and
+information geometry.} Stages 0--2 produce a library of priors,
+each annotated with applicability conditions. As the library
+grows the agent will independently rediscover priors that are
+formally equivalent but stylistically different. Le Chatelier
+and Lenz, RC discharge and radioactive decay, logistic growth
+and saturating enzyme kinetics --- pairwise, these share a
+formal structure (an isomorphism in a Markov category, a
+Blackwell-equivalent statistical experiment) even though their
+surface descriptions look unrelated. A formal alignment layer
+detects these equivalences and merges the descriptions, so a
+prior validated in one domain can be transferred to another.
+This is where category-theoretic probability
+(Fritz, 2020) and information geometry
+(Ay et al., 2017) earn their keep, even though they cannot
+do the earlier stages' work.
+
+\paragraph{Stage 4 --- Generation of \emph{new} priors, validated
+by the rest of the architecture.} Once the agent has Stages
+0--3, it can recognise problems for which no existing prior
+applies. At that point the LLM's generative capacity proposes a
+\emph{new} candidate prior; the alignment layer (Stage 3) checks
+that it is not formally equivalent to an existing one; the
+scheduler (Stage 1) tries to apply it on a battery of test
+problems through the world model (Stage 0.5); the experience
+feedback (Stage 2) refines its applicability conditions. The
+prior is committed only when the entire stack agrees. This is
+the version of self-improvement that was the original target.
+
+\paragraph{Where this paper sits.}
+This paper is a calibrated study of \emph{what happens when you
+try to skip stages 0.5 through 4}. We have a draft of Stage 0
+(the wisdom library), no Stage 0.5, no Stage 1 scheduler beyond
+``test the candidate by A/B,'' no Stage 2 experience feedback,
+no Stage 3 alignment, and no Stage 4. The naive loop's
+validation step (Stage 1's degenerate placeholder, a same-family
+\(+10\)pp A/B at \(n=50\)) is exactly the brittle point: it
+conflates selection bias, judge stylistic preference, exemplar
+contamination, and small-sample noise into one number. Our null
+is a quantitative argument that the missing pieces are not
+optional polish but load-bearing architecture.
+
+\paragraph{Comparison to closely related work.}
+\textbf{POPPER} (Huang et al., 2025) validates natural-language
+hypotheses with Type-I error control --- it is a Stage 1
+validator without Stages 0/2/3/4, and it has shown the same
+recurring weakness: the validator's null is only as strong as
+the language model's coverage of failure modes. \textbf{EvolveR}
+(Wang et al., 2025) runs the cycle ``act \(\to\) distil
+strategic principles \(\to\) reuse'' --- this is Stage 0+2
+without explicit human priors, and as our null suggests, it
+re-discovers slowly because it lacks the inductive bias humans
+already wrote down. \textbf{ReMA}, \textbf{Reflexion}, and
+\textbf{Voyager} are partial Stage 1+2 implementations on narrow
+task distributions; they confirm the recursion is implementable
+but do not provide the priors or the alignment layer. The
+Bayesian/categorical foundations (Perrone, 2024; Fritz, 2020;
+Ay et al., 2017) are Stage 3 in the absence of
+the rest of the architecture --- they are exactly the part that
+cannot stand alone, but is essential when the rest exists. Our
+contribution is the diagnostic that combines these into a single
+roadmap.
+
 \section{Discussion}
 \label{sec:discussion}
 
@@ -3741,8 +4810,11 @@ than leave them to footnotes.
     bounding threshold-hindsight; layer-selection hindsight is
     bounded only to the extent that each layer responded to an
     external objection rather than a desired conclusion. A truly
-    pre-registered application of the stack to a fresh loop is
-    the strongest available correction and is future work.
+    pre-registered application of the stack to a freshly-run
+    candidate-generation loop (i.e.\ rerunning candidate
+    generation, distillation, and pruning on fresh data, then
+    auditing the new KEEPs) is the strongest available correction
+    and is future work.
   \item \textbf{Solver-family scope (partially closed by Exp~40).}
     The original 12 inner-loop candidates were all judged on
     gemini-solved answers. Exp~40 (\S\ref{sec:exp40}) re-runs the
@@ -3776,8 +4848,10 @@ than leave them to footnotes.
     Exp~41 (\S\ref{sec:exp41}) shows gpt-5.5 (a stronger
     non-panel rater under structured 4-dim Likert) prefers base
     over ext on all three KEEPs; Exp~32 + Exp~42
-    (\S\ref{sec:exp42}) show all three KEEPs harm GSM8K
-    objective accuracy by \(1\)--\(2\) problems out of 30. An
+    (\S\ref{sec:exp42}) show all three KEEPs give a small
+    negative point estimate on GSM8K objective accuracy
+    (\(1\)--\(2\) problems out of 30, direction uniform but not
+    individually McNemar-significant at this \(n\)). An
     actual human study with \(n \geq 30\) raters across at
     least two demographic backgrounds remains future work, but
     the alternative explanation (``audit panel is wrong; original
@@ -3875,10 +4949,12 @@ library; \(0/6\) English wisdoms clear wr \(\geq 0.60\) under any
 single family across two independent runs, and all 3-family means
 sit below \(0.50\). We report this as one further language loop,
 not as cross-lingual generality. GSM8K (Exp~32) is included as a closed-form English
-portability probe, not as a representative test, and the
-\(W_{078}\) harms-accuracy finding there should be read as
-``the wisdom does not transfer out of the Chinese open-ended
-scaffold.'' A full English replication of the closed loop (English
+portability probe, not as a representative test; the small
+negative point estimate on \(W_{078}\) GSM8K accuracy there
+(29/30 vs 30/30, not significant by McNemar) should be read as
+``the wisdom does not appear to transfer out of the Chinese
+open-ended scaffold,'' not as confident harm. A full English
+replication of the closed loop (English
 proposers, English wisdoms, English gate, English audit) remains
 future work.
 
@@ -3942,32 +5018,56 @@ rhetorical patterns.
 \section{Conclusion}
 \label{sec:conclusion}
 
-We set out to build the simplest fully-logged closed-loop agent
-that \emph{proposes} wisdom, \emph{validates} it, \emph{prunes}
-what stops being used, and \emph{imports} what a stronger
-cross-model generator sees but the solver misses. We did build it,
-and its inner loop works as specified: three new active wisdoms,
-nineteen retired, \(3/12\) candidates KEPT by a strict \(+10\)pp
-A/B gate, every decision traceable to its evidence.
+We started from a long-standing target: an agent that
+\emph{proposes hypotheses about how to solve a problem and then
+validates them recursively}, the way humans do every day. The
+field's current proxy --- LLM-as-judge with same-family A/B
+gating --- imitates the surface form of this loop without any of
+the substance. To find out what is actually missing, we built
+the simplest possible instance: an autonomous Chinese
+``wisdom-library'' agent whose validator is a same-family
+\(+10\)pp test on \(n=50\) held-out problems, and we audited
+the result the way the rest of the architecture would audit it
+if it existed.
 
-We then ran the cheapest available falsification on our own
-result: re-judging the identical answer pairs with a
-disjoint-family judge. \emph{All three KEEPs flipped}, and the
-agent's pre-committed self-rebuttal step had named this exact
-failure mode first.
+The instance fails. The validator accepts \(3/12\) candidates;
+zero of those clear cross-family re-judgment on the cached
+pairs. The cached drops are statistically consistent with
+top-3-of-12 winner's curse on noisy \(n=50\) selections. A
+preregistered fresh-data evaluation at \(n=30\) gave a fleeting
+\(3/12\) that hierarchical Bayes already labelled
+weak-to-moderate; a follow-up at \(n=100\), with and without the
+solver's same-domain exemplar mechanism, returned \(0/12\) under
+both protocols. The cached signal decomposes cleanly into
+``in-pool exemplar boost \(\sim +0.10\)--\(0.20\) pp'' plus
+``selection bias on top-3-of-12''; neither component is the
+candidate's own utility.
 
-The state of the loop and the state of the audit are both fully
-documented (\(9/12\) rejections, disjoint evidence sources, every
-decision logged with evidence). The substantive finding is that
-this fully-logged loop with a same-family gate produces KEEPs
-that do not transport to a different-family re-judgment. The
-recommendation we draw, scoped to this single-loop case study, is
-that cross-family re-judgment be reported as a default audit item
-for retrieval-level self-improvement claims of this form, and
-that a same-family $+N$pp on $n=50$ be reported as preliminary
-until cross-family re-judgment confirms the direction. Whether
-this generalises to other classes of self-improvement claim is an
-empirical question we do not settle here.
+That null is informative. It says that a same-family A/B at
+\(n=50\) is the worst possible self-validator because it folds
+selection bias, judge stylistic preference, exemplar
+contamination, and small-sample noise into one number. Better
+audits cannot fix that --- they can only diagnose it, which is
+what ours did. The fix is the rest of the architecture
+(\S\ref{sec:roadmap}): a library of human-distilled
+methodological priors so the agent does not re-derive
+``increment one component at a time'' from scratch; a cheap
+world model so testing a hypothesis costs seconds rather than
+hours; a learned scheduler so the priors apply where they
+should; and a formal alignment layer so insights generalise
+across domains. None of these is optional.
+
+Concretely, we recommend that any future paper proposing
+retrieval-level self-improvement should report, jointly: (i)
+cross-family re-judgment, (ii) a selection-bias model on the
+candidate ranking, (iii) a preregistered fresh-data evaluation
+at \(n \geq 100\) under the original solver protocol, (iv) a
+hierarchical Bayesian posterior on the exact decision rule, and
+(v) a pool-separation sensitivity analysis. These five together
+are cheap; we ran them all on \({\sim}\$80\) of API spend. They
+will not save a broken loop, but they will tell you, calibrated,
+exactly which piece of the architecture you cannot get away
+without.
 
 \paragraph{Reproducibility.} All code
 (\texttt{wisdom\_registry.py}, \texttt{success\_distiller.py},

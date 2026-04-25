@@ -1,5 +1,228 @@
 # 阶段四：新假设生成——完整开发文档 (v1)
 
+---
+
+## 🏁 2026-04-23 v16 里程碑回看
+
+**写于**: v16 架构验证完成后。**这是整个项目的终极目标**——让 AI 在已有框架不够时提出新方法论假设并自我验证。
+
+### 原意 → v16 实际覆盖
+
+**原设计的 4 个核心模块**:
+1. 策略空白检测 (gap_detector) — 识别 KB 覆盖不到的问题
+2. 候选策略生成 (hypothesis_generator) — LLM 生成新策略候选
+3. 形式化一致性检验 — 确保新策略与已有不矛盾
+4. 经验验证协议 — 在任务上测试新策略的价值
+
+**v16 对这 4 个模块的覆盖度：**
+
+| 原模块 | v16 对应 | 覆盖度 |
+|---|---|---|
+| gap_detector | ❌ 没做（v16 无"所有策略都失败"的信号检测） | 0% |
+| hypothesis_generator | ✅ **部分**: v13/v16 的 audit 层是 micro-version（提出 1-2 个"草稿没应用的 prior"作为新假设） | ~20% |
+| 形式化一致性检验 | ❌ 没做（Phase 3 形式化本身没做） | 0% |
+| 经验验证协议 | 🟡 已有评估框架（A/B judge）可支持，但缺**自动回流**机制 | ~30% |
+
+**v16 离"终极目标"还很远**。它实现的只是**单问题内的微型版本**。
+
+### v16 audit-revise 作为 micro-hypothesis-generation
+
+**原设想**:
+```
+KB 所有策略失败 → LLM 提出新 meta-strategy → 验证 → 纳入 KB
+(跨问题 + 跨策略 + 无限递归)
+```
+
+**v16 实际**:
+```
+问题 P → Turn 1 draft → Turn 2 audit: "哪条 prior 没真用？"
+→ 识别 1-2 个遗漏 → integrate into revised answer
+(单问题 + 已有 prior 范围 + 1 次迭代)
+```
+
+这是原目标的**极度简化版**——相同的 recursive pattern，但深度只有 1，宽度只有 1-2 个 blindspot。
+
+### 用户在 Claude.md 中的原愿景 (回顾)
+
+> "我想要的是一个能在已有哲学框架不足时提出新方法论假设并自我验证的 AI 系统。"
+
+**v16 在这条路上的进展位置：**
+- ✅ 单问题内的反思-改写 (audit pass)
+- 🟡 跨问题的经验提取（v6 的 mine_v5_losses 做了一次）
+- ❌ 策略空白检测（不知道什么时候"已有哲学不够"）
+- ❌ 生成跨 domain 通用的新 meta-strategy
+- ❌ 自动纳入 KB 并在后续使用
+- ❌ 递归式无限深度
+
+### 仍未做到的原意（核心 gaps）
+
+1. **Gap detection**: 如何从"多个问题都失败"识别到"缺少某类 strategy"？  
+   - 原设计: 调度器的 top-K 置信度都低 + 执行失败 → flag
+   - v16 无调度器无 confidence，没法识别
+
+2. **Hypothesis 生成 ≠ 答案生成**: v16 的 audit 生成的是"修订后的答案"，不是新的 meta-strategy  
+   - 原设计: 从失败中抽 出"我现在 miss 的是什么 orientation"  
+   - v16: 从失败中抽出"本题漏用的是什么 existing orientation"  
+   - **缺了一层：从"已有不够"跳到"需要新的"**
+
+3. **Novelty 验证**: 新策略和已有 wisdom library 的 overlap 检测没做
+
+4. **自动回流**: v6 的 141 new triggers 手动做了一次，没有自动触发机制
+
+5. **递归深度**: v16 只有 2-turn (draft + audit)，没有 "audit revised again, audit again..." 的递归循环
+
+### 与用户最新讨论的连接
+
+用户在这轮对话中提过**"递归式的循环提出假设到论证假设，也许本来就该发生在 reasoning/thinking 层"** （见 `world_model_thinking_layer.md`）。
+
+这意味着**Phase 4 的原设计可能方向错了**：
+- 原设计: **外部搭建 gap_detector + hypothesis_generator + validator** (工程化架构)
+- 更接近目标的可能路径: **让 LLM 的 thinking tokens 自己做递归假设生成** (依赖模型能力)
+
+如果后者正确，Phase 4 的大部分工程模块可能是多余的——真正要做的是：
+- 优化 prompt 让 thinking tokens 自己展开 hypothesis loop
+- 或等更强 reasoning models (o3/o4/o5) 把这件事内化
+
+### 用户 2026-04-23 的核心 framing: **Phase 4 = Residual Chaos → Paradigm Shift**
+
+用户原话:
+> "这和 MC-WM 那个项目最开始的设想一样——总有目前哲学框架无法解释的 **residual chaos**（在 MC-WM 里叫做 aleatoric uncertainty）。把这些 aleatoric uncertainty/chaos 积攒起来，里面可能蕴含一个全新的哲学观点。例如一个科学家算来算去那个量比理论少了，于是他大胆认为理论错了，结果新理论的确更完美解释了实验数据——这就是提出了新的假设并自我论证。"
+
+这**彻底重定义了 Phase 4 的路径**，和原 dev doc 的工程化架构（gap_detector + hypothesis_generator + consistency_checker）**本质不同**。
+
+### Popperian paradigm shift 的机制（人类科学史上验证过上百次）
+
+经典例子:
+- **Mercury 近日点进动**: Newton 力学算的 vs 观测的差 43″/century → Einstein GR 诞生
+- **Michelson-Morley 实验**: 预期的 ether velocity 测不到 → 相对论
+- **黑体辐射紫外灾难**: 经典物理发散 → Planck 量子假设
+- **原子光谱离散**: Rutherford 模型预测连续谱 → Bohr 模型
+- **Kuhn 的范式转换**: 异常累积到临界点 → 旧范式无法包容 → 新范式诞生
+
+**共同模式**:
+```
+theory T → predicts X
+observe actual outcome Y
+residual = Y - X
+if residual is RANDOM → T is fine
+if residual is SYSTEMATIC → T has missing component
+  → propose T' that explains residual + preserves T's previous successes
+  → T' 是新哲学假设
+```
+
+### 和 MC-WM aleatoric uncertainty 的对偶
+
+MC-WM 的核心区分:
+- **Epistemic uncertainty** = 数据不够（可 reducible）
+- **Aleatoric uncertainty** = 世界本身的随机性（irreducible）
+
+**关键 insight**（用户点出）:
+> "aleatoric" 里往往**不是纯随机**，而是**当前 theory 覆盖不了的 structure**。系统地积累它，就能发现新 theory。
+
+在 assumption-agent 框架下的对应:
+- **Epistemic residual** = 现有 wisdom library 没找全的 orientation（wisdom 不够多）
+- **Aleatoric residual** = 即使 library 全了，也有一些 "wisdom 解释不了的失败 pattern"（wisdom 的表征形式不够）
+
+**Phase 4 真正的任务**: 不是"当所有 wisdom 都失败时生成新的"，而是**从系统性 residual 中提炼新的哲学视角**。
+
+### Phase 4 v2 设计: Residual-Driven Paradigm Shift Pipeline
+
+**Stage 1 — Residual 收集**:
+```python
+for problem in all_attempted_problems:
+    # 每个问题都有 "wisdom-guided answer" 和 "baseline answer"
+    # residual = judge's reasoning for which wisdom failed to help
+    # 不是看 win/lose，而是看"wisdom 预测 LLM 会这样答、LLM 实际那样答"的 gap
+    residuals[problem] = extract_residual(
+        wisdom_selected, draft_answer, baseline_answer, judge_reasoning
+    )
+```
+
+**Stage 2 — Pattern Detection (关键步骤)**:
+对 residuals 做 clustering / embedding:
+- 如果分布均匀随机 → epistemic，只需扩 library
+- 如果某些 cluster 集中 → **发现了 systematic bias** = aleatoric-structure
+
+具体算法（LLM-native，不需要训小模型）:
+```
+1. 取过去 200 题中 wisdom 明显没帮上的 50 题
+2. 让 GPT-5.4 读全部 50 题 + 各自的 (selected_wisdom, draft_answer, 为什么没帮上)
+3. Prompt: "这 50 个失败里，有没有一个共有的 missing orientation，
+   现有 75 条 wisdom library 里没覆盖？"
+4. 如果 GPT 能提炼出 3-5 条 candidate new wisdom → 进 Stage 3
+5. 如果 GPT 说"没有系统 pattern，只是偶发失败" → 跳过，继续收集
+```
+
+**Stage 3 — 新 wisdom 验证（关键：self-consistency）**:
+```
+1. 新 wisdom W_new 加入 library
+2. 在没有用过的 held-out 问题上测试:
+   - 用 v16 架构（cases + audit）跑一次
+   - 比较 with W_new vs without W_new
+3. 如果 with W_new 在目标 cluster 上 > +5pp → KEEP
+4. 否则 REVERT
+```
+
+这**就是"提出新假设 + 自我论证"**。和用户描述的"那个科学家算来算去"完全同构:
+- 科学家: 累积观测数据 → 发现 residual → 提新理论 → 新理论解释 residual + 保留旧成功 → KEEP
+- Phase 4 v2: 累积 problem-solving failures → 发现 residual cluster → GPT 提新 wisdom → 新 wisdom 在 held-out 上 >+5pp → KEEP
+
+### 和 v16 的 audit 层不同在哪
+
+v16 audit 是**单问题内**的 "Turn 1 draft → Turn 2 audit"。审查范围是 existing wisdom。
+
+Phase 4 residual-driven 是**跨问题**的 "all failures → common missing orientation"。审查范围**超出** existing wisdom。
+
+这两者互补:
+- v16 audit = 单次推理的 local refinement
+- Phase 4 residual → paradigm shift = 跨推理的 global framework update
+
+### 与原 dev doc 的关系
+
+原 dev doc §0.3 的 4 目标:
+1. 策略空白检测 → **被 residual clustering 替代**（更 principled）
+2. 候选策略生成 → **被 GPT-5.4 从 residual 归纳替代**
+3. 形式化一致性检验 → **被 held-out empirical 验证替代**
+4. 经验验证协议 → **保留，且更清晰**（A/B on held-out）
+5. 知识库集成 → **保留，标准 wisdom library append**
+
+**原设计的大方向对了，细节机制都可以用 v16 的路径替换**。
+
+### 仍未做到的原意（Phase 4 的真 gap）
+
+即使引入 residual-driven pipeline:
+
+1. ❌ **Residual 收集架构**: 我们目前只有 A/B 判决 (win/lose)，不记录 residual text。需要 judge 的 reasoning 存档 + 可分析
+2. ❌ **长期 corpus 积累**: 100 题太少，residual pattern 不够 dense。需要 n=500+ 才能聚类出真 pattern
+3. ❌ **"新 wisdom 不与已有矛盾"的自动检测**: 原设计的 consistency checker 没做（虽然 v16 的 diverse exemplar mining 间接在做）
+4. ❌ **递归深度**: v16 只做 2-turn。用户原愿景里的"递归"意味着 meta-wisdom（wisdom about wisdom），还没碰
+
+### 启示
+
+**用户这个 framing 是对 Phase 4 的根本性重新定位**。从"工程化 hypothesis generator"到**"residual-driven paradigm shift mimicking 科学史"**。
+
+这也解释了为什么 v16 的 audit 不够——它只做了 local paradigm correction，没做 **across-problem residual accumulation + new paradigm proposal**。
+
+**v16 artifact 索引**:
+- 单问题 audit: `phase2_v13_reflect_framework.py`, `phase2_v16_cases_reflect.py`
+- 跨问题 residual 分析（需要新建）: 应该做 `phase 4/residual_analyzer.py` 读取 judgments + answers 差异
+- MC-WM 参考: 用户另一个项目 `/home/erzhu419/mine_code/MC-WM/` 的 aleatoric uncertainty 处理
+- 理论: Popper *Logic of Scientific Discovery* + Kuhn *Structure of Scientific Revolutions*
+
+**Phase 4 v2 MVP 的下一步**（如果要做）:
+1. 把所有 existing judgment 文件里 `reasoning` 字段 extract 成 corpus
+2. 筛出 v16 明显没帮上的 ~30-50 例
+3. GPT-5.4 分析：有没有系统性 missing orientation
+4. 如果有 → 提炼 W_76+（新 wisdom）→ 在 held-out 上 A/B 验证
+5. PASS → 正式加入 library，Phase 4 闭环完成一次
+
+**v16 artifact 索引**:
+- Code: `phase2_v13_reflect_framework.py` (micro-audit), `phase2_v16_cases_reflect.py` (cases + audit)
+- 相关讨论: `reflection_wisdom_vs_technique.md`, `world_model_thinking_layer.md`
+- 原愿景: `Claude.md`, `Gemini.md` (recursive hypothesis generation 的哲学 / 数学基础)
+
+---
+
 ## 0. 文档概述
 
 ### 0.1 本阶段在整体架构中的位置
