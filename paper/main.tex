@@ -32,8 +32,8 @@
 
 \title{\textbf{Six Layers of Re-Judgment:}\\
 A Case Study in Auditing a Self-Improving LLM Loop,\\
-and Evidence That a Default Single-Family Gate's Decisions\\
-Do Not Reproduce Under the Audit Stack}
+and a Preregistered Fresh-Loop Replication\\
+Distinguishing Real Replication from Selection Bias}
 
 \author{%
   Anonymous submission\\
@@ -213,11 +213,19 @@ axis we have run, and once across a language switch.
 
 \noindent\textbf{Contribution.} (i)~The six-layer audit stack, each
 layer specified operationally enough to run against any future
-self-improving LLM loop. (ii)~Single-loop evidence that on the specific Chinese open-ended
-setup studied here, the default inner-loop gate is judge-fragile:
-\(3/3\) of its decisions fail to survive cross-family re-judgment
-on identical content. We treat this as falsification of
-robustness, not falsification of the gate's underlying claim.
+self-improving LLM loop. (ii)~Single-loop evidence that on the
+specific Chinese open-ended setup studied here, the default
+inner-loop gate's decisions do not reproduce as point estimates
+under the cached-data audit at the original \(0.60\) threshold;
+but a preregistered fresh-loop replication at the
+preregistration's laxer L1 threshold of \(0.55\) (Exp~47) shows
+\(2/3\) of the original KEEPs do replicate on disjoint fresh
+data, plus one originally-rejected candidate is recovered. The
+audit stack therefore distinguishes \emph{regression-to-mean
+non-reproduction} (W077, W078, which look like selection-bias
+losses on cached data but pass on fresh data) from \emph{real
+non-reproduction} (W076, which collapses to wr \(=0.41\) on fresh
+data, well below parity).
 (iii)~A concrete testbed (code, 21 candidates, 150 answer pairs,
 cross-family logs) on which others can test alternative audit
 designs. (iv)~A partial architectural recovery (trigger-conditioned
@@ -240,16 +248,19 @@ items for any self-improvement claim.
     \(74\%\) baseline. \emph{Evolve}: a four-module orchestrator
     proposes \(12\) candidates; a \(+10\)pp held-out A/B gate
     commits three KEEPs (\(W_{076}, W_{077}, W_{078}\)).
-    \emph{Audit}: each KEEP faces a six-layer audit stack along
-    conditionally-distinct nuisance axes (cross-family judge,
-    side-reseed, \(n{=}50 \to 100\), cross-solver, fresh-domain +
-    GSM8K, non-pair-wr faithfulness); \(0/3\) survive.
-    \emph{Recover?}: a trigger-conditioned gate redesigned on the
-    same \(12\) locally rescues \(4/12\) (tuning-set), but
-    prospectively on \(9\) new candidates scores \(0/9\); combined
-    \(4/21\) sits below the \(30\%\) random-inclusion baseline.
-    \textbf{Final validated library delta on external data: \(+0\).
-    The audit stack itself is the paper's contribution.}}
+    \emph{Audit on cached data}: each KEEP faces a six-layer
+    audit stack (cross-family judge, side-reseed, \(n{=}50\to100\),
+    cross-solver, fresh-domain+GSM8K, non-pair-wr faithfulness);
+    none reach \(\geq\!0.60\) as a point estimate under L1/L3/L5/
+    expensive-judge measurements. \emph{Selection-bias check (Exp~45)}:
+    these L1 drops are statistically consistent with regression-
+    to-mean on top-3-of-12 noisy gate scores. \emph{Preregistered
+    fresh-loop replication (Exp~47)}: under the preregistration's
+    laxer L1 threshold (\(0.55\)) on a disjoint 30-pid split,
+    \(W_{077}\) and \(W_{078}\) both reproduce; \(W_{076}\)
+    collapses (fresh inner wr \(=0.41\)); one originally-rejected
+    candidate is recovered. \textbf{The audit stack distinguishes
+    selection-bias-explainable drops from real non-replication.}}
   \label{fig:overview}
 \end{figure}
 
@@ -338,46 +349,70 @@ distinct failure mode:
 \begin{figure}[t]
   \centering
   \includegraphics[width=0.55\linewidth]{figs/intuition_audit_sieve.png}
-  \caption{The six-layer audit stack as a sieve. The inner loop's
-    held-out \(+10\)pp gate selects \(3/12\) candidates (the committed
-    KEEPs \(W_{076}, W_{077}, W_{078}\)). Each subsequent layer is
-    an independent filter attacking a distinct non-specific source
-    of lift (judge preference, side position, noise, solver
-    interaction, domain, style). \(\mathbf{0}\) candidates exit at
-    the bottom; the final validated library delta is \(+0\).}
+  \caption{The six-layer audit stack as a sieve, on the cached
+    \texttt{sample\_extend\_50} data. The inner loop's held-out
+    \(+10\)pp gate selects \(3/12\) candidates (the committed
+    KEEPs \(W_{076}, W_{077}, W_{078}\)). Each subsequent layer
+    intervenes on a distinct nuisance source of lift (judge
+    preference, side position, noise, solver interaction, domain,
+    style). On the cached data at the strict \(0.60\) threshold,
+    none of the three KEEPs reaches the threshold as a point
+    estimate under any audit layer. \emph{The preregistered fresh-
+    loop replication (Exp~47, not pictured here) is run separately
+    on a disjoint 30-pid split with the preregistration's laxer
+    L1 threshold (\(0.55\)) and recovers \(W_{077}\) and
+    \(W_{078}\); only \(W_{076}\) fails the fresh test.}}
   \label{fig:audit-sieve}
 \end{figure}
 
-\textbf{We report a null result under this audit stack.} The
-inner loop produces \(3/12\) KEEPs (gate-positive at \(n=50\),
-gemini-judged). After the audit: \(\mathbf{0/3}\) KEEPs
-clear the \(0.60\) gate as a point estimate under L1, L3, L5, or
-the expensive-judge audit (Fig.~\ref{fig:audit-sieve}); the cross-
-solver layer (L4 / Exp~40) is the one exception, where some
-single-judge cells exceed \(0.60\) but no (KEEP, solver) reaches
-3-family consensus. Final validated library delta under the inner-
-loop gate's own threshold: \(\boxed{+0}\). Our contributions are:
+\textbf{We report a differentiated result.} The inner loop
+produces \(3/12\) KEEPs (gate-positive at \(n=50\), gemini-judged).
+On the cached data, \(\mathbf{0/3}\) KEEPs clear the \(0.60\)
+threshold as a point estimate under L1, L3, L5, or the
+expensive-judge audit (Fig.~\ref{fig:audit-sieve}). The cross-
+solver layer (Exp~40) is one exception (\(7/18\) cells single-
+judge \(\geq 0.60\), but \(0/6\) under 3-family consensus). The
+\emph{preregistered fresh-loop replication} (Exp~47) is the
+strongest test: under the preregistration's laxer L1 threshold
+(\(0.55\)), \(W_{077}\) and \(W_{078}\) reproduce and one
+originally-rejected candidate (WCAND03) is recovered;
+\(W_{076}\) collapses to \(\mathrm{wr} = 0.41\), well below
+parity. Final library delta on the cached data at the
+\(\geq\!0.60\) threshold: \(\boxed{+0}\); on the preregistered
+fresh-loop test at the \(\geq\!0.55\) threshold: \(\boxed{+3}\)
+(W077, W078, WCAND03). Our contributions are:
 
 \paragraph{Contribution 1 — The six-layer audit stack (primary).} We
 specify each layer operationally enough to run against any future
 self-improving LLM loop. Each layer is both (i)~cheap to compute on
 top of an existing inner-loop artifact and (ii)~capable of
 independently destabilising a KEEP decision the inner-loop gate
-treated as confirmed. Cross-family re-judgment (L1) alone moves
-\(3/3\) of our loop's KEEPs from above to below the gate's own
-\(+10\)pp threshold on identical content; we read this as
-judge-fragility of the verdict, not as direct falsification.
+treated as confirmed. Cross-family re-judgment (L1) on the cached
+data moves \(3/3\) of our loop's KEEPs from above to below the
+\(+10\)pp threshold on identical content; preregistered fresh-loop
+re-evaluation at the preregistration's laxer L1 threshold (\(0.55\))
+recovers \(2/3\) of these KEEPs on disjoint fresh data. We read this
+not as universal judge-fragility but as \emph{the audit stack
+distinguishing the two failure modes} --- W076 truly fails to
+generalise (fresh inner wr \(0.41 \ll 0.50\)), while W077/W078
+were within selection-bias range on cached data and survive
+preregistered fresh evaluation.
 
 \paragraph{Contribution 2 — Single-loop evidence that the default
-inner-loop gate is judge-fragile.} Under a
-\(+10\)pp single-family A/B at \(n=50\), our loop commits three
+inner-loop gate's verdicts are unreliable on cached data.} Under
+a \(+10\)pp single-family A/B at \(n=50\), our loop commits three
 wisdoms from disjoint evidence sources; the gate refuses \(9/12\)
-proposals (so the gate is not permissive). Yet the three it
-\emph{accepts} lose \(20\), \(13\), and \(9\) percentage points
-respectively when re-judged cross-family on identical content. On
-GSM8K the strongest survivor (\(W_{078}\)) \emph{actively harms}
-accuracy. The loop was not dishonest; the gate's measurement is
-simply not what it advertises.
+proposals (so the gate is not permissive). On the cached data
+the three accepts lose \(20\), \(13\), \(9\) percentage points
+respectively when re-judged cross-family. \emph{The selection-bias
+analysis (Exp~45) shows these drops are statistically consistent
+with regression-to-mean on top-3-of-12 noisy gate scores}; L1
+alone is therefore \emph{not} sufficient to call them
+judge-fragility. On GSM8K \(W_{078}\) ext is below base accuracy
+on the same problems; on the preregistered fresh-loop
+replication (Exp~47) \(W_{077}\) and \(W_{078}\) recover but
+\(W_{076}\) does not. The audit stack delivers a
+\emph{differentiated} verdict, not a uniform one.
 
 \paragraph{Contribution 3 — A strong scaffold as instrument
 (itself reported under same-family judging).} The audit stack
@@ -2077,35 +2112,45 @@ overly permissive. The issue is the \emph{composition} of its 3
 accepts, not the count: what it accepts is spurious across all 6
 audit layers.
 
-\paragraph{The sharpened final claim.} All three original KEEPs
-(W076, W077, W078) fall below the inner-loop \(+10\)pp gate's own
-threshold under \emph{every} additional audit-stack measurement
-we run, with the caveat that several CIs at the \(n\)'s involved
-still contain \(0.60\) (so this is non-replication, not formal
-falsification at \(95\%\) confidence):
+\paragraph{The sharpened final claim (cached-data audit + fresh-loop
+replication).} On the \emph{cached} Exp~10 answer pairs, all three
+original KEEPs (W076, W077, W078) fall below the inner-loop
+\(+10\)pp gate's own threshold under \emph{every} additional
+audit-stack measurement we run, with the caveat that several CIs
+at the \(n\)'s involved still contain \(0.60\) (so this is
+non-replication, not formal falsification at \(95\%\) confidence).
+However, when we re-execute the entire loop \emph{from scratch} on
+30 preregistered fresh pids (Exp~47, \S\ref{sec:exp47}), W077 and
+W078 both clear the preregistration's L1 threshold (0.55) on
+disjoint data; only W076 collapses. The audit table below shows
+the \emph{cached-data} columns (Exp~1--34) alongside the
+\emph{fresh-loop} column (Exp~47):
 
 \begin{center}\small
-\begin{tabular}{l c c c c c c c}
+\begin{tabular}{l c c c c c c c c}
   \toprule
-  & Exp 1 & Exp 5 & Exp 8 & Exp 26 & Exp 31 & Exp 32 & \textbf{Exp 34} \\
-  KEEP & cross-fam & side & n=100 & cross-slv & fresh & GSM8K & \textbf{exp-judge} \\
+  & Exp 1 & Exp 5 & Exp 8 & Exp 26 & Exp 31 & Exp 32 & Exp 34 & \textbf{Exp 47} \\
+  KEEP & cross-fam & side & n=100 & cross-slv & fresh & GSM8K & exp-judge & \textbf{fresh loop} \\
   \midrule
-  W076 & FLIP & FLIP & gray & NULL & --- & --- & --- \\
-  W077 & FLIP &  --- & FAIL &  --- & --- & --- & --- \\
-  \textbf{W078} & FLIP &  --- & FAIL &  --- & NULL & \textbf{HARM} & \textbf{NULL} \\
+  W076 & FLIP & FLIP & gray & NULL & --- & --- & --- & \textbf{COLLAPSE} \\
+  W077 & FLIP &  --- & FAIL &  --- & --- & --- & --- & \textbf{REPLICATE} \\
+  W078 & FLIP &  --- & FAIL &  --- & NULL & HARM & NULL & \textbf{REPLICATE} \\
   \bottomrule
 \end{tabular}
 \end{center}
 
-The paper's final validated library delta on unseen data is
-\(\boxed{+0}\), not \(+1\) (W078) as \S\ref{sec:meta} earlier
-suggested. The W078 pass in Exp 11 was an n=50 single-domain
-single-family-pair majority-of-3 local lucky draw that does not
-replicate to fresh domain with three-family judging. The ``inner
-loop produces decisions nothing else agrees with'' claim is now
-supported by \textbf{six independent audit layers} (Exp~34 adds
-the expensive-judge layer: Opus and GPT-5.4 both score \(W_{078}\)
-at wr\_ext \(= 0.43\), below the cheap haiku L1 mark of \(0.51\)).
+This produces a \emph{differentiated} headline: cached-data strict
+re-judgment yields \(\boxed{+0}\) library delta (no KEEP clears
+\(+10\)pp on the cached pairs under the audit panel), while
+preregistered fresh re-execution at the laxer L1 threshold yields
+\(\boxed{+2/3}\) replication on disjoint data. The cached-data
+\emph{drops} (\(-20, -13, -9\) percentage points relative to the
+inner-loop gate) are statistically consistent with selection bias
+on a top-3-of-12 noisy ranking (Exp~45); the fresh-loop
+\emph{recovery} of W077 and W078 indicates that two of the three
+original signals are not artefacts of selection. W076's
+collapse on fresh pids is the one cell where the audit stack and
+the fresh-loop re-execution agree on a non-reproducing signal.
 
 Five of six fatal objections are now closed experimentally
 (\#1, \#2, \#3, \#4, \#11):
@@ -3952,20 +3997,46 @@ A/B gate, every decision traceable to its evidence.
 
 We then ran the cheapest available falsification on our own
 result: re-judging the identical answer pairs with a
-disjoint-family judge. \emph{All three KEEPs flipped}, and the
-agent's pre-committed self-rebuttal step had named this exact
-failure mode first.
+disjoint-family judge. On the cached data, all three KEEPs fall
+below the \(+10\)pp gate; the agent's pre-committed self-rebuttal
+step had named this exact failure mode first. The cached-data
+\emph{drops}, however, are statistically consistent with what
+top-3-of-12 selection would produce on noisy \(n{=}50\) measurements
+of an empirical-Bayes--fit population mean (Exp~45) — so a
+cached-data drop alone does not distinguish ``the signal was
+spurious'' from ``the signal was real but the point estimate
+shrank toward the mean.''
 
-The state of the loop and the state of the audit are both fully
-documented (\(9/12\) rejections, disjoint evidence sources, every
-decision logged with evidence). The substantive finding is that
-this fully-logged loop with a same-family gate produces KEEPs
-that do not transport to a different-family re-judgment. The
+We resolve this ambiguity by re-executing the entire loop from
+scratch on 30 preregistered fresh pids (Exp~47) at thresholds
+fixed before the run. Two of the three original KEEPs (W077,
+W078) clear both the inner gate and the cross-family L1 gate at
+the preregistration's laxer threshold (0.55) on disjoint data;
+W076 fails the inner gate already (wr 0.41) and does not survive.
+The differentiated finding is therefore: cached-data strict
+re-judgment yields a \(\boxed{+0}\) library delta (Exp~35
+expensive judges and Exp~36 cheap re-judgment do not cross
+\(+10\)pp on cached pairs); preregistered fresh re-execution at
+the laxer L1 yields a \(\boxed{+2/3}\) replication. One signal
+(W076) is non-replicating in both directions and is the cleanest
+example of a same-family gate accepting a candidate that has no
+cross-family or fresh-loop support. Two signals (W077, W078)
+recover under the preregistered protocol, indicating they are not
+artefacts of selection on the original cached pairs.
+
+The substantive finding is that a six-layer cross-family audit
+stack — combined with selection-bias modelling and a
+preregistered fresh-loop replication — \emph{distinguishes}
+selection-driven cached-data drops from genuine non-replication.
+In our single case study, exactly one of three KEEPs is
+diagnosed as a true non-replication; the other two recover. The
 recommendation we draw, scoped to this single-loop case study, is
-that cross-family re-judgment be reported as a default audit item
-for retrieval-level self-improvement claims of this form, and
-that a same-family $+N$pp on $n=50$ be reported as preliminary
-until cross-family re-judgment confirms the direction. Whether
+that (i) cross-family re-judgment, (ii) selection-bias modelling
+on the inner-loop ranking, and (iii) preregistered fresh-loop
+replication be reported jointly as default audit items for
+retrieval-level self-improvement claims of this form, and that a
+same-family \(+N\)pp on \(n{=}50\) be reported as preliminary
+until at least one of these three confirms the direction. Whether
 this generalises to other classes of self-improvement claim is an
 empirical question we do not settle here.
 
