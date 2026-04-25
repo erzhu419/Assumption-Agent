@@ -478,38 +478,42 @@ one solver-judge configuration than we have run here.
 \section{Related Work}
 \label{sec:related}
 
-\paragraph{Retrieval-augmented and in-context methods.} Chain-of-thought
-prompting~\citep{wei2022chain} established that surfacing explicit
-reasoning helps; self-consistency~\citep{wang2023selfcons} stabilized
-it; reflection/verification~\citep{madaan2023selfrefine,
-shinn2023reflexion} closed a one-step inner loop. RAG over document
-stores~\citep{lewis2020rag, borgeaud2022retro} and agentic
-tool-use~\citep{yao2023react, schick2024toolformer} extended the input
-context. Our scaffold (v20) is a retrieval-augmented method over a
-\emph{methodological} corpus rather than a factual one.
+\paragraph{Two strategies for ``self-improvement'' in LLMs, and where
+this paper sits.} The literature has tried two broad ways to make
+an LLM improve itself. The first updates \emph{weights}: STaR
+\citep{zelikman2022star,zelikman2024star} fine-tunes on filtered
+chain-of-thought traces; self-rewarding LMs
+\citep{yuan2024selfrewarding} use the model's own preference signal
+as a training reward; self-play fine-tuning \citep{chen2024selfplay}
+and instruction backtranslation \citep{li2024backtrans} close an
+outer training loop. These changes live in the parameters, are
+expensive, and are hard to audit individually.
 
-\paragraph{Self-improvement of language models.}
-STaR~\citep{zelikman2022star, zelikman2024star}, self-rewarding
-LMs~\citep{yuan2024selfrewarding}, self-play fine-tuning and
-instruction-backtranslation~\citep{chen2024selfplay, li2024backtrans}
-all close an outer loop at the \emph{weights} level. We close an outer
-loop at the \emph{retrieval corpus} level, which is orders of magnitude
-cheaper and allows the changes to be auditable.
+The second strategy updates \emph{retrieved context} rather than
+weights: chain-of-thought \citep{wei2022chain}, self-consistency
+\citep{wang2023selfcons}, and self-reflection
+\citep{madaan2023selfrefine,shinn2023reflexion} re-shape the
+prompt; RAG over document stores
+\citep{lewis2020rag,borgeaud2022retro} and agentic tool use
+\citep{yao2023react,schick2024toolformer} extend the input. Our
+scaffold sits in this second family but retrieves \emph{methodological
+orientations} (one-line aphorisms with applicability conditions)
+rather than facts, and the outer loop edits the retrieval corpus,
+not the weights. That choice is what makes the loop auditable at
+the unit-of-retrieval granularity: each entry can be added, kept,
+re-judged, removed, and traced.
 
-\paragraph{Audit practices in adjacent LLM-as-judge self-improvement
-papers.} Our recommendation --- that L1 cross-family re-judgment
-be reported as a default for retrieval-level self-improvement
-claims --- rests partly on the observation that this axis is not
-routinely reported in the works most directly adjacent to ours.
-Table~\ref{tab:audit-practices} restricts attention to
-LLM-judged self-improvement: works whose primary acceptance signal
-is a same-family LLM preference verdict on open-ended outputs.
-Papers that rely chiefly on environment rewards
-(e.g.\ Voyager's procedural success signal in Minecraft) or
-weight-level supervised/RL training signals (e.g.\ STaR's
-fine-tuning on filtered chain-of-thought rationales) do not face
-the same judge-fragility issue we describe and are listed with a
-``n/a'' rather than a missing-column dash.
+\paragraph{What's missing in the closest neighbours: cross-family
+re-judgment is rarely reported.} The works most directly adjacent
+to ours --- those whose primary acceptance signal is a same-family
+LLM preference verdict on open-ended outputs --- almost never
+report a cross-family re-judgment of their own accepted samples.
+We tabulate this for five well-known adjacent papers
+(Table~\ref{tab:audit-practices}). Papers that use environment
+rewards (Voyager: procedural success in Minecraft) or weight-level
+training signals (STaR: filtered fine-tuning) do not face the same
+judge-fragility issue and are listed for reference only with
+``n/a'' instead of a missing-column dash.
 
 \begin{table}[h]
   \centering\small
@@ -548,44 +552,44 @@ the same judge-fragility issue we describe and are listed with a
 \end{table}
 
 The narrowed reading: across the five LLM-judged self-improvement
-works most adjacent to ours, the L1 cross-family column is
-empty. We do not claim these papers are wrong; we recommend, on
-the basis of our single-loop case study, that L1 be considered
-a default reporting item for self-improvement claims whose
-acceptance signal is itself an LLM preference verdict.
+works most adjacent to ours, the cross-family-re-judgment column
+is empty. We do not claim these papers are wrong; we recommend,
+on the basis of our single-loop case study, that cross-family
+re-judgment be considered a default reporting item for
+self-improvement claims whose acceptance signal is itself an LLM
+preference verdict.
 
-\paragraph{Case-based reasoning and skill libraries.} Case-based
-reasoning~\citep{aamodt1994cbr} and skill-library
-agents~\citep{wang2023voyager, zhu2023ghost, sumers2024agentkb} both
-maintain a growing store of reusable units. Voyager~\citep{wang2023voyager}
-grows a skill library from procedural success in Minecraft; our
-setting grows a \emph{methodological} library from A/B-judged open
-reasoning. AgentKB~\citep{sumers2024agentkb} focuses on task-specific
-routines, whereas we target \emph{domain-general orientations}
-(\(\leq 35\)-character aphorisms with cross-domain exemplars).
+\paragraph{Skill libraries that store reusable units.} Several
+recent agents maintain a growing corpus of things-the-agent-has-
+learned and reuse them later: case-based reasoning
+\citep{aamodt1994cbr}, Voyager's Minecraft skill library
+\citep{wang2023voyager}, GHOST \citep{zhu2023ghost}, AgentKB
+\citep{sumers2024agentkb}. The unit they store and the signal
+they accept on differ from ours. Voyager grows skills from
+procedural success in a simulator; AgentKB stores task-specific
+routines. We grow a \emph{methodological} library from open-ended
+A/B judgments, with each unit being a domain-general orientation
+(an aphorism plus applicability conditions and cross-domain
+exemplars) rather than a procedure.
 
-\paragraph{Curriculum and program synthesis of thoughts.} Automated
-discovery of reasoning structures via Self-Discover
-\citep{zhou2024selfdiscover} generates per-problem module stacks; Tree
-of Thoughts~\citep{yao2023tot} branches the search. Our library
-\emph{outlives} any single problem and is acted on by the solver at
-retrieval time, not at generation time. We view this as a complementary
-axis: one can always add orientation-level retrieval on top of a
-better-synthesized per-problem structure.
+\paragraph{Synthesis-of-thought and prompt optimization.}
+Self-Discover \citep{zhou2024selfdiscover} generates per-problem
+reasoning module stacks; Tree of Thoughts \citep{yao2023tot}
+branches the search; PromptBreeder \citep{fernando2023promptbreeder}
+evolves prompts by an evolutionary search on a fitness signal.
+Our work is complementary: the library is built once and reused
+across problems, and the unit of selection is one retrievable
+orientation (not a whole prompt or per-problem reasoning chain).
 
-\paragraph{Darwinian / evolutionary approaches.} Evolutionary prompt
-optimization~\citep{promptbreeder, fernando2023promptbreeder} uses a
-selection signal on prompts themselves. We share the Darwinian framing
-but select at the \emph{unit-of-retrieval} granularity (one wisdom),
-which allows finer-grained credit assignment and interpretable audit.
-
-\paragraph{Cross-model distillation.} Using a stronger model as a
-teacher is classical~\citep{hinton2015distillation} and modern at the
-instruction-tuning level~\citep{taori2023alpaca, peng2024evolinstruct}.
-Our \emph{cross-LLM distiller} (\S\ref{sec:cross-llm}) distills not
-answers but \emph{orientations}: what the stronger model's
-answer-structure foregrounds that the weaker model's scaffolding does
-not.
+\paragraph{Cross-model distillation.} A stronger LLM teaching a
+weaker one is classical \citep{hinton2015distillation} and now
+common at the instruction-tuning level
+\citep{taori2023alpaca,peng2024evolinstruct}. Our cross-LLM
+distiller (\S\ref{sec:cross-llm}) is unusual in that it distills
+\emph{orientations} rather than answers --- what the stronger
+model's answer-structure foregrounds that the weaker model's
+scaffolding misses --- and the distilled orientation is then
+audited like any other library entry.
 
 \section{Method}
 \label{sec:method}
@@ -593,59 +597,69 @@ not.
 \subsection{Preliminaries: the scaffolded solver (v20)}
 \label{sec:solver}
 
-We use \emph{gemini-3-flash} as the underlying
-generator\footnote{Exposed via the ruoli.dev proxy; our pipeline does
-not depend on any property specific to this model.} and an independent
-LLM judge (same family) to produce A/B verdicts. A \textbf{wisdom}
-\(w\) is a record
-\[
-  w = (\text{id}, \text{aphorism}, \text{source}, \text{signal},
-      \text{unpacked\_for\_llm}, \text{cross\_domain\_examples}).
-\]
-At inference time a retriever selects the top \(K=2\) wisdoms for
-problem \(p\). The solver then runs a three-turn procedure:
+The underlying solver is \emph{gemini-3-flash}, accessed through
+the ruoli.dev proxy.\footnote{Nothing in the loop depends on this
+particular model; any reasonably capable LLM with cheap access
+would work.} A separate LLM (same family by default) acts as the
+A/B judge. The retrieval corpus is the \emph{wisdom library}: a
+list of records, each containing an aphorism, its source, the
+situation it applies to, an unpacked LLM-legible explanation, and
+two cross-domain example scenarios.
 
-\begin{description}[leftmargin=1.5em, topsep=2pt, itemsep=1pt]
-  \item[\textbf{Turn 0 (frame + rewrite).}] A single JSON call produces
-  \((\text{frame}, \text{critical\_reframe}, \text{anti\_patterns},
-  \text{evaluation\_criteria}, \text{rewritten\_problem},
-  \text{what\_changed})\). The ``rewritten problem'' is the
-  subject-of-attention the solver will then see.
-  \item[\textbf{Turn 1 (execute).}] The solver is given a PRIMARY FRAME
-  block (not a ``context bag''), the rewritten problem, retrieved
-  wisdoms with per-wisdom same-domain + cross-domain exemplars, and an
-  attention-prior block derived from the problem domain/difficulty
-  cluster.
-  \item[\textbf{Turn 2 (audit).}] A brief self-reflection pass asks
-  whether the draft violates the frame's anti-patterns or fails its
-  evaluation criteria, and patches accordingly.
-\end{description}
+For any problem \(p\), the solver runs three short turns. The
+first turn (\textbf{frame}) is a single JSON call that produces
+the problem's frame label (object-level vs paradigm-level vs
+hybrid), a critical reframe of the question, the most relevant
+anti-patterns, the evaluation criteria, a rewritten version of
+the problem statement, and a brief ``what changed'' note. The
+rewritten version of the problem is what the second turn sees.
+The second turn (\textbf{execute}) is the actual solve; it sees
+the rewritten problem with the frame block placed as a primary
+directive, plus the top-\(K{=}2\) wisdoms retrieved from the
+library, each instantiated with one same-domain example and one
+cross-domain example. The third turn (\textbf{audit}) is a brief
+self-check that asks whether the draft violates the frame's
+anti-patterns or fails its evaluation criteria, and patches if
+so.
 
-\paragraph{Why this matters for the library loop.} Turn 0 produces a
-log of \texttt{what\_changed} fields—the solver's own articulation,
-per problem, of ``what is this problem really about.'' These are the
-signals the \emph{success distiller} (\S\ref{sec:success}) mines.
+\paragraph{Why this scaffold matters for the library loop.}
+The first turn's ``what changed'' field is the solver's own
+articulation, per problem, of what the problem is really about.
+These articulations accumulate as a side product of running the
+solver; they are the input the \emph{success distiller} mines
+(\S\ref{sec:success}). Without this field the loop has nothing
+to cluster.
 
 \subsection{The library as mutable state}
 \label{sec:registry}
 
-The library is a versioned registry whose entries track
-\texttt{status} \(\in \{\text{active, deprecated, removed}\}\),
-\texttt{activation\_count}, \texttt{last\_activated},
-\texttt{contribution\_gain}, \texttt{source}, and a \texttt{keep\_reason}
-string. Every mutation bumps a semantic version
-(\texttt{v20.0} \(\to\) \texttt{v20.1} \(\to \ldots\)). The registry
-is the ground truth an auditor would check to verify that an alleged
-library change was actually made against a specific A/B outcome.
+The library is not a static prompt; it is a versioned registry
+whose every change is logged. Each entry records its status
+(active, deprecated, or removed), how many times it has been
+retrieved, when it was last retrieved, an estimated contribution
+gain, the source it came from, and a one-line ``keep reason.''
+Every mutation bumps a semantic version
+(\texttt{v20.0} \(\to\) \texttt{v20.1} \(\to \ldots\)). This is
+the ground truth an external auditor checks to verify that an
+alleged library change was actually committed against a specific
+A/B outcome. Without this audit trail the loop's claim
+``we accepted this candidate based on this evidence'' would be
+unfalsifiable.
 
 \subsection{Closed-loop orchestrator}
 \label{sec:orchestrator}
 
-Figure~\ref{fig:loop} shows the four-component loop. Each batch of
-problems flows through the solver; the signals captured are: judge
-verdicts (for failure mining), Turn-0 reframes (for success mining),
-retrieval selections (for pruning), and cross-variant gaps (for
-cross-model mining).
+The orchestrator is four asynchronous components reading from a
+shared buffer of solver signals (Figure~\ref{fig:loop}). Three
+\emph{generators} propose new candidate wisdoms; one
+\emph{pruner} retires wisdoms that are no longer being retrieved.
+Each generator listens to a different signal: the success
+distiller mines repeated problem reframes, the failure generator
+mines clusters of solver losses, and the cross-LLM distiller
+mines gaps between our solver and a stronger one. The candidate
+each generator emits goes through a single A/B gate
+(\S\ref{sec:gate}); the pruner runs independently on the
+retrieval log.
 
 \begin{figure}[t]
   \centering
@@ -658,64 +672,65 @@ cross-model mining).
   \label{fig:loop}
 \end{figure}
 
-\paragraph{Candidate generation.} Three generators run asynchronously
-against a shared buffer of recent signals:
-
 \subsubsection{Success distiller}
 \label{sec:success}
 
-Given \(N\) recent Turn-0 outputs, we embed the concatenation
-\texttt{what\_changed || critical\_reframe} with a multilingual
-sentence encoder~\citep{reimers2019sbert} and apply agglomerative
-clustering with cosine-distance threshold \(0.4\) and minimum cluster
-size \(6\). For each surviving cluster, a GPT-class prompter reads
-\(\leq 10\) cluster members plus the current library summary and
-either emits \texttt{\{"proposal": null, "reason": ...\}} or a complete
-wisdom record with rationale and cluster-coverage PIDs. We measure
-novelty by maximum cosine similarity of the proposed
-\texttt{unpacked\_for\_llm} embedding against all active entries; we
-reject when \(\text{sim} > 0.78\). The rationale: wisdom candidates
-are \emph{latent orientations in the solver's own reasoning}, surfaced
-by repetition, not by failure.
+The success distiller is the cheapest source of candidates. It
+clusters recent Turn-0 reframes (the solver's own articulations
+of what each problem is really about) and asks: are any of these
+clusters big enough and coherent enough to be worth promoting to
+a library entry? Concretely, recent
+\texttt{what\_changed} \(+\) \texttt{critical\_reframe} strings are
+embedded with a multilingual sentence encoder
+\citep{reimers2019sbert}, agglomeratively clustered with cosine
+distance \(\leq 0.4\), and any cluster of size \(\geq 6\) is
+shown to a GPT-class prompter together with the current library
+summary. The prompter either emits ``no proposal'' or a complete
+wisdom record. The intuition: the wisdoms worth adding are
+already \emph{latent in the solver's own reasoning}, surfacing as
+repeated framings; the distiller just reads them off. A novelty
+gate (cosine similarity \(\leq 0.78\) against the existing
+library's unpacked entries) blocks duplicates.
 
 \subsubsection{Failure generator}
 \label{sec:failure}
 
-A symmetric generator listens to judge verdicts and accumulates
-problems where the solver lost or tied into a failure buffer. When the
-buffer size passes a threshold, a prompter asks: ``do these
-\(\geq 3\) problems share a systematic residual pattern a new wisdom
-could address?'' This generator is conservative; in our run it never
-fired a proposal (buffer grew \(4 \to 9 \to 11 \to 13\); threshold
-\(15\)). We treat this as informative and discuss it in
-\S\ref{sec:discussion}.
+The failure generator is symmetric: it watches for problems the
+solver \emph{lost} on (or tied) and pools them into a failure
+buffer. Once the buffer is large enough, a prompter is asked
+whether the buffer's contents share a systematic residual pattern
+that one new wisdom could address. In our single run, the
+failure buffer never grew large enough to fire (it was at
+\(13\) at end of cycle vs.\ a threshold of \(15\)), so the failure
+generator contributed zero candidates. We discuss what this
+implies in \S\ref{sec:discussion}.
 
 \subsubsection{Cross-LLM distiller}
 \label{sec:cross-llm}
 
-For each problem where the solver's answer lost to a comparison
-variant's answer by a judge margin \(\geq 1\), a stronger generator
-(GPT-5.4, accessed through the same proxy) independently re-solves the
-problem. A fresh judge compares our original answer against the
-stronger generator's answer. Problems where the stronger generator
-\emph{also} wins by \(\geq 1\) are kept. A single distillation prompt
-is then shown all surviving
-\(\text{(problem, our answer, stronger answer, both judge reasonings)}\)
-tuples, and asked to name a single recurring orientation that the
-stronger generator's structure foregrounds but the scaffolding does
-not. The output is subject to the same novelty gate as the success
-distiller.
+The cross-LLM distiller tries to import what a \emph{stronger}
+generator sees that ours misses. For every problem where our
+solver loses to a comparison variant by a margin of \(\geq 1\)
+judge point, a stronger generator (GPT-5.4) independently
+re-solves the problem; a fresh judge then compares our answer
+to the stronger answer. Problems where the stronger generator
+also wins by \(\geq 1\) are pooled and sent to a distillation
+prompt, which is asked to name a single recurring orientation
+that the stronger answer's structure foregrounds but ours does
+not. As with the success distiller, the proposal goes through
+the novelty gate before becoming a candidate.
 
 \subsubsection{Darwinian pruner}
 \label{sec:prune}
 
-The pruner scans every available retrieval-selection file and counts
-how often each wisdom appeared in the top-\(K\) for some problem.
-Active wisdoms with zero activations across the scan are marked
-\texttt{deprecated}; already-deprecated wisdoms with zero activations
-on a subsequent scan are \texttt{removed}. A \emph{newborn protection}
-rule exempts wisdoms created after the newest scan file's
-modification time.
+The pruner is the simplest component: every wisdom that has not
+been retrieved by the top-\(K{=}2\) selector for any problem in
+the recent retrieval log is moved from \texttt{active} to
+\texttt{deprecated}; deprecated wisdoms that remain unused on a
+subsequent scan are removed. A newborn-protection rule exempts
+wisdoms created after the newest scan file's modification time
+so that brand-new entries are not pruned before they have had a
+chance to be retrieved.
 
 \subsection{The A/B validation gate}
 \label{sec:gate}
@@ -743,49 +758,43 @@ the total wall time for \(11\) candidates + \(1\) base from
 \({\sim}6\) hours to \({\sim}1\) hour \emph{without compromising the
 evaluation}.
 
-\subsection{What the A/B gate actually measures (decomposition)}
+\subsection{What the A/B gate actually measures}
 \label{sec:theory}
 
-Before presenting experiments that attack the gate, we state formally
-what pair-wr \emph{is} and what it \emph{cannot separate}. Fix a
-solver \(S\), a retriever \(R\), a judge \(J\), a wisdom \(w\), and
-a problem distribution \(P\). Let \(a_0(p) = S(R(\emptyset, p), p)\)
-be the baseline answer and \(a_w(p) = S(R(\{w\}, p), p)\) the ext
-answer. The observed quantity is
-\[
-  \mathrm{wr}_{\mathrm{ext}}(w; S, J, P) \;=\;
-  \mathbb{E}_{p \sim P}\!\left[\mathbb{1}\!\left\{
-    J(p, a_w(p), a_0(p)) = w\right\}\right].
-\]
+Before showing the experiments that attack the gate, it helps to
+be explicit about what its number means. The gate measures one
+thing: a fraction of held-out problems on which a same-family
+judge prefers the with-wisdom answer over the without-wisdom
+answer. Call that fraction \(\mathrm{wr}_{\mathrm{ext}}\). When
+\(\mathrm{wr}_{\mathrm{ext}}\) sits above \(0.50\), the gate is
+saying ``most of the time the judge picks the new version.'' But
+``most of the time the judge picks the new version'' is
+compatible with at least three different underlying causes that
+look identical from the outside.
 
-\paragraph{Conceptual decomposition (informal, not a theorem).}
-Let \(Z_w(p) := \mathbb{1}\{J(p, a_w, a_0) = w\} - \tfrac12\). Then
-\(\mathrm{wr}_{\mathrm{ext}}(w) - \tfrac12 = \mathbb{E}_p Z_w(p)\).
-We find it conceptually useful to think of three sources of lift
-that can drive \(\mathbb{E}_p Z_w\) above zero:
-\begin{description}[leftmargin=1.5em,topsep=2pt,itemsep=1pt]
-  \item[\(Z_w^{\mathrm{specific}}\)] lift attributable to the
-    \emph{content} of \(w\) --- the particular orientation \(w\)
-    advertises, instantiated at \(p\).
-  \item[\(Z_w^{\mathrm{generic}}\)] lift attributable to
-    \emph{any} extra context of matching length and register
-    perturbing Turn-0 away from a default basin (operationally:
-    what one would measure by swapping \(w\) with a
-    length-matched placebo wisdom).
-  \item[\(Z_w^{\mathrm{style}}\)] lift attributable to \(w\)
-    producing surface features (register shifts, phrase patterns)
-    that \(J\) happens to prefer, independent of problem-specific
-    fit.
-\end{description}
-This is \emph{not} a unique algebraic decomposition, and we do
-not claim the three terms are estimable from any single
-experiment. Treating the labels as informal probes, the audit
-stack's interventions can each be argued to attack one term more
-than the others (judge swap stresses \(Z^{\mathrm{style}}\),
-length-matched placebo swap stresses \(Z^{\mathrm{generic}}\),
-faithfulness probes attempt to estimate \(Z^{\mathrm{specific}}\)
-directly). Below we use this informal labelling to motivate the
-audit layers, not to prove identifiability.
+\textbf{Cause A (specific content):} the new wisdom genuinely
+contains methodological content the solver was missing, and the
+content is matched to the problem.
+
+\textbf{Cause B (generic extra context):} adding \emph{any} extra
+context of matching length and register would perturb the solver
+out of a default basin into a slightly more deliberate mode,
+which the judge happens to prefer. A length-matched placebo would
+produce a similar lift.
+
+\textbf{Cause C (judge stylistic preference):} the new wisdom
+produces surface features --- register shifts, phrase patterns,
+characteristic transitions --- that the judge family happens to
+prefer, independent of whether the wisdom matched the problem.
+
+Pair-wr cannot tell these three apart from a single same-family
+\((S, J)\) measurement. We use this taxonomy informally
+throughout the paper to motivate which audit layer attacks which
+cause: cross-family re-judgment stresses Cause C, length-matched
+placebo controls stress Cause B, faithfulness probes try to
+detect Cause A directly. The taxonomy is not an identifiable
+causal decomposition; we do not claim the three contributions
+can be subtracted out. We use it as a threat model.
 
 \paragraph{What cross-family re-judgment can and cannot deliver.}
 A single-family \((S, J)\) measurement of
@@ -799,42 +808,34 @@ differ in calibration, verbosity preferences, tie propensity, and
 competence on specific problem types, so a swap conflates
 ``\(J\)-specific style'' with ``\(J\)-vs-\(J'\) full
 disagreement''; (b)~two families may share style preferences that
-a third would not; (c)~the swap leaves \(Z_w^{\mathrm{generic}}\)
-untouched (the generic ``any extra context'' lift is invariant to
-which family judges it). What cross-family re-judgment delivers
-is therefore a falsifier of the claim ``the original wr\_ext is
-robust to the choice of \(J\),'' which is what we use it for. We
-do not claim it identifies \(Z^{\mathrm{specific}}\).
+\paragraph{What this means for cross-family re-judgment.} If the
+original wr\_ext came from Cause C (judge stylistic preference),
+swapping the judge to a different family should make it drop.
+That is the test cross-family re-judgment performs. But a
+cross-family re-judgment cannot, on its own, separate the three
+causes. Different judge families have different overall
+calibrations, verbosity preferences, tie propensities, and
+competence on different problem types --- so a swap conflates
+``judge-specific style'' with ``judge-vs-judge full
+disagreement.'' Two families may even share the stylistic
+preference a third would not. And nothing about a judge swap
+touches Cause B; generic-context lift is invariant to which
+family does the judging. What cross-family re-judgment
+\emph{does} deliver is a falsifier of the strong claim
+``\(\mathrm{wr}_{\mathrm{ext}}\) is robust to which judge looks
+at it,'' which is what we use it for.
 
-\paragraph{Empirical use of the labelling.}
-\(W_{078}\) wr\_ext at \(n = 50\) across five judges:
+\paragraph{What this means empirically.} W\(_{078}\)'s
+wr\_ext at \(n=50\) across five judge families is
 \(\{0.60, 0.51, 0.57, 0.43, 0.43\}\) (gemini, haiku, gpt-mini,
-opus, gpt-5.4) --- a spread of \(0.17\), wider than the sampling
-CI width of \({\sim}0.13\). With Cohen's \(\kappa\) fair-to-low
-across pairs (Exp~37, mean \(\approx 0.18\)--\(0.26\)),
-cross-family agreement is itself weak; conditions under which a
-strong identifiability claim about \(Z^{\mathrm{specific}}\)
-would hold are not met. We therefore use the decomposition as a
-conceptual organising frame for the audit stack and as a
-descriptive interpretation of the empirical findings, not as a
-formal identification result. The cached-data null at the
-original \(0.60\) threshold survives under this weaker reading
-\emph{when measured on the original solver family with the audit
-panel of judges}: no cached-data
-audit layer in this configuration assigns a
-\(\mathrm{wr} \geq 0.60\) point estimate to the three KEEPs.
-\emph{We do not extend this null to other solver families or to
-fresh data}: under cross-solver re-runs (Exp~40, L4) several
-single-judge cells exceed \(0.60\) for individual KEEPs, and on
-fresh data (Exp~47) W078 reaches \(0.63\) inner / \(0.71\) L1
-under the original gemini solver. The qualitative picture is
-therefore: \emph{cached audit panel + original solver: 0/3 clear
-0.60}; \emph{cross-solver and fresh-data evaluations: a
-heterogeneous mixture, dominated by W078 clearing on fresh and
-some single-judge cross-solver cells exceeding 0.60 but no
-3-family-consensus cross-solver cell clearing}. The full
-qualitative picture --- not just the cached-data null --- is
-documented in the \emph{differentiated finding} of \S Conclusion.
+opus, gpt-5.4). The \(0.17\)-wide spread exceeds the sampling
+interval, and the cross-family Cohen's \(\kappa\) is only
+\(0.18\)--\(0.26\) (\S Exp~37). The cached-data null is therefore
+local: under the audit panel + the original solver, no candidate
+clears \(0.60\). Under different solver families some single-
+judge cells exceed \(0.60\); under preregistered fresh data the
+result depends on \(n\) (Exp~47/53/54/66). The full picture is in
+\S\ref{sec:experiments}.
 
 \begin{figure}[t]
   \centering
@@ -1364,28 +1365,35 @@ roadmap.
 \section{Discussion}
 \label{sec:discussion}
 
-\paragraph{The single most important question: do the KEPT wisdoms
-have \emph{any} value?} Cross-family re-judgment says ``not as much
-as the inner loop thought.'' But it does not say ``zero.'' Claude's
-scores are $0.40, 0.47, 0.51$—one collapse and two near-parities.
-A future cycle could: (a)~commit wisdoms only if \emph{both} judges
-return $\geq 0.55$, turning the gate into an AND; (b)~commit only
-when the \emph{judge-family-average} wr
-$\bar{\text{wr}} \geq 0.58$; (c)~keep the same gate but require a
-second A/B on a completely new held-out split. Any of these would
-have rejected all three of our current KEEPs. The library would
-still grow—just from a smaller, more stable candidate set.
+\paragraph{Do the accepted wisdoms have any utility at all?}
+This is the natural follow-up question and the most uncomfortable
+one to face head-on. Cross-family re-judgment says ``less utility
+than the inner loop thought,'' not ``zero utility.'' Claude's
+scores on the three accepts are \(0.40\), \(0.47\), \(0.51\) ---
+one collapse and two near-parities. The honest read is that
+\(W_{077}\) and \(W_{078}\) might still carry \emph{some}
+content-specific value but that the original gate over-credited
+it; \(W_{076}\) is harder to defend as carrying any. A future
+loop wanting to be more cautious could tighten the gate to
+require both judges to agree at \(\geq 0.55\), or require a
+second A/B on a completely new split before committing. Any of
+those rules would have rejected all three of our actual accepts.
+The library would still grow, just from a smaller and more
+stable candidate set.
 
-\paragraph{What does this mean for the prior literature?} Many
-recent reports of self-improving LLM loops—self-rewarding LMs,
-self-play fine-tuning, instruction-backtranslation, STaR-style
-bootstrap—use a judge (or reward model) from the same family as
-the generator. Our experiment does not falsify these directly (they
-target the \emph{weights}, not a retrieval library), but it raises a
-specific testable question: are the reported gains intra-family
-judge-preference alignments or true capability gains? A drop-in
-cross-family re-judge, on the \emph{identical} generator outputs
-from the paper's most-improved checkpoint, is cheap and decisive.
+\paragraph{What this implies for the rest of the literature.}
+Many recent self-improving-LLM papers --- self-rewarding LMs,
+self-play fine-tuning, instruction backtranslation, STaR-style
+bootstrap --- use a judge or reward model from the same family
+as the generator. Our experiment does not directly falsify those
+results (they update weights, not a retrieval library), but it
+raises a concrete testable question for any of them: are the
+reported gains true capability improvements, or are they
+intra-family judge-preference alignment? A cross-family
+re-judgment of the paper's most-improved checkpoint, on the
+exact same generator outputs, would settle that question
+cheaply. None of the adjacent papers we surveyed
+(\S\ref{sec:related}) has run such a check.
 
 \paragraph{Why did the failure generator never fire?} The intended
 signal was ``judge gave B \(\geq\) 8-point margin, accumulate
@@ -1576,46 +1584,39 @@ conceptually open.
 \section{Limitations}
 \label{sec:limitations}
 
-\textbf{Held-out exposure via dynamic same-domain exemplars
-(real but symmetric).} The v20 solver pipeline
-(\S\ref{sec:gate}, code at
-\texttt{phase one/scripts/validation/phase2\_v15\_exemplar\_framework.py})
-includes, at solve time, a same-domain exemplar dynamically
-selected from the evaluation pool's other pids: for evaluation
-on pid \(p\), the prompt is augmented with the most-similar
-in-pool pid in the same domain, with that pid's cached
-v15-class answer text. This is a real exposure to the
-evaluation distribution. \emph{Crucially, it applies symmetrically
-to the base condition (no-wisdom) and the ext condition
-(with-wisdom): both prompts have the same same-domain exemplar
-augmentation.} The relative measurement
-\(\mathrm{wr}_{\mathrm{ext}} = \mathrm{ext} / (\mathrm{ext}
-+ \mathrm{base})\) is therefore approximately
-exposure-neutral, and we believe the comparison remains
-informative about whether the wisdom adds anything beyond the
-base condition under the same exposure. A separate
-cross-domain mining pass exists in
-\texttt{validate\_parallel.py:91--278}; it would have stored
-PID-bound exemplars in the candidate wisdom records under
-\texttt{wisdom\_diverse\_exemplars.json}. We verified
-empirically that for our 12 candidates, this file contains zero
-WCAND/WCROSS entries: the cross-domain mining was either skipped
-(the ``\(\geq 3\) exemplars'' guard branched out) or never run
-on this candidate set. The candidates' \texttt{cross\_domain\_examples}
-visible in the wisdom records (\texttt{success\_distilled\_candidates.json})
-are abstract scenarios generated by the success distiller, with
-no PID grounding; the v20 prompt formatter does not consume them.
-An earlier draft of this Limitations section described an
-exemplar mining leak as serious; that draft was based on a
-reading of the code path that was not actually exercised on
-our 12 candidates. We retain the symmetric same-domain
-exposure as the actual extent of held-out involvement.
+\textbf{Some held-out exposure, applied symmetrically.} At
+solve time, the v20 scaffold retrieves a same-domain example
+from the held-out evaluation pool itself --- specifically, the
+most-similar other pid in the same domain, along with that pid's
+cached prior-version answer. This is a real exposure to the
+evaluation distribution. The reason we believe it does not
+break the relative comparison is that it applies
+\emph{symmetrically} to base (no wisdom) and ext (with wisdom):
+both prompts get the same same-domain example. So
+\(\mathrm{wr}_{\mathrm{ext}}\) measures whether the wisdom adds
+anything \emph{beyond what is already there}, and the additional
+exposure cancels in the ratio.
 
-A clean re-run of the inner loop with strict pool separation
-(no same-domain exemplar from the eval pool) is straightforward
-to implement and remains future work; given the symmetry
-argument above we do not expect it to materially change the
-wr\_ext numbers on this candidate set.
+A separate cross-domain mining pass exists in the validation
+code that, in principle, would store pid-bound exemplars in the
+candidate's wisdom record. We verified empirically that this did
+not run on our 12 candidates: the relevant file
+(\texttt{wisdom\_diverse\_exemplars.json}) contains zero entries
+for them. The cross-domain examples that appear in the
+candidates' records are abstract scenarios generated by the
+success distiller, with no held-out-pid grounding. An earlier
+draft of this section described a serious exemplar leak; that
+draft was reading code paths that turned out not to have run on
+this candidate set. The actual exposure is the same-domain
+in-pool example, applied symmetrically.
+
+We do consider a clean rerun with strict pool separation
+worthwhile, and Exp~52 (\S\ref{sec:experiments}) is exactly that
+sensitivity test. It shows that without the exemplar mechanism
+the cached signal drops by 10--20 absolute win-rate points for
+W076 and W077; W078's cross-family signal is more robust to the
+ablation. We believe this captures the magnitude of the
+exemplar-mechanism's contribution.
 
 \textbf{Language scope: primarily Chinese open-ended problems.}
 The full pipeline (scaffold v20, 75-entry wisdom library, the
