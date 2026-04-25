@@ -83,52 +83,19 @@ SCHED_PROMPT = """You are a strategy selector. Given a problem, choose ONE prior
 
 
 def load_gsm8k_subset(n=100):
-    """Load 100 GSM8K problems from cached source."""
-    # Try the existing GSM8K cache
-    candidates = [
-        PROJECT / "phase four" / "autonomous" / "gsm8k_30.json",
-        PROJECT / "phase zero" / "benchmark" / "gsm8k_train.jsonl",
-        PROJECT / "phase zero" / "benchmark" / "gsm8k.json",
-    ]
-    for p in candidates:
-        if p.exists():
-            print(f"  Loading GSM8K from {p}")
-            try:
-                if p.suffix == ".jsonl":
-                    items = [json.loads(line) for line in p.read_text().splitlines()]
-                else:
-                    items = json.loads(p.read_text())
-                # Normalize
-                problems = []
-                for it in items[:n]:
-                    if "question" in it and "answer" in it:
-                        # Extract gold from answer (after #### marker)
-                        ans = it["answer"]
-                        m = re.search(r'####\s*(-?\d+(?:\.\d+)?)', ans)
-                        gold = float(m.group(1)) if m else None
-                        if gold is not None:
-                            problems.append({"prompt": it["question"], "gold": gold,
-                                              "pid": f"gsm_{len(problems):03d}"})
-                    elif "problem" in it and "gold" in it:
-                        problems.append({"prompt": it["problem"], "gold": it["gold"],
-                                          "pid": f"gsm_{len(problems):03d}"})
-                if problems:
-                    return problems[:n]
-            except Exception as e:
-                print(f"  Error loading {p}: {e}")
-                continue
-    print(f"  Could not load GSM8K. Using a small handcrafted GSM8K-style set.")
-    # Fallback: small handcrafted set
-    fallback = [
-        {"prompt": "Janet's ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins with four. The remainder are sold at $2 each. How much in dollars does she make every day?", "gold": 18},
-        {"prompt": "A robe takes 2 bolts of blue fiber and half that much white fiber. How many bolts in total?", "gold": 3},
-        {"prompt": "Josh decides to try flipping a house. He buys it for $80,000 and puts in $50,000 in repairs. This increased the value of the house by 150%. How much profit did he make?", "gold": 70000},
-        {"prompt": "James decides to run 3 sprints 3 times a week. He runs 60 meters each sprint. How many total meters does he run a week?", "gold": 540},
-        {"prompt": "Every day, Wendi feeds each of her chickens three cups of mixed chicken feed. She has 20 chickens. How many cups of feed for the entire flock per day?", "gold": 60},
-    ] * 20
-    for i, p in enumerate(fallback):
-        p["pid"] = f"gsm_{i:03d}"
-    return fallback[:n]
+    """Load GSM8K test problems via HuggingFace datasets, matching Exp 32 setup."""
+    print(f"  Loading GSM8K test split via HuggingFace datasets...")
+    from datasets import load_dataset
+    ds = load_dataset("gsm8k", "main", split=f"test[:{n}]")
+    problems = []
+    for i, x in enumerate(ds):
+        ans = x["answer"]
+        m = re.search(r'####\s*(-?\d+(?:\.\d+)?)', ans)
+        gold = float(m.group(1)) if m else None
+        if gold is not None:
+            problems.append({"prompt": x["question"], "gold": gold,
+                              "pid": f"gsm_{i:03d}"})
+    return problems[:n]
 
 
 def solve(client, problem, prior_name):
