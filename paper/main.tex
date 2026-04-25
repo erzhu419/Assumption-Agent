@@ -123,8 +123,7 @@ not a fix.
 \noindent\textbf{Strict-reviewer closure (Exp 25--33).} Nine further
 experiments each target a specific publication objection with
 concrete evidence, including: 3-family labeling reliability
-(\(\kappa\)); researcher/random/always-accept gate baselines (agent
-gate F1 \(= 0.40\) beats all); cluster-threshold relaxation
+(\(\kappa\)); cluster-threshold relaxation
 (12 \(\to\) 22 candidates, 83\% increase); and GSM8K standard-benchmark
 portability. The single-family self-adjudication failure replicates
 across every independent axis.
@@ -347,11 +346,14 @@ evaluated on the same substrate. Log provenance is preserved end-to-end.
 representative of all self-improvement schemes — it is one concrete
 instantiation designed to be auditable. We do not claim the audit
 stack is complete — L6 (faithfulness) in particular is the newest
-layer and admits many operationalizations. We do claim that
-\emph{a loop reporting ``\(k\) new entries passed the gate'' is not
-a publishable result} without at least L1 (cross-family re-judgment)
-attached, and that for this class of claim the defaults of the
-current literature are systematically too permissive.
+layer and admits many operationalizations. Within the scope of our
+single-loop case study, we recommend that for retrieval-level
+self-improvement claims of the form ``\(k\) new entries passed the
+held-out gate,'' L1 (cross-family re-judgment) be reported as a
+default audit item. We do not generalise this to a normative claim
+about whether such reports are publishable in the absence of L1;
+that would require evidence from more than one loop and more than
+one solver-judge configuration than we have run here.
 
 \section{Related Work}
 \label{sec:related}
@@ -419,9 +421,12 @@ non-pair-wr faithfulness axis (L6).
 
 The reading we want this table to support is modest: across
 eight representative papers, the L1 cross-family column is
-uniformly empty. Our contribution is not ``these papers are
-wrong,'' but ``the L1 column is a default reporting gap the field
-has collectively not filled.''
+uniformly empty. We do not claim these papers are wrong, nor that
+the gap is universal across self-improvement methods. We do
+observe that L1 is not a routine reporting item in this slice of
+the literature, and recommend, on the basis of our single-loop
+case study, that it be considered a default for
+retrieval-level self-improvement claims.
 
 \paragraph{Case-based reasoning and skill libraries.} Case-based
 reasoning~\citep{aamodt1994cbr} and skill-library
@@ -1114,7 +1119,9 @@ Before these experiments, the paper could at best claim
 Experiments 1--3 together let us say, concretely:
 \begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
   \item \textbf{Cross-family judge agreement} is measurable
-    (Experiment 1) and should become a routine reporting item;
+    (Experiment 1); we recommend it as a default reporting item
+    for retrieval-level self-improvement claims of the form
+    studied here;
   \item \textbf{Self-predicted failure modes} are specific and
     useful—the system's rebuttal verdicts \emph{agree with the
     criticisms a human reviewer would raise}, not a rubber-stamp
@@ -1737,8 +1744,9 @@ self-adjudication fails at \emph{both} the judge layer and the
 solver layer.
 
 \paragraph{Experiment 27 — Self-consistency of gate variants
-relative to inner-loop verdicts (NOT baseline F1).} An earlier
-draft of this paper reported an F1 ranking of gate variants
+relative to inner-loop verdicts (NOT baseline F1).}
+\label{sec:exp27}
+An earlier draft of this paper reported an F1 ranking of gate variants
 against \(\{W_{078}, \text{WCAND07}\}\) as a pseudo-ground-truth
 \emph{drawn from the inner-loop's own majority-of-3 labels}.
 \textbf{We retract the F1-ranking framing.} The audit stack
@@ -1796,8 +1804,13 @@ listed in \S\ref{sec:limitations}:
   \item \checkmark \textbf{\#3 single-family labeler}:
     closed by Exp 25 (κ per subset) + Exp 28 (agent gate
     invariant to labeler)
-  \item \checkmark \textbf{\#11 no baseline}:
-    closed by Exp 27 (F1 ranking)
+  \item $\times$ \textbf{\#11 no baseline}:
+    \emph{not closed}. An earlier draft cited the Exp~27 F1
+    ranking, but that ranking used inner-loop labels which the
+    audit stack subsequently rejects (see retraction in
+    \S\ref{sec:exp27}). A genuinely external baseline (human
+    labels or a pre-registered held-out scoring scheme) remains
+    future work.
   \item $\times$ \#1 small N (12 candidates, 50 held-out):
     open; requires compute scale-up
   \item $\times$ \#4 no standard benchmark (GSM8K / MATH):
@@ -1958,12 +1971,18 @@ Five of six fatal objections are now closed experimentally
   \item \#4 standard benchmark: GSM8K, W078 wr 0.15 mean,
     accuracy dropped (Exp 32); additionally fresh math pool
     null (Exp 31)
-  \item \#11 no baseline: F1 ranking established (Exp 27)
 \end{itemize}
 
-Only objection \#5 (wisdom-ontology framing) remains, and is a
-writing issue not a data issue. The paper's central thesis now
-has six independent confirming data streams.
+\textbf{Objection \#11 (no baseline) remains open.} An earlier
+draft cited Exp~27's F1 ranking; that ranking used inner-loop
+labels the audit stack subsequently rejects, so we have retracted
+the F1 framing (\S\ref{sec:exp27}). A genuinely external baseline
+(human labels or a pre-registered held-out scoring scheme) is
+future work. Objection \#5 (wisdom-ontology framing) is a
+writing issue not a data issue. With \#5 noted and \#11 explicitly
+unclosed, four of six fatal objections (\#1, \#2, \#3, \#4) have
+empirical responses; the central judge-fragility finding has
+six independent confirming data streams.
 
 \subsection{Experiment 34 — Expensive-tier judge robustness}
 \label{sec:exp34}
@@ -2990,12 +3009,14 @@ The state of the loop and the state of the audit are both fully
 documented (\(9/12\) rejections, disjoint evidence sources, every
 decision logged with evidence). The substantive finding is that
 this fully-logged loop with a same-family gate produces KEEPs
-that do not transport to a different-family re-judgment. The discipline going
-forward is not to close this loop harder; it is to include
-cross-family re-judgment as a first-class reporting item and to
-treat a same-family $+N$pp as preliminary until cross-family
-re-judgment confirms the direction. Our agent could have told us
-this; now we have told the reader.
+that do not transport to a different-family re-judgment. The
+recommendation we draw, scoped to this single-loop case study, is
+that cross-family re-judgment be reported as a default audit item
+for retrieval-level self-improvement claims of this form, and
+that a same-family $+N$pp on $n=50$ be reported as preliminary
+until cross-family re-judgment confirms the direction. Whether
+this generalises to other classes of self-improvement claim is an
+empirical question we do not settle here.
 
 \paragraph{Reproducibility.} All code
 (\texttt{wisdom\_registry.py}, \texttt{success\_distiller.py},
