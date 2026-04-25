@@ -3299,26 +3299,45 @@ reviewer feedback; the accurate name is ``preregistered
 fresh-data replication of the original candidates,'' used
 consistently throughout.
 
-\paragraph{Missing-data sensitivity (R15 callout).} \(n_{\text{eff}}\)
-in Exp~47 ranges from 26--29 (out of 30 fresh pids per cell)
-because \(1\)--\(4\) responses per cell are dropped due to model
-errors / invalid output / proxy failures. The headline analysis
-treats remaining valid outputs as the denominator. As a conservative
-sensitivity check, we recompute fresh-inner wr treating every
-invalid response as a \emph{base win} (worst case for the
-candidate, since it removes the candidate's chance to win):
-\(W_{078}\) inner drops from \(0.63 \to 0.57\) (now FAILS the
-\(0.60\) inner gate), \(W_{077}\) drops from \(0.66 \to 0.63\)
-(still passes), WCAND03 drops from \(0.68 \to 0.63\) (still
-passes). \emph{Under this conservative missing-data convention,
-only \(W_{077}\) and WCAND03 (not \(W_{078}\)) clear the inner
-gate}. The headline ``\(W_{078}\) is the strongest-replicating
-KEEP'' therefore holds under the standard valid-only convention
-but reverses under invalid-as-loss for inner. The L1 conservative
-recomputation does not change the L1 pass/fail set since L1's
-\(n_{\text{eff}}\) values are 28/30/28 (close to full coverage).
-The missing-data convention was \emph{not} preregistered; we
-flag this gap and include both readings.
+\paragraph{Missing-data sensitivity (R15/R16 callouts).}
+\(n_{\text{eff}}\) in Exp~47 ranges from 26--29 (out of 30 fresh
+pids per cell) because \(1\)--\(4\) responses per cell are dropped
+due to model errors / invalid output / proxy failures. The
+headline analysis treats remaining valid outputs as the
+denominator. The missing-data convention was \emph{not}
+preregistered. We recompute under invalid-as-loss (worst case for
+the candidate: count every invalid as a base win) and report all
+four corner combinations:
+
+\begin{center}\small
+\begin{tabular}{l c c c c}
+  \toprule
+  & \multicolumn{2}{c}{\(\text{inner} \geq 0.60\) AND \(\text{L1} \geq 0.55\)} & \multicolumn{2}{c}{\(\text{inner} \geq 0.60\) AND \(\text{L1} \geq 0.60\)} \\
+  \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+  Convention & \multicolumn{2}{c}{(preregistered)} & \multicolumn{2}{c}{(strict)} \\
+  & valid-only & invalid-as-loss & valid-only & invalid-as-loss \\
+  \midrule
+  W078 & PASS & f(inner 0.57) & PASS & f(inner 0.57) \\
+  W077 & PASS & PASS & f(L1 0.57) & f(both) \\
+  WCAND03 & PASS & f(L1 0.53) & f(L1 0.57) & f(both) \\
+  W076 & f(inner) & f(inner) & f(inner) & f(inner) \\
+  \midrule
+  \(/12\) clear & 3 & 1 (W077) & 1 (W078) & 0 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\noindent\emph{Reading.} Under the maximum-conservative
+combination (invalid-as-loss + strict \(0.60/0.60\)) the fresh
+replication count is \(\mathbf{0/12}\); under the most-permissive
+combination (valid-only + preregistered \(0.60/0.55\)) it is
+\(3/12\). The headline ``W077, W078 recover; W076 collapses''
+therefore depends on threshold and missing-data convention. The
+joint posterior reading (independent of convention since the
+posterior puts mass on \(\theta\), not on individual outputs)
+remains the cleanest summary: probabilistic ordering W078 \(>\)
+WCAND03 \(\approx\) W077 \(\gg\) W076, with no candidate
+exceeding 0.55 joint posterior on the exact preregistered rule.
 
 \paragraph{Preregistration audit trail (R10 Question 1).}
 \texttt{PREREGISTRATION\_v2.md} was first committed at
