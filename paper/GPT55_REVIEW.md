@@ -1,122 +1,79 @@
 # Summary
 
-The paper presents a fully logged, retrieval-level “wisdom library” self-improvement loop for an LLM solver, then argues that its single-family \(n=50\) A/B acceptance gate is judge-fragile. The main empirical claim is a null result: three wisdoms accepted by the inner loop do not survive a multi-layer audit involving cross-family re-judgment, side/order perturbations, sample extension, cross-solver checks, fresh-domain/GSM8K probes, and faithfulness-style diagnostics. The paper positions the audit stack, rather than the wisdom loop itself, as the methodological contribution, while repeatedly emphasizing that the evidence comes from one loop cycle and three accepted candidates.
+The paper builds a closed-loop “wisdom library” curation system for a scaffolded LLM solver, lets it propose and gate new retrieval entries, and then audits the three entries accepted by the inner-loop same-family A/B gate. Its main empirical claim is a null result: the accepted wisdoms do not robustly survive a multi-layer audit involving cross-family re-judging, sample extension, cross-solver tests, fresh-domain probes, expensive judges, faithfulness analyses, and objective GSM8K checks. The claimed methodological contribution is the audit stack and the case-study evidence that a default single-family LLM-as-judge gate is fragile.
 
 # Strengths
 
-- **The paper studies an important and under-audited failure mode.** The central L1 experiment in “Experiment 1 — Cross-judge stability” re-judges identical cached answer pairs with a different model family, holding content fixed. This is a simple but valuable diagnostic for LLM-as-judge self-improvement claims, and the paper makes a convincing case that such checks are often missing in adjacent work.
+- **Clear high-level scoping of the claim.** The abstract and “Scope and non-claims” in the Introduction explicitly state that this is a methodology/case-study paper, not a field-level claim that self-improving LLM loops fail. This restraint is important because the empirical base is small and the paper repeatedly acknowledges that cross-family disagreement is not the same as human-ground-truth falsification.
 
-- **The authors are unusually explicit that the main result is negative and scoped.** The abstract’s “Honest scope” paragraph and the “Scope and non-claims” paragraph in the Introduction state that the evidence is three accepted wisdoms from one loop cycle, with no human ground truth. This restraint strengthens the submission relative to many self-improvement papers that would overclaim from similar evidence.
+- **Valuable negative result with unusually extensive self-audit.** The paper reports that the loop’s apparent \(3/12\) KEEP outcome collapses under multiple probes, rather than only reporting the inner-loop success. The chronological retention of intermediate positive-looking results, e.g. Exp. 7’s majority-of-3 apparent survival of \(W_{078}\) and its later overturning in Exp. 8/31/32/34, strengthens the submission by showing the authors did not simply hide failed hypotheses.
 
-- **The loop is concretely specified and logged.** Sections 3.1–3.4 describe the solver, mutable registry, candidate generators, pruner, and A/B gate in enough detail to understand the system’s state transitions. The versioned registry and provenance claims are especially useful for auditing whether a purported library mutation actually occurred.
+- **Operationally concrete L1 audit.** Experiment 1 re-judges the exact same cached answer pairs with a different model family, holding answer content fixed. This is a simple, cheap, and practically useful audit intervention for LLM-as-judge self-improvement papers, and the reported \(0.64 \to 0.40\), \(0.60 \to 0.47\), \(0.60 \to 0.51\) drops are directly interpretable as lack of robustness to judge family.
 
-- **The paper reports several uncomfortable negative findings instead of hiding them.** Examples include the failure generator never firing in Section 4.4, the collapse of original KEEPs under L1/L3, the retraction of the Exp. 27 F1 framing, and the failure of the trigger-conditioned gate to generalize in Exp. 15/33. These admissions increase trust in the authors’ willingness to falsify their own narrative.
+- **Good acknowledgement of statistical fragility.** Section “Binomial confidence intervals on headline claims” reports Wilson intervals and explicitly notes that many CIs overlap both parity and the \(0.60\) threshold. This is much better than the common practice of treating \(n=50\) point estimates as decisive.
 
-- **The conceptual decomposition in Section 3.5 is appropriately caveated.** The paper explicitly says the \(Z^{\mathrm{specific}}, Z^{\mathrm{generic}}, Z^{\mathrm{style}}\) decomposition is informal and non-identifiable from one experiment. That is the right level of theory for this setting and helps organize the audit layers without pretending to prove identifiability.
+- **Reproducibility-oriented artifacts.** The main body claims release of code, candidate records, cached answer pairs, judgment files, registry states, and logs, and the prompt says the appendix includes model identities, temperatures, seeds, proxy details, cost breakdown, prompt templates, and schemas. For a methodology paper, this kind of provenance is a genuine strength.
 
-- **The audit goes beyond one kind of perturbation.** Even though the layers are not independent, the paper does attempt cross-family judging, sample extension, cross-solver regeneration, fresh-domain testing, standard-benchmark probing, and non-pairwise faithfulness checks. This breadth is a strength for a case-study methodology paper.
+- **Attempts to separate preference from faithfulness.** Experiments 9–14 and 15–17 try to move beyond scalar pairwise win rate by measuring perturbation magnitude, embedding/LLM faithfulness, citation, trigger-fit, and conditional utility. The operationalizations are imperfect, but the motivation is right: pairwise preference alone is not enough to establish that a retrieved “wisdom” caused the claimed reasoning improvement.
 
-- **The reproducibility intent is strong.** The main body promises release of code, cached judgments, registry states, figures, prompt templates, costs, seeds, proxy details, and logs. For a paper whose main contribution is an audit procedure, such artifacts are important.
+- **Honest limitation reporting.** The Limitations section admits serious issues, including held-out contamination through exemplar mining, post-hoc audit-stack construction, single-cycle scope, no human ground truth, no positive controls, proxy-based reproducibility, and L6 under-specification. This candor makes the paper more trustworthy, even though several of these issues remain fatal for acceptance.
 
 # Weaknesses
 
-- **The audit stack is not validated as an audit method; it only rejects this loop’s candidates.**  
-  Reference: Discussion, “No positive / negative controls for the audit stack,” and Experiments 9–15.  
-  For a methodology paper, showing that an audit rejects three weak or unstable KEEPs is not enough; the method must also be shown to accept genuinely useful interventions and reject known-placebo interventions at an interpretable rate. Without positive controls, length-matched random-context controls, deliberately useful task-specific hints, or human-curated improvements, the audit stack may simply be too conservative or miscalibrated.  
-  **Fix:** Add controlled interventions: random aphorisms, shuffled wisdoms, length-matched placebo context, intentionally useful task-specific hints, and human-curated library additions. Report false-positive and false-negative rates of each audit layer.
+- **Held-out contamination undermines the inner-loop gate being audited.** In the Limitations section, the authors disclose that candidate exemplars were mined from the same 50-problem held-out set used for the A/B gate, and may even include the evaluated PID itself. For this class of paper, the central object of study is the gate’s KEEP decision; if the gate was partially exposed to the evaluation distribution, then the original \(0.64/0.60/0.60\) KEEP scores are not clean held-out evidence. A clean rerun with exemplars mined only from a separate development pool and a frozen evaluation set is necessary.
 
-- **The entire audit protocol is post-hoc and adaptively expanded.**  
-  Reference: Section 4, “A note on staged stress testing (not pre-registration),” and Discussion, “Gate-design freedom / hindsight” and “Audit stack itself is post-hoc.”  
-  The paper states that L1–L6 were added through staged reviewer simulation after the inner-loop result, and that several gate designs were tried before the trigger-conditioned gate. This is a serious weakness for a top-venue methodology claim, because the final “0/3 survive six layers” result is vulnerable to layer-selection hindsight: keep adding tests until the accepted candidates fail.  
-  **Fix:** Freeze the audit stack and thresholds in advance, then run it prospectively on a fresh loop cycle or fresh candidate batch. The included preregistration template is not a substitute for a prospective result.
+- **The audit stack is post-hoc and not validated on a fresh loop.** Section “A note on staged stress testing” says the six layers were added in response to reviewer-simulation objections and were not pre-registered. That is acceptable for exploration, but the paper presents the stack as the main methodological contribution and recommends routine reporting based on it. A convincing methodology paper should apply a frozen audit stack to a fresh loop or at least to a fresh batch of candidates, with all thresholds and survival criteria fixed in advance.
 
-- **There are serious internal inconsistencies in the reported statistics.**  
-  Reference: Abstract expensive-tier claim; Exp. 35 Table 1/caption; Fig. 5-judge forest caption; Section 4.18 “Binomial confidence intervals”; Exp. 42 GSM8K table.  
-  The abstract says no expensive-tier CI upper bound reaches 0.60, but Exp. 35 reports \(W_{076}\) under GPT-5.4 as \(0.54\) with CI \([0.40,0.67]\), and \(W_{077}\) under Opus as \([0.39,0.67]\). The five-judge forest caption says no CI upper bound reaches the KEEP threshold across all 15 measurements, but the inner-loop Gemini CIs for the original KEEPs plainly exceed 0.60. Exp. 42 reports base \(28/30\) and \(+W078=29/30\) while still labeling \(W078\) as “\(-1\), HARMS,” apparently mixing runs.  
-  **Fix:** Regenerate all tables from a single source of truth, report exact ext/base/tie counts and effective \(n\), and correct all captions/abstract claims before resubmission.
+- **No positive controls, negative controls, or human-ground-truth calibration.** The Discussion explicitly admits there are no positive/negative controls for the audit stack and no human ground truth on the open-ended Chinese pool. This is severe: the paper shows the stack rejects the three KEEPs, but not that it would accept a genuinely useful library addition or reject placebo/random context at a known rate. The fix is to include placebo wisdoms, length-matched generic context, deliberately useful task-specific hints, human-curated improvements, and human or objective labels on a representative subset.
 
-- **Tie handling is inconsistent with the paper’s own stated protocol.**  
-  Reference: Section 4.1 “Tie handling and effective \(n\),” Experiment 1 table, Section 4.18 Table of CIs, Exp. 32 GSM8K.  
-  The paper says ties are excluded and Wilson CIs use the non-tie effective \(n\), but the CI table lists \(n=50\) for L1 rows where Exp. 1 has many ties, e.g. \(W077=19:21:10_{\text{tie}}\), whose effective \(n\) is 40, not 50. In GSM8K, subjective win rates are computed after excluding 20–26 ties out of 30, leaving extremely small effective denominators, yet the narrative treats the resulting wr values as strong evidence.  
-  **Fix:** Report all CIs using the actual non-tie denominator, and preferably model ternary outcomes directly or count ties as 0.5 in a sensitivity analysis.
+- **Small, selected sample makes regression-to-the-mean a major alternative explanation.** The headline \(0/3\) survival result is computed on three candidates selected from the right tail of 12 initial candidates, with many measurements at \(n=50\) or \(n=20\). The paper discusses CIs but does not model the winner’s-curse/selection effect: under a noisy gate, selected high point estimates are expected to drop on remeasurement even without any special “judge-fragility.” The authors should provide a selection-adjusted analysis, e.g. a hierarchical model or simulation of expected post-selection shrinkage under null and alternative assumptions.
 
-- **The main A/B gate appears to leak held-out information through exemplar mining.**  
-  Reference: Section 3.4 “The A/B validation gate,” item 1: “Mine 3 cross-domain exemplars from the held-out 50,” then evaluate on all 50 held-out problems.  
-  If the wisdom record used during evaluation contains exemplars selected from the same held-out set being evaluated, the held-out gate is contaminated. This is especially problematic because the paper’s core story depends on the original gate producing plausible KEEPs that are later audited.  
-  **Fix:** Mine exemplars only from training/development pools disjoint from the evaluation set, or exclude exemplar PIDs from evaluation. Rerun the original gate under a nested split.
+- **Several central claims are internally inconsistent.** The abstract says “None of the three KEEPs reaches \(\mathrm{wr}_{\mathrm{ext}}\geq0.60\) as a point estimate under any audit-stack measurement we report,” but Experiment 40 reports 7/18 cross-solver cells at or above \(0.60\), including \(W_{078}\) with a 3-family mean of \(0.63\) under the Claude solver and \(0.61\) under the GPT-mini solver. Similarly, the Introduction says the six layers “share no data with the others,” while the abstract correctly says L1/L2 reuse cached answer pairs and L3/L4 overlap in solver/problem pool. The paper needs a single precise definition of “survive” and should remove or correct all stronger inconsistent statements.
 
-- **The statistical evidence is underpowered and often overinterpreted.**  
-  Reference: Section 4.1 Measurement; Section 4.18 CI table; Exp. 31–42.  
-  At \(n=50\), a wr of 0.60 has a Wilson interval including 0.50, as the paper itself notes. Many later tests use \(n=20\) or \(n=30\), often with high tie rates, and many claims are threshold-crossing claims rather than statistically significant paired differences. The paper should not say “fail every audit axis” or “actively harms” without more careful uncertainty treatment.  
-  **Fix:** Use larger samples, paired tests for identical answer pairs, hierarchical models over problem/candidate/judge, and equivalence/non-inferiority framing where appropriate.
+- **The interpretation of cross-family disagreement is too strong in places.** The theory section carefully says cross-family re-judgment falsifies robustness to judge choice, not substantive utility. But Experiment 1’s interpretation says the gate is “measuring gemini-3-flash’s preference for answers that activate certain rhetorical structures,” and the abstract/conclusion use “validated library delta \(+0\).” Without human or objective calibration, another judge family may simply have different or worse preferences; the supported claim is non-robustness of the LLM-judge verdict, not absence of utility on the original open-ended task. The fix is to calibrate judges against human labels or task-grounded outcomes and consistently phrase the claim as robustness failure.
 
-- **The audit layers are repeatedly described as independent despite shared data and dependencies.**  
-  Reference: Introduction list says “each layer attacks a different failure mode and shares no data with the others”; abstract says they reuse the same KEEPs and cached pairs; Exp. 9 calls orthogonal tests “statistically independent.”  
-  The same three KEEPs, overlapping problem pools, cached answer pairs, and judge families recur across many layers. This does not invalidate the case study, but it invalidates language suggesting independent evidence streams.  
-  **Fix:** Consistently call them conditionally distinct stress tests, not independent tests, and use a dependency-aware analysis if combining evidence.
+- **Tie handling is fragile and judge-dependent.** Section “Tie handling and effective \(n\)” excludes ties from the denominator, but tie rates differ substantially across judges, e.g. Claude has many ties in Exp. 1 and GSM8K subjective judgments have 20+ ties out of 30. Excluding ties changes the estimand and can make judges with different tie propensities look incomparable. The paper should report sensitivity analyses treating ties as half-wins, as a third multinomial outcome, and via ordinal/preference models.
 
-- **Cross-family disagreement is sometimes overinterpreted as lack of utility.**  
-  Reference: Abstract “0/3 KEEPs survive,” Exp. 1 interpretation, Exp. 38 “rules out” stylistic-disagreement rebuttal, Conclusion.  
-  The paper correctly states in places that L1 only falsifies robustness to judge choice, not substantive utility. But elsewhere it slides into stronger claims such as “final validated library delta +0,” “falsified,” and “rules out” alternative explanations using another LLM judge. Low \(\kappa\) among judges shows instability, not which judge is correct.  
-  **Fix:** Use strictly robustness/non-validation language unless supported by human labels or objective task metrics. Treat gpt-5.5 as another model judge, not a human substitute that can rule out stylistic disagreement.
+- **Hosted-model temporal drift confounds several claimed interventions.** Section “Experiment 37” reports that the same gemini family at temperature 0 drifts from \(0.64\to0.47\) on \(W_{076}\), and Experiment 42 reports base GSM8K accuracy drifting from 30/30 to 28/30. This weakens claims that L2 isolates side-randomization or that repeated measurements differ only by a named nuisance variable. The fix is repeated adjudication with multiple independent runs, official versioned endpoints where possible, and modeling run-to-run variance explicitly.
 
-- **The side-randomization result is confounded with temporal drift.**  
-  Reference: Experiment 5 “The side-stability finding” and its caveat; Section 4.17 \(\kappa\) bonus finding.  
-  The paper initially presents \(0.64 \to 0.41\) as caused by side seed, but later acknowledges the rerun was not in the same batch and hosted-model drift is large even at temperature 0.0. Therefore L2, as executed, does not isolate side-position bias.  
-  **Fix:** Run same-batch AB/BA counterbalancing for every pair, ideally with both orders judged back-to-back and position-bias correction estimated directly.
+- **The L6 faithfulness measurements are not yet validated.** Experiments 9–11 use embedding alignment between Turn-0 `what_changed` deltas and wisdom text, plus a single LLM’s YES/PARTIAL/NO judgments. These are plausible probes but not established measures of causal faithfulness. For a methodology paper, L6 needs validation on synthetic cases with known inserted effects, human faithfulness annotations, and placebo/length-matched controls.
 
-- **The faithfulness layer is not yet methodologically sound.**  
-  Reference: Experiments 9–11 and 14; Discussion “L6 operationalization is under-specified.”  
-  Comparing a sentence-embedding difference vector of two “what_changed” strings to a wisdom embedding has no validated interpretation as causal faithfulness. LLM-judged citation strictness is also prompt-sensitive, as Exp. 17 shows when requiring explicit citations drives target-citation to 95% without proving utility.  
-  **Fix:** Validate L6 on synthetic examples with known inserted wisdom effects, include human faithfulness labels, and add placebo/context controls.
+- **The random-30% baseline is arbitrary and sometimes overinterpreted.** Experiments 33 and 15 compare pass rates such as \(0/9\), \(3/21\), or \(4/21\) to a “random-inclusion” baseline of 30%, while also acknowledging that 30% is arbitrary. This does not establish utility or gate quality; it only says the observed pass rate is below an arbitrary reference. A meaningful baseline would compare against always-accept, random wisdoms, length-matched generic context, human-curated candidate entries, and pre-registered alternative gates on the same external criterion.
 
-- **The benchmark and task distribution are insufficiently calibrated.**  
-  Reference: Section 4.1 Setup; Limitations “Language scope”; Exp. 39 English replication.  
-  The primary benchmark is a Chinese open-ended pool with unclear provenance, no human calibration, and LLM-judged outcomes. The English replication is only 30 MT-Bench prompts with a 6-entry library, and GSM8K is a small arithmetic probe that may not reflect the intended open-ended setting.  
-  **Fix:** Provide detailed benchmark construction and validation, include public open-ended benchmarks with human annotations, and run a full English closed-loop replication rather than a small static-library probe.
+- **The cross-solver and fresh-domain audits are uneven.** Exp. 26 tests only \(W_{076}\) on 20 fresh PIDs; Exp. 31 tests only \(W_{078}\); Exp. 33 tests the 9 new candidates with \(n=20\) and gemini-only judging; Exp. 40 is fuller but yields mixed positive cells. This unevenness makes the “six-layer” story look more like accumulated probes than a balanced factorial audit. A cleaner design would test all KEEPs and a control set across the same PIDs, solvers, judges, and sample sizes.
 
-- **The solver/proposer scope remains narrow despite cross-solver audits.**  
-  Reference: Limitations “Single LLM family for solver”; Exp. 40.  
-  The original candidate generation, solving, and gate are all centered on Gemini. Exp. 40 audits the three KEEPs with other solvers, but does not rerun the full self-improvement loop with another solver family. This limits claims about “default gates” beyond this specific solver-judge configuration.  
-  **Fix:** Run at least one full loop cycle with a non-Gemini solver and judge, then apply the frozen audit stack.
+- **The architectural recovery story is confusing and partly inconsistent.** The abstract says scaling to 21 candidates in Exp. 33 yields \(3/21\) PASS, while the Introduction and Exp. 15 say the trigger-conditioned gate locally rescues \(4/12\), prospectively gets \(0/9\), and thus gives \(4/21\). These appear to refer to different gates, but the text sometimes presents them as the same “architectural recovery.” The authors should separate naive-gate pass rate, trigger-conditioned-gate training performance, and prospective trigger-conditioned performance in one table.
 
-- **Several baseline analyses are not meaningful.**  
-  Reference: Exp. 27 and Exp. 33/Section 4.18 “random 30% baseline.”  
-  A random 30% inclusion rate is not a principled baseline for utility or audit correctness, and pass-rate comparisons do not establish that a gate is better or worse without external labels. The paper partially retracts the Exp. 27 F1 framing, but still uses “below random baseline” language elsewhere.  
-  **Fix:** Define baselines in terms of external utility labels or controlled interventions, not arbitrary pass-rate targets.
+- **The scaffold performance claims are under-supported and internally unclear.** The abstract claims v20 is \(+28\)pp vs. v16 on 100 problems and \(+76\)pp vs. a budget-matched baseline on 50 held-out, while Figure 1/Figure 2 text elsewhere mentions \(86\%\) vs. \(74\%\) and \(0.86\to0.88\). Since the paper’s audit depends on having a strong scaffold as instrument, these numbers should be made consistent, tabulated, and clearly labeled as same-family-judged rather than independently validated.
 
-- **The presentation is too sprawling and contains too many chronological dead ends for a main-track paper.**  
-  Reference: Experiments 1–42 are not ordered logically; Exp. 7 is retained as an “intermediate verdict subsequently overturned”; Exp. 25–42 appear before Exp. 12–19; repeated phrases such as “first time,” “fatal objections closed,” and “strict-reviewer closure.”  
-  The paper reads like a lab notebook plus rebuttal log rather than a polished methodology paper. This makes it hard to identify the final protocol, final claims, and final evidence.  
-  **Fix:** Move chronological history and overturned intermediate analyses to the appendix. In the main paper, present a fixed audit protocol, a single final results table, corrected statistics, and concise limitations.
+- **The English replication does not test the same claim.** Exp. 39 uses a fixed six-entry English wisdom library on MT-Bench, not a full English closed-loop candidate-generation/gating/audit process. It is useful as an extra stress test, but it cannot remove the “Chinese-only” limitation for the self-improvement loop. A real replication would need English candidate generation, English exemplar mining, English gate decisions, and the same pre-registered audit stack.
 
-- **Reproducibility remains limited by proprietary hosted models and a third-party proxy.**  
-  Reference: Limitations “Reproducibility via third-party proxy”; Section 3.1 footnote; Section 4.17 observed temporal drift.  
-  The paper itself observes substantial drift on identical content, and exact-token reproduction depends on proxy routing state. Cached artifacts help, but independent reproduction of the audit conclusions remains uncertain.  
-  **Fix:** Replicate key results through official vendor endpoints and/or open-weight models with frozen checkpoints, and distinguish “reproduce from cached logs” from “rerun the experiment.”
+- **The paper is overloaded and hard to audit as a main-track methodology contribution.** The main body includes dozens of experiments, retractions, intermediate verdicts, architectural probes, and reviewer rebuttals, many of which are exploratory. This makes the central contribution difficult to verify and contributes to inconsistent claims. The paper should move exploratory chronology to appendices and present one clean frozen protocol, one primary result table, and one limitations table in the main text.
 
 # Questions to the authors
 
-1. Did the A/B gate really mine cross-domain exemplars from the same 50 held-out problems used for evaluation? If yes, what happens when exemplars are mined from a disjoint development pool or exemplar PIDs are excluded?
+1. If you rerun the inner loop cleanly with exemplars mined only from a separate development pool, do any of \(W_{076}, W_{077}, W_{078}\) still pass the original same-family gate, and does the audit-stack conclusion remain \(0/3\)?
 
-2. Can you provide a corrected single table with ext/base/tie counts, effective \(n\), and Wilson CIs for every headline cell, especially Exp. 1, Exp. 35, Exp. 32, and Exp. 42?
+2. How much of the L1/L3 drop would be expected from post-selection regression to the mean under a noisy \(n=50\) gate? Can you provide a simulation or hierarchical Bayesian analysis conditioning on selecting the top three of twelve candidates?
 
-3. If the six-layer audit stack and all thresholds are frozen now, what happens on a fresh loop cycle or fresh candidate batch with no further gate/layer changes?
+3. What is the human-preference or task-grounded calibration of the five LLM judges on a subset of the Chinese open-ended answer pairs? If human raters prefer the original gemini KEEPs, the interpretation of “audit failure” would change substantially.
 
-4. Can the audit stack accept known-useful interventions and reject known-placebo interventions? For example: length-matched random wisdoms, shuffled wisdom descriptions, and human-authored task-specific hints.
+4. What positive controls has the audit stack been tested on? For example, would it accept a human-written task-specific hint known to improve GSM8K or a deliberately useful domain-specific retrieval entry?
 
-5. On a stratified subset of the Chinese open-ended pairs, how do human annotators rate base vs. ext, and how do their preferences correlate with Gemini, Claude, GPT, and gpt-5.5 judgments?
+5. Please define “survive” formally. Does survival require every judge in a panel to exceed \(0.60\), a majority, the mean, a CI lower bound, or something else? How does this definition reconcile with Exp. 40’s cells and means above \(0.60\)?
 
-6. How much of L2 is true side-position bias versus temporal/model drift? Can you rerun same-batch AB/BA counterbalancing for all original KEEPs?
+6. What fraction of the held-out evaluation PIDs were used as exemplars for each candidate, and did any candidate include the same PID being evaluated as an exemplar? This matters for assessing the size of the contamination.
 
-7. Would a full non-Gemini self-improvement loop—candidate generation, solving, judging, and audit—show the same judge-fragility pattern?
+7. Can you provide a tie-aware reanalysis of the main L1/L3/Exp. 35 results, treating ties as half-wins and also as a third multinomial outcome?
+
+8. How were the proxy-served model identities verified, and how stable are repeated judgments on official endpoints or repeated proxy calls? The reported temporal drift is large enough to affect several conclusions.
 
 # Rating
 
-Reject
+Weak Reject
 
-The paper is interesting and potentially valuable as a case study, but it is not yet a reliable top-venue methodology contribution. The most important problems are the lack of positive/negative controls for the audit stack, the post-hoc adaptive construction of the audit layers, apparent held-out leakage through exemplar mining, and multiple serious statistical/reporting inconsistencies. The core L1 idea is strong and the authors are commendably transparent about many limitations, but the current paper overstates what judge disagreement proves and contains enough internal contradictions that the main empirical narrative cannot be trusted without substantial correction and prospective validation.
+The submission is interesting, unusually honest, and potentially useful as an audit case study, but it is not yet a solid top-venue methodology paper. The most important issues are the contaminated inner-loop held-out gate, the post-hoc and unvalidated audit stack, the absence of human/positive-control calibration, and the very small selected sample with no selection-adjusted inference. Internal inconsistencies around what counts as “survival” and the mixed Exp. 40 cross-solver results further weaken the headline \(0/3\) claim. A clean pre-registered rerun with controls and calibrated evaluation could make this much stronger.
 
 # Confidence
 
-4. I am familiar with LLM self-improvement loops, LLM-as-judge evaluation and cross-judge reliability issues, and reproducibility/preregistration concerns in empirical ML, though I am not a specialist in this particular Chinese wisdom-library benchmark.
+4 — I am familiar with LLM-as-judge evaluation, self-improvement/agent-loop methodology, and reproducibility/preregistration issues; I have somewhat less direct experience with this exact “wisdom-library” retrieval formulation, but the evaluation concerns are squarely within my area.

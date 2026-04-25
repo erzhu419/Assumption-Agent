@@ -65,11 +65,14 @@ given retrieval-augmented \emph{methodological scaffolding}: problem
 reframes, anti-patterns, evaluation criteria, exemplars of parallel
 prior reasoning. A natural next step is an agent that \emph{curates
 its own} library of such methodological wisdoms without a human in
-the loop. We build this loop as a concrete testbed: a strong scaffolded
-solver (v20, \(+28\)pp vs.\ the v16 champion on 100 problems, \(+76\)pp
-vs.\ budget-matched baseline on 50 held-out) plus four orchestration
-modules (failure generator, success distiller, cross-model distiller,
-Darwinian pruner), gated by a \(+10\)pp held-out A/B test.
+the loop. We build this loop as a concrete testbed: a strong
+scaffolded solver (v20; pairwise win rate \(0.64\) vs.\ the v16
+case-library champion on 100 problems and \(0.88\) vs.\ a
+budget-matched baseline on 50 held-out, both same-family
+LLM-judged --- see Fig.~\ref{fig:arch} and \S\ref{sec:ratchet})
+plus four orchestration modules (failure generator, success
+distiller, cross-model distiller, Darwinian pruner), gated by a
+\(+10\)pp held-out A/B test.
 
 \noindent\textbf{Inner-loop result.} Over one cycle the library grows
 \(75 \to 77 \to 58_{\text{active}} + 19_{\text{deprecated}} \to
@@ -119,9 +122,17 @@ confidence on those three cells. Cohen's \(\kappa\) on the full
 a judge-tier artifact.
 \textbf{Final validated library delta on external data under our
 single-family inner-loop gate's own threshold:} \(\boxed{+0}\).
-None of the three KEEPs reaches \(\mathrm{wr}_{\mathrm{ext}}
-\geq 0.60\) as a point estimate under any audit-stack
-measurement we report.
+No KEEP reaches \(\mathrm{wr}_{\mathrm{ext}} \geq 0.60\) as a
+point estimate under L1 (cross-family judge), L3 (\(n=100\)
+extension), L5 (fresh-domain / GSM8K), or the expensive-judge
+audit (Exp~35). \emph{The one exception is the cross-solver
+audit (Exp~40):} when the SOLVER (not just the judge) is changed
+to claude-haiku-4.5 or gpt-5.4-mini, \(7/18\) (KEEP, solver,
+judge) cells reach \(\geq 0.60\), and \(W_{078}\)'s 3-family mean
+under a claude-haiku solver is \(0.63\); however, no
+(KEEP, solver) combination crosses \(0.60\) under \emph{all}
+three judges in the cheap panel (\(0/6\) under the strict
+3-family-consensus criterion).
 
 \noindent\textbf{Honest scope.} The empirical base of this paper
 is \emph{three} accepted wisdoms from \emph{one} loop cycle on
@@ -304,8 +315,12 @@ attacks a different failure mode and shares no data with the others:
 \textbf{We report a null result under this audit stack.} The
 inner loop produces \(3/12\) KEEPs (gate-positive at \(n=50\),
 gemini-judged). After the audit: \(\mathbf{0/3}\) KEEPs
-survive any layer, let alone all six (Fig.~\ref{fig:audit-sieve}).
-Final validated library delta: \(\boxed{+0}\). Our contributions are:
+clear the \(0.60\) gate as a point estimate under L1, L3, L5, or
+the expensive-judge audit (Fig.~\ref{fig:audit-sieve}); the cross-
+solver layer (L4 / Exp~40) is the one exception, where some
+single-judge cells exceed \(0.60\) but no (KEEP, solver) reaches
+3-family consensus. Final validated library delta under the inner-
+loop gate's own threshold: \(\boxed{+0}\). Our contributions are:
 
 \paragraph{Contribution 1 — The six-layer audit stack (primary).} We
 specify each layer operationally enough to run against any future
@@ -331,10 +346,12 @@ simply not what it advertises.
 \paragraph{Contribution 3 — A strong scaffold as instrument
 (itself reported under same-family judging).} The audit stack
 only has bite if attached to a scaffold strong enough to produce
-candidates in the first place. Our v20 scaffold reaches \(+28\)pp
-vs.\ the v16 case-library champion on 100 problems and \(+76\)pp
-vs.\ a budget-matched baseline on 50 held-out, with held-out
-advantage \emph{larger} than training-split advantage. \textbf{We
+candidates in the first place. Our v20 scaffold's pairwise win
+rate (Fig.~\ref{fig:arch}) is \(0.64\) against the v16
+case-library champion on 100 problems (\(+28\)pp above parity)
+and \(0.88\) against a budget-matched baseline on 50 held-out
+problems (\(+76\)pp above parity), with held-out advantage
+\emph{larger} than training-split advantage. \textbf{We
 note that these scaffold-vs-baseline gains were themselves
 measured by a same-family pairwise LLM judge}; under this paper's
 own critique of same-family judging, they should be read as
@@ -2321,6 +2338,44 @@ trigger-gate PASS vs.\ same baseline (\(p = 0.086\)). These are
 consistent with ``no candidate improves on the random-inclusion
 baseline.''
 
+\paragraph{Tie-handling sensitivity.} Our default convention
+excludes ties from the denominator (\S\ref{sec:setup}). For the
+low-tie-rate cells in Table~\ref{tab:ci} (\(\leq 10\) ties out
+of 50), the alternative ``ties as half-wins'' convention shifts
+wr by at most \(0.01\)--\(0.02\): e.g.\ \(W_{077}\) L1 Opus
+(ties\(=10\)) gives \(0.475\) excluded vs.\ \(0.480\) half-wins.
+Direction (below the \(0.60\) gate) is invariant. The exception
+is the GSM8K subjective wr in Exp~32/42, which has \(20\)--\(26\)
+ties out of 30: under ties-excluded, mean wr \(\approx 0.12\)--\(0.23\);
+under ties-as-half-wins, mean wr \(\approx 0.43\)--\(0.47\) ---
+much closer to parity, and the cleaner signal in those experiments
+is therefore the \emph{objective} accuracy
+(\(\#\text{correct numerical answers}\)/30) which is independent
+of tie convention.
+
+\paragraph{Winner's curse / selection bias on the inner-loop
+KEEPs.} The three KEEPs (\(W_{076}, W_{077}, W_{078}\)) are not
+random candidates; they are the top of \(12\) inner-loop proposals
+selected by passing a noisy \(n = 50\) gate. Under any noisy
+measurement, the maxima of a candidate set are expected to drop
+on remeasurement even with no underlying judge-fragility (the
+classical winner's curse). For our setup, a back-of-envelope
+estimate is informative: with all twelve true wr's drawn from
+\(\mathrm{Beta}(\alpha, \beta)\) centred at \(0.50\) and
+\(n=50\) observations per candidate, the expected
+post-selection drop on the top-3 is in the range of
+\(0.04\)--\(0.08\) under a wide range of \(\alpha, \beta\). The
+observed inner-loop \(\to\) L1 drops are \(0.24\) (W076),
+\(0.13\) (W077), \(0.09\) (W078) --- the W078 drop is within the
+selection-bias band, the W077 drop is at the top of the band,
+and the W076 drop is well outside it. We therefore do not
+attribute the entire L1 drop to judge-fragility alone: the
+three KEEPs are top-3-of-12 selected on noisy measurements, and
+some shrinkage was expected under any null.\footnote{A formal
+hierarchical-model selection-adjusted analysis would tighten
+this bound; we describe the back-of-envelope reasoning as the
+honest minimum, not as a substitute for that analysis.}
+
 \subsection{Per-domain breakdown of the null verdict}
 \label{sec:per-domain}
 
@@ -3285,6 +3340,16 @@ than leave them to footnotes.
     cross-family fragility persists across solver families.
     A second \emph{full inner-loop cycle} on a non-gemini solver
     (proposers, gate, audit) is still open.
+  \item \textbf{Uneven probe coverage across the audit layers.}
+    Several individual probes test only a subset of the 3 KEEPs:
+    Exp~26 (cross-solver, original L4) only \(W_{076}\); Exp~31
+    (fresh math) only \(W_{078}\); Exp~33 (\(9\) new candidates
+    prospective) gemini-only judging. The full panel (3 KEEPs
+    \(\times\) all relevant axes) is not balanced. Exp~35,
+    Exp~40, Exp~41, Exp~42 close most of these gaps for the 3
+    KEEPs, but a balanced factorial design (all KEEPs across
+    all solvers and all judges and all problem subsets at the
+    same \(n\)) is future work.
   \item \textbf{One evolution cycle.} We ran the loop once. We
     have no data on whether a multi-cycle run converges, cycles,
     or drifts.
