@@ -61,9 +61,10 @@ applicability conditions, a formal alignment layer that lets the
 agent recognise that two superficially different priors are the
 same idea, and eventually a generator of \emph{new} priors when
 the existing ones do not fit. We unfold these into the six-stage
-roadmap of \S\ref{sec:roadmap}. No existing system has the
-combination; the field's current proxy --- LLM-as-judge with
-same-family A/B gating --- has \emph{none} of them.
+roadmap of \S\ref{sec:roadmap}. No existing system we are aware
+of has all of these; the common proxy in retrieval/prompt-level
+self-improvement loops --- LLM-as-judge with same-family A/B
+gating --- supplies very few.
 
 \noindent This paper studies one extremely simple instance of the
 target: a closed-loop agent that proposes Chinese-language
@@ -106,19 +107,20 @@ experience~/ alignment / new prior generation) and
 \emph{stress-test each stage} in a separate campaign of 11
 diagnostic experiments (Exp~55--65,
 \S\ref{sec:roadmap-validation}) on a synthetic 4-task-family
-environment, 5 languages, and 3 LLM solver families. Result: three stages work in their simplest form
-(priors library; in-context experience feedback;
-cross-language alignment, \(95\%\) pairwise pick agreement); one
+environment, 5 languages, and 3 LLM solver families. Result: two stages clearly work in their simplest form
+(priors library; in-context experience feedback); a third
+passes a cross-language pick-consistency probe (\(95\%\)
+pairwise agreement) which is necessary but not sufficient for the
+formal alignment layer Stage~3 ultimately calls for; one
 is conditional on the task's prior-sensitivity (the scheduler
 picks robustly but solver-end gain depends on the gap between
 best and worst prior); two fail in their simplest form (a
 naive LLM-prompted ``cheap world model'' has AUROC \(0.40\); a
 naive LLM-prompted ``new prior generator'' beats baseline on
-\(0/5\) hold-outs). The honest reading: three of the six stages
-plug in cheaply, one is conditional, and two need substantively
-more work than a single LLM prompt. A same-
-family A/B gate at \(n=50\) is the \emph{worst} possible
-substitute. Code, all logs, and the preregistration document are
+\(0/5\) hold-outs). For the specific class of loops we study ---
+LLM-judged retrieval/prompt-level acceptance --- a same-family
+A/B gate at \(n=50\) is, on this evidence, an unreliable
+substitute for an audit-based acceptance criterion. Code, all logs, and the preregistration document are
 released so others can run the same checks on their loops.
 \end{abstract}
 
@@ -160,9 +162,10 @@ Chatelier and Lenz are the same negative-feedback principle);
 \textbf{Stage 4}, a generator of \emph{new} priors when the
 existing library is silent on a problem, audited by the rest of
 the stack. We sketch the six-stage roadmap in
-\S\ref{sec:roadmap}; no existing system has all of them, and the
-field's current proxy --- LLM-as-judge with same-family A/B
-testing --- has \emph{none} of them.
+\S\ref{sec:roadmap}; no existing system we are aware of has all
+of them, and the common proxy in retrieval/prompt-level
+self-improvement loops --- LLM-as-judge with same-family A/B
+testing --- supplies very few.
 
 \paragraph{What this paper is.}
 This paper studies the absolute simplest possible instance of the
@@ -183,9 +186,10 @@ of the architectural pieces we cannot omit.}
 The minimal loop's gate accepts \(3/12\) candidates. We then
 audit those three accepts six ways, model the selection bias
 explicitly, fit a hierarchical Bayesian posterior over the
-verdict array, and run \emph{two} preregistered fresh-data
-replications at \(n=100\) (one without the same-domain in-pool
-exemplar mechanism the original solver used, one with it).
+verdict array, and run \emph{three} preregistered fresh-data
+replications: \(n=100\) without the same-domain in-pool
+exemplar mechanism the original solver used, \(n=100\) with it,
+and a final \(n=200\) at double the sample size on a fresh seed.
 \textbf{The result is a clean null}: under any honest evaluation
 protocol at adequate sample size, no candidate clears the gate.
 Cached-audit drops are statistically indistinguishable from
@@ -212,10 +216,10 @@ of a paper about wisdom libraries.
 \paragraph{Roadmap of this paper.}
 \S\ref{sec:method} describes the minimal loop and its inputs.
 \S\ref{sec:experiments} reports the audit, the selection-bias
-analysis, the hierarchical Bayes, and the two preregistered fresh
-\(n=100\) replications --- enough to establish the null with
-calibrated uncertainty and resolve the protocol-mismatch
-ambiguity. \S\ref{sec:roadmap} lays out the six-stage
+analysis, the hierarchical Bayes, and the three preregistered
+fresh-data replications (\(n=100\) twice, \(n=200\) once) --- enough
+to establish the null with calibrated uncertainty and resolve the
+protocol-mismatch ambiguity. \S\ref{sec:roadmap} lays out the six-stage
 architecture our null motivates. \S\ref{sec:discussion} compares
 to existing work (POPPER, EvolveR, ReMA, Voyager, Reflexion).
 Limitations and conclusion follow.
@@ -1007,10 +1011,19 @@ expected from picking the top 3 of 12 noisy measurements}
 The cached-audit drops by themselves are ambiguous. They could
 mean the gate is wrong, or they could mean the original
 measurements were noisy and we selected on the noise. We fitted
-an empirical-Bayes Beta prior to the \(12\) candidate win-rates,
-simulated the entire ``measure 12, accept top 3, re-measure''
-process, and asked: under \emph{pure} regression to the mean,
-how big should the drops between original-measurement and
+an empirical-Bayes Beta prior to the \(12\) candidate win-rates
+by maximising the marginal likelihood under independent
+Beta-Binomial cells, then simulated the entire ``measure 12,
+accept top 3, re-measure'' process. The fit gave a prior mean of
+\(\hat\mu = 0.555\) with very high concentration
+(\(\hat\alpha + \hat\beta \approx 6 \times 10^7\)), which is the
+expected outcome when the \(12\) observed candidate win-rates are
+tightly clustered relative to the per-candidate sampling noise:
+the pool is consistent with \emph{all candidates having
+near-identical true win-rates around \(0.55\)}, with the
+\(0.60\)--\(0.64\) gate-passers being upward fluctuations. We
+asked: under \emph{pure} regression to the mean implied by this
+prior, how big should the drops between original-measurement and
 re-measurement be?
 
 The answer: \(W_{076}\)'s observed drop of \(0.20\) (in absolute
@@ -1055,6 +1068,26 @@ without that clustering would have given an even higher
 This was the picture at \(n=30\). The next subsection shows
 what happened when we ran the same protocol at \(n=100\).
 
+\paragraph{Why was the \(W_{078}\) posterior overconfident, in
+hindsight?} The model at \(n=30\) saw a \(20/30\) inner reading
+plus consistent cross-family L1 verdicts and pooled them through
+random effects on judge and pid; with no covariate for the
+\emph{exemplar mechanism} (every cached cell used in-pool
+exemplars; the \(n=30\) fresh cell happened to as well) and no
+shrinkage informed by the candidate-pool prior fitted in
+\S\ref{sec:exp-summary-selection}, the model's between-candidate
+prior was effectively flat and the within-pid clustering pushed
+support upward rather than down. The \(n \geq 100\) data
+contains both pieces of information the \(n=30\) model lacked:
+the exemplar-vs-no-exemplar contrast as an explicit factor, and a
+much tighter likelihood. Operationally, the lesson is that a
+hierarchical model fitted on cached data plus one small fresh
+sample, without an explicit covariate for the protocol features
+that may shift the mean, can be confidently wrong about the upper
+tail. We retain the \(n=30\) hierarchical fit as a checkpoint
+rather than as a contribution: it is the model used to fix the
+preregistration, not the final analysis.
+
 \subsection{Three preregistered fresh-data replications
 (\(n=100\) twice, \(n=200\) once): \(0/12\) under all three}
 \label{sec:exp-summary-fresh}
@@ -1096,9 +1129,10 @@ underpowered, we ran the v20-style+exemplar protocol again at
 double the sample size, on a fresh seed (2028) disjoint from all
 prior fresh samples. Top three: \(W_{078}\) inner \(0.590\) /
 L1 \(0.573\); \textsc{wcand03} inner \(0.580\) / L1 \(0.574\);
-\textsc{wcand07} inner \(0.565\) / L1 \(0.558\). All three are
-below both inner-\(0.60\) and L1-\(0.55\) thresholds, none
-clearing the joint preregistered rule. \textbf{The triple
+\textsc{wcand07} inner \(0.565\) / L1 \(0.558\). All three fall
+below the inner-\(0.60\) threshold; their L1 values do clear the
+laxer \(0.55\) threshold, but the joint preregistered rule
+requires \emph{both}, so zero candidates pass. \textbf{The triple
 \(0/12\) (\(n{=}100\) no-exemplar; \(n{=}100\) v20+exemplar;
 \(n{=}200\) v20+exemplar)} is the strongest fresh-data evidence
 in this paper. Full table in
@@ -1321,15 +1355,17 @@ the LLM to invent a prior. Solver: gemini-3-flash unless noted.
       \emph{Experience accumulation substantially improves
       prior-selection.} \\
   \midrule
-  3. Cross-language alignment
-    & \cellcolor{green!28}\textbf{strongly works}
+  3. Cross-language pick consistency
+    & \cellcolor{green!22}\textbf{operational probe passes}
     & \(95\%\) mean pairwise pick agreement across English /
       Spanish / French / German / Japanese on the same problems
       (Exp~63). \(96.7\%\) mode-pick consistency. Per-family
       mode-correct: A=100\%, B=93\%, C=93\%, D=60\%. \emph{The
-      scheduler operates on underlying problem structure, not
-      surface language --- which is what an alignment layer is
-      supposed to deliver.} \\
+      scheduler's pick is largely invariant to surface language ---
+      a necessary but not sufficient condition for a real
+      alignment layer; this is one operational probe of
+      structure-over-surface, not the formal cross-domain
+      equivalence detection Stage~3 ultimately requires.} \\
   \midrule
   4. New prior generation
     & \cellcolor{red!18}\textbf{fails}
@@ -1344,11 +1380,16 @@ the LLM to invent a prior. Solver: gemini-3-flash unless noted.
       ``ask the LLM for a new prior'' --- does not work.} \\
   \bottomrule
 \end{tabular}
-\caption{Per-stage empirical verdict from Exp~55--65. Three
-stages (0, 2, 3) work in their simplest form. One (1) is
-conditional on the task's prior-sensitivity. Two (0.5, 4) fail
-in their simplest form and need substantively more sophisticated
-implementations than a single LLM prompt.}
+\caption{Per-stage operational verdict from Exp~55--65 on a
+small synthetic diagnostic environment (60 problems across 4
+families). Two stages (0, 2) clearly work; one (3) passes a
+necessary cross-language consistency probe but the formal
+alignment claim itself is not tested here; one (1) is conditional
+on the task's prior-sensitivity; two (0.5, 4) fail in their
+simplest form and need substantively more sophisticated
+implementations than a single LLM prompt. We deliberately label
+these as operational probes rather than full architectural
+validation given the synthetic scope.}
 \label{tab:stage-verdicts}
 \end{table}
 
@@ -1729,10 +1770,11 @@ rhetorical patterns.
 
 We started from a long-standing target: an agent that
 \emph{proposes hypotheses about how to solve a problem and then
-validates them recursively}, the way humans do every day. The
-field's current proxy --- LLM-as-judge with same-family A/B
-gating --- imitates the surface form of this loop without any of
-the substance. To find out what is actually missing, we built
+validates them recursively}, the way humans do every day. A
+common proxy in retrieval/prompt-level self-improvement loops
+--- LLM-as-judge with same-family A/B gating --- imitates the
+surface form of this loop without supplying most of the
+substance an audit-grade self-validator would need. To find out what is actually missing, we built
 the simplest possible instance: an autonomous Chinese
 ``wisdom-library'' agent whose validator is a same-family
 \(+10\)pp test on \(n=50\) held-out problems, and we audited
@@ -1753,10 +1795,10 @@ absolute win-rate'' plus ``selection bias on top-3-of-12'';
 neither is the candidate's own content-specific utility, though
 the data also does not rule it out.
 
-That null is informative. It says that a same-family A/B at
-\(n=50\) is the worst possible self-validator because it folds
-selection bias, judge stylistic preference, exemplar
-contamination, and small-sample noise into one number. Better
+That null is informative. It says that, for this class of
+loop, a same-family A/B at \(n=50\) is a poor self-validator
+because it folds selection bias, judge stylistic preference,
+exemplar contamination, and small-sample noise into one number. Better
 audits cannot fix that --- they can only diagnose it, which is
 what ours did. The fix is the rest of the architecture
 (\S\ref{sec:roadmap}): a library of human-distilled
