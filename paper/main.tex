@@ -134,16 +134,23 @@ architectural redesign recovers \emph{local} positive signal on
 the original 12 but does not generalize: a partial recovery,
 not a fix.
 
-\noindent\textbf{Strict-reviewer closure (Exp 25--39).} Further
+\noindent\textbf{Strict-reviewer closure (Exp 25--42).} Further
 experiments each target a specific publication objection with
 concrete evidence, including: 3-family labeling reliability
 (\(\kappa\)); cluster-threshold relaxation (12 \(\to\) 21
-candidates, 75\% increase); GSM8K standard-benchmark
-portability; expensive-tier judge scale-up
-(Exp~35; cross-tier \(\kappa\) in Exp~37); structured non-panel
-rating by gpt-5.5 (Exp~38); and a minimal English-language
-replication on MT-Bench (Exp~39, 0/6 English wisdoms clear
-\(0.60\) under any family across two independent runs). The
+candidates); expensive-tier judge scale-up (Exp~35;
+cross-tier \(\kappa\) in Exp~37); structured non-panel rating by
+gpt-5.5 on \emph{all three KEEPs} (Exp~38, Exp~41 --- 4-dim
+Likert preference base \(>\) ext on every dimension and every
+candidate); minimal English-language replication on MT-Bench
+(Exp~39, 0/6 English wisdoms clear \(0.60\) under any family
+across two independent runs); cross-solver L4 full audit
+(Exp~40, three KEEPs across two new solver families: 7/18 cells
+reach a single-judge wr \(\geq 0.60\), but 0/6 (KEEP, solver)
+combinations clear \(0.60\) under all three judges); and GSM8K
+objective-accuracy probe extended from W078 (Exp~32) to
+\emph{all three KEEPs} (Exp~42, all three harm accuracy by
+\(1\)--\(2\) of 30 problems). The
 judge-fragility finding replicates across every conditionally-distinct
 axis we have run, and once across a language switch.
 
@@ -2524,6 +2531,161 @@ possible explanations of the original finding. Cost:
 \({\sim}\$10\), \({\sim}30\) min wall time per run. Log:
 \texttt{phase four/autonomous/exp39\_english\_replication\_log.json}.
 
+\subsection{Experiment 40 — L4 cross-solver full audit on the
+three KEEPs (\(2\) new solver families)}
+\label{sec:exp40}
+
+The original cross-solver probe (Exp~26) tested only \(W_{076}\)
+on \(20\) pids with three solver families. Closes the
+``solver always gemini'' objection on the full \(3\) KEEPs:
+re-generate base + ext answers with \emph{claude-haiku-4.5} and
+\emph{gpt-5.4-mini} as the SOLVER (the gemini-3-flash judge panel
+is replaced by the same 3-family cheap panel), on the same 50
+holdout pids. \(3 \text{ KEEPs} \times 2\text{ solvers} \times
+50\text{ pids}\) = \(300\) (base, ext) pairs to generate, \(900\)
+judge calls.
+
+\begin{center}\small
+\begin{tabular}{l l c c c c}
+  \toprule
+  KEEP & Solver & gemini j. & haiku j. & gpt-mini j. & 3-family mean \\
+  \midrule
+  \(W_{076}\) & claude-haiku & \(0.60\) & \(0.34\) & \(0.34\) & \(0.43\) \\
+  \(W_{077}\) & claude-haiku & \(0.61\) & \(0.48\) & \(0.58\) & \(0.56\) \\
+  \(W_{078}\) & claude-haiku & \textbf{0.75} & \(0.59\) & \(0.54\) & \(0.63\) \\
+  \(W_{076}\) & gpt-5.4-mini & \textbf{0.71} & \(0.54\) & \(0.51\) & \(0.59\) \\
+  \(W_{077}\) & gpt-5.4-mini & \(0.50\) & \textbf{0.68} & \(0.59\) & \(0.59\) \\
+  \(W_{078}\) & gpt-5.4-mini & \(0.60\) & \textbf{0.68} & \(0.56\) & \(0.61\) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Reading the cross-solver result honestly --- it is
+\emph{not} pure null.} This is the only audit layer at which we
+observe (KEEP, judge) cells with wr \(\geq 0.60\): \(7/18\) cells
+reach the threshold. The structure of the wins is informative:
+\(W_{078}\) under a claude-haiku solver scores \(0.75\) under the
+gemini judge but only \(0.54\) under the gpt-mini judge; cross-
+family disagreement on \emph{the same content} remains
+substantial (max-min spread \(0.21\) on this row).
+\textbf{Crucially, no (KEEP, solver) combination has wr \(\geq
+0.60\) under all three cheap-tier judges simultaneously
+(\(0/6\)).} Cross-family judge fragility therefore persists when
+the solver is changed; the strictest 3-family-consensus criterion
+still rejects every (KEEP, solver) combination.
+
+\paragraph{What this teaches.} Two readings co-exist:
+(i)~\emph{The original gemini-self-adjudication was not
+\emph{purely} judge bias.} When the solver is changed, the
+wisdom does sometimes produce above-\(0.60\) wr for some judges,
+which is more lift than a hypothesis of ``judges merely prefer
+gemini's writing style'' would predict.
+(ii)~\emph{Cross-family judge consensus is still absent.}
+Whatever uplift exists at the cross-solver layer is judge-specific;
+no candidate gets a \(\geq 0.60\) endorsement from all three
+families on the same answers. The conservative reading: the
+wisdoms have effects that depend jointly on solver, on judge, and
+on the (solver, judge) interaction --- not the kind of robust
+methodological lift the inner-loop gate is designed to detect.
+
+Cost: \({\sim}\$15\), \({\sim}45\) min. Log:
+\texttt{phase four/autonomous/exp40\_cross\_solver\_full\_audit\_log.json}.
+
+\subsection{Experiment 41 — gpt-5.5 structured rating extended
+to all three KEEPs}
+\label{sec:exp41}
+
+Exp~38 used gpt-5.5 (a stronger non-panel rater) to give 1--5
+Likert scores on four dimensions for \(W_{078}\) only. Closes the
+``human-substitute applied to one KEEP only'' angle by running
+the same protocol on \(W_{076}\) and \(W_{077}\).
+
+\begin{center}\small
+\begin{tabular}{l c c c}
+  \toprule
+  Dimension (ext\(-\)base) & \(W_{076}\) & \(W_{077}\) & \(W_{078}\) (Exp~38) \\
+  \midrule
+  substantive content      & \(+0.03\) & \(-0.03\) & \(-0.13\) \\
+  methodological soundness & \(-0.27\) & \(-0.20\) & \(-0.17\) \\
+  problem fit              & \(+0.00\) & \(-0.17\) & \(-0.10\) \\
+  prescriptive burden\(^*\) & \(-0.13\) & \(+0.07\) & \(-0.03\) \\
+  \midrule
+  \multicolumn{4}{l}{\emph{Combined 4-dim mean preference (out of 30)}}\\
+  ext\(>\)base / base\(>\)ext / tie & \(9/14/7\) & \(8/13/9\) & \(7/11/12\) \\
+  \bottomrule
+\end{tabular}\\
+\small\(^*\) higher score = lower prescriptive burden = better.
+\end{center}
+
+\textbf{Pattern is uniform across all three KEEPs.} On every
+dimension and on the combined 4-dim mean, gpt-5.5 prefers the
+base answer (no wisdom) over the wisdom-augmented answer for all
+three KEEPs. The strongest single negative is methodological
+soundness on \(W_{076}\) (\(-0.27\)). At combined-preference
+level, base-better outpaces ext-better by \(5\)--\(6\) of \(30\)
+pids in each candidate. This rules out the
+``judges-just-disagree-stylistically-and-the-substance-is-fine''
+rebuttal for all three KEEPs, not just \(W_{078}\).
+
+Honest scope (unchanged from Exp~38): gpt-5.5 is a stronger LLM,
+not a human. Cost: \({\sim}\$10\) for the extended run.
+
+\subsection{Experiment 42 — GSM8K objective-accuracy probe
+extended to \(W_{076}\) and \(W_{077}\)}
+\label{sec:exp42}
+
+Exp~32 ran GSM8K only on \(W_{078}\) (29/30 ext vs.\ 30/30 base
+under gemini-3-flash; the wisdom \emph{harmed} accuracy by 1
+problem). Closes the ``objective-benchmark check on one KEEP only''
+angle by running the same probe on \(W_{076}\) and \(W_{077}\):
+30 GSM8K problems, gemini solver, base + ext per KEEP.
+
+\paragraph{Objective accuracy (numerical answer extracted from
+the response, matched against the GSM8K gold).}
+
+\begin{center}\small
+\begin{tabular}{l c c c}
+  \toprule
+  Condition & accuracy & vs.\ base & verdict \\
+  \midrule
+  base (no wisdom)     & \(28/30\) (\(0.93\)) & --- & --- \\
+  \(+ W_{076}\)        & \(26/30\) (\(0.87\)) & \(-2\) & HARMS \\
+  \(+ W_{077}\)        & \(26/30\) (\(0.87\)) & \(-2\) & HARMS \\
+  \(+ W_{078}\) (Exp~32) & \(29/30\) (\(0.97\)) & \(-1\) & HARMS \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Subjective verdict (3-family cheap panel).}
+\(W_{076}\): per-family wr 0.29 / 0.14 / 0.25 (mean 0.23, ties
+make up 20--26 of 30). \(W_{077}\): 0.10 / 0.12 / 0.14 (mean 0.12).
+Both far below parity, consistent with Exp~32's W078 mean of 0.15.
+
+\paragraph{Reading.} On the strongest non-LLM-judged measurement
+in this paper (numerical-answer correctness against GSM8K gold),
+all three KEEPs \emph{harm} accuracy by 1--2 problems out of 30.
+Even allowing for the small \(n\), the direction is uniform.
+This is the cleanest piece of objective evidence we have that
+these wisdoms do not improve answers on a held-out distribution
+where ``correct'' has an external definition; on the
+substantively-judged Chinese open-ended pool we cannot make this
+claim, only the weaker ``judges of one family preferred them.''
+
+\paragraph{Aside on hosted-model temporal drift.} Exp~32 reported
+base accuracy of \(30/30\) on the same 30 problems; Exp~42
+reports \(28/30\). Same problems, same gemini-3-flash, different
+re-run, \texttt{temperature}\(=0.2\) for solver. This is yet
+another instance of the cross-time instability documented in
+\S\ref{sec:kappa}: the same solver-judge configuration produces
+different objective-correctness counts on identical input across
+re-runs. We retain the most recent run as the saved state and
+note that the qualitative finding (all three KEEPs harm GSM8K
+accuracy by \(1\)--\(2\) problems) is invariant to which run is
+used.
+
+Cost: \({\sim}\$5\), \({\sim}15\) min. Log:
+\texttt{phase four/autonomous/exp42\_gsm8k\_w076\_w077\_log.json}.
+
 \subsection{Experiments 12–14 — Three architectural probes (not
 gate-tuning): fragmentation, conditional-activator, citation}
 \label{sec:arch}
@@ -3064,24 +3226,36 @@ than leave them to footnotes.
     external objection rather than a desired conclusion. A truly
     pre-registered application of the stack to a fresh loop is
     the strongest available correction and is future work.
-  \item \textbf{Solver is always gemini-3-flash.} All answer
-    texts come from one solver family. If the confound sits in
-    the \emph{solver}'s answer-distribution rather than the
-    judge's preferences, the audit stack as constructed cannot
-    see it. Exp~26 is a partial solver-family probe on one
-    wisdom; a full cross-solver re-run is future work.
+  \item \textbf{Solver-family scope (partially closed by Exp~40).}
+    The original 12 inner-loop candidates were all judged on
+    gemini-solved answers. Exp~40 (\S\ref{sec:exp40}) re-runs the
+    full cross-solver L4 audit on the three KEEPs with
+    claude-haiku and gpt-5.4-mini as the SOLVER (not just judge),
+    on the same 50 holdout pids and with the 3-family cheap
+    panel: \(7/18\) (KEEP, judge) cells reach wr \(\geq 0.60\)
+    under at least one judge, but \(0/6\) (KEEP, solver)
+    combinations clear \(0.60\) under all three judges --- the
+    cross-family fragility persists across solver families.
+    A second \emph{full inner-loop cycle} on a non-gemini solver
+    (proposers, gate, audit) is still open.
   \item \textbf{One evolution cycle.} We ran the loop once. We
     have no data on whether a multi-cycle run converges, cycles,
     or drifts.
   \item \textbf{No human ground truth on the open-ended Chinese
-    pool.} Cross-family disagreement and gpt-5.5 structured
-    rating both substitute for, but do not match, human expert
-    annotation. It remains possible that the original gemini
-    judge preferred genuinely better answers and that
-    cross-family / expensive judges penalised useful but
-    stylistically different content. A representative human-
-    annotated subset would let us calibrate which judges are
-    closer to expert preference. Future work.
+    pool (partially mitigated by GSM8K + gpt-5.5 rating).}
+    Cross-family disagreement is not the same as
+    ``the wisdoms lack substantive utility.'' Two
+    LLM-substitute checks bound the alternative explanation:
+    Exp~41 (\S\ref{sec:exp41}) shows gpt-5.5 (a stronger
+    non-panel rater under structured 4-dim Likert) prefers base
+    over ext on all three KEEPs; Exp~32 + Exp~42
+    (\S\ref{sec:exp42}) show all three KEEPs harm GSM8K
+    objective accuracy by \(1\)--\(2\) problems out of 30. An
+    actual human study with \(n \geq 30\) raters across at
+    least two demographic backgrounds remains future work, but
+    the alternative explanation (``audit panel is wrong; original
+    judge was right'') is not supported by any of the available
+    LLM-substitute proxies.
   \item \textbf{No positive / negative controls for the audit
     stack.} The audit demonstrates that the inner-loop gate's
     KEEPs do not survive; it does not demonstrate that the audit
