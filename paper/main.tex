@@ -31,8 +31,8 @@
 }
 
 \title{\textbf{Six Layers of Re-Judgment:}\\
-An Audit Stack for Self-Improving LLM Loops,\\
-and Evidence the Default Gate Is Confidently Wrong}
+A Case Study in Auditing a Self-Improving LLM Loop,\\
+and Evidence That a Default Single-Family Gate Is Judge-Fragile}
 
 \author{%
   Anonymous submission\\
@@ -51,9 +51,14 @@ whether self-improving LLM loops work.} The empirical headline is a
 \emph{null result}: after building and running a complete autonomous
 wisdom-curation loop, \emph{zero} of its committed wisdoms survive a
 six-layer independent audit. The scientific contribution is the audit
-stack that produced this verdict, and the demonstration that naive
-single-family A/B gates — the default in the current self-improvement
-literature — can be confidently wrong about their own decisions.
+stack itself, and a single-loop demonstration that on this specific
+Chinese open-ended wisdom-library setup, a naive single-family A/B
+gate is \emph{judge-fragile}: its decisions do not survive
+re-judgment by a different LLM family on identical content. We do
+not generalise this to a field-level claim about all self-improving
+LLM loops; we report it as a methodological cautionary tale on one
+loop and release the audit stack so that others can run the same
+checks on theirs.
 
 \noindent\textbf{Setup.} Large language models improve markedly when
 given retrieval-augmented \emph{methodological scaffolding}: problem
@@ -126,8 +131,11 @@ across every independent axis.
 
 \noindent\textbf{Contribution.} (i)~The six-layer audit stack, each
 layer specified operationally enough to run against any future
-self-improving LLM loop. (ii)~Evidence that the default inner-loop
-gate can be confidently wrong about \(3/3\) of its own decisions.
+self-improving LLM loop. (ii)~Single-loop evidence that on the specific Chinese open-ended
+setup studied here, the default inner-loop gate is judge-fragile:
+\(3/3\) of its decisions fail to survive cross-family re-judgment
+on identical content. We treat this as falsification of
+robustness, not falsification of the gate's underlying claim.
 (iii)~A concrete testbed (code, 22 candidates, 150 answer pairs,
 cross-family logs) on which others can test alternative audit
 designs. (iv)~A partial architectural recovery (trigger-conditioned
@@ -265,12 +273,14 @@ Final validated library delta: \(\boxed{+0}\). Our contributions are:
 specify each layer operationally enough to run against any future
 self-improving LLM loop. Each layer is both (i)~cheap to compute on
 top of an existing inner-loop artifact and (ii)~capable of
-independently invalidating a KEEP decision that the inner-loop gate
-was confident about. Cross-family re-judgment (L1) alone flips \(3/3\)
-of our loop's KEEPs.
+independently destabilising a KEEP decision the inner-loop gate
+treated as confirmed. Cross-family re-judgment (L1) alone moves
+\(3/3\) of our loop's KEEPs from above to below the gate's own
+\(+10\)pp threshold on identical content; we read this as
+judge-fragility of the verdict, not as direct falsification.
 
-\paragraph{Contribution 2 — Evidence that the default inner-loop
-gate is confidently wrong about its own decisions.} Under a
+\paragraph{Contribution 2 — Single-loop evidence that the default
+inner-loop gate is judge-fragile.} Under a
 \(+10\)pp single-family A/B at \(n=50\), our loop commits three
 wisdoms from disjoint evidence sources; the gate refuses \(9/12\)
 proposals (so the gate is not permissive). Yet the three it
@@ -303,7 +313,7 @@ subsequently falsified by the audit stack.
 not generalize.} Having falsified the naive pair-wr gate, we decompose
 it into three independent components (trigger-fit, conditional utility,
 citability) and build a trigger-conditioned replacement gate
-(\S\ref{sec:trigger-gate}). On the original 12 candidates this
+(\S\ref{sec:l1}). On the original 12 candidates this
 locally rescues \(4/12\), including two REVERTs the naive gate had
 missed. But when we scale to 22 candidates the same gate PASSes
 only \(3/22\) — below the random-baseline rate of \(\sim\!30\%\).
@@ -1270,7 +1280,7 @@ seed: with a different seed, \emph{the same judge family returns
 the opposite verdict}. The ext--vs--base content is identical in
 both runs; only the ordering of presentation to the judge
 differs. This is a widely discussed LLM-judge phenomenon
-(\cite{zheng2023judging, wang2024positionbias}), but is rarely
+(\cite{zheng2023judging}), but is rarely
 surfaced at the level of individual library-mutation decisions.
 
 \paragraph{Putting cross-family and side-stability together.} The
@@ -1724,35 +1734,39 @@ this as a strengthening of the paper's central claim: single-family
 self-adjudication fails at \emph{both} the judge layer and the
 solver layer.
 
-\paragraph{Experiment 27 — Computational baselines.} We treat
-Experiment 11's majority-of-3 positives (\(\{W_{078},
-\text{WCAND07}\}\)) as a pseudo-ground-truth for precision/recall.
-This is the closest thing we have to external validation for which
-candidates are ``genuinely'' meaningful:
+\paragraph{Experiment 27 — Self-consistency of gate variants
+relative to inner-loop verdicts (NOT baseline F1).} An earlier
+draft of this paper reported an F1 ranking of gate variants
+against \(\{W_{078}, \text{WCAND07}\}\) as a pseudo-ground-truth
+\emph{drawn from the inner-loop's own majority-of-3 labels}.
+\textbf{We retract the F1-ranking framing.} The audit stack
+subsequently rejects \(W_{078}\), so labels derived from the
+inner-loop are not external validation; using them to rank gate
+variants is circular relative to the paper's central conclusion.
+We retain the experiment as a measure of \emph{gate-to-inner-loop
+self-consistency} only:
 
 \begin{center}\small
-\begin{tabular}{l r r r r}
+\begin{tabular}{l r r}
   \toprule
-  gate                          & n\_pred & P & R & F1 \\
+  gate variant & n\_pred / 12 & agreement w/ Exp~11 majority-of-3 \\
   \midrule
-  always\_accept (trivial)      & 12 & 0.17 & 1.00 & 0.29 \\
-  always\_reject                & 0  & 0.00 & 0.00 & 0.00 \\
-  random 25\% (MC, n=10k)       & 3  & 0.17 & 0.25 & 0.20 \\
-  random 33\%                   & 4  & 0.17 & 0.34 & 0.22 \\
-  random 50\%                   & 6  & 0.17 & 0.51 & 0.25 \\
-  random 67\%                   & 8  & 0.17 & 0.67 & 0.27 \\
-  researcher Exp 15 (trig-cond) & 4  & 0.25 & 0.50 & 0.33 \\
-  \textbf{agent v2 Exp 19/24}   & 8  & 0.25 & \textbf{1.00} & \textbf{0.40} \\
+  always\_accept                  & 12 & \(0.17\) (trivial) \\
+  random 33\%                      & 4  & \(0.22 \pm 0.10\) (MC) \\
+  researcher Exp~15 (trig-cond)    & 4  & \(0.33\) \\
+  agent v2 Exp~19/24               & 8  & \(0.40\) \\
   \bottomrule
 \end{tabular}
 \end{center}
 
-\textbf{Agent's v2 gate achieves the highest F1 (0.40)}, strictly
-better than the researcher gate (0.33) and all random baselines
-(max 0.27). Random 33\%'s \(p_{95}\) F1 is 0.67, which bounds the
-significance question — but agent's mean exceeds random's mean by
-0.18, and agent's 100\% recall on the pseudo-ground-truth is not
-achievable by chance at this \(n\).
+The agent and researcher gates are \emph{more self-consistent with
+the inner-loop's own labels} than random baselines. We do not
+interpret this as evidence that either gate is correct, because the
+target labels themselves are subsequently invalidated by the audit
+stack. The intended use of this experiment is now narrow: it
+documents that two structured-decomposition gates produce
+discrimination that is internally non-arbitrary, not that they
+out-perform random under an externally validated ranking.
 
 \paragraph{Experiment 28 — Robustness of agent gate to labeler
 family.} We rerun the agent v2 gate three times with different
@@ -2281,6 +2295,62 @@ the commit because three of five judges disagree on the same
 content. \emph{The audit's restraint is correct on this pid not
 because the wisdom is useless, but because it is genuinely
 disputed.}
+
+\subsection{Experiment 38 — Structured non-panel rating as a
+human-annotation substitute}
+\label{sec:exp38}
+
+The audit stack so far has treated A/B preference as the unit of
+verdict. A reasonable reviewer concern is that A/B preference
+under-determines what is actually being measured: judges may
+agree the wisdom-augmented answer is ``different'' but disagree on
+\emph{whether different is better}. Real human annotation is
+logistically expensive; we use \emph{gpt-5.5} (a stronger model
+not in the 5-judge audit panel) as a substitute, asking it to
+produce \emph{structured Likert (1--5)} scores on four
+dimensions: substantive content, methodological soundness,
+problem fit, and prescriptive burden (reverse-scored). This is not
+human annotation and we do not present it as ground truth, but it
+gives an external, non-panel reading of the same answer pairs that
+goes beyond A/B preference.
+
+Protocol: 30 random pids from the cached \(W_{078}\) base/ext
+pool; gpt-5.5 sees both answers in random order and rates each on
+all four dimensions. The dimensions and scoring rubric are written
+in advance and frozen.
+
+\begin{center}\small
+\begin{tabular}{l c c c c}
+  \toprule
+  Dimension & ext mean & base mean & \(\Delta\) & ext\(>\)base count \\
+  \midrule
+  substantive content    & \(4.60\) & \(4.73\) & \(-0.13\) & \(3/30\) \\
+  methodological soundness & \(3.60\) & \(3.77\) & \(-0.17\) & \(5/30\) \\
+  problem fit            & \(4.77\) & \(4.87\) & \(-0.10\) & \(3/30\) \\
+  prescriptive burden\(^*\)  & \(3.30\) & \(3.33\) & \(-0.03\) & \(6/30\) \\
+  \midrule
+  4-dim mean (combined)  & \multicolumn{4}{c}{ext\(>\)base \(=7/30\); base\(>\)ext \(=11/30\); tie \(=12/30\)} \\
+  \bottomrule
+\end{tabular}\\
+\small\(^*\) higher score = lower prescriptive burden = better.
+\end{center}
+
+\textbf{Finding.} A stronger non-panel rater doing structured
+multi-dimensional Likert finds the wisdom-augmented answer
+slightly \emph{worse} on every dimension, with a combined-mean
+preference of \(11/30\) base-better vs.\ \(7/30\) ext-better.
+This rules out a ``judges-just-disagree-stylistically'' rebuttal:
+when forced to score on substance and methodology separately
+rather than express A/B preference, the wisdom does not improve
+the answer. The audit stack's null is corroborated from outside
+the panel.
+
+\textbf{Honest scope.} gpt-5.5 is a stronger LLM, not a human.
+This experiment is closer to ``a more capable LLM under structured
+evaluation'' than to ``human annotation.'' A real human study with
+\(n \geq 30\) raters across at least two demographic backgrounds
+remains future work and is acknowledged in
+\S\ref{sec:limitations}.
 
 \subsection{Experiments 12–14 — Three architectural probes (not
 gate-tuning): fragmentation, conditional-activator, citation}
