@@ -259,27 +259,18 @@ but a preregistered fresh-data replication at the
 preregistration's laxer L1 threshold of \(0.55\) (Exp~47) shows
 \(2/3\) of the original KEEPs cross both gates as point estimates
 on disjoint fresh data, plus one originally-rejected candidate.
-A genuine Bayesian multilevel model (Exp~51, Metropolis-within-
-Gibbs on the full \(50 \times 5 \times 3\) cached + fresh verdict
-array, with random effects for candidate, judge family, and pid)
-gives joint posterior on the exact preregistered decision rule
-\(\{\theta_{\text{inner}} \geq 0.60\} \cap
-\{\theta_{\text{L1}} \geq 0.55\}\): W078 \(\mathbf{= 0.763}\),
-W077 \(= 0.448\), W076 \(= 0.014\). This properly accounts for
-within-pid clustering (the dominant variance component, \(\hat
-\sigma_\gamma \approx 0.80\)) — naive per-cell Beta(2,2) gave the
-weaker W078 \(= 0.539\) under independence. The hierarchical
-posteriors yield a probabilistic ordering W078 \(\gg\) W077
-\(\gg\) W076: W078 has \(>76\%\) posterior probability of
-clearing both gates; W076 has \(<2\%\); W077 sits at moderate
-\(\sim 45\%\). The audit-stack pattern is therefore
-\emph{consistent with} a separation between \emph{regression-to-
-mean non-reproduction} (W077, W078: cached weak, fresh joint
-posterior moderate-to-strong) and \emph{real non-reproduction}
-(W076: cached weak, fresh inner wr \(=0.41\), joint posterior
-\(<2\%\)). W078's ``replicate'' label is well-supported under
-hierarchical inference; W077's is weaker; W076's ``collapse''
-label is robust to the modelling choice.
+A genuine Bayesian multilevel model fit to the small-\(n=30\)
+fresh data (Exp~51, Metropolis-within-Gibbs with random effects
+for candidate, judge family, and pid) gave joint posteriors on
+the preregistered rule of W078 \(0.763\), W077 \(0.448\),
+W076 \(0.014\) --- but Exp~53 at \(n=100\) subsequently overturned
+the upper-end W078 posterior: empirical W078 inner wr at \(n=100\)
+is \(0.49\), well below the \(0.60\) gate. \textbf{The standing
+audit verdict at adequate sample size is therefore a uniform null
+on the original 12 candidates}; W076's ``collapse'' label is
+robust to the modelling choice and to scaling, while the W077 /
+W078 ``replicate-on-fresh'' labels were small-\(n\) artefacts
+that did not survive the \(n=100\) replication.
 (iii)~A concrete testbed (code, 21 candidates, 150 answer pairs,
 cross-family logs) on which others can test alternative audit
 designs. (iv)~A partial architectural recovery (trigger-conditioned
@@ -3786,17 +3777,27 @@ it strengthens the W078 posterior (0.76 vs 0.54 naive joint) and
 strengthens the W076 collapse posterior (0.014 vs 0.07 single-cell
 Beta).
 
-\paragraph{What this changes about the paper's claims.}
-Under the hierarchical model, the joint preregistered rule
-posteriors \(\{0.014, 0.448, 0.763\}\) for \(W_{076}, W_{077},
-W_{078}\) provide the cleanest probabilistic ordering. W078 has
-posterior \(P > 0.7\) of clearing both gates, supporting its
-``replicate on fresh data'' label. W076 has posterior \(< 0.02\),
-supporting its ``collapse'' label. W077 sits at moderate \(\sim
-0.45\); its label of ``replicates'' on fresh is not unambiguous
-under the strictest probabilistic reading. We adopt the
-hierarchical posterior as the primary inferential target and
-demote the per-cell Beta and DL pool to secondary statistics.
+\paragraph{What this changes about the paper's claims (and what
+Exp~53 subsequently overturned).} The hierarchical model fit to
+the small-\(n=30\) fresh data gave joint posteriors
+\(\{0.014, 0.448, 0.763\}\) for \(W_{076}, W_{077}, W_{078}\),
+which at the time supported a probabilistic ordering with W078
+strongly favoured. \textbf{Exp~53 at \(n=100\) subsequently
+falsified the upper end of this posterior}: empirical W078 inner
+wr at \(n=100\) is \(0.49\), inconsistent with the model's
+\(P(\theta_{\text{inner}} > 0.60) > 0.7\) prediction. The
+hierarchical model was correctly specified for the small-\(n\)
+data it saw, but small-\(n\) regression-to-mean and protocol
+noise were under-represented in the prior; the model's
+predictions did not extrapolate to a larger-\(n\) sample. We
+therefore retain Exp~51 as a \emph{retrospective model
+diagnostic} --- evidence that even a defensible Bayesian
+multilevel fit can be overturned by additional data --- rather
+than as the paper's primary inferential target. The primary
+target is now the empirical Exp~53 \(n=100\) result; the W076
+``collapse'' label remains robust under the model and under
+scaling, while the W077, W078 ``replicate'' labels do not
+survive Exp~53.
 Cost: \(\$0\) (pure analysis on existing logs); MCMC walltime
 \({\sim}\)5\,min single-thread. Log:
 \texttt{phase four/autonomous/exp51\_hierarchical\_bayes\_full\_log.json}.
