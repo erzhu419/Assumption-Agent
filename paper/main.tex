@@ -882,12 +882,20 @@ conceptual organising frame for the audit stack and as a
 descriptive interpretation of the empirical findings, not as a
 formal identification result. The cached-data null at the
 original \(0.60\) threshold survives under this weaker reading
-because no audit layer at any threshold assigns a cached-data
+\emph{when measured on the original solver family with the audit
+panel of judges}: no cached-data
+audit layer in this configuration assigns a
 \(\mathrm{wr} \geq 0.60\) point estimate to the three KEEPs.
-\emph{The fresh-data result (Exp~47) is different}: W078
-recovers cleanly at both \(0.55\) and \(0.60\) thresholds, W077
-recovers at the preregistration's \(0.55\) but not the original
-\(0.60\), and W076 fails on fresh data as well. The full
+\emph{We do not extend this null to other solver families or to
+fresh data}: under cross-solver re-runs (Exp~40, L4) several
+single-judge cells exceed \(0.60\) for individual KEEPs, and on
+fresh data (Exp~47) W078 reaches \(0.63\) inner / \(0.71\) L1
+under the original gemini solver. The qualitative picture is
+therefore: \emph{cached audit panel + original solver: 0/3 clear
+0.60}; \emph{cross-solver and fresh-data evaluations: a
+heterogeneous mixture, dominated by W078 clearing on fresh and
+some single-judge cross-solver cells exceeding 0.60 but no
+3-family-consensus cross-solver cell clearing}. The full
 qualitative picture --- not just the cached-data null --- is
 documented in the \emph{differentiated finding} of \S Conclusion.
 
@@ -911,31 +919,39 @@ documented in the \emph{differentiated finding} of \S Conclusion.
 \end{figure}
 
 Figure~\ref{fig:decomposition} is the schematic of this
-theoretical content. Each audit layer targets one non-specific
-term:
+theoretical content. Each audit layer \emph{stresses} one nuisance
+variable rather than \emph{causally cancelling} a non-specific
+term --- the model is not identifiable, so we cannot subtract
+components, only stress-test their plausibility:
 \begin{itemize}[leftmargin=*,topsep=2pt,itemsep=1pt]
-  \item \textbf{L1 (cross-family judge)} changes \(J\) while
-    holding \(a_0, a_w\) fixed: cancels \(J\)-specific stylistic
-    preferences, so persistent lift localises to
-    \(Z^{\mathrm{specific}}\) (plus any style preference \emph{both}
-    families share — a residual we acknowledge).
-  \item \textbf{L2 (side-reseed)} changes the nuisance of
-    A/B position while holding everything else fixed: cancels
-    position-induced judge bias.
+  \item \textbf{L1 (cross-family judge)} varies \(J\) while
+    holding \(a_0, a_w\) fixed: stresses any \(J\)-specific
+    stylistic-preference contribution to the gate verdict.
+    Cross-family agreement lets the original verdict be read as
+    less judge-dependent; cross-family disagreement exposes that
+    a non-trivial fraction of the inner verdict could be
+    \(J\)-specific (with stylistic preference shared between
+    both families remaining as a residual we cannot rule out).
+  \item \textbf{L2 (side-reseed)} varies A/B position while
+    everything else is held fixed: stresses position-induced
+    judge bias.
   \item \textbf{L3 (\(n\) extension)} shrinks the CI without
     changing the estimand; exposes when an inner-loop
     \(0.60 \pm 0.12\) was noise about a true value
     near \(0.50\).
-  \item \textbf{L4 (cross-solver)} changes \(S\) while holding
-    \(w, J, P\) fixed: cancels solver-specific interactions with
-    the wisdom phrasing.
-  \item \textbf{L5 (fresh domain / GSM8K)} changes \(P\): exposes
+  \item \textbf{L4 (cross-solver)} varies \(S\) while holding
+    \(w, J, P\) fixed: stresses solver-specific interactions
+    with the wisdom phrasing.
+  \item \textbf{L5 (fresh domain / GSM8K)} varies \(P\): exposes
     when \(Z_w^{\mathrm{specific}}\) was specific to the training-like
     distribution rather than the population the solver will face.
-  \item \textbf{L6 (faithfulness)} directly estimates
-    \(Z_w^{\mathrm{specific}}\) from outside pair-wr: via embedding
-    cosine between perturbation direction and \(w\)'s
-    self-description, and via LLM-judged citation strictness.
+  \item \textbf{L6 (faithfulness)} \emph{indirectly probes}
+    \(Z_w^{\mathrm{specific}}\) from outside pair-wr via two
+    weak proxies: embedding cosine between perturbation direction
+    and \(w\)'s self-description, and LLM-judged citation
+    strictness. Neither is a direct estimate of the causal
+    component; both are descriptive correlates that can fail in
+    either direction.
 \end{itemize}
 
 \emph{The decomposition is a taxonomy of confounds, not an
@@ -2796,26 +2812,35 @@ panel's collective judgement. Mean across-family spread is
 
 \paragraph{Two-run instability is itself informative.} An
 independent earlier run of the same code on the same 30 prompts
-produced a different distribution: 1/6 with a single family
-\(\geq 0.60\) (EW06: gemini \(0.63\) / haiku \(0.48\) / mini
+produced a different distribution: \(1/6\) with a single family
+\(\geq 0.60\) (EW06: gemini \(0.63\), haiku \(0.48\), mini
 \(0.37\)) and mean across-family spread \(0.151\). Same prompts,
 same code, same model identifiers, different stochastic
 outcomes. The two-run gap on identical inputs (\(\sim 0.10\) on
 several wisdoms) is itself an instance of the cross-time
 instability documented in \S\ref{sec:kappa}: an n=30 single-loop
 single-family A/B is not stable across re-runs. We retain the
-later (and currently saved) numbers in the table above; we
-report the earlier-run divergence here so the reader can see
-that the headline fact (no English wisdom clears the gate under
-any family in either run) is invariant under run-to-run noise
-even when the per-wisdom point estimates are not.
+later (and currently saved) numbers in the table above. The
+relevant headline fact \emph{is not} ``no English wisdom clears
+under any family in either run'' (the earlier-run EW06 gemini
+\(0.63\) cell does cross \(0.60\) under one family, exactly as
+in the Chinese inner loop). The relevant headline fact
+\emph{is}: ``no English wisdom clears \(\geq 0.60\) under
+3-family consensus, in either run.'' Single-family clears do
+appear in run 1 (1/6) and were already absent in the saved
+run 2 (0/6).
 
-\paragraph{Reading.} The judge-fragility we report on the Chinese
-loop is not an artefact of language: a frozen English-authored
-protocol, applied to public English open-ended prompts using the
-same solver and the same 3-family cheap-tier judging protocol,
-yields no English wisdom that clears \(0.60\) under any family
-in either of two independent runs. We do not extrapolate this to
+\paragraph{Reading.} The English replication probe shows the
+same instability structure as the Chinese loop: at \(n=30\),
+single-family same-language A/B verdicts are not stable
+across-run or across-family. Specifically, no English wisdom
+clears \(\geq 0.60\) under \emph{3-family consensus} in either
+of two independent runs; exactly one wisdom (EW06) clears
+single-family gemini in one run and not in the other. This
+reproduces the Chinese cached-audit pattern (high disagreement
+across families and runs) on a frozen English protocol; we do
+not extrapolate this to a confidence claim about English
+self-improvement loops generally. We do not extrapolate this to
 all retrieval-level self-improvement claims --- two language
 loops with one solver family and one judge panel is still a case
 study --- but it removes ``Chinese-only'' from the list of
@@ -3354,15 +3379,31 @@ both gates on the fresh split (\(1/12\)). The differentiated
 finding therefore depends on the threshold policy: at the
 preregistration's \(0.55\) the headline is \(\boxed{+3}\)
 (W077, W078, WCAND03); at the original \(0.60\) the headline
-collapses to \(\boxed{+1}\) (W078 only). The DerSimonian-Laird
-fresh pool (Exp~49 Layer~B) gives \(P(\theta>0.55)=0.808/0.958\)
-for W077 / W078 fresh pool but \(P(\theta>0.60)=0.536/0.841\) ---
-W077's posterior at the original \(0.60\) is barely above
-coin-flip. We retain the preregistration's \(0.55\) threshold as
-the primary reporting choice (it was committed before the
-experiment, and the inner gate was made strictly stricter at
-\(0.60\) to preserve specificity on candidate generation), but
-both readings are reported here for transparency.
+collapses to \(\boxed{+1}\) (W078 only). We retain the
+preregistration's \(0.55\) threshold as the primary reporting
+choice (it was committed before the experiment, and the inner
+gate was made strictly stricter at \(0.60\) to preserve
+specificity on candidate generation), but both readings are
+reported here for transparency.
+
+\paragraph{Primary inferential target (R12/R13 callout).} The
+preregistered decision rule is the joint event
+\(\{\theta_{\text{inner}} \geq 0.60\} \cap
+\{\theta_{\text{L1}} \geq 0.55\}\). The next paragraph reports
+the posterior probability of this exact joint event per
+candidate; this is the primary inferential target for whether a
+candidate ``replicates'' under the preregistered protocol. The
+DerSimonian-Laird pooled \(P(\theta > 0.55)\) reported in
+Exp~49 Layer~B (\S\ref{sec:exp49}) is a \emph{secondary}
+quantity: it answers ``what is the population-level wr\_ext
+across the available judges?'' under a random-effects
+meta-analysis assumption, not ``does the candidate satisfy the
+preregistered joint rule?'' We flag this distinction explicitly
+because the two posteriors point in different directions for
+W077 (joint posterior 0.37, DL pool 0.808). We treat the joint
+posterior as the primary number for the preregistered
+classification and the DL pool as a sensitivity / secondary
+descriptive statistic.
 
 \paragraph{Joint posterior on the exact preregistered decision
 rule (R10/R11 Question~3).} The decision rule for replication
