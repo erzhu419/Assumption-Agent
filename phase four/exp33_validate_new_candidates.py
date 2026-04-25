@@ -197,14 +197,18 @@ def main():
     print(f"\n  PASS at +10pp threshold (wr >= 0.60): {n_pass_at_0_60}/{len(results)}")
     print(f"  Mean wr_ext: {sum(r['wr_ext'] for r in results)/len(results):.2f}")
 
-    # Combined with original 12 — full 22 PASS count
+    # Combined with original inner-loop candidates
     orig_log = cache_load(AUTO_DIR / "validation_log_parallel.json", default=[])
     orig_pass = 0
+    orig_total = 0
     for entry in orig_log:
         for r in entry.get("results", []):
+            orig_total += 1
             if r.get("decision") == "KEEP": orig_pass += 1
-    print(f"\n  Combined: {orig_pass} (from original 12) + {n_pass_at_0_60} (from 9 new) "
-          f"= {orig_pass + n_pass_at_0_60} / 22")
+    combined_total = orig_total + len(uniq)
+    print(f"\n  Combined: {orig_pass} (from original {orig_total}) + "
+          f"{n_pass_at_0_60} (from {len(uniq)} new) "
+          f"= {orig_pass + n_pass_at_0_60} / {combined_total}")
 
     out = {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "n_pids": len(problems),
@@ -213,7 +217,7 @@ def main():
            "judge": judge_client.model,
            "results": results,
            "n_pass_at_0.60": n_pass_at_0_60,
-           "combined_n_total": 22,
+           "combined_n_total": combined_total,
            "combined_n_pass": orig_pass + n_pass_at_0_60}
     prev = cache_load(OUT_LOG, default=[]) or []
     prev.append(out)
