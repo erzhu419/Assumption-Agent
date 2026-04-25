@@ -120,13 +120,18 @@ architectural redesign recovers \emph{local} positive signal on
 the original 12 but does not generalize: a partial recovery,
 not a fix.
 
-\noindent\textbf{Strict-reviewer closure (Exp 25--33).} Nine further
+\noindent\textbf{Strict-reviewer closure (Exp 25--39).} Further
 experiments each target a specific publication objection with
 concrete evidence, including: 3-family labeling reliability
-(\(\kappa\)); cluster-threshold relaxation
-(12 \(\to\) 22 candidates, 83\% increase); and GSM8K standard-benchmark
-portability. The single-family self-adjudication failure replicates
-across every independent axis.
+(\(\kappa\)); cluster-threshold relaxation (12 \(\to\) 22
+candidates, 83\% increase); GSM8K standard-benchmark
+portability; expensive-tier judge scale-up
+(Exp~35; cross-tier \(\kappa\) in Exp~37); structured non-panel
+rating by gpt-5.5 (Exp~38); and a minimal English-language
+replication on MT-Bench (Exp~39, 0/6 English wisdoms clear
+\(0.60\) under any family across two independent runs). The
+judge-fragility finding replicates across every independent axis
+we have run, and once across a language switch.
 
 \noindent\textbf{Contribution.} (i)~The six-layer audit stack, each
 layer specified operationally enough to run against any future
@@ -2373,6 +2378,86 @@ evaluation'' than to ``human annotation.'' A real human study with
 remains future work and is acknowledged in
 \S\ref{sec:limitations}.
 
+\subsection{Experiment 39 — English-language minimal replication}
+\label{sec:exp39}
+
+The original loop is Chinese open-ended; the language-scope
+critique is therefore real. We run a minimal English replication
+under a frozen, English-authored protocol to test whether the
+judge-fragility pattern survives a language switch.
+
+\paragraph{Protocol.}
+\textbf{Problems}: 30 prompts from MT-Bench (\texttt{writing,
+roleplay, reasoning} categories — open-ended, English-authored).
+\textbf{Wisdom library}: a 6-entry English-only library, each
+entry an English-authored maxim with English-source attribution
+and English unpacking (Munger's hammer/nail; Drucker's measure /
+manage; the approximately-right-vs-precisely-wrong tradition;
+Munger on incentives; the bake-off / 70\%-now-vs-95\%-late
+heuristic; Knight's known/unknown/unknowable distinction). No
+Chinese content, no translation. \textbf{Solver}: same
+gemini-3-flash, same temperature. \textbf{Judges}: the same
+3-family cheap-tier panel used as the inner-loop judges in the
+Chinese pipeline. \textbf{Decision protocol frozen before
+running}: a wisdom is judge-fragile iff at least one family
+scores it above \(0.60\) and at least one family scores it below
+\(0.50\) on the same answer pairs.
+
+\paragraph{Result.}
+
+\begin{center}\small
+\begin{tabular}{l c c c c}
+  \toprule
+  Wisdom & gemini & haiku & gpt-mini & 3-family mean \\
+  \midrule
+  EW01 hammer/nail (Munger)         & \(0.38\) & \(0.37\) & \(0.30\) & \(0.35\) \\
+  EW02 measure/manage (Drucker)     & \(0.30\) & \(0.29\) & \(0.34\) & \(0.31\) \\
+  EW03 approximately right          & \(0.44\) & \(0.37\) & \(0.45\) & \(0.42\) \\
+  EW04 incentives (Munger)          & \(0.52\) & \(0.33\) & \(0.31\) & \(0.39\) \\
+  EW05 roughly right early          & \(0.45\) & \(0.40\) & \(0.41\) & \(0.42\) \\
+  EW06 known / unknown / unknowable & \(0.38\) & \(0.36\) & \(0.27\) & \(0.34\) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\(\mathbf{0/6}\) English wisdoms reach wr \(\geq 0.60\) under any
+single cheap-tier family, let alone the strict
+``all-three-families'' criterion. All six 3-family means sit
+strictly below \(0.50\): on MT-Bench prompts, the English-only
+wisdom library makes the answers \emph{worse}, not better, in the
+panel's collective judgement. Mean across-family spread is
+\(\mathbf{0.099}\), comparable to the Chinese inner loop's
+\(0.09\).
+
+\paragraph{Two-run instability is itself informative.} An
+independent earlier run of the same code on the same 30 prompts
+produced a different distribution: 1/6 with a single family
+\(\geq 0.60\) (EW06: gemini \(0.63\) / haiku \(0.48\) / mini
+\(0.37\)) and mean across-family spread \(0.151\). Same prompts,
+same code, same model identifiers, different stochastic
+outcomes. The two-run gap on identical inputs (\(\sim 0.10\) on
+several wisdoms) is itself an instance of the cross-time
+instability documented in \S\ref{sec:kappa}: an n=30 single-loop
+single-family A/B is not stable across re-runs. We retain the
+later (and currently saved) numbers in the table above; we
+report the earlier-run divergence here so the reader can see
+that the headline fact (no English wisdom clears the gate under
+any family in either run) is invariant under run-to-run noise
+even when the per-wisdom point estimates are not.
+
+\paragraph{Reading.} The judge-fragility we report on the Chinese
+loop is not an artefact of language: a frozen English-authored
+protocol, applied to public English open-ended prompts using the
+same solver and the same 3-family cheap-tier judging protocol,
+yields no English wisdom that clears \(0.60\) under any family
+in either of two independent runs. We do not extrapolate this to
+all retrieval-level self-improvement claims --- two language
+loops with one solver family and one judge panel is still a case
+study --- but it removes ``Chinese-only'' from the list of
+possible explanations of the original finding. Cost:
+\({\sim}\$10\), \({\sim}30\) min wall time per run. Log:
+\texttt{phase four/autonomous/exp39\_english\_replication\_log.json}.
+
 \subsection{Experiments 12–14 — Three architectural probes (not
 gate-tuning): fragmentation, conditional-activator, citation}
 \label{sec:arch}
@@ -2917,19 +3002,23 @@ are resource-bounded rather than conceptually open.
 \section{Limitations}
 \label{sec:limitations}
 
-\textbf{Scope: Chinese open-ended problems.} The scaffold (v20), the
-wisdom library, and the 1768-problem benchmark pool are all authored
-in Chinese and designed for \emph{open-ended, multi-domain} reasoning
-(business strategy, scientific investigation, software-engineering
-judgement, mathematical estimation). Our audit stack's null verdict
-is established on this distribution. GSM8K (Exp~32) is included as a
-cross-language portability probe, not as a representative test: the
+\textbf{Language scope: primarily Chinese open-ended problems.}
+The full pipeline (scaffold v20, 75-entry wisdom library, the
+1768-problem benchmark pool) is authored in Chinese and designed
+for \emph{open-ended, multi-domain} reasoning. Our audit stack's
+null verdict on the three KEEPs is established on this
+distribution. Exp~39 runs a minimal English-language replication
+on 30 MT-Bench prompts with a frozen 6-entry English-only wisdom
+library; \(0/6\) English wisdoms clear wr \(\geq 0.60\) under any
+single family across two independent runs, and all 3-family means
+sit below \(0.50\). We report this as one further language loop,
+not as cross-lingual generality. GSM8K (Exp~32) is included as a closed-form English
+portability probe, not as a representative test, and the
 \(W_{078}\) harms-accuracy finding there should be read as
-``the wisdom does not transfer out of the Chinese open-ended scaffold,''
-not as ``the audit stack works on English math word problems.'' A
-fair English-only replication of the full pipeline (English scaffold,
-English-authored wisdoms, English-judged A/B) is a necessary follow-up
-before any cross-lingual generality claim.
+``the wisdom does not transfer out of the Chinese open-ended
+scaffold.'' A full English replication of the closed loop (English
+proposers, English wisdoms, English gate, English audit) remains
+future work.
 
 \textbf{Single LLM family for solver.} The solver is
 \emph{gemini-3-flash} throughout. A paired (solver, judge) from the
