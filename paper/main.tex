@@ -102,16 +102,26 @@ itself is orthogonally falsified: embedding-faithfulness and
 LLM-faithfulness both show wisdoms cause real perturbations
 (magnitude \([0.71,0.77]\)) but in directions \emph{unrelated}
 to what the wisdom self-advertises. On 30 GSM8K problems,
-\(W_{078}\) actively \emph{harms} accuracy (29/30 vs 30/30 base).
+\(W_{078}\) ext\ accuracy (29/30) is \emph{below} that run's
+gemini-base (30/30); a later run (Exp~42) shows the same direction
+on \(W_{076}\) and \(W_{077}\) (each \(26/30\) vs.\ that run's
+\(28/30\) base, the latter run's base having drifted from
+Exp~32's).
 Scaling the L1 panel to expensive-tier judges (Claude Opus 4.6,
-GPT-5.4) on all three KEEPs gives six measurements
-with wr\_ext \(\in [0.43, 0.54]\); \emph{not one} CI upper bound
-reaches the \(0.60\) gate. Cohen's \(\kappa\) on the full
+GPT-5.4) on all three KEEPs gives six wr\_ext measurements in
+\([0.43, 0.54]\); none reach the \(0.60\) gate as a point estimate
+(\(0/6\)), though \(3/6\) Wilson 95\% CIs do contain the
+threshold, so the gate is not formally rejected at \(95\%\)
+confidence on those three cells. Cohen's \(\kappa\) on the full
 \(5 \times 50\) cheap\(\cup\)expensive verdict matrix is
-\(+0.25\) cross-tier, comparable to within-tier \(+0.18\)--\(+0.26\)
-— the null is not a judge-tier artifact.
-\textbf{Final validated library delta on external data:
-\(\boxed{+0}\).} The three KEEPs fail every audit axis we run.
+\(+0.25\) cross-tier, comparable to within-tier
+\(+0.18\)--\(+0.26\) --- the gate's failure to reproduce is not
+a judge-tier artifact.
+\textbf{Final validated library delta on external data under our
+single-family inner-loop gate's own threshold:} \(\boxed{+0}\).
+None of the three KEEPs reaches \(\mathrm{wr}_{\mathrm{ext}}
+\geq 0.60\) as a point estimate under any audit-stack
+measurement we report.
 
 \noindent\textbf{Honest scope.} The empirical base of this paper
 is \emph{three} accepted wisdoms from \emph{one} loop cycle on
@@ -129,9 +139,12 @@ combine them as a trigger-conditioned gate (Exp 15). On the original
 12 candidates this rescues \(4/12\) (vs \(3/12\) for the naive gate),
 including two REVERTs the naive gate missed. But scaling to
 \(21\) candidates (Exp 33) yields \(3/21\) PASS at the same
-threshold — below the \(30\%\) random-baseline rate. The
-architectural redesign recovers \emph{local} positive signal on
-the original 12 but does not generalize: a partial recovery,
+threshold --- a pass rate that is not above what a
+random-inclusion procedure at \(\sim 30\%\) would deliver
+(we use \(30\%\) only as an arbitrary reference point, not as
+a principled utility baseline). The architectural redesign
+recovers \emph{local} positive signal on the original 12 but
+does not generalize: a partial recovery,
 not a fix.
 
 \noindent\textbf{Strict-reviewer closure (Exp 25--42).} Further
@@ -342,13 +355,15 @@ signal, unpacking, exemplars, and evidence trail. Each is
 subsequently falsified by the audit stack.
 
 \paragraph{Contribution 5 — A partial architectural recovery that does
-not generalize.} Having falsified the naive pair-wr gate, we decompose
-it into three independent components (trigger-fit, conditional utility,
+not generalize.} Having destabilised the naive pair-wr gate, we
+decompose it into three components (trigger-fit, conditional utility,
 citability) and build a trigger-conditioned replacement gate
 (\S\ref{sec:l1}). On the original 12 candidates this
 locally rescues \(4/12\), including two REVERTs the naive gate had
 missed. But when we scale to 21 candidates the same gate PASSes
-only \(3/21\) — below the random-baseline rate of \(\sim\!30\%\).
+only \(3/21\), a rate not above the \(\sim 30\%\) reference that an
+arbitrary random-inclusion procedure at this threshold would
+deliver.
 The architectural redesign recovers signal on the seen set but not
 on a superset. \emph{The audit stack is harder to satisfy than a gate
 is to redesign.} The rescued \(4/12\) is therefore reported as
@@ -2006,8 +2021,11 @@ accepts, not the count: what it accepts is spurious across all 6
 audit layers.
 
 \paragraph{The sharpened final claim.} All three original KEEPs
-(W076, W077, W078) fail \emph{every} additional audit we can
-construct:
+(W076, W077, W078) fall below the inner-loop \(+10\)pp gate's own
+threshold under \emph{every} additional audit-stack measurement
+we run, with the caveat that several CIs at the \(n\)'s involved
+still contain \(0.60\) (so this is non-replication, not formal
+falsification at \(95\%\) confidence):
 
 \begin{center}\small
 \begin{tabular}{l c c c c c c c}
@@ -2128,17 +2146,20 @@ loop. Total: 300 new API calls at expensive tier (cost
   \centering
   \includegraphics[width=\linewidth]{figs/exp35_five_judge_forest.png}
   \caption{Forest plot of wr\_ext with 95\% Wilson CIs for each KEEP
-    \(\times\) each of the five judges used across the audit stack.
-    Blue band: cheap-tier (gemini-3-flash, claude-haiku-4.5,
-    gpt-5.4-mini). Pink band: expensive-tier (claude-opus-4.6,
-    gpt-5.4). Green vertical line: \(+10\)pp KEEP threshold
-    (\(0.60\)); grey dashed: \(0.50\) baseline. \textbf{No single
-    CI upper bound reaches the KEEP threshold} for any (KEEP, judge)
-    combination. This visualises the Exp~35 scale-up claim more
-    directly than Table~\ref{tab:exp35-expensive-extended}: the null
-    verdict holds across all 15 measurements, not a single one of
-    which supports keeping any of W076/W077/W078 under the gate
-    that committed them.}
+    \(\times\) each of the five audit-stack judges (re-judged on
+    cached answer pairs). Blue band: cheap-tier (gemini-3-flash,
+    claude-haiku-4.5, gpt-5.4-mini, all from Exp~36's re-run).
+    Pink band: expensive-tier (claude-opus-4.6, gpt-5.4, from
+    Exp~35). Green vertical line: \(+10\)pp KEEP threshold
+    (\(0.60\)); grey dashed: \(0.50\) baseline.
+    \textbf{No (KEEP, judge) point estimate reaches \(0.60\)} in
+    these audit-stack re-runs (\(0/15\) cells), although a few
+    individual CI upper bounds do extend past \(0.60\) at the
+    sample sizes involved (notably W076 under gpt-5.4 and W077
+    under claude-opus-4.6). The original \emph{inner-loop}
+    gemini verdicts of 0.64/0.60/0.60, by contrast, are not
+    plotted here; this figure shows only the audit-stack
+    re-runs.}
   \label{fig:five-judge-forest}
 \end{figure}
 
@@ -2246,39 +2267,50 @@ has \(p = 0.040\) (null confirmed).
 
 \begin{table}[h]
   \centering\small
-  \begin{tabular}{l c c c}
+  \begin{tabular}{l c c c c}
     \toprule
-    Claim & wr\_ext & \(n\) & 95\% CI \\
+    Claim & wr\_ext & \(n_{\mathrm{eff}}\) & ties & 95\% CI \\
     \midrule
-    \multicolumn{4}{l}{\emph{Inner-loop (gemini judge)}}\\
-    \quad \(W_{076}\) & 0.64 & 50 & \([0.50,\ 0.76]\) \\
-    \quad \(W_{077}\) & 0.60 & 50 & \([0.46,\ 0.72]\) \\
-    \quad \(W_{078}\) & 0.60 & 50 & \([0.46,\ 0.72]\) \\
+    \multicolumn{5}{l}{\emph{Inner-loop (gemini judge)}}\\
+    \quad \(W_{076}\) & 0.64 & 50 & 0  & \([0.50,\ 0.76]\) \\
+    \quad \(W_{077}\) & 0.60 & 50 & 0  & \([0.46,\ 0.72]\) \\
+    \quad \(W_{078}\) & 0.60 & 50 & 0  & \([0.46,\ 0.72]\) \\
     \midrule
-    \multicolumn{4}{l}{\emph{L1 cross-family (Opus judge)}}\\
-    \quad \(W_{076}\) & 0.40 & 50 & \([0.28,\ 0.54]\) \\
-    \quad \(W_{077}\) & 0.47 & 50 & \([0.35,\ 0.61]\) \\
-    \quad \(W_{078}\) & 0.51 & 50 & \([0.39,\ 0.65]\) \\
+    \multicolumn{5}{l}{\emph{L1 cross-family (Opus judge)}}\\
+    \quad \(W_{076}\) & 0.40 & 45 & 5  & \([0.27,\ 0.55]\) \\
+    \quad \(W_{077}\) & 0.47 & 40 & 10 & \([0.33,\ 0.63]\) \\
+    \quad \(W_{078}\) & 0.51 & 45 & 5  & \([0.37,\ 0.65]\) \\
     \midrule
-    \multicolumn{4}{l}{\emph{L3 sample extension (gemini, \(n=100\))}}\\
-    \quad \(W_{076}\) & 0.57 & 100 & \([0.47,\ 0.66]\) \\
-    \quad \(W_{077}\) & 0.52 & 100 & \([0.42,\ 0.62]\) \\
-    \quad \(W_{078}\) & 0.52 & 100 & \([0.42,\ 0.62]\) \\
+    \multicolumn{5}{l}{\emph{L3 sample extension (gemini, \(n=100\) combined)}}\\
+    \quad \(W_{076}\) & 0.57 & 99 & 1  & \([0.47,\ 0.66]\) \\
+    \quad \(W_{077}\) & 0.52 & 100 & 0 & \([0.42,\ 0.62]\) \\
+    \quad \(W_{078}\) & 0.52 & 100 & 0 & \([0.42,\ 0.62]\) \\
     \midrule
-    \multicolumn{4}{l}{\emph{L4 cross-solver (3 families \(\times\) 20 pids)}}\\
-    \quad \(W_{076}\) mean & 0.41 & 60 & \([0.30,\ 0.54]\) \\
+    \multicolumn{5}{l}{\emph{L4 cross-solver (3 families \(\times\) 20 pids; W076)}}\\
+    \quad \(W_{076}\) mean & 0.41 & 60 & 0 & \([0.30,\ 0.54]\) \\
     \midrule
-    \multicolumn{4}{l}{\emph{Exp~34 expensive judges on \(W_{078}\)}}\\
-    \quad claude-opus-4-6 & 0.43 & 46 & \([0.30,\ 0.58]\) \\
-    \quad gpt-5.4 & 0.43 & 49 & \([0.30,\ 0.57]\) \\
+    \multicolumn{5}{l}{\emph{Exp~35 expensive judges on 3 KEEPs}}\\
+    \quad \(W_{076}\) opus & 0.46 & 46 & 4 & \([0.32,\ 0.60]\) \\
+    \quad \(W_{076}\) gpt-5.4 & 0.54 & 48 & 2 & \([0.40,\ 0.67]\) \\
+    \quad \(W_{077}\) opus & 0.53 & 47 & 3 & \([0.39,\ 0.67]\) \\
+    \quad \(W_{077}\) gpt-5.4 & 0.43 & 47 & 3 & \([0.30,\ 0.57]\) \\
+    \quad \(W_{078}\) opus & 0.43 & 46 & 4 & \([0.30,\ 0.58]\) \\
+    \quad \(W_{078}\) gpt-5.4 & 0.43 & 49 & 1 & \([0.30,\ 0.57]\) \\
     \bottomrule
   \end{tabular}
-  \caption{95\% Wilson binomial CIs on headline pair-wr claims.
-    Every audit-stack CI contains \(0.50\); two of three inner-loop
-    CIs contain \(0.50\) as well. The narrative verb ``flips''
-    (inner-loop \(\to\) L1) corresponds to a shift within overlapping
-    CIs, consistent with the claim that the gate was measuring noise
-    to begin with.}
+  \caption{95\% Wilson binomial CIs on headline pair-wr claims,
+    using the non-tie effective sample size \(n_{\mathrm{eff}}\)
+    (ties excluded from the denominator per
+    \S\ref{sec:setup}). Tie counts are reported in the adjacent
+    column. \emph{Reading the table:} every audit-stack CI
+    contains \(0.50\); two of three inner-loop CIs contain
+    \(0.50\); three of six expensive-judge CIs (W076-opus,
+    W076-gpt5, W077-opus) extend past \(0.60\) at the available
+    \(n\). The narrative verb ``flips'' (inner-loop \(\to\) L1)
+    corresponds to a shift within overlapping CIs, consistent
+    with the claim that the gate is measurement-fragile in this
+    band rather than that it is sharply falsified at \(95\%\)
+    confidence.}
   \label{tab:ci}
 \end{table}
 
@@ -2436,12 +2468,16 @@ in advance and frozen.
 
 \textbf{Finding.} A stronger non-panel rater doing structured
 multi-dimensional Likert finds the wisdom-augmented answer
-slightly \emph{worse} on every dimension, with a combined-mean
+slightly worse on every dimension, with a combined-mean
 preference of \(11/30\) base-better vs.\ \(7/30\) ext-better.
-This rules out a ``judges-just-disagree-stylistically'' rebuttal:
-when forced to score on substance and methodology separately
-rather than express A/B preference, the wisdom does not improve
-the answer. The audit stack's null is corroborated from outside
+This is evidence \emph{against} the strongest version of a
+``judges-just-disagree-stylistically; substance is fine''
+rebuttal --- when forced to score on substance and methodology
+separately rather than express A/B preference, gpt-5.5 does not
+prefer the wisdom-augmented answer either. We do not claim this
+rules out the alternative explanation entirely (gpt-5.5 is a
+stronger LLM, not a human). The audit stack's null is
+corroborated from outside
 the panel.
 
 \textbf{Honest scope.} gpt-5.5 is a stronger LLM, not a human.
@@ -2623,7 +2659,7 @@ base answer (no wisdom) over the wisdom-augmented answer for all
 three KEEPs. The strongest single negative is methodological
 soundness on \(W_{076}\) (\(-0.27\)). At combined-preference
 level, base-better outpaces ext-better by \(5\)--\(6\) of \(30\)
-pids in each candidate. This rules out the
+pids in each candidate. This is evidence \emph{against} the
 ``judges-just-disagree-stylistically-and-the-substance-is-fine''
 rebuttal for all three KEEPs, not just \(W_{078}\).
 
@@ -2646,15 +2682,25 @@ the response, matched against the GSM8K gold).}
 \begin{center}\small
 \begin{tabular}{l c c c}
   \toprule
-  Condition & accuracy & vs.\ base & verdict \\
+  Condition (run) & accuracy & vs.\ that run's base & verdict \\
   \midrule
-  base (no wisdom)     & \(28/30\) (\(0.93\)) & --- & --- \\
-  \(+ W_{076}\)        & \(26/30\) (\(0.87\)) & \(-2\) & HARMS \\
-  \(+ W_{077}\)        & \(26/30\) (\(0.87\)) & \(-2\) & HARMS \\
-  \(+ W_{078}\) (Exp~32) & \(29/30\) (\(0.97\)) & \(-1\) & HARMS \\
+  \multicolumn{4}{l}{\emph{Exp~42 run (this experiment, 30 problems)}}\\
+  \quad base (no wisdom)     & \(28/30\) (\(0.93\)) & --- & --- \\
+  \quad \(+ W_{076}\)        & \(26/30\) (\(0.87\)) & \(-2\) & HARMS \\
+  \quad \(+ W_{077}\)        & \(26/30\) (\(0.87\)) & \(-2\) & HARMS \\
+  \midrule
+  \multicolumn{4}{l}{\emph{Exp~32 run (different time, same 30 problems)}}\\
+  \quad base (no wisdom)     & \(30/30\) (\(1.00\)) & --- & --- \\
+  \quad \(+ W_{078}\)        & \(29/30\) (\(0.97\)) & \(-1\) & HARMS \\
   \bottomrule
 \end{tabular}
 \end{center}
+
+The two runs CANNOT be combined into a single delta calculation
+because the gemini-3-flash base accuracy itself drifted (\(28/30\)
+in Exp~42 vs.\ \(30/30\) in Exp~32). What is invariant across the
+two runs is the \emph{within-run sign of the delta}: ext is below
+base for all three KEEPs in their respective runs.
 
 \paragraph{Subjective verdict (3-family cheap panel).}
 \(W_{076}\): per-family wr 0.29 / 0.14 / 0.25 (mean 0.23, ties
@@ -2936,18 +2982,19 @@ their verdicts; the boxed expression above is therefore the
 gate's training-set discrimination, not its prospective
 performance.
 
-\paragraph{The prospective test (Exp~33) falsifies the
-generalization claim.} The same gate applied without
-re-tuning to the 9 new candidates from the relaxed-cluster
-pool (Exp~29, \S\ref{sec:rebuttal2}) produces \(0/9\) PASS;
-combined with the \(4/12\) tuning-set rate this is
-\(4/21 \approx 19\%\), below the random-inclusion baseline of
-\(\sim 30\%\) (95\% Wilson CI \([0.08,\ 0.38]\); one-sided
-binomial \(p = 0.14\) against \(p_0 = 0.30\)). The
-trigger-conditioned gate \emph{locally discriminates} on its
-tuning set but does not prospectively out-perform random
-inclusion. The \(+4/-1\) box above should therefore not be
-cited as a validated library improvement. The generalization
+\paragraph{The prospective test (Exp~33) does not support the
+generalization claim.} The same gate applied without re-tuning
+to the 9 new candidates from the relaxed-cluster pool (Exp~29,
+\S\ref{sec:rebuttal2}) produces \(0/9\) PASS; combined with the
+\(4/12\) tuning-set rate this is \(4/21 \approx 19\%\). For
+reference, a random-inclusion procedure at the threshold
+implicit in this gate would deliver \(\sim 30\%\) PASS by
+construction; the observed rate is below that reference
+(\(95\%\) Wilson CI \([0.08, 0.38]\); one-sided binomial
+\(p = 0.14\) against \(p_0 = 0.30\)). We use the random-30\%
+figure only as an arbitrary calibration point, not as an
+external utility baseline. The \(+4/-1\) box above should
+therefore not be cited as a validated library improvement. The generalization
 gap is itself evidence for the audit stack's central claim:
 an orthogonal-component gate remains a single-family
 single-set measurement and inherits the same identifiability
@@ -3286,6 +3333,34 @@ conceptually open.
 
 \section{Limitations}
 \label{sec:limitations}
+
+\textbf{Held-out contamination via exemplar mining (real concern;
+re-running a clean inner loop is future work).} The inner-loop
+A/B gate (\S\ref{sec:gate}) mines three cross-domain exemplars
+for each candidate wisdom from the same \(50\)-problem
+\texttt{sample\_holdout\_50} set used for evaluation. The mined
+exemplar PIDs are stored inside the wisdom record and presented
+to the solver at retrieval time as
+\texttt{cross\_domain\_examples}. Concretely: when the gate
+evaluates wisdom \(w\) on PID \(p\), \(w\)'s record may contain
+exemplars referring to other PIDs in the held-out set, and in
+the worst case to \(p\) itself. This is a held-out
+contamination: the solver sees, at evaluation time, hints
+specifically curated from the evaluation distribution. We did
+not detect this in the original implementation; it was flagged
+in subsequent reviewer simulation. The inner-loop wr\_ext values
+of \(0.64 / 0.60 / 0.60\) for the three KEEPs should therefore
+be read as ``produced by a gate that had partial held-out
+exposure,'' not as a clean held-out signal. The audit-stack
+results (Exp~1, 5, 8, 26, 31--42) were not subject to this
+specific leak because the audit either re-judged cached answer
+pairs (no further exemplar lookup) or used disjoint pools
+(Exp~31 fresh math, Exp~32/42 GSM8K, Exp~39 MT-Bench), but the
+inner-loop gate's commit decision \emph{was}. A clean re-run of
+the inner loop with exemplars mined only from a separate
+development pool is the correct correction and is future work.
+We retain the inner-loop numbers as the headline that the audit
+stack is acting on, with this caveat made explicit.
 
 \textbf{Language scope: primarily Chinese open-ended problems.}
 The full pipeline (scaffold v20, 75-entry wisdom library, the
