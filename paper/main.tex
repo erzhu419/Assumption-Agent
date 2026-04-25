@@ -64,13 +64,13 @@ the third (W076) collapses on fresh data as well. The scientific
 contribution is the audit stack itself, plus a single-loop
 demonstration that combining (i) cross-family re-judgment,
 (ii)~selection-bias modelling on the inner-loop ranking, and
-(iii)~a preregistered fresh-loop replication \emph{distinguishes}
+(iii)~a preregistered fresh-data replication \emph{distinguishes}
 selection-driven cached-data drops (W077, W078) from genuine
 non-replication (W076). A formal selection-adjusted analysis
 (Exp~45) shows that the L1 drops on cached data are statistically
 consistent with regression to the mean on top-3-of-12 noisy gate
 selections — so cached-data drops alone cannot tell ``spurious''
-from ``real but shrunk''; the preregistered fresh-loop replication
+from ``real but shrunk''; the preregistered fresh-data replication
 is what does. We do not generalise to a field-level claim about
 all self-improving LLM loops; we release the audit stack so others
 can run the same checks on theirs.
@@ -109,7 +109,17 @@ non-pair-wr measurement axis), but they reuse the same KEEPs, the
 same cached answer pairs (L1, L2), and overlap in solver and
 problem pool (L3, L4); we therefore describe them as conditionally
 distinct stress tests rather than as independent evidence streams.
-A self-improvement claim that is real should survive all six.
+A self-improvement claim that is intended to generalise across
+the nuisance variables these layers stress-test --- judge family,
+position seed, sample size, solver family, problem distribution,
+and faithfulness of the reasoning trace --- should survive
+substantively across the layers that target nuisance variables in
+its target population. We do not claim ``a real wisdom must clear
+every layer'': a wisdom that is genuinely useful for a specific
+solver family or problem distribution can fail a layer that
+intervenes on that variable; what the layers do is help identify
+which estimand (which population, which judge, which solver) the
+inner-loop's same-family \(+10\)pp signal actually applies to.
 
 \noindent\textbf{Cached-data audit verdict: \(\mathbf{0/3}\)
 KEEPs clear the gate's own threshold on the original cached pairs.}
@@ -151,7 +161,7 @@ to claude-haiku or gpt-mini, \(7/18\) (KEEP, judge) cells reach
 \(\geq 0.60\), but no (KEEP, solver) clears \(0.60\) under all
 three judges (\(0/6\) under 3-family consensus).
 
-\noindent\textbf{Preregistered fresh-loop replication (Exp~47)
+\noindent\textbf{Preregistered preregistered fresh-data replication (Exp~47)
 recovers some signal.} Applying the audit-stack thresholds frozen
 in advance (\texttt{PREREGISTRATION\_v2.md}; inner gate
 \(\geq 0.60\), L1 cross-family \(\geq 0.55\) per the
@@ -170,7 +180,7 @@ under the preregistered protocol on fresh data.
 \noindent\textbf{Honest scope.} The empirical base is twelve
 candidates from one loop cycle on one solver family with no
 human-annotated ground truth. The paper is a case study, not a
-literature-level claim. The preregistered fresh-loop replication
+literature-level claim. The preregistered fresh-data replication
 is the strongest replication test we have run; combined with
 Exp~45's selection-bias finding, the overall reading is that
 the audit stack is a useful methodology that catches some real
@@ -215,8 +225,10 @@ across two independent runs); cross-solver L4 full audit
 reach a single-judge wr \(\geq 0.60\), but 0/6 (KEEP, solver)
 combinations clear \(0.60\) under all three judges); and GSM8K
 objective-accuracy probe extended from W078 (Exp~32) to
-\emph{all three KEEPs} (Exp~42, all three harm accuracy by
-\(1\)--\(2\) of 30 problems). The
+\emph{all three KEEPs} (Exp~42, all three give a small negative
+point estimate on objective accuracy by \(1\)--\(2\) of 30
+problems --- direction uniform but not individually significant
+by McNemar). The
 judge-fragility finding replicates across every conditionally-distinct
 axis we have run, and once across a language switch.
 
@@ -226,7 +238,7 @@ self-improving LLM loop. (ii)~Single-loop evidence that on the
 specific Chinese open-ended setup studied here, the default
 inner-loop gate's decisions do not reproduce as point estimates
 under the cached-data audit at the original \(0.60\) threshold;
-but a preregistered fresh-loop replication at the
+but a preregistered fresh-data replication at the
 preregistration's laxer L1 threshold of \(0.55\) (Exp~47) shows
 \(2/3\) of the original KEEPs do replicate on disjoint fresh
 data, plus one originally-rejected candidate is recovered. The
@@ -264,7 +276,7 @@ items for any self-improvement claim.
     expensive-judge measurements. \emph{Selection-bias check (Exp~45)}:
     these L1 drops are statistically consistent with regression-
     to-mean on top-3-of-12 noisy gate scores. \emph{Preregistered
-    fresh-loop replication (Exp~47)}: under the preregistration's
+    preregistered fresh-data replication (Exp~47)}: under the preregistration's
     laxer L1 threshold (\(0.55\)) on a disjoint 30-pid split,
     \(W_{077}\) and \(W_{078}\) both reproduce; \(W_{076}\)
     collapses (fresh inner wr \(=0.41\)); one originally-rejected
@@ -381,14 +393,14 @@ threshold as a point estimate under L1, L3, L5, or the
 expensive-judge audit (Fig.~\ref{fig:audit-sieve}). The cross-
 solver layer (Exp~40) is one exception (\(7/18\) cells single-
 judge \(\geq 0.60\), but \(0/6\) under 3-family consensus). The
-\emph{preregistered fresh-loop replication} (Exp~47) is the
+\emph{preregistered fresh-data replication} (Exp~47) is the
 strongest test: under the preregistration's laxer L1 threshold
 (\(0.55\)), \(W_{077}\) and \(W_{078}\) reproduce and one
 originally-rejected candidate (WCAND03) is recovered;
 \(W_{076}\) collapses to \(\mathrm{wr} = 0.41\), well below
 parity. Final library delta on the cached data at the
 \(\geq\!0.60\) threshold: \(\boxed{+0}\); on the preregistered
-fresh-loop test at the \(\geq\!0.55\) threshold: \(\boxed{+3}\)
+fresh-data replication at the \(\geq\!0.55\) threshold: \(\boxed{+3}\)
 (W077, W078, WCAND03). Our contributions are:
 
 \paragraph{Contribution 1 — The six-layer audit stack (primary).} We
@@ -398,8 +410,9 @@ top of an existing inner-loop artifact and (ii)~capable of
 independently destabilising a KEEP decision the inner-loop gate
 treated as confirmed. Cross-family re-judgment (L1) on the cached
 data moves \(3/3\) of our loop's KEEPs from above to below the
-\(+10\)pp threshold on identical content; preregistered fresh-loop
-re-evaluation at the preregistration's laxer L1 threshold (\(0.55\))
+\(+10\)pp threshold on identical content; preregistered fresh-data
+re-evaluation of the original candidate set at the
+preregistration's laxer L1 threshold (\(0.55\))
 recovers \(2/3\) of these KEEPs on disjoint fresh data. We read this
 not as universal judge-fragility but as \emph{the audit stack
 distinguishing the two failure modes} --- W076 truly fails to
@@ -418,8 +431,9 @@ analysis (Exp~45) shows these drops are statistically consistent
 with regression-to-mean on top-3-of-12 noisy gate scores}; L1
 alone is therefore \emph{not} sufficient to call them
 judge-fragility. On GSM8K \(W_{078}\) ext is below base accuracy
-on the same problems; on the preregistered fresh-loop
-replication (Exp~47) \(W_{077}\) and \(W_{078}\) recover but
+on the same problems; on the preregistered fresh-data
+re-evaluation of the original candidate set (Exp~47) \(W_{077}\)
+and \(W_{078}\) recover but
 \(W_{076}\) does not. The audit stack delivers a
 \emph{differentiated} verdict, not a uniform one.
 
@@ -1610,8 +1624,9 @@ isolation this would suggest \(\{W_{078}, \text{WCAND07}\}\) is a
 does not survive the rest of the audit stack.} \(W_{078}\) drops
 to \(\approx 0.52\) under L3 sample extension to \(n = 100\)
 (\S\ref{sec:exp8}) and to \(\approx 0.43\) under expensive-tier
-judges (Exp~34--35); \(W_{078}\) also actively harms accuracy on
-GSM8K (Exp~32). WCAND07 is not pursued through the full stack.
+judges (Exp~34--35); \(W_{078}\) also has a small-negative point
+estimate on GSM8K accuracy (Exp~32, 29/30 vs 30/30, not
+McNemar-significant at this \(n\)). WCAND07 is not pursued through the full stack.
 We retain this section as the chronological record of an
 intermediate analysis, not as a result.
 
@@ -2129,8 +2144,9 @@ overly permissive. The issue is the \emph{composition} of its 3
 accepts, not the count: what it accepts is spurious across all 6
 audit layers.
 
-\paragraph{The sharpened final claim (cached-data audit + fresh-loop
-replication).} On the \emph{cached} Exp~10 answer pairs, all three
+\paragraph{The sharpened final claim (cached-data audit + fresh-data
+re-evaluation of the original candidates).} On the \emph{cached}
+Exp~10 answer pairs, all three
 original KEEPs (W076, W077, W078) fall below the inner-loop
 \(+10\)pp gate's own threshold under \emph{every} additional
 audit-stack measurement we run, with the caveat that several CIs
@@ -2143,13 +2159,13 @@ full loop: candidate generation and pruning are not rerun), W077 and
 W078 both clear the preregistration's L1 threshold (0.55) on
 disjoint data; only W076 collapses. The audit table below shows
 the \emph{cached-data} columns (Exp~1--34) alongside the
-\emph{fresh-loop} column (Exp~47):
+\emph{fresh-data} column (Exp~47):
 
 \begin{center}\small
 \begin{tabular}{l c c c c c c c c}
   \toprule
   & Exp 1 & Exp 5 & Exp 8 & Exp 26 & Exp 31 & Exp 32 & Exp 34 & \textbf{Exp 47} \\
-  KEEP & cross-fam & side & n=100 & cross-slv & fresh & GSM8K & exp-judge & \textbf{fresh loop} \\
+  KEEP & cross-fam & side & n=100 & cross-slv & fresh & GSM8K & exp-judge & \textbf{fresh data} \\
   \midrule
   W076 & FLIP & FLIP & gray & NULL & --- & --- & --- & \textbf{COLLAPSE} \\
   W077 & FLIP &  --- & FAIL &  --- & --- & --- & --- & \textbf{REPLICATE} \\
@@ -2165,11 +2181,11 @@ preregistered fresh re-execution at the laxer L1 threshold yields
 \(\boxed{+2/3}\) replication on disjoint data. The cached-data
 \emph{drops} (\(-20, -13, -9\) percentage points relative to the
 inner-loop gate) are statistically consistent with selection bias
-on a top-3-of-12 noisy ranking (Exp~45); the fresh-loop
+on a top-3-of-12 noisy ranking (Exp~45); the fresh-data
 \emph{recovery} of W077 and W078 indicates that two of the three
 original signals are not artefacts of selection. W076's
 collapse on fresh pids is the one cell where the audit stack and
-the fresh-loop re-execution agree on a non-reproducing signal.
+the fresh-data re-evaluation agree on a non-reproducing signal.
 
 Four of six anticipated objections (\#1, \#2, \#3, \#4) have
 empirical responses at the scale of this single-loop case study:
@@ -2931,8 +2947,9 @@ extended to \(W_{076}\) and \(W_{077}\)}
 \label{sec:exp42}
 
 Exp~32 ran GSM8K only on \(W_{078}\) (29/30 ext vs.\ 30/30 base
-under gemini-3-flash; the wisdom \emph{harmed} accuracy by 1
-problem). Closes the ``objective-benchmark check on one KEEP only''
+under gemini-3-flash; small negative point estimate of 1
+problem out of 30 --- not individually significant by McNemar).
+Closes the ``objective-benchmark check on one KEEP only''
 angle by running the same probe on \(W_{076}\) and \(W_{077}\):
 30 GSM8K problems, gemini solver, base + ext per KEEP.
 
@@ -2969,13 +2986,19 @@ Both far below parity, consistent with Exp~32's W078 mean of 0.15.
 
 \paragraph{Reading.} On the strongest non-LLM-judged measurement
 in this paper (numerical-answer correctness against GSM8K gold),
-all three KEEPs \emph{harm} accuracy by 1--2 problems out of 30.
-Even allowing for the small \(n\), the direction is uniform.
-This is the cleanest piece of objective evidence we have that
-these wisdoms do not improve answers on a held-out distribution
-where ``correct'' has an external definition; on the
-substantively-judged Chinese open-ended pool we cannot make this
-claim, only the weaker ``judges of one family preferred them.''
+all three KEEPs show a \emph{small negative point estimate} on
+accuracy --- 1--2 problems out of 30 fewer correct than base.
+A McNemar paired test on the per-pid 2\(\times\)2 contingency
+gives \(p > 0.5\) for each of the three KEEPs (insufficient
+discordant pairs at this \(n\)), so the differences are not
+statistically significant individually; what \emph{is} suggestive
+is that the direction is uniform across all three KEEPs and all
+three GSM8K-tier solver runs. We do not claim ``these wisdoms
+harm accuracy'' as a confidence statement; we report ``the
+direction of effect on objective correctness is uniformly
+non-positive across the three KEEPs at small \(n\),'' which
+contrasts with the inner-loop's \(+10\)pp same-family signal
+on Chinese open-ended pairs.
 
 \paragraph{Aside on hosted-model temporal drift.} Exp~32 reported
 base accuracy of \(30/30\) on the same 30 problems; Exp~42
@@ -2985,9 +3008,9 @@ another instance of the cross-time instability documented in
 \S\ref{sec:kappa}: the same solver-judge configuration produces
 different objective-correctness counts on identical input across
 re-runs. We retain the most recent run as the saved state and
-note that the qualitative finding (all three KEEPs harm GSM8K
-accuracy by \(1\)--\(2\) problems) is invariant to which run is
-used.
+note that the qualitative finding (uniform small-negative
+direction on GSM8K accuracy across all three KEEPs, 1--2
+problems out of 30) is invariant to which run is used.
 
 Cost: \({\sim}\$5\), \({\sim}15\) min. Log:
 \texttt{phase four/autonomous/exp42\_gsm8k\_w076\_w077\_log.json}.
@@ -3195,11 +3218,11 @@ problem split (30 fresh pids), the seed, the inner-loop gate
 verdict, the L1 cross-family verdict, and the threshold policy
 (both thresholds frozen in advance). It is a preregistered
 fresh-data replication of the original candidate set against the
-inner gate plus L1, not a fresh full loop. We previously called
-this a ``fresh-loop replication''; we have retained the prefix
-\emph{fresh-loop} elsewhere in the paper for searchability but
-the accurate name is ``preregistered fresh-data replication of
-the original candidates.''
+inner gate plus L1, not a fresh full loop. We have swept
+``fresh-loop'' language out of the paper following Round-9
+reviewer feedback; the accurate name is ``preregistered
+fresh-data replication of the original candidates,'' used
+consistently throughout.
 
 This is the experiment that most directly addresses the
 post-hoc-audit-stack concern. We apply the audit-stack thresholds
@@ -3216,26 +3239,41 @@ original \(+10\)pp gate), L1 cross-family \(\mathrm{wr}_{\mathrm{ext}}
 specifies for replication runs). Inner judge: gemini-3-flash; L1
 judge: claude-haiku-4.5.
 
-\begin{center}\small
-\begin{tabular}{l c c c c c}
+\begin{center}\scriptsize
+\begin{tabular}{l c r r c c r r c}
   \toprule
-  Candidate & original wr & fresh inner & fresh L1 & inner pass? & L1 pass? \\
+  & orig & \multicolumn{4}{c}{\textbf{fresh inner (gemini)}} & \multicolumn{3}{c}{\textbf{fresh L1 (haiku)}} \\
+  \cmidrule(lr){3-6} \cmidrule(lr){7-9}
+  Candidate & wr & ext/base/tie & \(n_{\text{eff}}\) & wr & pass? & ext/base/tie & wr & pass? \\
   \midrule
-  WCAND01 (上工治未病)        & 0.58 & \(0.55\) & ---     & FAIL & --- \\
-  WCAND02                     & 0.46 & \(0.45\) & ---     & FAIL & --- \\
-  \textbf{WCAND03} (凡事预则立) & 0.56 & \(\mathbf{0.68}\) & \(\mathbf{0.57}\) & \textbf{PASS} & \textbf{PASS} \\
-  WCAND04                     & 0.48 & \(0.48\) & ---     & FAIL & --- \\
-  WCAND05 \emph{(\(W_{076}\))} & 0.64 & \(0.41\) & ---     & FAIL & --- \\
-  WCAND06                     & 0.58 & \(0.34\) & ---     & FAIL & --- \\
-  WCAND07                     & 0.56 & \(0.44\) & ---     & FAIL & --- \\
-  WCAND08                     & 0.51 & \(0.54\) & ---     & FAIL & --- \\
-  WCAND09                     & 0.55 & \(0.43\) & ---     & FAIL & --- \\
-  \textbf{WCAND10} \emph{(\(W_{077}\))} & 0.60 & \(\mathbf{0.66}\) & \(\mathbf{0.57}\) & \textbf{PASS} & \textbf{PASS} \\
-  WCAND11                     & 0.54 & \(0.25\) & ---     & FAIL & --- \\
-  \textbf{WCROSSL01} \emph{(\(W_{078}\))} & 0.60 & \(\mathbf{0.63}\) & \(\mathbf{0.71}\) & \textbf{PASS} & \textbf{PASS} \\
+  WCAND01 (上工治未病)        & 0.58 & 16/13/0 & 29 & 0.55 & FAIL &  ---    & ---  & --- \\
+  WCAND02                     & 0.46 & 13/16/0 & 29 & 0.45 & FAIL &  ---    & ---  & --- \\
+  \textbf{WCAND03} (凡事预则立) & 0.56 & 19/9/0  & 28 & \(\mathbf{0.68}\) & \textbf{PASS} & 16/12/0 & \(\mathbf{0.57}\) & \textbf{PASS} \\
+  WCAND04                     & 0.48 & 14/15/0 & 29 & 0.48 & FAIL &  ---    & ---  & --- \\
+  WCAND05 \emph{(\(W_{076}\))} & 0.64 & 11/16/0 & 27 & 0.41 & FAIL &  ---    & ---  & --- \\
+  WCAND06                     & 0.58 & 10/19/0 & 29 & 0.34 & FAIL &  ---    & ---  & --- \\
+  WCAND07                     & 0.56 & 12/15/0 & 27 & 0.44 & FAIL &  ---    & ---  & --- \\
+  WCAND08                     & 0.51 & 14/12/0 & 26 & 0.54 & FAIL &  ---    & ---  & --- \\
+  WCAND09                     & 0.55 & 12/16/0 & 28 & 0.43 & FAIL &  ---    & ---  & --- \\
+  \textbf{WCAND10} \emph{(\(W_{077}\))} & 0.60 & 19/10/0 & 29 & \(\mathbf{0.66}\) & \textbf{PASS} & 17/13/0 & \(\mathbf{0.57}\) & \textbf{PASS} \\
+  WCAND11                     & 0.54 & 7/21/0  & 28 & 0.25 & FAIL &  ---    & ---  & --- \\
+  \textbf{WCROSSL01} \emph{(\(W_{078}\))} & 0.60 & 17/10/0 & 27 & \(\mathbf{0.63}\) & \textbf{PASS} & 20/8/0 & \(\mathbf{0.71}\) & \textbf{PASS} \\
   \bottomrule
 \end{tabular}
 \end{center}
+
+\noindent\emph{Reading.} Tie counts are zero for all 12 candidates
+under both judges; \(n_{\text{eff}}\) ranges from 26--29
+(out of 30 fresh pids), reflecting 1--4 dropped responses per cell
+(error or invalid output). Tie sensitivity is therefore vacuous on
+this dataset: the ties-as-half-wins convention coincides with the
+ties-excluded convention because there are no ties. L1 was run
+only on candidates passing the inner gate, per the preregistration
+(answer to R9 Question~1: yes, only inner-passers were sent to L1,
+because the preregistered protocol gates L1 on the inner gate;
+re-running L1 on inner-failures is logged as a future-work
+sensitivity analysis but does not affect the preregistered
+outcome category).
 
 \paragraph{Headline.}
 \textbf{Three of twelve candidates pass both the inner-loop
@@ -3281,7 +3319,7 @@ signal at this \(n\); a tighter test would require \(n \geq 100\)
 on the fresh split.
 
 \paragraph{Implications for the paper's primary claims.}
-The preregistered fresh-loop result \emph{partially overturns}
+The preregistered fresh-data replication result \emph{partially overturns}
 the strict ``\(0/3\) survive any audit measurement'' framing:
 \begin{itemize}[leftmargin=*,topsep=2pt,itemsep=2pt]
   \item \(W_{077}\) and \(W_{078}\) reproduce on fresh data under
@@ -3294,7 +3332,7 @@ the strict ``\(0/3\) survive any audit measurement'' framing:
     with Exp~45's selection-bias analysis).
   \item WCAND03 emerges as a candidate that the original
     inner-loop gate \emph{would have missed} (false negative).
-    The preregistered fresh-loop protocol catches it.
+    The preregistered fresh-data replication protocol catches it.
   \item The audit stack's sensitivity is now empirically
     demonstrated (the gate accepts something on fresh data),
     addressing the Exp~44+46 sensitivity gap.
@@ -3306,79 +3344,120 @@ evidence in this paper, and rewrite the abstract's headline to
 reflect both. Cost: \({\sim}\$25\), \({\sim}2\)~h. Log:
 \texttt{phase four/autonomous/exp47\_preregistered\_fresh\_loop\_log.json}.
 
-\subsection{Experiment 49 --- Hierarchical Bayesian re-analysis
-(replacing threshold-crossing with posterior probabilities)}
+\subsection{Experiment 49 --- Bayesian re-analysis: Beta-Binomial
+sensitivity per cell + DerSimonian-Laird random-effects pooling
+across judges}
 \label{sec:exp49}
 
-\paragraph{Motivation.} R8 reviewer feedback flagged that the paper
-``frequently uses threshold-crossing rhetoric (FLIP, COLLAPSE,
-REPLICATE) even when intervals overlap substantially.'' We
-therefore re-analyse the existing audit-stack verdict matrix as a
-Bayesian posterior over each KEEP's true ext-win-rate
-\(\theta\), with no new API calls.
+\paragraph{Motivation.} R8/R9 reviewer feedback flagged that the
+paper ``frequently uses threshold-crossing rhetoric (FLIP,
+COLLAPSE, REPLICATE) even when intervals overlap substantially''
+and that an earlier draft of this section described an
+``independent Beta-binomial per cell'' as ``hierarchical Bayes,''
+which it was not. We re-do the analysis cleanly in two layers
+with no new API calls.
 
-\paragraph{Model.} For each (KEEP, judge family, evaluation set)
+\paragraph{Layer A --- per-cell Beta-Binomial sensitivity (not
+hierarchical).} For each (KEEP, judge family, evaluation set)
 cell, the observed ext-wins among non-tie pairs is modelled as
 \(\text{Binomial}(n_{\text{eff}}, \theta)\) with a weakly
 informative \(\text{Beta}(2, 2)\) prior. The posterior is
 \(\text{Beta}(2 + \text{ext\_wins}, 2 + n_{\text{eff}} -
-\text{ext\_wins})\). We report posterior mean, 95\% credible
-interval, and the posterior probabilities
-\(P(\theta > 0.50 \mid \text{data})\),
-\(P(\theta > 0.55 \mid \text{data})\), and
-\(P(\theta > 0.60 \mid \text{data})\) for each cell. Pooling
-across judge families assumes per-pid independence across families
-on the same content; this is a simplification but the per-family
-breakdown is also reported. Source verdicts: cached
-\texttt{sample\_extend\_50} (\(\sim 50\) pids each) under five
-families (gemini-3-flash, claude-haiku-4.5, gpt-5.4-mini in
-Exp~36; claude-opus-4.6, gpt-5.4 in Exp~35) plus Exp~47 fresh
-30-pid verdicts (gemini inner, claude-haiku L1).
+\text{ext\_wins})\). Per-cell rows in Table~\ref{tab:exp49-bayes}
+make this transparent.
+
+\paragraph{Layer B --- DerSimonian-Laird random-effects pool
+across judge cells (proper hierarchical model).} Cached
+verdicts on identical answer pairs across five judge families
+share content and side-randomization seed but differ in judge
+family; treating the five \(\text{Beta}(2,2)\) posteriors as
+independent is overconfident. We instead apply the standard
+DerSimonian-Laird random-effects meta-analysis on logit-transformed
+proportions (DerSimonian \& Laird, \emph{Controlled Clinical
+Trials}, 1986): per cell \(j\) with proportion
+\(p_j = (y_j+0.5)/(n_j+1)\) (continuity-corrected), let
+\(\theta_j = \log(p_j / (1 - p_j))\) with sampling variance
+\(v_j = 1/((n_j+1) p_j (1-p_j))\); the model is
+\(\theta_j \sim \mathcal{N}(\mu, v_j + \tau^2)\) where \(\tau^2\)
+is the between-judge variance, estimated by Cochran's \(Q\)
+statistic. The pooled population-level effect \(\mu\) has standard
+error
+\(\mathrm{SE}_{\mathrm{RE}} = (\sum_j 1/(v_j + \tau^2))^{-1/2}\),
+and we report
+\(P(\theta > t) = 1 - \Phi((\mathrm{logit}(t) - \mu) / \mathrm{SE}_{\mathrm{RE}})\)
+on the probability scale via inverse-logit. Source verdicts as in
+Layer A: cached \texttt{sample\_extend\_50} under five families
+(gemini-3-flash, claude-haiku-4.5, gpt-5.4-mini in Exp~36;
+claude-opus-4.6, gpt-5.4 in Exp~35), plus Exp~47 fresh 30-pid
+verdicts (gemini inner, claude-haiku L1).
 
 \begin{table}[h]
   \centering\small
   \begin{tabular}{l c c c c c}
     \toprule
-    KEEP & set & wins/n & post.\ mean & 95\% CrI & \(P(\theta>0.55)\) \\
+    KEEP & set & wins/n & post.\ mean & 95\% CI & \(P(\theta>0.55)\) \\
     \midrule
+    \multicolumn{6}{l}{\emph{Layer A --- per-cell Beta-Binomial (Beta(2,2) prior, naive)}} \\
     \(W_{076}\) & cached pooled & 100/215 & 0.466 & [0.40, 0.53] & 0.006 \\
     \(W_{077}\) & cached pooled & 105/217 & 0.484 & [0.42, 0.55] & 0.025 \\
     \(W_{078}\) & cached pooled &  98/215 & 0.457 & [0.39, 0.52] & 0.003 \\
-    \midrule
     \(W_{076}\) & fresh inner   & 11/27   & 0.419 & [0.26, 0.59] & 0.071 \\
-    \(W_{077}\) & fresh inner   & 19/29   & 0.636 & [0.47, 0.79] & \textbf{0.849} \\
-    \(W_{077}\) & fresh L1      & 17/30   & 0.559 & [0.39, 0.72] & \textbf{0.546} \\
-    \(W_{078}\) & fresh inner   & 17/27   & 0.613 & [0.44, 0.77] & \textbf{0.767} \\
-    \(W_{078}\) & fresh L1      & 20/28   & 0.688 & [0.52, 0.83] & \textbf{0.948} \\
+    \(W_{077}\) & fresh inner   & 19/29   & 0.636 & [0.47, 0.79] & 0.849 \\
+    \(W_{077}\) & fresh L1      & 17/30   & 0.559 & [0.39, 0.72] & 0.546 \\
+    \(W_{078}\) & fresh inner   & 17/27   & 0.613 & [0.44, 0.77] & 0.767 \\
+    \(W_{078}\) & fresh L1      & 20/28   & 0.688 & [0.52, 0.83] & 0.948 \\
+    \midrule
+    \multicolumn{6}{l}{\emph{Layer B --- DerSimonian-Laird random-effects pool (\(\hat\tau\) reported)}} \\
+    \(W_{076}\) & cached (\(k{=}5\)) & --- & 0.466 & [0.40, 0.53] & 0.007 \\
+    \(W_{077}\) & cached (\(k{=}5\)) & --- & 0.484 & [0.42, 0.55] & 0.025 \\
+    \(W_{078}\) & cached (\(k{=}5\)) & --- & 0.457 & [0.39, 0.52] & 0.003 \\
+    \(W_{076}\) & fresh (\(k{=}1\))  & --- & 0.411 & [0.25, 0.60] & 0.072 \\
+    \(W_{077}\) & fresh (\(k{=}2\))  & --- & 0.606 & [0.48, 0.72] & \textbf{0.808} \\
+    \(W_{078}\) & fresh (\(k{=}2\))  & --- & 0.665 & [0.53, 0.78] & \textbf{0.958} \\
     \bottomrule
   \end{tabular}
-  \caption{Posterior probabilities under \(\text{Beta}(2,2)\) prior.
-    On cached pooled data (5 panel judges, \(\sim 215\) non-tie
-    pairs), all three KEEPs have \(P(\theta > 0.55) < 0.03\) and
-    \(P(\theta > 0.60) \approx 0\). On Exp~47 fresh-data, W076
-    remains weak (\(P(\theta > 0.55) = 0.07\)); W077 and W078 both
-    have \(P(\theta > 0.55) \geq 0.55\) under at least one fresh
-    judge, with W078 L1 reaching \(0.948\). The posterior cleanly
-    separates W076 (genuine non-replication on both cached and
-    fresh) from W077, W078 (cached posterior weak by selection
-    bias, fresh posterior strong).}
+  \caption{Posterior probabilities. Layer~A: per-cell
+    Beta-Binomial (independent across cells, naive). Layer~B:
+    DerSimonian-Laird random-effects pool with judge-family
+    between-cell variance \(\tau\). On all three KEEPs the cached
+    DL pool yields \(\hat\tau \approx 0\) (judges agree the cell
+    is below 0.55), so the cached DL posterior coincides with the
+    naive pool. Fresh DL has only \(k{=}1\)--\(2\) cells per KEEP;
+    we report it for completeness but it does not differ
+    materially from the per-cell naive posterior in this regime.
+    The DL pool of W077 fresh (\(k{=}2\)) gives
+    \(P(\theta > 0.55) = 0.808\), strictly stronger than the
+    weakest single-cell reading (W077 fresh L1, 0.546), and W078
+    fresh \(P = 0.958\).}
   \label{tab:exp49-bayes}
 \end{table}
 
-\paragraph{What this changes.} The threshold-crossing language
-(\textsc{flip}, \textsc{replicate}, \textsc{collapse}) is now
-backed by continuous posterior probabilities. We retain the
-binary labels in the main text for readability but they are
-shorthand for the Bayesian readings in
-Table~\ref{tab:exp49-bayes}: \textsc{collapse} = \(P(\theta > 0.55)
-< 0.10\) on the relevant data; \textsc{replicate} = \(P(\theta >
-0.55) \geq 0.50\) on fresh data; cached-pooled
-\(P(\theta > 0.60) \approx 0\) for all three KEEPs corresponds to
-the original ``\(0/3\) cleared at the \(0.60\) threshold'' framing.
-The fresh-data posterior for W078 L1 (0.948) is strong even
-without selection-bias correction; W077 fresh inner (0.849) is
-strong but the fresh L1 posterior (0.546) is only moderate. Cost:
-\(\$0\) (pure analysis on existing logs). Log:
+\paragraph{Implications for the labels.} We retain the binary
+labels (\textsc{collapse}, \textsc{replicate}) in the main text
+for readability but they are shorthand for the Bayesian readings:
+\textsc{collapse} = DL posterior \(P(\theta > 0.55) < 0.10\) on
+the relevant data; \textsc{replicate} = DL posterior \(P(\theta >
+0.55) \geq 0.50\). Under this rubric W076 \textsc{collapses}
+on both cached and fresh (cached 0.007, fresh 0.072); W078 cleanly
+\textsc{replicates} on fresh (DL pool 0.958); and W077 also
+\textsc{replicates} on fresh (DL pool 0.808). The W077 fresh L1
+single-cell posterior (0.546) is not the right reading for the
+hierarchical question — the DL pool combining both fresh judges
+yields 0.808, which is unambiguously above the threshold.
+
+\paragraph{What this does and does not address.} The DL pool
+properly handles between-judge variance for the cached cells;
+the cached \(\tau \to 0\) means the cached judges agree on
+\(\theta \approx 0.46\), so the cached non-reproduction reading
+is robust to the modelling choice. The DL pool of fresh data
+(\(k = 1\)--2 cells per KEEP) cannot meaningfully estimate
+between-judge variance and is reported for completeness. The
+limitation a fully hierarchical model would address — pooling
+\emph{within-pid} judge correlation when the same pid is
+re-judged by multiple families — is not closed by DL either; it
+would require an ML or MCMC fit on the full
+\(50 \times 5 \times 3\) cached verdict array, which is future
+work. Cost: \(\$0\) (pure analysis on existing logs). Log:
 \texttt{phase four/autonomous/exp49\_hierarchical\_bayes\_log.json}.
 
 \subsection{Experiments 12–14 — Three architectural probes (not
@@ -3920,8 +3999,11 @@ than leave them to footnotes.
     bounding threshold-hindsight; layer-selection hindsight is
     bounded only to the extent that each layer responded to an
     external objection rather than a desired conclusion. A truly
-    pre-registered application of the stack to a fresh loop is
-    the strongest available correction and is future work.
+    pre-registered application of the stack to a freshly-run
+    candidate-generation loop (i.e.\ rerunning candidate
+    generation, distillation, and pruning on fresh data, then
+    auditing the new KEEPs) is the strongest available correction
+    and is future work.
   \item \textbf{Solver-family scope (partially closed by Exp~40).}
     The original 12 inner-loop candidates were all judged on
     gemini-solved answers. Exp~40 (\S\ref{sec:exp40}) re-runs the
@@ -3955,8 +4037,10 @@ than leave them to footnotes.
     Exp~41 (\S\ref{sec:exp41}) shows gpt-5.5 (a stronger
     non-panel rater under structured 4-dim Likert) prefers base
     over ext on all three KEEPs; Exp~32 + Exp~42
-    (\S\ref{sec:exp42}) show all three KEEPs harm GSM8K
-    objective accuracy by \(1\)--\(2\) problems out of 30. An
+    (\S\ref{sec:exp42}) show all three KEEPs give a small
+    negative point estimate on GSM8K objective accuracy
+    (\(1\)--\(2\) problems out of 30, direction uniform but not
+    individually McNemar-significant at this \(n\)). An
     actual human study with \(n \geq 30\) raters across at
     least two demographic backgrounds remains future work, but
     the alternative explanation (``audit panel is wrong; original
@@ -4054,10 +4138,12 @@ library; \(0/6\) English wisdoms clear wr \(\geq 0.60\) under any
 single family across two independent runs, and all 3-family means
 sit below \(0.50\). We report this as one further language loop,
 not as cross-lingual generality. GSM8K (Exp~32) is included as a closed-form English
-portability probe, not as a representative test, and the
-\(W_{078}\) harms-accuracy finding there should be read as
-``the wisdom does not transfer out of the Chinese open-ended
-scaffold.'' A full English replication of the closed loop (English
+portability probe, not as a representative test; the small
+negative point estimate on \(W_{078}\) GSM8K accuracy there
+(29/30 vs 30/30, not significant by McNemar) should be read as
+``the wisdom does not appear to transfer out of the Chinese
+open-ended scaffold,'' not as confident harm. A full English
+replication of the closed loop (English
 proposers, English wisdoms, English gate, English audit) remains
 future work.
 
@@ -4141,33 +4227,40 @@ cached-data drop alone does not distinguish ``the signal was
 spurious'' from ``the signal was real but the point estimate
 shrank toward the mean.''
 
-We resolve this ambiguity by re-executing the entire loop from
-scratch on 30 preregistered fresh pids (Exp~47) at thresholds
-fixed before the run. Two of the three original KEEPs (W077,
-W078) clear both the inner gate and the cross-family L1 gate at
-the preregistration's laxer threshold (0.55) on disjoint data;
-W076 fails the inner gate already (wr 0.41) and does not survive.
-The differentiated finding is therefore: cached-data strict
-re-judgment yields a \(\boxed{+0}\) library delta (Exp~35
-expensive judges and Exp~36 cheap re-judgment do not cross
-\(+10\)pp on cached pairs); preregistered fresh re-execution at
-the laxer L1 yields a \(\boxed{+2/3}\) replication. One signal
-(W076) is non-replicating in both directions and is the cleanest
-example of a same-family gate accepting a candidate that has no
-cross-family or fresh-loop support. Two signals (W077, W078)
-recover under the preregistered protocol, indicating they are not
-artefacts of selection on the original cached pairs.
+We partially resolve this ambiguity (Exp~47) by re-evaluating the
+original 12 candidates against the inner gate plus L1 cross-family
+judge on 30 preregistered fresh pids at thresholds fixed in
+advance. \emph{This is not a re-execution of the full loop:
+candidate generation, distillation, and pruning are not rerun.}
+Two of the three original KEEPs (W077, W078) clear both the inner
+gate and the L1 gate at the preregistration's laxer threshold
+(0.55) on disjoint data; W076 fails the inner gate already
+(wr 0.41) and does not survive. The differentiated finding is
+therefore: cached-data strict re-judgment yields a \(\boxed{+0}\)
+library delta (Exp~35 expensive judges and Exp~36 cheap re-judgment
+do not cross \(+10\)pp on cached pairs); preregistered fresh-data
+re-evaluation of the original candidates at the laxer L1 yields a
+\(\boxed{+2/3}\) replication, with the W077 fresh L1 evidence
+markedly weaker than W078 (\(P(\theta>0.55)\) of \(0.55\) vs
+\(0.95\); see Exp~49). One signal (W076) is non-replicating in
+both directions and is the cleanest example of a same-family gate
+accepting a candidate that has no cross-family or fresh-data
+support. Two signals (W077, W078) recover under the preregistered
+protocol, with the caveat that fresh \(n=30\) and the W077 fresh
+L1 result is moderate rather than strong.
 
 The substantive finding is that a six-layer cross-family audit
 stack — combined with selection-bias modelling and a
-preregistered fresh-loop replication — \emph{distinguishes}
+preregistered fresh-data re-evaluation of the original
+candidates — \emph{distinguishes}
 selection-driven cached-data drops from genuine non-replication.
 In our single case study, exactly one of three KEEPs is
 diagnosed as a true non-replication; the other two recover. The
 recommendation we draw, scoped to this single-loop case study, is
 that (i) cross-family re-judgment, (ii) selection-bias modelling
-on the inner-loop ranking, and (iii) preregistered fresh-loop
-replication be reported jointly as default audit items for
+on the inner-loop ranking, and (iii) preregistered fresh-data
+re-evaluation of the original candidates be reported jointly as
+default audit items for
 retrieval-level self-improvement claims of this form, and that a
 same-family \(+N\)pp on \(n{=}50\) be reported as preliminary
 until at least one of these three confirms the direction. Whether
