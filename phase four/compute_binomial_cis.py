@@ -15,24 +15,30 @@ def ci_row(name, wr, n):
 
 def main():
     print("=== Headline binomial CIs (Wilson, 95%) ===\n")
+    # n is non-tie effective sample size. Ties are reported in the
+    # parenthetical comment to keep the source visible.
     rows = [
-        # Inner-loop (gemini)
+        # Inner-loop (gemini, ties=0)
         ("W076 inner-loop gemini", 0.64, 50),
         ("W077 inner-loop gemini", 0.60, 50),
         ("W078 inner-loop gemini", 0.60, 50),
-        # L1 Opus
-        ("W076 L1 claude-opus", 0.40, 50),
-        ("W077 L1 claude-opus", 0.47, 50),
-        ("W078 L1 claude-opus", 0.51, 50),
-        # L3 n=100 (combined Exp 10 falsifier values: see exp10 log)
-        ("W076 L3 extend n=100", 0.57, 100),
+        # L1 Opus (Exp 1: ties = 5/10/5)
+        ("W076 L1 claude-opus (5 ties)", 18/45, 45),
+        ("W077 L1 claude-opus (10 ties)", 19/40, 40),
+        ("W078 L1 claude-opus (5 ties)", 23/45, 45),
+        # L3 n=100 combined (1/0/0 ties from extension)
+        ("W076 L3 extend n=100 (1 tie)", 0.57, 99),
         ("W077 L3 extend n=100", 0.52, 100),
         ("W078 L3 extend n=100", 0.52, 100),
         # L4 cross-solver
         ("W076 L4 cross-solver mean", 0.41, 60),
-        # L6 expensive judges
-        ("W078 L6 claude-opus-4-6", 20 / 46, 46),
-        ("W078 L6 gpt-5.4", 21 / 49, 49),
+        # Exp 35 expensive judges (Exp 35 ties = 4/2/3/3/4/1)
+        ("W076 L6 opus (4 ties)", 21/46, 46),
+        ("W076 L6 gpt5 (2 ties)", 26/48, 48),
+        ("W077 L6 opus (3 ties)", 25/47, 47),
+        ("W077 L6 gpt5 (3 ties)", 20/47, 47),
+        ("W078 L6 opus (4 ties)", 20/46, 46),
+        ("W078 L6 gpt5 (1 tie)", 21/49, 49),
     ]
     for name, wr, n in rows:
         print(ci_row(name, wr, n))
