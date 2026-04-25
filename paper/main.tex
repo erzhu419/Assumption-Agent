@@ -64,9 +64,12 @@ the third (W076) collapses on fresh data as well. The scientific
 contribution is the audit stack itself, plus a single-loop
 demonstration that combining (i) cross-family re-judgment,
 (ii)~selection-bias modelling on the inner-loop ranking, and
-(iii)~a preregistered fresh-data replication \emph{distinguishes}
-selection-driven cached-data drops (W077, W078) from genuine
-non-replication (W076). A formal selection-adjusted analysis
+(iii)~a preregistered fresh-data replication \emph{produces a
+diagnostic pattern consistent with} separating selection-driven
+cached-data drops (W077, W078) from genuine non-replication
+(W076), at this case study's small \(n\) and across only three
+KEEPs --- this is suggestive evidence rather than a demonstrated
+classification. A formal selection-adjusted analysis
 (Exp~45) shows that the L1 drops on cached data are statistically
 consistent with regression to the mean on top-3-of-12 noisy gate
 selections — so cached-data drops alone cannot tell ``spurious''
@@ -242,8 +245,9 @@ but a preregistered fresh-data replication at the
 preregistration's laxer L1 threshold of \(0.55\) (Exp~47) shows
 \(2/3\) of the original KEEPs do replicate on disjoint fresh
 data, plus one originally-rejected candidate is recovered. The
-audit stack therefore distinguishes \emph{regression-to-mean
-non-reproduction} (W077, W078, which look like selection-bias
+audit stack therefore \emph{suggests} a separation between
+\emph{regression-to-mean non-reproduction} (W077, W078, which
+look like selection-bias
 losses on cached data but pass on fresh data) from \emph{real
 non-reproduction} (W076, which collapses to wr \(=0.41\) on fresh
 data, well below parity).
@@ -275,13 +279,16 @@ items for any self-improvement claim.
     none reach \(\geq\!0.60\) as a point estimate under L1/L3/L5/
     expensive-judge measurements. \emph{Selection-bias check (Exp~45)}:
     these L1 drops are statistically consistent with regression-
-    to-mean on top-3-of-12 noisy gate scores. \emph{Preregistered
-    preregistered fresh-data replication (Exp~47)}: under the preregistration's
-    laxer L1 threshold (\(0.55\)) on a disjoint 30-pid split,
-    \(W_{077}\) and \(W_{078}\) both reproduce; \(W_{076}\)
-    collapses (fresh inner wr \(=0.41\)); one originally-rejected
-    candidate is recovered. \textbf{The audit stack distinguishes
-    selection-bias-explainable drops from real non-replication.}}
+    to-mean on top-3-of-12 noisy gate scores.
+    \emph{Preregistered fresh-data replication (Exp~47)}: under
+    the preregistration's laxer L1 threshold (\(0.55\)) on a
+    disjoint 30-pid split, \(W_{077}\) and \(W_{078}\) both
+    reproduce; \(W_{076}\) collapses (fresh inner wr \(=0.41\));
+    one originally-rejected candidate is recovered.
+    \textbf{The audit stack \emph{suggests} a separation between
+    selection-bias-explainable drops and real non-replication ---
+    suggestive at \(n=30\) and three KEEPs, not a demonstrated
+    classification.}}
   \label{fig:overview}
 \end{figure}
 
@@ -3224,6 +3231,21 @@ reviewer feedback; the accurate name is ``preregistered
 fresh-data replication of the original candidates,'' used
 consistently throughout.
 
+\paragraph{Preregistration audit trail (R10 Question 1).}
+\texttt{PREREGISTRATION\_v2.md} was first committed at
+\texttt{58c7b55} on \texttt{2026-04-25 08:03:45 +0800} and the
+Exp~47 implementation + log were committed at \texttt{1af9884} on
+\texttt{2026-04-25 12:10:24 +0800} (4h 6min later). The L1
+\(\geq 0.55\) replication threshold appears in the prereg file at
+the time of \texttt{58c7b55} (line 27, \emph{``Threshold is
+\textbf{0.55}, not 0.60, to give the candidate the laxer
+replication bound''}) and was not modified between
+\texttt{58c7b55} and the Exp~47 run. The 30 fresh pids were
+sampled at \texttt{seed=2026} from the disjoint pool prior to any
+verdict generation; this seed was not changed after observing
+results. We did not run pilots on the same fresh pids before the
+preregistered run.
+
 This is the experiment that most directly addresses the
 post-hoc-audit-stack concern. We apply the audit-stack thresholds
 specified in advance in
@@ -3274,6 +3296,43 @@ because the preregistered protocol gates L1 on the inner gate;
 re-running L1 on inner-failures is logged as a future-work
 sensitivity analysis but does not affect the preregistered
 outcome category).
+
+\paragraph{Threshold sensitivity (R10 callout).} The
+preregistration's L1 threshold is \(0.55\); the original
+inner-loop's gate threshold is \(0.60\). The reviewer asked
+whether the headline ``\(2/3\) original KEEPs replicate'' would
+survive at the stricter \(0.60\) L1 threshold. Comparing both:
+
+\begin{center}\small
+\begin{tabular}{l c c c c}
+  \toprule
+  & \multicolumn{2}{c}{\(\geq 0.55\) (preregistered)} & \multicolumn{2}{c}{\(\geq 0.60\) (original gate)} \\
+  \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+  Candidate (KEEP) & inner & L1 & inner & L1 \\
+  & (P/f, wr) & (P/f, wr) & (P/f, wr) & (P/f, wr) \\
+  \midrule
+  \textbf{WCROSSL01} (\(W_{078}\)) & P \(0.63\) & P \(0.71\) & P \(0.63\) & P \(0.71\) \\
+  \textbf{WCAND10} (\(W_{077}\))   & P \(0.66\) & P \(0.57\) & P \(0.66\) & f \(0.57\) \\
+  \textbf{WCAND03} (recovered)     & P \(0.68\) & P \(0.57\) & P \(0.68\) & f \(0.57\) \\
+  WCAND05 (\(W_{076}\))            & f \(0.41\) & ---       & f \(0.41\) & --- \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+At the stricter \(0.60\) L1 threshold, only \(W_{078}\) clears
+both gates on the fresh split (\(1/12\)). The differentiated
+finding therefore depends on the threshold policy: at the
+preregistration's \(0.55\) the headline is \(\boxed{+3}\)
+(W077, W078, WCAND03); at the original \(0.60\) the headline
+collapses to \(\boxed{+1}\) (W078 only). The DerSimonian-Laird
+fresh pool (Exp~49 Layer~B) gives \(P(\theta>0.55)=0.808/0.958\)
+for W077 / W078 fresh pool but \(P(\theta>0.60)=0.536/0.841\) ---
+W077's posterior at the original \(0.60\) is barely above
+coin-flip. We retain the preregistration's \(0.55\) threshold as
+the primary reporting choice (it was committed before the
+experiment, and the inner gate was made strictly stricter at
+\(0.60\) to preserve specificity on candidate generation), but
+both readings are reported here for transparency.
 
 \paragraph{Headline.}
 \textbf{Three of twelve candidates pass both the inner-loop
@@ -4252,7 +4311,8 @@ L1 result is moderate rather than strong.
 The substantive finding is that a six-layer cross-family audit
 stack — combined with selection-bias modelling and a
 preregistered fresh-data re-evaluation of the original
-candidates — \emph{distinguishes}
+candidates — produces a diagnostic pattern consistent with
+\emph{distinguishing}
 selection-driven cached-data drops from genuine non-replication.
 In our single case study, exactly one of three KEEPs is
 diagnosed as a true non-replication; the other two recover. The
