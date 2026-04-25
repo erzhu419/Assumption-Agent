@@ -2135,11 +2135,13 @@ families. Results:
 \end{tabular}
 \end{center}
 
-\textbf{Even W078, previously the sole candidate surviving majority-of-3
-at \(n=50\) (Exp 11), fails on fresh math with three-family judging.}
-The gemini judge is alone above 0.50, and even it is below the
-\(+10\)pp threshold. This is a fifth independent layer of
-falsification, adding to:
+\textbf{Even W078, previously the sole candidate surviving
+majority-of-3 at \(n=50\) (Exp 7), fails on fresh math with
+three-family judging.} The gemini judge is alone above 0.50,
+and even it is below the \(+10\)pp threshold. This is a fifth
+\emph{conditionally distinct} (not statistically independent)
+audit-stack measurement that does not assign cached-data
+\(\mathrm{wr} \geq 0.60\) to W078; it adds to:
 
 \begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=0pt]
   \item judge-family (Exp 1, 3/3 flip)
@@ -2289,8 +2291,8 @@ so far is that all three families in our judge panel (gemini-3-flash,
 claude-haiku, gpt-5.4-mini) are in the \emph{cheap} tier. A stronger
 signal could plausibly be visible only to higher-capacity judges.
 We re-run layer L1 on the strongest surviving KEEP
-(\(W_{078}\), the only one that reached majority-of-3 at \(n=50\) in
-Exp~11) using expensive-tier judges: \emph{claude-opus-4-6} and
+(\(W_{078}\), the only one that reached majority-of-3 at \(n=50\)
+in Exp~7) using expensive-tier judges: \emph{claude-opus-4-6} and
 \emph{gpt-5.4}. Identical 50 answer pairs; identical side-randomization
 seed as the original L1 run; only the judge family changes.
 
@@ -3297,6 +3299,27 @@ reviewer feedback; the accurate name is ``preregistered
 fresh-data replication of the original candidates,'' used
 consistently throughout.
 
+\paragraph{Missing-data sensitivity (R15 callout).} \(n_{\text{eff}}\)
+in Exp~47 ranges from 26--29 (out of 30 fresh pids per cell)
+because \(1\)--\(4\) responses per cell are dropped due to model
+errors / invalid output / proxy failures. The headline analysis
+treats remaining valid outputs as the denominator. As a conservative
+sensitivity check, we recompute fresh-inner wr treating every
+invalid response as a \emph{base win} (worst case for the
+candidate, since it removes the candidate's chance to win):
+\(W_{078}\) inner drops from \(0.63 \to 0.57\) (now FAILS the
+\(0.60\) inner gate), \(W_{077}\) drops from \(0.66 \to 0.63\)
+(still passes), WCAND03 drops from \(0.68 \to 0.63\) (still
+passes). \emph{Under this conservative missing-data convention,
+only \(W_{077}\) and WCAND03 (not \(W_{078}\)) clear the inner
+gate}. The headline ``\(W_{078}\) is the strongest-replicating
+KEEP'' therefore holds under the standard valid-only convention
+but reverses under invalid-as-loss for inner. The L1 conservative
+recomputation does not change the L1 pass/fail set since L1's
+\(n_{\text{eff}}\) values are 28/30/28 (close to full coverage).
+The missing-data convention was \emph{not} preregistered; we
+flag this gap and include both readings.
+
 \paragraph{Preregistration audit trail (R10 Question 1).}
 \texttt{PREREGISTRATION\_v2.md} was first committed at
 \texttt{58c7b55} on \texttt{2026-04-25 08:03:45 +0800} and the
@@ -3545,26 +3568,42 @@ informative \(\text{Beta}(2, 2)\) prior. The posterior is
 \text{ext\_wins})\). Per-cell rows in Table~\ref{tab:exp49-bayes}
 make this transparent.
 
-\paragraph{Layer B --- DerSimonian-Laird random-effects pool
-across judge cells (proper hierarchical model).} Cached
-verdicts on identical answer pairs across five judge families
-share content and side-randomization seed but differ in judge
-family; treating the five \(\text{Beta}(2,2)\) posteriors as
-independent is overconfident. We instead apply the standard
-DerSimonian-Laird random-effects meta-analysis on logit-transformed
-proportions (DerSimonian \& Laird, \emph{Controlled Clinical
-Trials}, 1986): per cell \(j\) with proportion
+\paragraph{Layer B --- DerSimonian-Laird random-effects
+meta-analytic sensitivity (frequentist, not a Bayesian
+hierarchical model).} \textbf{Naming clarification (R15
+callout):} DerSimonian-Laird (DL) is a frequentist
+random-effects meta-analysis estimator, not a Bayesian
+hierarchical posterior. We use it here as a sensitivity check
+against the per-cell Beta(2,2) posteriors of Layer~A: it pools
+across judge cells with explicit between-cell variance \(\tau^2\),
+which the per-cell Beta-Binomial does not. The reported
+``\(P(\theta > t)\)'' values from DL are Wald-style normal-
+approximation tail probabilities under the random-effects
+sampling distribution, \emph{not} posterior probabilities under
+a Bayesian hierarchy. They are reported as a secondary
+descriptive statistic alongside the per-cell posteriors. A
+genuine Bayesian hierarchical model over the full
+\(50 \times 5 \times 3\) cached pid-by-judge-by-KEEP verdict
+array (with pid random effects) is future work.
+
+Concretely: cached verdicts on identical answer pairs across five
+judge families share content and side-randomization seed but
+differ in judge family. Per cell \(j\) with proportion
 \(p_j = (y_j+0.5)/(n_j+1)\) (continuity-corrected), let
 \(\theta_j = \log(p_j / (1 - p_j))\) with sampling variance
-\(v_j = 1/((n_j+1) p_j (1-p_j))\); the model is
-\(\theta_j \sim \mathcal{N}(\mu, v_j + \tau^2)\) where \(\tau^2\)
-is the between-judge variance, estimated by Cochran's \(Q\)
-statistic. The pooled population-level effect \(\mu\) has standard
-error
+\(v_j = 1/((n_j+1) p_j (1-p_j))\); the random-effects model is
+\(\theta_j \sim \mathcal{N}(\mu, v_j + \tau^2)\), with \(\tau^2\)
+estimated by Cochran's \(Q\) statistic (DerSimonian \& Laird,
+\emph{Controlled Clinical Trials}, 1986). The pooled
+population-level effect \(\mu\) has standard error
 \(\mathrm{SE}_{\mathrm{RE}} = (\sum_j 1/(v_j + \tau^2))^{-1/2}\),
-and we report
+and we compute
 \(P(\theta > t) = 1 - \Phi((\mathrm{logit}(t) - \mu) / \mathrm{SE}_{\mathrm{RE}})\)
-on the probability scale via inverse-logit. Source verdicts as in
+on the probability scale via inverse-logit. With \(k=1\)--2
+fresh judge cells per KEEP, \(\tau^2\) is essentially not
+estimable from the fresh data alone; the fresh DL probabilities
+are therefore approximate sensitivity calculations, not
+authoritative pooling. Source verdicts as in
 Layer A: cached \texttt{sample\_extend\_50} under five families
 (gemini-3-flash, claude-haiku-4.5, gpt-5.4-mini in Exp~36;
 claude-opus-4.6, gpt-5.4 in Exp~35), plus Exp~47 fresh 30-pid
