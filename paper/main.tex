@@ -896,18 +896,18 @@ term:
     self-description, and via LLM-judged citation strictness.
 \end{itemize}
 
-\emph{Under this decomposition, the headline claim of \S\ref{sec:intro} has a
-precise form.} Our loop's inner-loop KEEPs exhibit
-\(\mathrm{wr}_{\mathrm{ext}} > 0.60\) at \(n = 50\), which requires
-\emph{one or more} of the three terms to be positive. Every audit
-layer that cancels a non-specific term returns the measurement to
-the vicinity of \(0.50\) (Table~\ref{tab:ci}). By elimination,
-either \(Z^{\mathrm{specific}}\) is near-zero for these KEEPs, or it
-is non-zero but exactly cancelled by
-\(Z^{\mathrm{generic}} + Z^{\mathrm{style}}\) summing to a negative
-residual that conspiratorially reappears across every layer. The
-first explanation is the simpler one; it is the one the null result
-supports.
+\emph{The decomposition is a taxonomy of confounds, not an
+identifiable causal model.} The three terms are not independently
+estimable from the experiments we run --- judge family, solver
+family, problem distribution, and generic-context effects can
+interact, and our interventions do not isolate any single
+component. The qualitative reading we draw from
+Table~\ref{tab:ci} is that audit layers which target non-specific
+terms move the measurement toward \(0.50\); we do \emph{not}
+claim this proves \(Z^{\mathrm{specific}} \approx 0\) by
+elimination. A formal causal claim would require placebo,
+length-matched, and known-effect interventions on each component
+separately, which we have not run.
 
 \emph{What the theory does not say.} It does not say wisdom
 injection cannot work — only that the default gate cannot
@@ -1370,11 +1370,14 @@ GPT-5.4 output with numerics preserved):
     current survivors; hold.''
 \end{itemize}
 
-\paragraph{Meaning.} This is, as far as we know, the first paper
-that demonstrates a closed-loop LLM agent proposing a gate,
-testing it with an out-of-family judge, updating its belief,
-proposing a \emph{stricter} gate, and terminating at an empirical
-fixed point—all without human intervention between cycles. The
+\paragraph{Meaning.} The pattern instantiated here --- a
+closed-loop LLM agent proposing a gate, testing it with an
+out-of-family judge, updating its belief, proposing a
+\emph{stricter} gate, and terminating at an empirical fixed
+point without human intervention between cycles --- composes
+existing pieces (LLM-as-judge cross-family rejudgment, agent-
+designed gates, fixed-point termination) into a self-auditing
+configuration we have not seen reported in this exact form. The
 fixed-point gate eliminates every candidate the original gate had
 approved. Put differently: \emph{the recursion, given the tools it
 itself asked for, withdraws its original commits}.
@@ -1782,8 +1785,11 @@ they do not, a more accurate interpretation is:
 additional context paraphrased from human aphorisms}. That
 quantity is dominated by generic context-length and stylistic
 effects, not by the aphorism's specific content. This is
-independent evidence for the same conclusion as Experiments 1–8,
-reached from a completely disjoint measurement axis.
+conditionally-distinct evidence for the same conclusion as
+Experiments 1--8, reached from a measurement axis that does not
+share judge or pair-wr structure (it does still share KEEPs and
+the same problem pool, so it is not statistically independent of
+those layers).
 
 \subsection{Experiment 11 — LLM-judged faithfulness}
 \label{sec:faith}
@@ -1984,8 +1990,8 @@ gate output is invariant under labeler-family swap and under dropping
 the lowest-reliability component. We read this as: the gate's
 discrimination does not depend on any particular labeler's idiosyncrasy.
 
-\paragraph{Reviewer rebuttal summary.} Of the six fatal objections
-listed in \S\ref{sec:limitations}:
+\paragraph{Reviewer-objection summary.} Of the six anticipated
+objections listed in \S\ref{sec:limitations}:
 
 \begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
   \item \checkmark \textbf{\#2 single solver family}:
@@ -2008,9 +2014,11 @@ listed in \S\ref{sec:limitations}:
     framing, not experimental — writing tightening only
 \end{itemize}
 
-Three of the six fatal objections have experimental closure at this
-scale. Three remain and require either compute scale-up (\#1, \#4)
-or writing revision (\#5).
+Three of the six anticipated objections have experimental
+responses at this scale; we use ``response,'' not ``closure,''
+because the responses are themselves single-loop measurements at
+modest \(n\). Three remain and require either compute scale-up
+(\#1, \#4) or writing revision (\#5).
 
 \subsection{Experiments 29, 31, 32, 33 — Closure on objections \#1 and \#4}
 \label{sec:rebuttal2}
@@ -2163,8 +2171,8 @@ original signals are not artefacts of selection. W076's
 collapse on fresh pids is the one cell where the audit stack and
 the fresh-loop re-execution agree on a non-reproducing signal.
 
-Five of six fatal objections are now closed experimentally
-(\#1, \#2, \#3, \#4, \#11):
+Four of six anticipated objections (\#1, \#2, \#3, \#4) have
+empirical responses at the scale of this single-loop case study:
 
 \begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
   \item \#1 N: scaled to 21 candidates (Exp 29+33); all 9 new
@@ -2185,9 +2193,13 @@ the F1 framing (\S\ref{sec:exp27}). A genuinely external baseline
 (human labels or a pre-registered held-out scoring scheme) is
 future work. Objection \#5 (wisdom-ontology framing) is a
 writing issue not a data issue. With \#5 noted and \#11 explicitly
-unclosed, four of six fatal objections (\#1, \#2, \#3, \#4) have
-empirical responses; the central judge-fragility finding has
-six independent confirming data streams.
+unclosed, the cached-data audit reading rests on six
+\emph{conditionally distinct} measurements (not independent
+streams: layers reuse KEEPs, cached pairs, and overlapping solver/
+problem pools). The number of audit layers is therefore not the
+strength of the evidence; the evidence is the joint pattern across
+distinct nuisance variables plus the preregistered fresh-data
+replication.
 
 \subsection{Experiment 34 — Expensive-tier judge robustness}
 \label{sec:exp34}
@@ -3145,6 +3157,26 @@ methodology this paper formalises. The negative result
 nevertheless suggests adding the same wisdom \emph{again} cannot
 move the gate, which is informative.
 
+\paragraph{Sensitivity is empirically established by Exp~47, not
+Exp~44+46.} Constructed positive controls of the form ``insert a
+candidate into the prompt'' have a structural problem in this
+pipeline: the v20 base solver already retrieves relevant wisdoms
+from its 75-entry library at solve time, so injecting one more
+wisdom block via the candidate slot is partially redundant,
+biasing all such controls toward null. The R8 reviewer's exact
+sensitivity question --- ``can this audit stack ever accept
+something?'' --- is therefore better answered by Exp~47, where the
+inner gate plus L1 cross-family judge \emph{do} accept three
+candidates on a fresh 30-pid split, including \emph{WCAND03 (凡事
+预则立)} which the original loop had REVERTED. WCAND03 is the
+empirical positive control: a candidate the original loop's gate
+rejected at \(\mathrm{wr} = 0.56\), that on disjoint fresh data
+clears both the inner gate (\(0.68\)) and L1 (\(0.57\)) under
+preregistered thresholds. The audit-stack protocol therefore
+demonstrates non-zero sensitivity \emph{prospectively} on a fresh
+split, even though same-distribution constructed controls fail
+for the structural reason above.
+
 Cost: \({\sim}\$8\), \({\sim}30\) min. Log:
 \texttt{phase four/autonomous/exp46\_stronger\_positive\_controls\_log.json}.
 
@@ -3273,6 +3305,81 @@ study; we add Exp~47 as the strongest piece of replication
 evidence in this paper, and rewrite the abstract's headline to
 reflect both. Cost: \({\sim}\$25\), \({\sim}2\)~h. Log:
 \texttt{phase four/autonomous/exp47\_preregistered\_fresh\_loop\_log.json}.
+
+\subsection{Experiment 49 --- Hierarchical Bayesian re-analysis
+(replacing threshold-crossing with posterior probabilities)}
+\label{sec:exp49}
+
+\paragraph{Motivation.} R8 reviewer feedback flagged that the paper
+``frequently uses threshold-crossing rhetoric (FLIP, COLLAPSE,
+REPLICATE) even when intervals overlap substantially.'' We
+therefore re-analyse the existing audit-stack verdict matrix as a
+Bayesian posterior over each KEEP's true ext-win-rate
+\(\theta\), with no new API calls.
+
+\paragraph{Model.} For each (KEEP, judge family, evaluation set)
+cell, the observed ext-wins among non-tie pairs is modelled as
+\(\text{Binomial}(n_{\text{eff}}, \theta)\) with a weakly
+informative \(\text{Beta}(2, 2)\) prior. The posterior is
+\(\text{Beta}(2 + \text{ext\_wins}, 2 + n_{\text{eff}} -
+\text{ext\_wins})\). We report posterior mean, 95\% credible
+interval, and the posterior probabilities
+\(P(\theta > 0.50 \mid \text{data})\),
+\(P(\theta > 0.55 \mid \text{data})\), and
+\(P(\theta > 0.60 \mid \text{data})\) for each cell. Pooling
+across judge families assumes per-pid independence across families
+on the same content; this is a simplification but the per-family
+breakdown is also reported. Source verdicts: cached
+\texttt{sample\_extend\_50} (\(\sim 50\) pids each) under five
+families (gemini-3-flash, claude-haiku-4.5, gpt-5.4-mini in
+Exp~36; claude-opus-4.6, gpt-5.4 in Exp~35) plus Exp~47 fresh
+30-pid verdicts (gemini inner, claude-haiku L1).
+
+\begin{table}[h]
+  \centering\small
+  \begin{tabular}{l c c c c c}
+    \toprule
+    KEEP & set & wins/n & post.\ mean & 95\% CrI & \(P(\theta>0.55)\) \\
+    \midrule
+    \(W_{076}\) & cached pooled & 100/215 & 0.466 & [0.40, 0.53] & 0.006 \\
+    \(W_{077}\) & cached pooled & 105/217 & 0.484 & [0.42, 0.55] & 0.025 \\
+    \(W_{078}\) & cached pooled &  98/215 & 0.457 & [0.39, 0.52] & 0.003 \\
+    \midrule
+    \(W_{076}\) & fresh inner   & 11/27   & 0.419 & [0.26, 0.59] & 0.071 \\
+    \(W_{077}\) & fresh inner   & 19/29   & 0.636 & [0.47, 0.79] & \textbf{0.849} \\
+    \(W_{077}\) & fresh L1      & 17/30   & 0.559 & [0.39, 0.72] & \textbf{0.546} \\
+    \(W_{078}\) & fresh inner   & 17/27   & 0.613 & [0.44, 0.77] & \textbf{0.767} \\
+    \(W_{078}\) & fresh L1      & 20/28   & 0.688 & [0.52, 0.83] & \textbf{0.948} \\
+    \bottomrule
+  \end{tabular}
+  \caption{Posterior probabilities under \(\text{Beta}(2,2)\) prior.
+    On cached pooled data (5 panel judges, \(\sim 215\) non-tie
+    pairs), all three KEEPs have \(P(\theta > 0.55) < 0.03\) and
+    \(P(\theta > 0.60) \approx 0\). On Exp~47 fresh-data, W076
+    remains weak (\(P(\theta > 0.55) = 0.07\)); W077 and W078 both
+    have \(P(\theta > 0.55) \geq 0.55\) under at least one fresh
+    judge, with W078 L1 reaching \(0.948\). The posterior cleanly
+    separates W076 (genuine non-replication on both cached and
+    fresh) from W077, W078 (cached posterior weak by selection
+    bias, fresh posterior strong).}
+  \label{tab:exp49-bayes}
+\end{table}
+
+\paragraph{What this changes.} The threshold-crossing language
+(\textsc{flip}, \textsc{replicate}, \textsc{collapse}) is now
+backed by continuous posterior probabilities. We retain the
+binary labels in the main text for readability but they are
+shorthand for the Bayesian readings in
+Table~\ref{tab:exp49-bayes}: \textsc{collapse} = \(P(\theta > 0.55)
+< 0.10\) on the relevant data; \textsc{replicate} = \(P(\theta >
+0.55) \geq 0.50\) on fresh data; cached-pooled
+\(P(\theta > 0.60) \approx 0\) for all three KEEPs corresponds to
+the original ``\(0/3\) cleared at the \(0.60\) threshold'' framing.
+The fresh-data posterior for W078 L1 (0.948) is strong even
+without selection-bias correction; W077 fresh inner (0.849) is
+strong but the fresh L1 posterior (0.546) is only moderate. Cost:
+\(\$0\) (pure analysis on existing logs). Log:
+\texttt{phase four/autonomous/exp49\_hierarchical\_bayes\_log.json}.
 
 \subsection{Experiments 12–14 — Three architectural probes (not
 gate-tuning): fragmentation, conditional-activator, citation}
