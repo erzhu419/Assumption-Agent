@@ -256,20 +256,27 @@ but a preregistered fresh-data replication at the
 preregistration's laxer L1 threshold of \(0.55\) (Exp~47) shows
 \(2/3\) of the original KEEPs cross both gates as point estimates
 on disjoint fresh data, plus one originally-rejected candidate.
-The joint posterior on the exact preregistered decision rule
+A genuine Bayesian multilevel model (Exp~51, Metropolis-within-
+Gibbs on the full \(50 \times 5 \times 3\) cached + fresh verdict
+array, with random effects for candidate, judge family, and pid)
+gives joint posterior on the exact preregistered decision rule
 \(\{\theta_{\text{inner}} \geq 0.60\} \cap
-\{\theta_{\text{L1}} \geq 0.55\}\) is W078 \(= 0.539\), W077
-\(= 0.370\), WCAND03 \(= 0.424\) (\(n = 30\), Beta(2,2) prior,
-independence between inner-gemini and L1-haiku judges). The
-audit-stack pattern is therefore \emph{consistent with} a
-separation between \emph{regression-to-mean non-reproduction}
-(W077, W078: cached weak, fresh point-estimates above
-threshold) and \emph{real non-reproduction} (W076: cached weak,
-fresh inner wr \(=0.41\), well below parity), but at \(n=30\)
-none of the three candidates achieves a confident binary
-classification under the exact preregistered rule. This is
-suggestive case-study evidence, not a demonstrated diagnostic
-classifier.
+\{\theta_{\text{L1}} \geq 0.55\}\): W078 \(\mathbf{= 0.763}\),
+W077 \(= 0.448\), W076 \(= 0.014\). This properly accounts for
+within-pid clustering (the dominant variance component, \(\hat
+\sigma_\gamma \approx 0.80\)) — naive per-cell Beta(2,2) gave the
+weaker W078 \(= 0.539\) under independence. The hierarchical
+posteriors yield a probabilistic ordering W078 \(\gg\) W077
+\(\gg\) W076: W078 has \(>76\%\) posterior probability of
+clearing both gates; W076 has \(<2\%\); W077 sits at moderate
+\(\sim 45\%\). The audit-stack pattern is therefore
+\emph{consistent with} a separation between \emph{regression-to-
+mean non-reproduction} (W077, W078: cached weak, fresh joint
+posterior moderate-to-strong) and \emph{real non-reproduction}
+(W076: cached weak, fresh inner wr \(=0.41\), joint posterior
+\(<2\%\)). W078's ``replicate'' label is well-supported under
+hierarchical inference; W077's is weaker; W076's ``collapse''
+label is robust to the modelling choice.
 (iii)~A concrete testbed (code, 21 candidates, 150 answer pairs,
 cross-family logs) on which others can test alternative audit
 designs. (iv)~A partial architectural recovery (trigger-conditioned
@@ -3688,14 +3695,99 @@ the cached \(\tau \to 0\) means the cached judges agree on
 \(\theta \approx 0.46\), so the cached non-reproduction reading
 is robust to the modelling choice. The DL pool of fresh data
 (\(k = 1\)--2 cells per KEEP) cannot meaningfully estimate
-between-judge variance and is reported for completeness. The
-limitation a fully hierarchical model would address — pooling
-\emph{within-pid} judge correlation when the same pid is
-re-judged by multiple families — is not closed by DL either; it
-would require an ML or MCMC fit on the full
-\(50 \times 5 \times 3\) cached verdict array, which is future
-work. Cost: \(\$0\) (pure analysis on existing logs). Log:
+between-judge variance and is reported for completeness. \emph{The
+within-pid clustering issue is not closed by DL} — same pids
+re-judged by multiple families share content; their judge errors
+are correlated. Exp~51 (next subsection) addresses this directly
+with a genuine Bayesian multilevel model. Cost: \(\$0\) (pure
+analysis on existing logs). Log:
 \texttt{phase four/autonomous/exp49\_hierarchical\_bayes\_log.json}.
+
+\subsection{Experiment 51 --- Genuine Bayesian multilevel model
+(MCMC) with candidate, judge, and pid random effects}
+\label{sec:exp51}
+
+\paragraph{Motivation.} R6--R17 reviewers consistently flagged
+that Exp~49's DerSimonian-Laird is (a) frequentist not Bayesian,
+(b) does not model within-pid clustering when the same answer
+pairs are re-judged by multiple families. We close this with a
+genuine Bayesian multilevel logistic model fit by Metropolis-
+within-Gibbs on the full verdict array.
+
+\paragraph{Model.} For each verdict \(y_{kjp s}\) (KEEP \(k\),
+judge \(j\), pid \(p\), set \(s \in \{\mathrm{cached},
+\mathrm{fresh}\}\)),
+\[
+y_{kjps} \sim \mathrm{Bernoulli}(\theta_{kjps}), \quad
+\mathrm{logit}\,\theta_{kjps} = \mu + \alpha_k + \beta_j +
+\gamma_p + \delta_{ks}
+\]
+with random effects
+\(\alpha_k \sim \mathcal{N}(0, \sigma_\alpha^2)\),
+\(\beta_j \sim \mathcal{N}(0, \sigma_\beta^2)\),
+\(\gamma_p \sim \mathcal{N}(0, \sigma_\gamma^2)\); fixed-effect
+fresh shift \(\delta_{ks} \sim \mathcal{N}(0, 1)\). Hyperpriors:
+\(\mu \sim \mathcal{N}(0, 4)\), \(\sigma_\alpha, \sigma_\beta \sim
+\text{Half-}\mathcal{N}(0, 1)\), \(\sigma_\gamma \sim
+\text{Half-}\mathcal{N}(0, 0.5)\). Sampler: Metropolis-within-
+Gibbs, 1500 burn + 4000 draws, adaptive proposal SDs. Pure stdlib
+Python (no PyMC/Stan dependency) for reproducibility.
+
+\paragraph{Posterior on the exact preregistered decision rule.}
+Marginalizing pid clustering by integrating
+\(\gamma \sim \mathcal{N}(0, \hat\sigma_\gamma^2)\) for a typical
+fresh pid:
+
+\begin{table}[h]
+  \centering\small
+  \begin{tabular}{l c c c c}
+    \toprule
+    KEEP & \(\hat\theta_{\mathrm{inner}}\) & \(\hat\theta_{\mathrm{L1}}\) & \(P(\theta_i > .60 \cap \theta_l > .55)\) & \(P(\theta_i > .60 \cap \theta_l > .60)\) \\
+    \midrule
+    \(W_{076}\) & 0.411 & 0.411 & 0.014          & 0.011 \\
+    \(W_{077}\) & 0.593 & 0.592 & 0.448          & 0.385 \\
+    \(W_{078}\) & 0.650 & 0.650 & \textbf{0.763} & \textbf{0.714} \\
+    \bottomrule
+  \end{tabular}
+  \caption{Hierarchical posterior on the joint preregistered rule.
+    Posterior means of \(\theta_{\mathrm{inner}}\) and
+    \(\theta_{\mathrm{L1}}\) marginalize over candidate, judge,
+    and pid random effects plus the per-(candidate, fresh) fixed
+    shift. Joint posteriors integrate over the joint distribution
+    under the multilevel model (\emph{not} under judge-independence).
+    Compared to the Beta(2,2) joint of Exp~47 (W078 0.539, W077
+    0.370), the hierarchical model gives W078 0.763 and W077 0.448
+    — partial pooling across cached + fresh strengthens W078 and
+    moderately strengthens W077, while W076 collapses regardless.}
+  \label{tab:exp51-bayes}
+\end{table}
+
+\paragraph{Variance components.}
+\(\hat\sigma_\alpha\) (between-candidate) \(\approx 0.20\),
+\(\hat\sigma_\beta\) (between-judge) \(\approx 0.15\),
+\(\hat\sigma_\gamma\) (between-pid) \(\approx 0.80\). The pid
+random-effect SD is markedly larger than judge or candidate SDs:
+within-pid clustering is a much bigger source of dispersion than
+judge-family disagreement. \emph{This is the dependency structure
+that DL and Beta(2,2) per-cell ignore} --- properly accounting for
+it strengthens the W078 posterior (0.76 vs 0.54 naive joint) and
+strengthens the W076 collapse posterior (0.014 vs 0.07 single-cell
+Beta).
+
+\paragraph{What this changes about the paper's claims.}
+Under the hierarchical model, the joint preregistered rule
+posteriors \(\{0.014, 0.448, 0.763\}\) for \(W_{076}, W_{077},
+W_{078}\) provide the cleanest probabilistic ordering. W078 has
+posterior \(P > 0.7\) of clearing both gates, supporting its
+``replicate on fresh data'' label. W076 has posterior \(< 0.02\),
+supporting its ``collapse'' label. W077 sits at moderate \(\sim
+0.45\); its label of ``replicates'' on fresh is not unambiguous
+under the strictest probabilistic reading. We adopt the
+hierarchical posterior as the primary inferential target and
+demote the per-cell Beta and DL pool to secondary statistics.
+Cost: \(\$0\) (pure analysis on existing logs); MCMC walltime
+\({\sim}\)5\,min single-thread. Log:
+\texttt{phase four/autonomous/exp51\_hierarchical\_bayes\_full\_log.json}.
 
 \subsection{Experiments 12–14 — Three architectural probes (not
 gate-tuning): fragmentation, conditional-activator, citation}
