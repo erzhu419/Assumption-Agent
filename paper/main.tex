@@ -51,16 +51,19 @@ humans do every day: face a problem, propose a hypothesis about how
 to solve it, run the hypothesis, notice where it fails, propose a
 sub-hypothesis to repair the failure, and recurse — \emph{self-
 hypothesizing and self-validating}, all the way down. We argue this
-target requires at least four ingredients working together: a
-library of human-distilled methodological priors (control of
-variables, divide-and-conquer, Occam's razor, \ldots), a cheap
-world model in which candidate solutions can be simulated, a
-learned scheduler that decides which prior to invoke when, and a
-formal alignment layer that lets the agent recognise that two
-superficially different priors are the same idea. We call this the
-five-stage roadmap (\S\ref{sec:roadmap}). No existing system has
-all four; the field's current proxy --- LLM-as-judge with same-
-family A/B gating --- has \emph{none} of them.
+target requires several ingredients working together: a library of
+human-distilled methodological priors (control of variables,
+divide-and-conquer, Occam's razor, \ldots), a cheap world model in
+which candidate solutions can be simulated rather than executed at
+full cost, a learned scheduler that decides which prior to invoke
+when, an experience-feedback channel that refines the priors'
+applicability conditions, a formal alignment layer that lets the
+agent recognise that two superficially different priors are the
+same idea, and eventually a generator of \emph{new} priors when
+the existing ones do not fit. We unfold these into the six-stage
+roadmap of \S\ref{sec:roadmap}. No existing system has the
+combination; the field's current proxy --- LLM-as-judge with
+same-family A/B gating --- has \emph{none} of them.
 
 \noindent This paper studies one extremely simple instance of the
 target: a closed-loop agent that proposes Chinese-language
@@ -98,12 +101,12 @@ works.'' It is a \emph{calibrated negative result on the simplest
 imaginable self-validating loop}, plus an audit toolbox that turned
 out to be reliable enough to detect the failure across four
 independent diagnostic axes. We use the null to motivate a
-five-stage architecture (priors~/ world model~/ scheduler~/
-experience~/ alignment) and \emph{empirically validate each stage}
-in a separate campaign of 11 diagnostic experiments
-(Exp~55--65, \S\ref{sec:roadmap-validation}) on a synthetic
-4-task-family environment, 5 languages, and 3 LLM solver
-families. Result: three stages work in their simplest form
+six-stage architecture (priors~/ world model~/ scheduler~/
+experience~/ alignment / new prior generation) and
+\emph{stress-test each stage} in a separate campaign of 11
+diagnostic experiments (Exp~55--65,
+\S\ref{sec:roadmap-validation}) on a synthetic 4-task-family
+environment, 5 languages, and 3 LLM solver families. Result: three stages work in their simplest form
 (priors library; in-context experience feedback;
 cross-language alignment, \(95\%\) pairwise pick agreement); one
 is conditional on the task's prior-sensitivity (the scheduler
@@ -111,9 +114,9 @@ picks robustly but solver-end gain depends on the gap between
 best and worst prior); two fail in their simplest form (a
 naive LLM-prompted ``cheap world model'' has AUROC \(0.40\); a
 naive LLM-prompted ``new prior generator'' beats baseline on
-\(0/5\) hold-outs). The honest reading: real progress needs
-\emph{three} of the four ingredients to work cheaply, plus
-non-trivial calibration training for the other two. A same-
+\(0/5\) hold-outs). The honest reading: three of the six stages
+plug in cheaply, one is conditional, and two need substantively
+more work than a single LLM prompt. A same-
 family A/B gate at \(n=50\) is the \emph{worst} possible
 substitute. Code, all logs, and the preregistration document are
 released so others can run the same checks on their loops.
@@ -138,22 +141,28 @@ self-validating}. It is what people mean when they say
 self-improvement loops are imitating, very imperfectly.
 
 \paragraph{What such an agent must contain.}
-A working version of this agent has at least four moving parts:
-(i) a library of human-distilled \emph{methodological priors} ---
-control of variables, divide-and-conquer, Occam's razor, ``before
-arguing, get the facts'' --- the shortcuts the species spent
-millennia accumulating; (ii) a cheap \emph{world model} in which
-candidate solutions can be simulated forward, so the recursive
-hypothesis-test loop runs in seconds rather than hours; (iii) a
-learned \emph{scheduler} that decides which prior to invoke for
-which problem, refining the priors' applicability conditions from
-experience; (iv) an \emph{alignment layer} that recognises when
+A working version of this agent has at least six moving parts,
+which we will call stages 0 through 4 (with stage 0.5 marking a
+half-stage between the static library and the active scheduler):
+\textbf{Stage 0}, a library of human-distilled \emph{methodological
+priors} --- control of variables, divide-and-conquer, Occam's
+razor, ``before arguing, get the facts'' --- the shortcuts the
+species spent millennia accumulating; \textbf{Stage 0.5}, a cheap
+\emph{world model} in which candidate solutions can be simulated
+forward so the recursive hypothesis-test loop runs in seconds
+rather than hours; \textbf{Stage 1}, a learned \emph{scheduler}
+that decides which prior to invoke for which problem;
+\textbf{Stage 2}, an \emph{experience-feedback} channel that
+refines the priors' applicability conditions over time;
+\textbf{Stage 3}, an \emph{alignment layer} that recognises when
 two superficially different priors are the same idea (Le
-Chatelier and Lenz are the same negative-feedback principle), so
-the agent can carry insights across domains. We sketch this
-five-stage roadmap in \S\ref{sec:roadmap}; no existing system has
-all four, and the field's current proxy --- LLM-as-judge with
-same-family A/B testing --- has \emph{none} of them.
+Chatelier and Lenz are the same negative-feedback principle);
+\textbf{Stage 4}, a generator of \emph{new} priors when the
+existing library is silent on a problem, audited by the rest of
+the stack. We sketch the six-stage roadmap in
+\S\ref{sec:roadmap}; no existing system has all of them, and the
+field's current proxy --- LLM-as-judge with same-family A/B
+testing --- has \emph{none} of them.
 
 \paragraph{What this paper is.}
 This paper studies the absolute simplest possible instance of the
@@ -162,13 +171,13 @@ target: a closed-loop agent that proposes Chinese-language
 candidate by running a same-family \(+10\)pp pairwise A/B test
 on \(n=50\) held-out problems, and updates its own retrieval
 library based on the test outcome. This is roughly stage zero of
-the five-stage roadmap, with no scheduler, no world model, no
+the six-stage roadmap, with no scheduler, no world model, no
 alignment layer. We pick this instance not because we expect it
 to work but because it is the cheapest possible test of the
 self-validating idea. \emph{If even this minimal loop's
 validation step is reliable, we have a foothold; if it fails,
 we have a calibrated negative result that tells us exactly which
-of the four ingredients we cannot omit.}
+of the architectural pieces we cannot omit.}
 
 \paragraph{What we found.}
 The minimal loop's gate accepts \(3/12\) candidates. We then
@@ -206,7 +215,7 @@ of a paper about wisdom libraries.
 analysis, the hierarchical Bayes, and the two preregistered fresh
 \(n=100\) replications --- enough to establish the null with
 calibrated uncertainty and resolve the protocol-mismatch
-ambiguity. \S\ref{sec:roadmap} lays out the five-stage
+ambiguity. \S\ref{sec:roadmap} lays out the six-stage
 architecture our null motivates. \S\ref{sec:discussion} compares
 to existing work (POPPER, EvolveR, ReMA, Voyager, Reflexion).
 Limitations and conclusion follow.
@@ -1045,9 +1054,8 @@ without that clustering would have given an even higher
 This was the picture at \(n=30\). The next subsection shows
 what happened when we ran the same protocol at \(n=100\).
 
-\subsection{Two preregistered fresh \(n=100\) replications, with
-and without the original solver's exemplar mechanism: \(0/12\)
-under both}
+\subsection{Three preregistered fresh-data replications
+(\(n=100\) twice, \(n=200\) once): \(0/12\) under all three}
 \label{sec:exp-summary-fresh}
 
 The most consistent reviewer pushback against \(n=30\) was that
@@ -1071,33 +1079,48 @@ top three are likewise all below \(0.55\). The hierarchical
 posterior \(0.763\) for \(W_{078}\) is empirically falsified at
 the upper end.
 
-\textbf{With exemplars:} the exemplar mechanism systematically
-adds \(0.06\)--\(0.18\) percentage-point\footnote{In absolute
-win-rate units; \(0.10\) here means a \(10\) percentage-point
-absolute change.} boost to the candidates' wr. \(W_{076}\) gets
-the largest boost (\(0.30 \to 0.48\)); \(W_{077}\) a moderate
-boost (\(0.51 \to 0.57\)); \(W_{078}\) and \(\textsc{wcand03}\)
-get \emph{zero} boost. Yet still no candidate clears the
-\(0.60\) inner gate; \(\textsc{wcand04}\) leads at \(0.591\). The
-joint preregistered rule is satisfied by zero candidates under
-either protocol.
+\textbf{With exemplars (\(n=100\)):} the exemplar mechanism
+systematically adds \(0.06\)--\(0.18\) percentage-point\footnote{In
+absolute win-rate units; \(0.10\) here means a \(10\) percentage-
+point absolute change.} boost to the candidates' wr.
+\(W_{076}\) gets the largest boost (\(0.30 \to 0.48\)),
+\(W_{077}\) a moderate boost (\(0.51 \to 0.57\)), \(W_{078}\) and
+\(\textsc{wcand03}\) zero boost. Yet still no candidate clears
+the \(0.60\) inner gate; \(\textsc{wcand04}\) leads at \(0.591\).
+The joint preregistered rule is satisfied by zero candidates.
+
+\textbf{Third replication, with exemplars at \(n=200\) (Exp~66):}
+to remove residual concern that the \(n=100\) result is itself
+underpowered, we ran the v20-style+exemplar protocol again at
+double the sample size, on a fresh seed (2028) disjoint from all
+prior fresh samples. Top three: \(W_{078}\) inner \(0.590\) /
+L1 \(0.573\); \textsc{wcand03} inner \(0.580\) / L1 \(0.574\);
+\textsc{wcand07} inner \(0.565\) / L1 \(0.558\). All three are
+below both inner-\(0.60\) and L1-\(0.55\) thresholds, none
+clearing the joint preregistered rule. \textbf{The triple
+\(0/12\) (\(n{=}100\) no-exemplar; \(n{=}100\) v20+exemplar;
+\(n{=}200\) v20+exemplar)} is the strongest fresh-data evidence
+in this paper. Full table in
+\S\ref{sec:exp66} of the appendix.
 
 \medskip
 
 \noindent\textbf{What this combination tells us.} The original
-cached signal of \(0.60\)--\(0.64\) decomposes cleanly into three
-additive components: an exemplar boost of about \(0.10\)--\(0.20\)
-percentage points (visible in the with-exemplar vs without-exemplar
-delta), a selection bias of similar magnitude on the noisy
-\(n=50\) measurements (visible in the empirical-Bayes simulation),
-and within-distribution variance. None of the three is the
-candidate's own utility. Removing any one collapses the apparent
-gain below the gate. This is why the small-\(n\) fresh result
-showed \(3/12\) and the large-\(n\) fresh result showed \(0/12\):
-at \(n=30\) the residual within-pid noise was wide enough that
-two of the three candidates could fluctuate above the threshold;
-at \(n=100\) the noise band tightened around their true means,
-which sit just below \(0.50\).
+cached signal of \(0.60\)--\(0.64\) is consistent with the sum of
+three components: an exemplar-mechanism contribution of about
+\(0.10\)--\(0.20\) absolute win-rate (visible in the
+with-exemplar vs without-exemplar delta), a selection bias of
+similar magnitude from the top-\(3\)-of-\(12\) noisy
+\(n{=}50\) measurements (visible in the empirical-Bayes
+simulation), and within-distribution variance. None of the three
+is the candidate's own utility. Removing any one collapses the
+apparent gain below the gate. This is why the small-\(n\) fresh
+result showed \(3/12\) and the larger-\(n\) fresh results
+(\(n{=}100\) twice, \(n{=}200\) once) all showed \(0/12\): at
+\(n=30\) the residual within-pid noise was wide enough that two
+of the three candidates could fluctuate above threshold; at
+\(n \geq 100\) the noise band tightens around true means that
+sit just below \(0.50\).
 
 
 \medskip
@@ -1124,7 +1147,7 @@ a tie. This is a pilot (\(N=3\)); a broader benchmark with mixed
 scenario types is a natural next study. Full harness, scenarios, and
 verdicts in Appendix~\ref{app:multistep}.
 
-\section{Five-Stage Roadmap to a Self-Hypothesizing,
+\section{Six-Stage Roadmap to a Self-Hypothesizing,
 Self-Validating Agent}
 \label{sec:roadmap}
 
@@ -1228,9 +1251,11 @@ The wisdom-library case study tests Stage~0 only. The null at
 second campaign of 11 experiments (Exp~55--65, summarised below),
 we instantiate each remaining stage in the simplest plausible
 form and measure what each contributes.} The result is mixed and
-informative: three of the five stages work, one is conditional,
-one fails outright, and one (Stage~0.5 in its naive form) is
-dominated by Stage~1. This is the empirical content of the
+informative: three of the six stages work in their simplest form,
+one is conditional on the task's prior-sensitivity, two fail
+outright. (Stage~0.5 ``cheap world model'' is the half-stage
+between the static priors of Stage~0 and the learned scheduler
+of Stage~1; the labelling is six stages including 0.5.) This is the empirical content of the
 roadmap; the rest of this section explains the wins and the
 failures stage by stage.
 
@@ -3100,8 +3125,8 @@ three families, only the (not-extended) gpt-5.4 score at
 \(n = 50\) for the third}, \(W_{078}\)'s vote count drops from
 \(2/3\) to at most \(1/3\)—below the KEEP threshold.
 
-\paragraph{Honest re-statement of the empirically validated
-library change.} After Exp 8:
+\paragraph{Honest re-statement of the library change after
+the larger-\(n\) audit.} After Exp 8:
 \begin{itemize}[leftmargin=*, topsep=2pt, itemsep=0pt]
   \item \textbf{No} candidate in the current \(12\)-candidate
     batch has a robustly validated autonomous commit: once
