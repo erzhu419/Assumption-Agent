@@ -73,20 +73,25 @@ extension to \(n=100\), cross-solver replication, fresh-domain
 re-test, and embedding/citation faithfulness probes. To distinguish
 ``the gate is wrong'' from ``the audit is over-strict,'' we add a
 selection-bias model (top-3-of-12 winner's curse), a hierarchical
-Bayesian re-analysis, and \emph{two} preregistered fresh-data
-replications: one without the original same-domain in-pool exemplar
-mechanism and one with it, both at \(n=100\).
+Bayesian re-analysis, and \emph{three} preregistered fresh-data
+replications: at \(n=100\) without the original same-domain
+in-pool exemplar mechanism, at \(n=100\) with it, and at
+\(\mathbf{n=200}\) with it under a fresh seed disjoint from all
+prior samples.
 
-\noindent The result is a clean null. On the cached pairs no accept
-clears the gate's own threshold under cross-family re-judgment. The
-\(0.20\)-pp drops cached audits report are statistically consistent
-with regression to the mean. A small-\(n=30\) fresh evaluation gave
-an apparently positive \(3/12\); at \(n=100\) this drops to
-\(0/12\), with or without the exemplar mechanism. The intermediate
-positive was small-\(n\) noise, not signal. The cached signal
-itself decomposes cleanly into ``exemplar boost \(\sim 0.10\)--\(0.20\)
-pp'' plus ``top-3-of-12 selection bias'' --- removing either
-collapses the loop's apparent gains.
+\noindent The result is a clean null, replicated three times. On
+the cached pairs no accept clears the gate's own threshold under
+cross-family re-judgment; the cached drops are statistically
+consistent with regression to the mean. A small-\(n=30\) fresh
+evaluation gave an apparently positive \(3/12\); at \(n=100\)
+this drops to \(0/12\), with or without the exemplar mechanism;
+at \(\mathbf{n=200}\) under the v20-style+exemplar protocol with
+a fresh seed, \(\mathbf{0/12}\) again. The intermediate positive
+was small-\(n\) noise. The cached signal is consistent with a
+combination of ``exemplar boost \(\sim 0.10\)--\(0.20\)
+absolute win-rate'' and ``top-3-of-12 selection bias''
+(Exp~52 and Exp~54 isolate the two contributions); removing
+either collapses the loop's apparent gains.
 
 \noindent The contribution is therefore not ``self-improvement
 works.'' It is a \emph{calibrated negative result on the simplest
@@ -4146,10 +4151,82 @@ exemplar mechanism (W078, WCAND03) are the ones whose original
 ``signal'' was driven by selection bias plus noise; W076's
 ``signal'' was almost entirely an exemplar-mechanism artefact.
 \textbf{The protocol-mismatch concern is closed in the negative
-direction: even under the original v20-style exemplar pipeline at
-\(n=100\), \(0/12\) candidates clear the joint preregistered
-rule.} Cost: \(\sim\$20\), \(\sim 90\) min wall. Log:
+direction at \(n=100\): even under the original v20-style exemplar
+pipeline, \(0/12\) candidates clear the joint preregistered rule.}
+Cost: \(\sim\$20\), \(\sim 90\) min wall. Log:
 \texttt{phase four/autonomous/exp54\_n100\_v20style\_exemplar\_log.json}.
+
+\subsection{Experiment 66 --- Preregistered v20-style+exemplar at
+\(n=200\): the strongest single fresh-data replication}
+\label{sec:exp66}
+
+\paragraph{Why a third fresh-data run.} Exp~53 (\(n=100\), no
+exemplar) and Exp~54 (\(n=100\), v20-style exemplar) both yielded
+\(0/12\). A reviewer concern through several rounds was that
+\(n=100\) under the corrected no-exemplar protocol is not the
+exact original gate's protocol, and that even Exp~54's dynamic
+pass-1-as-exemplar is not exactly identical to the v20 pipeline.
+This experiment runs the same v20-style protocol at \emph{double
+the sample size} on a fresh seed disjoint from all prior fresh
+samples, as a final preregistered confirmation.
+
+\paragraph{Protocol.} Identical to Exp~54 except (a) seed=2028,
+disjoint from all prior fresh seeds (\texttt{sample\_extend\_50},
+Exp~47's seed=2026 30 pids, Exp~53/54's seed=2027 100 pids), and
+(b) \(n=200\) instead of 100. Same frozen thresholds:
+\(\theta_{\mathrm{inner}} \geq 0.60\) (gemini-3-flash) and
+\(\theta_{\mathrm{L1}} \geq 0.55\) (claude-haiku-4.5). Cost: 200
+pass-1 + 200 base + 12$\times$200 ext + 12$\times$200 inner judge
++ \(3\times200\) L1 = \(\sim 7800\) cheap-tier API calls,
+\(\sim 2.5\) h wall.
+
+\paragraph{Result --- \(\mathbf{0/12}\) for the third time.}
+
+\begin{center}\small
+\begin{tabular}{l c c c c}
+  \toprule
+  Candidate & wr\_inner & wr\_L1 & L1@.55 & L1@.60 \\
+  \midrule
+  WCROSSL01 (\(W_{078}\)) & 0.590 & 0.573 & FAIL & FAIL \\
+  WCAND03                 & 0.580 & 0.574 & FAIL & FAIL \\
+  WCAND07                 & 0.565 & 0.558 & FAIL & FAIL \\
+  WCAND10 (\(W_{077}\))   & 0.557 & ---   & ---  & ---  \\
+  WCAND04                 & 0.538 & ---   & ---  & ---  \\
+  WCAND08                 & 0.530 & ---   & ---  & ---  \\
+  WCAND09                 & 0.529 & ---   & ---  & ---  \\
+  WCAND01                 & 0.521 & ---   & ---  & ---  \\
+  WCAND05 (\(W_{076}\))   & 0.497 & ---   & ---  & ---  \\
+  WCAND02                 & 0.495 & ---   & ---  & ---  \\
+  WCAND06                 & 0.463 & ---   & ---  & ---  \\
+  WCAND11                 & 0.383 & ---   & ---  & ---  \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Reading.} At \(n=200\) under the corrected
+v20-style+exemplar protocol, \(0/12\) candidates clear either the
+preregistered policy (inner \(\geq 0.60\) and L1 \(\geq 0.55\))
+or the strict policy (both \(\geq 0.60\)). The top three
+candidates --- \(W_{078}\), WCAND03, WCAND07 --- sit at inner
+\(0.57\)--\(0.59\) and L1 \(0.56\)--\(0.57\), consistently below
+both thresholds. The outcome is consistent with Exp~53 and Exp~54
+(both 0/12 at \(n=100\)) and is the third independent
+preregistered fresh-data replication to fail.
+
+\textbf{The protocol-mismatch concern is now closed across three
+protocols and two sample sizes:}
+\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=2pt]
+  \item Exp~53 (\(n=100\), no-exemplar simpler solver): \(0/12\).
+  \item Exp~54 (\(n=100\), v20-style same-domain exemplar): \(0/12\).
+  \item \textbf{Exp~66} (\(n=200\), v20-style same-domain exemplar):
+    \textbf{\(0/12\)}.
+\end{itemize}
+
+The triple confirmation makes the negative result robust to the
+particular protocol chosen and removes the ``maybe v20+exemplar
+at larger \(n\) would replicate'' lever entirely. Cost:
+\(\sim\$50\), \(\sim 2.5\) h wall. Log:
+\texttt{phase four/autonomous/exp66\_v20exemplar\_n200\_log.json}.
 
 \subsection{Experiments 12–14 — Three architectural probes (not
 gate-tuning): fragmentation, conditional-activator, citation}
