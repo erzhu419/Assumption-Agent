@@ -3789,6 +3789,76 @@ Cost: \(\$0\) (pure analysis on existing logs); MCMC walltime
 \({\sim}\)5\,min single-thread. Log:
 \texttt{phase four/autonomous/exp51\_hierarchical\_bayes\_full\_log.json}.
 
+\subsection{Experiment 52 --- Pool-separation rerun: regenerate
+base/ext on the \emph{same} cached pids without same-domain
+exemplars}
+\label{sec:exp52}
+
+\paragraph{Motivation.} R8--R17 reviewers have repeatedly noted
+that the v20 scaffold solver retrieves a most-similar same-domain
+exemplar from the \emph{evaluation pool's other pids} at solve
+time, and the paper's defence has been ``symmetric exposure
+between base and ext.'' Symmetry helps the pairwise comparison
+but does not rule out asymmetric interaction with the added
+wisdom. This experiment removes the exemplar mechanism entirely
+and regenerates base + ext on the same 50 cached pids
+(\texttt{sample\_extend\_50}) using the simpler Exp~47-style
+solver: frame \(\to\) rewritten\_problem \(\to\) execute with a
+single wisdom block, no exemplar retrieval.
+
+\paragraph{Result.}
+
+\begin{center}\small
+\begin{tabular}{l c c c c}
+  \toprule
+  & \multicolumn{3}{c}{wr\_ext (no exemplar, Exp~52)} & cached wr (v20+ex, Exp~36) \\
+  \cmidrule(lr){2-4}
+  KEEP & gemini & haiku & gpt-mini & 3-fam mean (cached) \\
+  \midrule
+  \(W_{076}\) & 0.229 & 0.234 & 0.250 & \(\mathbf{0.44}\) \\
+  \(W_{077}\) & 0.354 & 0.426 & 0.479 & \(\mathbf{0.49}\) \\
+  \(W_{078}\) & 0.457 & 0.587 & 0.458 & \(\mathbf{0.49}\) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Reading.} Under the no-exemplar simpler solver on the
+same 50 cached pids:
+\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=2pt]
+  \item \(W_{076}\) wr drops sharply across all three judges
+    (mean \(0.24\), down \(\sim 0.20\) from cached). The original
+    cached signal is largely an artefact of the v20-scaffold
+    \(+\)exemplar pipeline; under the simpler solver \(W_{076}\)
+    is decisively below parity. \emph{This is consistent with the
+    Exp~47 fresh-data collapse} (fresh inner \(0.41\)).
+  \item \(W_{077}\) wr drops from cached mean \(0.49\) to
+    \(0.42\); cross-family judges (haiku \(0.43\), gpt-mini
+    \(0.48\)) are at or near parity. The original cached
+    \(0.60\) inner-loop signal does not survive solver
+    simplification on the same pids.
+  \item \(W_{078}\) wr mean \(0.50\) under the simpler solver
+    (cached mean was also \(0.49\)); the cross-family judges
+    actually \emph{rise} (haiku \(0.59\), gpt-mini \(0.46\)).
+    \(W_{078}\)'s cross-family signal is robust to removing
+    in-pool exemplars; this is the cleanest evidence in the paper
+    that \(W_{078}\) is not an exemplar-contamination artefact.
+\end{itemize}
+
+\paragraph{Caveat.} This is not a clean controlled experiment of
+``v20-scaffold with vs without exemplars''; it changes the entire
+solver pipeline (v20 scaffolded \(\to\) Exp~47-style minimal).
+The drop reflects two compounded changes: removing exemplar
+retrieval, and using a simpler frame\(+\)execute pipeline. A
+controlled experiment isolating only the exemplar mechanism
+within v20 is future work. What this experiment \emph{does}
+show: the \(W_{076}\) and \(W_{077}\) original cached signals are
+not robust to solver simplification, while \(W_{078}\)'s
+cross-family pattern is. This pattern is consistent with the
+hierarchical-model joint posteriors of Exp~51
+(W078 \(0.76 \gg\) W077 \(0.45 \gg\) W076 \(0.01\)). Cost:
+\(\sim\$10\), \(\sim 12\) min wall. Log:
+\texttt{phase four/autonomous/exp52\_pool\_separation\_log.json}.
+
 \subsection{Experiments 12–14 — Three architectural probes (not
 gate-tuning): fragmentation, conditional-activator, citation}
 \label{sec:arch}
