@@ -195,7 +195,8 @@ protocol at adequate sample size, no candidate clears the gate.
 Cached-audit drops are statistically indistinguishable from
 top-3-of-12 winner's curse on a noisy measurement. The cached
 signal decomposes cleanly into ``in-pool exemplar boost \(\sim
-+0.10\)--\(0.20\) pp'' \emph{plus} ``selection bias from
+0.10\)--\(0.20\) absolute win-rate (\({\sim} 10\)--\(20\)
+percentage points)'' \emph{plus} ``selection bias from
 top-3-of-12 selection on noisy \(n=50\)''; remove either and
 the \(+10\)pp story collapses.
 
@@ -405,10 +406,11 @@ inner gate on a fresh disjoint split, and the same-family
 only has bite if attached to a scaffold strong enough to produce
 candidates in the first place. Our v20 scaffold's pairwise win
 rate (Fig.~\ref{fig:arch}) is \(0.64\) against the v16
-case-library champion on 100 problems (\(+28\)pp above parity)
-and \(0.88\) against a budget-matched baseline on 50 held-out
-problems (\(+76\)pp above parity), with held-out advantage
-\emph{larger} than training-split advantage. \textbf{We
+case-library champion on 100 problems (\(+14\)pp absolute, or
+equivalently a \(0.28\) win-minus-loss margin) and \(0.88\)
+against a budget-matched baseline on 50 held-out problems
+(\(+38\)pp absolute, or a \(0.76\) margin), with held-out
+advantage \emph{larger} than training-split advantage. \textbf{We
 note that these scaffold-vs-baseline gains were themselves
 measured by a same-family pairwise LLM judge}; under this paper's
 own critique of same-family judging, they should be read as
@@ -810,19 +812,7 @@ causal decomposition; we do not claim the three contributions
 can be subtracted out. We use it as a threat model.
 
 \paragraph{What cross-family re-judgment can and cannot deliver.}
-A single-family \((S, J)\) measurement of
-\(\mathrm{wr}_{\mathrm{ext}}(w)\) at fixed \(n\) cannot
-distinguish \(Z_w^{\mathrm{specific}}\) from
-\(Z_w^{\mathrm{generic}} + Z_w^{\mathrm{style}}\). A measurement
-that swaps \(J\) for \(J'\) at fixed \(a_0, a_w\) attacks the
-\(J\)-specific style component but \emph{cannot} on its own
-identify \(Z_w^{\mathrm{specific}}\). Reasons: (a)~judge families
-differ in calibration, verbosity preferences, tie propensity, and
-competence on specific problem types, so a swap conflates
-``\(J\)-specific style'' with ``\(J\)-vs-\(J'\) full
-disagreement''; (b)~two families may share style preferences that
-\paragraph{What this means for cross-family re-judgment.} If the
-original wr\_ext came from Cause C (judge stylistic preference),
+If the original wr\_ext came from Cause C (judge stylistic preference),
 swapping the judge to a different family should make it drop.
 That is the test cross-family re-judgment performs. But a
 cross-family re-judgment cannot, on its own, separate the three
@@ -1193,9 +1183,10 @@ The empirical null in \S\ref{sec:experiments} is not just ``one
 loop did not work.'' It is a calibrated diagnostic of \emph{what
 is missing} from current LLM-as-judge self-improvement loops.
 This section sketches the architecture our null points toward.
-We describe it as five sequential stages so that each can be
-built and validated incrementally; each stage's output is the
-next stage's known-reliable component.
+We describe it as six components --- numbered \(0\), \(0.5\),
+\(1\), \(2\), \(3\), \(4\) to make the dependency order explicit
+--- so that each can be built and validated incrementally; each
+component's output is the next stage's known-reliable input.
 
 \paragraph{Stage 0 --- The methodological-prior library.}
 The first thing missing is the equivalent of human education.
@@ -5469,7 +5460,8 @@ inner gemini judge does not. The joint preregistered rule
 
 \paragraph{Reading.} The original cached signal of \(0.60\)--\(0.64\)
 was the sum of: (a) the same-domain exemplar boost
-(\({\sim}+0.10\)--\(0.20\) pp uniform across most candidates),
+(\({\sim}0.10\)--\(0.20\) absolute win-rate, i.e.\
+\(10\)--\(20\) percentage points, uniform across most candidates),
 (b) selection bias from picking top-3-of-12 on noisy \(n=50\)
 measurements, and (c) small-sample variance. Removing any one of
 these three components collapses the apparent gain below the

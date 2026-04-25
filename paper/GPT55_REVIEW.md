@@ -1,101 +1,121 @@
 # Summary
 
-The paper presents a case study of an autonomous “wisdom-library” LLM loop that proposes methodological aphorisms, validates them with a same-family LLM A/B gate at \(n=50\), and commits candidates passing a \(+10\)pp threshold. The central empirical claim is negative: the loop’s \(3/12\) accepted candidates do not survive cross-family re-judgment, larger fresh-data replications, or selection-bias analysis, so same-family A/B gating is unreliable for this kind of self-improvement claim. The paper then uses this null result to motivate a six-stage architecture for self-hypothesizing/self-validating agents and reports a small synthetic diagnostic campaign suggesting which stages are easy, conditional, or currently failing.
+The paper presents a case study of a retrieval/prompt-level “self-improving” LLM loop that proposes Chinese-language methodological “wisdoms,” accepts candidates via a same-family LLM-as-judge A/B gate at \(n=50\), and then audits the accepted candidates. The main empirical claim is negative: the loop accepts \(3/12\) candidates, but these do not survive cross-family re-judgment, larger fresh-data replications, or selection-bias analysis. The paper then uses this failure to motivate a broader six-stage architecture for self-hypothesizing/self-validating agents and reports small diagnostic probes of those stages.
 
 # Strengths
 
-- **Clear and valuable negative result on a concrete self-improvement loop**  
-  In the abstract, Introduction, and Experiments summary, the authors explicitly state that “self-improvement works” is *not* the contribution; the main result is that the minimal loop’s \(3/12\) KEEP decisions collapse under audit. This is a useful corrective to a literature where positive self-improvement claims are often accepted on weak LLM-as-judge evidence.
+- **Clear and valuable negative result, scoped more honestly than many self-improvement papers.**  
+  In the abstract, Introduction “What we found,” and Experiments §§3.1–3.5, the authors explicitly state that the loop does *not* demonstrate self-improvement and that the final library delta is \(+0\). This strengthens the submission because negative results about self-improvement loops are important and underreported.
 
-- **Multiple audit axes target distinct failure modes**  
-  The six-layer audit stack in the Introduction and Method—cross-family re-judgment, side randomization, sample extension, cross-solver replication, fresh-domain testing, and faithfulness probes—is well motivated by concrete nuisance sources: judge preference, side bias, sample noise, solver interaction, distribution shift, and lack of causal use. Even if not all layers are novel, bundling them into a reusable checklist is practically valuable.
+- **Auditing same-family LLM-as-judge gates is a timely and concrete target.**  
+  The paper focuses on a real methodological vulnerability: generator/judge family coupling in LLM preference evaluation. The six audit layers listed in the Introduction and §2.5 target plausible failure modes—judge-family preference, side bias, sample size, solver interaction, domain transfer, and faithfulness—making the case study practically relevant.
 
-- **Honest treatment of post-hoc analysis and limitations**  
-  The Experiments caveat explicitly states that the audit layers were not preregistered and were added in response to objections. The Discussion similarly lists gate-design hindsight, post-hoc audit selection, solver-family scope, lack of human ground truth, and missing positive controls as unresolved objections. This transparency strengthens the paper considerably.
+- **The cached-audit vs fresh-data distinction is handled relatively carefully.**  
+  In §3, the authors explicitly acknowledge that the six audit layers were post-hoc and assign more inferential weight to the preregistered \(n=100\) and \(n=200\) fresh-data replications. This is an important strength: the paper does not simply present a post-hoc audit as if it were confirmatory.
 
-- **Fresh-data replications are a major improvement over cached-only audit**  
-  The progression from cached audit to \(n=30\), then \(n=100\) without exemplars, \(n=100\) with exemplars, and \(n=200\) with exemplars is one of the strongest parts of the submission. The triple \(0/12\) fresh-data result in Section “Three preregistered fresh-data replications” is much more persuasive than the initial cross-family cached re-judgment alone.
+- **Selection bias / winner’s curse is directly modeled rather than merely asserted.**  
+  §3.3 fits an empirical-Bayes model to the 12 candidate win rates and simulates the “measure 12, accept top 3, re-measure” process. Even if the modeling choices need scrutiny, explicitly asking whether the observed drops are expected under top-\(k\) selection is exactly the right diagnostic for this class of loop.
 
-- **Selection-bias / winner’s curse analysis addresses an important ambiguity**  
-  Section “Selection bias” correctly notes that cached drops after selecting the top 3 of 12 noisy measurements are ambiguous. Modeling the expected shrinkage under top-\(k\) selection is exactly the right kind of diagnostic for this setting, even though the implementation details need more scrutiny.
+- **The authors disclose many unresolved problems instead of hiding them.**  
+  The Discussion “Objections we have not closed” section is unusually candid: it lists gate-design hindsight, post-hoc audit-stack construction, solver-family scope, missing human ground truth, lack of positive controls, and under-specified L6 faithfulness. This improves trust in the empirical narrative.
 
-- **The authors avoid overinterpreting cross-family re-judgment as ground truth**  
-  Section “What cross-family re-judgment can and cannot deliver” carefully states that a judge-family swap cannot identify content-specific utility and may conflate calibration, verbosity preference, tie propensity, and competence. This is a nuanced and correct framing.
+- **Artifact and provenance emphasis is strong.**  
+  §§2.2, 2.3, Conclusion “Reproducibility,” and the stated appendices describe versioned library state, candidate evidence trails, logs, prompts, seeds, proxy details, and preregistration documents. For a methodology/case-study paper, this level of provenance is valuable.
 
-- **Reproducibility orientation is unusually strong**  
-  The main body describes released code, logs, model identities, seeds, registry states, and judgment files, and the user notes that the appendix includes prompts, compute/cost, schema examples, and reproducibility details. For a methodology/case-study paper, this materially improves auditability.
+- **The paper avoids claiming that cross-family re-judgment identifies causal content utility.**  
+  §2.5 explicitly says the decomposition into content/generic-context/style components is not identifiable and that cross-family re-judgment is only a falsifier of judge-family robustness. This is a good correction to a common overclaim in LLM-evaluation work.
 
 # Weaknesses
 
-- **The paper’s main empirical scope is one loop, one primary solver family, one task distribution, yet some claims are written too broadly**  
-  The Introduction and Conclusion repeatedly describe same-family \(n=50\) A/B gating as “the worst possible substitute” or “the field’s current proxy” having “none” of the required ingredients. For a top-venue methodology paper, a single-loop Chinese wisdom-library case study cannot support such broad field-level conclusions. The fix is to rephrase the claims as scoped recommendations, or add at least one independently implemented loop with a different solver, generator, judge, and task distribution.
+- **The central empirical scope is too narrow for the breadth of the claims.**  
+  The main null result is one loop, one primary solver family, one Chinese open-ended benchmark distribution, one evolution cycle, and 12 candidates (§§3.1–3.5; Limitations). This is useful as a case study, but the title, abstract, Introduction, and Conclusion repeatedly generalize to “same-family A/B gates” and “retrieval-level self-improvement claims” broadly. For a top-venue methodology paper, one audited loop can motivate hypotheses, but it cannot establish a general methodological prescription as strongly as the paper presents it.  
+  **Fix:** Either substantially narrow the claims throughout, or add at least one fully independent loop replication: different solver family, different language/domain, fresh candidate generation, same preregistered audit stack.
 
-- **No functioning positive control means the audit stack’s sensitivity is unknown**  
-  The Discussion explicitly states that Exp 44 and Exp 46 tried six controls and all \(6/6\) failed the gate, so “no positive control we constructed actually functions as a positive.” This is severe: if the gate/audit stack rejects even known-useful or intended-useful controls, then \(0/12\) may reflect an anti-additive scaffold, an overly harsh evaluation design, or task insensitivity rather than failure of candidate wisdom content. A fix would be to include synthetic tasks with deterministic known-useful interventions, or human-validated helpful wisdoms with objective outcomes, and show that the audit stack accepts them.
+- **The six-stage “self-hypothesizing agent” roadmap is weakly connected to the empirical contribution.**  
+  The empirical study tests a retrieval-library acceptance gate, but §4 expands to a broad architecture involving world models, schedulers, experience feedback, category-theoretic alignment, and new prior generation. The bridge from “\(n=50\) same-family A/B gate fails” to “these six architectural stages are necessary” is mostly argumentative, not demonstrated. This matters because the paper presents itself as both a case study and a roadmap; the roadmap currently reads more like speculative positioning than a contribution established by the experiments.  
+  **Fix:** Reframe the roadmap as discussion/future work, or provide stronger evidence that each missing stage would specifically remedy the observed failure modes.
 
-- **The same-domain in-pool exemplar mechanism is a serious evaluation contamination risk, and “symmetry” does not fully solve it**  
-  In Limitations, the solver retrieves a same-domain example from the held-out evaluation pool itself, including that pid’s cached prior-version answer. The authors argue this applies symmetrically to base and ext, so it cancels in the relative comparison. But symmetric exposure need not cancel if the added wisdom interacts with the exemplar, changes retrieval use, or changes how the solver copies/adapts the example. The \(n=100\) no-exemplar and with-exemplar sensitivity helps, but the clean fix is to run the full original gate and audit under strict pool separation from the start.
+- **The roadmap validation experiments are too small and synthetic to support the stated verdicts.**  
+  §4.1 uses 60 synthetic problems across 4 task families, with “known-optimal prior” labels and simple probes. Yet Table 1 labels stages as “works,” “fails,” or “conditional,” and the following paragraph says “Three stages work.” Cross-language pick consistency is treated as an “alignment” probe, but it does not test formal cross-domain equivalence detection, category-theoretic alignment, or transfer of structurally equivalent priors. For a main-track ML paper, these are weak diagnostics relative to the architectural claims.  
+  **Fix:** Downgrade the language to “toy probes,” remove “works” labels, and avoid claiming validation of Stage 3 alignment unless an actual equivalence-detection/transfer experiment is run.
 
-- **Several internal inconsistencies weaken confidence in experimental accounting**  
-  The abstract says there are three preregistered fresh-data replications including \(n=200\), while the Introduction’s “What we found” and roadmap still say “two preregistered fresh \(n=100\) replications.” Section “Three preregistered fresh-data replications” says the \(n=200\) top three are “below both inner-\(0.60\) and L1-\(0.55\) thresholds,” but the listed L1 values are \(0.573\), \(0.574\), and \(0.558\), all above \(0.55\). These may be editing errors, but in a paper where exact decision rules are central, they need correction throughout.
+- **Internal inconsistency in stage counting and terminology.**  
+  The abstract says “six-stage roadmap,” the Introduction says “six moving parts” but “stages 0 through 4” with stage 0.5, while §4 says “five sequential stages” and then includes Stage 0.5. Later §4.1 says “three of the six stages work,” while Table 1 says Stage 3 is only an operational probe. These inconsistencies make the roadmap appear under-edited and weaken the methodological framing.  
+  **Fix:** Use one consistent numbering scheme and one consistent claim: e.g., “six components: 0, 0.5, 1, 2, 3, 4,” with Stage 3 clearly labeled as “not validated.”
 
-- **The \(+10\)pp gate is described as statistically strict, but at \(n=50\) it is not a strong statistical criterion**  
-  Section “The A/B validation gate” says the threshold is “intentionally strict” and refuses candidates indistinguishable from sampling noise. But \(30/50=0.60\) versus \(0.50\) is not a strong signal; a one-sided binomial test is weak, and with 12 candidates the multiple-comparison/winner’s-curse issue is substantial. The paper later recognizes this empirically, but the gate should not be described as strict in the statistical sense. The fix is to distinguish “operationally high threshold” from “statistically well-powered threshold,” and define gates using preregistered confidence/posterior criteria.
+- **The paper’s own positive-control results undermine the audit/gate interpretation more than the main text admits.**  
+  In Discussion “Positive controls remain unresolved,” all \(6/6\) positive/placebo/useful controls fail the gate with wr \(\leq 0.25\), and the authors say the parsimonious null is that the gate is “structurally anti-additive.” If the gate rejects even constructed positive controls, then the experiment may primarily show that this scaffold/gate setup is pathological, not that same-family A/B gates are generally unreliable. This is a major issue for a methodology paper because calibration of the measurement instrument is essential.  
+  **Fix:** Include a genuine positive-control environment where a known-useful inserted wisdom reliably improves objective outcomes and verify that the gate and audit stack detect it.
 
-- **The selection-bias model is useful but under-specified in the main body**  
-  Section “Selection bias” says an empirical-Bayes Beta prior was fitted to the 12 candidate win rates and used to simulate “measure 12, accept top 3, re-measure.” But the main body does not specify the fitted prior, whether uncertainty in the prior is propagated, whether candidates are exchangeable, whether judge-family effects are modeled, or whether the “top 3” matches the actual threshold-based acceptance process. A fix would be to include the model equations, fitted hyperparameters, and sensitivity to alternative priors in the main text or a compact table.
+- **The selection-bias model is not sufficiently justified and may be misspecified.**  
+  §3.3 fits an empirical-Bayes Beta prior and obtains concentration \(\hat\alpha+\hat\beta \approx 6\times 10^7\), effectively assuming almost no between-candidate heterogeneity. This boundary-like result is then used to argue the accepted candidates are upward fluctuations. But the model treats candidate cells as independent Beta-Binomial measurements, despite shared problems, shared judges, common solver artifacts, and possibly correlated candidate effects. It also describes the process as “top-3-of-12,” whereas the gate rule is threshold-based \(\mathrm{wr}\ge 0.60\), not literally top-3 selection.  
+  **Fix:** Provide sensitivity analyses with hierarchical logistic models over candidates/problems/judges, correlated candidate effects, and threshold-selection rather than top-\(k\) selection; report whether the regression-to-mean conclusion is robust.
 
-- **The hierarchical Bayesian analysis is ultimately misleadingly prominent given that it is falsified by later data**  
-  Section “Hierarchical Bayes on the small-\(n\) fresh data” reports posterior support \(0.763\) for W078 under the preregistered decision rule, then the next section says larger \(n\) empirically falsifies this. This is honest, but the paper should more directly diagnose why the model failed—prior choice, pooling assumptions, omitted exemplar/protocol factors, pid effects, or distribution shift. Otherwise the reader learns that the hierarchical model was overconfident but not how to use it safely in future audits.
+- **Statistical language around the \(+10\)pp gate is misleading.**  
+  §2.4 says the \(+10\)pp threshold is “intentionally strict” and refuses candidates “undistinguishable from sampling noise.” But at \(n=50\), observing 30/50 wins gives a wide interval; under a binomial null around 0.5, this is not strong evidence. The paper later recognizes this, but the gate description and some contribution text still treat \(0.60\) as a meaningful success threshold.  
+  **Fix:** State explicitly near the gate definition that \(0.60\) at \(n=50\) is a heuristic operating threshold, not a statistically stringent acceptance criterion; include exact binomial/Wilson intervals and false-positive rates under multiple testing over 12 candidates.
 
-- **The roadmap validation experiments are too small and synthetic to support the architectural claims made around them**  
-  Section “Empirical validation of each stage” uses 60 problems across 4 synthetic task families, 5 languages, and 3 solver families. This is useful as a diagnostic toy environment, but claims like “Stage 3 strongly works” and “the scheduler operates on underlying problem structure” are too strong. Cross-language pick consistency is not the same as the formal alignment layer involving category theory, Markov categories, or Blackwell equivalence described earlier. The fix is to label these as toy operational probes, not validation of the proposed architectural stages.
+- **Same-domain exemplar exposure is not guaranteed to “cancel” by symmetry.**  
+  In Limitations, the authors argue that using a same-domain example from the held-out evaluation pool applies symmetrically to base and ext, so it cancels in the relative comparison. This is not generally valid: the new wisdom can interact with the exemplar, retrieval, prompt framing, or solver behavior, and indeed §3.5 reports that exemplar ablation shifts win rates by 0.06–0.18. For an audit paper, evaluation-pool exposure is a serious design flaw even if later ablated.  
+  **Fix:** Make the no-exemplar fresh replication the primary confirmatory result and avoid defending the original exposure as cancelled; future runs should use strict split separation from the start.
 
-- **The Stage 3 theory is largely disconnected from the experiment actually run**  
-  The roadmap describes alignment via category theory and information geometry, detecting equivalences such as Le Chatelier/Lenz or Markov-category isomorphisms. The experiment tests whether an LLM scheduler picks the same prior after translating problems into five languages. That is cross-lingual robustness, not formal alignment of priors. Either remove the category-theoretic framing or add an experiment that actually tests equivalence detection/merging across formally analogous domains.
+- **The distinction between “judge fragility” and “true quality difference” remains unresolved without human or objective ground truth.**  
+  Cross-family re-judgment shows lack of robustness to judge family, but it does not tell whether Gemini was over-rewarding style, Claude was under-rewarding useful content, or both were noisy. The paper acknowledges no human ground truth in Limitations but still leans on cross-family drops as strong evidence against the gate’s accepted wisdoms. For open-ended Chinese reasoning tasks, judge disagreement is not enough to establish lack of substantive utility.  
+  **Fix:** Add human evaluations on a stratified subset, or use tasks with objective outcomes where possible; report judge-human correlations for the audit panel.
 
-- **Scaffold performance claims are based on the same kind of same-family judging the paper criticizes**  
-  Contribution 3 says the v20 scaffold reaches strong win rates against baselines, but acknowledges these were “measured by a same-family pairwise LLM judge” and are not independently audited. Since the scaffold is the substrate for all candidate generation and evaluation, uncertainty about its real performance matters. The fix is either to audit the scaffold-vs-baseline claims with the same L1/L3/L4 stack or to remove performance numbers not needed for the audit contribution.
+- **The hierarchical Bayesian analysis is presented as a contribution but then shown to be overconfident and wrong.**  
+  §3.4 reports a multilevel logistic model giving \(P(\text{pass})=0.763\) for W078, then §3.5 says the \(n=100\) data falsifies this. The authors candidly diagnose the missing exemplar covariate and flat candidate prior, but this means the hierarchical analysis is not supporting the final conclusions except as a cautionary tale. Its role in the paper is unclear.  
+  **Fix:** Either remove it from the claimed contributions or refit a final preregistered hierarchical model including exemplar/protocol covariates and candidate-pool shrinkage.
 
-- **The candidate-generation loop is not re-run under the preregistered audit protocol**  
-  The stronger fresh-data replications evaluate the original 12 candidates under better protocols, but the full closed loop—generation, selection, pruning, commitment—is not rerun prospectively with the final audit stack fixed. The Discussion acknowledges this. For a methodology paper about auditing self-improving loops, the strongest validation would be a fully preregistered second loop where all gate/audit choices are frozen before candidate generation.
+- **The paper sometimes overstates “replication” because protocols differ.**  
+  The fresh evaluations differ in sample size, exemplar mechanism, seed, possibly protocol details, and thresholds (§3.5). The \(n=100\) no-exemplar run is not a direct replication of the original v20-style gate; the \(n=100\) with-exemplar and \(n=200\) with-exemplar are closer. Calling the whole sequence “replicated three times” risks obscuring these design changes.  
+  **Fix:** Separate “direct replication under original protocol” from “sensitivity replication under modified protocol,” and reserve “replication” for protocol-matched runs.
 
-- **The paper sometimes conflates point-estimate threshold failure with statistical evidence of no effect**  
-  Several sections emphasize that no candidate “clears” \(0.60\) as a point estimate, while also noting that Wilson intervals sometimes touch \(0.60\). This is acceptable for evaluating the gate’s own decision rule, but not equivalent to showing no content-specific utility. The paper mostly says this, but phrases like “clean null” and “collapses” can overstate the evidence. The fix is to consistently distinguish “fails the operational acceptance rule” from “evidence of zero or negative effect.”
+- **Some numerical phrasing is confusing or incorrect.**  
+  The abstract and Introduction describe “exemplar boost \(\sim 0.10\)--\(0.20\) absolute win-rate” and elsewhere “\(+0.10\)--\(0.20\) pp”; \(0.10\) absolute win rate is 10 percentage points, not 0.10 percentage points. Contribution 3 says \(0.88\) vs baseline is “+76pp above parity,” which is unconventional because parity is 0.50, so it is +38 percentage points over parity, not +76pp unless using margin over loss. Such phrasing creates ambiguity in reported effect sizes.  
+  **Fix:** Standardize all effects as either “absolute win-rate units” or “percentage points,” and avoid “above parity” unless precisely defined.
 
-- **The multi-step research-task pilot is too small to contribute meaningfully**  
-  Section “Multi-step research-task pilot” reports \(N=3\), with two scenarios favoring multi-turn + wisdom and one tie. This does not validate extension to sequential tasks and is too small for a main-body result. It should be moved entirely to appendix or framed only as an implementation smoke test.
+- **The paper contains duplicated/garbled text in the theory section.**  
+  In §2.5, the paragraph “What cross-family re-judgment can and cannot deliver” cuts off mid-sentence—“two families may share style preferences that”—and is immediately followed by another paragraph with overlapping content. This suggests the main body was not fully edited and makes the theoretical argument harder to follow.  
+  **Fix:** Remove the duplicate fragment and consolidate the cross-family re-judgment caveats.
 
-- **The related-work table risks overstating the novelty of the audit recommendation**  
-  Table “Audit practices in adjacent LLM-judged self-improvement papers” marks many papers as lacking L1/L3/L4/L6. The observation is useful, but the comparison mixes quite different systems and acceptance signals. The paper partially handles this with “n/a” rows, but the broader discussion still implies a general gap across self-improvement literature. The fix is to limit the claim to retrieval/prompt-level LLM-judged acceptance loops, or add a more systematic survey.
+- **The related-work comparison risks being too checklist-based.**  
+  Table 1 marks adjacent papers as lacking L1/L3/L4/L6 audit practices. This is useful, but the paper sometimes implies that absence of cross-family re-judgment is a general deficiency even for works whose acceptance signals, tasks, or evaluation regimes differ substantially. The table does include “n/a” for environment/weight-level cases, but the Discussion later broadens again to many self-improvement papers.  
+  **Fix:** Restrict the comparison to papers whose primary acceptance signal is same-family LLM preference over open-ended outputs, and avoid extrapolating to weight-level or environment-reward systems without direct evidence.
 
-- **Reproducibility via a third-party proxy limits exact replication**  
-  Limitations state that model access is mediated by ruoli.dev and exact-token reproduction depends on proxy routing state. This is not fatal, especially with cached outputs, but it weakens claims about re-running the full loop. The fix is to provide cached answer/judgment artifacts as primary reproducibility targets and, ideally, replicate key cells on official vendor endpoints.
+- **Reproducibility remains limited by third-party proxy and model identities.**  
+  The Limitations section notes that API access is via ruoli.dev and exact-token reproduction depends on proxy routing state. For an audit-methodology paper whose conclusions depend on judge-family behavior and model identity, this is a nontrivial reproducibility limitation.  
+  **Fix:** Replicate key cells through official vendor endpoints or provide cached inputs/outputs sufficient for third parties to re-judge with current public models.
 
 # Questions to the authors
 
-1. Can you provide a functioning positive control where a known-useful inserted wisdom/intervention is accepted by the gate and survives the audit stack? If not, how should readers distinguish “all candidates are useless” from “the evaluation setup is insensitive or anti-additive”?
+1. **What happens under a fully preregistered, fresh candidate-generation loop?**  
+   The current audit stack was developed post-hoc after the original loop. If you rerun candidate generation, gating, and auditing from scratch with the final audit protocol frozen, do you again obtain \(0\) validated additions?
 
-2. For the \(n=200\) replication, why does the text say the top candidates are below the L1-\(0.55\) threshold when the listed L1 values are \(0.573\), \(0.574\), and \(0.558\)? Was the joint rule inner \(\geq 0.60\) *and* L1 \(\geq 0.55\), or was a different L1 criterion used?
+2. **Can you provide a genuine positive-control task where an inserted wisdom has known objective utility and show that the gate plus audit detects it?**  
+   The failed positive controls are currently one of the most serious threats to interpreting the results.
 
-3. What exactly was preregistered for the \(n=100\) and \(n=200\) runs: candidate set, thresholds, exemplar condition, seeds, judge families, exclusion rules, and analysis code? Were any analyses or candidate subsets added after seeing results?
+3. **How robust is the selection-bias conclusion to a hierarchical model with shared problem effects and threshold selection rather than top-3 selection?**  
+   The \(\alpha+\beta\approx 6\times10^7\) empirical-Bayes fit seems boundary-like; sensitivity analyses would materially affect my confidence.
 
-4. In the empirical-Bayes winner’s-curse analysis, what are the fitted Beta hyperparameters, and how sensitive are the simulated drop percentiles to alternative priors or to modeling the actual threshold rule rather than top-3 selection?
+4. **Do human judges agree more with the original same-family judge or the cross-family audit panel on a stratified subset of Chinese open-ended outputs?**  
+   This would help distinguish judge-family fragility from true quality differences.
 
-5. Why did the hierarchical Bayesian model assign W078 posterior support \(0.763\) before being contradicted by the \(n=100\) and \(n=200\) data? Which modeling assumption failed, and what revised model would you recommend for future users of the audit stack?
+5. **For the \(n=200\) with-exemplar run, what are the confidence intervals and exact counts for the top candidates, especially W078 and wcand03?**  
+   Values such as 0.590 and 0.580 are close to the 0.60 threshold, so uncertainty and exact binomial counts matter.
 
-6. Can the full closed loop be rerun prospectively with strict pool separation and the final audit protocol fixed in advance, rather than only re-evaluating the original 12 candidates?
+6. **How many gate/audit/gate-redesign variants were tried before the final reported protocol, and which results were excluded from the main narrative?**  
+   The paper acknowledges gate-design freedom; a complete design-search log would clarify the extent of hindsight.
 
-7. For the roadmap experiments, what evidence shows that the Stage 3 cross-language consistency probe measures “alignment of priors” rather than ordinary translation robustness of the scheduler prompt?
+7. **Does the no-exemplar \(n=100\) run use exactly the same prompts and solver settings except for exemplar removal?**  
+   Since exemplar interaction is central to the interpretation, any additional protocol changes would matter.
 
 # Rating
 
 **Weak Reject**
 
-The paper is interesting, unusually transparent, and contains a valuable negative result, but it is not yet a convincing top-venue methodology contribution. The biggest issues are the lack of a functioning positive control, the single-loop/single-primary-solver scope, the contaminated same-domain exemplar mechanism, and the fact that the final audit protocol is not applied prospectively to a fresh closed-loop run. I also find the roadmap section substantially overclaimed relative to the toy diagnostics, especially the formal alignment claims. With a clean preregistered second loop, a working positive control, corrected inconsistencies, and tighter scoping, this could become a strong case-study paper.
+The paper addresses an important problem and provides a candid, artifact-backed negative case study, but the evidence is not yet strong enough for the breadth of the methodological and architectural claims. The most serious issues are the single-loop/single-primary-solver scope, the post-hoc audit-stack construction, the unresolved lack of positive controls and human/objective ground truth, and the weak connection between the empirical null and the large six-stage roadmap. I would be much more positive on a narrower paper framed strictly as an auditable case study with preregistered fresh-loop replication, calibrated positive controls, and reduced claims about general self-validating architectures.
 
 # Confidence
 
-**4**
-
-I am familiar with LLM self-improvement loops, LLM-as-judge evaluation fragility, cross-model judging, winner’s-curse effects in adaptive experimentation, and reproducibility/preregistration issues, though I am less specialized in the category-theoretic alignment framing invoked in the roadmap.
+**4** — I am familiar with LLM self-improvement loops, LLM-as-judge evaluation failure modes, cross-model auditing, and reproducibility/preregistration concerns, though I am not a specialist in Chinese-language wisdom-library benchmarks specifically.
