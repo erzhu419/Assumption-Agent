@@ -136,6 +136,46 @@
 
 ---
 
+## 3.35 关键的真实事件: Exp 17 的"trigger-conditioned gate"设计
+
+**时间**: 2026-04-24 ~01:39 AM (会话 eba0a676)
+**情境**: v1 paper 跑完 16 个 audit 实验，全部 null (0/12 KEEP 通过)。Claude 在对话里设计了 Exp 17 — trigger-conditioned gate —— 把 pair-wr 拆成 `util_fire`（wisdom 触发时 utility）+ `cite_fire`（触发时引用率）+ `util_abs`，并只在 wisdom 实际触发的 PID 上评分。
+
+**结果**: 4/12 PASS (WCAND01: util_fire=0.59, n=22; WCAND02: util_fire=0.71, n=14, etc.) —— 是 17 个实验里**第一次有正信号的 gate**。
+
+**用户当场说的话**（原文）:
+> "你和 agent 没区别，agent 端我也可以调用和你一样的 opus 4.6，不过你设计了新 gate，非常好，说明 agent 也可以做到。你看如何把设计的思路/过程/结构教给 agent"
+
+**关键续集（v1 paper 里有，这次实验链补全的解释）**:
+
+Exp 33 (prospective rerun) 在 9 个新 candidate 上跑了同一个 gate: **0/9 PASS**。`4/21 ≈ 19%` 总通过率，Wilson 95% CI [0.08, 0.38]，one-sided binomial p=0.14 against p₀=0.30。
+
+也就是说：
+- **Claude 在对话里设计的新 gate，在 tuning set 上 4/12 看起来 work**
+- **prospective fresh data 上 0/9 — 完全是 tuning-set overfit**
+- 即便把"如何设计 trigger-conditioned gate"完整教给 agent，agent 自己跑出来的 gate 也是同一个 overfit pattern
+
+**这是真实事件的 vs 论文论点 1:1 映射**:
+
+| 真实事件 | 对应论点 |
+|---|---|
+| Claude 对话里设计 Exp 17 → 4/12 (tuning) | 在 dialogue 里设计的"新 wisdom"看似 work |
+| Exp 33 fresh data → 0/9 prospective | 同一个 wisdom 拿到 fresh 上失效 |
+| 用户说"教给 agent" | 试图把方法论烧成 sys_prompt |
+| autonomous agent 烧完仍解不了 | 不是 prompt 不够好，是 dialogue 里被 overfit 的方法论本身就是 stuck-state |
+
+**真正的双重失败**:
+1. wisdom-as-prompt 编码不了 dialogue 结构（H₇）
+2. dialogue 里被 Claude 自己想出来的"新方法"也常是 tuning-set over-fit；Claude 看不到这一点，**直到 prospective rerun 才暴露**
+3. 也就是说：**dialogue 结构防止了 specificity 信号被压扁，但没解决 over-fitting 到当前对话上下文这个问题**
+
+**对 paper v2 的含义**:
+- paper v1 里 "Exp 17 是 tuning-set 而 Exp 33 是 prospective fail" 这条数据已经在 main.tex 里
+- 但当时没把它跟"为什么 dialogue 解但 autonomous 解不了"的因果关系写出来
+- paper v2 应该把这两条合并成一个论点：**dialogue-discovered methodology + tuning-set overfit + prompt-injection 不能 transfer = current agent 的根本病灶**
+
+---
+
 ## 3.4 用户的最深 meta-observation: dialogue structure ≠ wisdom
 
 **用户在过程中第二次纠正**: 之前我把"用户提出新假设、Claude 执行"当成 dialog 跟 autonomous loop 的差别。用户说不对：之前在另一次会话里，**用户只是批准 Claude 的提议，Claude 自己解决了问题**。然后用户让 Claude 把"刚刚怎么解决的"写进 sys_prompt_en.txt 烧给 autonomous agent。**烧完后 agent 仍然解不了类似问题**，否则今天我们不会还在做这种实验。
