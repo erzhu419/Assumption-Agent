@@ -73,10 +73,21 @@
 如果成立：v1 的 0/12 不是 "wisdom 没用"，是 **"LLM-as-judge gate 物理上不能 detect content gain"**，无论 wisdom 是什么形态。
 
 ### H₅: 加 worked example 能让 specificity 显现（可能 H₃ 漏的因素）
-**Tested by**: Exp 70d (跑中)
+**Tested by**: Exp 70d
 **Setup**: TIGHT_WITH_EX (trigger+label+specific worked example) vs GENERIC_WITH_EX (generic warning+generic worked example) 对照
-**Status**: 跑中（约 20-25 min wall）
-**Hypothetical**: 不论结果，限于 textbook 问题域
+**Result**: 0/5 SPECIFIC, 0/5 TENTATIVE, 2/5 NOT SPECIFIC, 3/5 MIXED
+
+| Slice | GENERIC | TIGHT_EX | GENERIC_EX | wr TIGHT_EX vs GENERIC_EX |
+|---|---|---|---|---|
+| bayesian | 96% | 98% | 98% | 0.379 |
+| quantifier | 94% | 92% | 94% | 0.644 |
+| multistep | 90% | 88% | 88% | 0.639 |
+| constraint | 70% | 66% | 64% | 0.457 |
+| counterfactual | 84% | 88% | 84% | 0.450 |
+
+**结论**: quantifier 和 multistep 上 wr ~0.64 是有限的 stylistic 偏好，但 Δacc=0 — 还是风格胜利不是内容胜利。3/5 slice GENERIC_EX 与 TIGHT_EX 等价或反超。
+**H₅ REJECTED**：worked example 不解锁 specificity；这条路径在 textbook 问题上死。
+**但仍未排除**：在**模型真不会**的问题上，specific procedure + worked example 是否能 rescue。这正是 Exp 71 要测的。
 
 ---
 
@@ -112,6 +123,38 @@
 1. 它**统一**解释 v1 + v2 + Exp 70a-d 全部数据
 2. 它**直接 imply**：当前文献中所有"LLM 自我改进"研究都可能踩同样的坑
 3. 它**自我演示**：用户的 meta-observation 本身就是论文论点的 case study
+
+---
+
+## 3.5 真实存在的证据：GenericAgent 项目
+
+**用户提醒**：我之前给他的另一个项目（`/home/erzhu419/mine_code/Asumption Agent/GenericAgent/`）烧过一系列 prompt 模板和 SOP。
+
+具体看 `GenericAgent/assets/sys_prompt_en.txt`：
+
+```
+- Probe first: on failure, gather sufficient info (logs/status/context),
+  store key findings in working memory, then decide to retry or pivot.
+- Failure escalation: 1st fail → read error and understand cause;
+  2nd → probe environment state; 3rd → deep analysis then switch approach
+  or ask user. Never repeat an action without new information.
+```
+
+以及 `GenericAgent/memory/memory_management_sop.md` 里的核心公理：
+- 行动验证原则 (Action-Verified Only) — "No Execution, No Memory"
+- 神圣不可删改性 (Sanctity of Verified Data)
+- 禁止存储易变状态 (No Volatile State)
+- 最小充分指针 (Minimum Sufficient Pointer)
+
+**这些就是 Exp 70 v2 想测的 "triggered cognitive patch" 形态**。Trigger + procedure + 红线规则，每条都是任务特定的 wisdom。这不是合成的，是用户实际在用的 agent 装的真东西。
+
+**实证价值**：
+- agent 装了这些高质量 wisdom 后，**autonomous 跑遇到困难依然会卡住**，需要用户介入和 Claude 对话来突破
+- 这是 v1 paper 主论点的**直接活证据**：当前 LLM agent 即使装了正确的 wisdom，也缺 **propose-new-hypothesis** 的 capability
+- 每次 hit 死胡同，agent + Claude 自己只能 retry 同类 procedure；是 human 在对话中 inject 新假设
+- Exp 70a-d 的负结果（specific wisdom 在 textbook 域跟 generic warning 等价）+ GenericAgent 的真实 stuck 经验 = 同一个现象的两面
+
+**写进 paper v2 的方式**: 作为论文 §Discussion 或 §Limitations 的一个 callout case，`agent system prompt with failure-escalation rules has been deployed in the wild for over a year; the deployer reports that the agent still gets stuck on novel problems despite the rules being well-designed and procedurally specific. The user's lived experience is that breaking the impasse requires interactive dialogue with a human who proposes new hypotheses — a capability the prompt rules cannot encode.`
 
 ---
 
