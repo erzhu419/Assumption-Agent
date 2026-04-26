@@ -32,6 +32,14 @@ _GPT_BASE = os.environ.get("GPT5_BASE_URL", "https://ruoli.dev/v1")
 _GPT_KEY = os.environ.get("GPT5_API_KEY", "")
 _GEMINI_BASE = os.environ.get("GEMINI_PROXY_BASE_URL", "https://ruoli.dev/v1")
 _GEMINI_KEY = os.environ.get("GEMINI_PROXY_API_KEY", _GPT_KEY)
+# deepseek lives on a different ruoli.dev channel/group
+_DEEPSEEK_BASE = os.environ.get("DEEPSEEK_BASE_URL", "https://ruoli.dev/v1")
+_DEEPSEEK_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+# Google official Gemini API (OpenAI-compatible endpoint) — use as
+# headroom-control fallback when proxy-routed models saturate
+_GOOGLE_BASE = os.environ.get("GOOGLE_GEMINI_BASE_URL",
+                                  "https://generativelanguage.googleapis.com/v1beta/openai")
+_GOOGLE_KEY = os.environ.get("GOOGLE_GEMINI_KEY", "")
 
 
 class UnifiedClient:
@@ -60,6 +68,10 @@ CHEAP_MODELS = {
     "gemini": ("gemini-3-flash", _GEMINI_BASE, _GEMINI_KEY),
     "claude_haiku": ("claude-haiku-4-5-20251001", _CLAUDE_BASE, _CLAUDE_KEY),
     "gpt_mini": ("gpt-5.4-mini", _GPT_BASE, _GPT_KEY),
+    # weaker tier — for headroom-sensitive experiments where stronger
+    # cheap-tier models saturate the task
+    "deepseek_flash": ("deepseek-v4-flash", _DEEPSEEK_BASE, _DEEPSEEK_KEY),
+    "gemini25_flash": ("gemini-2.5-flash", _GOOGLE_BASE, _GOOGLE_KEY),
 }
 
 EXPENSIVE_MODELS = {
