@@ -176,6 +176,54 @@ Exp 33 (prospective rerun) 在 9 个新 candidate 上跑了同一个 gate: **0/9
 
 ---
 
+## 3.45 KEYSTONE：Exp 72 — Skeptic-replay 证实架构主张
+
+**Tested by**: Exp 72 (`phase six/exp72_skeptic_replay.py`)
+
+**Hypothesis being tested**:
+> 把 Exp 17 那次（dialogue-Claude 设计了 trigger-conditioned gate, 4/12 PASS, 后被 Exp 33 prospective 0/9 推翻）的全部 context 喂给一个**只换 system prompt 当 SKEPTIC**的 opus 4.6 实例，它能否**在 Exp 33 跑之前**预测出 Exp 33 的结果？
+
+**Setup**:
+- 同一个 model: claude-opus-4-6
+- Skeptic system prompt 强制要求检查 5 项: search-history overlap / tuning-vs-fresh contamination / winner's curse / threshold-design vs result / predictive commitment
+- 3 trials at T=0.2/0.4/0.6 测温度稳健性
+- Briefing = 16 prior null experiments + Exp 17 design + 4/12 PASS table 完整数据
+
+**Result**: **3/3 trials, score 5/5, all 5 failure modes flagged**
+
+| Trial | T | search_history | tuning_overfit | demand_prospective | verdict_reject | predicts_failure | score |
+|---|---|---|---|---|---|---|---|
+| 1 | 0.2 | ✓ | ✓ | ✓ | ✓ | ✓ | 5/5 |
+| 2 | 0.4 | ✓ | ✓ | ✓ | ✓ | ✓ | 5/5 |
+| 3 | 0.6 | ✓ | ✓ | ✓ | ✓ | ✓ | 5/5 |
+
+**Skeptic 的核心定量诊断**（一致出现在 3 trial）:
+- 1 - 0.85^17 ≈ 0.94: 17 次 redesign 至少一次蒙对的 base rate 极高
+- WCAND01 util_fire=0.59 at n=22, 95% CI [0.38, 0.81] — null 0.5 在内；P(noise≥0.55|n=22)≈0.28
+- 12 candidates × P(noise≥0.55) ≈ 3.4 期望 noise pass，观察 4 — fully consistent with null
+- threshold (0.55) 精确卡在 WCAND03 (0.54 fail) 和 WCAND01 (0.59 pass) 之间 1pp 间隙
+- **predicted Phase B (12 fresh candidates): 0/12 with 95% interval [0/12, 2/12]**
+
+**这跟 Exp 33 实际结果对比**:
+- Exp 33 实际: 0/9 PASS on 9 fresh candidates
+- Skeptic 预测: 0/12, interval [0, 2]
+- **量级和方向都对**
+
+---
+
+## Paper v2 真正的 keystone 论点（由 Exp 72 实证锁定）
+
+> **Dialogue-Claude 在 Exp 17 那次产出了真实的方法论 hypothesis，但因为缺 SKEPTIC role 而 over-fit，后被独立 prospective 实验否决。我们用同一个 model（opus 4.6）+ 同样的 context，仅靠切换 system prompt 给 SKEPTIC 设了一个 adversarial role，就在不需要任何新数据、不需要 Exp 33 的情况下，retroactively 预测出 Exp 33 的 0/9 结果（Skeptic 给出 0/12 with [0,2] interval，3 trials 一致）。这把 paper v2 的核心主张从理论变成实证：autonomous research agent 的"epistemic closure" 缺失不是新能力问题，是**N 轮 vs 1 轮 + 角色分离 prompt + 资源**的工程问题。**
+
+**对比 v1 paper 旧 thesis**: "current LLM agents cannot self-hypothesize" → **被 Exp 17 falsify 了**
+**对比中间 v2 thesis**: "specificity is undetectable in prompt-injection" → **太狭窄**
+**新 v2 thesis**（终版）:
+> The capacity for hypothesis generation exists in frontier LLMs already (Exp 17). The failure mode is **adaptive over-fit + missing epistemic closure**, not absent creativity. Closing the gap is **architectural, not capability-driven**: a role-switched skeptic call (same model, different system prompt, same data, no new compute beyond one extra LLM call) **retroactively catches Exp 17's over-fit and predicts Exp 33's 0/9 result**, demonstrated empirically across 3 temperature settings (Exp 72, all trials 5/5). The 'autonomous self-hypothesizing-and-validating agent' is therefore reachable as a **resource-scaled multi-agent prompt orchestration** (proposer + skeptic + statistician + frozen evaluator + search-history ledger + external resources), not a new model capability.
+
+**真实存在证据 + 实证架构验证 + 资源-非能力诊断 = paper v2 完整论点**。
+
+---
+
 ## 3.4 用户的最深 meta-observation: dialogue structure ≠ wisdom
 
 **用户在过程中第二次纠正**: 之前我把"用户提出新假设、Claude 执行"当成 dialog 跟 autonomous loop 的差别。用户说不对：之前在另一次会话里，**用户只是批准 Claude 的提议，Claude 自己解决了问题**。然后用户让 Claude 把"刚刚怎么解决的"写进 sys_prompt_en.txt 烧给 autonomous agent。**烧完后 agent 仍然解不了类似问题**，否则今天我们不会还在做这种实验。
