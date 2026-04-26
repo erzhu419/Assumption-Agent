@@ -109,18 +109,24 @@ imaginable self-validating loop}, plus an audit toolbox that turned
 out to be reliable enough to detect the failure across four
 independent diagnostic axes. Positive-and-negative controls on
 objectively-graded reasoning problems
-(Exp~67~+~68, \S\ref{sec:exp-summary-poscontrol}) close the
-audit-stack-sensitivity question: a reasoning-suppressing
-intervention is rejected at \(\mathrm{wr} = 0.286\) and
-\(0.133\); a task-specific Bayesian template is accepted at
-\(\mathrm{wr} = \mathbf{0.846}\) (\(+35\)pp above parity, well
-above the \(+10\)pp inner-gate threshold), with same-family
-gemini-3-flash and cross-family claude-haiku-4.5 agreeing
-perfectly (\(\kappa = 1.0\) on every pairwise split). The
-gate is therefore not structurally anti-additive --- it
-correctly accepts a strong intervention --- and the original
-twelve wisdoms' \(0/12\) at \(n \geq 100\) is calibrated content
-failure, not gate failure. We use the null to motivate a
+(Exp~67--69, \S\ref{sec:exp-summary-poscontrol}) cover the
+audit-stack-sensitivity question across two solver families: a
+reasoning-suppressing intervention is rejected at
+\(\mathrm{wr} \in \{0.286, 0.133, 0.000\}\); a task-specific
+Bayesian template is accepted at
+\(\mathrm{wr} \in \{0.846, 0.933\}\), well above the
+\(+10\)pp inner-gate threshold, with same-family gemini-3-flash
+and cross-family claude-haiku-4.5 agreeing perfectly on every
+pairwise split (\(\kappa = 1.0\)). The gate is therefore not
+structurally anti-additive on this scaffold; the residual scope
+limit is that available cheap solvers (gemini-3-flash,
+gpt-5.4-mini) already solve our textbook Bayesian set at
+ceiling, so the gate's preference cannot, on this evidence, be
+fully separated into ``correctness detection'' vs ``rigour
+detection.'' The parsimonious reading of the cross-experiment
+numbers is that the original twelve wisdoms' \(0/12\) at
+\(n \geq 100\) is calibrated content failure rather than gate
+failure. We use the null to motivate a
 six-stage architecture (priors~/ world model~/ scheduler~/
 experience~/ alignment / new prior generation) and
 \emph{stress-test each stage} in a separate campaign of 11
@@ -1355,24 +1361,6 @@ task-specific Bayesian prior decisively. NEGATIVE-vs-BASE at
 \(0.133\) is symmetrically rejected; POSITIVE-vs-NEGATIVE at
 \(1.000\) (\(14/0/1\)) is a perfect contrast.
 
-\textbf{What the two experiments together establish.}
-The audit stack is sensitive \emph{in both directions}.
-A reasoning-suppressing intervention is rejected at
-\(\mathrm{wr} = 0.286\) on Exp~67 and at \(\mathrm{wr} = 0.133\)
-on Exp~68; a strong, task-specific positive intervention is
-accepted at \(\mathrm{wr} = 0.846\) on Exp~68. Both same-family
-and cross-family judges agree on every pair. The earlier
-hypothesis that the gate is structurally anti-additive on this
-scaffold/task pairing is therefore \emph{not} supported: when a
-genuinely useful intervention exists, the gate detects it. The
-original twelve wisdoms' failure to clear the gate at
-\(n \geq 100\) (\S\ref{sec:exp-summary-fresh}) is not a
-gate-architectural artifact; it is the gate correctly identifying
-that the wisdoms, unlike the Bayesian template, do not produce a
-substantively different answer. This converts the original null
-from ``ambiguous between content failure and gate failure'' to
-``content failure, calibrated.''
-
 \textbf{Honest scope.} Exp~68's \(\Delta_{\mathrm{acc}}\) is
 small (\(+6.7\)pp, not the \(\geq +20\)pp we had originally
 hoped for) because gemini-3-flash's baseline on this curated
@@ -1380,12 +1368,55 @@ set is already \(14/15\). The strong gate signal of
 \(\mathrm{wr}=0.846\) is therefore primarily detecting an
 improvement in \emph{rigor and explicitness} of the Bayesian
 reasoning rather than a change in the final answer on most
-problems. We regard this as positive sensitivity nonetheless ---
-a wisdom that produced this kind of gate signal in the original
-loop would have been accepted, and that is the question this
-experiment was constructed to answer --- but a future run on a
-weaker solver where headroom is wider would tighten the
-\(\Delta_{\mathrm{acc}}\) component of the demonstration.
+problems.
+
+\paragraph{Exp~69 --- robustness check with a different solver
+family (gpt-5.4-mini).} To check whether the gate signal
+generalises across solver families and whether widening headroom
+could move \(\Delta_{\mathrm{acc}}\), we re-ran Exp~68 with
+\emph{gpt-5.4-mini} as the solver (judges unchanged: gemini-3-flash
+inner-like + claude-haiku-4.5 L1). We had hypothesised gpt-5.4-mini
+might be weaker than gemini-3-flash on Bayesian counter-intuitive
+problems and produce the wider \(\Delta_{\mathrm{acc}}\) the
+demonstration needed. Instead, gpt-5.4-mini reached
+\(15/15\) baseline on this set (gemini was \(14/15\)), so the
+ceiling is even tighter; \(\Delta_{\mathrm{acc}} = 0\).
+Pairwise verdicts, again identical across the two judge families
+(\(\kappa = 1.0\) over the three condition pairs):
+POSITIVE-vs-BASE \(\mathrm{wr} = \mathbf{0.933}\) (\(14/1/0\)),
+NEGATIVE-vs-BASE \(\mathrm{wr} = 0.000\) (\(0/13/2\)),
+POSITIVE-vs-NEGATIVE \(\mathrm{wr} = 1.000\) (\(14/0/1\)). The
+gate's preference for the Bayesian template strengthens
+slightly when the solver changes (\(0.846 \to 0.933\)),
+NEGATIVE is now uniformly rejected (\(0.000\)), and the
+cross-family agreement remains perfect.
+
+\paragraph{What the three experiments together establish, and
+what they do not.} \emph{Establish}: the audit stack is
+sensitive in both directions, the verdict is independent of
+which cheap solver family generates the answers
+(gemini-3-flash and gpt-5.4-mini both produce gate-acceptance
+\(\mathrm{wr} \geq 0.85\) for the Bayesian template), the
+same-family and cross-family judges agree perfectly on these
+controls. The earlier hypothesis that the gate is structurally
+anti-additive on the loop's scaffold is \emph{not} supported.
+\emph{Do not establish, in the strict sense}: that the gate's
+acceptance is driven by ground-truth accuracy improvement
+rather than by preference for rigorous and explicit
+reasoning. On every textbook Bayesian problem in our test set
+both BASE and POSITIVE produced the correct final answer in
+the cheap solvers we have access to, so we cannot, with this
+solver inventory, separate ``gate detects correctness gain''
+from ``gate detects rigor''. We give the parsimonious reading
+nonetheless: the original twelve wisdoms produced
+\(\mathrm{wr} \approx 0.45\)--\(0.55\) cross-family at
+\(n \geq 100\) (\S\ref{sec:exp-summary-fresh}); the
+algorithmic-prior controls in Exp~67--68--69 produce
+\(\mathrm{wr} \in [0.571, 0.933]\) when their substantive
+content matters. The original null is therefore most
+parsimoniously read as ``the wisdoms did not produce
+substantively-different reasoning'' rather than ``the gate
+ignores any substantively-different reasoning.''
 
 \section{Multi-step research-task pilot (summary;
 full in Appendix~\ref{app:multistep})}
@@ -1875,34 +1906,41 @@ than leave them to footnotes.
     the alternative explanation (``audit panel is wrong; original
     judge was right'') is not supported by any of the available
     LLM-substitute proxies.
-  \item \textbf{Positive control: resolved by Exp~67~+~68.}
+  \item \textbf{Positive control: largely resolved by
+    Exp~67~+~68~+~69 with one residual.}
     Earlier attempts at positive control on the original Chinese
     open-ended scaffold (Exp~44, Exp~46) all returned
     \(\mathrm{wr} \leq 0.25\) on \(6/6\) constructed wisdoms, an
     ambiguous result consistent with either ``no constructed
     wisdom is genuinely useful'' or ``the gate is structurally
     anti-additive on this scaffold/task pairing.''
-    Exp~67~+~68 (\S\ref{sec:exp-summary-poscontrol}) disambiguate
+    Exp~67--69 (\S\ref{sec:exp-summary-poscontrol}) disambiguate
     by switching to objectively-graded reasoning problems and
     running BASE / POSITIVE / NEGATIVE conditions through the
-    same \texttt{judge\_pair} the original gate uses plus L1
-    cross-family re-judgment. Together they show the audit stack
-    is sensitive in both directions: a reasoning-suppressing
-    intervention is rejected at \(\mathrm{wr} = 0.286\) (Exp~67)
-    and \(0.133\) (Exp~68), and a strong task-specific Bayesian
-    template is accepted at \(\mathrm{wr} = \mathbf{0.846}\)
-    (Exp~68) by both same-family and cross-family judges
+    same \texttt{judge\_pair} the gate uses plus L1 cross-family
+    re-judgment. Across the three experiments and across
+    solver families (gemini-3-flash, gpt-5.4-mini), the audit
+    stack is sensitive in both directions: reasoning-suppressing
+    interventions are rejected at
+    \(\mathrm{wr} \in \{0.286, 0.133, 0.000\}\); a strong
+    task-specific Bayesian template is accepted at
+    \(\mathrm{wr} \in \{0.846, 0.933\}\), well above any
+    threshold; cross-family judges agree perfectly
     (\(\kappa = 1.0\) on every pair). The structural-anti-additivity
-    hypothesis is therefore \emph{not} supported: when a useful
-    intervention exists the gate detects it. The original
-    twelve wisdoms' failure at \(n \geq 100\) is calibrated
-    content failure, not architectural failure of the gate.
-    Exp~68's accuracy delta itself is small (\(+6.7\)pp; baseline
-    \(14/15\) so headroom is narrow), so the gate's strong
-    \(0.846\) signal is primarily detecting rigour and
-    explicitness rather than answer-change; a future run on a
-    weaker solver with wider headroom would tighten this aspect
-    of the demonstration.
+    hypothesis is \emph{not} supported. The single residual is
+    that gemini-3-flash and gpt-5.4-mini both already produce the
+    correct final answer on essentially every textbook Bayesian
+    problem we tested, so Exp~67--69 cannot, with the cheap
+    solvers we have access to, fully separate ``gate detects
+    correctness gain'' from ``gate detects rigour gain.'' The
+    parsimonious reading of the cross-experiment numbers is that
+    the gate detects substantively-different reasoning when it is
+    present, and the original twelve wisdoms' failure is best
+    read as ``they did not produce substantively-different
+    reasoning,'' but a positive control with \(\Delta_{\mathrm{acc}}
+    \gg 0\) on a verifiable task --- which would require a solver
+    weak enough to fail on textbook Bayesian without a prior ---
+    remains the cleanest single follow-up.
   \item \textbf{L6 operationalization is under-specified.}
     Embedding cosine and citation strictness are two proxies
     for faithfulness; they could in principle disagree. On our
