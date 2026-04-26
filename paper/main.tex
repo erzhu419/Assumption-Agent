@@ -1688,20 +1688,26 @@ validation given the synthetic scope.}
 \paragraph{What this calibrates.}
 The roadmap is not vapourware: each stage has a measurable
 operationalisation and produces a measurable result.
-\textbf{Three stages work} (priors library, experience feedback,
-alignment). \textbf{One stage is conditional} (scheduler picks
-robustly but the solver-end improvement depends on whether the
-task is far from ceiling). \textbf{Two stages fail in their
-simplest form} (cheap world model via single LLM prompt;
-new-prior generation via single LLM prompt). The two failures
-are informative: they tell us that the obvious shortcut
-(``just prompt the LLM to do it'') does not work for these two
-roles, and that real Stage~0.5 / Stage~4 implementations need
-calibration training data and explicit search procedures over the
-prior space respectively. This narrows the contribution of the
-roadmap: it is not ``five plug-and-play modules,'' it is ``three
-plug-and-play modules + two open research problems with
-characterised failure modes.''
+\textbf{Two stages clearly work} in their simplest form (priors
+library; in-context experience feedback). \textbf{A third
+(alignment) passes a cross-language pick-consistency probe
+that is necessary but not sufficient for the formal alignment
+layer the architecture ultimately calls for} --- consistent with
+Table~\ref{tab:stage-verdicts}'s ``minimal proxy passes; formal
+alignment not tested.'' \textbf{One stage is conditional}
+(scheduler picks robustly but the solver-end improvement
+depends on whether the task is far from ceiling). \textbf{Two
+stages fail in their simplest form} (cheap world model via
+single LLM prompt; new-prior generation via single LLM prompt).
+The two failures are informative: they tell us that the obvious
+shortcut (``just prompt the LLM to do it'') does not work for
+these two roles, and that real Stage~0.5 / Stage~4
+implementations need calibration training data and explicit
+search procedures over the prior space respectively. This
+narrows the contribution of the roadmap: it is not ``six
+plug-and-play modules,'' it is ``two plug-and-play modules +
+one minimal-proxy probe + one conditional + two open research
+problems with characterised failure modes.''
 
 \paragraph{Comparison to closely related work.}
 \textbf{POPPER} (Huang et al., 2025) validates natural-language
@@ -2116,7 +2122,12 @@ methodological priors so the agent does not re-derive
 world model so testing a hypothesis costs seconds rather than
 hours; a learned scheduler so the priors apply where they
 should; and a formal alignment layer so insights generalise
-across domains. None of these is optional.
+across domains. The architecture is presented as a plausible
+target rather than an empirically forced conclusion --- the
+empirical case for it here is that the simplest loop (which
+omits all of the architecture except a static prior library)
+fails, not that we have shown each individual component is
+necessary on its own.
 
 Concretely, we recommend that any future paper proposing
 retrieval-level self-improvement should report, jointly: (i)
@@ -3927,10 +3938,8 @@ pids using gemini-3-flash solver + gemini judge:
 \end{center}
 
 Combined with the original 12 candidates: \(3 / 21 \approx 14\%\)
-pass rate on the inner loop's own gate. This is \emph{lower} than a
-random-30\% baseline (expected \(\sim\!6.3 / 21\)) --- the inner
-loop is not
-overly permissive. The issue is the \emph{composition} of its 3
+pass rate on the inner loop's own gate. The
+inner loop is therefore not overly permissive on this set. The issue is the \emph{composition} of its 3
 accepts, not the count: what it accepts is spurious across all 6
 audit layers.
 
