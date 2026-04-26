@@ -101,14 +101,14 @@ def call_solver(client, problem, condition, card, trial_idx, solver_name="?"):
     }
     t0 = time.time()
     raw = None
-    # 6 retries with exponential backoff (1, 2, 4, 8, 16, 32 sec) — covers
-    # rate-limit recovery on the busy ruoli.dev proxy
-    for attempt in range(6):
+    # 8 retries with exponential backoff (1..128 sec). max_tokens=4000 to
+    # accommodate thinking-mode models (gemini-2.5) that mix thinking + verbose
+    # output and can truncate at lower budgets when given verbose cards.
+    for attempt in range(8):
         try:
-            r = client.generate(user_prompt, max_tokens=1500, temperature=0.0)
+            r = client.generate(user_prompt, max_tokens=4000, temperature=0.0)
             raw = r["text"].strip()
-            if raw:  # accept only non-empty responses (some models return ""
-                       # if max_tokens is too tight for thinking)
+            if raw:  # accept only non-empty responses
                 break
             else:
                 record["errors"].append({"attempt": attempt+1,

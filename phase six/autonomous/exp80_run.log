@@ -1,0 +1,58 @@
+PROBLEMS module: 23 tasks loaded
+=== Exp 78: trigger-conditioned wisdom validation on Python coding tasks ===
+  Solver: gemini25_flash
+  Raw log: /home/erzhu419/mine_code/Asumption Agent/phase six/autonomous/exp78_gemini25_flash_raw.jsonl
+  Summary: /home/erzhu419/mine_code/Asumption Agent/phase six/autonomous/exp78_gemini25_flash_summary.json
+  N problems: 23
+  N cards: 8
+  N trials per (problem, condition): 3
+  Total LLM calls planned: 348
+  By condition: {'BASE': 69, 'GENERIC': 69, 'FULL': 105, 'LITE': 105}
+
+  [20/348 24s] last: pid=LB_01 cond=BASE passed=True
+  [40/348 49s] last: pid=TC_01 cond=BASE passed=True
+  [60/348 74s] last: pid=MIX_07 cond=BASE passed=True
+  [80/348 97s] last: pid=SB_02 cond=GENERIC passed=False
+  [100/348 125s] last: pid=IM_01 cond=GENERIC passed=True
+  [120/348 160s] last: pid=MIX_04 cond=GENERIC passed=False
+  [140/348 188s] last: pid=MD_01 cond=LITE passed=True
+  [160/348 211s] last: pid=SB_01 cond=LITE passed=True
+  [180/348 236s] last: pid=FE_01 cond=LITE passed=False
+  [200/348 257s] last: pid=CS_02 cond=FULL passed=False
+  [220/348 282s] last: pid=IM_01 cond=LITE passed=True
+  [240/348 311s] last: pid=TC_01 cond=LITE passed=True
+  [260/348 342s] last: pid=MIX_03 cond=FULL passed=False
+  [280/348 380s] last: pid=MIX_04 cond=LITE passed=False
+  [300/348 414s] last: pid=MIX_06 cond=LITE passed=False
+  [320/348 450s] last: pid=MIX_08 cond=LITE passed=True
+  [340/348 481s] last: pid=MIX_10 cond=LITE passed=True
+  All calls done in 491s
+
+=== AGGREGATING ===
+
+Overall pass rate by condition:
+  BASE    : 51/69 = 73.9%
+  GENERIC : 39/69 = 56.5%
+  FULL    : 59/105 = 56.2%
+  LITE    : 78/105 = 74.3%
+
+=== PER-CARD TRIGGER-CONDITIONED ANALYSIS ===
+For each card, compare BASE vs FULL on the SUBSET of problems where the card's pattern fires.
+  mut_default        (MUT_DEFAULT   ): BASE=100%(12/12) FULL=100%(12/12) GEN=100%(12/12) LITE=100%(12/12) |Δ(F-B)=+0% Δ(F-G)=+0%
+  slice_boundary     (SLICE_BOUNDARY): BASE=75%(9/12) FULL=58%(7/12) GEN=50%(6/12) LITE=75%(9/12) |Δ(F-B)=-17% Δ(F-G)=+8% ✗ negative
+  float_eq           (FLOAT_EQ      ): BASE=80%(12/15) FULL=60%(9/15) GEN=60%(9/15) LITE=47%(7/15) |Δ(F-B)=-20% Δ(F-G)=+0% ✗ negative
+  late_bind          (LATE_BIND     ): BASE=50%(3/6) FULL=100%(6/6) GEN=17%(1/6) LITE=50%(3/6) |Δ(F-B)=+50% Δ(F-G)=+83% ★ STRONG
+  copy_semantics     (COPY_SEMANTICS): BASE=60%(9/15) FULL=40%(6/15) GEN=33%(5/15) LITE=73%(11/15) |Δ(F-B)=-20% Δ(F-G)=+7% ✗ negative
+  empty_edge         (EMPTY_EDGE    ): BASE=90%(27/30) FULL=33%(10/30) GEN=63%(19/30) LITE=90%(27/30) |Δ(F-B)=-57% Δ(F-G)=-30% ✗ negative
+  iter_mutate        (ITER_MUTATE   ): BASE=67%(6/9) FULL=67%(6/9) GEN=33%(3/9) LITE=67%(6/9) |Δ(F-B)=+0% Δ(F-G)=+33%
+  type_coerce        (TYPE_COERCE   ): BASE=50%(3/6) FULL=50%(3/6) GEN=50%(3/6) LITE=50%(3/6) |Δ(F-B)=+0% Δ(F-G)=+0%
+
+=== VERDICT ===
+  STRONG (Δacc≥10pp vs BASE AND Δ≥5pp vs GENERIC): 1/8
+  TENTATIVE (5pp ≤ Δacc < 10pp): 0/8
+  NEGATIVE (Δacc ≤ −5pp): 4/8
+
+  BREAK-OUT: 1/8 cards produce >=10pp objective-accuracy improvement on their applicable subset, and >=5pp over the GENERIC baseline. Wisdom-as-prompt-injection paradigm DOES produce content-level signal when (a) wisdom is procedural, (b) trigger is reliable, (c) task has real bug, (d) baseline isn't at ceiling. The 0/12 of v1 paper was domain-specific, not universal. Answer to user's challenge: yes, the loop CAN break out of 0/12.
+
+Forensic log:    phase six/autonomous/exp78_gemini25_flash_raw.jsonl
+Summary:         phase six/autonomous/exp78_gemini25_flash_summary.json

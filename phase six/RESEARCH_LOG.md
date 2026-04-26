@@ -332,6 +332,68 @@ Skeptic 接受理由 (`exp77_raw.jsonl`, role=skeptic, trial_id=1, round=1, verd
 
 ---
 
+## 3.7 Exp 78-81 — 在 Python coding bugs domain 用 procedural cards 尝试突破 0/12
+
+### Setup
+- 23 Python coding tasks，每题打 1-2 个 bug pattern tag (8 patterns 总)
+- 8 张 procedural wisdom cards，每张针对一个 pattern: trigger desc + failure-to-avoid + 4-step procedure + worked example
+- 4 conditions: BASE / GENERIC ("be careful") / FULL (full card) / LITE (trigger+label only)
+- Objective grading via subprocess pytest (返回 PASS / FAIL)
+- 3 trials per (problem, condition) cell
+- Forensic log: 每个 LLM call + extracted code + test stdout/stderr 全记 raw.jsonl
+
+### 4 个 run + 多个 artifact
+
+| Exp | Solver | max_tokens | retries | API_FAILED rate | Artifacts |
+|---|---|---|---|---|---|
+| 78a | gemini-3-flash | 900 | 3 | <5% | ceiling: 7/8 cards 100% BASE → 100% FULL |
+| 78b | deepseek-v4-flash | 900 | 3 | **50%** | ⚠️ "+40pp copy_semantics break-out" 是 API_FAILED 当 test_fail 假象 |
+| 79 | deepseek-v4-flash | 1500 | 6 | 19% | OK-only 重判后 copy_semantics 真实 -6pp（不是 +40pp）|
+| 80 | gemini-2.5-flash | 1500 | 6 | 0% | ⚠️ "+50pp late_bind break-out" 是 max_tokens 截断假象 |
+| **81a** | **deepseek-v4-flash** | **4000** | **8** | **<5%** | **clean** |
+| **81b** | **gemini-2.5-flash** | **4000** | **8** | **0%** | **clean** |
+
+### 跨 solver clean 数据 (Exp 81a + 81b + 78a)
+
+| Card | deepseek 81a | gemini-2.5 81b | gemini-3 78a | Cross-solver |
+|---|---|---|---|---|
+| mut_default | 100/100 | 100/100 | 100/100 | ceiling |
+| slice_boundary | 100/100 | 100/100 | 100/100 | ceiling |
+| float_eq | 100/93 (−7) | 100/100 | 100/100 | ≤ ceiling |
+| late_bind | 100/50 (**−50**) ✗ | 100/100 (0) | 100/100 | NEG on deepseek 不一致 |
+| copy_semantics | 80/60 (**−20**) ✗ | 73/67 (−7) ✗ | 87/100 (+13)? | **两 clean 都 NEG** |
+| empty_edge | 100/100 | 100/100 | 100/100 | ceiling |
+| iter_mutate | 89/100 (+11) ★ | 100/78 (**−22**) ✗ | 100/100 | **方向相反** |
+| type_coerce | 100/100 | 100/100 | 100/100 | ceiling |
+
+### 最终 verdict
+
+**0/8 cards 产生 cross-solver-consistent break-out**。所有此前出现的"break-out"都是 artifact：
+- Exp 78b copy_semantics +40pp → 50% API_FAILED 假象
+- Exp 80 late_bind +50pp → max_tokens=1500 truncation 假象（gemini-2.5 thinking + verbose card → 输出截断）
+- Exp 81a iter_mutate +11pp → 跟 81b 方向相反 (-22pp)，small-n variance
+
+### Forensic 证据指针
+
+每个 artifact 都有 raw.jsonl 直接证据：
+
+- **Exp 78b artifact**: `exp78_deepseek_flash_raw.jsonl` (overwritten by 79)，原始 173/348 records 有 `status="API_FAILED"`，runner 旧逻辑把它们当 `passed=False`。OK-only 重计算 copy_semantics: BASE 5/8 (62%) FULL 11/12 (92%) — 但 n_OK 太小 (8 vs 12) 不可靠，且 81a clean 重跑后是 -20pp
+- **Exp 80 artifact**: `exp78_gemini25_flash_raw.jsonl` (now overwritten by 81b)，原始 SB_01 / EE_01 系列的 FULL trials 被截断在 `# Python's negative slicing handles cases ...` mid-comment，根本没有 function body。chars=165-207 但是 max_tokens=1500 编码后 thinking + verbose comments 把预算吃完
+- **Exp 81a iter_mutate +11pp 不可靠**: BASE 8/9 (89%), FULL 9/9 (100%) — 1 trial 的差别。Exp 81b 同 card 是 9/9 BASE → 7/9 FULL = -22pp，方向相反
+
+### Paper v2 终结论 (cross-solver 实证锁定)
+
+> Across 3 frontier-tier LLMs (gemini-3-flash, gemini-2.5-flash, deepseek-v4-flash) with carefully controlled API handling and adequate token budgets, prompt-injection wisdom in any form (full procedural cards, lite trigger+failure-label, generic warning) **fails to produce cross-solver-consistent objective-accuracy gains** on a benchmark of 23 procedural Python coding bugs with reliable trigger detection and headroom in baseline. The 0/12 of v1 paper's Chinese-aphorism domain is not a domain artifact; it is a structural property of the prompt-injection paradigm itself. To genuinely break out of 0/12, wisdom must leave the prompt — into model parameters (fine-tune), retrieval policy, or test-time search.
+
+### 这跟 architecture 部分（Skeptic 等）的关系
+
+- 架构 (Skeptic + multi-turn loop) 仍然 work：Exp 72/73/76/77 数据稳健
+- 但架构提供的是 epistemic closure（catch over-fit, calibrate null），不是 signal generation
+- 当 substrate 本身 content-empty (prompt-injection on solvable tasks) 时，架构无法变出信号 — 它只是 honest 地 produce calibrated null
+- Exp 77 那次 Proposer 在 Round 1 就提出"calibrated null is informative outcome" 的判断，**预言了 Exp 78-81 的结果**
+
+---
+
 ## 3.45 KEYSTONE：Exp 72 — Skeptic-replay 证实架构主张
 
 **Tested by**: Exp 72 (`phase six/exp72_skeptic_replay.py`)
