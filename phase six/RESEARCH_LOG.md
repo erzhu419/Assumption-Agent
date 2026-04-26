@@ -72,6 +72,16 @@
 
 如果成立：v1 的 0/12 不是 "wisdom 没用"，是 **"LLM-as-judge gate 物理上不能 detect content gain"**，无论 wisdom 是什么形态。
 
+### H₆: 在 OOD-procedural 任务上，specificity + worked example 才能显现（gpt-5.5 设计）
+**Tested by**: Exp 71 (Hamming(7,4) decoding + Sprague-Grundy {1,3,4})
+**Setup**: 24 题 (12 Hamming + 12 SG)，4 conditions: BASE / GENERIC / SPECIFIC_LITE / SPECIFIC_FULL（带详细 procedure + worked example）。3-judge cross-family panel.
+**Result**:
+- 客观正确率：**所有 4 个 condition 都 100%**（gemini 在这两个 domain 上也是 in-distribution）
+- Pairwise: SPECIFIC_FULL vs GENERIC = **wr 0.145**（GENERIC 完胜！）；SPECIFIC_FULL vs SPECIFIC_LITE = 0.318；SPECIFIC_LITE vs GENERIC = 0.213
+**结论**: H₆ 的前提失败 —— 我们没找到"模型真不会"的 domain。但 wr=0.145 是 H₇ 的最强证据：当所有版本都答对，判官仍然强烈偏好最简洁版。**判官测的不是 content，是 verbosity**。
+
+---
+
 ### H₅: 加 worked example 能让 specificity 显现（可能 H₃ 漏的因素）
 **Tested by**: Exp 70d
 **Setup**: TIGHT_WITH_EX (trigger+label+specific worked example) vs GENERIC_WITH_EX (generic warning+generic worked example) 对照
@@ -123,6 +133,35 @@
 1. 它**统一**解释 v1 + v2 + Exp 70a-d 全部数据
 2. 它**直接 imply**：当前文献中所有"LLM 自我改进"研究都可能踩同样的坑
 3. 它**自我演示**：用户的 meta-observation 本身就是论文论点的 case study
+
+---
+
+## 3.4 用户的最深 meta-observation: dialogue structure ≠ wisdom
+
+**用户在过程中第二次纠正**: 之前我把"用户提出新假设、Claude 执行"当成 dialog 跟 autonomous loop 的差别。用户说不对：之前在另一次会话里，**用户只是批准 Claude 的提议，Claude 自己解决了问题**。然后用户让 Claude 把"刚刚怎么解决的"写进 sys_prompt_en.txt 烧给 autonomous agent。**烧完后 agent 仍然解不了类似问题**，否则今天我们不会还在做这种实验。
+
+**这个观察的破坏力**:
+- 如果用户只是 approve、Claude 自己想出来：那 missing piece **不是 wisdom**（同一个 Claude，同样的训练）
+- 不是 wisdom 就**不可能编码到 prompt 模板里**
+- 把对话的解法 dump 到 sys_prompt 等于把动态结构压扁成静态规则；**信息损失就在压扁那一步**
+
+**真正的 missing piece**:
+- 每一步被用户的 approve 切成 checkpoint
+- Claude 每次回答会 **read 自己整段过去思考**（因为对话历史在 context 里）
+- 失败时强制 articulate "下一步打算做什么" 才能继续
+- 死胡同时被沉默或反问 force pause
+
+这些是**外部化-反思-递归** (externalized-reflective-recursion) 的循环结构，不是知识。**prompt-injection 编码不了 structure，只能编码 content**。
+
+**Paper v2 真正的论点（最强版，由用户两次纠正逼出来）**:
+
+> The recursive self-validation pattern that produces new methodology in human-Claude dialogue is **not encodable as prompt-injected wisdom** — neither as aphorism (v1), as triggered procedural card (v2 Sub-MVP), nor as worked example (Exp 70d/71). The missing capability is not knowledge but **structure**: externalized stepwise reflection with commitment points, where each step's reasoning is re-readable and the loop pauses on dead ends rather than retrying. Current autonomous-agent architectures collapse this into context-passing, where the iteration's reflective force dissipates. Wisdom-as-prompt-injection is therefore a categorically wrong substrate for the recursive self-validation that the paper's vision requires.
+
+**实证支撑**:
+- Exp 70a-d: textbook 域，judge prefer GENERIC over specific
+- Exp 71: model-already-solves 域，wr=0.145 仍 prefer GENERIC over SPECIFIC_FULL
+- 用户实测: sys_prompt_en.txt 有"Failure escalation: 1st→2nd→3rd→switch/ask"等 wisdom，agent 仍在新问题上卡住
+- Exp 67/68/69: 唯一 specific intervention 看起来 work 的场合，是 task 有 ground-truth 而 model 又能解的窄缝；判官在那时候才偶尔分得出 content vs style
 
 ---
 
