@@ -1,0 +1,306 @@
+[
+  {
+    "name": "denominator_lock",
+    "slice": "bayesian",
+    "trigger": "Problem gives percentages, base rates, or conditional probabilities across different groups (sensitivity/specificity, prevalence, false-positive rate).",
+    "failure_prevented": "Base-rate neglect; confusing P(evidence|hypothesis) with P(hypothesis|evidence).",
+    "patch": [
+      "Pick one fixed denominator: 1,000 or 10,000 cases.",
+      "Convert every given rate into integer counts on that denominator.",
+      "Build the requested probability as count_of_target / count_of_condition, using counts only.",
+      "Avoid using rates and conditional probabilities directly until the final ratio."
+    ],
+    "verification": "Did you confuse P(positive | disease) with P(disease | positive)? Re-read the question's conditional direction.",
+    "example": "Disease 1% prevalence, test 99% sens, 99% spec. Of 10000: 100 sick (99 test+); 9900 healthy (99 test+). P(sick|test+) = 99/(99+99) = 0.5.",
+    "notes": "Most reliable rescue for base-rate fallacy."
+  },
+  {
+    "name": "bayes_skeleton",
+    "slice": "bayesian",
+    "trigger": "Conditional probability with explicit symbolic Bayes structure (P(A|B), updating beliefs from evidence).",
+    "failure_prevented": "Skipping prior * likelihood / marginal, jumping to a heuristic answer.",
+    "patch": [
+      "Identify hypothesis H and evidence E explicitly: write 'H = ___, E = ___'.",
+      "Write P(H|E) = P(E|H) * P(H) / P(E).",
+      "Compute P(E) = sum over hypotheses of P(E|h) * P(h) (total probability).",
+      "Plug numbers in symbolically before simplifying."
+    ],
+    "verification": "Does P(H|E) sum to 1 across all H? Did you compute P(E) using all hypotheses, not just one?",
+    "example": "P(rain|wet) = P(wet|rain) * P(rain) / [P(wet|rain)*P(rain) + P(wet|no rain)*P(no rain)].",
+    "notes": "Algorithmic complement to denominator_lock."
+  },
+  {
+    "name": "sample_space_enumerate",
+    "slice": "bayesian",
+    "trigger": "Discrete probability problem with finite outcomes (dice, cards, two-children, Monty Hall).",
+    "failure_prevented": "Intuitive guesses based on surface symmetry; missing conditioning step.",
+    "patch": [
+      "List every possible outcome of the random process explicitly (e.g. for two children: BB, BG, GB, GG).",
+      "Mark which outcomes are consistent with the conditioning event.",
+      "Mark which of those also satisfy the target event.",
+      "P(target | condition) = (count target AND condition) / (count condition)."
+    ],
+    "verification": "Did you double-count any outcome? Are equally-likely outcomes really equally likely after conditioning?",
+    "example": "Two children, at least one boy. Sample space {BB,BG,GB,GG}. Condition rules out GG: 3 left. Target BB: 1. P=1/3.",
+    "notes": "Best for problems where enumeration fits in a paragraph."
+  },
+  {
+    "name": "monty_hall_extension",
+    "slice": "bayesian",
+    "trigger": "Problem has a knowledgeable revealer (host, expert) who deliberately reveals information after a choice.",
+    "failure_prevented": "Treating the revealer's action as random, when it conditions on what they know.",
+    "patch": [
+      "Distinguish: did the revealer choose what to show, or was it random?",
+      "If deliberate: their action does not change which door has the prize, only redistributes posterior over remaining doors.",
+      "Original prior of your chosen door stays unchanged; remaining probability concentrates on the remaining unchosen unrevealed door(s).",
+      "Compute: P(your door) = original prior; P(switch) = 1 - that prior."
+    ],
+    "verification": "If revealer's action concentrated probability uniformly over all remaining doors, you've made the random-revealer mistake.",
+    "example": "3 doors, you pick 1, host opens a goat-door from {2,3}. P(your door)=1/3, P(switch)=2/3.",
+    "notes": "Specialized but high-yield for Monty-Hall family."
+  },
+
+  {
+    "name": "quantifier_swap_check",
+    "slice": "quantifier",
+    "trigger": "The argument depends on quantifier words: all, some, none, every, must, may, necessarily, possibly, 所有, 必然, 可能, 至少, 仅当.",
+    "failure_prevented": "Inferring 'all A are B' from 'all B are A' (universal direction reversal).",
+    "patch": [
+      "Translate each premise into symbolic form: ∀x (A(x) → B(x)) or ∃x (A(x) ∧ B(x)) or ¬∃x ...",
+      "Check the conclusion's direction independently from any premise's direction.",
+      "Try to construct a 2-element counterexample where premises hold but conclusion fails.",
+      "If a counterexample exists, the inference is invalid."
+    ],
+    "verification": "If you swapped 'all A are B' to 'all B are A' anywhere in your reasoning, that's the error.",
+    "example": "All cats are mammals + Some mammals are pets ⇏ all cats are pets. Counterexample: feral cats.",
+    "notes": "Catches the most common quantifier error."
+  },
+  {
+    "name": "necessary_vs_sufficient",
+    "slice": "quantifier",
+    "trigger": "Conditional reasoning with 'if', 'only if', 'iff', '如果', '只有...才', '当且仅当'.",
+    "failure_prevented": "Confusing necessary with sufficient; affirming the consequent; denying the antecedent.",
+    "patch": [
+      "Rewrite each statement as either 'if A then B' (A sufficient for B) or 'only if A then B' (A necessary for B).",
+      "If you want to use B to conclude A, you need 'iff' or independent justification — pure 'if A then B' is insufficient.",
+      "Affirming the consequent (B is true → A is true) is INVALID for one-way implications.",
+      "Denying the antecedent (A is false → B is false) is INVALID for one-way implications."
+    ],
+    "verification": "Is your reasoning 'if A then B; B is true; therefore A'? That's affirming the consequent — invalid.",
+    "example": "If rain then wet ground. Ground is wet. Cannot conclude rain (sprinkler also wets ground).",
+    "notes": "Most common formal-logic error in word problems."
+  },
+  {
+    "name": "counterexample_search",
+    "slice": "quantifier",
+    "trigger": "A claim of the form 'all X have property Y' or 'no X has Y'.",
+    "failure_prevented": "Accepting universal claims based on a few examples.",
+    "patch": [
+      "Identify the universally quantified claim explicitly.",
+      "Search for any X that does NOT have Y (or for an X that DOES have Y if claim is 'no X has Y').",
+      "Consider edge cases: empty sets, infinite sets, boundary values.",
+      "Even one counterexample falsifies a universal claim."
+    ],
+    "verification": "Did you check at least 3 distinct kinds of X, including edge cases?",
+    "example": "'All birds fly' — counterexample: penguins. Universal claim falsified.",
+    "notes": "Falsificationist habit; especially useful in logic puzzles."
+  },
+  {
+    "name": "vacuous_truth_watch",
+    "slice": "quantifier",
+    "trigger": "Statement of the form 'every X is Y' where the set of X might be empty, or 'if A then B' where A might never hold.",
+    "failure_prevented": "Treating vacuously true claims as substantive evidence.",
+    "patch": [
+      "Check whether the antecedent set is non-empty (or whether the condition can ever hold).",
+      "If empty/never holds, the statement is vacuously true — it carries no information.",
+      "Vacuous truth cannot support an inference about real instances.",
+      "If the inference relies on a non-empty case, you need independent evidence the case exists."
+    ],
+    "verification": "Did the proof use a member of the antecedent set? If no member exists, the conclusion may be vacuous.",
+    "example": "'Every unicorn is purple' is vacuously true (no unicorns). Cannot conclude purple things exist.",
+    "notes": "Subtle but important in formal logic puzzles."
+  },
+
+  {
+    "name": "step_by_step_lock",
+    "slice": "multistep",
+    "trigger": "Problem with 4+ explicit numerical operations in sequence (compounding, conversion chains, multi-stage processes).",
+    "failure_prevented": "Skipping intermediate steps; arithmetic errors propagating undetected.",
+    "patch": [
+      "Identify the sequential operations: list them as numbered steps before computing.",
+      "Compute each step in isolation; write its intermediate result on its own line.",
+      "Use the previous step's result as input to the next; do not chain operations mentally.",
+      "After the final step, restate what the result represents in the problem's units."
+    ],
+    "verification": "Re-read each intermediate line; does the type/units match what the next step expects?",
+    "example": "$1000 at 5% for 3y, then 7% for 2y. Step 1: 1000*1.05^3=1157.6. Step 2: 1157.6*1.07^2=1325.2.",
+    "notes": "Most general multistep helper."
+  },
+  {
+    "name": "order_of_operations_replay",
+    "slice": "multistep",
+    "trigger": "Problem with mixed operations (multiplication, addition, percentage, exponentiation) where order matters.",
+    "failure_prevented": "Computing in left-to-right order when problem requires PEMDAS or domain-specific order.",
+    "patch": [
+      "Identify each operator by precedence class (parentheses, exponents, mult/div, add/sub).",
+      "Resolve highest-precedence operators first, leaving the rest as a placeholder expression.",
+      "Re-evaluate the simplified expression using the same rule.",
+      "If the problem implies a non-PEMDAS order (e.g., 'apply discount A then B'), follow problem's order strictly."
+    ],
+    "verification": "Did you respect parentheses and any problem-stated order? Test by computing left-to-right vs PEMDAS — if results differ, PEMDAS wins unless problem says otherwise.",
+    "example": "30% off then 20% off: not 50% off. 1.0 * 0.7 * 0.8 = 0.56, so total 44% off.",
+    "notes": "Specifically catches successive-discount and successive-rate errors."
+  },
+  {
+    "name": "unit_carry_through",
+    "slice": "multistep",
+    "trigger": "Problem mixes different units (seconds vs hours, miles vs km, dollars vs cents, rates vs totals).",
+    "failure_prevented": "Magnitude errors from unit mismatches.",
+    "patch": [
+      "On every numerical line, attach explicit units (e.g., '60 km/h', not '60').",
+      "When two quantities combine, verify the units cancel or combine correctly.",
+      "Convert all quantities to one consistent unit system before final computation.",
+      "Final answer must be reported in the units the problem requested."
+    ],
+    "verification": "What are the units of your final number? Do they match what the problem asked for?",
+    "example": "Travel 100 km at 50 km/h. Time = 100km / 50km/h = 2h. Units: km/(km/h)=h. ✓",
+    "notes": "Especially important for physics/engineering-style problems."
+  },
+  {
+    "name": "final_answer_sanity",
+    "slice": "multistep",
+    "trigger": "Any computational problem about to output a final number.",
+    "failure_prevented": "Off-by-one errors, decimal-point errors, magnitude errors.",
+    "patch": [
+      "Estimate the answer's order of magnitude before the detailed computation.",
+      "Compute the detailed answer.",
+      "Compare: is the detailed answer within 0.5x and 2x of the estimate?",
+      "If not, redo the computation; if yes, sanity is intact."
+    ],
+    "verification": "Pretend you are seeing this answer for the first time. Does its magnitude make sense for the problem?",
+    "example": "Salary $60k, save 20%: estimate ~$10k. Detailed: 60k * 0.8 (after-tax 25%) * 0.2 = $9k. ✓",
+    "notes": "Catches catastrophic but rare errors."
+  },
+
+  {
+    "name": "constraint_enumeration",
+    "slice": "constraint",
+    "trigger": "Problem with 3+ explicit constraints to satisfy simultaneously (knights/knaves, scheduling, seating, logic puzzles).",
+    "failure_prevented": "Satisfying some constraints while silently violating others.",
+    "patch": [
+      "List every constraint as a separate numbered item before solving.",
+      "Propose a candidate solution.",
+      "Check each constraint against the candidate; mark each as satisfied or violated.",
+      "If any violation, revise the candidate and re-check ALL constraints, not just the violated one."
+    ],
+    "verification": "Re-read each numbered constraint. For each, point to the part of your solution that satisfies it.",
+    "example": "Knights/knaves with 3 statements. List: (S1: A says X), (S2: B says Y), (S3: C says Z). Check each candidate assignment against all 3.",
+    "notes": "The basic move for any constraint puzzle."
+  },
+  {
+    "name": "exception_first",
+    "slice": "constraint",
+    "trigger": "A rule followed by 'except', 'unless', 'only if', '但', '除非', '仅当'.",
+    "failure_prevented": "Applying the default rule and forgetting the exception.",
+    "patch": [
+      "Rewrite the rule and the exception as two separate if-then clauses.",
+      "Check the exception's antecedent FIRST.",
+      "If the exception applies, follow the exception (default rule is overridden).",
+      "Only fall through to the default rule if the exception does not apply."
+    ],
+    "verification": "Did you evaluate the exception's antecedent before defaulting to the main rule?",
+    "example": "'All employees get a bonus, except those on probation.' For an employee X on probation: exception applies, no bonus. Skip the default.",
+    "notes": "Especially common in legal/admin problems."
+  },
+  {
+    "name": "forbidden_region_sketch",
+    "slice": "constraint",
+    "trigger": "Geometric / spatial / arrangement problem with multiple positional or adjacency constraints.",
+    "failure_prevented": "Missing impossible configurations because the constraints were checked sequentially, not jointly.",
+    "patch": [
+      "Sketch the configuration space (positions, slots, possible values).",
+      "For each constraint, mark which configurations it FORBIDS.",
+      "The valid configurations are those not forbidden by any constraint.",
+      "If only one valid configuration remains, that is the answer."
+    ],
+    "verification": "Are there any configurations you have not checked against any constraint?",
+    "example": "Seating: A,B,C in 3 chairs. C1: A not next to B; C2: C is right of A. Mark forbidden seatings; the remaining set is valid.",
+    "notes": "Geometric version of constraint enumeration."
+  },
+  {
+    "name": "try_and_verify_loop",
+    "slice": "constraint",
+    "trigger": "Problem where a closed-form solution is hard but the search space is small (≤ ~10 candidates).",
+    "failure_prevented": "Guessing without checking; over-trusting initial intuition.",
+    "patch": [
+      "Identify the small candidate set explicitly.",
+      "For each candidate, plug it into the problem and verify all constraints.",
+      "Mark candidates that satisfy ALL constraints; others are eliminated.",
+      "If exactly one candidate survives, that's the answer."
+    ],
+    "verification": "Did you check every member of the candidate set, or stop at the first plausible one?",
+    "example": "Find x in {1,2,3,...,10} satisfying x^2 = x+6: try each → x=3 works.",
+    "notes": "Underused but powerful when search space is bounded."
+  },
+
+  {
+    "name": "hidden_assumption_surface",
+    "slice": "counterfactual",
+    "trigger": "Problem with vivid scenario but unusual setup (e.g., 'four walls facing south', 'passes 10 police cars without being stopped').",
+    "failure_prevented": "Interpreting the scenario in the most familiar way and missing the unusual condition.",
+    "patch": [
+      "Identify every concrete detail in the scenario, even ones that seem incidental.",
+      "Ask: 'Is the most familiar interpretation consistent with EVERY detail?'",
+      "If a detail is inconsistent (e.g., 'all walls face south' implies you are at the North Pole), that detail forces a non-standard interpretation.",
+      "Use the forced interpretation to answer."
+    ],
+    "verification": "Is there a detail in the problem that the standard reading silently ignores?",
+    "example": "'All four walls face south' → only at the North Pole. So a bear walking by is a polar bear (white).",
+    "notes": "For lateral-thinking puzzles."
+  },
+  {
+    "name": "literal_vs_intent",
+    "slice": "counterfactual",
+    "trigger": "Problem with surface-level math/computation but possibly a trick interpretation.",
+    "failure_prevented": "Mechanically computing the obvious answer when the problem requires a different reading.",
+    "patch": [
+      "Compute the literal arithmetic answer.",
+      "Re-read the question: what is being asked? Does the literal answer answer it?",
+      "Look for negations, qualifiers, or self-referential phrasing.",
+      "If question and literal answer don't match, the question's wording is the trick."
+    ],
+    "verification": "Re-read the question's last sentence. Does your answer answer THAT specific question?",
+    "example": "'I had 10 apples, ate 3, gave away 2. How many did I drop?' Literal arithmetic gives '5 left' but question asks 'how many dropped'. If problem says nothing about dropping, answer is 0.",
+    "notes": "Rare but high-failure-rate when present."
+  },
+  {
+    "name": "self_reference_watch",
+    "slice": "counterfactual",
+    "trigger": "Statement that refers to itself or contains 'this sentence', 'I am lying', 'the speaker', recursive references.",
+    "failure_prevented": "Treating self-referential statements as ordinary propositions.",
+    "patch": [
+      "Identify whether the statement refers to itself or to a class containing itself.",
+      "Try assuming the statement is true; check for contradictions.",
+      "Try assuming the statement is false; check for contradictions.",
+      "If both lead to contradiction, the statement is paradoxical; if only one is consistent, that is the truth value."
+    ],
+    "verification": "Did you handle both true-assumption and false-assumption cases?",
+    "example": "'This sentence is false.' True ⇒ false (contradiction). False ⇒ true (contradiction). Paradox.",
+    "notes": "Rare in practice but classic trip-up."
+  },
+  {
+    "name": "context_reset",
+    "slice": "counterfactual",
+    "trigger": "Problem with rich narrative context that may carry irrelevant or misleading details.",
+    "failure_prevented": "Anchoring on narrative-supplied numbers or relationships that don't affect the answer.",
+    "patch": [
+      "Strip the problem to its mathematical / logical structure (variables, constraints, target).",
+      "Note which narrative details map to which variables.",
+      "Identify any details that are NOT part of the structure — these may be distractors.",
+      "Solve using only the structural elements; ignore the narrative-only details."
+    ],
+    "verification": "Are there details in the original problem that you didn't use? Are they truly irrelevant, or did you miss something?",
+    "example": "'Train A leaves at 9am, the conductor's mother is from Chicago.' The mother detail is narrative noise; ignore it.",
+    "notes": "Helps with context-heavy word problems."
+  }
+]
