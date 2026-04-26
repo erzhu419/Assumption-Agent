@@ -176,6 +176,126 @@ Exp 33 (prospective rerun) 在 9 个新 candidate 上跑了同一个 gate: **0/9
 
 ---
 
+## 3.5 模块审计 — 哪些起作用，哪些没起作用（log-grounded）
+
+按用户要求，对所有"为了突破 v1 paper 0/12 而新增的模块"做 log-grounded 审计。每条结论附原始 log 的证据指针。
+
+### 路径 1：改 wisdom 形态（Exp 70 系列）
+
+#### M1. Aphorism → Triggered Cognitive Card
+- **测试**：Exp 70 Sub-MVP — 5 slice × 50 problems × 3 conditions (BASE / WITH-CARD / ABLATED-with-verification)
+- **Log**：`phase six/autonomous/exp70_sub_mvp_log.json`
+- **数据**：0/5 STRONG, 2/5 TENTATIVE survivor (multistep + quantifier)
+- **Verdict**: ⚠️ **部分起作用，但有 confound**
+- **Why**：multistep WITH-vs-ABLATED wr=0.765；quantifier 0.762。两个 slice 上 procedural core 看似有效。但 constraint slice 上 ABLATED acc=62% > WITH acc=12%（差 50pp），说明 ablation 没真隔离掉 procedural effect
+
+#### M2. Tightened ablation（去 verification line，只剩 trigger+failure label）
+- **测试**：Exp 70b — 重跑 ABLATED condition，只留 trigger + failure label
+- **Log**：`exp70b_tightened_ablation_log.json`
+- **数据**：1/5 STRONG (multistep)，1/5 TENTATIVE (quantifier)。但 constraint ABL_TIGHT acc=60%（vs BASE 6%），counterfactual 80%（vs BASE 34%）—— **ablation 自己反而成了"主角"**
+- **Verdict**: ❌ **不起作用 / 反向**
+- **Why**：ablation 巨大的 acc gain 暴露了 specificity 假设的脆弱 —— 因为 ablation 把 procedure 拿掉只剩 trigger+label，仍然能让 acc 暴涨 → 推翻"procedural core 必须存在"
+
+#### M3. Worked example 加进 card
+- **测试**：Exp 70d — TIGHT_WITH_EX vs GENERIC_WITH_EX 对照
+- **Log**：`exp70d_worked_example_check_log.json`
+- **数据**：0/5 SPECIFIC, 0/5 TENTATIVE, 2/5 NOT SPECIFIC, 3/5 MIXED. 5 个 slice 上 TIGHT_EX vs GENERIC_EX wr ∈ [0.379, 0.644], avg ≈ 0.51
+- **Verdict**: ❌ **不起作用**
+- **Why**：worked example 没让 specificity 显现。GENERIC_EX 在 4/5 slice 上等价或反超 TIGHT_EX。配合 Exp 70c 的 GENERIC ≈ TIGHT 结果，这条路彻底死
+
+#### M4. OOD-procedural benchmark (Hamming + SG)
+- **测试**：Exp 71 — 24 个 algorithmic problems (12 Hamming + 12 SG), 4 conditions
+- **Log**：`exp71_ood_benchmark_log.json`
+- **数据**：BASE 100% / GENERIC 100% / SPECIFIC_LITE 100% / SPECIFIC_FULL 100% — **gemini 已经全会**。SPECIFIC_FULL vs GENERIC wr=0.145（GENERIC 完胜）
+- **Verdict**: ❌ **不起作用（但发现 in-dist 假设错误）**
+- **Why**：以为是 OOD 实际是 in-dist。当所有版本都答对时，judge 强烈偏好最简洁的 GENERIC。这是 H₇ "judge 测 verbosity 不测 content" 最强证据
+
+### 路径 1 总结
+**4 个 module 全部失败或反向**。结论：在当前 LLM 已知的任务上，prompt-injection 形态的 wisdom **无论 form 如何**都无法跟 generic warning 区分出来。这条路是死胡同。
+
+---
+
+### 路径 2：架构改造（Exp 72/73/76）
+
+#### M5. Skeptic role 单点应用
+- **测试**：Exp 72 — 把 Exp 17 完整 context 喂给 Skeptic, 3 trials at T=0.2/0.4/0.6
+- **Log**：`exp72_skeptic_replay_log.json`
+- **数据**：3/3 trials, 5/5 score. 全部 verdict=REJECT_PENDING_PROSPECTIVE. 预测 prospective 0/12 [interval 0,2] —— 与实际 Exp 33 0/9 一致
+- **Verdict**: ✅ **起作用**
+- **Why**：Skeptic 抓 5 个 failure mode 全中，定量诊断 1-0.85^17≈0.94 + winner's curse + threshold reverse-engineering 都对
+
+#### M6. Skeptic 跨 case + 跨 phrasing + 跨温度的鲁棒性
+- **测试**：Exp 73 — 3 cases × 3 phrasings × 5 temperatures = 45 trials
+- **Log**：`exp73_raw.jsonl` (forensic, 45 records) + `exp73_summary.json`
+- **数据（按 verdict-line 严格重判）**：
+  - EXP17: 0/15 accept, 15/15 reject, avg 4.73/5
+  - INNERGATE: 0/15 accept, 15/15 reject, avg 4.60/5
+  - TOY: 0/15 accept, 15/15 reject, avg 4.73/5
+  - **Overall: 0/45 accept, 45/45 reject**
+- **Verdict**: ✅ **稳健**
+- **Why**：三种 prompt 表述、5 个温度、3 个 case 上 Skeptic 全部 reject，平均 score 4.69/5
+- **⚠️ Forensic 发现**：原 auto-eval 报 EXP17 4 次 "accept" 是 regex 误判。详见 `exp73_raw.jsonl` trial idx 2/4/10/13，`flags.verdict_accept.evidence.offset` 都在 5500-6500 区间，远在 verdict-line（offset 0-100）之后。匹中的是 "If it passes, I'll accept tentatively" 这种条件性未来时。**用 verdict-line-restricted regex 重判后 0/15 accept**
+
+#### M7. Skeptic 对 known-good methodology 的接受率
+- **测试**：Exp 76 — 4 cases × 3 temperatures = 12 trials
+- **Log**：`exp76_raw.jsonl` + `exp76_summary.json`
+- **数据**：
+  - G1_STANDARD (locked holdout + preregistered): **3/3 accept**
+  - G2_CV (5-fold CV on train): **0/3 accept** ← Skeptic catch real flaw
+  - G3_RCT (preregistered randomized A/B): **3/3 accept**
+  - G4_REPLICATION (replication of published): **3/3 accept**
+  - **Overall: 9/12 accept (75%)**
+- **Verdict**: ✅ **selective 不是 paranoid**
+- **Why**：G2 被拒是合理的 — Skeptic 准确指出 "Your 5-fold CV uses the 1.28M train split for both training and fold-level evaluation. The 50k ImageNet validation set is mentioned... but never actually appears as an independent evaluation set" (`exp76_raw.jsonl` G2_CV 三 trials 一致)。这是真方法论缺陷不是过度怀疑
+
+### 路径 2 总结
+**M5/M6/M7 全部起作用且互相印证**：
+- 0/45 false accept on known-overfit cases
+- 9/12 (75%) accept on known-good cases
+- 唯一拒绝的是有真缺陷的 G2_CV
+**Skeptic role 是 selective epistemic filter，不是 over-strict gate**
+
+---
+
+### 路径 3：gpt-5.5 recipe 残项（未实现）
+
+| Module | 状态 | 在 paper v2 narrative 里的角色 |
+|---|---|---|
+| M8. Statistician role | 未实现 | Skeptic 已混着做了一些定量检查，可独立可不独立 |
+| M9. Frozen Evaluator panel | 未实现 | Exp 33 性质类似但不是 architecture component |
+| M10. Search-history ledger（结构化外存）| 未实现 | briefing 里有内容，但不是 queryable store |
+| M11. External resources (web/literature search) | 未实现 | 现版用不到 |
+| M12. Multi-turn proposer ↔ skeptic 迭代 | 未实现 | **关键缺口**：能否产出 Skeptic 接受 + prospective 通过的"新逻辑" |
+
+---
+
+## 3.55 整体审计结论：哪些起作用了
+
+| 路径 | 模块 | Verdict |
+|---|---|---|
+| 改 wisdom 形态 | M1-M4 | ❌ 全失败。结论：prompt-injection wisdom paradigm 在 in-dist 任务上 verbosity≈content |
+| 架构改造 | M5 Skeptic 单点 | ✅ 起作用 (Exp 72) |
+| 架构改造 | M6 Skeptic 鲁棒性 | ✅ 起作用 (Exp 73, 0/45 false-accept) |
+| 架构改造 | M7 Skeptic 选择性 | ✅ 起作用 (Exp 76, 9/12 真好的接受) |
+| gpt-5.5 残项 | M8-M12 | 未实现 |
+
+**对"突破 0/12"这个具体目标**：
+- ❌ 改 wisdom form 不解决（M1-M4）—— 因为 0/12 的成因不是 form 错而是 wisdom 没真效果
+- ✅ 加 Skeptic role **能 retroactively 拦下 over-fit gate**（M5-M7）—— 这把 Exp 17→Exp 33 的 cycle 短路
+- ❓ **没证明能产出新的"通过 Skeptic + prospective 都活下来的"gate**（M12 未跑）—— 这才是 paper v2 thesis 真正缺的最后一块拼图
+
+---
+
+## 3.6 Forensic logging 自身价值的实证
+
+按用户的 strict-logging 要求做的 raw JSONL，**在 Exp 73 上立刻派上用场**：
+- 原 auto-eval 误判 EXP17 4/15 "accept"，若没有 char_offset + matched_text 的 forensic 记录，这个 bug 不会被发现
+- 修正后真实 accept rate 是 0/15
+- 证据指针：`exp73_raw.jsonl` trial idx 2/4/10/13，`flags.verdict_accept.evidence` 字段
+- 这条印证：**any auto-eval over LLM output requires forensic-level provenance**，否则 high-stakes 的 conclusion 可能 silent-fail
+
+---
+
 ## 3.45 KEYSTONE：Exp 72 — Skeptic-replay 证实架构主张
 
 **Tested by**: Exp 72 (`phase six/exp72_skeptic_replay.py`)
