@@ -269,6 +269,42 @@ Exp 33 (prospective rerun) 在 9 个新 candidate 上跑了同一个 gate: **0/9
 
 ---
 
+### M12. Multi-turn Proposer ↔ Skeptic 迭代收敛
+- **测试**：Exp 77 — 3 trials × max 5 rounds, T=0.3/0.6/0.9
+- **Log**：`exp77_raw.jsonl` (forensic full prompts/responses) + `exp77_summary.json`
+- **数据**：**3/3 trials converged at Round 1**（Skeptic 在 Round 1 就 ACCEPT_TENTATIVELY）
+
+**Forensic 检查 Trial 1 Round 1 内容**：
+
+Proposer 自己产出的 gate 设计 (`exp77_raw.jsonl`, role=proposer, trial_id=1, round=1, raw_response 长 4896 chars)：
+- Component 1: Fresh task pool n=200，locked-in-advance
+- Component 2: Cross-family blind judge
+- Component 3: Bonferroni 校正 (α=0.025/12)，要求 wr ≥ 0.61
+- Component 4: 4-block stability check
+- "Calibrated Null" 决策规则：0/12 通过被显式定义为合法 outcome
+- 自我预测：{0/12: 85%, 1/12: 12%, 2+: 3%}
+
+Skeptic 接受理由 (`exp77_raw.jsonl`, role=skeptic, trial_id=1, round=1, verdict offset=2)：
+- "Well-constructed proposal. Internalizes failure history"
+- 独立重算 winner's curse: best-of-12 at n=50 under noise ≈ 0.615 ≈ 原 gate +10pp 门槛 → **原 gate 实际 calibrated 到 accept noise**（与 Exp 45 Empirical Bayes 独立印证）
+- 用 Proposer 的 n=200+Bonferroni 推 noise 期望 0.558 < 0.61 threshold → 该 gate "would reject pure noise with high probability"
+
+**Verdict**: ✅ **强起作用**（M12 是 paper v2 keystone 拼图）
+
+**Why this is ≈ Outcome A (substantive) not B (trivial)**：
+- 单 component 都来自标准 ML 实践，但**combination 专门针对 v1 16 nulls 的具体 failure mode**
+- Block stability check 在 wisdom-loop / self-improvement 文献里**非标准**
+- "Calibrated null is informative outcome" 这条**不是标准 practice**，是 explicit methodological commitment
+- Proposer 自我预测 0/12 with 85% — 该体系不只产出 gate，还产出**对自己 gate 结果的 epistemic 自评**
+
+**这意味着什么**：
+- 闭环 architecture **真的 produce 了一个 honest research-grade methodology**
+- 它**不试图 rescue 信号**（这正是 ill-aligned agent loop 的失败模式）
+- 它产出的是: "如果信号在，这个 gate 能 detect；如果不在，这个 gate 给 calibrated null"
+- 这是 paper v2 thesis 的最终实证：**autonomous research closure 可以 build 出来，且 build 出来后表现是科学的**
+
+---
+
 ## 3.55 整体审计结论：哪些起作用了
 
 | 路径 | 模块 | Verdict |
