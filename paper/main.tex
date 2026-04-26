@@ -145,29 +145,34 @@ without the substance an audit-grade self-validator would
 require.
 
 \paragraph{What such an agent must contain.}
-A working version of this agent has at least six moving parts,
-which we will call stages 0 through 4 (with stage 0.5 marking a
-half-stage between the static library and the active scheduler):
-\textbf{Stage 0}, a library of human-distilled \emph{methodological
-priors} --- control of variables, divide-and-conquer, Occam's
-razor, ``before arguing, get the facts'' --- the shortcuts the
-species spent millennia accumulating; \textbf{Stage 0.5}, a cheap
-\emph{world model} in which candidate solutions can be simulated
-forward so the recursive hypothesis-test loop runs in seconds
-rather than hours; \textbf{Stage 1}, a learned \emph{scheduler}
-that decides which prior to invoke for which problem;
-\textbf{Stage 2}, an \emph{experience-feedback} channel that
-refines the priors' applicability conditions over time;
-\textbf{Stage 3}, an \emph{alignment layer} that recognises when
-two superficially different priors are the same idea (Le
-Chatelier and Lenz are the same negative-feedback principle);
-\textbf{Stage 4}, a generator of \emph{new} priors when the
-existing library is silent on a problem, audited by the rest of
-the stack. We sketch the six-stage roadmap in
-\S\ref{sec:roadmap}; no existing system we are aware of has all
-of them, and the common proxy in retrieval/prompt-level
-self-improvement loops --- LLM-as-judge with same-family A/B
-testing --- supplies very few.
+What does that recursive loop actually need to run? At least six
+things, and we have not seen them assembled in one place. First,
+a starting library of \emph{methodological priors} that the
+species spent millennia distilling --- control of variables,
+divide-and-conquer, Occam's razor, ``before arguing, get the
+facts,'' analogy from a known case, counterexample search ---
+loaded as an operating system rather than waiting for the agent
+to rediscover them under noisy reward (this is Stage~0). Second,
+a cheap \emph{world model} where candidate solutions can be
+simulated quickly, so the recursion runs in seconds rather than
+afternoons (Stage~0.5). Third, a \emph{scheduler} that picks
+which prior to apply on which subproblem, the way an experienced
+researcher reaches for the right tool (Stage~1). Fourth, an
+\emph{experience-feedback} channel that uses real outcomes to
+sharpen each prior's true applicability boundary (Stage~2: control
+of variables doesn't help when components are tightly coupled;
+divide-and-conquer doesn't help when subtasks share a hidden
+constraint). Fifth, an \emph{alignment layer} that detects when
+two priors discovered separately are actually the same idea ---
+Le Chatelier and Lenz, RC discharge and radioactive decay ---
+so a result proven in one domain can transfer for free to the
+other (Stage~3). And sixth, when none of the existing priors
+fit, a way to \emph{generate new candidate priors} and validate
+them through the rest of the stack (Stage~4). We unfold these
+into the six-stage roadmap of \S\ref{sec:roadmap}. No existing
+system we are aware of has all of these; the common proxy in
+retrieval/prompt-level self-improvement loops --- LLM-as-judge
+with same-family A/B gating --- supplies very few.
 
 \paragraph{What this paper is.}
 This paper studies the absolute simplest possible instance of the
@@ -1191,99 +1196,141 @@ verdicts in Appendix~\ref{app:multistep}.
 Self-Validating Agent}
 \label{sec:roadmap}
 
-The empirical null in \S\ref{sec:experiments} is not just ``one
-loop did not work.'' It is a calibrated diagnostic of \emph{what
-is missing} from current LLM-as-judge self-improvement loops.
-This section sketches the architecture our null points toward.
-We describe it as six components --- numbered \(0\), \(0.5\),
-\(1\), \(2\), \(3\), \(4\) to make the dependency order explicit
---- so that each can be built and validated incrementally; each
-component's output is the next stage's known-reliable input.
+The point of the empirical null in \S\ref{sec:experiments} is not
+``one loop didn't work.'' It is that what current LLM-as-judge
+self-improvement loops are missing is structural --- not the
+choice of judge model, not the threshold value, not even the
+sample size. To see what they are missing, it helps to write
+out what a self-validator actually has to do.
 
-\paragraph{Stage 0 --- The methodological-prior library.}
-The first thing missing is the equivalent of human education.
-Human researchers do not re-discover ``control of variables''
-from scratch every time; they were taught it, and they apply it
-when conditions warrant. A self-hypothesizing agent should start
-with 15--20 such priors --- divide-and-conquer, Occam's razor,
-``before arguing get the facts,'' analogy from a known case,
-counterexample search, dimensional analysis, increment-one-thing
-debugging, etc. --- each annotated with applicability conditions
-and historical examples. The current paper's wisdom library
-(\(75\) entries from the classical Chinese tradition) is one
-draft of this; a serious version would extend across cultures
-and add applicability conditions an LLM can pattern-match
-against. Stage 0 alone is not an agent; it is a substrate.
+The pattern is the same one humans use every time they hit a
+problem they don't immediately know how to solve. You face a
+problem \(P\). You propose a hypothesis \(H\): ``approach \(S\)
+will solve \(P\).'' You start executing \(S\); at some step
+you notice a mismatch with reality. That spawns a sub-problem
+\(P'\): ``why did this step fail?'' You recurse on \(P'\),
+return with a fix, continue \(P\). Sometimes \(H\) was wrong at
+the top; sometimes only a substep was; sometimes you discover
+that the right \(H\) belongs to a class you've never tried, and
+you have to invent one. ``Intelligence,'' to the extent the word
+means anything operational, is this loop converging.
 
-\paragraph{Stage 0.5 --- A cheap world model for hypothesis
-testing.} The recursive hypothesis-test loop is unusable if every
-test costs hours of real execution. The agent needs a world
-model in which a candidate solution can be \emph{simulated} fast
-enough that the search can branch. This is the role current
-LLM-agent stacks try to play with chain-of-thought + tool use,
-but those stacks are not calibrated as predictors of execution
-outcomes; they are calibrated as plausibility generators. A
-proper world model is task-specific (a code-execution simulator
-for code tasks; a fluid-dynamics simulator for engineering
-tasks; a learned dynamics model for embodied tasks) and predicts
-``if I take action \(a\) in state \(s\), the next observation
-will be \(o\) with probability \(p\).'' Without this, the
-recursion's \emph{wall clock} is the verification bottleneck.
+To run it, an agent needs at least six things, each of which the
+existing literature has built one piece of. We call them stages
+\(0\), \(0.5\), \(1\), \(2\), \(3\), \(4\) so the dependency
+order is explicit; each stage's output is the next stage's
+known-reliable input.
 
-\paragraph{Stage 1 --- A scheduler that maps problems to priors.}
-With Stage 0 as priors and Stage 0.5 as fast simulator, the
-agent needs to learn \emph{which} prior to invoke when. This is
-classic meta-RL on an action space whose actions are
-``invoke prior \(p_i\) on subproblem \(s\).'' Recent work
-(ReMA (Wan et al., 2025), Memory-R1 (Yan et al., 2025),
-EvolveR (Wang et al., 2025)) has built proxies for this in
-narrow domains. None pairs an explicit human-prior library with
-an explicit scheduler; doing so is the cheapest known way to
-inject the millennia of accumulated human methodology without
-re-deriving it from scratch.
+\paragraph{Stage 0 --- A library of distilled methodological
+priors.} Human civilisation has spent thousands of years
+distilling a small set of moves that turn out to work on
+remarkably many problems: change one variable at a time;
+divide-and-conquer; Occam's razor; argue by analogy from a
+case you understand; look for a counterexample; check
+dimensions; reason by contradiction; estimate before you
+calculate. Researchers don't rediscover these from scratch every
+time --- they were taught them and they apply them when conditions
+warrant. A self-hypothesizing agent should start with
+\(15\)--\(20\) such priors as a substrate, each annotated with
+the kind of problem it suits and a couple of historical examples
+of when it works and when it doesn't. The current paper's
+wisdom library (\(75\) entries from the classical Chinese
+tradition) is one draft of this; a serious version would extend
+across cultures and add applicability conditions an LLM can
+pattern-match against. Stage 0 alone is not an agent --- it is a
+substrate, an operating system of methodology that the rest of
+the architecture is going to schedule, refine, and (eventually)
+extend.
 
-\paragraph{Stage 2 --- Experience feedback refines the priors'
-applicability conditions.} As the scheduler runs, it accumulates
-data on \emph{when} each prior fires successfully and when it
-fails. ``Control of variables fails when components are tightly
-coupled.'' ``Divide-and-conquer fails on problems where the
-sub-tasks share a hidden constraint.'' These applicability
-conditions are partly known to humans but rarely written down
-formally; the agent's job at Stage 2 is to discover and tighten
-them by gradient feedback from real outcomes. Recent work on
-metacognitive and meta-experience learning (MEL
-(Liang et al., 2026), lifelong-learning agent surveys
-(Liu et al., 2025)) has built half of this; the other half
-is the alignment layer below.
+\paragraph{Stage 0.5 --- A cheap world model so hypothesis
+testing doesn't take hours.} The recursion in the loop above is
+useless if every test costs an afternoon of real execution. The
+agent needs somewhere to \emph{simulate} a candidate solution
+fast enough that branching is affordable --- the analogue of
+Doctor Strange's time stone, or, less dramatically, of the
+physics simulator a control engineer uses before turning anything
+on. This is the role chain-of-thought + tool use is currently
+trying to play in LLM-agent stacks, but those stacks were
+optimised as plausibility generators, not as outcome predictors;
+their failure mode is to confidently simulate something that
+won't happen. A proper Stage~0.5 is task-specific (a code
+sandbox for code tasks; a fluid solver for engineering tasks; a
+learned dynamics model for embodied tasks) and is calibrated as
+\(p(o \mid s, a)\) --- ``if I take action \(a\) in state \(s\),
+this is the distribution of next observations.'' Without
+something playing this role, the recursion's wall clock, not its
+algorithm, is the bottleneck.
 
-\paragraph{Stage 3 --- Alignment of priors via category theory and
-information geometry.} Stages 0--2 produce a library of priors,
-each annotated with applicability conditions. As the library
-grows the agent will independently rediscover priors that are
-formally equivalent but stylistically different. Le Chatelier
-and Lenz, RC discharge and radioactive decay, logistic growth
-and saturating enzyme kinetics --- pairwise, these share a
-formal structure (an isomorphism in a Markov category, a
-Blackwell-equivalent statistical experiment) even though their
-surface descriptions look unrelated. A formal alignment layer
-detects these equivalences and merges the descriptions, so a
-prior validated in one domain can be transferred to another.
-This is where category-theoretic probability
-(Fritz, 2020) and information geometry
-(Ay et al., 2017) earn their keep, even though they cannot
-do the earlier stages' work.
+\paragraph{Stage 1 --- A scheduler that picks the right prior
+for the right problem.} With priors as the substrate (Stage~0)
+and a fast simulator as a verifier (Stage~0.5), the remaining
+question is \emph{which} prior to reach for. ``Use control of
+variables on this debugging task; use estimate-then-refine on
+this Fermi question; use analogy on this novel domain.'' This is
+classic meta-RL where the action space is the prior library
+itself. ReMA (Wan et al., 2025), Memory-R1
+(Yan et al., 2025), and EvolveR (Wang et al., 2025) build
+narrow proxies for this; none pairs an explicit, human-curated
+prior library with an explicit scheduler trained to dispatch from
+it. Doing so is the cheapest known way to inject millennia of
+human methodology into an agent without forcing it to rediscover
+the methodology from scratch through trial and error.
 
-\paragraph{Stage 4 --- Generation of \emph{new} priors, validated
-by the rest of the architecture.} Once the agent has Stages
-0--3, it can recognise problems for which no existing prior
-applies. At that point the LLM's generative capacity proposes a
-\emph{new} candidate prior; the alignment layer (Stage 3) checks
-that it is not formally equivalent to an existing one; the
-scheduler (Stage 1) tries to apply it on a battery of test
-problems through the world model (Stage 0.5); the experience
-feedback (Stage 2) refines its applicability conditions. The
-prior is committed only when the entire stack agrees. This is
-the version of self-improvement that was the original target.
+\paragraph{Stage 2 --- Experience feedback that sharpens
+\emph{when} each prior actually works.} The textbook description
+of ``control of variables'' is incomplete. It works beautifully
+when components are loosely coupled and fails badly when they
+aren't; divide-and-conquer works when sub-tasks are
+near-independent and fails when they share a hidden constraint.
+These applicability conditions are partly known to humans but
+rarely written down with the precision an automated scheduler
+needs. Stage~2 is the place those conditions get tightened by
+gradient feedback from real outcomes: every time the scheduler
+picks a prior, sees the verifier's result, and updates, it is
+edging the prior's documented applicability boundary closer to
+its true one. MEL (Liang et al., 2026) and the recent
+lifelong-learning surveys (Liu et al., 2025) build half of this;
+they extract experience but they don't have a Stage~3 to glue
+similar experiences from different domains together.
+
+\paragraph{Stage 3 --- An alignment layer that recognises when
+two priors are the same idea.} As the library grows, the agent
+will keep stumbling into priors that are formally the same but
+look superficially different: Le Chatelier and Lenz are both
+just ``a perturbed equilibrium pushes back''; RC discharge,
+radioactive decay, and first-order chemical kinetics are
+literally the same exponential differential equation; logistic
+growth, capacitor charging, and saturating enzyme kinetics share
+a saturation structure. A research-grade alignment layer detects
+these equivalences and merges the descriptions, so a prior
+validated in one domain can be transferred for free to another.
+This is also where category-theoretic probability
+(Fritz, 2020) and information geometry (Ay et al., 2017) earn
+their keep --- not as a universal language for ``what a
+hypothesis is'' (they cannot represent ``selling brownies at the
+subway entrance'' as a hypothesis), but specifically as a tool
+for one well-scoped problem: \emph{is this newly discovered
+prior an instance of a prior we already know?} On that
+question, Markov-category isomorphism and Fisher-distance
+between statistical experiments are exactly the right
+formalism.
+
+\paragraph{Stage 4 --- Generation of \emph{new} priors when none
+of the existing ones fit, validated by the rest of the
+architecture.} Once Stages~\(0\)--\(3\) are in place, the agent
+can finally do the thing the recursive loop was originally for:
+recognise that no existing prior fits the problem in front of
+it, propose a new candidate prior, and validate it without
+human supervision. The proposal is the LLM's generative
+capacity. The validation is the architecture as a closed
+system: Stage~3 checks the new prior is not formally equivalent
+to an existing one (no need to commit a duplicate); Stage~1
+schedules it onto a battery of test problems; Stage~0.5 runs
+those tests cheaply; Stage~2 watches the outcomes and refines
+the applicability description. The prior is committed only when
+the whole stack agrees. \emph{This} is the version of
+self-improvement the field's current proxy --- a same-family A/B
+at \(n=50\) --- is trying, and failing, to imitate in one number.
 
 \paragraph{Where this paper sits.}
 The wisdom-library case study tests Stage~0 only. The null at
