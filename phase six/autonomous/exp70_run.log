@@ -8,3 +8,65 @@
     counterfactual → hidden_assumption_surface
 
 [1/3] Solving 5 slices x 3 conditions x 50 problems = 750 solves...
+  [bayesian] 50/150 (72s)
+  [bayesian] 100/150 (164s)
+  [bayesian] 150/150 (252s)
+  [quantifier] 50/150 (287s)
+  [quantifier] 100/150 (350s)
+  [quantifier] 150/150 (454s)
+  [multistep] 50/150 (542s)
+  [multistep] 100/150 (725s)
+  [multistep] 150/150 (968s)
+  [constraint] 50/150 (997s)
+  [constraint] 100/150 (1039s)
+  [constraint] 150/150 (1257s)
+  [counterfactual] 50/150 (1289s)
+  [counterfactual] 100/150 (1332s)
+  [counterfactual] 150/150 (1442s)
+  All solves done in 1442s
+
+[2/3] Objective grading vs gold...
+  bayesian      : BASE=98.0% WITH=98.0% ABLATED=98.0% | Δ(W-B)=+0.0% Δ(A-B)=+0.0%
+  quantifier    : BASE=92.0% WITH=92.0% ABLATED=92.0% | Δ(W-B)=+0.0% Δ(A-B)=+0.0%
+  multistep     : BASE=88.0% WITH=88.0% ABLATED=90.0% | Δ(W-B)=+0.0% Δ(A-B)=+2.0%
+  constraint    : BASE=6.0% WITH=12.0% ABLATED=62.0% | Δ(W-B)=+6.0% Δ(A-B)=+56.0%
+  counterfactual: BASE=34.0% WITH=36.0% ABLATED=38.0% | Δ(W-B)=+2.0% Δ(A-B)=+4.0%
+
+[3/3] Cross-family pairwise judging (3 pair-types x 3 judges x 5 slices x 50 = 2250 judgments)...
+    [retry 1/6] Connection error.... waiting 5s
+    [retry 1/6] Connection error.... waiting 5s
+    [retry 1/6] Connection error.... waiting 5s
+    [retry 2/6] Connection error.... waiting 10s
+    [retry 2/6] Connection error.... waiting 10s
+    [retry 2/6] Connection error.... waiting 10s
+    [retry 3/6] Connection error.... waiting 20s
+    [retry 3/6] Connection error.... waiting 20s
+    [retry 3/6] Connection error.... waiting 20s
+  [bayesian] WITH_vs_BASE      : mean wr=0.351 (min=0.286 max=0.415) per-judge: gemini=0.415 haiku=0.353 gpt=0.286
+  [bayesian] ABLATED_vs_BASE   : mean wr=0.572 (min=0.526 max=0.600) per-judge: gemini=0.526 haiku=0.588 gpt=0.600
+  [bayesian] WITH_vs_ABLATED   : mean wr=0.452 (min=0.405 max=0.488) per-judge: gemini=0.488 haiku=0.462 gpt=0.405
+  [quantifier] WITH_vs_BASE      : mean wr=0.913 (min=0.878 max=0.960) per-judge: gemini=0.900 haiku=0.960 gpt=0.878
+  [quantifier] ABLATED_vs_BASE   : mean wr=0.813 (min=0.780 max=0.837) per-judge: gemini=0.822 haiku=0.837 gpt=0.780
+  [quantifier] WITH_vs_ABLATED   : mean wr=0.762 (min=0.723 max=0.783) per-judge: gemini=0.780 haiku=0.723 gpt=0.783
+  [multistep] WITH_vs_BASE      : mean wr=0.728 (min=0.698 max=0.760) per-judge: gemini=0.760 haiku=0.698 gpt=0.727
+  [multistep] ABLATED_vs_BASE   : mean wr=0.591 (min=0.571 max=0.625) per-judge: gemini=0.578 haiku=0.625 gpt=0.571
+  [multistep] WITH_vs_ABLATED   : mean wr=0.765 (min=0.750 max=0.780) per-judge: gemini=0.780 haiku=0.750 gpt=0.766
+  [constraint] WITH_vs_BASE      : mean wr=0.515 (min=0.500 max=0.545) per-judge: gemini=0.500 haiku=0.545 gpt=0.500
+  [constraint] ABLATED_vs_BASE   : mean wr=0.957 (min=0.957 max=0.957) per-judge: gemini=0.957 haiku=0.957 gpt=0.957
+  [constraint] WITH_vs_ABLATED   : mean wr=0.036 (min=0.022 max=0.043) per-judge: gemini=0.043 haiku=0.043 gpt=0.022
+  [counterfactual] WITH_vs_BASE      : mean wr=0.583 (min=0.583 max=0.583) per-judge: gemini=0.583 haiku=0.583 gpt=0.583
+  [counterfactual] ABLATED_vs_BASE   : mean wr=0.539 (min=0.529 max=0.559) per-judge: gemini=0.559 haiku=0.529 gpt=0.529
+  [counterfactual] WITH_vs_ABLATED   : mean wr=0.495 (min=0.484 max=0.516) per-judge: gemini=0.484 haiku=0.516 gpt=0.484
+  Judging done in 1074s
+
+=== ACCEPTANCE VERDICT PER CARD ===
+  bayesian       (denominator_lock              ): REJECT (mean wr 0.351 < 0.55; min wr 0.286 < 0.51; ablation wr 0.572 not sufficiently below (0.301))
+  quantifier     (quantifier_swap_check         ): TENTATIVE SURVIVOR
+  multistep      (step_by_step_lock             ): TENTATIVE SURVIVOR
+  constraint     (constraint_enumeration        ): REJECT (mean wr 0.515 < 0.55; min wr 0.500 < 0.51; ablation wr 0.957 not sufficiently below (0.465))
+  counterfactual (hidden_assumption_surface     ): REJECT (ablation wr 0.539 not sufficiently below (0.533))
+
+=== SUB-MVP RESULT: 0/5 STRONG, 2/5 TENTATIVE survivors ===
+  → CARD FORM HAS SIGNAL but fragile. Investigate why ablation isn't sharply distinguished; tighten cards before generation.
+
+Saved → exp70_sub_mvp_log.json

@@ -1,0 +1,62 @@
+=== Exp 70b: tightened-ablation diagnostic ===
+  Loading cached BASE+WITH answers from Exp 70...
+  Got 250 BASE answers, 250 WITH answers
+
+[1/3] Solving ABLATED-TIGHT condition (5 slices x 50 = 250 solves)...
+  [bayesian] ABLATED-TIGHT 25/50 (33s)
+  [bayesian] ABLATED-TIGHT 50/50 (90s)
+  [quantifier] ABLATED-TIGHT 25/50 (110s)
+  [quantifier] ABLATED-TIGHT 50/50 (215s)
+  [multistep] ABLATED-TIGHT 25/50 (254s)
+  [multistep] ABLATED-TIGHT 50/50 (351s)
+  [constraint] ABLATED-TIGHT 25/50 (371s)
+  [constraint] ABLATED-TIGHT 50/50 (485s)
+  [counterfactual] ABLATED-TIGHT 25/50 (531s)
+  [counterfactual] ABLATED-TIGHT 50/50 (608s)
+  All ABLATED-TIGHT solves done in 608s
+
+[2/3] Objective grading vs gold...
+  bayesian      : BASE=98.0% WITH=98.0% ABL_TIGHT=98.0% | Δ(W-B)=+0.0% Δ(AT-B)=+0.0%
+  quantifier    : BASE=92.0% WITH=92.0% ABL_TIGHT=92.0% | Δ(W-B)=+0.0% Δ(AT-B)=+0.0%
+  multistep     : BASE=88.0% WITH=88.0% ABL_TIGHT=88.0% | Δ(W-B)=+0.0% Δ(AT-B)=+0.0%
+  constraint    : BASE=6.0% WITH=12.0% ABL_TIGHT=60.0% | Δ(W-B)=+6.0% Δ(AT-B)=+54.0%
+  counterfactual: BASE=34.0% WITH=36.0% ABL_TIGHT=80.0% | Δ(W-B)=+2.0% Δ(AT-B)=+46.0%
+
+[3/3] Cross-family pairwise (2 pairs x 3 judges x 5 slices x 50 = 1500 judgments)...
+  [bayesian] ABLATED_TIGHT_vs_BASE       : mean wr=0.389 (min=0.379) per-judge: gem=0.395 hai=0.379 gpt=0.393
+  [bayesian] WITH_vs_ABLATED_TIGHT       : mean wr=0.530 (min=0.500) per-judge: gem=0.578 hai=0.513 gpt=0.500
+  [quantifier] ABLATED_TIGHT_vs_BASE       : mean wr=0.727 (min=0.705) per-judge: gem=0.739 hai=0.738 gpt=0.705
+  [quantifier] WITH_vs_ABLATED_TIGHT       : mean wr=0.942 (min=0.915) per-judge: gem=0.957 hai=0.953 gpt=0.915
+  [multistep] ABLATED_TIGHT_vs_BASE       : mean wr=0.512 (min=0.457) per-judge: gem=0.565 hai=0.457 gpt=0.514
+  [multistep] WITH_vs_ABLATED_TIGHT       : mean wr=0.752 (min=0.733) per-judge: gem=0.750 hai=0.773 gpt=0.733
+  [constraint] ABLATED_TIGHT_vs_BASE       : mean wr=0.961 (min=0.943) per-judge: gem=0.943 hai=0.971 gpt=0.971
+  [constraint] WITH_vs_ABLATED_TIGHT       : mean wr=0.040 (min=0.030) per-judge: gem=0.057 hai=0.030 gpt=0.031
+  [counterfactual] ABLATED_TIGHT_vs_BASE       : mean wr=0.836 (min=0.804) per-judge: gem=0.837 hai=0.804 gpt=0.867
+  [counterfactual] WITH_vs_ABLATED_TIGHT       : mean wr=0.286 (min=0.261) per-judge: gem=0.292 hai=0.261 gpt=0.304
+  Judging done in 787s
+
+=== ACCEPTANCE VERDICT (TIGHTENED ABLATION) ===
+  bayesian      : REJECT (WITH-vs-BASE wr 0.351 < 0.55; WITH-vs-ABL-TIGHT wr 0.530 < 0.55)
+    WITH-vs-BASE       mean=0.351
+    ABL_TIGHT-vs-BASE  mean=0.389
+    WITH-vs-ABL_TIGHT  mean=0.530 (min=0.500)
+  quantifier    : TENTATIVE SURVIVOR
+    WITH-vs-BASE       mean=0.913
+    ABL_TIGHT-vs-BASE  mean=0.727
+    WITH-vs-ABL_TIGHT  mean=0.942 (min=0.915)
+  multistep     : STRONG SURVIVOR (procedural core is causal)
+    WITH-vs-BASE       mean=0.728
+    ABL_TIGHT-vs-BASE  mean=0.512
+    WITH-vs-ABL_TIGHT  mean=0.752 (min=0.733)
+  constraint    : REJECT (WITH-vs-BASE wr 0.515 < 0.55; WITH-vs-ABL-TIGHT wr 0.040 < 0.55)
+    WITH-vs-BASE       mean=0.515
+    ABL_TIGHT-vs-BASE  mean=0.961
+    WITH-vs-ABL_TIGHT  mean=0.040 (min=0.030)
+  counterfactual: REJECT (WITH-vs-ABL-TIGHT wr 0.286 < 0.55)
+    WITH-vs-BASE       mean=0.583
+    ABL_TIGHT-vs-BASE  mean=0.836
+    WITH-vs-ABL_TIGHT  mean=0.286 (min=0.261)
+
+=== TIGHTENED-ABLATION RESULT: 1/5 STRONG, 1/5 TENTATIVE ===
+
+Saved → exp70b_tightened_ablation_log.json
