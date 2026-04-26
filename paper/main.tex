@@ -107,16 +107,16 @@ either collapses the loop's apparent gains.
 works.'' It is a \emph{calibrated negative result on the simplest
 imaginable self-validating loop}, plus an audit toolbox that turned
 out to be reliable enough to detect the failure across four
-independent diagnostic axes. A positive-and-negative
-control on objectively-graded reasoning problems
+independent diagnostic axes. A negative-control plus
+style-sensitivity probe on objectively-graded reasoning problems
 (Exp~67, \S\ref{sec:exp-summary-poscontrol}) finds the audit
-stack internally consistent (gemini and claude-haiku judges
-agree with Cohen's \(\kappa = 1.0\) across the controls) and
-sharply sensitive to a reasoning-suppressing intervention
-(\(\mathrm{wr}=0.286\)), which is consistent with the gate
-operating as designed --- and consistent with the original
-twelve wisdoms, like the algorithmic-prior control, producing
-slight stylistic but not material content-level effects. We use the null to motivate a
+stack internally consistent on this set (cross-family agreement
+at \(\kappa = 1.0\) over the three condition pairs) and clearly
+preferring reasoning-rich answers to reasoning-suppressed ones,
+but does \emph{not} construct an intervention that improves
+objective accuracy --- so the formal positive-control question
+(``does the gate accept a wisdom that demonstrably raises
+ground-truth accuracy by \(\geq 10\)pp?'') remains open. We use the null to motivate a
 six-stage architecture (priors~/ world model~/ scheduler~/
 experience~/ alignment / new prior generation) and
 \emph{stress-test each stage} in a separate campaign of 11
@@ -1198,9 +1198,9 @@ sensitivity is in Appendix~\ref{app:exp-log}. The five summary
 subsections above contain everything the rest of the paper
 depends on.
 
-\subsection{Positive-and-negative control on
-objectively-graded reasoning problems
-(Exp~67)}
+\subsection{Negative-control plus style-sensitivity probe on
+objectively-graded reasoning problems (Exp~67):
+the formal positive-control question remains open}
 \label{sec:exp-summary-poscontrol}
 
 The most consistent reviewer pushback on the paper's null is
@@ -1294,23 +1294,32 @@ slightly improve answer style or rigor. The original \(0/12\) at
 \(n \geq 100\) is consistent with the twelve wisdoms producing
 exactly this kind of small stylistic-but-not-content-level effect.
 
-\textbf{What this experiment does and does not establish.} It
-\emph{does} establish that the audit stack (gate \(+\) L1 cross-family
-re-judgment) is internally consistent, agrees across judge families
-on clear contrasts, and detects negative interventions sharply.
-It \emph{does not} establish that the gate would accept a wisdom
-that genuinely improved objective accuracy --- because we did not
-construct one, and cannot, on these specific tasks, with the
-solver model used. A clean positive control of that form (an
-intervention that objectively changes \(\Delta_{\mathrm{acc}}\) by
-\(\geq +10\)pp on a verifiable task and that the gate then accepts)
-remains the strongest single missing piece, and is now the only
-way to fully resolve the outstanding sensitivity question. Exp~67
-narrows what such a control must look like: it must use a solver
-weak enough to leave headroom for the prior to operate
-(gemini-3-flash at \(0/16\) is at the floor for these traps), and
-the prior must be specific enough to actually move the
-solver off its first answer.
+\textbf{What this experiment does and does not establish.} The
+honest reading is that Exp~67 is a \emph{negative control} plus a
+\emph{style-sensitivity probe}, not a positive control. It
+\emph{does} establish that the audit stack (gate \(+\) L1
+cross-family re-judgment) gives internally consistent verdicts on
+this set, that it correctly prefers reasoning-rich answers over
+reasoning-suppressed ones, and that the same-family and
+cross-family judges agree (\(\kappa = 1.0\) on these three
+splits, in tension with the lower \(\kappa\approx 0.18\)--\(0.26\)
+seen on the original twelve cached wisdoms; the gap is consistent
+with judges agreeing on sharp contrasts and disagreeing on subtle
+ones). It \emph{does not} establish positive sensitivity. The
+formal positive-control question --- ``does the gate accept a
+wisdom that demonstrably raises ground-truth accuracy by
+\(\geq +10\)pp on a verifiable task?'' --- is not answered here,
+because the strong algorithmic prior we constructed did not
+actually raise accuracy on this problem set
+(\(\Delta_{\mathrm{acc}} = 0\); the chosen problems are at the
+floor for gemini-3-flash regardless of prior strength, and the
+generic algorithmic prior is not specific enough to move the
+solver off its incorrect first answer). Constructing a true
+positive control --- a solver weak enough on a verifiable task
+that a problem-specific prior actually raises accuracy, and that
+the gate then accepts --- is the single best-defined remaining
+piece of work, and now the only way to fully resolve the
+outstanding gate-sensitivity question.
 
 \section{Multi-step research-task pilot (summary;
 full in Appendix~\ref{app:multistep})}
@@ -1800,39 +1809,38 @@ than leave them to footnotes.
     the alternative explanation (``audit panel is wrong; original
     judge was right'') is not supported by any of the available
     LLM-substitute proxies.
-  \item \textbf{Positive control: partially resolved by Exp~67.}
+  \item \textbf{Positive control: partially probed by Exp~67;
+    formal version remains open.}
     Earlier attempts at positive control on the original Chinese
     open-ended scaffold (Exp~44, Exp~46) all returned
     \(\mathrm{wr} \leq 0.25\) on \(6/6\) constructed wisdoms, an
     ambiguous result consistent with either ``no constructed
     wisdom is genuinely useful'' or ``the gate is structurally
     anti-additive on this scaffold/task pairing.''
-    Exp~67 (\S\ref{sec:exp-summary-poscontrol}) addresses the
-    ambiguity by switching to objectively-graded reasoning
-    problems and running BASE / POSITIVE / NEGATIVE conditions
-    through the same \texttt{judge\_pair} the original gate uses,
-    plus L1 cross-family re-judgment. Three results: (i) the
-    audit stack \emph{correctly rejects} a reasoning-suppressing
-    intervention, with \(\mathrm{wr}_{\text{NEG-vs-BASE}} = 0.286\)
-    far below \(0.50\); (ii) it \emph{correctly prefers}
-    reasoning-rich answers over reasoning-poor ones with
-    \(\mathrm{wr}_{\text{POS-vs-NEG}} = 0.733\), well above the
-    \(+10\)pp threshold; (iii) gemini-3-flash and claude-haiku-4.5
-    agreed on every single pairwise split (Cohen's
-    \(\kappa = 1.0\)) on this set. The only direction in which
-    the audit stack is \emph{not} sharply sensitive is
-    POSITIVE-vs-BASE (\(\mathrm{wr} = 0.571\)) --- but this is
-    the case in which the ``positive'' intervention does not
-    materially change answer content, only its rigor. The
-    parsimonious reading is that the gate is operating as
-    designed, both on Exp~67 and on the original twelve wisdoms:
-    it correctly rejects insertions that don't materially help.
-    The remaining residual --- a clean positive control where
+    Exp~67 (\S\ref{sec:exp-summary-poscontrol}) attempts to
+    disambiguate by switching to objectively-graded reasoning
+    problems and running BASE / POSITIVE-algorithmic-prior /
+    NEGATIVE-suppressed-reasoning conditions through the same
+    \texttt{judge\_pair} the original gate uses, plus L1
+    cross-family re-judgment. The result is two-thirds of a
+    positive control: (i) the audit stack \emph{rejects} the
+    reasoning-suppressing intervention sharply
+    (\(\mathrm{wr}_{\text{NEG-vs-BASE}} = 0.286\)); (ii) it
+    \emph{prefers} reasoning-rich over reasoning-poor at sharp
+    contrast (\(\mathrm{wr}_{\text{POS-vs-NEG}} = 0.733\));
+    (iii) the same-family and cross-family judges agreed on
+    every pairwise split (\(\kappa = 1.0\)). But the
+    POSITIVE intervention did not move objective accuracy
+    (\(\Delta_{\mathrm{acc}} = 0\), all conditions \(0/16\) at the
+    selected problem set's floor), so this is technically a
+    negative control plus a style-sensitivity probe, not a true
+    positive control. A genuine positive control ---
     \(\Delta_{\mathrm{acc}} \geq +10\)pp on a verifiable task
     \emph{and} the gate accepts --- is now the single
-    well-defined open question, and Exp~67 narrows what it
-    must look like (a solver weak enough to leave headroom plus
-    a prior specific enough to actually move it).
+    well-defined open question. Exp~67 narrows what such a
+    control must look like (a solver weak enough to leave
+    headroom plus a prior specific enough to actually move
+    it off its first answer); we have not yet constructed one.
   \item \textbf{L6 operationalization is under-specified.}
     Embedding cosine and citation strictness are two proxies
     for faithfulness; they could in principle disagree. On our
