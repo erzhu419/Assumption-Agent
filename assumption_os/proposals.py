@@ -34,6 +34,7 @@ class ProposalType(str, Enum):
     SCOPE_NARROWING = "scope_narrowing"
     EVIDENCE_REQUEST = "evidence_request"
     PROMOTION_RECORD = "promotion_record"
+    FAILURE_HYPOTHESIS = "failure_hypothesis"
 
 
 @dataclass(frozen=True)

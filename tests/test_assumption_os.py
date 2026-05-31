@@ -17,6 +17,7 @@ from assumption_os.conditioned_eval import (
 )
 from assumption_os.domain_templates import format_phase2_domain_execution_template
 from assumption_os.evolution_cycle import build_evolution_cycle_payload, build_policy_update_plan
+from assumption_os.failure_hypotheses import build_failure_hypothesis_payload
 from assumption_os.falsification import FalsificationDecision, build_falsification_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
@@ -524,6 +525,48 @@ class AssumptionOSTest(unittest.TestCase):
                 formal_mapping_gate_payload=gate_payload,
             )
             self.assertEqual(policy["actions"][0]["policy_action"], "block_unsafe_formal_mapping")
+
+    def test_failure_hypotheses_generate_candidate_from_loss(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S03",
+                type=AssumptionType.METHOD,
+                claim="use staged fallback planning",
+                tags=["S03"],
+            ))
+            store.flush()
+            graph = SimpleAssumptionGraph(JsonlGraphStore(td))
+            payload = build_failure_hypothesis_payload(
+                graph=graph,
+                sample=[{
+                    "problem_id": "daily_life_001",
+                    "domain": "daily_life",
+                    "difficulty": "medium",
+                    "description": "Plan a move when time and transport are uncertain.",
+                }],
+                meta_by_pid={"daily_life_001": {"frame": "contingency planning"}},
+                writeback_summary={
+                    "eval_id": "unit_eval",
+                    "processed_trials": [{
+                        "trial_id": "trial_1",
+                        "problem_id": "daily_life_001",
+                        "domain": "daily_life",
+                        "difficulty": "medium",
+                        "outcome": "loss",
+                        "residual_type": "memory_defect",
+                        "gold_hit": False,
+                        "gold_ids": ["strategy_S03"],
+                        "active_assumption_ids": [],
+                    }],
+                },
+                eval_id="unit_failures",
+            )
+            self.assertEqual(payload["proposal_counts"], {ProposalType.FAILURE_HYPOTHESIS.value: 1})
+            proposal = payload["proposals"][0]
+            self.assertEqual(proposal["parent_node_id"], "strategy_S03")
+            self.assertEqual(proposal["candidate_node"]["status"], "candidate")
+            self.assertEqual(proposal["candidate_node"]["payload"]["source_problem_id"], "daily_life_001")
 
     def test_software_engineering_reranker_boosts_execution_specific_methods(self):
         with tempfile.TemporaryDirectory() as td:

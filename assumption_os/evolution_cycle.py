@@ -22,6 +22,7 @@ from .candidate_acceptance import apply_accepted_candidates, build_acceptance_pa
 from .candidate_eval import build_candidate_eval_payload
 from .bayesian_policy import build_bayesian_policy_payload
 from .conditioned_eval import GateThresholds, build_conditioned_rows, evaluate_graph_nodes
+from .failure_hypotheses import build_failure_hypothesis_payload, merge_proposal_payloads
 from .falsification import build_falsification_payload
 from .formal_mapping import build_formal_mapping_gate_payload, build_formal_mapping_payload
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
@@ -49,6 +50,7 @@ def build_evolution_cycle_payload(
     conditioned_top_n: int = 25,
     lifecycle_top_n: int | None = None,
     proposal_top_n: int | None = None,
+    failure_hypothesis_top_n: int | None = 8,
     min_benefit_n: int = 3,
     min_harm_n: int = 3,
     force_proposal_route: bool = True,
@@ -109,11 +111,30 @@ def build_evolution_cycle_payload(
         max_actions=lifecycle_top_n,
     )
     formal_mapping_payload = build_formal_mapping_payload(graph.store)
-    proposal_payload = build_proposal_payload(
+    lifecycle_proposal_payload = build_proposal_payload(
         graph=graph,
         lifecycle_payload=lifecycle_payload,
         eval_id=f"{eval_id}_proposals",
         max_proposals=proposal_top_n,
+    )
+    failure_hypothesis_payload = build_failure_hypothesis_payload(
+        graph=graph,
+        sample=sample,
+        meta_by_pid=meta_by_pid,
+        writeback_summary=writeback_summary,
+        eval_id=f"{eval_id}_failure_hypotheses",
+        max_hypotheses=failure_hypothesis_top_n,
+    ) if failure_hypothesis_top_n != 0 else {
+        "eval_id": f"{eval_id}_failure_hypotheses",
+        "source_eval_id": writeback_summary.get("eval_id"),
+        "loss_problem_count": 0,
+        "skipped": {},
+        "proposal_counts": {},
+        "proposals": [],
+    }
+    proposal_payload = merge_proposal_payloads(
+        eval_id=f"{eval_id}_proposals",
+        payloads=[lifecycle_proposal_payload, failure_hypothesis_payload],
     )
     formal_mapping_gate_payload = build_formal_mapping_gate_payload(
         proposal_payload=proposal_payload,
@@ -191,6 +212,7 @@ def build_evolution_cycle_payload(
             "skip_missing_meta": skip_missing_meta,
             "force_proposal_route": force_proposal_route,
             "proposals_arg": proposals_arg,
+            "failure_hypothesis_top_n": failure_hypothesis_top_n,
         },
         "source": {
             "graph_dir": str(graph_dir),
@@ -205,6 +227,7 @@ def build_evolution_cycle_payload(
         "lifecycle": lifecycle_payload,
         "formal_mapping_audit": formal_mapping_payload,
         "formal_mapping_gate": formal_mapping_gate_payload,
+        "failure_hypotheses": failure_hypothesis_payload,
         "proposals": proposal_payload,
         "candidate_preflight": preflight_payload,
         "candidate_acceptance": acceptance_payload,
@@ -370,6 +393,7 @@ def main() -> None:
     ap.add_argument("--conditioned-top-n", type=int, default=25)
     ap.add_argument("--lifecycle-top-n", type=int, default=None)
     ap.add_argument("--proposal-top-n", type=int, default=None)
+    ap.add_argument("--failure-hypothesis-top-n", type=int, default=8)
     ap.add_argument("--min-benefit-n", type=int, default=3)
     ap.add_argument("--min-harm-n", type=int, default=3)
     ap.add_argument("--no-force-proposal-route", action="store_true")
@@ -400,6 +424,7 @@ def main() -> None:
         conditioned_top_n=args.conditioned_top_n,
         lifecycle_top_n=args.lifecycle_top_n,
         proposal_top_n=args.proposal_top_n,
+        failure_hypothesis_top_n=args.failure_hypothesis_top_n,
         min_benefit_n=args.min_benefit_n,
         min_harm_n=args.min_harm_n,
         force_proposal_route=not args.no_force_proposal_route,

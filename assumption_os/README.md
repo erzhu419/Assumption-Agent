@@ -174,9 +174,9 @@ python3 -m assumption_os.lifecycle \
 
 For a single conservative entry point, `assumption_os.evolution_cycle` now runs
 the whole planning loop in dry-run mode: writeback preview, conditioned gate,
-formal mapping audit, lifecycle actions, candidate proposals, candidate
-preflight, regression prediction, sequential falsification, Bayesian policy
-scoring, and policy update plan. It does not mutate the graph unless `--writeback` or
+formal mapping audit, lifecycle actions, failure-derived hypotheses, candidate
+proposals, candidate preflight, regression prediction, sequential
+falsification, Bayesian policy scoring, and policy update plan. It does not mutate the graph unless `--writeback` or
 `--apply-accepted` is explicitly supplied.
 
 ```bash
@@ -192,17 +192,19 @@ python3 -m assumption_os.evolution_cycle \
   --eval-id phase2_v20_ag_learned_gpt55_vs_gpt55_21_50_cycle \
   --policy-rerank \
   --assumption-graph-skip-domains software_engineering \
+  --failure-hypothesis-top-n 8 \
   --summary-out "phase four/assumption_graph/evolution_cycle_dryrun_phase2_v20_gpt55_21_50.json"
 ```
 
 The first dry run processed 22 writeback-preview rows, produced 12 conditioned
-summaries, planned 8 lifecycle actions, generated 8 proposals, and identified
-one retrieval-policy candidate ready for fresh ablation. Its sequential
-falsification gate produced `manifest_only=4`, `ready_for_ablation=1`, and
-`blocked_underpowered=3`. The Bayesian scorer ranked that ready candidate as
-`run_ablation` with priority `1.6421`, while three underpowered candidates were
+summaries, planned 8 lifecycle actions, generated 8 lifecycle proposals plus 2
+failure-derived hypothesis proposals, and identified 3 candidates ready for
+fresh ablation. Its sequential falsification gate produced `manifest_only=4`,
+`ready_for_ablation=3`, and `blocked_underpowered=3`. The Bayesian scorer ranked
+those 3 ready candidates as `run_ablation`; three underpowered candidates were
 ranked as `collect_evidence`. The same dry run also audits 45 typed formal nodes
-into 9 complete formal mappings. The report is in
+into 9 complete formal mappings and applies 10 proposal-level formal gates with
+0 blocked. The report is in
 `phase four/assumption_graph/evolution_cycle_dryrun_phase2_v20_gpt55_21_50.md`.
 
 `assumption_os.formal_mapping` is the executable GRAM/category-style bridge for
@@ -228,9 +230,15 @@ bounded audit layer: it checks that generated formal bundles are executable and
 constraint-preserving, and `assumption_os.evolution_cycle` now feeds the result
 into a proposal-level formal mapping gate. `partial` or `unsafe` mappings block
 promotion-sensitive policy actions until the formal bundle is repaired. The
-latest cycle has `not_applicable=8` proposal gates and `blocked=0`, meaning the
+latest cycle has `not_applicable=10` proposal gates and `blocked=0`, meaning the
 current proposal set does not target typed formal bundles. The gate does not yet
 synthesize new mappings by itself.
+
+`assumption_os.failure_hypotheses` converts attributed loss rows from
+`writeback_summary.processed_trials` into candidate assumptions and manifests.
+In the current dry run it generated two candidates:
+`daily_life_0161` under `strategy_S03` for a memory-defect residual, and
+`business_0199` under `strategy_S12` for an optimization residual.
 
 `assumption_os.proposals` then turns lifecycle actions into candidate nodes and
 experiment manifests. Retrieval-policy candidates copy the parent's trigger
