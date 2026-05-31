@@ -254,6 +254,26 @@ After fresh proposal judgments exist for the same proposal IDs, add
 tree from child verification results instead of leaving those children as
 `run_fresh_ablation` leaves.
 
+`assumption_os.recursive_executor` is the executor/resume layer for that
+frontier. In dry-run mode it records which recursive leaf commands are ready to
+run. With candidate judgments, it builds the acceptance payload and resumes the
+recursive tree so returned verification children update their parent candidate
+frames.
+
+```bash
+python3 -m assumption_os.recursive_executor \
+  --recursive-payload "phase four/assumption_graph/recursive_runner_phase2_v20_gpt55_21_50.json" \
+  --evolution-payload "phase four/assumption_graph/evolution_cycle_dryrun_phase2_v20_gpt55_21_50.json" \
+  --eval-id recursive_executor_phase2_v20_gpt55_21_50 \
+  --summary-out "phase four/assumption_graph/recursive_executor_phase2_v20_gpt55_21_50.json"
+```
+
+The executor does not spend model calls by default. Add `--execute` only when
+the frontier commands should actually run. Add `--candidate-judgments`,
+`--candidate-variant`, `--candidate-baseline`, and `--proposal-ids` for a single
+acceptance resume, or `--judgment-bundle` for multiple per-proposal judgment
+runs.
+
 The first recursive dry run produced `root_problem=1`,
 `candidate_hypothesis=8`, and `verification_subproblem=8`, with 16 recursion
 edges and 8 leaf `run_fresh_ablation` next actions. By default this is a dry
