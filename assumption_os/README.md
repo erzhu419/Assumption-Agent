@@ -118,6 +118,11 @@ On the 21-50 heldout math/science rows, this intent-aware bypass beat current
 report is in
 `phase four/assumption_graph/math_science_bridge_eval_gpt55_21_50.md`.
 
+On the larger 30-row math/science slice from `sample_100`, the same bridge beat
+current `phase2_v20` bidirectionally by 53 wins / 5 losses / 2 ties, and beat
+the raw baseline by 55 wins / 2 losses / 3 ties. The report is in
+`phase four/assumption_graph/math_science_bridge_eval_gpt55_ms100.md`.
+
 The software-engineering reranker is available when the skip gate is disabled,
 but it is not yet enabled by default. In the targeted rerun it improved
 retrieval strongly but only reached neutral answer quality, so the default gate
