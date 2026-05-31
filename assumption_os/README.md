@@ -181,8 +181,9 @@ For a single conservative entry point, `assumption_os.evolution_cycle` now runs
 the whole planning loop in dry-run mode: writeback preview, conditioned gate,
 formal mapping audit, lifecycle actions, failure-derived hypotheses, candidate
 proposals, candidate preflight, regression prediction, sequential
-falsification, Bayesian policy scoring, and policy update plan. It does not mutate the graph unless `--writeback` or
-`--apply-accepted` is explicitly supplied.
+falsification, Bayesian policy scoring, and policy update plan. It does not
+mutate the graph unless `--writeback`, `--apply-accepted`, or the gated
+`--autonomous-apply` mode is explicitly supplied.
 
 ```bash
 python3 -m assumption_os.evolution_cycle \
@@ -200,6 +201,11 @@ python3 -m assumption_os.evolution_cycle \
   --failure-hypothesis-top-n 8 \
   --summary-out "phase four/assumption_graph/evolution_cycle_dryrun_phase2_v20_gpt55_21_50.json"
 ```
+
+For unattended graph edits, use `--autonomous-apply` with candidate judgments.
+This automatically enables writeback and applies only candidates that pass the
+acceptance gate and are not blocked by the formal-mapping gate. If no candidate
+acceptance payload is supplied, it only performs the evaluation writeback.
 
 The first dry run processed 22 writeback-preview rows, produced 12 conditioned
 summaries, planned 8 lifecycle actions, generated 8 lifecycle proposals plus 2

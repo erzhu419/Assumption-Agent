@@ -59,12 +59,15 @@ def build_evolution_cycle_payload(
     candidate_variant: str | None = None,
     candidate_baseline_variant: str | None = None,
     apply_accepted: bool = False,
+    autonomous_apply: bool = False,
 ) -> dict:
     """Run one self-evolution planning cycle and return an audit payload."""
 
     judgment_paths = list(judgment_paths)
     candidate_judgment_paths = list(candidate_judgment_paths or [])
     skip_domains = skip_domains or set()
+    effective_writeback = writeback or autonomous_apply
+    effective_apply_accepted = apply_accepted or autonomous_apply
 
     writeback_summary = record_phase2_eval(
         root=root,
@@ -79,7 +82,7 @@ def build_evolution_cycle_payload(
         policy_rerank=policy_rerank,
         skip_domains=skip_domains,
         skip_missing_meta=skip_missing_meta,
-        dry_run=not writeback,
+        dry_run=not effective_writeback,
     )
 
     graph = SimpleAssumptionGraph(JsonlGraphStore(graph_dir))
@@ -167,7 +170,7 @@ def build_evolution_cycle_payload(
             baseline_variant=candidate_baseline_variant,
             eval_id=f"{eval_id}_candidate_acceptance",
         )
-        if apply_accepted:
+        if effective_apply_accepted:
             gated_acceptance_payload = _filter_acceptance_for_formal_mapping_gate(
                 acceptance_payload,
                 formal_mapping_gate_payload,
@@ -196,7 +199,7 @@ def build_evolution_cycle_payload(
         proposal_payload=proposal_payload,
         preflight_payload=preflight_payload,
         acceptance_payload=acceptance_payload,
-        apply_accepted=apply_accepted,
+        apply_accepted=effective_apply_accepted,
         applied_candidate_node_ids=applied_candidate_node_ids,
         bayesian_policy_payload=bayesian_policy_payload,
         formal_mapping_gate_payload=formal_mapping_gate_payload,
@@ -207,6 +210,9 @@ def build_evolution_cycle_payload(
         "mode": {
             "writeback": writeback,
             "apply_accepted": apply_accepted,
+            "autonomous_apply": autonomous_apply,
+            "effective_writeback": effective_writeback,
+            "effective_apply_accepted": effective_apply_accepted,
             "policy_rerank": policy_rerank,
             "skip_domains": sorted(skip_domains),
             "skip_missing_meta": skip_missing_meta,
@@ -235,6 +241,14 @@ def build_evolution_cycle_payload(
         "regression_predictions": regression_predictions,
         "bayesian_policy": bayesian_policy_payload,
         "policy_update_plan": policy_update_plan,
+        "autonomous_apply_summary": build_autonomous_apply_summary(
+            autonomous_apply=autonomous_apply,
+            effective_writeback=effective_writeback,
+            effective_apply_accepted=effective_apply_accepted,
+            candidate_acceptance=acceptance_payload,
+            formal_mapping_gate_payload=formal_mapping_gate_payload,
+            applied_candidate_node_ids=applied_candidate_node_ids,
+        ),
     }
 
 
@@ -332,6 +346,56 @@ def build_policy_update_plan(
     }
 
 
+def build_autonomous_apply_summary(
+    *,
+    autonomous_apply: bool,
+    effective_writeback: bool,
+    effective_apply_accepted: bool,
+    candidate_acceptance: dict | None,
+    formal_mapping_gate_payload: dict,
+    applied_candidate_node_ids: list[str],
+) -> dict:
+    accepted = (candidate_acceptance or {}).get("accepted_proposal_ids", [])
+    blocked = formal_mapping_gate_payload.get("blocked_proposal_ids", [])
+    return {
+        "enabled": autonomous_apply,
+        "writeback_applied": effective_writeback,
+        "candidate_acceptance_available": candidate_acceptance is not None,
+        "accepted_proposal_ids": accepted,
+        "formal_mapping_blocked_proposal_ids": blocked,
+        "candidate_apply_requested": effective_apply_accepted and candidate_acceptance is not None,
+        "applied_candidate_node_ids": applied_candidate_node_ids,
+        "reason": _autonomous_apply_reason(
+            autonomous_apply=autonomous_apply,
+            candidate_acceptance=candidate_acceptance,
+            accepted=accepted,
+            blocked=blocked,
+            applied_candidate_node_ids=applied_candidate_node_ids,
+        ),
+    }
+
+
+def _autonomous_apply_reason(
+    *,
+    autonomous_apply: bool,
+    candidate_acceptance: dict | None,
+    accepted: list[str],
+    blocked: list[str],
+    applied_candidate_node_ids: list[str],
+) -> str:
+    if not autonomous_apply:
+        return "autonomous apply disabled"
+    if candidate_acceptance is None:
+        return "writeback applied; no candidate acceptance payload was supplied"
+    if blocked:
+        return "formal mapping gate blocked at least one proposal before candidate application"
+    if accepted and applied_candidate_node_ids:
+        return "accepted candidates were applied after acceptance and formal mapping gates"
+    if accepted:
+        return "accepted proposals existed but no candidate nodes were applied"
+    return "candidate acceptance was available but no proposal passed acceptance"
+
+
 def _filter_acceptance_for_formal_mapping_gate(acceptance_payload: dict, formal_mapping_gate_payload: dict) -> dict:
     blocked = set(formal_mapping_gate_payload.get("blocked_proposal_ids", []))
     if not blocked:
@@ -403,6 +467,8 @@ def main() -> None:
     ap.add_argument("--candidate-variant", default=None)
     ap.add_argument("--candidate-baseline", default=None)
     ap.add_argument("--apply-accepted", action="store_true")
+    ap.add_argument("--autonomous-apply", action="store_true",
+                    help="apply writeback and accepted candidates automatically, still gated by acceptance and formal mapping checks")
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
@@ -433,6 +499,7 @@ def main() -> None:
         candidate_variant=args.candidate_variant,
         candidate_baseline_variant=args.candidate_baseline,
         apply_accepted=args.apply_accepted,
+        autonomous_apply=args.autonomous_apply,
     )
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.proposal_artifact_out:

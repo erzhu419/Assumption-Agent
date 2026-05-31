@@ -316,6 +316,82 @@ class AssumptionOSTest(unittest.TestCase):
             )
             self.assertEqual(JsonlGraphStore(graph_dir).trials, {})
 
+    def test_evolution_cycle_autonomous_apply_writes_only_gated_acceptance(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            graph_dir = root / "graph"
+            store = JsonlGraphStore(graph_dir)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S01",
+                type=AssumptionType.METHOD,
+                claim="Use controlled-variable tests with a baseline and one intervention.",
+                tags=["S01", "controlled", "baseline", "experiment"],
+                context_conditions=["controlled variable experiment"],
+            ))
+            store.flush()
+
+            sample = [
+                {
+                    "problem_id": f"p{i}",
+                    "domain": "business",
+                    "difficulty": "medium",
+                    "description": f"Use a controlled baseline experiment to test channel {i}.",
+                    "coverage_tags": ["S01"],
+                }
+                for i in range(1, 4)
+            ]
+            sample_path = root / "sample.json"
+            sample_path.write_text(json.dumps(sample), encoding="utf-8")
+            meta_path = root / "meta.json"
+            meta_path.write_text(json.dumps({
+                p["problem_id"]: {
+                    "frame": "hybrid",
+                    "critical_reframe": "test one variable against a baseline",
+                    "rewritten_problem": p["description"],
+                    "what_changed": "explicit baseline",
+                    "anti_patterns": [],
+                }
+                for p in sample
+            }), encoding="utf-8")
+            judgment_path = root / "judgments.json"
+            judgment_path.write_text(json.dumps({
+                p["problem_id"]: {"winner": "base", "score_a": 6, "score_b": 8}
+                for p in sample
+            }), encoding="utf-8")
+            candidate_judgment_path = root / "candidate_judgments.json"
+            candidate_judgment_path.write_text(json.dumps({
+                p["problem_id"]: {"winner": "candidate"}
+                for p in sample
+            }), encoding="utf-8")
+
+            payload = build_evolution_cycle_payload(
+                root=root,
+                graph_dir=graph_dir,
+                sample_path=sample_path,
+                meta_path=meta_path,
+                judgment_paths=[judgment_path],
+                intervention_variant="ag",
+                baseline_variant="base",
+                eval_id="unit_auto_cycle",
+                min_benefit_n=1,
+                min_harm_n=1,
+                failure_hypothesis_top_n=0,
+                candidate_judgment_paths=[candidate_judgment_path],
+                candidate_variant="candidate",
+                candidate_baseline_variant="base",
+                autonomous_apply=True,
+            )
+
+            summary = payload["autonomous_apply_summary"]
+            self.assertTrue(summary["enabled"])
+            self.assertTrue(summary["writeback_applied"])
+            self.assertTrue(summary["candidate_apply_requested"])
+            self.assertTrue(summary["applied_candidate_node_ids"])
+            updated = JsonlGraphStore(graph_dir)
+            self.assertTrue(updated.trials)
+            for node_id in summary["applied_candidate_node_ids"]:
+                self.assertEqual(updated.nodes[node_id].status, "active")
+
     def test_falsification_gate_orders_preflight_before_acceptance(self):
         proposal_payload = {
             "eval_id": "unit_props",

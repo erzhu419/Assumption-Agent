@@ -24,7 +24,8 @@ python3 -m assumption_os.evolution_cycle \
   --summary-out "phase four/assumption_graph/evolution_cycle_dryrun_phase2_v20_gpt55_21_50.json"
 ```
 
-No graph mutation was performed. `writeback=false` and `dry_run=true`.
+No graph mutation was performed. `writeback=false`, `autonomous_apply=false`,
+and `dry_run=true`.
 
 ## Pipeline Result
 
@@ -38,6 +39,7 @@ No graph mutation was performed. `writeback=false` and `dry_run=true`.
 - Bayesian policy scorer: `run_ablation=3`, `collect_evidence=3`, `record_only=4`
 - Formal mapping audit: `complete=9`, `partial=0`, `unsafe=0`
 - Formal mapping proposal gate: `not_applicable=10`, `blocked=0`
+- Autonomous apply summary: disabled; no writeback or candidate application
 
 ## Policy Plan
 
