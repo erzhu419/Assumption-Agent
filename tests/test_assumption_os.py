@@ -5,6 +5,7 @@ from pathlib import Path
 
 from assumption_os.adapters import ingest_artifacts, load_exp82_hypotheses, load_wisdom_nodes
 from assumption_os.activation import build_activation_profile
+from assumption_os.bayesian_policy import BayesianPolicyAction, build_bayesian_policy_payload, parent_belief
 from assumption_os.candidate_acceptance import AcceptanceDecision, apply_accepted_candidates, build_acceptance_payload
 from assumption_os.conditioned_eval import (
     ConditionedEvalRow,
@@ -31,6 +32,7 @@ from assumption_os.schema import (
     AssumptionNode,
     AssumptionType,
     EdgeType,
+    EvidenceRecord,
     ResidualType,
     TrialManifest,
     TrialStatus,
@@ -300,6 +302,7 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(payload["proposals"]["proposal_counts"], {"evidence_request": 1})
             self.assertEqual(payload["candidate_preflight"]["readiness_counts"], {"manifest_only": 1})
             self.assertEqual(payload["falsification_gate"]["decision_counts"], {"manifest_only": 1})
+            self.assertEqual(payload["bayesian_policy"]["decision_counts"], {"record_only": 1})
             self.assertEqual(
                 payload["policy_update_plan"]["actions"][0]["policy_action"],
                 "record_manifest_only_no_graph_policy_change",
@@ -349,6 +352,58 @@ class AssumptionOSTest(unittest.TestCase):
             FalsificationDecision.REJECT_BENEFIT.value,
         )
         self.assertEqual(rejected["summaries"][0]["next_action"], "reject_or_revise_candidate")
+
+    def test_bayesian_policy_scores_ready_candidate_for_ablation(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S01",
+                type=AssumptionType.METHOD,
+                claim="固定其他条件，每次只改变一个因素",
+                tags=["S01"],
+            ))
+            for i, value in enumerate([1.0, 1.0, 0.5]):
+                store.add_evidence(EvidenceRecord(
+                    node_id="strategy_S01",
+                    source="unit",
+                    outcome="success" if value == 1.0 else "tie",
+                    metric="pairwise_judge_win",
+                    value=value,
+                    evidence_id=f"ev_{i}",
+                ))
+            belief = parent_belief(store, "strategy_S01")
+            self.assertGreater(belief.mean, 0.65)
+
+            payload = build_bayesian_policy_payload(
+                store=store,
+                proposal_payload={
+                    "eval_id": "unit_props",
+                    "proposals": [{
+                        "proposal_id": "prop_1",
+                        "proposal_type": "assumption_revision",
+                        "parent_node_id": "strategy_S01",
+                        "candidate_node": {"id": "cand_1"},
+                    }],
+                },
+                preflight_payload={
+                    "eval_id": "unit_preflight",
+                    "summaries": [{
+                        "proposal_id": "prop_1",
+                        "readiness": "ready_for_fresh_ablation",
+                        "command_hint": "run ablation",
+                    }],
+                },
+                falsification_payload={
+                    "summaries": [{
+                        "proposal_id": "prop_1",
+                        "decision": "ready_for_ablation",
+                    }],
+                },
+                regression_predictions=[{"proposal_id": "prop_1", "risk": "low"}],
+            )
+            score = payload["scores"][0]
+            self.assertEqual(score["recommended_action"], BayesianPolicyAction.RUN_ABLATION.value)
+            self.assertGreater(score["posterior_priority"], 1.0)
 
     def test_software_engineering_reranker_boosts_execution_specific_methods(self):
         with tempfile.TemporaryDirectory() as td:

@@ -33,6 +33,7 @@ No graph mutation was performed. `writeback=false` and `dry_run=true`.
 - Candidate proposals: `promotion_record=1`, `retrieval_policy=4`, `evidence_request=3`
 - Candidate preflight: `manifest_only=4`, `ready_for_fresh_ablation=1`, `needs_more_trigger_rows=3`
 - Sequential falsification gate: `manifest_only=4`, `ready_for_ablation=1`, `blocked_underpowered=3`
+- Bayesian policy scorer: `run_ablation=1`, `collect_evidence=3`, `record_only=4`
 
 ## Policy Plan
 
@@ -49,6 +50,9 @@ The ready candidate is a retrieval policy for `wisdom_W020`:
 - routed trigger rows: `daily_life_0161`, `daily_life_0173`, `daily_life_0018`
 - control rows: 8 non-trigger rows
 - regression prediction: low preflight risk; fresh ablation still required
+- Bayesian priority: `1.6421`
+- Bayesian expected value: `0.73`
+- Bayesian information value: `0.3873`
 
 ## Interpretation
 
@@ -58,3 +62,7 @@ conditioned gates, lifecycle actions, candidate hypotheses, falsification
 preflight, regression predictions, and a graph policy update plan. Promotion or
 graph mutation remains gated behind explicit acceptance evidence and opt-in
 write flags.
+
+The Bayesian scorer is only a budget-allocation layer. It ranks which gated
+candidate is worth testing next; it does not override the sequential
+falsification or acceptance gates.

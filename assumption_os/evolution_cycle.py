@@ -20,6 +20,7 @@ from typing import Iterable
 
 from .candidate_acceptance import apply_accepted_candidates, build_acceptance_payload
 from .candidate_eval import build_candidate_eval_payload
+from .bayesian_policy import build_bayesian_policy_payload
 from .conditioned_eval import GateThresholds, build_conditioned_rows, evaluate_graph_nodes
 from .falsification import build_falsification_payload
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
@@ -152,12 +153,21 @@ def build_evolution_cycle_payload(
         preflight_payload=preflight_payload,
         acceptance_payload=acceptance_payload,
     )
+    bayesian_policy_payload = build_bayesian_policy_payload(
+        store=JsonlGraphStore(graph_dir),
+        proposal_payload=proposal_payload,
+        preflight_payload=preflight_payload,
+        falsification_payload=falsification_payload,
+        acceptance_payload=acceptance_payload,
+        regression_predictions=regression_predictions,
+    )
     policy_update_plan = build_policy_update_plan(
         proposal_payload=proposal_payload,
         preflight_payload=preflight_payload,
         acceptance_payload=acceptance_payload,
         apply_accepted=apply_accepted,
         applied_candidate_node_ids=applied_candidate_node_ids,
+        bayesian_policy_payload=bayesian_policy_payload,
     )
 
     return {
@@ -187,6 +197,7 @@ def build_evolution_cycle_payload(
         "candidate_acceptance": acceptance_payload,
         "falsification_gate": falsification_payload,
         "regression_predictions": regression_predictions,
+        "bayesian_policy": bayesian_policy_payload,
         "policy_update_plan": policy_update_plan,
     }
 
@@ -233,9 +244,14 @@ def build_policy_update_plan(
     acceptance_payload: dict | None = None,
     apply_accepted: bool = False,
     applied_candidate_node_ids: list[str] | None = None,
+    bayesian_policy_payload: dict | None = None,
 ) -> dict:
     accepted = set((acceptance_payload or {}).get("accepted_proposal_ids", []))
     summary_by_proposal = {s["proposal_id"]: s for s in preflight_payload.get("summaries", [])}
+    bayes_by_proposal = {
+        s["proposal_id"]: s
+        for s in (bayesian_policy_payload or {}).get("scores", [])
+    }
     actions = []
     for proposal in proposal_payload.get("proposals", []):
         pid = proposal.get("proposal_id")
@@ -259,6 +275,9 @@ def build_policy_update_plan(
             "parent_node_id": proposal.get("parent_node_id"),
             "candidate_node_id": candidate.get("id"),
             "preflight_readiness": preflight.get("readiness"),
+            "bayesian_action": bayes_by_proposal.get(pid, {}).get("recommended_action"),
+            "bayesian_priority": bayes_by_proposal.get(pid, {}).get("posterior_priority"),
+            "bayesian_expected_value": bayes_by_proposal.get(pid, {}).get("expected_value"),
             "policy_action": action,
             "command_hint": preflight.get("command_hint", ""),
         })

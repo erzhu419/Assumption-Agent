@@ -175,9 +175,9 @@ python3 -m assumption_os.lifecycle \
 For a single conservative entry point, `assumption_os.evolution_cycle` now runs
 the whole planning loop in dry-run mode: writeback preview, conditioned gate,
 lifecycle actions, candidate proposals, candidate preflight, regression
-prediction, sequential falsification, and policy update plan. It does not
-mutate the graph unless `--writeback` or `--apply-accepted` is explicitly
-supplied.
+prediction, sequential falsification, Bayesian policy scoring, and policy
+update plan. It does not mutate the graph unless `--writeback` or
+`--apply-accepted` is explicitly supplied.
 
 ```bash
 python3 -m assumption_os.evolution_cycle \
@@ -199,7 +199,9 @@ The first dry run processed 22 writeback-preview rows, produced 12 conditioned
 summaries, planned 8 lifecycle actions, generated 8 proposals, and identified
 one retrieval-policy candidate ready for fresh ablation. Its sequential
 falsification gate produced `manifest_only=4`, `ready_for_ablation=1`, and
-`blocked_underpowered=3`. The report is in
+`blocked_underpowered=3`. The Bayesian scorer ranked that ready candidate as
+`run_ablation` with priority `1.6421`, while three underpowered candidates were
+ranked as `collect_evidence`. The report is in
 `phase four/assumption_graph/evolution_cycle_dryrun_phase2_v20_gpt55_21_50.md`.
 
 `assumption_os.proposals` then turns lifecycle actions into candidate nodes and
