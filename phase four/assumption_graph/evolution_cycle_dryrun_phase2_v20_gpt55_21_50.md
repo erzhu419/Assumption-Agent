@@ -32,6 +32,7 @@ No graph mutation was performed. `writeback=false` and `dry_run=true`.
 - Lifecycle actions: `promote_assumption=1`, `expand_retrieval=4`, `keep_collect_evidence=3`
 - Candidate proposals: `promotion_record=1`, `retrieval_policy=4`, `evidence_request=3`
 - Candidate preflight: `manifest_only=4`, `ready_for_fresh_ablation=1`, `needs_more_trigger_rows=3`
+- Sequential falsification gate: `manifest_only=4`, `ready_for_ablation=1`, `blocked_underpowered=3`
 
 ## Policy Plan
 

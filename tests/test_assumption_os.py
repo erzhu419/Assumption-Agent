@@ -16,6 +16,7 @@ from assumption_os.conditioned_eval import (
 )
 from assumption_os.domain_templates import format_phase2_domain_execution_template
 from assumption_os.evolution_cycle import build_evolution_cycle_payload
+from assumption_os.falsification import FalsificationDecision, build_falsification_payload
 from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
 from assumption_os.math_science_policy import route_math_science_problem
@@ -298,11 +299,56 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(payload["lifecycle"]["action_counts"], {"keep_collect_evidence": 1})
             self.assertEqual(payload["proposals"]["proposal_counts"], {"evidence_request": 1})
             self.assertEqual(payload["candidate_preflight"]["readiness_counts"], {"manifest_only": 1})
+            self.assertEqual(payload["falsification_gate"]["decision_counts"], {"manifest_only": 1})
             self.assertEqual(
                 payload["policy_update_plan"]["actions"][0]["policy_action"],
                 "record_manifest_only_no_graph_policy_change",
             )
             self.assertEqual(JsonlGraphStore(graph_dir).trials, {})
+
+    def test_falsification_gate_orders_preflight_before_acceptance(self):
+        proposal_payload = {
+            "eval_id": "unit_props",
+            "proposals": [{
+                "proposal_id": "prop_1",
+                "proposal_type": "assumption_revision",
+                "parent_node_id": "strategy_S01",
+                "candidate_node": {"id": "cand_1"},
+            }],
+        }
+        preflight_payload = {
+            "eval_id": "unit_preflight",
+            "summaries": [{
+                "proposal_id": "prop_1",
+                "readiness": "ready_for_fresh_ablation",
+            }],
+        }
+        ready = build_falsification_payload(
+            proposal_payload=proposal_payload,
+            preflight_payload=preflight_payload,
+        )
+        self.assertEqual(
+            ready["summaries"][0]["decision"],
+            FalsificationDecision.READY_FOR_ABLATION.value,
+        )
+
+        rejected = build_falsification_payload(
+            proposal_payload=proposal_payload,
+            preflight_payload=preflight_payload,
+            acceptance_payload={
+                "eval_id": "unit_acceptance",
+                "summaries": [{
+                    "proposal_id": "prop_1",
+                    "decision": "reject_benefit",
+                    "rationale": "benefit too weak",
+                }],
+            },
+        )
+        self.assertEqual(
+            rejected["summaries"][0]["decision"],
+            FalsificationDecision.REJECT_BENEFIT.value,
+        )
+        self.assertEqual(rejected["summaries"][0]["next_action"], "reject_or_revise_candidate")
 
     def test_software_engineering_reranker_boosts_execution_specific_methods(self):
         with tempfile.TemporaryDirectory() as td:

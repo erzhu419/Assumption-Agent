@@ -21,6 +21,7 @@ from typing import Iterable
 from .candidate_acceptance import apply_accepted_candidates, build_acceptance_payload
 from .candidate_eval import build_candidate_eval_payload
 from .conditioned_eval import GateThresholds, build_conditioned_rows, evaluate_graph_nodes
+from .falsification import build_falsification_payload
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .lifecycle import build_lifecycle_payload
 from .proposal_overlay import parse_csv_set
@@ -146,6 +147,11 @@ def build_evolution_cycle_payload(
             )
 
     regression_predictions = predict_candidate_regressions(preflight_payload)
+    falsification_payload = build_falsification_payload(
+        proposal_payload=proposal_payload,
+        preflight_payload=preflight_payload,
+        acceptance_payload=acceptance_payload,
+    )
     policy_update_plan = build_policy_update_plan(
         proposal_payload=proposal_payload,
         preflight_payload=preflight_payload,
@@ -179,6 +185,7 @@ def build_evolution_cycle_payload(
         "proposals": proposal_payload,
         "candidate_preflight": preflight_payload,
         "candidate_acceptance": acceptance_payload,
+        "falsification_gate": falsification_payload,
         "regression_predictions": regression_predictions,
         "policy_update_plan": policy_update_plan,
     }
