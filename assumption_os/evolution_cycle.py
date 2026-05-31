@@ -50,7 +50,7 @@ def build_evolution_cycle_payload(
     conditioned_top_n: int = 25,
     lifecycle_top_n: int | None = None,
     proposal_top_n: int | None = None,
-    failure_hypothesis_top_n: int | None = 8,
+    failure_hypothesis_top_n: int | None = None,
     min_benefit_n: int = 3,
     min_harm_n: int = 3,
     force_proposal_route: bool = True,
@@ -60,6 +60,7 @@ def build_evolution_cycle_payload(
     candidate_baseline_variant: str | None = None,
     apply_accepted: bool = False,
     autonomous_apply: bool = False,
+    include_skipped_failure_hypotheses: bool = True,
 ) -> dict:
     """Run one self-evolution planning cycle and return an audit payload."""
 
@@ -127,10 +128,19 @@ def build_evolution_cycle_payload(
         writeback_summary=writeback_summary,
         eval_id=f"{eval_id}_failure_hypotheses",
         max_hypotheses=failure_hypothesis_top_n,
+        judgment_paths=judgment_paths,
+        intervention_variant=intervention_variant,
+        baseline_variant=baseline_variant,
+        skip_domains=skip_domains,
+        skip_missing_meta=skip_missing_meta,
+        include_skipped_losses=include_skipped_failure_hypotheses,
     ) if failure_hypothesis_top_n != 0 else {
         "eval_id": f"{eval_id}_failure_hypotheses",
         "source_eval_id": writeback_summary.get("eval_id"),
         "loss_problem_count": 0,
+        "processed_loss_problem_count": 0,
+        "skipped_loss_problem_count": 0,
+        "skipped_loss_scan": {"enabled": include_skipped_failure_hypotheses},
         "skipped": {},
         "proposal_counts": {},
         "proposals": [],
@@ -219,6 +229,7 @@ def build_evolution_cycle_payload(
             "force_proposal_route": force_proposal_route,
             "proposals_arg": proposals_arg,
             "failure_hypothesis_top_n": failure_hypothesis_top_n,
+            "include_skipped_failure_hypotheses": include_skipped_failure_hypotheses,
         },
         "source": {
             "graph_dir": str(graph_dir),
@@ -457,7 +468,8 @@ def main() -> None:
     ap.add_argument("--conditioned-top-n", type=int, default=25)
     ap.add_argument("--lifecycle-top-n", type=int, default=None)
     ap.add_argument("--proposal-top-n", type=int, default=None)
-    ap.add_argument("--failure-hypothesis-top-n", type=int, default=8)
+    ap.add_argument("--failure-hypothesis-top-n", type=int, default=None,
+                    help="maximum failure hypotheses to materialize; omit to include every grouped loss, use 0 to disable")
     ap.add_argument("--min-benefit-n", type=int, default=3)
     ap.add_argument("--min-harm-n", type=int, default=3)
     ap.add_argument("--no-force-proposal-route", action="store_true")
@@ -469,6 +481,8 @@ def main() -> None:
     ap.add_argument("--apply-accepted", action="store_true")
     ap.add_argument("--autonomous-apply", action="store_true",
                     help="apply writeback and accepted candidates automatically, still gated by acceptance and formal mapping checks")
+    ap.add_argument("--exclude-skipped-failure-hypotheses", action="store_true",
+                    help="do not generate failure hypotheses from judged rows skipped by writeback policy or missing meta")
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
@@ -500,6 +514,7 @@ def main() -> None:
         candidate_baseline_variant=args.candidate_baseline,
         apply_accepted=args.apply_accepted,
         autonomous_apply=args.autonomous_apply,
+        include_skipped_failure_hypotheses=not args.exclude_skipped_failure_hypotheses,
     )
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.proposal_artifact_out:

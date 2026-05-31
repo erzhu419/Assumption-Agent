@@ -204,6 +204,7 @@ def _evaluate_proposal(
         policy_rerank=policy_rerank,
         skip_domains=skip_domains,
         skip_missing_meta=skip_missing_meta,
+        probe_problem_ids=_probe_problem_ids(candidate),
     )
 
     if proposal_type == ProposalType.RETRIEVAL_POLICY.value:
@@ -283,20 +284,24 @@ def _build_probe_rows(
     policy_rerank: bool,
     skip_domains: set[str] | None,
     skip_missing_meta: bool,
+    probe_problem_ids: set[str] | None = None,
 ) -> list[ConditionedEvalRow]:
     rows = []
+    probe_problem_ids = probe_problem_ids or set()
     for problem in sample:
         pid = problem.get("problem_id", "")
         meta = meta_by_pid.get(pid, {})
-        if skip_missing_meta and not meta:
+        force_probe = pid in probe_problem_ids
+        if skip_missing_meta and not meta and not force_probe:
             continue
+        effective_skip_domains = set() if force_probe else skip_domains
         subgraph = retrieve_eval_subgraph(
             graph,
             problem,
             meta,
             top_k=top_k,
             policy_rerank=policy_rerank,
-            skip_domains=skip_domains,
+            skip_domains=effective_skip_domains,
         )
         if subgraph is None:
             continue
@@ -311,6 +316,17 @@ def _build_probe_rows(
             meta=meta,
         ))
     return rows
+
+
+def _probe_problem_ids(candidate: AssumptionNode | None) -> set[str]:
+    if not candidate:
+        return set()
+    activation = candidate.payload.get("activation", {})
+    return {
+        str(pid)
+        for pid in activation.get("problem_ids", [])
+        if pid
+    }
 
 
 def _readiness(

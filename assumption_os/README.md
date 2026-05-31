@@ -252,11 +252,18 @@ graph retrieval injects these hits through `format_policy_context` as a `Formal
 Mapping Reasoning` section. The first five-query search audit passed 5 / 5; see
 `phase four/assumption_graph/formal_mapping_search_eval_phase2_graph.md`.
 
-`assumption_os.failure_hypotheses` converts attributed loss rows from
-`writeback_summary.processed_trials` into candidate assumptions and manifests.
-In the current dry run it generated two candidates:
-`daily_life_0161` under `strategy_S03` for a memory-defect residual, and
-`business_0199` under `strategy_S12` for an optimization residual.
+`assumption_os.failure_hypotheses` converts loss rows into candidate assumptions
+and manifests. It now uses two sources: attributed graph losses from
+`writeback_summary.processed_trials`, and raw judgment losses for rows that
+writeback skipped because meta was missing or the current policy bypassed the
+domain. Skipped-source candidates carry `source_skipped_reason` in the node
+payload and manifest.
+
+In the current dry run it generated 14 failure hypotheses: two processed graph
+losses plus 12 net skipped losses from math/science missing-meta bypasses and
+software-engineering policy skips. Failure-hypothesis generation defaults to
+materializing every grouped loss; use `--failure-hypothesis-top-n` as an
+explicit proposal-budget cap, or `0` to disable this source.
 
 `assumption_os.proposals` then turns lifecycle actions into candidate nodes and
 experiment manifests. Retrieval-policy candidates copy the parent's trigger
@@ -277,6 +284,9 @@ python3 -m assumption_os.proposals \
 fresh solver/judge calls. It overlays the candidate in memory, routes each
 problem into trigger/control subsets, and can model the actual ablation mode
 where the proposal target is forced only on its own `should_fire` rows.
+For failure hypotheses generated from skipped rows, preflight probes the source
+problem even when the normal run would skip missing-meta math/science rows or
+the software-engineering domain.
 
 ```bash
 python3 -m assumption_os.candidate_eval \

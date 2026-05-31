@@ -654,6 +654,92 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(proposal["candidate_node"]["status"], "candidate")
             self.assertEqual(proposal["candidate_node"]["payload"]["source_problem_id"], "daily_life_001")
 
+    def test_failure_hypotheses_include_skipped_judgment_losses(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            for sid, claim in [
+                ("strategy_S18", "abstract shared mathematical structure"),
+                ("strategy_S24", "identify release bottlenecks"),
+            ]:
+                store.upsert_node(AssumptionNode(
+                    id=sid,
+                    type=AssumptionType.METHOD,
+                    claim=claim,
+                    tags=[sid.replace("strategy_", "")],
+                ))
+            store.flush()
+            judgment_path = Path(td) / "judgments.json"
+            judgment_path.write_text(json.dumps({
+                "math_skip": {"winner": "baseline"},
+                "se_skip": {"winner": "baseline"},
+            }), encoding="utf-8")
+            sample = [
+                {
+                    "problem_id": "math_skip",
+                    "domain": "mathematics",
+                    "difficulty": "hard",
+                    "description": "Find a unifying view between two identities.",
+                    "coverage_tags": ["S18"],
+                },
+                {
+                    "problem_id": "se_skip",
+                    "domain": "software_engineering",
+                    "difficulty": "medium",
+                    "description": "Prioritize release-blocking regressions before launch.",
+                    "coverage_tags": ["S24"],
+                },
+            ]
+            payload = build_failure_hypothesis_payload(
+                graph=SimpleAssumptionGraph(JsonlGraphStore(td)),
+                sample=sample,
+                meta_by_pid={"se_skip": {"frame": "release gate"}},
+                writeback_summary={"eval_id": "unit_eval", "processed_trials": []},
+                eval_id="unit_failures",
+                judgment_paths=[judgment_path],
+                intervention_variant="intervention",
+                baseline_variant="baseline",
+                skip_domains={"software_engineering"},
+                skip_missing_meta=True,
+            )
+            self.assertEqual(payload["processed_loss_problem_count"], 0)
+            self.assertEqual(payload["skipped_loss_problem_count"], 2)
+            self.assertEqual(payload["skipped_loss_scan"]["reason_counts"], {
+                "missing_meta": 1,
+                "policy_skipped": 1,
+            })
+            by_source = {
+                p["candidate_node"]["payload"]["source_problem_id"]: p
+                for p in payload["proposals"]
+            }
+            self.assertEqual(by_source["math_skip"]["parent_node_id"], "strategy_S18")
+            self.assertEqual(
+                by_source["math_skip"]["candidate_node"]["payload"]["source_skipped_reason"],
+                "missing_meta",
+            )
+            self.assertEqual(by_source["se_skip"]["parent_node_id"], "strategy_S24")
+            self.assertEqual(
+                by_source["se_skip"]["candidate_node"]["payload"]["source_skipped_reason"],
+                "policy_skipped",
+            )
+
+            preflight = build_candidate_eval_payload(
+                graph_dir=Path(td),
+                proposal_payload=payload,
+                sample=sample,
+                meta_by_pid={"se_skip": {"frame": "release gate"}},
+                eval_id="unit_preflight",
+                policy_rerank=True,
+                skip_domains={"software_engineering"},
+                skip_missing_meta=True,
+                min_trigger_n=1,
+                min_active_trigger_n=1,
+                force_proposal_route=True,
+            )
+            self.assertEqual(
+                preflight["readiness_counts"],
+                {CandidateReadiness.READY_FOR_FRESH_ABLATION.value: 2},
+            )
+
     def test_software_engineering_reranker_boosts_execution_specific_methods(self):
         with tempfile.TemporaryDirectory() as td:
             store = JsonlGraphStore(td)
