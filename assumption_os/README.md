@@ -28,6 +28,9 @@ an Assumption Graph.
   the committed graph store.
 - `candidate_acceptance.py` converts fresh proposal judgments into accept /
   reject / defer decisions and can apply only accepted candidates to the graph.
+- `recursive_runner.py` turns one-shot evolution artifacts into a recursive
+  assumption tree with parent hypotheses, child verification subproblems,
+  argument maps, return updates, and optional manifest writeback.
 
 ## Build The Graph
 
@@ -198,7 +201,6 @@ python3 -m assumption_os.evolution_cycle \
   --eval-id phase2_v20_ag_learned_gpt55_vs_gpt55_21_50_cycle \
   --policy-rerank \
   --assumption-graph-skip-domains software_engineering \
-  --failure-hypothesis-top-n 8 \
   --summary-out "phase four/assumption_graph/evolution_cycle_dryrun_phase2_v20_gpt55_21_50.json"
 ```
 
@@ -207,16 +209,46 @@ This automatically enables writeback and applies only candidates that pass the
 acceptance gate and are not blocked by the formal-mapping gate. If no candidate
 acceptance payload is supplied, it only performs the evaluation writeback.
 
-The first dry run processed 22 writeback-preview rows, produced 12 conditioned
-summaries, planned 8 lifecycle actions, generated 8 lifecycle proposals plus 2
-failure-derived hypothesis proposals, and identified 3 candidates ready for
-fresh ablation. Its sequential falsification gate produced `manifest_only=4`,
-`ready_for_ablation=3`, and `blocked_underpowered=3`. The Bayesian scorer ranked
-those 3 ready candidates as `run_ablation`; three underpowered candidates were
-ranked as `collect_evidence`. The same dry run also audits 45 typed formal nodes
-into 9 complete formal mappings and applies 10 proposal-level formal gates with
-0 blocked. The report is in
+The current dry run processed 22 writeback-preview rows and scanned skipped
+rows for failures (`missing_meta=18`, `policy_skipped=20`). It produced 12
+conditioned summaries, planned 8 lifecycle actions, generated 8 lifecycle
+proposals plus 14 failure-derived hypothesis proposals, and identified 13
+candidates ready for fresh ablation. Its sequential falsification gate produced
+`manifest_only=4`, `ready_for_ablation=13`, and `blocked_underpowered=5`. The
+Bayesian scorer ranked those 13 ready candidates as `run_ablation`; five
+underpowered candidates were ranked as `collect_evidence`. The same dry run
+also audits 45 typed formal nodes into 9 complete formal mappings and applies
+22 proposal-level formal gates with 0 blocked. The report is in
 `phase four/assumption_graph/evolution_cycle_dryrun_phase2_v20_gpt55_21_50.md`.
+
+Failure-hypothesis generation defaults to materializing every grouped loss. Use
+`--failure-hypothesis-top-n` only as an explicit proposal-budget cap, or `0` to
+disable this source.
+
+`assumption_os.recursive_runner` is the first recursive outer loop. It consumes
+the evolution-cycle payload, builds a task stack, and expands each high-priority
+candidate into an argument map plus a child verification/evidence/repair
+subproblem. Open child frames define exactly what observation is needed before
+their parent hypothesis can be updated.
+
+```bash
+python3 -m assumption_os.recursive_runner \
+  --graph-dir "phase four/assumption_graph" \
+  --problem "Phase2 v20 graph self-evolution has judged losses and skipped math/science/software rows; decide which assumptions should be tested, repaired, or written back next." \
+  --goal "Build a recursive assumption tree where each candidate hypothesis has explicit support, objections, falsification tests, and child subproblems that return updates to the parent." \
+  --problem-id phase2_v20_gpt55_21_50_recursive \
+  --eval-id recursive_runner_phase2_v20_gpt55_21_50 \
+  --evolution-payload "phase four/assumption_graph/evolution_cycle_dryrun_phase2_v20_gpt55_21_50.json" \
+  --max-children 8 \
+  --max-depth 3 \
+  --summary-out "phase four/assumption_graph/recursive_runner_phase2_v20_gpt55_21_50.json"
+```
+
+The first recursive dry run produced `root_problem=1`,
+`candidate_hypothesis=8`, and `verification_subproblem=8`, with 16 recursion
+edges and 8 leaf `run_fresh_ablation` next actions. By default this is a dry
+run; `--writeback` appends each recursive frame as a `TrialManifest` without
+applying candidates.
 
 `assumption_os.formal_mapping` is the executable GRAM/category-style bridge for
 typed formal forms. It groups Exp82-style `feature`, `constraint`,

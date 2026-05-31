@@ -35,6 +35,11 @@ from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_cand
 from assumption_os.proposals import ProposalType, build_candidate_proposals
 from assumption_os.record_phase2_eval import record_phase2_eval
 from assumption_os.retrieval_policy import retrieve_phase2_assumptions
+from assumption_os.recursive_runner import (
+    RecursiveFrameStatus,
+    RecursiveFrameType,
+    build_recursive_assumption_run,
+)
 from assumption_os.residuals import classify_manifest
 from assumption_os.schema import (
     AssumptionEdge,
@@ -393,6 +398,134 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertTrue(updated.trials)
             for node_id in summary["applied_candidate_node_ids"]:
                 self.assertEqual(updated.nodes[node_id].status, "active")
+
+    def test_recursive_runner_builds_argument_tree_from_evolution_payload(self):
+        with tempfile.TemporaryDirectory() as td:
+            graph_dir = Path(td) / "graph"
+            store = JsonlGraphStore(graph_dir)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S01",
+                type=AssumptionType.METHOD,
+                claim="Use controlled-variable tests.",
+                tags=["S01", "controlled"],
+                confidence=0.7,
+            ))
+            store.flush()
+            evolution_payload = {
+                "proposals": {
+                    "proposals": [{
+                        "proposal_id": "prop_ready",
+                        "proposal_type": ProposalType.FAILURE_HYPOTHESIS.value,
+                        "parent_node_id": "strategy_S01",
+                        "priority": 0.8,
+                        "candidate_node": {
+                            "id": "cand_ready",
+                            "claim": "Require a baseline and one intervention before answering.",
+                            "predicted_effects": ["improve causal diagnosis"],
+                        },
+                    }],
+                },
+                "candidate_preflight": {
+                    "summaries": [{
+                        "proposal_id": "prop_ready",
+                        "readiness": CandidateReadiness.READY_FOR_FRESH_ABLATION.value,
+                        "active_trigger_problem_ids": ["p1", "p2", "p3"],
+                        "trigger_problem_ids": ["p1", "p2", "p3"],
+                        "control_problem_ids": ["c1"],
+                        "command_hint": "run candidate ablation",
+                    }],
+                },
+                "falsification_gate": {
+                    "summaries": [{
+                        "proposal_id": "prop_ready",
+                        "decision": FalsificationDecision.READY_FOR_ABLATION.value,
+                        "next_action": "run_fresh_ablation",
+                        "ordered_checks": [{"name": "trigger_power", "passed": True}],
+                    }],
+                },
+                "bayesian_policy": {
+                    "scores": [{
+                        "proposal_id": "prop_ready",
+                        "recommended_action": BayesianPolicyAction.RUN_ABLATION.value,
+                        "posterior_priority": 1.2,
+                        "expected_value": 0.7,
+                        "command_hint": "run candidate ablation",
+                    }],
+                },
+                "policy_update_plan": {
+                    "actions": [{
+                        "proposal_id": "prop_ready",
+                        "policy_action": "run_fresh_ablation_before_promotion",
+                    }],
+                },
+                "regression_predictions": [{
+                    "proposal_id": "prop_ready",
+                    "risk": "low",
+                    "reasons": ["no outside active row"],
+                }],
+                "formal_mapping_gate": {
+                    "gates": [{
+                        "proposal_id": "prop_ready",
+                        "decision": "not_applicable",
+                        "blocks_policy_update": False,
+                    }],
+                },
+            }
+
+            payload = build_recursive_assumption_run(
+                graph_dir=graph_dir,
+                problem="Diagnose a channel experiment failure with one controlled intervention.",
+                goal="Create a recursive assumption tree.",
+                eval_id="unit_recursive",
+                evolution_payload=evolution_payload,
+                max_children=1,
+            )
+
+            self.assertEqual(payload["frame_counts"][RecursiveFrameType.ROOT_PROBLEM.value], 1)
+            self.assertEqual(payload["frame_counts"][RecursiveFrameType.CANDIDATE_HYPOTHESIS.value], 1)
+            self.assertEqual(payload["frame_counts"][RecursiveFrameType.VERIFICATION_SUBPROBLEM.value], 1)
+            self.assertEqual(payload["status_counts"][RecursiveFrameStatus.READY_TO_ACT.value], 2)
+            self.assertEqual(len(payload["recursion_edges"]), 2)
+            candidate = next(
+                frame for frame in payload["frames"]
+                if frame["frame_type"] == RecursiveFrameType.CANDIDATE_HYPOTHESIS.value
+            )
+            self.assertIn("preflight readiness=ready_for_fresh_ablation", candidate["argument"]["support"])
+            self.assertEqual(candidate["next_action"], "run_fresh_ablation_before_promotion")
+            child = next(
+                frame for frame in payload["frames"]
+                if frame["frame_type"] == RecursiveFrameType.VERIFICATION_SUBPROBLEM.value
+            )
+            self.assertEqual(child["parent_frame_id"], candidate["frame_id"])
+            self.assertEqual(child["next_action"], "run_fresh_ablation")
+            self.assertEqual(JsonlGraphStore(graph_dir).trials, {})
+
+    def test_recursive_runner_writeback_logs_frame_manifests(self):
+        with tempfile.TemporaryDirectory() as td:
+            graph_dir = Path(td) / "graph"
+            store = JsonlGraphStore(graph_dir)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S24",
+                type=AssumptionType.METHOD,
+                claim="Identify bottleneck before optimizing.",
+                tags=["S24", "bottleneck"],
+            ))
+            store.flush()
+
+            payload = build_recursive_assumption_run(
+                graph_dir=graph_dir,
+                problem="A release has many blocking bugs and needs triage.",
+                goal="Decide which assumption should shape the next action.",
+                eval_id="unit_recursive_writeback",
+                max_children=1,
+                writeback=True,
+            )
+            updated = JsonlGraphStore(graph_dir)
+            self.assertEqual(len(updated.trials), len(payload["frames"]))
+            self.assertTrue(all(
+                trial.component == "recursive_assumption_runner"
+                for trial in updated.trials.values()
+            ))
 
     def test_falsification_gate_orders_preflight_before_acceptance(self):
         proposal_payload = {
