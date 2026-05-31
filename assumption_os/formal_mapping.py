@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from enum import Enum
@@ -108,6 +109,74 @@ def build_formal_mapping_gate_payload(*, proposal_payload: dict, formal_mapping_
     }
 
 
+def search_formal_mappings(
+    formal_mapping_payload: dict,
+    query: str,
+    *,
+    top_n: int = 3,
+    min_score: float = 1.0,
+) -> list[dict]:
+    """Search complete formal mappings and return executable applications."""
+
+    text = query.lower()
+    applications = []
+    for summary in formal_mapping_payload.get("summaries", []):
+        if summary.get("status") != FormalMappingStatus.COMPLETE.value:
+            continue
+        score, matched_keywords, matched_regex = _mapping_trigger_score(summary, text)
+        if score < min_score:
+            continue
+        applications.append({
+            "mapping_id": summary.get("mapping_id"),
+            "source_key": summary.get("source_key"),
+            "score": score,
+            "matched_keywords": matched_keywords,
+            "matched_regex": matched_regex,
+            "constraint_operator": _collect_role_invariants(summary, FormalRole.CONSTRAINT.value),
+            "decomposition_operator": _collect_role_invariants(summary, FormalRole.DECOMPOSITION.value),
+            "verification_operator": _collect_role_invariants(summary, FormalRole.VERIFICATION.value),
+            "runtime_policy": _collect_role_invariants(summary, FormalRole.HP_CHANGE.value),
+        })
+    applications = sorted(applications, key=lambda a: (-a["score"], a["source_key"]))
+    return applications[:top_n]
+
+
+def format_formal_mapping_applications(applications: list[dict], *, max_items: int = 2) -> str:
+    if not applications:
+        return ""
+    lines = [
+        "## Formal Mapping Reasoning",
+        "Use these only when their trigger signal fits the current problem.",
+    ]
+    for app in applications[:max_items]:
+        lines.append(f"\n- {app['source_key']} ({app['mapping_id']}, score={app['score']:.1f})")
+        if app.get("matched_keywords"):
+            lines.append("  Trigger hits: " + ", ".join(app["matched_keywords"][:8]))
+        constraints = _first(app.get("constraint_operator", []))
+        if constraints:
+            required = constraints.get("required_substrings", [])
+            if required:
+                lines.append("  Preserve constraints: " + "; ".join(required[:6]))
+        decomp = _first(app.get("decomposition_operator", []))
+        if decomp:
+            steps = decomp.get("steps", [])
+            if steps:
+                lines.append("  Apply steps: " + " -> ".join(str(s) for s in steps[:5]))
+        verifier = _first(app.get("verification_operator", []))
+        if verifier and verifier.get("instruction"):
+            lines.append("  Verify: " + str(verifier["instruction"]))
+        runtime = _first(app.get("runtime_policy", []))
+        if runtime and runtime.get("has_runtime_policy"):
+            knobs = [
+                f"{key}={runtime[key]}"
+                for key in ("temperature", "top_p", "max_tokens")
+                if runtime.get(key) is not None
+            ]
+            if knobs:
+                lines.append("  Runtime hint: " + ", ".join(knobs))
+    return "\n".join(lines).strip()
+
+
 def _summarize_group(source_key: str, nodes: list[AssumptionNode]) -> FormalMappingSummary:
     views = [_node_view(node) for node in nodes]
     roles: dict[str, list[str]] = defaultdict(list)
@@ -183,6 +252,7 @@ def _node_invariants(node: AssumptionNode) -> dict:
     if role == FormalRole.DECOMPOSITION:
         steps = expr.get("steps", [])
         return {
+            "steps": list(steps),
             "step_count": len(steps),
             "has_ordered_operator": bool(steps),
         }
@@ -225,6 +295,39 @@ def _mapping_warnings(invariants: dict) -> list[str]:
     if not invariants.get("runtime_policy"):
         warnings.append("missing runtime policy")
     return warnings
+
+
+def _mapping_trigger_score(summary: dict, text: str) -> tuple[float, list[str], list[str]]:
+    matched_keywords: list[str] = []
+    matched_regex: list[str] = []
+    for node in summary.get("nodes", []):
+        if node.get("role") != FormalRole.FEATURE.value:
+            continue
+        invariants = node.get("invariants", {})
+        for keyword in [*invariants.get("keywords_zh", []), *invariants.get("keywords_en", [])]:
+            keyword_s = str(keyword).strip()
+            if keyword_s and keyword_s.lower() in text:
+                matched_keywords.append(keyword_s)
+        for pattern in invariants.get("regex", []):
+            try:
+                if re.search(pattern, text, flags=re.IGNORECASE):
+                    matched_regex.append(pattern)
+            except re.error:
+                continue
+    score = float(len(set(matched_keywords)) + 2 * len(set(matched_regex)))
+    return score, sorted(set(matched_keywords)), sorted(set(matched_regex))
+
+
+def _collect_role_invariants(summary: dict, role: str) -> list[dict]:
+    return [
+        node.get("invariants", {})
+        for node in summary.get("nodes", [])
+        if node.get("role") == role
+    ]
+
+
+def _first(items: list[dict]) -> dict:
+    return items[0] if items else {}
 
 
 def _proposal_gate(proposal: dict, formal_mapping_payload: dict) -> dict:
@@ -322,6 +425,8 @@ def main() -> None:
     ap.add_argument("--root", default=".")
     ap.add_argument("--graph-dir", default="phase four/assumption_graph")
     ap.add_argument("--node-ids", nargs="*", default=None)
+    ap.add_argument("--query", default=None)
+    ap.add_argument("--top-n", type=int, default=3)
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
@@ -330,6 +435,9 @@ def main() -> None:
         JsonlGraphStore(_resolve(root, args.graph_dir)),
         node_ids=args.node_ids,
     )
+    if args.query:
+        payload["search"] = search_formal_mappings(payload, args.query, top_n=args.top_n)
+        payload["formatted_search"] = format_formal_mapping_applications(payload["search"])
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.summary_out:
         out = _resolve(root, args.summary_out)

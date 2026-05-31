@@ -1,0 +1,424 @@
+{
+  "mapping_count": 9,
+  "status_counts": {
+    "complete": 9
+  },
+  "query_count": 5,
+  "pass_count": 5,
+  "results": [
+    {
+      "id": "fragile_prod",
+      "query": "线上生产系统黑盒缺文档，需要回滚监控护栏，先做风险评估。",
+      "expected": "WCAND01",
+      "top_source_key": "WCAND01",
+      "passed": true,
+      "applications": [
+        {
+          "mapping_id": "formal_map::WCAND01",
+          "source_key": "WCAND01",
+          "score": 7.0,
+          "matched_keywords": [
+            "回滚",
+            "护栏",
+            "监控",
+            "缺文档",
+            "黑盒"
+          ],
+          "matched_regex": [
+            "(高可用|线上|生产).{0,8}(黑盒|缺文档|回滚|监控|合规|风控|声誉风险)"
+          ],
+          "constraint_operator": [
+            {
+              "required_substrings": [
+                "回滚",
+                "护栏",
+                "观测",
+                "风险评估"
+              ],
+              "forbidden_substrings": [],
+              "has_constraint": true
+            }
+          ],
+          "decomposition_operator": [
+            {
+              "steps": [
+                "Step 1: First classify the request: decide whether this is a purely local implementation task or a high-risk system-governance task, based on signs like fragile dependencies, black-box components, missing documentation, availability requirements, compliance exposure, or reputational risk.",
+                "Step 2: If it is a high-risk system, identify the failure modes before proposing a solution: list what could break, what is hard to observe, what is hard to recover, and which parts require explicit responsibility boundaries.",
+                "Step 3: Design the solution with preventive controls first: add observability, validation, guardrails, rollback paths, safe defaults, and dependency isolation before any optimization or feature work.",
+                "Step 4: Define how the solution will be verified and operated: specify checks, rollout strategy, fallback conditions, and success/failure criteria so the system can be caught early if it degrades.",
+                "Step 5: Only after the preventive and operational plan is clear, produce the concrete answer or implementation, and make sure it reflects the chosen risk posture rather than treating the problem as a narrow coding fix."
+              ],
+              "step_count": 5,
+              "has_ordered_operator": true
+            }
+          ],
+          "verification_operator": [
+            {
+              "instruction": "Review your answer and explicitly test whether the request is truly a local implementation task or a fragile high-stakes system task; if the latter, add the missing observability, safeguards, rollback, validation, and ownership boundaries before finalizing.",
+              "has_verifier": true
+            }
+          ],
+          "runtime_policy": [
+            {
+              "temperature": 0.0,
+              "top_p": 0.9,
+              "max_tokens": 1800,
+              "has_runtime_policy": true
+            }
+          ]
+        },
+        {
+          "mapping_id": "formal_map::WCROSSL01",
+          "source_key": "WCROSSL01",
+          "score": 1.0,
+          "matched_keywords": [
+            "评估"
+          ],
+          "matched_regex": [],
+          "constraint_operator": [
+            {
+              "required_substrings": [
+                "先检验再选",
+                "列出候选方案",
+                "同一标准下比较",
+                "实际验证",
+                "对比测试后再决定"
+              ],
+              "forbidden_substrings": [],
+              "has_constraint": true
+            }
+          ],
+          "decomposition_operator": [
+            {
+              "steps": [
+                "Step 1: 列出所有可行候选方案，并明确每个方案要解决什么问题、适用什么场景，避免一开始就凭直觉选定唯一答案。",
+                "Step 2: 提前定义统一的比较指标和场景约束，例如准确率、成本、速度、稳定性、可解释性、资源限制等，确保所有方案在同一标准下接受检验。",
+                "Step 3: 按相同流程逐一“拉出来遛遛”——用相同数据、相同条件或相同例子验证每个方案，记录它们在各指标上的表现和失败点。",
+                "Step 4: 根据检验结果做权衡取舍：优先选择在关键指标上最符合约束的方案，而不是名气最大或直觉最顺的方案。",
+                "Step 5: 如果测试结果接近或存在不确定性，再补充更有针对性的验证，直到能够基于证据而不是印象做出最终决定。"
+              ],
+              "step_count": 5,
+              "has_ordered_operator": true
+            }
+          ],
+          "verification_operator": [
+            {
+              "instruction": "If your solution involved choosing among multiple methods, recompute the result with at least one alternative method and compare both against the problem’s constraints and target metric before finalizing your answer.",
+              "has_verifier": true
+            }
+          ],
+          "runtime_policy": [
+            {
+              "temperature": 0.1,
+              "top_p": 0.9,
+              "max_tokens": 2000,
+              "has_runtime_policy": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "migration_risk",
+      "query": "平台迁移有单点依赖、迁移成本、业务连续性和风险集中问题。",
+      "expected": "WCAND02",
+      "top_source_key": "WCAND02",
+      "passed": true,
+      "applications": [
+        {
+          "mapping_id": "formal_map::WCAND02",
+          "source_key": "WCAND02",
+          "score": 7.0,
+          "matched_keywords": [
+            "业务连续性",
+            "依赖",
+            "单点",
+            "迁移成本",
+            "风险集中"
+          ],
+          "matched_regex": [
+            "(单点依赖|迁移成本|沉没成本|业务连续性|风险集中)"
+          ],
+          "constraint_operator": [
+            {
+              "required_substrings": [
+                "先问问题本身",
+                "别在局部题面里求最优",
+                "资产配置",
+                "连续性风险"
+              ],
+              "forbidden_substrings": [],
+              "has_constraint": true
+            }
+          ],
+          "decomposition_operator": [
+            {
+              "steps": [
+                "Step 1: Identify the apparent problem statement and restate it in one sentence without choosing a solution yet (e.g., team/tech/role/plan).",
+                "Step 2: List the hidden drivers behind it by checking for delivery-window pressure, single-point dependency, migration or switching cost, sunk cost, and future flexibility concerns.",
+                "Step 3: Reframe the issue as a governance question: is this really an execution choice, or is it about asset allocation, risk concentration, continuity, and long-term optionality?",
+                "Step 4: Evaluate options against the hidden drivers first, then discard any solution that optimizes the surface problem while worsening continuity or concentration risk.",
+                "Step 5: Only after the true problem type is confirmed, propose the smallest action that addresses the real constraint rather than the most efficient local fix."
+              ],
+              "step_count": 5,
+              "has_ordered_operator": true
+            }
+          ],
+          "verification_operator": [
+            {
+              "instruction": "重新审读你的答案，明确把问题归类为“执行优化问题”或“资产配置/连续性治理问题”，并逐条检查你的建议是否真的在处理后者而不是只是在局部题面上做优化。",
+              "has_verifier": true
+            }
+          ],
+          "runtime_policy": [
+            {
+              "temperature": 0.0,
+              "top_p": 0.95,
+              "max_tokens": 1800,
+              "has_runtime_policy": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "irreversible_choice",
+      "query": "A还是B的二选一选择，存在隐性成本和不可逆失败风险，应先试点双轨分阶段。",
+      "expected": "WCAND03",
+      "top_source_key": "WCAND03",
+      "passed": true,
+      "applications": [
+        {
+          "mapping_id": "formal_map::WCAND03",
+          "source_key": "WCAND03",
+          "score": 10.0,
+          "matched_keywords": [
+            "不可逆",
+            "二选一",
+            "分阶段",
+            "双轨",
+            "试点",
+            "隐性成本"
+          ],
+          "matched_regex": [
+            "(?:A还是B|选A还是B|二选一)",
+            "(?:隐性成本|失败风险|不可逆)"
+          ],
+          "constraint_operator": [
+            {
+              "required_substrings": [
+                "分阶段",
+                "双轨",
+                "目标函数",
+                "试点",
+                "隐性成本"
+              ],
+              "forbidden_substrings": [],
+              "has_constraint": true
+            }
+          ],
+          "decomposition_operator": [
+            {
+              "steps": [
+                "Step 1: Before comparing options, restate the real decision goal as a concrete objective function with success metrics, constraints, and a clear failure threshold.",
+                "Step 2: For each option, list both visible benefits and hidden costs/risks, including information gaps, switching costs, irreversible losses, and resource constraints.",
+                "Step 3: Test whether the choice can be converted into a lower-risk decision by adding a pilot, phased rollout, parallel track, or other hedge that preserves reversibility.",
+                "Step 4: Compare the options using the same standard and only then recommend the path that best maximizes expected value while minimizing downside under uncertainty."
+              ],
+              "step_count": 4,
+              "has_ordered_operator": true
+            }
+          ],
+          "verification_operator": [
+            {
+              "instruction": "Re-check your answer by explicitly listing the true objective, the hidden costs and failure risks of each option, and whether a pilot, dual-track, or staged rollout could reduce irreversible downside; if any of these changes the ranking, revise your answer.",
+              "has_verifier": true
+            }
+          ],
+          "runtime_policy": [
+            {
+              "temperature": 0.0,
+              "top_p": 0.95,
+              "max_tokens": 1200,
+              "has_runtime_policy": true
+            }
+          ]
+        },
+        {
+          "mapping_id": "formal_map::WCAND05",
+          "source_key": "WCAND05",
+          "score": 1.0,
+          "matched_keywords": [
+            "分阶段"
+          ],
+          "matched_regex": [],
+          "constraint_operator": [
+            {
+              "required_substrings": [
+                "保全核心资产",
+                "分阶段",
+                "可回滚",
+                "识别失效前提",
+                "风险受控"
+              ],
+              "forbidden_substrings": [],
+              "has_constraint": true
+            }
+          ],
+          "decomposition_operator": [
+            {
+              "steps": [
+                "Step 1: Identify which parts of the current system must not be disrupted, and list the core assets, cash-flow, service continuity, and hard constraints that must be preserved.",
+                "Step 2: Re-evaluate the original assumptions and mark which historical premises have failed because the external environment, rules, or dependencies have changed.",
+                "Step 3: Reframe the task as a phased transformation of an operating system, not a simple upgrade, and define the target state, migration boundaries, and success criteria for each phase.",
+                "Step 4: Design a staged migration plan with reversible checkpoints, risk controls, fallback paths, and monitoring so each phase can be validated before the next one begins.",
+                "Step 5: Execute the transition incrementally, using feedback from each stage to adjust the next step while keeping the system running throughout."
+              ],
+              "step_count": 5,
+              "has_ordered_operator": true
+            }
+          ],
+          "verification_operator": [
+            {
+              "instruction": "Now verify your answer by checking whether it treats the problem as a phased, reversible transformation rather than a simple fix: list the historical assumptions that no longer hold, identify the assets or operations that must remain uninterrupted, and confirm that your proposed steps preserve continuity while adapting to the new constraints. If you find a problem, correct your answer.",
+              "has_verifier": true
+            }
+          ],
+          "runtime_policy": [
+            {
+              "temperature": 0.2,
+              "top_p": 0.95,
+              "max_tokens": 2000,
+              "has_runtime_policy": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "evidence_first",
+      "query": "症状模糊、变量纠缠、证据不足，不能直接下结论，要先调查取证再验证。",
+      "expected": "WCAND10",
+      "top_source_key": "WCAND10",
+      "passed": true,
+      "applications": [
+        {
+          "mapping_id": "formal_map::WCAND10",
+          "source_key": "WCAND10",
+          "score": 6.0,
+          "matched_keywords": [
+            "变量纠缠",
+            "症状模糊",
+            "证据不足",
+            "调查取证"
+          ],
+          "matched_regex": [
+            "直接.*(下结论|给方案)"
+          ],
+          "constraint_operator": [
+            {
+              "required_substrings": [
+                "先收集证据",
+                "先调查",
+                "先验证",
+                "再下结论"
+              ],
+              "forbidden_substrings": [],
+              "has_constraint": true
+            }
+          ],
+          "decomposition_operator": [
+            {
+              "steps": [
+                "Step 1: Restate the problem in neutral terms and explicitly separate what is observed, what is inferred, and what is still unknown; do not name causes or solutions yet.",
+                "Step 2: Decompose the situation into candidate variables, constraints, and possible failure modes, then mark which parts are evidence-backed and which are only guesses.",
+                "Step 3: Identify the minimum investigation needed to turn the key guesses into testable claims: what data, comparison, experiment, or observation would confirm or falsify each candidate.",
+                "Step 4: If the evidence is insufficient, answer with a diagnostic plan and the next questions to ask; if the evidence is sufficient, rank the candidates by support and only then give a conclusion or solution with confidence level."
+              ],
+              "step_count": 4,
+              "has_ordered_operator": true
+            }
+          ],
+          "verification_operator": [
+            {
+              "instruction": "For each main conclusion in your answer, list the specific observations, data, or tests that support it, then check whether any alternative explanation fits the same evidence better; revise or remove any claim that lacks direct support.",
+              "has_verifier": true
+            }
+          ],
+          "runtime_policy": [
+            {
+              "temperature": 0.0,
+              "top_p": 0.9,
+              "max_tokens": 2000,
+              "has_runtime_policy": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "benchmark_compare",
+      "query": "候选方案需要同一标准下比较，用验证指标、测试集、benchmark 做对比测试。",
+      "expected": "WCROSSL01",
+      "top_source_key": "WCROSSL01",
+      "passed": true,
+      "applications": [
+        {
+          "mapping_id": "formal_map::WCROSSL01",
+          "source_key": "WCROSSL01",
+          "score": 7.0,
+          "matched_keywords": [
+            "benchmark",
+            "候选方案",
+            "对比测试",
+            "测试集",
+            "验证指标"
+          ],
+          "matched_regex": [
+            "候选.*(方案|方法).*(比较|对比|评估)"
+          ],
+          "constraint_operator": [
+            {
+              "required_substrings": [
+                "先检验再选",
+                "列出候选方案",
+                "同一标准下比较",
+                "实际验证",
+                "对比测试后再决定"
+              ],
+              "forbidden_substrings": [],
+              "has_constraint": true
+            }
+          ],
+          "decomposition_operator": [
+            {
+              "steps": [
+                "Step 1: 列出所有可行候选方案，并明确每个方案要解决什么问题、适用什么场景，避免一开始就凭直觉选定唯一答案。",
+                "Step 2: 提前定义统一的比较指标和场景约束，例如准确率、成本、速度、稳定性、可解释性、资源限制等，确保所有方案在同一标准下接受检验。",
+                "Step 3: 按相同流程逐一“拉出来遛遛”——用相同数据、相同条件或相同例子验证每个方案，记录它们在各指标上的表现和失败点。",
+                "Step 4: 根据检验结果做权衡取舍：优先选择在关键指标上最符合约束的方案，而不是名气最大或直觉最顺的方案。",
+                "Step 5: 如果测试结果接近或存在不确定性，再补充更有针对性的验证，直到能够基于证据而不是印象做出最终决定。"
+              ],
+              "step_count": 5,
+              "has_ordered_operator": true
+            }
+          ],
+          "verification_operator": [
+            {
+              "instruction": "If your solution involved choosing among multiple methods, recompute the result with at least one alternative method and compare both against the problem’s constraints and target metric before finalizing your answer.",
+              "has_verifier": true
+            }
+          ],
+          "runtime_policy": [
+            {
+              "temperature": 0.1,
+              "top_p": 0.9,
+              "max_tokens": 2000,
+              "has_runtime_policy": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

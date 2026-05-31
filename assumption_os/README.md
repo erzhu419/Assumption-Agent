@@ -245,6 +245,13 @@ latest cycle has `not_applicable=10` proposal gates and `blocked=0`, meaning the
 current proposal set does not target typed formal bundles. The gate does not yet
 synthesize new mappings by itself.
 
+The same module now also supports solver-time formal search. `search_formal_mappings`
+matches problem text against complete mapping triggers, then returns executable
+constraints, ordered steps, verifier instructions, and runtime hints. Phase2
+graph retrieval injects these hits through `format_policy_context` as a `Formal
+Mapping Reasoning` section. The first five-query search audit passed 5 / 5; see
+`phase four/assumption_graph/formal_mapping_search_eval_phase2_graph.md`.
+
 `assumption_os.failure_hypotheses` converts attributed loss rows from
 `writeback_summary.processed_trials` into candidate assumptions and manifests.
 In the current dry run it generated two candidates:

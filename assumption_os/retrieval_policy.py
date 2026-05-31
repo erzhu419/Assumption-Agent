@@ -11,6 +11,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .formal_mapping import (
+    build_formal_mapping_payload,
+    format_formal_mapping_applications,
+    search_formal_mappings,
+)
 from .schema import ActivatedSubgraph, AssumptionNode, AssumptionType
 
 
@@ -29,6 +34,7 @@ class RetrievalPolicyResult:
     subgraph: ActivatedSubgraph
     policy_notes: list[str] = field(default_factory=list)
     diagnostics: dict = field(default_factory=dict)
+    formal_mapping_applications: list[dict] = field(default_factory=list)
 
 
 def retrieve_phase2_assumptions(
@@ -62,11 +68,26 @@ def retrieve_phase2_assumptions(
         *meta.get("anti_patterns", [])[:3],
     ]
     subgraph = graph.retrieve(query, seeds=seeds, top_k=max(top_k, pool_k), candidate_types=PRIMARY_TYPES)
+    formal_mapping_applications = search_formal_mappings(
+        build_formal_mapping_payload(graph.store),
+        query,
+        top_n=2,
+    )
     if domain == "software_engineering":
-        return _rerank_software_engineering(subgraph, query=query, top_k=top_k)
+        result = _rerank_software_engineering(subgraph, query=query, top_k=top_k)
+        result.formal_mapping_applications = formal_mapping_applications
+        result.diagnostics["formal_mapping_hits"] = [
+            app["source_key"] for app in formal_mapping_applications
+        ]
+        return result
     return RetrievalPolicyResult(
         subgraph=_slice_subgraph(subgraph, top_k),
-        diagnostics={"policy": "generic_primary", "domain": domain},
+        diagnostics={
+            "policy": "generic_primary",
+            "domain": domain,
+            "formal_mapping_hits": [app["source_key"] for app in formal_mapping_applications],
+        },
+        formal_mapping_applications=formal_mapping_applications,
     )
 
 
@@ -75,7 +96,8 @@ def format_policy_context(result: RetrievalPolicyResult | None, formatter, *, ma
         return ""
     text = formatter(result.subgraph, max_nodes=max_nodes)
     if not result.policy_notes:
-        return text
+        formal_text = format_formal_mapping_applications(result.formal_mapping_applications)
+        return "\n\n".join(x for x in [text, formal_text] if x).strip()
     lines = [
         text,
         "",
@@ -83,6 +105,9 @@ def format_policy_context(result: RetrievalPolicyResult | None, formatter, *, ma
         "Treat these as acceptance constraints for using the assumptions above.",
     ]
     lines.extend(f"- {note}" for note in result.policy_notes)
+    formal_text = format_formal_mapping_applications(result.formal_mapping_applications)
+    if formal_text:
+        lines.extend(["", formal_text])
     return "\n".join(lines).strip()
 
 

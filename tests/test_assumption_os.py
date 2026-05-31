@@ -24,6 +24,8 @@ from assumption_os.formal_mapping import (
     FormalMappingStatus,
     build_formal_mapping_gate_payload,
     build_formal_mapping_payload,
+    format_formal_mapping_applications,
+    search_formal_mappings,
 )
 from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
@@ -532,6 +534,14 @@ class AssumptionOSTest(unittest.TestCase):
             summary = payload["summaries"][0]
             self.assertTrue(summary["invariants"]["trigger_detector"])
             self.assertTrue(summary["invariants"]["verification_operator"])
+            self.assertEqual(summary["nodes"][1]["invariants"]["steps"], ["identify risk", "add guardrail"])
+
+            applications = search_formal_mappings(payload, "上线风险需要回滚")
+            self.assertEqual(applications[0]["source_key"], "WCAND_TEST")
+            self.assertIn("回滚", applications[0]["constraint_operator"][0]["required_substrings"])
+            formatted = format_formal_mapping_applications(applications)
+            self.assertIn("Formal Mapping Reasoning", formatted)
+            self.assertIn("identify risk", formatted)
 
     def test_formal_mapping_audit_rejects_missing_trigger(self):
         with tempfile.TemporaryDirectory() as td:
