@@ -172,6 +172,33 @@ python3 -m assumption_os.lifecycle \
   --summary-out "phase four/assumption_graph/lifecycle_plan_phase2_v20_gpt55_21_50.json"
 ```
 
+For a single conservative entry point, `assumption_os.evolution_cycle` now runs
+the whole planning loop in dry-run mode: writeback preview, conditioned gate,
+lifecycle actions, candidate proposals, candidate preflight, regression
+prediction, and policy update plan. It does not mutate the graph unless
+`--writeback` or `--apply-accepted` is explicitly supplied.
+
+```bash
+python3 -m assumption_os.evolution_cycle \
+  --graph-dir "phase four/assumption_graph" \
+  --sample "phase two/analysis/cache/sample_21_50.json" \
+  --meta "phase two/analysis/cache/answers/phase2_v20_ag_learned_gpt55_meta.json" \
+  --judgments \
+    "phase two/analysis/cache/judgments/phase2_v20_ag_learned_gpt55_vs_phase2_v20_gpt55.json" \
+    "phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_phase2_v20_ag_learned_gpt55.json" \
+  --intervention phase2_v20_ag_learned_gpt55 \
+  --baseline phase2_v20_gpt55 \
+  --eval-id phase2_v20_ag_learned_gpt55_vs_gpt55_21_50_cycle \
+  --policy-rerank \
+  --assumption-graph-skip-domains software_engineering \
+  --summary-out "phase four/assumption_graph/evolution_cycle_dryrun_phase2_v20_gpt55_21_50.json"
+```
+
+The first dry run processed 22 writeback-preview rows, produced 12 conditioned
+summaries, planned 8 lifecycle actions, generated 8 proposals, and identified
+one retrieval-policy candidate ready for fresh ablation. The report is in
+`phase four/assumption_graph/evolution_cycle_dryrun_phase2_v20_gpt55_21_50.md`.
+
 `assumption_os.proposals` then turns lifecycle actions into candidate nodes and
 experiment manifests. Retrieval-policy candidates copy the parent's trigger
 surface into a candidate retrieval node; revision candidates are narrower child

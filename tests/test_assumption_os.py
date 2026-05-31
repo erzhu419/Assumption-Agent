@@ -15,6 +15,7 @@ from assumption_os.conditioned_eval import (
     route_problem_to_node,
 )
 from assumption_os.domain_templates import format_phase2_domain_execution_template
+from assumption_os.evolution_cycle import build_evolution_cycle_payload
 from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
 from assumption_os.math_science_policy import route_math_science_problem
@@ -233,6 +234,75 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(len(updated.trials), 1)
             self.assertTrue(updated.evidence)
             self.assertTrue(updated.nodes["strategy_S01"].residual_ids)
+
+    def test_evolution_cycle_plans_loop_without_mutating_by_default(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            graph_dir = root / "graph"
+            store = JsonlGraphStore(graph_dir)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S01",
+                type=AssumptionType.METHOD,
+                claim="固定其他条件，每次只改变一个因素",
+                tags=["S01", "控制变量"],
+                confidence=0.6,
+            ))
+            store.flush()
+
+            sample_path = root / "sample.json"
+            sample_path.write_text(json.dumps([
+                {
+                    "problem_id": "p1",
+                    "domain": "business",
+                    "difficulty": "medium",
+                    "description": "预算有限时先小额测试不同渠道。",
+                    "coverage_tags": ["S01"],
+                }
+            ], ensure_ascii=False), encoding="utf-8")
+            meta_path = root / "meta.json"
+            meta_path.write_text(json.dumps({
+                "p1": {
+                    "frame": "hybrid",
+                    "critical_reframe": "用小实验定位有效渠道。",
+                    "rewritten_problem": "设计小额对照实验。",
+                    "what_changed": "显式化预算约束。",
+                    "anti_patterns": [],
+                }
+            }, ensure_ascii=False), encoding="utf-8")
+            judgment_path = root / "judgments.json"
+            judgment_path.write_text(json.dumps({
+                "p1": {
+                    "winner": "ag",
+                    "score_a": 9,
+                    "score_b": 8,
+                    "reasoning": "ag 更具体。",
+                    "a_was": "A",
+                }
+            }, ensure_ascii=False), encoding="utf-8")
+
+            payload = build_evolution_cycle_payload(
+                root=root,
+                graph_dir=graph_dir,
+                sample_path=sample_path,
+                meta_path=meta_path,
+                judgment_paths=[judgment_path],
+                intervention_variant="ag",
+                baseline_variant="base",
+                eval_id="unit_cycle",
+                min_benefit_n=1,
+                min_harm_n=1,
+            )
+            self.assertTrue(payload["writeback_summary"]["dry_run"])
+            self.assertEqual(payload["writeback_summary"]["processed"], 1)
+            self.assertEqual(payload["conditioned"]["decision_counts"], {"keep": 1})
+            self.assertEqual(payload["lifecycle"]["action_counts"], {"keep_collect_evidence": 1})
+            self.assertEqual(payload["proposals"]["proposal_counts"], {"evidence_request": 1})
+            self.assertEqual(payload["candidate_preflight"]["readiness_counts"], {"manifest_only": 1})
+            self.assertEqual(
+                payload["policy_update_plan"]["actions"][0]["policy_action"],
+                "record_manifest_only_no_graph_policy_change",
+            )
+            self.assertEqual(JsonlGraphStore(graph_dir).trials, {})
 
     def test_software_engineering_reranker_boosts_execution_specific_methods(self):
         with tempfile.TemporaryDirectory() as td:
