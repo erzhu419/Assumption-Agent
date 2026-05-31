@@ -205,11 +205,40 @@ policy proposals force the parent node only on the parent's trigger subset;
 revision/scope proposals force the candidate child only on the child's trigger
 subset. Neutral and no-fire rows remain unforced controls.
 
+Proposal forcing can now be narrowed further by route metadata:
+
+```bash
+python3 "phase one/scripts/validation/phase2_v20_framework.py" \
+  --variant proposal_ready_combo_se_hard_next \
+  --sample proposal_samples/proposal_se_mh_sample.json \
+  --assumption-graph "phase four/assumption_graph" \
+  --assumption-graph-skip-domains "" \
+  --assumption-proposals "phase four/assumption_graph/proposals_phase2_v20_gpt55_21_50.json" \
+  --assumption-proposal-ids prop_3a5cf90b1010 prop_e9c8ee2fa09b prop_b7fd42179967 prop_ad2c1f2b1cad prop_16571ee152bc prop_66a126a35878 \
+  --assumption-force-proposal-route \
+  --assumption-force-proposal-domains software_engineering \
+  --assumption-force-proposal-difficulties hard
+```
+
+`--assumption-route-scope-proposals` is also available for stricter candidate
+isolation: it removes proposal candidate nodes outside their own routed
+`should_fire` subset. The first screening found that this was safer outside the
+target route but too suppressive for software-engineering gains, so it remains
+an experimental guard rather than the default policy.
+
 In the first mini-model screening pass, the six ready proposals were also tested
 as a combo route-conditioned policy (`proposal_ready_combo_gpt54mini`) against a
 same-model v20 baseline on the union proposal sample. The combo won 26-12
 bidirectionally, mostly on software-engineering rows. Individual acceptance
 remained conservative and did not apply any candidate to the graph.
+
+The follow-up routed policy evaluation is recorded in
+`phase four/assumption_graph/route_policy_ablation_gpt54mini_gpt55.md`. Mini
+screening preferred `software_engineering` + `medium|hard`, but GPT-5.5
+confirmation showed the medium rows were not stable. The current recommended
+gate is therefore `software_engineering` + `hard` + proposal `should_fire`,
+which scored 6 wins, 2 losses, and 10 fallback ties against `phase2_v20_gpt55`
+on the nine SE confirmation rows.
 
 After fresh judgments are available, `assumption_os.candidate_acceptance`
 separates trigger benefit from control harm. By default it only writes a JSON

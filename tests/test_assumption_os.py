@@ -18,7 +18,7 @@ from assumption_os.domain_templates import format_phase2_domain_execution_templa
 from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
 from assumption_os.candidate_eval import CandidateReadiness, build_candidate_eval_payload
-from assumption_os.proposal_overlay import apply_proposal_overlay
+from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
 from assumption_os.proposals import ProposalType, build_candidate_proposals
 from assumption_os.record_phase2_eval import record_phase2_eval
 from assumption_os.retrieval_policy import retrieve_phase2_assumptions
@@ -524,6 +524,7 @@ class AssumptionOSTest(unittest.TestCase):
             overlay_store = JsonlGraphStore(td)
             applied = apply_proposal_overlay(overlay_store, payload)
             self.assertEqual(len(applied), 1)
+            self.assertEqual(proposal_candidate_ids(payload), applied)
             self.assertIn(applied[0], overlay_store.nodes)
             self.assertNotIn(applied[0], JsonlGraphStore(td).nodes)
 

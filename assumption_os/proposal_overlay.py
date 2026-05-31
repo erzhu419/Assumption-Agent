@@ -75,6 +75,28 @@ def apply_proposal_overlay(
     return applied_candidate_ids
 
 
+def proposal_candidate_ids(
+    proposal_payload: dict,
+    *,
+    proposal_ids: Iterable[str] | None = None,
+    parent_node_ids: Iterable[str] | None = None,
+    proposal_types: Iterable[str] | None = None,
+) -> list[str]:
+    """Return candidate node ids for matching proposals."""
+
+    ids: list[str] = []
+    for proposal in iter_matching_proposals(
+        proposal_payload,
+        proposal_ids=proposal_ids,
+        parent_node_ids=parent_node_ids,
+        proposal_types=proposal_types,
+    ):
+        candidate = proposal.get("candidate_node")
+        if candidate and candidate.get("id"):
+            ids.append(candidate["id"])
+    return ids
+
+
 def apply_proposal_overlay_file(
     store: JsonlGraphStore,
     proposal_path: str | Path,

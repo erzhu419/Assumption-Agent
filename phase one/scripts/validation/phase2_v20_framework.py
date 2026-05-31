@@ -179,6 +179,9 @@ def load_assumption_graph(
     proposal_ids: list[str] | None = None,
     proposal_types: set[str] | None = None,
     force_proposal_route: bool = False,
+    force_proposal_domains: set[str] | None = None,
+    force_proposal_difficulties: set[str] | None = None,
+    route_scope_proposals: bool = False,
 ):
     if not graph_dir:
         return None
@@ -215,6 +218,9 @@ def load_assumption_graph(
         proposal_ids,
         proposal_types,
         force_proposal_route,
+        force_proposal_domains or set(),
+        force_proposal_difficulties or set(),
+        route_scope_proposals,
     )
 
 
@@ -245,6 +251,9 @@ def build_assumption_context(
         proposal_ids,
         proposal_types,
         force_proposal_route,
+        force_proposal_domains,
+        force_proposal_difficulties,
+        route_scope_proposals,
     ) = graph_bundle
     result = retrieve_policy(
         graph,
@@ -257,24 +266,38 @@ def build_assumption_context(
         pool_k=24,
         skip_domains=skip_domains,
     )
-    if result and proposal_payload and force_proposal_route:
-        from assumption_os.proposal_overlay import proposal_route_target_ids
+    if result and proposal_payload and (force_proposal_route or route_scope_proposals):
+        from assumption_os.proposal_overlay import proposal_candidate_ids, proposal_route_target_ids
 
-        forced_ids = proposal_route_target_ids(
-            graph.store,
-            proposal_payload,
-            problem={
-                "problem_id": pid,
-                "domain": dom,
-                "difficulty": diff,
-                "description": problem,
-                "coverage_tags": coverage_tags or [],
-            },
-            meta=meta,
-            proposal_ids=proposal_ids,
-            proposal_types=proposal_types,
+        target_ids: list[str] = []
+        route_domain_ok = not force_proposal_domains or dom in force_proposal_domains
+        route_difficulty_ok = (
+            not force_proposal_difficulties or diff in force_proposal_difficulties
         )
-        _force_nodes_into_result(result, graph, forced_ids)
+        if route_domain_ok and route_difficulty_ok:
+            target_ids = proposal_route_target_ids(
+                graph.store,
+                proposal_payload,
+                problem={
+                    "problem_id": pid,
+                    "domain": dom,
+                    "difficulty": diff,
+                    "description": problem,
+                    "coverage_tags": coverage_tags or [],
+                },
+                meta=meta,
+                proposal_ids=proposal_ids,
+                proposal_types=proposal_types,
+            )
+        if route_scope_proposals:
+            candidates = proposal_candidate_ids(
+                proposal_payload,
+                proposal_ids=proposal_ids,
+                proposal_types=proposal_types,
+            )
+            _remove_nodes_from_result(result, set(candidates) - set(target_ids))
+        if force_proposal_route and route_domain_ok and route_difficulty_ok:
+            _force_nodes_into_result(result, graph, target_ids)
     return policy_formatter(result, formatter, max_nodes=8)
 
 
@@ -290,6 +313,20 @@ def _force_nodes_into_result(result, graph, node_ids: list[str]) -> None:
     for node in forced:
         subgraph.scores[node.id] = max(1.25, subgraph.scores.get(node.id, 0.0))
     result.policy_notes.append("Forced proposal-route nodes: " + ", ".join(node.id for node in forced))
+
+
+def _remove_nodes_from_result(result, node_ids: set[str]) -> None:
+    if not node_ids:
+        return
+    subgraph = result.subgraph
+    before = len(subgraph.nodes)
+    subgraph.nodes = [node for node in subgraph.nodes if node.id not in node_ids]
+    removed = before - len(subgraph.nodes)
+    if not removed:
+        return
+    for node_id in node_ids:
+        subgraph.scores.pop(node_id, None)
+    result.policy_notes.append(f"Route-scoped proposal candidates removed: {removed}")
 
 
 def build_domain_execution_block(enabled: bool, dom: str, problem: str, meta: dict) -> str:
@@ -323,6 +360,12 @@ def main():
                     help="comma-separated proposal types to overlay")
     ap.add_argument("--assumption-force-proposal-route", action="store_true",
                     help="force overlaid proposal target nodes only on their routed should-fire problems")
+    ap.add_argument("--assumption-force-proposal-domains", default="",
+                    help="comma-separated domains where proposal-route forcing is allowed")
+    ap.add_argument("--assumption-force-proposal-difficulties", default="",
+                    help="comma-separated difficulties where proposal-route forcing is allowed")
+    ap.add_argument("--assumption-route-scope-proposals", action="store_true",
+                    help="remove proposal candidate nodes outside their routed should-fire subset")
     ap.add_argument("--disable-domain-execution-template", action="store_true",
                     help="disable domain execution templates that are enabled with --assumption-graph")
     args = ap.parse_args()
@@ -366,6 +409,9 @@ def main():
         proposal_ids=args.assumption_proposal_ids,
         proposal_types=parse_csv_set(args.assumption_proposal_types),
         force_proposal_route=args.assumption_force_proposal_route,
+        force_proposal_domains=parse_csv_set(args.assumption_force_proposal_domains),
+        force_proposal_difficulties=parse_csv_set(args.assumption_force_proposal_difficulties),
+        route_scope_proposals=args.assumption_route_scope_proposals,
     )
     assumption_graph_skip_domains = parse_csv_set(args.assumption_graph_skip_domains)
     domain_execution_enabled = bool(args.assumption_graph) and not args.disable_domain_execution_template
