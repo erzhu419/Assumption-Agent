@@ -17,6 +17,7 @@ from assumption_os.conditioned_eval import (
 from assumption_os.domain_templates import format_phase2_domain_execution_template
 from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
+from assumption_os.math_science_policy import route_math_science_problem
 from assumption_os.candidate_eval import CandidateReadiness, build_candidate_eval_payload
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
 from assumption_os.proposals import ProposalType, build_candidate_proposals
@@ -289,6 +290,20 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertIn("capability matrix", adapter_template)
 
         self.assertEqual(format_phase2_domain_execution_template("business", "渠道预算怎么分配", {}), "")
+
+    def test_math_science_bypass_routes_research_and_decision_rows(self):
+        self.assertEqual(
+            route_math_science_problem("mathematics", "导师建议我尝试构建反例，但我投入了一年证明这个定理。"),
+            "math_research_bridge",
+        )
+        self.assertEqual(
+            route_math_science_problem("mathematics", "计算满足方程 x^2=4 的所有实数解。"),
+            "math_formal",
+        )
+        self.assertEqual(
+            route_math_science_problem("science", "博士合同三个月后到期，设备排队六个月，是否应先投稿？"),
+            "science_decision",
+        )
 
     def test_conditioned_evaluator_routes_and_gates_by_relevance(self):
         node = AssumptionNode(

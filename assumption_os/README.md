@@ -102,6 +102,22 @@ python3 "phase one/scripts/validation/phase2_v20_framework.py" \
   --assumption-graph-skip-domains ""
 ```
 
+For math/science bypass rows, use `--math-science-bridge` to keep ordinary
+proof/mechanism rows strict while routing research-bridge and science-decision
+rows to concrete bridge/action prompts:
+
+```bash
+python3 "phase one/scripts/validation/phase2_v20_framework.py" \
+  --variant phase2_v20_ms_bridge_next \
+  --sample proposal_samples/math_science_21_50_sample.json \
+  --math-science-bridge
+```
+
+On the 21-50 heldout math/science rows, this intent-aware bypass beat current
+`phase2_v20_gpt55` 16-2 bidirectionally and beat the raw `baseline` 18-0. The
+report is in
+`phase four/assumption_graph/math_science_bridge_eval_gpt55_21_50.md`.
+
 The software-engineering reranker is available when the skip gate is disabled,
 but it is not yet enabled by default. In the targeted rerun it improved
 retrieval strongly but only reached neutral answer quality, so the default gate

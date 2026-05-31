@@ -366,6 +366,8 @@ def main():
                     help="comma-separated difficulties where proposal-route forcing is allowed")
     ap.add_argument("--assumption-route-scope-proposals", action="store_true",
                     help="remove proposal candidate nodes outside their routed should-fire subset")
+    ap.add_argument("--math-science-bridge", action="store_true",
+                    help="use intent-aware math/science bypass prompts for research-bridge and science-decision rows")
     ap.add_argument("--disable-domain-execution-template", action="store_true",
                     help="disable domain execution templates that are enabled with --assumption-graph")
     args = ap.parse_args()
@@ -435,6 +437,19 @@ def main():
             else:
                 prompt = EXECUTE_SCIENCE.format(problem=problem)
                 max_tok = 900
+            if args.math_science_bridge:
+                from assumption_os.math_science_policy import format_math_science_prompt
+
+                prompt, max_tok, route = format_math_science_prompt(dom, problem)
+                meta[pid] = {
+                    "frame": "object" if route in {"math_formal", "science_mechanism"} else "hybrid",
+                    "critical_reframe": f"math/science bypass route: {route}",
+                    "rewritten_problem": problem,
+                    "what_changed": "intent-aware math/science bypass",
+                    "anti_patterns": [],
+                    "bypass_route": route,
+                }
+                cache_save(meta_path, meta)
             try:
                 resp = _generate_with_retry(client, prompt, max_tokens=max_tok, temperature=0.3)
                 answers[pid] = resp["text"].strip()
