@@ -18,6 +18,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Iterable
 
+from .activation import build_activation_profile, keyword_hit_count
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph, cosine_counter, tokenize
 from .record_phase2_eval import PRIMARY_TYPES, retrieve_eval_subgraph
 from .schema import AssumptionNode
@@ -147,38 +148,38 @@ def route_problem_to_node(
     thresholds: GateThresholds | None = None,
 ) -> RouteLabel:
     thresholds = thresholds or GateThresholds()
-    activation = node.payload.get("activation", {}) if isinstance(node.payload, dict) else {}
-    domains = set(activation.get("domains", []))
-    excluded_domains = set(activation.get("excluded_domains", []))
-    difficulties = set(activation.get("difficulties", []))
-    problem_ids = set(activation.get("problem_ids", []))
-    keywords = [str(x).lower() for x in activation.get("keywords", [])]
-    strategy_ids = {str(x) for x in activation.get("coverage_tags", [])}
-
-    if row.problem_id in problem_ids:
+    profile = build_activation_profile(node)
+    if row.problem_id in profile.problem_ids:
         return RouteLabel.SHOULD_FIRE
-    if row.domain in excluded_domains:
+    if row.domain in profile.excluded_domains:
         return RouteLabel.NO_FIRE
-    if domains and row.domain not in domains:
+    if profile.family not in {"wisdom"} and profile.domains and row.domain not in profile.domains:
         return RouteLabel.NO_FIRE
-    if difficulties and row.difficulty not in difficulties:
+    if profile.difficulties and row.difficulty not in profile.difficulties:
         return RouteLabel.NO_FIRE
-    if keywords:
-        text = _row_text(row).lower()
-        return RouteLabel.SHOULD_FIRE if any(k in text for k in keywords) else RouteLabel.NEUTRAL
+    if profile.keywords:
+        hits = keyword_hit_count(profile, _row_text(row))
+        domain_ok = not profile.domains or row.domain in profile.domains
+        if hits >= profile.min_keyword_hits and (domain_ok or hits >= profile.min_keyword_hits + 1):
+            return RouteLabel.SHOULD_FIRE
+        if profile.family == "wisdom":
+            return RouteLabel.NEUTRAL
 
     gold_ids = {f"strategy_{sid}" for sid in row.coverage_tags}
     if node.id in gold_ids:
         return RouteLabel.SHOULD_FIRE
-    if strategy_ids & set(row.coverage_tags):
+    if profile.coverage_tags & set(row.coverage_tags):
         return RouteLabel.SHOULD_FIRE
     tag_set = {str(tag) for tag in node.tags}
     if tag_set & set(row.coverage_tags):
         return RouteLabel.SHOULD_FIRE
+    if profile.family == "strategy":
+        return RouteLabel.NEUTRAL
 
-    node_domains = {t.split(":", 1)[1] for t in tag_set if t.startswith("domain:")}
-    if node_domains:
-        return RouteLabel.SHOULD_FIRE if row.domain in node_domains else RouteLabel.NO_FIRE
+    if profile.domains:
+        return RouteLabel.SHOULD_FIRE if row.domain in profile.domains else RouteLabel.NO_FIRE
+    if not profile.allow_lexical_fallback:
+        return RouteLabel.NEUTRAL
 
     lexical = cosine_counter(tokenize(_node_route_text(node)), tokenize(_row_text(row)))
     if lexical >= thresholds.lexical_should_fire:

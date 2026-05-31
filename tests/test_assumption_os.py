@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 
 from assumption_os.adapters import ingest_artifacts, load_exp82_hypotheses, load_wisdom_nodes
+from assumption_os.activation import build_activation_profile
+from assumption_os.candidate_acceptance import AcceptanceDecision, apply_accepted_candidates, build_acceptance_payload
 from assumption_os.conditioned_eval import (
     ConditionedEvalRow,
     GateDecision,
@@ -14,6 +16,10 @@ from assumption_os.conditioned_eval import (
 )
 from assumption_os.domain_templates import format_phase2_domain_execution_template
 from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
+from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
+from assumption_os.candidate_eval import CandidateReadiness, build_candidate_eval_payload
+from assumption_os.proposal_overlay import apply_proposal_overlay
+from assumption_os.proposals import ProposalType, build_candidate_proposals
 from assumption_os.record_phase2_eval import record_phase2_eval
 from assumption_os.retrieval_policy import retrieve_phase2_assumptions
 from assumption_os.residuals import classify_manifest
@@ -340,6 +346,314 @@ class AssumptionOSTest(unittest.TestCase):
         )
         summary = evaluate_node(node, rows, thresholds=GateThresholds(min_benefit_n=2, min_harm_n=1))
         self.assertIn(summary.decision, {GateDecision.KEEP, GateDecision.PROMOTE})
+
+    def test_conditioned_strategy_routing_does_not_fall_back_to_broad_lexical_match(self):
+        node = AssumptionNode(
+            id="strategy_S15",
+            type=AssumptionType.METHOD,
+            claim="从最小可工作版本开始，逐步添加功能，通过迭代循环不断完善和扩展产品或系统。",
+            tags=["S15", "incremental"],
+        )
+        unrelated = ConditionedEvalRow(
+            problem_id="p1",
+            domain="software_engineering",
+            difficulty="medium",
+            description="评估医疗设备的商业化路径和责任边界。",
+            coverage_tags=["S21", "S23"],
+            outcome="win",
+            active_assumption_ids=[],
+        )
+        relevant = ConditionedEvalRow(
+            problem_id="p2",
+            domain="software_engineering",
+            difficulty="hard",
+            description="给遗留系统设计最小可行增量替换路径。",
+            coverage_tags=["S15"],
+            outcome="win",
+            active_assumption_ids=["strategy_S15"],
+        )
+
+        self.assertEqual(route_problem_to_node(node, unrelated), RouteLabel.NEUTRAL)
+        self.assertEqual(route_problem_to_node(node, relevant), RouteLabel.SHOULD_FIRE)
+
+    def test_wisdom_routing_uses_trigger_profile_not_broad_lexical_match(self):
+        wisdom = AssumptionNode(
+            id="wisdom_W020",
+            type=AssumptionType.METHOD,
+            claim="当你犹豫是继续投入还是及时退出时，区分责任感、脸面、沉没代价和不甘心。",
+            tags=["wisdom", "W020"],
+            context_conditions=["当你在继续与撤回之间摇摆，既受惯性牵引又怕显得软弱时。"],
+            payload={
+                "signal": "当你在继续与撤回之间摇摆，既受惯性牵引又怕显得软弱时。",
+                "unpacked_for_llm": "当你犹豫是继续投入还是及时退出时，先分开看沉没代价和不甘心。",
+                "cross_domain_examples": [
+                    {"domain": "daily_life", "scenario": "关系只剩消耗，却因投入太久不肯离开。"},
+                    {"domain": "engineering", "scenario": "方案方向已错，却因前期投入巨大被强行延续。"},
+                ],
+            },
+        )
+        profile = build_activation_profile(wisdom)
+        self.assertEqual(profile.family, "wisdom")
+        self.assertFalse(profile.allow_lexical_fallback)
+
+        relevant = ConditionedEvalRow(
+            problem_id="p1",
+            domain="daily_life",
+            difficulty="medium",
+            description="我已经投入很多钱和时间，不甘心退出，但继续下去身体越来越差。",
+            coverage_tags=[],
+            outcome="win",
+            active_assumption_ids=["wisdom_W020"],
+        )
+        unrelated = ConditionedEvalRow(
+            problem_id="p2",
+            domain="business",
+            difficulty="medium",
+            description="如何给新产品制定渠道预算和首批客户画像。",
+            coverage_tags=[],
+            outcome="loss",
+            active_assumption_ids=["wisdom_W020"],
+        )
+
+        self.assertEqual(route_problem_to_node(wisdom, relevant), RouteLabel.SHOULD_FIRE)
+        self.assertEqual(route_problem_to_node(wisdom, unrelated), RouteLabel.NEUTRAL)
+
+    def test_lifecycle_planner_maps_conditioned_gate_to_auditable_actions(self):
+        summaries = [
+            {
+                "node_id": "strategy_S15",
+                "claim": "incremental",
+                "decision": "expand_retrieval",
+                "route_counts": {"should_fire": 8},
+                "active_counts": {"should_fire": 2},
+                "active_should_fire_outcomes": {"win": 2},
+                "utility_when_active_should_fire": 1.0,
+                "utility_lcb90": 1.0,
+                "harm_ucb90": None,
+                "reasons": ["useful but under-retrieved"],
+            },
+            {
+                "node_id": "strategy_S21",
+                "claim": "stop dead end",
+                "decision": "revise",
+                "route_counts": {"should_fire": 6},
+                "active_counts": {"should_fire": 6},
+                "active_should_fire_outcomes": {"loss": 4, "win": 2},
+                "utility_when_active_should_fire": 0.33,
+                "utility_lcb90": 0.08,
+                "harm_ucb90": None,
+                "reasons": ["weak benefit"],
+            },
+        ]
+        actions = plan_lifecycle_actions(summaries, eval_id="unit_eval")
+        self.assertEqual(actions[0].action_type, LifecycleActionType.EXPAND_RETRIEVAL)
+        self.assertEqual(actions[0].to_trial_manifest(eval_id="unit_eval").assumption_ids, ["strategy_S15"])
+        self.assertEqual(actions[1].action_type, LifecycleActionType.REVISE_ASSUMPTION)
+
+    def test_candidate_proposals_create_child_nodes_without_mutating_parent(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S21",
+                type=AssumptionType.METHOD,
+                claim="识别当前路径已不可能成功，放弃并回溯到更高层决策点",
+                tags=["S21"],
+                confidence=0.8,
+            ))
+            store.flush()
+            graph = SimpleAssumptionGraph(JsonlGraphStore(td))
+            lifecycle_payload = {
+                "actions": [
+                    {
+                        "node_id": "strategy_S21",
+                        "action_type": "revise_assumption",
+                        "priority": 0.7,
+                        "rationale": "conditioned utility failed",
+                        "proposed_updates": {"expected_effect": "child should beat parent"},
+                        "verification_plan": "test child against parent",
+                        "rollback_condition": "reject weak child",
+                        "source": {"decision": "revise"},
+                    }
+                ]
+            }
+
+            proposals = build_candidate_proposals(
+                graph=graph,
+                lifecycle_payload=lifecycle_payload,
+                eval_id="unit_eval",
+            )
+            self.assertEqual(len(proposals), 1)
+            self.assertEqual(proposals[0].proposal_type, ProposalType.ASSUMPTION_REVISION)
+            self.assertEqual(proposals[0].parent_node_id, "strategy_S21")
+            self.assertEqual(proposals[0].candidate_node["status"], "candidate")
+            self.assertIn("failure thresholds", proposals[0].candidate_node["claim"])
+            self.assertIn("strategy_S21", graph.store.nodes)
+            self.assertNotIn(proposals[0].candidate_node["id"], graph.store.nodes)
+
+    def test_proposal_overlay_is_in_memory_only(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S08",
+                type=AssumptionType.METHOD,
+                claim="提出猜测并测试",
+                tags=["S08"],
+            ))
+            store.flush()
+            graph = SimpleAssumptionGraph(JsonlGraphStore(td))
+            lifecycle_payload = {
+                "actions": [{
+                    "node_id": "strategy_S08",
+                    "action_type": "expand_retrieval",
+                    "priority": 0.8,
+                    "rationale": "useful but under-retrieved",
+                    "proposed_updates": {"expected_effect": "increase trigger coverage"},
+                    "verification_plan": "retrieval audit",
+                    "rollback_condition": "outside harm",
+                    "source": {
+                        "decision": "expand_retrieval",
+                        "utility_lcb90": 1.0,
+                        "route_counts": {"should_fire": 4},
+                        "active_counts": {"should_fire": 1},
+                    },
+                }]
+            }
+            proposals = build_candidate_proposals(graph=graph, lifecycle_payload=lifecycle_payload, eval_id="unit_eval")
+            payload = {"proposals": [p.to_dict() for p in proposals]}
+
+            overlay_store = JsonlGraphStore(td)
+            applied = apply_proposal_overlay(overlay_store, payload)
+            self.assertEqual(len(applied), 1)
+            self.assertIn(applied[0], overlay_store.nodes)
+            self.assertNotIn(applied[0], JsonlGraphStore(td).nodes)
+
+    def test_candidate_eval_preflight_marks_ready_overlay(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            store = JsonlGraphStore(root / "graph")
+            store.upsert_node(AssumptionNode(
+                id="strategy_S08",
+                type=AssumptionType.METHOD,
+                claim="提出猜测并测试",
+                tags=["S08", "假设检验"],
+                confidence=0.7,
+            ))
+            store.flush()
+            graph = SimpleAssumptionGraph(JsonlGraphStore(root / "graph"))
+            lifecycle_payload = {
+                "actions": [{
+                    "node_id": "strategy_S08",
+                    "action_type": "revise_assumption",
+                    "priority": 0.7,
+                    "rationale": "weak conditioned utility",
+                    "proposed_updates": {"expected_effect": "child should beat parent"},
+                    "verification_plan": "fresh ablation",
+                    "rollback_condition": "reject weak child",
+                    "source": {"decision": "revise", "utility_lcb90": 0.1},
+                }]
+            }
+            proposals = build_candidate_proposals(graph=graph, lifecycle_payload=lifecycle_payload, eval_id="unit_eval")
+            payload = {"eval_id": "unit_eval", "proposals": [p.to_dict() for p in proposals]}
+            sample = [
+                {
+                    "problem_id": "p1",
+                    "domain": "business",
+                    "difficulty": "medium",
+                    "description": "用一个低成本假设检验测试新渠道是否有效。",
+                    "coverage_tags": ["S08"],
+                },
+                {
+                    "problem_id": "p2",
+                    "domain": "business",
+                    "difficulty": "medium",
+                    "description": "先提出可证伪假设，再用小样本测试。",
+                    "coverage_tags": ["S08"],
+                },
+                {
+                    "problem_id": "p3",
+                    "domain": "engineering",
+                    "difficulty": "medium",
+                    "description": "对泵站故障提出可能原因并逐项测试。",
+                    "coverage_tags": ["S08"],
+                },
+            ]
+            meta = {p["problem_id"]: {"frame": "hybrid", "critical_reframe": "", "rewritten_problem": p["description"]} for p in sample}
+
+            result = build_candidate_eval_payload(
+                graph_dir=root / "graph",
+                proposal_payload=payload,
+                sample=sample,
+                meta_by_pid=meta,
+                eval_id="unit_preflight",
+                min_trigger_n=3,
+                min_active_trigger_n=2,
+            )
+            summary = result["summaries"][0]
+            self.assertEqual(summary["readiness"], CandidateReadiness.READY_FOR_FRESH_ABLATION.value)
+            self.assertGreaterEqual(len(summary["active_trigger_problem_ids"]), 2)
+
+    def test_candidate_acceptance_gate_applies_only_accepted_children(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            store = JsonlGraphStore(root / "graph")
+            store.upsert_node(AssumptionNode(
+                id="strategy_S01",
+                type=AssumptionType.METHOD,
+                claim="control one variable",
+                tags=["S01"],
+            ))
+            store.flush()
+            graph = SimpleAssumptionGraph(JsonlGraphStore(root / "graph"))
+            lifecycle_payload = {
+                "actions": [{
+                    "node_id": "strategy_S01",
+                    "action_type": "revise_assumption",
+                    "priority": 0.7,
+                    "rationale": "weak conditioned utility",
+                    "proposed_updates": {"expected_effect": "child should beat parent"},
+                    "verification_plan": "fresh ablation",
+                    "rollback_condition": "reject weak child",
+                    "source": {"decision": "revise", "utility_lcb90": 0.1},
+                }]
+            }
+            proposals = build_candidate_proposals(graph=graph, lifecycle_payload=lifecycle_payload, eval_id="unit_eval")
+            proposal_payload = {"eval_id": "unit_eval", "proposals": [p.to_dict() for p in proposals]}
+            proposal_id = proposals[0].proposal_id
+            candidate_id = proposals[0].candidate_node["id"]
+            preflight_payload = {
+                "eval_id": "unit_preflight",
+                "summaries": [{
+                    "proposal_id": proposal_id,
+                    "readiness": "ready_for_fresh_ablation",
+                    "trigger_problem_ids": ["p1", "p2", "p3"],
+                    "control_problem_ids": ["p4", "p5", "p6"],
+                }],
+            }
+            judgment_path = root / "judgments.json"
+            judgment_path.write_text(json.dumps({
+                "p1": {"winner": "candidate"},
+                "p2": {"winner": "candidate"},
+                "p3": {"winner": "candidate"},
+                "p4": {"winner": "tie"},
+                "p5": {"winner": "candidate"},
+                "p6": {"winner": "tie"},
+            }), encoding="utf-8")
+
+            acceptance = build_acceptance_payload(
+                proposal_payload=proposal_payload,
+                preflight_payload=preflight_payload,
+                judgment_paths=[judgment_path],
+                candidate_variant="candidate",
+                baseline_variant="baseline",
+                eval_id="unit_accept",
+            )
+            self.assertEqual(acceptance["accepted_proposal_ids"], [proposal_id])
+            self.assertEqual(acceptance["summaries"][0]["decision"], AcceptanceDecision.ACCEPT.value)
+
+            applied = apply_accepted_candidates(JsonlGraphStore(root / "graph"), proposal_payload, acceptance)
+            self.assertEqual(applied, [candidate_id])
+            updated = JsonlGraphStore(root / "graph")
+            self.assertEqual(updated.nodes[candidate_id].status, "active")
 
 
 if __name__ == "__main__":

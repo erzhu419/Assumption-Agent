@@ -72,7 +72,11 @@ class GeminiClient:
         if base_url:
             from openai import OpenAI
             self._sdk = "openai-proxy"
-            self.client = OpenAI(base_url=base_url, api_key=api_key)
+            self.client = OpenAI(
+                base_url=base_url,
+                api_key=api_key,
+                timeout=float(os.environ.get("OPENAI_TIMEOUT", "120")),
+            )
             return
 
         try:

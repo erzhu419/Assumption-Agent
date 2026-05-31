@@ -23,6 +23,11 @@ an Assumption Graph.
   being wrong and the executor simply failing to apply a valid assumption.
 - `context.py` formats activated subgraphs for future v16/v20/Exp82 prompt
   integration.
+- `proposal_overlay.py` and `candidate_eval.py` let candidate nodes enter a
+  temporary graph overlay for preflight and fresh ablation, without mutating
+  the committed graph store.
+- `candidate_acceptance.py` converts fresh proposal judgments into accept /
+  reject / defer decisions and can apply only accepted candidates to the graph.
 
 ## Build The Graph
 
@@ -138,6 +143,89 @@ python3 -m assumption_os.conditioned_eval \
   --intervention phase2_v20_ag_learned_gpt55 \
   --baseline phase2_v20_gpt55 \
   --summary-out "phase four/assumption_graph/conditioned_eval_phase2_v20_gpt55_21_50.json"
+```
+
+`assumption_os.lifecycle` turns conditioned decisions into auditable lifecycle
+actions and pending manifests.  It deliberately plans edits instead of applying
+them directly.
+
+```bash
+python3 -m assumption_os.lifecycle \
+  --conditioned-summary "phase four/assumption_graph/conditioned_eval_phase2_v20_gpt55_21_50.json" \
+  --eval-id phase2_v20_ag_learned_gpt55_vs_gpt55_21_50_conditioned \
+  --summary-out "phase four/assumption_graph/lifecycle_plan_phase2_v20_gpt55_21_50.json"
+```
+
+`assumption_os.proposals` then turns lifecycle actions into candidate nodes and
+experiment manifests. Retrieval-policy candidates copy the parent's trigger
+surface into a candidate retrieval node; revision candidates are narrower child
+assumptions with concrete acceptance criteria. It is a proposal queue, not an
+automatic mutation step; use `--apply` only after reviewing and validating the
+generated candidates.
+
+```bash
+python3 -m assumption_os.proposals \
+  --graph-dir "phase four/assumption_graph" \
+  --lifecycle-plan "phase four/assumption_graph/lifecycle_plan_phase2_v20_gpt55_21_50.json" \
+  --eval-id phase2_v20_ag_learned_gpt55_vs_gpt55_21_50_proposals \
+  --summary-out "phase four/assumption_graph/proposals_phase2_v20_gpt55_21_50.json"
+```
+
+`assumption_os.candidate_eval` preflights proposal candidates before spending
+fresh solver/judge calls. It overlays the candidate in memory, routes each
+problem into trigger/control subsets, and can model the actual ablation mode
+where the proposal target is forced only on its own `should_fire` rows.
+
+```bash
+python3 -m assumption_os.candidate_eval \
+  --graph-dir "phase four/assumption_graph" \
+  --proposals "phase four/assumption_graph/proposals_phase2_v20_gpt55_21_50.json" \
+  --sample "phase two/analysis/cache/sample_21_50.json" \
+  --meta "phase two/analysis/cache/answers/phase2_v20_ag_learned_gpt55_meta.json" \
+  --eval-id phase2_v20_ag_learned_gpt55_vs_gpt55_21_50_candidate_preflight \
+  --force-proposal-route \
+  --summary-out "phase four/assumption_graph/candidate_preflight_phase2_v20_gpt55_21_50.json"
+```
+
+For the v20 solver, candidate experiments can be run with a temporary overlay:
+
+```bash
+python3 "phase one/scripts/validation/phase2_v20_framework.py" \
+  --variant proposal_3a5cf90b1010 \
+  --sample sample_21_50.json \
+  --assumption-graph "phase four/assumption_graph" \
+  --assumption-graph-skip-domains "" \
+  --assumption-proposals "phase four/assumption_graph/proposals_phase2_v20_gpt55_21_50.json" \
+  --assumption-proposal-ids prop_3a5cf90b1010 \
+  --assumption-force-proposal-route
+```
+
+`--assumption-force-proposal-route` is deliberately route-conditioned: retrieval
+policy proposals force the parent node only on the parent's trigger subset;
+revision/scope proposals force the candidate child only on the child's trigger
+subset. Neutral and no-fire rows remain unforced controls.
+
+In the first mini-model screening pass, the six ready proposals were also tested
+as a combo route-conditioned policy (`proposal_ready_combo_gpt54mini`) against a
+same-model v20 baseline on the union proposal sample. The combo won 26-12
+bidirectionally, mostly on software-engineering rows. Individual acceptance
+remained conservative and did not apply any candidate to the graph.
+
+After fresh judgments are available, `assumption_os.candidate_acceptance`
+separates trigger benefit from control harm. By default it only writes a JSON
+decision report; `--apply-accepted` is required to mutate the graph.
+
+```bash
+python3 -m assumption_os.candidate_acceptance \
+  --graph-dir "phase four/assumption_graph" \
+  --proposals "phase four/assumption_graph/proposals_phase2_v20_gpt55_21_50.json" \
+  --preflight "phase four/assumption_graph/candidate_preflight_phase2_v20_gpt55_21_50.json" \
+  --judgments "phase two/analysis/cache/judgments/proposal_3a5cf90b1010_vs_phase2_v20_gpt55.json" \
+  --candidate-variant proposal_3a5cf90b1010 \
+  --baseline-variant phase2_v20_gpt55 \
+  --proposal-ids prop_3a5cf90b1010 \
+  --eval-id proposal_3a5cf90b1010_acceptance \
+  --summary-out "phase four/assumption_graph/acceptance_proposal_3a5cf90b1010.json"
 ```
 
 ## Why This Shape
