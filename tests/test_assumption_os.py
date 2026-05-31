@@ -500,6 +500,143 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(child["next_action"], "run_fresh_ablation")
             self.assertEqual(JsonlGraphStore(graph_dir).trials, {})
 
+    def test_recursive_runner_propagates_acceptance_results_to_parent_frontier(self):
+        def ready_evolution_payload():
+            return {
+                "proposals": {
+                    "proposals": [{
+                        "proposal_id": "prop_ready",
+                        "proposal_type": ProposalType.FAILURE_HYPOTHESIS.value,
+                        "parent_node_id": "strategy_S01",
+                        "priority": 0.8,
+                        "candidate_node": {
+                            "id": "cand_ready",
+                            "claim": "Require a baseline and one intervention before answering.",
+                            "predicted_effects": ["improve causal diagnosis"],
+                        },
+                    }],
+                },
+                "candidate_preflight": {
+                    "summaries": [{
+                        "proposal_id": "prop_ready",
+                        "readiness": CandidateReadiness.READY_FOR_FRESH_ABLATION.value,
+                        "active_trigger_problem_ids": ["p1", "p2", "p3"],
+                        "trigger_problem_ids": ["p1", "p2", "p3"],
+                        "control_problem_ids": ["c1"],
+                    }],
+                },
+                "falsification_gate": {
+                    "summaries": [{
+                        "proposal_id": "prop_ready",
+                        "decision": FalsificationDecision.READY_FOR_ABLATION.value,
+                        "next_action": "run_fresh_ablation",
+                        "ordered_checks": [{"name": "trigger_power", "passed": True}],
+                    }],
+                },
+                "bayesian_policy": {
+                    "scores": [{
+                        "proposal_id": "prop_ready",
+                        "recommended_action": BayesianPolicyAction.RUN_ABLATION.value,
+                        "posterior_priority": 1.2,
+                        "expected_value": 0.7,
+                    }],
+                },
+                "policy_update_plan": {
+                    "actions": [{
+                        "proposal_id": "prop_ready",
+                        "policy_action": "run_fresh_ablation_before_promotion",
+                    }],
+                },
+                "regression_predictions": [{
+                    "proposal_id": "prop_ready",
+                    "risk": "low",
+                    "reasons": ["no outside active row"],
+                }],
+                "formal_mapping_gate": {
+                    "gates": [{
+                        "proposal_id": "prop_ready",
+                        "decision": "not_applicable",
+                        "blocks_policy_update": False,
+                    }],
+                },
+            }
+
+        cases = {
+            AcceptanceDecision.ACCEPT.value: (
+                "apply_accepted_candidate_if_requested",
+                RecursiveFrameStatus.READY_TO_ACT.value,
+                RecursiveFrameStatus.RESOLVED.value,
+                "accepted",
+            ),
+            AcceptanceDecision.REJECT_HARM.value: (
+                "reject_or_narrow_scope",
+                RecursiveFrameStatus.READY_TO_ACT.value,
+                RecursiveFrameStatus.RESOLVED.value,
+                "rejected_harm",
+            ),
+            AcceptanceDecision.REJECT_BENEFIT.value: (
+                "reject_or_revise_candidate",
+                RecursiveFrameStatus.READY_TO_ACT.value,
+                RecursiveFrameStatus.RESOLVED.value,
+                "rejected_benefit",
+            ),
+            AcceptanceDecision.INSUFFICIENT_JUDGMENTS.value: (
+                "collect_more_judgments",
+                RecursiveFrameStatus.WAITING_FOR_EVIDENCE.value,
+                RecursiveFrameStatus.WAITING_FOR_EVIDENCE.value,
+                "underpowered",
+            ),
+        }
+
+        with tempfile.TemporaryDirectory() as td:
+            graph_dir = Path(td) / "graph"
+            store = JsonlGraphStore(graph_dir)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S01",
+                type=AssumptionType.METHOD,
+                claim="Use controlled-variable tests.",
+                tags=["S01", "controlled"],
+                confidence=0.7,
+            ))
+            store.flush()
+
+            for decision, (parent_action, parent_status, child_status, outcome) in cases.items():
+                with self.subTest(decision=decision):
+                    payload = build_recursive_assumption_run(
+                        graph_dir=graph_dir,
+                        problem="Diagnose a channel experiment failure with one controlled intervention.",
+                        goal="Create a recursive assumption tree.",
+                        eval_id=f"unit_recursive_{decision}",
+                        evolution_payload=ready_evolution_payload(),
+                        acceptance_payload={
+                            "summaries": [{
+                                "proposal_id": "prop_ready",
+                                "decision": decision,
+                                "trigger_utility": 1.0,
+                                "trigger_lcb90": 0.5,
+                                "control_loss_ucb90": 0.0,
+                                "rationale": f"unit {decision}",
+                            }],
+                        },
+                        max_children=1,
+                    )
+
+                    candidate = next(
+                        frame for frame in payload["frames"]
+                        if frame["frame_type"] == RecursiveFrameType.CANDIDATE_HYPOTHESIS.value
+                    )
+                    child = next(
+                        frame for frame in payload["frames"]
+                        if frame["frame_type"] == RecursiveFrameType.VERIFICATION_SUBPROBLEM.value
+                    )
+                    self.assertEqual(candidate["next_action"], parent_action)
+                    self.assertEqual(candidate["status"], parent_status)
+                    self.assertEqual(child["status"], child_status)
+                    self.assertEqual(child["return_update"]["outcome"], outcome)
+                    self.assertIn(f"acceptance_decision={decision}", candidate["argument"]["support"])
+                    self.assertEqual(payload["next_actions"][0]["frame_id"], candidate["frame_id"])
+                    self.assertEqual(payload["next_actions"][0]["next_action"], parent_action)
+
     def test_recursive_runner_writeback_logs_frame_manifests(self):
         with tempfile.TemporaryDirectory() as td:
             graph_dir = Path(td) / "graph"

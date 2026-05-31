@@ -78,6 +78,7 @@ def build_recursive_assumption_run(
     eval_id: str,
     problem_id: str | None = None,
     evolution_payload: dict | None = None,
+    acceptance_payload: dict | None = None,
     top_k: int = 6,
     max_children: int = 8,
     max_depth: int = 3,
@@ -110,6 +111,7 @@ def build_recursive_assumption_run(
             frames=frames,
             root_frame=root,
             evolution_payload=evolution_payload,
+            acceptance_payload=acceptance_payload,
             eval_id=eval_id,
             max_children=max_children,
             max_depth=max_depth,
@@ -137,6 +139,7 @@ def build_recursive_assumption_run(
             "max_children": max_children,
             "max_depth": max_depth,
             "source": "evolution_payload" if evolution_payload else "retrieval_only",
+            "acceptance_payload": bool(acceptance_payload),
         },
         "root": {
             "problem_id": problem_id,
@@ -172,6 +175,7 @@ def _extend_from_evolution_payload(
     frames: list[RecursiveFrame],
     root_frame: RecursiveFrame,
     evolution_payload: dict,
+    acceptance_payload: dict | None,
     eval_id: str,
     max_children: int,
     max_depth: int,
@@ -179,7 +183,7 @@ def _extend_from_evolution_payload(
     proposals = evolution_payload.get("proposals", {}).get("proposals", [])
     if not proposals:
         return
-    indexes = _EvolutionIndexes(evolution_payload)
+    indexes = _EvolutionIndexes(evolution_payload, acceptance_payload=acceptance_payload)
     for proposal in _ranked_proposals(proposals, indexes, max_children):
         candidate_frame = _candidate_frame(
             proposal=proposal,
@@ -233,8 +237,9 @@ class _EvolutionIndexes:
     policy_by_id: dict
     regression_by_id: dict
     formal_gate_by_id: dict
+    acceptance_by_id: dict
 
-    def __init__(self, payload: dict):
+    def __init__(self, payload: dict, *, acceptance_payload: dict | None = None):
         self.preflight_by_id = {
             row.get("proposal_id"): row
             for row in payload.get("candidate_preflight", {}).get("summaries", [])
@@ -258,6 +263,15 @@ class _EvolutionIndexes:
         self.formal_gate_by_id = {
             row.get("proposal_id"): row
             for row in payload.get("formal_mapping_gate", {}).get("gates", [])
+        }
+        source_acceptance = (
+            acceptance_payload
+            if acceptance_payload is not None
+            else payload.get("candidate_acceptance") or {}
+        )
+        self.acceptance_by_id = {
+            row.get("proposal_id"): row
+            for row in source_acceptance.get("summaries", [])
         }
 
 
@@ -332,7 +346,8 @@ def _candidate_frame(
     policy = indexes.policy_by_id.get(proposal_id, {})
     regression = indexes.regression_by_id.get(proposal_id, {})
     formal_gate = indexes.formal_gate_by_id.get(proposal_id, {})
-    action = _recommended_action(policy, bayes, falsification, preflight)
+    acceptance = indexes.acceptance_by_id.get(proposal_id, {})
+    action = _recommended_action(policy, bayes, falsification, preflight, acceptance)
     status = _status_for_action(action)
     hypothesis = candidate.get("claim") or (proposal.get("manifest") or {}).get("assumption", "")
     if not hypothesis:
@@ -369,6 +384,7 @@ def _candidate_frame(
             "bayesian_policy": bayes,
             "formal_mapping_gate": formal_gate,
             "regression_prediction": regression,
+            "acceptance": acceptance,
         },
         trial_id=stable_id("trial", eval_id, proposal_id, "recursive_candidate"),
     )
@@ -398,6 +414,7 @@ def _candidate_frame(
             policy=policy,
             regression=regression,
             formal_gate=formal_gate,
+            acceptance=acceptance,
         ),
         next_action=action,
         command_hint=bayes.get("command_hint") or preflight.get("command_hint", ""),
@@ -427,7 +444,18 @@ def _child_frame_for_candidate(
     preflight = indexes.preflight_by_id.get(proposal_id, {})
     falsification = indexes.falsification_by_id.get(proposal_id, {})
     bayes = indexes.bayes_by_id.get(proposal_id, {})
+    acceptance = indexes.acceptance_by_id.get(proposal_id, {})
 
+    if acceptance:
+        return _verification_child(
+            candidate_frame=candidate_frame,
+            proposal_id=proposal_id,
+            preflight=preflight,
+            falsification=falsification,
+            bayes=bayes,
+            acceptance=acceptance,
+            eval_id=eval_id,
+        )
     if action in {"run_fresh_ablation", "run_ablation", "run_fresh_ablation_before_promotion"}:
         return _verification_child(
             candidate_frame=candidate_frame,
@@ -435,6 +463,7 @@ def _child_frame_for_candidate(
             preflight=preflight,
             falsification=falsification,
             bayes=bayes,
+            acceptance={},
             eval_id=eval_id,
         )
     if action in {"collect_more_evidence", "collect_evidence", "collect_more_trigger_rows"}:
@@ -470,10 +499,14 @@ def _verification_child(
     preflight: dict,
     falsification: dict,
     bayes: dict,
+    acceptance: dict,
     eval_id: str,
 ) -> RecursiveFrame:
     trigger_ids = preflight.get("trigger_problem_ids", [])
     control_ids = preflight.get("control_problem_ids", [])
+    acceptance_decision = acceptance.get("decision")
+    child_status = _verification_child_status(acceptance_decision)
+    next_action = _verification_child_next_action(acceptance_decision)
     hypothesis = "Fresh ablation on routed trigger/control rows can decide whether the parent candidate should be promoted."
     manifest = _child_manifest(
         eval_id=eval_id,
@@ -488,13 +521,17 @@ def _verification_child(
     return RecursiveFrame(
         frame_id=stable_id("rframe", eval_id, proposal_id, "fresh_ablation"),
         frame_type=RecursiveFrameType.VERIFICATION_SUBPROBLEM,
-        status=RecursiveFrameStatus.READY_TO_ACT,
+        status=child_status,
         depth=candidate_frame.depth + 1,
         parent_frame_id=candidate_frame.frame_id,
         problem_id=f"verify::{proposal_id}",
-        goal="Run the minimal fresh ablation needed to update the parent candidate.",
+        goal=(
+            "Return fresh ablation evidence to the parent candidate."
+            if acceptance
+            else "Run the minimal fresh ablation needed to update the parent candidate."
+        ),
         hypothesis=hypothesis,
-        expected_observation="Candidate wins on trigger rows and does not add outside-control harm.",
+        expected_observation=_verification_expected_observation(acceptance_decision),
         verifier="candidate_acceptance_gate",
         assumption_ids=candidate_frame.assumption_ids,
         source={
@@ -502,6 +539,7 @@ def _verification_child(
             "trigger_problem_ids": trigger_ids,
             "control_problem_ids": control_ids,
             "falsification_decision": falsification.get("decision"),
+            "acceptance": acceptance,
         },
         argument={
             "support": [
@@ -509,25 +547,128 @@ def _verification_child(
                 f"trigger_rows={len(trigger_ids)}",
                 f"control_rows={len(control_ids)}",
                 f"bayesian_priority={bayes.get('posterior_priority')}",
+                *(_acceptance_support(acceptance) if acceptance else []),
             ],
-            "objections": [
-                "fresh candidate judgments are not available yet",
-            ],
+            "objections": _acceptance_objections(acceptance),
             "falsification_tests": [
                 "trigger benefit lower bound clears acceptance gate",
                 "control loss upper bound stays below harm gate",
             ],
         },
-        next_action="run_fresh_ablation",
+        next_action=next_action,
         command_hint=bayes.get("command_hint") or preflight.get("command_hint", ""),
-        return_update={
-            "parent_frame_id": candidate_frame.frame_id,
-            "on_success": "mark parent candidate accepted or ready to apply",
-            "on_failure": "reject, narrow, or revise the parent candidate",
-        },
+        return_update=_verification_return_update(candidate_frame.frame_id, acceptance_decision),
         priority=candidate_frame.priority,
         manifest=manifest.to_dict(),
     )
+
+
+def _verification_child_status(decision: str | None) -> RecursiveFrameStatus:
+    if not decision:
+        return RecursiveFrameStatus.READY_TO_ACT
+    if decision in {"accept", "reject_benefit", "reject_harm"}:
+        return RecursiveFrameStatus.RESOLVED
+    if decision == "insufficient_judgments":
+        return RecursiveFrameStatus.WAITING_FOR_EVIDENCE
+    if decision in {"deferred_not_ready", "manifest_only"}:
+        return RecursiveFrameStatus.DEFERRED
+    return RecursiveFrameStatus.OPEN
+
+
+def _verification_child_next_action(decision: str | None) -> str:
+    if decision == "accept":
+        return "return_accept_to_parent"
+    if decision == "reject_harm":
+        return "return_harm_rejection_to_parent"
+    if decision == "reject_benefit":
+        return "return_benefit_rejection_to_parent"
+    if decision == "insufficient_judgments":
+        return "collect_more_judgments"
+    if decision in {"deferred_not_ready", "manifest_only"}:
+        return "wait_for_parent_preflight"
+    return "run_fresh_ablation"
+
+
+def _verification_expected_observation(decision: str | None) -> str:
+    if decision == "accept":
+        return "Fresh judgments accepted the candidate; parent can request gated application."
+    if decision == "reject_harm":
+        return "Fresh judgments found control harm; parent should narrow scope or reject."
+    if decision == "reject_benefit":
+        return "Fresh judgments did not show enough trigger benefit; parent should revise or reject."
+    if decision == "insufficient_judgments":
+        return "More judgments are needed before the parent can be updated."
+    return "Candidate wins on trigger rows and does not add outside-control harm."
+
+
+def _acceptance_support(acceptance: dict) -> list[str]:
+    decision = acceptance.get("decision")
+    if not decision:
+        return []
+    fields = [f"acceptance_decision={decision}"]
+    if acceptance.get("trigger_utility") is not None:
+        fields.append(f"trigger_utility={acceptance.get('trigger_utility')}")
+    if acceptance.get("trigger_lcb90") is not None:
+        fields.append(f"trigger_lcb90={acceptance.get('trigger_lcb90')}")
+    if acceptance.get("control_loss_ucb90") is not None:
+        fields.append(f"control_loss_ucb90={acceptance.get('control_loss_ucb90')}")
+    return fields
+
+
+def _acceptance_objections(acceptance: dict) -> list[str]:
+    if not acceptance:
+        return ["fresh candidate judgments are not available yet"]
+    decision = acceptance.get("decision")
+    rationale = acceptance.get("rationale", "")
+    if decision == "accept":
+        return []
+    if decision == "reject_harm":
+        return [f"control harm rejected candidate: {rationale}".strip()]
+    if decision == "reject_benefit":
+        return [f"trigger benefit rejected candidate: {rationale}".strip()]
+    if decision == "insufficient_judgments":
+        return [f"insufficient judgments: {rationale}".strip()]
+    return [f"acceptance gate returned {decision}: {rationale}".strip()]
+
+
+def _verification_return_update(parent_frame_id: str, decision: str | None) -> dict:
+    if decision == "accept":
+        return {
+            "parent_frame_id": parent_frame_id,
+            "outcome": "accepted",
+            "parent_next_action": "apply_accepted_candidate_if_requested",
+            "on_success": "mark parent candidate accepted and eligible for gated apply",
+            "on_failure": "not applicable; verification already accepted",
+        }
+    if decision == "reject_harm":
+        return {
+            "parent_frame_id": parent_frame_id,
+            "outcome": "rejected_harm",
+            "parent_next_action": "reject_or_narrow_scope",
+            "on_success": "parent should create a scope-repair child or reject the candidate",
+            "on_failure": "keep parent blocked until scope risk is addressed",
+        }
+    if decision == "reject_benefit":
+        return {
+            "parent_frame_id": parent_frame_id,
+            "outcome": "rejected_benefit",
+            "parent_next_action": "reject_or_revise_candidate",
+            "on_success": "parent should create a revision child or reject the candidate",
+            "on_failure": "keep parent unresolved until a stronger hypothesis exists",
+        }
+    if decision == "insufficient_judgments":
+        return {
+            "parent_frame_id": parent_frame_id,
+            "outcome": "underpowered",
+            "parent_next_action": "collect_more_judgments",
+            "on_success": "rerun acceptance when enough judgments exist",
+            "on_failure": "parent remains waiting for evidence",
+        }
+    return {
+        "parent_frame_id": parent_frame_id,
+        "on_success": "mark parent candidate accepted or ready to apply",
+        "on_failure": "reject, narrow, or revise the parent candidate",
+    }
 
 
 def _evidence_child(
@@ -737,7 +878,26 @@ def _ranked_proposals(proposals: list[dict], indexes: _EvolutionIndexes, max_chi
     return sorted(proposals, key=key)[:max_children]
 
 
-def _recommended_action(policy: dict, bayes: dict, falsification: dict, preflight: dict) -> str:
+def _recommended_action(
+    policy: dict,
+    bayes: dict,
+    falsification: dict,
+    preflight: dict,
+    acceptance: dict,
+) -> str:
+    decision = acceptance.get("decision")
+    if decision == "accept":
+        return "apply_accepted_candidate_if_requested"
+    if decision == "reject_harm":
+        return "reject_or_narrow_scope"
+    if decision == "reject_benefit":
+        return "reject_or_revise_candidate"
+    if decision == "insufficient_judgments":
+        return "collect_more_judgments"
+    if decision in {"deferred_not_ready", "manifest_only"}:
+        return "wait_for_parent_preflight"
+    if decision:
+        return "inspect_acceptance_result"
     if policy.get("policy_action"):
         return policy["policy_action"]
     if bayes.get("recommended_action"):
@@ -762,9 +922,18 @@ def _status_for_action(action: str) -> RecursiveFrameStatus:
         "run_ablation",
         "run_fresh_ablation_before_promotion",
         "verify_applicability",
+        "apply_accepted_candidate_if_requested",
+        "reject_or_narrow_scope",
+        "reject_or_revise_candidate",
+        "inspect_acceptance_result",
     }:
         return RecursiveFrameStatus.READY_TO_ACT
-    if action in {"collect_more_evidence", "collect_evidence", "collect_more_trigger_rows"}:
+    if action in {
+        "collect_more_evidence",
+        "collect_evidence",
+        "collect_more_trigger_rows",
+        "collect_more_judgments",
+    }:
         return RecursiveFrameStatus.WAITING_FOR_EVIDENCE
     if action in {
         "repair_scope",
@@ -781,6 +950,8 @@ def _status_for_action(action: str) -> RecursiveFrameStatus:
         "reject",
     }:
         return RecursiveFrameStatus.RESOLVED
+    if action == "wait_for_parent_preflight":
+        return RecursiveFrameStatus.DEFERRED
     if action == "block_unsafe_formal_mapping":
         return RecursiveFrameStatus.BLOCKED
     return RecursiveFrameStatus.OPEN
@@ -792,8 +963,13 @@ def _candidate_goal(action: str) -> str:
         "run_ablation": "Test whether this candidate should be promoted.",
         "collect_more_evidence": "Collect enough evidence to make this candidate falsifiable.",
         "collect_evidence": "Collect enough evidence to make this candidate falsifiable.",
+        "collect_more_judgments": "Collect enough fresh judgments to decide this candidate.",
         "repair_scope": "Narrow candidate scope before judging quality.",
         "repair_retrieval": "Repair retrieval exposure before judging quality.",
+        "apply_accepted_candidate_if_requested": "Apply this accepted candidate through the gated graph mutation path.",
+        "reject_or_narrow_scope": "Reject this harmful candidate or create a narrower scope-repair child.",
+        "reject_or_revise_candidate": "Reject this weak candidate or create a stronger revision child.",
+        "wait_for_parent_preflight": "Wait for preflight readiness before judging this candidate.",
         "record_manifest_only_no_graph_policy_change": "Record the lifecycle decision without mutating graph policy.",
     }
     return mapping.get(action, f"Resolve candidate action: {action}")
@@ -831,6 +1007,7 @@ def _argument_map(
     policy: dict,
     regression: dict,
     formal_gate: dict,
+    acceptance: dict,
 ) -> dict:
     support = []
     objections = []
@@ -861,6 +1038,10 @@ def _argument_map(
             support.append(f"falsification_decision={decision}")
         elif decision != "manifest_only":
             objections.append(f"falsification_decision={decision}: {falsification.get('rationale', '')}")
+    if acceptance:
+        support.extend(_acceptance_support(acceptance))
+        objections.extend(_acceptance_objections(acceptance))
+        tests.append("candidate_acceptance_gate")
     if not proposal.get("candidate_node"):
         objections.append("proposal has no candidate node")
     if not tests:
@@ -894,6 +1075,25 @@ def _compact_proposal(proposal: dict) -> dict:
 
 
 def _next_actions(frames: list[RecursiveFrame]) -> list[dict]:
+    frames_by_id = {frame.frame_id: frame for frame in frames}
+
+    def child_returned(child: RecursiveFrame) -> bool:
+        return bool(child.return_update.get("parent_next_action"))
+
+    def children_returned_or_terminal(frame: RecursiveFrame) -> bool:
+        terminal = {
+            RecursiveFrameStatus.RESOLVED,
+            RecursiveFrameStatus.BLOCKED,
+            RecursiveFrameStatus.DEFERRED,
+        }
+        for child_id in frame.child_frame_ids:
+            child = frames_by_id.get(child_id)
+            if not child:
+                continue
+            if child.status not in terminal and not child_returned(child):
+                return False
+        return True
+
     actionable = [
         frame
         for frame in frames
@@ -902,7 +1102,8 @@ def _next_actions(frames: list[RecursiveFrame]) -> list[dict]:
             RecursiveFrameStatus.READY_TO_ACT,
             RecursiveFrameStatus.WAITING_FOR_EVIDENCE,
         }
-        and not frame.child_frame_ids
+        and not child_returned(frame)
+        and (not frame.child_frame_ids or children_returned_or_terminal(frame))
         and frame.next_action
     ]
     actionable = sorted(actionable, key=lambda f: (-f.priority, f.depth, f.frame_id))
@@ -940,6 +1141,7 @@ def main() -> None:
     ap.add_argument("--problem-id", default=None)
     ap.add_argument("--eval-id", required=True)
     ap.add_argument("--evolution-payload", default=None)
+    ap.add_argument("--acceptance-payload", default=None)
     ap.add_argument("--top-k", type=int, default=6)
     ap.add_argument("--max-children", type=int, default=8)
     ap.add_argument("--max-depth", type=int, default=3)
@@ -957,6 +1159,11 @@ def main() -> None:
         evolution_payload=(
             _load_json(_resolve(root, args.evolution_payload))
             if args.evolution_payload
+            else None
+        ),
+        acceptance_payload=(
+            _load_json(_resolve(root, args.acceptance_payload))
+            if args.acceptance_payload
             else None
         ),
         top_k=args.top_k,

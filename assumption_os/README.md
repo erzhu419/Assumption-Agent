@@ -229,7 +229,12 @@ disable this source.
 the evolution-cycle payload, builds a task stack, and expands each high-priority
 candidate into an argument map plus a child verification/evidence/repair
 subproblem. Open child frames define exactly what observation is needed before
-their parent hypothesis can be updated.
+their parent hypothesis can be updated. When a candidate-acceptance payload is
+available, the same runner resumes the tree by propagating each child
+verification result back to the parent candidate: accepted candidates become
+eligible for gated apply, harmful candidates become scope-repair/reject actions,
+weak candidates become revise/reject actions, and underpowered candidates
+become more-judgment actions.
 
 ```bash
 python3 -m assumption_os.recursive_runner \
@@ -243,6 +248,11 @@ python3 -m assumption_os.recursive_runner \
   --max-depth 3 \
   --summary-out "phase four/assumption_graph/recursive_runner_phase2_v20_gpt55_21_50.json"
 ```
+
+After fresh proposal judgments exist for the same proposal IDs, add
+`--acceptance-payload path/to/candidate_acceptance_summary.json` to resume the
+tree from child verification results instead of leaving those children as
+`run_fresh_ablation` leaves.
 
 The first recursive dry run produced `root_problem=1`,
 `candidate_hypothesis=8`, and `verification_subproblem=8`, with 16 recursion
