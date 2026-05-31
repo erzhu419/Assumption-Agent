@@ -18,6 +18,7 @@ from assumption_os.conditioned_eval import (
 from assumption_os.domain_templates import format_phase2_domain_execution_template
 from assumption_os.evolution_cycle import build_evolution_cycle_payload
 from assumption_os.falsification import FalsificationDecision, build_falsification_payload
+from assumption_os.formal_mapping import FormalMappingStatus, build_formal_mapping_payload
 from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
 from assumption_os.math_science_policy import route_math_science_problem
@@ -404,6 +405,77 @@ class AssumptionOSTest(unittest.TestCase):
             score = payload["scores"][0]
             self.assertEqual(score["recommended_action"], BayesianPolicyAction.RUN_ABLATION.value)
             self.assertGreater(score["posterior_priority"], 1.0)
+
+    def test_formal_mapping_audit_detects_complete_exp82_bundle(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            base = {
+                "type": AssumptionType.HARNESS,
+                "claim": "formal mapping test",
+                "payload": {"seed_cid": "WCAND_TEST"},
+                "tags": ["WCAND_TEST"],
+            }
+            store.upsert_node(AssumptionNode(
+                id="feature_1",
+                kind="feature",
+                formal_form={"kind": "feature", "expr": {"keywords_zh": ["风险"], "regex": []}},
+                **base,
+            ))
+            store.upsert_node(AssumptionNode(
+                id="constraint_1",
+                kind="constraint",
+                formal_form={"kind": "constraint", "expr": {"required_substrings": ["回滚"]}},
+                **base,
+            ))
+            store.upsert_node(AssumptionNode(
+                id="decomp_1",
+                kind="decomposition",
+                formal_form={"kind": "decomposition", "expr": {"steps": ["identify risk", "add guardrail"]}},
+                **base,
+            ))
+            store.upsert_node(AssumptionNode(
+                id="verify_1",
+                kind="verification",
+                formal_form={"kind": "verification", "expr": {"instruction": "check rollback"}},
+                **base,
+            ))
+            store.upsert_node(AssumptionNode(
+                id="hp_1",
+                kind="hp_change",
+                formal_form={"kind": "hp_change", "expr": {"temperature": 0.0, "max_tokens": 1000}},
+                **base,
+            ))
+            payload = build_formal_mapping_payload(store)
+            self.assertEqual(payload["status_counts"], {FormalMappingStatus.COMPLETE.value: 1})
+            summary = payload["summaries"][0]
+            self.assertTrue(summary["invariants"]["trigger_detector"])
+            self.assertTrue(summary["invariants"]["verification_operator"])
+
+    def test_formal_mapping_audit_rejects_missing_trigger(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            base = {
+                "type": AssumptionType.HARNESS,
+                "claim": "formal mapping missing trigger",
+                "payload": {"seed_cid": "WCAND_UNSAFE"},
+                "tags": ["WCAND_UNSAFE"],
+            }
+            store.upsert_node(AssumptionNode(
+                id="constraint_1",
+                kind="constraint",
+                formal_form={"kind": "constraint", "expr": {"required_substrings": ["回滚"]}},
+                **base,
+            ))
+            store.upsert_node(AssumptionNode(
+                id="verify_1",
+                kind="verification",
+                formal_form={"kind": "verification", "expr": {"instruction": "check rollback"}},
+                **base,
+            ))
+            payload = build_formal_mapping_payload(store)
+            self.assertEqual(payload["status_counts"], {FormalMappingStatus.UNSAFE.value: 1})
+            summary = payload["summaries"][0]
+            self.assertIn("missing trigger detector", summary["warnings"])
 
     def test_software_engineering_reranker_boosts_execution_specific_methods(self):
         with tempfile.TemporaryDirectory() as td:

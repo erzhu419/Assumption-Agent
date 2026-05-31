@@ -174,9 +174,9 @@ python3 -m assumption_os.lifecycle \
 
 For a single conservative entry point, `assumption_os.evolution_cycle` now runs
 the whole planning loop in dry-run mode: writeback preview, conditioned gate,
-lifecycle actions, candidate proposals, candidate preflight, regression
-prediction, sequential falsification, Bayesian policy scoring, and policy
-update plan. It does not mutate the graph unless `--writeback` or
+formal mapping audit, lifecycle actions, candidate proposals, candidate
+preflight, regression prediction, sequential falsification, Bayesian policy
+scoring, and policy update plan. It does not mutate the graph unless `--writeback` or
 `--apply-accepted` is explicitly supplied.
 
 ```bash
@@ -201,8 +201,31 @@ one retrieval-policy candidate ready for fresh ablation. Its sequential
 falsification gate produced `manifest_only=4`, `ready_for_ablation=1`, and
 `blocked_underpowered=3`. The Bayesian scorer ranked that ready candidate as
 `run_ablation` with priority `1.6421`, while three underpowered candidates were
-ranked as `collect_evidence`. The report is in
+ranked as `collect_evidence`. The same dry run also audits 45 typed formal nodes
+into 9 complete formal mappings. The report is in
 `phase four/assumption_graph/evolution_cycle_dryrun_phase2_v20_gpt55_21_50.md`.
+
+`assumption_os.formal_mapping` is the executable GRAM/category-style bridge for
+typed formal forms. It groups Exp82-style `feature`, `constraint`,
+`decomposition`, `verification`, and `hp_change` nodes by source seed, then
+checks whether each group preserves the operational invariants needed for a
+safe morphism:
+
+- `trigger_detector`
+- `constraint_operator`
+- `decomposition_operator`
+- `verification_operator`
+- `runtime_policy`
+
+```bash
+python3 -m assumption_os.formal_mapping \
+  --graph-dir "phase four/assumption_graph" \
+  --summary-out "phase four/assumption_graph/formal_mapping_audit_phase2_graph.json"
+```
+
+The first audit found `complete=9`, `partial=0`, and `unsafe=0`. This is still a
+static audit layer: it checks that generated formal bundles are executable and
+constraint-preserving, but it does not yet synthesize new mappings by itself.
 
 `assumption_os.proposals` then turns lifecycle actions into candidate nodes and
 experiment manifests. Retrieval-policy candidates copy the parent's trigger

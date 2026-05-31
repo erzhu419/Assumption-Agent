@@ -34,6 +34,7 @@ No graph mutation was performed. `writeback=false` and `dry_run=true`.
 - Candidate preflight: `manifest_only=4`, `ready_for_fresh_ablation=1`, `needs_more_trigger_rows=3`
 - Sequential falsification gate: `manifest_only=4`, `ready_for_ablation=1`, `blocked_underpowered=3`
 - Bayesian policy scorer: `run_ablation=1`, `collect_evidence=3`, `record_only=4`
+- Formal mapping audit: `complete=9`, `partial=0`, `unsafe=0`
 
 ## Policy Plan
 
@@ -59,10 +60,14 @@ The ready candidate is a retrieval policy for `wisdom_W020`:
 This closes the orchestration gap for the self-evolution loop. The system now
 has a single dry-run entry point that turns judged failures and wins into
 conditioned gates, lifecycle actions, candidate hypotheses, falsification
-preflight, regression predictions, and a graph policy update plan. Promotion or
-graph mutation remains gated behind explicit acceptance evidence and opt-in
-write flags.
+preflight, regression predictions, formal mapping diagnostics, and a graph
+policy update plan. Promotion or graph mutation remains gated behind explicit
+acceptance evidence and opt-in write flags.
 
 The Bayesian scorer is only a budget-allocation layer. It ranks which gated
 candidate is worth testing next; it does not override the sequential
 falsification or acceptance gates.
+
+The formal mapping audit is a static safety check for typed Exp82 bundles. It
+does not synthesize new mappings yet, but it now makes incomplete or unsafe
+formal bundles visible inside the same self-evolution report.

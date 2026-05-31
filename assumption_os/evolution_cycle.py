@@ -23,6 +23,7 @@ from .candidate_eval import build_candidate_eval_payload
 from .bayesian_policy import build_bayesian_policy_payload
 from .conditioned_eval import GateThresholds, build_conditioned_rows, evaluate_graph_nodes
 from .falsification import build_falsification_payload
+from .formal_mapping import build_formal_mapping_payload
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .lifecycle import build_lifecycle_payload
 from .proposal_overlay import parse_csv_set
@@ -107,6 +108,7 @@ def build_evolution_cycle_payload(
         eval_id=f"{eval_id}_lifecycle",
         max_actions=lifecycle_top_n,
     )
+    formal_mapping_payload = build_formal_mapping_payload(graph.store)
     proposal_payload = build_proposal_payload(
         graph=graph,
         lifecycle_payload=lifecycle_payload,
@@ -192,6 +194,7 @@ def build_evolution_cycle_payload(
         "writeback_summary": writeback_summary,
         "conditioned": conditioned_payload,
         "lifecycle": lifecycle_payload,
+        "formal_mapping_audit": formal_mapping_payload,
         "proposals": proposal_payload,
         "candidate_preflight": preflight_payload,
         "candidate_acceptance": acceptance_payload,
