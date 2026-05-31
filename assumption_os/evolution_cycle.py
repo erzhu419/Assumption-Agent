@@ -23,7 +23,7 @@ from .candidate_eval import build_candidate_eval_payload
 from .bayesian_policy import build_bayesian_policy_payload
 from .conditioned_eval import GateThresholds, build_conditioned_rows, evaluate_graph_nodes
 from .falsification import build_falsification_payload
-from .formal_mapping import build_formal_mapping_payload
+from .formal_mapping import build_formal_mapping_gate_payload, build_formal_mapping_payload
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .lifecycle import build_lifecycle_payload
 from .proposal_overlay import parse_csv_set
@@ -115,6 +115,10 @@ def build_evolution_cycle_payload(
         eval_id=f"{eval_id}_proposals",
         max_proposals=proposal_top_n,
     )
+    formal_mapping_gate_payload = build_formal_mapping_gate_payload(
+        proposal_payload=proposal_payload,
+        formal_mapping_payload=formal_mapping_payload,
+    )
     preflight_payload = build_candidate_eval_payload(
         graph_dir=graph_dir,
         proposal_payload=proposal_payload,
@@ -143,10 +147,14 @@ def build_evolution_cycle_payload(
             eval_id=f"{eval_id}_candidate_acceptance",
         )
         if apply_accepted:
+            gated_acceptance_payload = _filter_acceptance_for_formal_mapping_gate(
+                acceptance_payload,
+                formal_mapping_gate_payload,
+            )
             applied_candidate_node_ids = apply_accepted_candidates(
                 JsonlGraphStore(graph_dir),
                 proposal_payload,
-                acceptance_payload,
+                gated_acceptance_payload,
             )
 
     regression_predictions = predict_candidate_regressions(preflight_payload)
@@ -170,6 +178,7 @@ def build_evolution_cycle_payload(
         apply_accepted=apply_accepted,
         applied_candidate_node_ids=applied_candidate_node_ids,
         bayesian_policy_payload=bayesian_policy_payload,
+        formal_mapping_gate_payload=formal_mapping_gate_payload,
     )
 
     return {
@@ -195,6 +204,7 @@ def build_evolution_cycle_payload(
         "conditioned": conditioned_payload,
         "lifecycle": lifecycle_payload,
         "formal_mapping_audit": formal_mapping_payload,
+        "formal_mapping_gate": formal_mapping_gate_payload,
         "proposals": proposal_payload,
         "candidate_preflight": preflight_payload,
         "candidate_acceptance": acceptance_payload,
@@ -248,6 +258,7 @@ def build_policy_update_plan(
     apply_accepted: bool = False,
     applied_candidate_node_ids: list[str] | None = None,
     bayesian_policy_payload: dict | None = None,
+    formal_mapping_gate_payload: dict | None = None,
 ) -> dict:
     accepted = set((acceptance_payload or {}).get("accepted_proposal_ids", []))
     summary_by_proposal = {s["proposal_id"]: s for s in preflight_payload.get("summaries", [])}
@@ -255,11 +266,16 @@ def build_policy_update_plan(
         s["proposal_id"]: s
         for s in (bayesian_policy_payload or {}).get("scores", [])
     }
+    formal_gate_by_proposal = {
+        g["proposal_id"]: g
+        for g in (formal_mapping_gate_payload or {}).get("gates", [])
+    }
     actions = []
     for proposal in proposal_payload.get("proposals", []):
         pid = proposal.get("proposal_id")
         preflight = summary_by_proposal.get(pid, {})
         candidate = proposal.get("candidate_node") or {}
+        formal_gate = formal_gate_by_proposal.get(pid, {})
         if pid in accepted:
             action = "applied_to_graph" if apply_accepted else "ready_to_apply_with_apply_accepted"
         elif preflight.get("readiness") == "ready_for_fresh_ablation":
@@ -272,12 +288,14 @@ def build_policy_update_plan(
             action = "record_manifest_only_no_graph_policy_change"
         else:
             action = "collect_more_evidence"
+        action = _apply_formal_mapping_policy_gate(action, proposal, formal_gate)
         actions.append({
             "proposal_id": pid,
             "proposal_type": proposal.get("proposal_type"),
             "parent_node_id": proposal.get("parent_node_id"),
             "candidate_node_id": candidate.get("id"),
             "preflight_readiness": preflight.get("readiness"),
+            "formal_mapping_gate": formal_gate or {"decision": "not_applicable"},
             "bayesian_action": bayes_by_proposal.get(pid, {}).get("recommended_action"),
             "bayesian_priority": bayes_by_proposal.get(pid, {}).get("posterior_priority"),
             "bayesian_expected_value": bayes_by_proposal.get(pid, {}).get("expected_value"),
@@ -288,6 +306,40 @@ def build_policy_update_plan(
         "accepted_proposal_ids": sorted(accepted),
         "applied_candidate_node_ids": applied_candidate_node_ids or [],
         "actions": actions,
+    }
+
+
+def _filter_acceptance_for_formal_mapping_gate(acceptance_payload: dict, formal_mapping_gate_payload: dict) -> dict:
+    blocked = set(formal_mapping_gate_payload.get("blocked_proposal_ids", []))
+    if not blocked:
+        return acceptance_payload
+    out = dict(acceptance_payload)
+    out["accepted_proposal_ids"] = [
+        pid for pid in acceptance_payload.get("accepted_proposal_ids", []) if pid not in blocked
+    ]
+    out["formal_mapping_blocked_accepted_proposal_ids"] = sorted(
+        pid for pid in acceptance_payload.get("accepted_proposal_ids", []) if pid in blocked
+    )
+    return out
+
+
+def _apply_formal_mapping_policy_gate(action: str, proposal: dict, formal_gate: dict) -> str:
+    if not formal_gate.get("blocks_policy_update"):
+        return action
+    if not _is_promotion_sensitive_action(action, proposal):
+        return action
+    if formal_gate.get("decision") == "block_unsafe_mapping":
+        return "block_unsafe_formal_mapping"
+    return "repair_formal_mapping_before_policy_update"
+
+
+def _is_promotion_sensitive_action(action: str, proposal: dict) -> bool:
+    if proposal.get("proposal_type") == "promotion_record":
+        return True
+    return action in {
+        "applied_to_graph",
+        "ready_to_apply_with_apply_accepted",
+        "run_fresh_ablation_before_promotion",
     }
 
 

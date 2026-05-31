@@ -224,8 +224,13 @@ python3 -m assumption_os.formal_mapping \
 ```
 
 The first audit found `complete=9`, `partial=0`, and `unsafe=0`. This is still a
-static audit layer: it checks that generated formal bundles are executable and
-constraint-preserving, but it does not yet synthesize new mappings by itself.
+bounded audit layer: it checks that generated formal bundles are executable and
+constraint-preserving, and `assumption_os.evolution_cycle` now feeds the result
+into a proposal-level formal mapping gate. `partial` or `unsafe` mappings block
+promotion-sensitive policy actions until the formal bundle is repaired. The
+latest cycle has `not_applicable=8` proposal gates and `blocked=0`, meaning the
+current proposal set does not target typed formal bundles. The gate does not yet
+synthesize new mappings by itself.
 
 `assumption_os.proposals` then turns lifecycle actions into candidate nodes and
 experiment manifests. Retrieval-policy candidates copy the parent's trigger

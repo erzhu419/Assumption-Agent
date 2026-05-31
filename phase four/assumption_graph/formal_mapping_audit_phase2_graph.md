@@ -29,6 +29,6 @@ an answer transformation and verification policy. A mapping is considered safe
 only when the trigger, transformation, verification, and runtime policy are all
 present.
 
-This is a static audit, not a full mapping generator. The next useful step is to
-feed these mapping statuses into retrieval and proposal gating so incomplete or
-unsafe formal bundles cannot be promoted without repair.
+This is a bounded audit, not a full mapping generator. The evolution cycle now
+feeds these mapping statuses into proposal gating so incomplete or unsafe formal
+bundles cannot be promoted without repair.

@@ -35,6 +35,7 @@ No graph mutation was performed. `writeback=false` and `dry_run=true`.
 - Sequential falsification gate: `manifest_only=4`, `ready_for_ablation=1`, `blocked_underpowered=3`
 - Bayesian policy scorer: `run_ablation=1`, `collect_evidence=3`, `record_only=4`
 - Formal mapping audit: `complete=9`, `partial=0`, `unsafe=0`
+- Formal mapping proposal gate: `not_applicable=8`, `blocked=0`
 
 ## Policy Plan
 
@@ -68,6 +69,7 @@ The Bayesian scorer is only a budget-allocation layer. It ranks which gated
 candidate is worth testing next; it does not override the sequential
 falsification or acceptance gates.
 
-The formal mapping audit is a static safety check for typed Exp82 bundles. It
-does not synthesize new mappings yet, but it now makes incomplete or unsafe
-formal bundles visible inside the same self-evolution report.
+The formal mapping audit is a bounded safety check for typed Exp82 bundles. It
+does not synthesize new mappings yet, but the cycle now turns incomplete or
+unsafe formal bundles into proposal-level policy blocks before promotion or
+accepted-candidate application.

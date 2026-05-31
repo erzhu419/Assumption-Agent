@@ -16,9 +16,14 @@ from assumption_os.conditioned_eval import (
     route_problem_to_node,
 )
 from assumption_os.domain_templates import format_phase2_domain_execution_template
-from assumption_os.evolution_cycle import build_evolution_cycle_payload
+from assumption_os.evolution_cycle import build_evolution_cycle_payload, build_policy_update_plan
 from assumption_os.falsification import FalsificationDecision, build_falsification_payload
-from assumption_os.formal_mapping import FormalMappingStatus, build_formal_mapping_payload
+from assumption_os.formal_mapping import (
+    FormalMappingGateDecision,
+    FormalMappingStatus,
+    build_formal_mapping_gate_payload,
+    build_formal_mapping_payload,
+)
 from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
 from assumption_os.math_science_policy import route_math_science_problem
@@ -476,6 +481,49 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(payload["status_counts"], {FormalMappingStatus.UNSAFE.value: 1})
             summary = payload["summaries"][0]
             self.assertIn("missing trigger detector", summary["warnings"])
+
+    def test_formal_mapping_gate_blocks_unsafe_promotion_policy(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="constraint_1",
+                type=AssumptionType.HARNESS,
+                kind="constraint",
+                claim="formal mapping missing trigger",
+                formal_form={"kind": "constraint", "expr": {"required_substrings": ["回滚"]}},
+                payload={"seed_cid": "WCAND_UNSAFE"},
+                tags=["WCAND_UNSAFE"],
+            ))
+            formal_payload = build_formal_mapping_payload(store)
+            proposal_payload = {
+                "proposals": [{
+                    "proposal_id": "prop_unsafe",
+                    "proposal_type": ProposalType.PROMOTION_RECORD.value,
+                    "parent_node_id": "constraint_1",
+                    "candidate_node": None,
+                }],
+            }
+            gate_payload = build_formal_mapping_gate_payload(
+                proposal_payload=proposal_payload,
+                formal_mapping_payload=formal_payload,
+            )
+            self.assertEqual(
+                gate_payload["decision_counts"],
+                {FormalMappingGateDecision.BLOCK_UNSAFE_MAPPING.value: 1},
+            )
+            self.assertEqual(gate_payload["blocked_proposal_ids"], ["prop_unsafe"])
+
+            policy = build_policy_update_plan(
+                proposal_payload=proposal_payload,
+                preflight_payload={
+                    "summaries": [{
+                        "proposal_id": "prop_unsafe",
+                        "readiness": "manifest_only",
+                    }],
+                },
+                formal_mapping_gate_payload=gate_payload,
+            )
+            self.assertEqual(policy["actions"][0]["policy_action"], "block_unsafe_formal_mapping")
 
     def test_software_engineering_reranker_boosts_execution_specific_methods(self):
         with tempfile.TemporaryDirectory() as td:

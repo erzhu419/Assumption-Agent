@@ -36,6 +36,13 @@ class FormalMappingStatus(str, Enum):
     UNSAFE = "unsafe"
 
 
+class FormalMappingGateDecision(str, Enum):
+    NOT_APPLICABLE = "not_applicable"
+    ALLOW = "allow"
+    REPAIR_BEFORE_PROMOTION = "repair_before_promotion"
+    BLOCK_UNSAFE_MAPPING = "block_unsafe_mapping"
+
+
 @dataclass(frozen=True)
 class FormalNodeView:
     node_id: str
@@ -83,6 +90,21 @@ def build_formal_mapping_payload(store: JsonlGraphStore, *, node_ids: list[str] 
         "status_counts": dict(Counter(s.status.value for s in summaries)),
         "role_counts": dict(Counter(role for s in summaries for role, ids in s.roles.items() for _ in ids)),
         "summaries": [s.to_dict() for s in summaries],
+    }
+
+
+def build_formal_mapping_gate_payload(*, proposal_payload: dict, formal_mapping_payload: dict) -> dict:
+    gates = [
+        _proposal_gate(proposal, formal_mapping_payload)
+        for proposal in proposal_payload.get("proposals", [])
+    ]
+    return {
+        "source_formal_mapping_count": formal_mapping_payload.get("mapping_count", 0),
+        "decision_counts": dict(Counter(g["decision"] for g in gates)),
+        "blocked_proposal_ids": sorted(
+            g["proposal_id"] for g in gates if g.get("blocks_policy_update")
+        ),
+        "gates": gates,
     }
 
 
@@ -203,6 +225,91 @@ def _mapping_warnings(invariants: dict) -> list[str]:
     if not invariants.get("runtime_policy"):
         warnings.append("missing runtime policy")
     return warnings
+
+
+def _proposal_gate(proposal: dict, formal_mapping_payload: dict) -> dict:
+    matches = _proposal_mapping_matches(proposal, formal_mapping_payload)
+    statuses = sorted({m["status"] for m in matches})
+    if not matches:
+        decision = FormalMappingGateDecision.NOT_APPLICABLE
+    elif FormalMappingStatus.UNSAFE.value in statuses:
+        decision = FormalMappingGateDecision.BLOCK_UNSAFE_MAPPING
+    elif FormalMappingStatus.PARTIAL.value in statuses:
+        decision = FormalMappingGateDecision.REPAIR_BEFORE_PROMOTION
+    else:
+        decision = FormalMappingGateDecision.ALLOW
+    return {
+        "proposal_id": proposal.get("proposal_id"),
+        "proposal_type": proposal.get("proposal_type"),
+        "parent_node_id": proposal.get("parent_node_id"),
+        "decision": decision.value,
+        "blocks_policy_update": decision in {
+            FormalMappingGateDecision.REPAIR_BEFORE_PROMOTION,
+            FormalMappingGateDecision.BLOCK_UNSAFE_MAPPING,
+        },
+        "mapping_ids": sorted({m["mapping_id"] for m in matches}),
+        "source_keys": sorted({m["source_key"] for m in matches}),
+        "mapping_statuses": statuses,
+        "warnings": sorted({w for m in matches for w in m.get("warnings", [])}),
+    }
+
+
+def _proposal_mapping_matches(proposal: dict, formal_mapping_payload: dict) -> list[dict]:
+    by_node_id, by_source_key = _mapping_indexes(formal_mapping_payload)
+    node_ids = {proposal.get("parent_node_id")}
+    source_keys: set[str] = set()
+    candidate = proposal.get("candidate_node") or {}
+    if candidate:
+        node_ids.add(candidate.get("id"))
+        source_keys.update(_node_source_keys(candidate))
+    source_action = proposal.get("source_action") or {}
+    source_keys.update(_node_source_keys(source_action))
+
+    matches = []
+    seen = set()
+    for node_id in sorted(x for x in node_ids if x):
+        for match in by_node_id.get(str(node_id), []):
+            key = (match["mapping_id"], match["status"])
+            if key not in seen:
+                seen.add(key)
+                matches.append(match)
+    for source_key in sorted(source_keys):
+        for match in by_source_key.get(source_key, []):
+            key = (match["mapping_id"], match["status"])
+            if key not in seen:
+                seen.add(key)
+                matches.append(match)
+    return matches
+
+
+def _mapping_indexes(formal_mapping_payload: dict) -> tuple[dict[str, list[dict]], dict[str, list[dict]]]:
+    by_node_id: dict[str, list[dict]] = defaultdict(list)
+    by_source_key: dict[str, list[dict]] = defaultdict(list)
+    for summary in formal_mapping_payload.get("summaries", []):
+        view = {
+            "mapping_id": summary.get("mapping_id", ""),
+            "source_key": summary.get("source_key", ""),
+            "status": summary.get("status", ""),
+            "warnings": summary.get("warnings", []),
+        }
+        if view["source_key"]:
+            by_source_key[view["source_key"]].append(view)
+        for node in summary.get("nodes", []):
+            node_id = node.get("node_id")
+            if node_id:
+                by_node_id[node_id].append(view)
+    return by_node_id, by_source_key
+
+
+def _node_source_keys(node: dict) -> set[str]:
+    keys = set()
+    payload = node.get("payload") if isinstance(node, dict) else None
+    if isinstance(payload, dict) and payload.get("seed_cid"):
+        keys.add(str(payload["seed_cid"]))
+    for tag in node.get("tags", []) if isinstance(node, dict) else []:
+        if isinstance(tag, str) and tag.startswith("WC"):
+            keys.add(tag)
+    return keys
 
 
 def _resolve(root: Path, path: str) -> Path:
