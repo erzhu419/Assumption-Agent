@@ -5,6 +5,7 @@ from pathlib import Path
 
 from assumption_os.adapters import ingest_artifacts, load_exp82_hypotheses, load_wisdom_nodes
 from assumption_os.activation import build_activation_profile
+from assumption_os.assumption_bench import build_assumption_bench_payload
 from assumption_os.bayesian_policy import BayesianPolicyAction, build_bayesian_policy_payload, parent_belief
 from assumption_os.candidate_acceptance import AcceptanceDecision, apply_accepted_candidates, build_acceptance_payload
 from assumption_os.conditioned_eval import (
@@ -1160,6 +1161,76 @@ class AssumptionOSTest(unittest.TestCase):
         )
         self.assertEqual(blocked["policy_decision"], EvolutionPolicyDecision.BLOCKED_BY_PERMISSIONS.value)
         self.assertEqual(blocked["permission_violations"][0]["kind"], "apply_accepted_not_allowed")
+
+    def test_assumption_bench_scores_lifecycle_capabilities(self):
+        with tempfile.TemporaryDirectory() as td:
+            graph_dir = Path(td) / "graph"
+            store = JsonlGraphStore(graph_dir)
+            types = [
+                AssumptionType.METHOD,
+                AssumptionType.MEMORY,
+                AssumptionType.VERIFIER,
+                AssumptionType.WORLD_MODEL,
+                AssumptionType.HARNESS,
+                AssumptionType.RETRIEVAL,
+            ]
+            for idx in range(24):
+                store.upsert_node(AssumptionNode(
+                    id=f"node_{idx}",
+                    type=types[idx % len(types)],
+                    claim=f"Capability node {idx}",
+                    metaproductivity=0.2,
+                ))
+            edge_types = [
+                EdgeType.SUPPORTS,
+                EdgeType.DEPENDS_ON,
+                EdgeType.HAS_VERIFIER,
+                EdgeType.GENERATED_FROM_RESIDUAL,
+                EdgeType.HAS_CASE,
+                EdgeType.HAS_RESIDUAL,
+            ]
+            for idx, edge_type in enumerate(edge_types):
+                store.add_edge(AssumptionEdge(source=f"node_{idx}", target=f"node_{idx + 1}", type=edge_type))
+            store.flush()
+            sections = {
+                "manifest_logger": {"pass": True, "event_count": 120, "real_log_event_count": 12, "secret_leak_detected": False},
+                "trajectory_search": {"pass": True, "multi_path_rate": 0.8, "top_path_label_hit_rate": 1.0, "selected_path_types": {"a": 1, "b": 1, "c": 1}},
+                "verifier_stack": {
+                    "pass": True,
+                    "proposal_count": 33,
+                    "accepted_count": 2,
+                    "accepted_protocol_ok": True,
+                    "rejected_protocol_ok": True,
+                    "falsification_experiment_count": 135,
+                    "stage_status_counts": {"V4:pass": 2, "V4:fail": 14},
+                },
+                "recursive_audit": {"pass": True, "min_closure_score": 1.0, "critical_issue_count": 0},
+                "recursive_daemon": {"pass": True, "accepted_apply_count": 2, "case_count": 2},
+                "residual_clusterer": {"pass": True, "cluster_count": 5, "proposal_count": 2, "validation_plans_complete": True},
+                "harness_observer": {"pass": True, "full_coverage_after_writeback": True, "artifact_file_count": 4},
+                "world_model": {
+                    "pass": True,
+                    "matched_label_count": 16,
+                    "pre_acceptance": {"auc": 1.0},
+                    "post_calibration": {"brier_score": 0.01},
+                },
+                "evolution_context": {
+                    "pass": True,
+                    "responsibility_count": 9,
+                    "responsibility_status_counts": {"pass": 9},
+                    "blocked_policy_decision": "blocked_by_permissions",
+                    "apply_policy_decision": "gated_apply_allowed",
+                },
+            }
+            payload = build_assumption_bench_payload(
+                eval_id="unit_assumption_bench",
+                sections=sections,
+                graph_dir=graph_dir,
+            )
+            self.assertTrue(payload["pass"])
+            self.assertEqual(payload["capability_count"], 9)
+            self.assertEqual(payload["failed_capabilities"], [])
+            self.assertGreaterEqual(payload["overall_score"], 0.9)
 
     def test_recursive_daemon_resumes_and_applies_accepted_candidate(self):
         with tempfile.TemporaryDirectory() as td:

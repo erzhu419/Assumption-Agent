@@ -12,6 +12,7 @@ This runner evaluates the reconstruction mechanisms added after reconstruction:
 8. unified verifier stack
 9. recursive runner closure audit
 10. evolution context / harness responsibility gate
+11. assumption lifecycle capability scoreboard
 
 The validation uses existing real artifacts where available and deterministic
 positive controls where the mechanism needs a safe graph-mutation sandbox.
@@ -28,6 +29,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from .assumption_bench import build_assumption_bench_payload
 from .falsification import build_falsification_payload
 from .evolution_context import build_evolution_context_payload
 from .formal_mapping import build_categorical_info_geometry_payload, build_formal_mapping_payload
@@ -105,6 +107,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["evolution_context"] = _validate_evolution_context(sections=sections)
     timings["evolution_context_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["assumption_bench"] = _validate_assumption_bench(sections=sections, graph_dir=graph_dir)
+    timings["assumption_bench_sec"] = _elapsed(start)
     return {
         "eval_id": eval_id,
         "source": {
@@ -536,6 +541,26 @@ def _validate_evolution_context(*, sections: dict[str, dict]) -> dict:
     }
 
 
+def _validate_assumption_bench(*, sections: dict[str, dict], graph_dir: Path) -> dict:
+    payload = build_assumption_bench_payload(
+        eval_id="perf_assumption_bench",
+        sections=sections,
+        graph_dir=graph_dir,
+    )
+    return {
+        "pass": payload["pass"],
+        "overall_score": payload["overall_score"],
+        "min_score": payload["min_score"],
+        "capability_count": payload["capability_count"],
+        "passed_capability_count": payload["passed_capability_count"],
+        "failed_capabilities": payload["failed_capabilities"],
+        "score_by_capability": {
+            row["name"]: row["score"]
+            for row in payload["scores"]
+        },
+    }
+
+
 def _validate_manifest_logger(*, root: Path) -> dict:
     events = [
         {
@@ -869,6 +894,8 @@ def _key_metric(name: str, section: dict) -> str:
         return f"score={section['min_closure_score']}, issues={section['critical_issue_count']}/{section['warning_issue_count']}"
     if name == "evolution_context":
         return f"decision={section['dry_policy_decision']}->{section['apply_policy_decision']}, resp={section['responsibility_status_counts']}"
+    if name == "assumption_bench":
+        return f"score={section['overall_score']}, passed={section['passed_capability_count']}/{section['capability_count']}"
     if name == "manifest_logger":
         return f"events={section['event_count']}, real_logs={section['real_log_event_count']}, leak={section['secret_leak_detected']}"
     if name == "harness_observer":

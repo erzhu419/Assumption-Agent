@@ -13,9 +13,10 @@ Overall: PASS
 | recursive_audit | PASS | score=1.0, issues=0/0 |
 | manifest_logger | PASS | events=112, real_logs=12, leak=False |
 | harness_observer | PASS | artifacts=4, backfill=0/19, covered=True |
-| residual_clusterer | PASS | clusters=5, proposals=2 |
+| residual_clusterer | PASS | clusters=6, proposals=2 |
 | formal_metrics | PASS | mappings=9, warnings=0 |
 | evolution_context | PASS | decision=ready_for_manual_apply->gated_apply_allowed, resp={'pass': 9} |
+| assumption_bench | PASS | score=0.9839, passed=9/9 |
 
 ## Details
 
@@ -83,7 +84,7 @@ Overall: PASS
 - `real_log_paths`: ["phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log", "phase four/assumption_graph/recursive_scoped_ablation_run_gpt55_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt54mini_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt55_21_50.log", "phase six/autonomous/exp80_run.log"]
 - `written_trials`: 112
 - `secret_leak_detected`: false
-- `throughput_events_per_sec`: 1671.64
+- `throughput_events_per_sec`: 1530.05
 - `event_counts`: {"judge_call": 28, "llm_call": 21, "retrieval": 20, "simulator_rollout": 20, "tool_use": 23}
 
 ### harness_observer
@@ -104,7 +105,7 @@ Overall: PASS
 ### residual_clusterer
 
 - `record_count`: 109
-- `cluster_count`: 5
+- `cluster_count`: 6
 - `proposal_count`: 2
 - `residual_type_counts`: {"memory_defect": 8, "optimization": 40, "unknown": 61}
 - `proposal_parent_ids`: ["strategy_S08", "strategy_S21"]
@@ -130,3 +131,12 @@ Overall: PASS
 - `actionable_frontier_count`: 5
 - `procedure_update_count`: 4
 - `procedure_update_ids`: ["require_verifier_stack_before_apply", "require_recursive_audit_before_daemon_apply", "require_manifest_and_harness_coverage", "manual_apply_available"]
+
+### assumption_bench
+
+- `overall_score`: 0.9839
+- `min_score`: 0.8833
+- `capability_count`: 9
+- `passed_capability_count`: 9
+- `failed_capabilities`: []
+- `score_by_capability`: {"assumption_explicitness": 1.0, "context_selection": 1.0, "execution_fidelity": 1.0, "harness_governance": 1.0, "memory_transfer": 0.8833, "metaproductivity": 1.0, "residual_attribution": 1.0, "verifier_reliability": 1.0, "world_model_quality": 0.9716}
