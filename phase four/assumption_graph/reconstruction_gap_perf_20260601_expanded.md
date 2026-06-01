@@ -23,6 +23,7 @@ Overall: PASS
 | evolution_context | PASS | decision=ready_for_manual_apply->gated_apply_allowed, resp={'pass': 9} |
 | memory_surfaces | PASS | types=11->11, edges=11->11 |
 | assumption_bench | PASS | score=0.9968, passed=9/9 |
+| reconstruction_progress | PASS | structure=81.3%, behavior=68.5%, weighted=74.3% |
 
 ## Details
 
@@ -90,7 +91,7 @@ Overall: PASS
 - `real_log_paths`: ["phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log", "phase four/assumption_graph/recursive_scoped_ablation_run_gpt55_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt54mini_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt55_21_50.log", "phase six/autonomous/exp80_run.log"]
 - `written_trials`: 112
 - `secret_leak_detected`: false
-- `throughput_events_per_sec`: 2403.43
+- `throughput_events_per_sec`: 2295.08
 - `event_counts`: {"judge_call": 28, "llm_call": 21, "retrieval": 20, "simulator_rollout": 20, "tool_use": 23}
 
 ### runtime_trace
@@ -215,3 +216,14 @@ Overall: PASS
 - `passed_capability_count`: 9
 - `failed_capabilities`: []
 - `score_by_capability`: {"assumption_explicitness": 1.0, "context_selection": 1.0, "execution_fidelity": 1.0, "harness_governance": 1.0, "memory_transfer": 1.0, "metaproductivity": 1.0, "residual_attribution": 1.0, "verifier_reliability": 1.0, "world_model_quality": 0.9716}
+
+### reconstruction_progress
+
+- `structure_percent`: 81.3
+- `behavior_percent`: 68.5
+- `weighted_percent`: 74.3
+- `completed_item_count`: 3
+- `item_count`: 9
+- `status_counts`: {"early": 1, "operational": 7, "partial": 1}
+- `lowest_behavior_items`: [{"behavior_score": 0.4443, "key": "C_world_model_simulator", "status": "early", "structure_score": 0.82}, {"behavior_score": 0.48, "key": "G_formal_alignment_layer", "status": "partial", "structure_score": 0.65}, {"behavior_score": 0.7, "key": "B_hypothesis_generator", "status": "operational", "structure_score": 0.8}]
+- `top_next_actions`: [{"action": "Add a deduplication pass that merges candidates with complete formal/semantic equivalence.", "item": "G_formal_alignment_layer", "priority": 0.4435}, {"action": "Measure whether formal-mapping quality predicts transfer success.", "item": "G_formal_alignment_layer", "priority": 0.4435}, {"action": "Accumulate a larger trace dataset from real first-party runs.", "item": "C_world_model_simulator", "priority": 0.3867}, {"action": "Train/calibrate a cheap predictor over problem + activated assumptions + trace features + residual label.", "item": "C_world_model_simulator", "priority": 0.3867}, {"action": "Add a generator pass that turns evaluator/world-model residuals into candidate proposals.", "item": "B_hypothesis_generator", "priority": 0.255}]

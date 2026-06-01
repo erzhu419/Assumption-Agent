@@ -41,6 +41,7 @@ Current gaps being addressed:
 13. Add a trace outcome model so route/component traces generate calibrated policy updates before the next recursive run.
 14. Convert trace policy updates into verifier-ready candidate proposals so recursive execution can consume them.
 15. Preflight trace policy proposals so only route-ready candidates proceed to fresh ablation.
+16. Add a reconstruction progress audit so completion against `reconstruction.md` is explicit and evidence-backed.
 
 ## Progress
 
@@ -80,6 +81,7 @@ Current gaps being addressed:
 - 2026-06-01: Added `assumption_os.trace_outcome_model`; the real 9-row math/science trace dataset now yields route/component leave-one-out calibration and three policy updates.
 - 2026-06-01: Extended trace outcome modeling to emit `CandidateProposal` payloads under the `domain_retrieval_policy` runtime surface.
 - 2026-06-01: Ran candidate preflight for trace policy proposals; all 3 are `ready_for_fresh_ablation` on the math/science trace slice.
+- 2026-06-01: Added `assumption_os.reconstruction_progress`; current reconstruction closure is structure 81.3%, behavior 68.5%, weighted 74.3%.
 
 ## Closure Notes
 
@@ -96,6 +98,7 @@ Current gaps being addressed:
 - Trace outcome modeling now converts those rows into repair/reinforce route-policy candidates without mutating graph memory.
 - Trace policy proposals now bridge route-policy learning into the existing candidate/verifier/recursive-executor intake path.
 - Trace policy preflight verifies trigger routing before any expensive fresh ablation.
+- Reconstruction progress is now part of performance validation and is capped against the full `reconstruction.md` target, so passing local artifacts do not overstate maturity.
 
 ## Performance Validation - 2026-06-01
 
@@ -119,6 +122,7 @@ Results:
 - Trace outcome model: 9 real trainable rows, 3 route groups, leave-one-out Brier 0.1605, and 3 policy updates: reinforce `math_research_bridge`, targeted repair for `science_mechanism`, reinforce `science_decision`.
 - Trace policy proposals: 3 `assumption_revision` proposals under `surface_6e7d9d238212`, with 1 targeted repair and 3 heldout-route verifiers.
 - Trace policy preflight: 3/3 proposals ready for fresh ablation, 0 missed trigger rows, 0 outside-active rows, command hints emitted.
+- Reconstruction progress: structure 81.3%, behavior 68.5%, weighted 74.3%; 3/9 mature-or-completed items; lowest behavior items are `C_world_model_simulator`, `G_formal_alignment_layer`, and `B_hypothesis_generator`.
 - Harness observer: 4 artifact files, 19 discovered events, full artifact-file coverage after writeback, no secret leak; current reruns skip already-covered events instead of duplicating persisted `harness_observer_backfill_20260601` trials.
 - Verifier stack: 33 proposals, 2 accepted-for-gated-apply, 14 rejected, 6 preflight-repair, 11 collect-more-evidence; V4 acceptance stages show 2 pass / 14 fail / 17 missing. The falsification protocol layer adds 135 experiment records across 27 candidate proposals; accepted protocol checks and rejected protocol checks both pass.
 - Recursive audit: dry frontier plus accepted-return cases pass with 12 total frames, 5 actionable frontier items, min closure score 1.0, 0 critical issues, and 0 warnings.

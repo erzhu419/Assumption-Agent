@@ -53,6 +53,7 @@ from assumption_os.recursive_runner import (
 from assumption_os.recursive_audit import build_recursive_audit_payload
 from assumption_os.recursive_daemon import build_recursive_daemon_payload
 from assumption_os.recursive_executor import JudgmentSet, build_recursive_execution_payload
+from assumption_os.reconstruction_progress import build_reconstruction_progress_payload
 from assumption_os.residual_clusterer import ResidualRecord, build_residual_cluster_payload, cluster_residual_records
 from assumption_os.residuals import classify_manifest
 from assumption_os.runtime_trace import RuntimeTraceRecorder
@@ -1438,6 +1439,99 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(payload["capability_count"], 9)
             self.assertEqual(payload["failed_capabilities"], [])
             self.assertGreaterEqual(payload["overall_score"], 0.9)
+
+    def test_reconstruction_progress_audits_structure_and_behavior(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            graph_dir = root / "graph"
+            store = JsonlGraphStore(graph_dir)
+            for idx, node_type in enumerate([
+                AssumptionType.METHOD,
+                AssumptionType.RETRIEVAL,
+                AssumptionType.VERIFIER,
+                AssumptionType.WORLD_MODEL,
+                AssumptionType.HARNESS,
+                AssumptionType.RESIDUAL,
+                AssumptionType.CASE,
+                AssumptionType.EVALUATOR,
+                AssumptionType.MEMORY,
+                AssumptionType.ALIGNMENT,
+                AssumptionType.SELF_MODIFICATION,
+            ]):
+                store.upsert_node(AssumptionNode(
+                    id=f"n{idx}",
+                    type=node_type,
+                    claim=f"Node {idx}",
+                    metaproductivity=0.1,
+                ))
+            for idx, edge_type in enumerate([
+                EdgeType.SUPPORTS,
+                EdgeType.DEPENDS_ON,
+                EdgeType.HAS_VERIFIER,
+                EdgeType.GENERATED_FROM_RESIDUAL,
+                EdgeType.HAS_CASE,
+                EdgeType.HAS_RESIDUAL,
+                EdgeType.SPECIALIZES,
+                EdgeType.DERIVED_FROM,
+                EdgeType.USES_EVALUATOR,
+                EdgeType.IS_FORMAL_ISOMORPHISM_OF,
+                EdgeType.GENERALIZES,
+            ]):
+                store.add_edge(AssumptionEdge(source=f"n{idx}", target=f"n{(idx + 1) % 11}", type=edge_type))
+            for idx in range(12):
+                store.append_trial(TrialManifest(
+                    problem_id=f"p{idx}",
+                    action_type="unit",
+                    assumption="unit",
+                    why_selected="unit",
+                    expected_effect="unit",
+                    status=TrialStatus.OBSERVED,
+                ))
+            store.flush()
+            sections = {
+                "memory_surfaces": {"pass": True, "surface_count": 10},
+                "harness_observer": {"pass": True, "full_coverage_after_writeback": True},
+                "residual_clusterer": {"pass": True, "cluster_count": 7, "proposal_count": 2, "record_count": 109, "residual_type_counts": {"optimization": 4, "memory_defect": 2, "unknown": 1}, "validation_plans_complete": True},
+                "trace_policy_proposals": {"pass": True, "proposal_count": 3, "repair_policy_count": 1},
+                "trace_policy_preflight": {"pass": True, "proposal_count": 3, "ready_count": 3},
+                "world_model": {"pass": True, "matched_label_count": 16, "post_calibration": {"brier_score": 0.0081}},
+                "trace_dataset": {"pass": True},
+                "trace_outcome_model": {"pass": True, "trainable_row_count": 9, "policy_update_count": 3, "residual_group_count": 1, "leave_one_out_metrics": {"brier_score": 0.1605}},
+                "verifier_stack": {"pass": True, "proposal_count": 33, "accepted_count": 2, "rejected_count": 14, "accepted_protocol_ok": True, "rejected_protocol_ok": True, "falsification_protocol_candidate_count": 27, "falsification_experiment_count": 135},
+                "trajectory_search": {"pass": True, "multi_path_rate": 0.8, "top_path_label_hit_rate": 1.0, "trajectory_count": 26, "frontier_actions": 10, "selected_path_types": {"a": 1, "b": 1, "c": 1, "d": 1}},
+                "assumption_bench": {"pass": True, "overall_score": 0.9968, "min_score": 0.9716, "capability_count": 9, "passed_capability_count": 9, "failed_capabilities": [], "score_by_capability": {"metaproductivity": 1.0}},
+                "formal_metrics": {"pass": True, "mapping_count": 9, "complete_count": 9, "same_shape_count": 9, "warning_count": 0},
+                "recursive_audit": {"pass": True, "min_closure_score": 1.0, "actionable_count": 5, "critical_issue_count": 0},
+                "recursive_daemon": {"pass": True, "case_count": 2, "accepted_apply_count": 2},
+            }
+            (root / "reconstruction.md").write_text(
+                "\n".join([
+                    "Assumption Graph Memory",
+                    "Hypothesis Generator",
+                    "World Model / Simulator",
+                    "Verifier Stack POPPER falsification",
+                    "Residual Analyzer residual taxonomy",
+                    "Metaproductivity HGM clade",
+                    "Formal Alignment Layer 范畴论 信息几何",
+                    "递归执行循环 recursive 多条候选假设轨迹",
+                    "评价体系 AssumptionBench answer win-rate",
+                ]),
+                encoding="utf-8",
+            )
+            payload = build_reconstruction_progress_payload(
+                root=root,
+                performance_payload={"eval_id": "unit_perf", "sections": sections},
+                graph_dir=graph_dir,
+                reconstruction_path=root / "reconstruction.md",
+                eval_id="unit_reconstruction_progress",
+            )
+            self.assertTrue(payload["overall_pass"])
+            self.assertEqual(payload["closure"]["item_count"], 9)
+            self.assertGreaterEqual(payload["closure"]["structure_percent"], 75.0)
+            self.assertGreaterEqual(payload["closure"]["behavior_percent"], 65.0)
+            self.assertTrue(payload["remaining_gaps_ranked"])
+            self.assertTrue(payload["next_actions_ranked"])
+            self.assertEqual(payload["reconstruction_reference"]["matched_target_count"], 9)
 
     def test_memory_surfaces_write_runtime_mechanisms_to_graph(self):
         with tempfile.TemporaryDirectory() as td:

@@ -19,6 +19,7 @@ This runner evaluates the reconstruction mechanisms added after reconstruction:
 15. trace outcome model for route/component policy calibration
 16. trace policy proposals for recursive verifier intake
 17. trace policy preflight for fresh-ablation readiness
+18. reconstruction progress audit against reconstruction.md
 
 The validation uses existing real artifacts where available and deterministic
 positive controls where the mechanism needs a safe graph-mutation sandbox.
@@ -46,6 +47,7 @@ from .memory_surfaces import build_memory_surface_payload
 from .recursive_audit import build_recursive_audit_payload
 from .recursive_daemon import build_recursive_daemon_payload
 from .recursive_executor import JudgmentSet
+from .reconstruction_progress import build_reconstruction_progress_payload
 from .recursive_runner import build_recursive_assumption_run
 from .residual_clusterer import build_residual_cluster_payload
 from .runtime_trace import RuntimeTraceRecorder
@@ -148,6 +150,14 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["assumption_bench"] = _validate_assumption_bench(sections=sections, graph_dir=graph_dir)
     timings["assumption_bench_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["reconstruction_progress"] = _validate_reconstruction_progress(
+        root=root,
+        graph_dir=graph_dir,
+        eval_id=eval_id,
+        sections=sections,
+    )
+    timings["reconstruction_progress_sec"] = _elapsed(start)
     return {
         "eval_id": eval_id,
         "source": {
@@ -596,6 +606,42 @@ def _validate_assumption_bench(*, sections: dict[str, dict], graph_dir: Path) ->
             row["name"]: row["score"]
             for row in payload["scores"]
         },
+    }
+
+
+def _validate_reconstruction_progress(
+    *,
+    root: Path,
+    graph_dir: Path,
+    eval_id: str,
+    sections: dict[str, dict],
+) -> dict:
+    payload = build_reconstruction_progress_payload(
+        root=root,
+        performance_payload={"eval_id": eval_id, "sections": sections},
+        graph_dir=graph_dir,
+        reconstruction_path=root / "reconstruction/md/reconstruction.md",
+        eval_id="perf_reconstruction_progress",
+    )
+    closure = payload["closure"]
+    return {
+        "pass": payload["overall_pass"],
+        "structure_percent": closure["structure_percent"],
+        "behavior_percent": closure["behavior_percent"],
+        "weighted_percent": closure["weighted_percent"],
+        "completed_item_count": closure["completed_item_count"],
+        "item_count": closure["item_count"],
+        "status_counts": dict(Counter(row["status"] for row in payload["items"])),
+        "lowest_behavior_items": [
+            {
+                "key": row["key"],
+                "behavior_score": row["behavior_score"],
+                "structure_score": row["structure_score"],
+                "status": row["status"],
+            }
+            for row in sorted(payload["items"], key=lambda row: (row["behavior_score"], row["structure_score"]))[:3]
+        ],
+        "top_next_actions": payload["next_actions_ranked"][:5],
     }
 
 
@@ -1247,6 +1293,8 @@ def _key_metric(name: str, section: dict) -> str:
         return f"decision={section['dry_policy_decision']}->{section['apply_policy_decision']}, resp={section['responsibility_status_counts']}"
     if name == "assumption_bench":
         return f"score={section['overall_score']}, passed={section['passed_capability_count']}/{section['capability_count']}"
+    if name == "reconstruction_progress":
+        return f"structure={section['structure_percent']}%, behavior={section['behavior_percent']}%, weighted={section['weighted_percent']}%"
     if name == "memory_surfaces":
         return f"types={section['before_node_type_count']}->{section['after_node_type_count']}, edges={section['before_edge_type_count']}->{section['after_edge_type_count']}"
     if name == "manifest_logger":
