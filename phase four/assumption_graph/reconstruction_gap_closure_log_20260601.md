@@ -12,6 +12,7 @@ Current gaps being addressed:
 4. Not every LLM call, retrieval, judge call, or tool-use has a TrialManifest-shaped log.
 5. No residual clustering pipeline that turns systematic residuals into new method hypotheses plus heldout validation plans.
 6. Formal mapping is an audit/search layer, not yet an executable finite categorical / information-geometry reasoning layer.
+7. Evolution context / harness responsibility is implicit in commands rather than represented as an auditable assumption.
 
 ## Design Constraints
 
@@ -29,6 +30,7 @@ Current gaps being addressed:
 5. Add residual clustering and synthesis from systematic residual groups into candidate method hypotheses and validation plans.
 6. Extend formal mapping with finite stochastic-kernel metrics: categorical objects/morphisms, row KL, total variation, Frobenius distance, and a Blackwell-style dominance proxy.
 7. Add unit tests and README documentation for the new loop.
+8. Add an evolution-context gate for task specification, context selection, observability, failure attribution, verification, permission boundaries, intervention recording, rollback, and procedure updates.
 
 ## Progress
 
@@ -56,6 +58,8 @@ Current gaps being addressed:
 - 2026-06-01: Regenerated the unified verifier artifact with 135 falsification experiment records across 27 candidate proposals.
 - 2026-06-01: Added `assumption_os.recursive_audit` to verify recursive runner closure: parent/child consistency, argument contracts, return-update contracts, and actionable frontier integrity.
 - 2026-06-01: Persisted `recursive_audit_reconstruction_gap_20260601_expanded.json`: 2 cases, 12 frames, 5 actionable frontier items, min closure score 1.0, 0 critical issues, 0 warnings.
+- 2026-06-01: Added `assumption_os.evolution_context` to make the evolution procedure itself auditable. It checks 9 harness responsibilities and gates write/apply/execute requests against explicit permissions and accepted-candidate budgets.
+- 2026-06-01: Persisted `evolution_context_reconstruction_gap_20260601_expanded.json`: dry mode is `ready_for_manual_apply`, bounded apply is `gated_apply_allowed`, unpermitted apply is `blocked_by_permissions`, and all 9 responsibilities pass.
 
 ## Closure Notes
 
@@ -87,6 +91,7 @@ Results:
 - Harness observer: 4 artifact files, 19 discovered events, 10 newly backfilled events, 9 already-covered events skipped, full artifact-file coverage after writeback, no secret leak; persisted via `harness_observer_backfill_20260601`.
 - Verifier stack: 33 proposals, 2 accepted-for-gated-apply, 14 rejected, 6 preflight-repair, 11 collect-more-evidence; V4 acceptance stages show 2 pass / 14 fail / 17 missing. The falsification protocol layer adds 135 experiment records across 27 candidate proposals; accepted protocol checks and rejected protocol checks both pass.
 - Recursive audit: dry frontier plus accepted-return cases pass with 12 total frames, 5 actionable frontier items, min closure score 1.0, 0 critical issues, and 0 warnings.
+- Evolution context: 9 / 9 harness responsibilities pass; dry mode reports `ready_for_manual_apply`, bounded permission reports `gated_apply_allowed`, and unpermitted apply is blocked with permission violations.
 - World model: 16 matched labels from 2 accepted / 14 rejected proposal outcomes; raw pre-acceptance Brier 0.2182, trained calibration Brier 0.0085, leave-one-out Brier 0.0090, post-acceptance Brier 0.0081.
 - Trajectory search: 10 frontier actions, 26 trajectories, multi-path rate 0.8, top-path label hit rate 1.0.
 - Recursive daemon: 2 positive-control accepted candidates applied in a temp graph, dry-run applied 0, gated apply applied 2, manifests written.

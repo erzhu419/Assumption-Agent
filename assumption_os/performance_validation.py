@@ -11,6 +11,7 @@ This runner evaluates the reconstruction mechanisms added after reconstruction:
 7. harness artifact observer coverage
 8. unified verifier stack
 9. recursive runner closure audit
+10. evolution context / harness responsibility gate
 
 The validation uses existing real artifacts where available and deterministic
 positive controls where the mechanism needs a safe graph-mutation sandbox.
@@ -28,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from .falsification import build_falsification_payload
+from .evolution_context import build_evolution_context_payload
 from .formal_mapping import build_categorical_info_geometry_payload, build_formal_mapping_payload
 from .graph_memory import JsonlGraphStore
 from .harness_observer import build_harness_observer_payload
@@ -100,6 +102,9 @@ def build_performance_validation_payload(
         "residual_clusterer": residuals,
         "formal_metrics": formal,
     }
+    start = time.perf_counter()
+    sections["evolution_context"] = _validate_evolution_context(sections=sections)
+    timings["evolution_context_sec"] = _elapsed(start)
     return {
         "eval_id": eval_id,
         "source": {
@@ -490,6 +495,47 @@ def _validate_recursive_audit(*, root: Path, graph_dir: Path) -> dict:
     }
 
 
+def _validate_evolution_context(*, sections: dict[str, dict]) -> dict:
+    dry = build_evolution_context_payload(
+        eval_id="perf_evolution_context_dry",
+        objective="Govern recursive graph self-evolution with explicit harness responsibilities.",
+        sections=sections,
+    )
+    apply_allowed = build_evolution_context_payload(
+        eval_id="perf_evolution_context_apply",
+        objective="Allow bounded gated apply only when accepted candidates and harness checks pass.",
+        sections=sections,
+        mode={"apply_accepted": True},
+        permissions={"allow_apply_accepted": True, "max_apply_candidates": 2},
+    )
+    blocked = build_evolution_context_payload(
+        eval_id="perf_evolution_context_blocked",
+        objective="Confirm apply is blocked without explicit permission.",
+        sections=sections,
+        mode={"apply_accepted": True},
+    )
+    dry_passes = dry["policy_decision"] == "ready_for_manual_apply"
+    apply_passes = apply_allowed["policy_decision"] == "gated_apply_allowed"
+    blocked_passes = (
+        blocked["policy_decision"] == "blocked_by_permissions"
+        and blocked["permission_violations"]
+    )
+    responsibilities_pass = dry["responsibility_status_counts"].get("pass", 0) >= 9
+    return {
+        "pass": dry_passes and apply_passes and blocked_passes and responsibilities_pass,
+        "responsibility_count": dry["responsibility_count"],
+        "responsibility_status_counts": dry["responsibility_status_counts"],
+        "dry_policy_decision": dry["policy_decision"],
+        "apply_policy_decision": apply_allowed["policy_decision"],
+        "blocked_policy_decision": blocked["policy_decision"],
+        "blocked_violation_count": len(blocked["permission_violations"]),
+        "accepted_candidate_count": dry["accepted_candidate_count"],
+        "actionable_frontier_count": dry["actionable_frontier_count"],
+        "procedure_update_count": len(dry["procedure_updates"]),
+        "procedure_update_ids": [row["id"] for row in dry["procedure_updates"]],
+    }
+
+
 def _validate_manifest_logger(*, root: Path) -> dict:
     events = [
         {
@@ -821,6 +867,8 @@ def _key_metric(name: str, section: dict) -> str:
         return f"applied={section['accepted_apply_count']}/{section['case_count']}"
     if name == "recursive_audit":
         return f"score={section['min_closure_score']}, issues={section['critical_issue_count']}/{section['warning_issue_count']}"
+    if name == "evolution_context":
+        return f"decision={section['dry_policy_decision']}->{section['apply_policy_decision']}, resp={section['responsibility_status_counts']}"
     if name == "manifest_logger":
         return f"events={section['event_count']}, real_logs={section['real_log_event_count']}, leak={section['secret_leak_detected']}"
     if name == "harness_observer":

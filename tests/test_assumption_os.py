@@ -17,6 +17,10 @@ from assumption_os.conditioned_eval import (
 )
 from assumption_os.domain_templates import format_phase2_domain_execution_template
 from assumption_os.evolution_cycle import build_evolution_cycle_payload, build_policy_update_plan
+from assumption_os.evolution_context import (
+    EvolutionPolicyDecision,
+    build_evolution_context_payload,
+)
 from assumption_os.failure_hypotheses import build_failure_hypothesis_payload
 from assumption_os.falsification import FalsificationDecision, build_falsification_payload
 from assumption_os.formal_mapping import (
@@ -1104,6 +1108,58 @@ class AssumptionOSTest(unittest.TestCase):
         v3 = next(stage for stage in by_id["prop_accept"]["stages"] if stage["tier"] == "V3")
         self.assertEqual(v3["evidence"]["experiment_name_counts"]["trigger_benefit_sequential"], 1)
         self.assertEqual(v3["evidence"]["experiment_status_counts"]["passed"], 4)
+
+    def test_evolution_context_gates_permissions_and_harness_responsibilities(self):
+        sections = {
+            "trajectory_search": {"pass": True, "multi_path_rate": 0.8},
+            "verifier_stack": {
+                "pass": True,
+                "proposal_count": 33,
+                "accepted_count": 2,
+                "accepted_protocol_ok": True,
+                "rejected_protocol_ok": True,
+                "falsification_experiment_count": 135,
+            },
+            "world_model": {"pass": True},
+            "formal_metrics": {"pass": True},
+            "manifest_logger": {"pass": True, "event_count": 12, "secret_leak_detected": False},
+            "harness_observer": {"pass": True, "full_coverage_after_writeback": True},
+            "residual_clusterer": {"pass": True, "cluster_count": 2, "proposal_count": 1},
+            "recursive_audit": {
+                "pass": True,
+                "actionable_count": 5,
+                "min_closure_score": 1.0,
+                "critical_issue_count": 0,
+                "warning_issue_count": 0,
+            },
+            "recursive_daemon": {"pass": True, "case_count": 2, "accepted_apply_count": 2},
+        }
+        dry = build_evolution_context_payload(
+            eval_id="unit_evolution_context_dry",
+            objective="Evolve graph policy only when harness responsibilities are satisfied.",
+            sections=sections,
+        )
+        self.assertEqual(dry["policy_decision"], EvolutionPolicyDecision.READY_FOR_MANUAL_APPLY.value)
+        self.assertEqual(dry["responsibility_status_counts"], {"pass": 9})
+        self.assertEqual(dry["permission_violations"], [])
+
+        allowed = build_evolution_context_payload(
+            eval_id="unit_evolution_context_apply",
+            objective="Apply accepted candidates under an explicit permission boundary.",
+            sections=sections,
+            mode={"apply_accepted": True},
+            permissions={"allow_apply_accepted": True, "max_apply_candidates": 2},
+        )
+        self.assertEqual(allowed["policy_decision"], EvolutionPolicyDecision.GATED_APPLY_ALLOWED.value)
+
+        blocked = build_evolution_context_payload(
+            eval_id="unit_evolution_context_blocked",
+            objective="Apply accepted candidates without permission.",
+            sections=sections,
+            mode={"apply_accepted": True},
+        )
+        self.assertEqual(blocked["policy_decision"], EvolutionPolicyDecision.BLOCKED_BY_PERMISSIONS.value)
+        self.assertEqual(blocked["permission_violations"][0]["kind"], "apply_accepted_not_allowed")
 
     def test_recursive_daemon_resumes_and_applies_accepted_candidate(self):
         with tempfile.TemporaryDirectory() as td:

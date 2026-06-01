@@ -34,6 +34,9 @@ an Assumption Graph.
 - `recursive_audit.py` checks recursive runner payloads for closed-loop
   structure: parent/child consistency, argument contracts, return updates, and
   actionable frontier integrity.
+- `evolution_context.py` treats the self-evolution procedure itself as a
+  harness assumption with explicit task, context, observability, verification,
+  permission, rollback, and intervention-recording responsibilities.
 - `manifest_logger.py` records LLM calls, retrievals, judge calls, tool-use,
   simulator rollouts, and daemon iterations as redacted `TrialManifest`s.
 - `harness_observer.py` audits existing judge/meta/log artifacts and backfills
@@ -321,6 +324,22 @@ python3 -m assumption_os.recursive_audit \
   --summary-out "phase four/assumption_graph/recursive_audit_phase2_v20_gpt55_21_50.json"
 ```
 
+`assumption_os.evolution_context` is the harness-responsibility layer. It takes
+the current validation sections and declared permissions, then decides whether
+the evolution step is dry-run only, ready for manual apply, allowed for bounded
+gated apply, or blocked by permission/harness failures.
+
+```bash
+python3 -m assumption_os.evolution_context \
+  --performance-payload "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.json" \
+  --eval-id evolution_context_phase2_v20 \
+  --objective "Govern recursive graph self-evolution with explicit harness responsibilities." \
+  --allow-apply-accepted \
+  --max-apply-candidates 2 \
+  --apply-accepted \
+  --summary-out "phase four/assumption_graph/evolution_context_phase2_v20.json"
+```
+
 `assumption_os.world_model` is the cheap verifier/simulator. It consumes the
 proposal, preflight, falsification, acceptance, regression, and formal-gate
 payloads, then predicts acceptance probability, regression risk, verifier tier,
@@ -473,7 +492,7 @@ python3 -m assumption_os.performance_validation \
   --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md"
 ```
 
-The expanded performance validation passes all nine sections. The initial run found
+The expanded performance validation passes all ten sections. The initial run found
 one real issue: post-acceptance world-model probabilities stayed too high after
 rejected evidence, with Brier score 0.2767. The calibrated version now scores
 Brier 0.0081 on the expanded 2 accepted / 14 rejected labeled set, while
@@ -489,7 +508,9 @@ artifact-file coverage after writeback. The unified verifier stack validates
 POPPER-style falsification protocols now cover 27 candidate proposals with 135
 planned/passed/failed experiment records. Recursive audit validates both dry
 frontier and accepted-return cases with closure score 1.0 and no critical or
-warning issues. Full report:
+warning issues. Evolution context validates 9 / 9 harness responsibilities:
+dry mode reports `ready_for_manual_apply`, bounded permission reports
+`gated_apply_allowed`, and an unpermitted apply request is blocked. Full report:
 `phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md`.
 
 `assumption_os.failure_hypotheses` converts loss rows into candidate assumptions
