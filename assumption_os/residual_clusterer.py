@@ -285,11 +285,16 @@ def _top_terms(records: list[ResidualRecord], limit: int = 8) -> list[str]:
         "would", "could", "residual", "candidate", "answer",
     }
     for record in records:
-        counts.update({
+        terms = {
             tok for tok in tokenize(record.residual)
             if len(tok) > 2 and tok not in stop
-        })
-    return [term for term, _ in counts.most_common(limit)]
+        }
+        for term in sorted(terms):
+            counts[term] += 1
+    return [
+        term
+        for term, _ in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:limit]
+    ]
 
 
 def _dominant_parent(records: list[ResidualRecord]) -> str | None:
@@ -301,7 +306,7 @@ def _dominant_parent(records: list[ResidualRecord]) -> str | None:
     )
     if not counts:
         return None
-    return counts.most_common(1)[0][0]
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
 
 
 def _deterministic_claim(cluster: ResidualCluster, *, parent_claim: str) -> str:

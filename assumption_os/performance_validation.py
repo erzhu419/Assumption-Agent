@@ -14,6 +14,7 @@ This runner evaluates the reconstruction mechanisms added after reconstruction:
 10. evolution context / harness responsibility gate
 11. assumption lifecycle capability scoreboard
 12. runtime memory surfaces in graph memory
+13. first-party runtime tracing for live LLM/retrieval calls
 
 The validation uses existing real artifacts where available and deterministic
 positive controls where the mechanism needs a safe graph-mutation sandbox.
@@ -43,6 +44,7 @@ from .recursive_daemon import build_recursive_daemon_payload
 from .recursive_executor import JudgmentSet
 from .recursive_runner import build_recursive_assumption_run
 from .residual_clusterer import build_residual_cluster_payload
+from .runtime_trace import RuntimeTraceRecorder
 from .trajectory_search import build_trajectory_search_payload
 from .verifier_stack import build_verifier_stack_payload
 from .world_model import build_world_model_payload, train_world_model_calibration
@@ -84,6 +86,10 @@ def build_performance_validation_payload(
     timings["manifest_logger_sec"] = _elapsed(start)
 
     start = time.perf_counter()
+    runtime_trace = _validate_runtime_trace()
+    timings["runtime_trace_sec"] = _elapsed(start)
+
+    start = time.perf_counter()
     harness = _validate_harness_observer(root=root, graph_dir=graph_dir)
     timings["harness_observer_sec"] = _elapsed(start)
 
@@ -102,6 +108,7 @@ def build_performance_validation_payload(
         "recursive_daemon": daemon,
         "recursive_audit": recursive_audit,
         "manifest_logger": manifests,
+        "runtime_trace": runtime_trace,
         "harness_observer": harness,
         "residual_clusterer": residuals,
         "formal_metrics": formal,
@@ -651,6 +658,70 @@ def _validate_manifest_logger(*, root: Path) -> dict:
     }
 
 
+def _validate_runtime_trace() -> dict:
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        graph_dir = root / "graph"
+        recorder = RuntimeTraceRecorder(
+            eval_id="perf_runtime_trace",
+            events_out=root / "events.jsonl",
+            summary_out=root / "summary.json",
+            graph_dir=graph_dir,
+            writeback=True,
+        )
+        recorder.record_retrieval(
+            problem_id="runtime_trace_retrieval",
+            component="phase2_assumption_graph_retrieval",
+            assumption="Live graph retrieval should emit a first-party assumption manifest.",
+            expected_effect="Make activated assumption ids, node types, and policy notes available without parsing logs.",
+            activated_assumption_ids=["strategy_S01", "surface_7f67a660e3c7"],
+            artifacts={
+                "node_types": ["method", "verifier"],
+                "policy_notes": ["runtime trace positive control"],
+                "query": "redaction test api_key=runtime-trace-probe",
+            },
+        )
+        recorder.record_llm_call(
+            problem_id="runtime_trace_draft",
+            component="phase2_turn1_draft",
+            prompt_kind="execute_v20",
+            assumption="A live draft call should be logged as a compact assumption-bearing LLM event.",
+            expected_effect="Record call metadata and outcome shape without storing full prompts or secrets.",
+            observed_effect="draft_chars=128",
+            artifacts={"request": "secret_token=runtime-trace-secret", "max_tokens": 1100},
+        )
+        recorder.record(
+            event_type="tool_use",
+            problem_id="runtime_trace_cache",
+            component="phase2_cache_write",
+            assumption="Cache writes are tool-use events that affect later evaluation.",
+            why_selected="The runner stores intermediate artifacts used by future passes.",
+            expected_effect="Persist bounded metadata about cache side effects.",
+            observed_effect="cache_keys=3",
+            artifacts={"path": "phase two/analysis/cache/answers/example.json"},
+        )
+        payload = recorder.flush()
+        event_text = (root / "events.jsonl").read_text(encoding="utf-8")
+        summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
+        leak = "runtime-trace-secret" in event_text or "runtime-trace-probe" in event_text
+        written = len(JsonlGraphStore(graph_dir).trials)
+        return {
+            "pass": (
+                payload["event_count"] == 3
+                and written == 3
+                and summary["event_count"] == 3
+                and not leak
+                and set(payload["event_counts"]) >= {"retrieval", "llm_call", "tool_use"}
+            ),
+            "event_count": payload["event_count"],
+            "event_counts": payload["event_counts"],
+            "written_trials": written,
+            "events_out_written": (root / "events.jsonl").exists(),
+            "summary_out_written": (root / "summary.json").exists(),
+            "secret_leak_detected": leak,
+        }
+
+
 def _validate_harness_observer(*, root: Path, graph_dir: Path) -> dict:
     artifact_paths = [
         root / "phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_phase2_v20_ms_bridge_gpt55_21_50.json",
@@ -931,6 +1002,8 @@ def _key_metric(name: str, section: dict) -> str:
         return f"types={section['before_node_type_count']}->{section['after_node_type_count']}, edges={section['before_edge_type_count']}->{section['after_edge_type_count']}"
     if name == "manifest_logger":
         return f"events={section['event_count']}, real_logs={section['real_log_event_count']}, leak={section['secret_leak_detected']}"
+    if name == "runtime_trace":
+        return f"events={section['event_count']}, written={section['written_trials']}, leak={section['secret_leak_detected']}"
     if name == "harness_observer":
         return f"artifacts={section['artifact_file_count']}, backfill={section['backfilled_event_count']}/{section['discovered_event_count']}, covered={section['full_coverage_after_writeback']}"
     if name == "residual_clusterer":

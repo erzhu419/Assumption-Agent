@@ -228,6 +228,13 @@ def parse_csv_set(raw: str) -> set[str]:
     return {x.strip() for x in raw.split(",") if x.strip()}
 
 
+def resolve_repo_path(raw: str | None) -> Path | None:
+    if not raw:
+        return None
+    path = Path(raw)
+    return path if path.is_absolute() else PROJECT.parent / path
+
+
 def build_assumption_context(
     graph_bundle,
     problem: str,
@@ -237,6 +244,7 @@ def build_assumption_context(
     diff: str,
     coverage_tags: list[str] | None = None,
     skip_domains: set[str] | None = None,
+    trace_recorder=None,
 ) -> str:
     if not graph_bundle:
         return ""
@@ -298,6 +306,27 @@ def build_assumption_context(
             _remove_nodes_from_result(result, set(candidates) - set(target_ids))
         if force_proposal_route and route_domain_ok and route_difficulty_ok:
             _force_nodes_into_result(result, graph, target_ids)
+    if trace_recorder and getattr(trace_recorder, "enabled", False):
+        nodes = list(getattr(result.subgraph, "nodes", [])) if result else []
+        trace_recorder.record_retrieval(
+            problem_id=pid,
+            component="phase2_assumption_graph_retrieval",
+            assumption="Activated Assumption Graph context should improve the phase2 answer when routed to the current problem.",
+            expected_effect="Retrieve method, harness, runtime, and residual assumptions that shape the draft rather than decorate it.",
+            activated_assumption_ids=[node.id for node in nodes],
+            artifacts={
+                "domain": dom,
+                "difficulty": diff,
+                "node_types": [str(getattr(node.type, "value", node.type)) for node in nodes],
+                "policy_notes": list(getattr(result, "policy_notes", [])) if result else [],
+                "coverage_tags": coverage_tags or [],
+            },
+            metadata={
+                "skip_domains": sorted(skip_domains or []),
+                "force_proposal_route": force_proposal_route,
+                "route_scope_proposals": route_scope_proposals,
+            },
+        )
     return policy_formatter(result, formatter, max_nodes=8)
 
 
@@ -370,9 +399,19 @@ def main():
                     help="use intent-aware math/science bypass prompts for research-bridge and science-decision rows")
     ap.add_argument("--disable-domain-execution-template", action="store_true",
                     help="disable domain execution templates that are enabled with --assumption-graph")
+    ap.add_argument("--runtime-trace-events-out", default=None,
+                    help="optional JSONL path for first-party LLM/retrieval runtime trace events")
+    ap.add_argument("--runtime-trace-summary-out", default=None,
+                    help="optional JSON summary path for TrialManifest-normalized runtime trace events")
+    ap.add_argument("--runtime-trace-eval-id", default=None,
+                    help="eval id for runtime trace manifests; defaults to <variant>_runtime_trace")
+    ap.add_argument("--runtime-trace-writeback", action="store_true",
+                    help="append runtime trace TrialManifests to --assumption-graph")
     args = ap.parse_args()
     if args.assumption_proposals and not args.assumption_graph:
         raise SystemExit("--assumption-proposals requires --assumption-graph")
+    if args.runtime_trace_writeback and not args.assumption_graph:
+        raise SystemExit("--runtime-trace-writeback requires --assumption-graph")
 
     selections_path = (CACHE / args.selections) if args.selections else SELECTIONS_PATH_DEFAULT
     wisdom_path = (CACHE / args.wisdom) if args.wisdom else WISDOM_PATH_DEFAULT
@@ -417,6 +456,17 @@ def main():
     )
     assumption_graph_skip_domains = parse_csv_set(args.assumption_graph_skip_domains)
     domain_execution_enabled = bool(args.assumption_graph) and not args.disable_domain_execution_template
+    trace_recorder = None
+    if args.runtime_trace_events_out or args.runtime_trace_summary_out or args.runtime_trace_writeback:
+        from assumption_os.runtime_trace import RuntimeTraceRecorder
+
+        trace_recorder = RuntimeTraceRecorder(
+            eval_id=args.runtime_trace_eval_id or f"{args.variant}_runtime_trace",
+            events_out=resolve_repo_path(args.runtime_trace_events_out),
+            summary_out=resolve_repo_path(args.runtime_trace_summary_out),
+            graph_dir=resolve_repo_path(args.assumption_graph),
+            writeback=args.runtime_trace_writeback,
+        )
     client = create_client()
     t0 = time.time()
     new = hit = hyg = full = 0
@@ -453,6 +503,22 @@ def main():
             try:
                 resp = _generate_with_retry(client, prompt, max_tokens=max_tok, temperature=0.3)
                 answers[pid] = resp["text"].strip()
+                if trace_recorder:
+                    trace_recorder.record_llm_call(
+                        problem_id=pid,
+                        component="phase2_math_science_bypass",
+                        prompt_kind="math_science_bridge" if args.math_science_bridge else "math_science_hygiene",
+                        assumption="A compact domain-specific math/science execution prompt is safer than generic graph context on bypass rows.",
+                        expected_effect="Produce a concrete answer without importing irrelevant method assumptions.",
+                        observed_effect=f"answer_chars={len(answers[pid])}",
+                        artifacts={
+                            "domain": dom,
+                            "difficulty": diff,
+                            "max_tokens": max_tok,
+                            "temperature": 0.3,
+                            "bypass_route": meta.get(pid, {}).get("bypass_route"),
+                        },
+                    )
             except Exception as e:
                 print(f"  [err {pid}] {e}")
                 continue
@@ -472,6 +538,21 @@ def main():
                         raise ValueError(f"missing: {required - m.keys()}")
                     meta[pid] = m
                     cache_save(meta_path, meta)
+                    if trace_recorder:
+                        trace_recorder.record_llm_call(
+                            problem_id=pid,
+                            component="phase2_turn0_frame_rewrite",
+                            prompt_kind="frame_rewrite",
+                            assumption="Explicitly framing and rewriting the problem improves downstream assumption selection.",
+                            expected_effect="Expose domain, evaluation criteria, anti-patterns, and a rewritten problem for the executor.",
+                            observed_effect=f"frame={m.get('frame', '?')}; anti_patterns={len(m.get('anti_patterns', []))}",
+                            artifacts={
+                                "domain": dom,
+                                "difficulty": diff,
+                                "frame": m.get("frame"),
+                                "what_changed": m.get("what_changed"),
+                            },
+                        )
                 except Exception as e:
                     print(f"  [err meta {pid}] {e}")
                     m = {"frame": "hybrid", "critical_reframe": "", "anti_patterns": [],
@@ -502,6 +583,7 @@ def main():
                 assumption_graph, problem, m, pid, dom, diff,
                 coverage_tags=p.get("coverage_tags", []),
                 skip_domains=assumption_graph_skip_domains,
+                trace_recorder=trace_recorder,
             )
             domain_execution_block = build_domain_execution_block(
                 domain_execution_enabled, dom, problem, m)
@@ -526,6 +608,24 @@ def main():
                     draft = r1["text"].strip()
                     drafts[pid] = draft
                     cache_save(drafts_path, drafts)
+                    if trace_recorder:
+                        trace_recorder.record_llm_call(
+                            problem_id=pid,
+                            component="phase2_turn1_draft",
+                            prompt_kind="execute_v20",
+                            assumption="Combining frame, retrieved assumptions, domain execution constraints, priors, and cases should yield a better draft.",
+                            expected_effect="Generate a task answer that operationalizes selected assumptions.",
+                            observed_effect=f"draft_chars={len(draft)}; graph_context_chars={len(assumption_context_block)}",
+                            artifacts={
+                                "domain": dom,
+                                "difficulty": diff,
+                                "wisdom_count": len(wisdom_entries),
+                                "has_assumption_context": bool(assumption_context_block.strip()),
+                                "has_domain_execution_block": bool(domain_execution_block.strip()),
+                                "max_tokens": 1100,
+                                "temperature": 0.3,
+                            },
+                        )
                 except Exception as e:
                     print(f"  [err draft {pid}] {e}")
                     continue
@@ -540,6 +640,22 @@ def main():
                 ), max_tokens=1100, temperature=0.3)
                 answers[pid] = r2["text"].strip()
                 cache_save(answers_path, answers)
+                if trace_recorder:
+                    trace_recorder.record_llm_call(
+                        problem_id=pid,
+                        component="phase2_turn2_audit_revise",
+                        prompt_kind="reflect_v20",
+                        assumption="A second-pass audit can detect decorative assumption use and revise toward concrete execution.",
+                        expected_effect="Convert the draft into a final answer that better follows the frame and task constraints.",
+                        observed_effect=f"final_chars={len(answers[pid])}",
+                        artifacts={
+                            "domain": dom,
+                            "difficulty": diff,
+                            "draft_chars": len(draft),
+                            "max_tokens": 1100,
+                            "temperature": 0.3,
+                        },
+                    )
             except Exception as e:
                 print(f"  [err audit {pid}] {e}")
                 continue
@@ -560,6 +676,9 @@ def main():
     from collections import Counter
     fc = Counter(x.get("frame", "?") for x in meta.values())
     print(f"  Frame distribution: {dict(fc)}")
+    if trace_recorder:
+        trace_payload = trace_recorder.flush()
+        print(f"  Runtime trace events: {trace_payload.get('event_count', 0)}")
 
 
 if __name__ == "__main__":

@@ -53,8 +53,9 @@ from assumption_os.recursive_runner import (
 from assumption_os.recursive_audit import build_recursive_audit_payload
 from assumption_os.recursive_daemon import build_recursive_daemon_payload
 from assumption_os.recursive_executor import JudgmentSet, build_recursive_execution_payload
-from assumption_os.residual_clusterer import build_residual_cluster_payload
+from assumption_os.residual_clusterer import ResidualRecord, build_residual_cluster_payload, cluster_residual_records
 from assumption_os.residuals import classify_manifest
+from assumption_os.runtime_trace import RuntimeTraceRecorder
 from assumption_os.schema import (
     AssumptionEdge,
     AssumptionNode,
@@ -844,6 +845,49 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(events[0]["artifacts"]["candidate_variant"], "proposal_a")
             self.assertEqual(events[0]["artifacts"]["returncode"], 0)
 
+    def test_runtime_trace_recorder_persists_redacted_first_party_events(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            graph_dir = root / "graph"
+            events_out = root / "events.jsonl"
+            summary_out = root / "summary.json"
+            recorder = RuntimeTraceRecorder(
+                eval_id="unit_runtime_trace",
+                events_out=events_out,
+                summary_out=summary_out,
+                graph_dir=graph_dir,
+                writeback=True,
+            )
+            recorder.record_retrieval(
+                problem_id="p1",
+                component="phase2_assumption_graph_retrieval",
+                assumption="Graph retrieval should select useful assumptions.",
+                expected_effect="Expose relevant method and runtime assumptions.",
+                activated_assumption_ids=["strategy_S01", "surface_verifier"],
+                artifacts={"query": "debug with api_key=unit-secret"},
+            )
+            recorder.record_llm_call(
+                problem_id="p1",
+                component="phase2_turn1_draft",
+                prompt_kind="execute_v20",
+                assumption="The draft call should apply retrieved assumptions.",
+                expected_effect="Generate a useful draft.",
+                observed_effect="draft_chars=42",
+                artifacts={"request": "secret_token=runtime-trace-secret"},
+            )
+            payload = recorder.flush()
+            self.assertTrue(payload["enabled"])
+            self.assertEqual(payload["event_count"], 2)
+            self.assertEqual(payload["event_counts"], {"retrieval": 1, "llm_call": 1})
+            self.assertTrue(events_out.exists())
+            self.assertTrue(summary_out.exists())
+            text = events_out.read_text(encoding="utf-8")
+            self.assertIn("[REDACTED]", text)
+            self.assertNotIn("unit-secret", text)
+            self.assertNotIn("runtime-trace-secret", text)
+            updated = JsonlGraphStore(graph_dir)
+            self.assertEqual(len(updated.trials), 2)
+
     def test_harness_observer_backfills_artifact_manifest_coverage(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -1421,6 +1465,32 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(proposal["parent_node_id"], "strategy_S03")
             self.assertTrue(proposal["candidate_node"]["payload"]["validation_plan"]["trigger_problem_ids"])
             self.assertEqual(len(JsonlGraphStore(td).trials), 3)
+
+    def test_residual_clusterer_tie_breaks_terms_deterministically(self):
+        records = [
+            ResidualRecord(
+                record_id="r2",
+                problem_id="p2",
+                residual_type=ResidualType.UNKNOWN.value,
+                residual="zeta beta alpha",
+                action_type="answer",
+                component="phase2",
+                assumption_ids=["strategy_B", "strategy_A"],
+            ),
+            ResidualRecord(
+                record_id="r1",
+                problem_id="p1",
+                residual_type=ResidualType.UNKNOWN.value,
+                residual="zeta beta alpha",
+                action_type="answer",
+                component="phase2",
+                assumption_ids=["strategy_A", "strategy_B"],
+            ),
+        ]
+        clusters = cluster_residual_records(records, min_cluster_size=1, max_clusters=4)
+        self.assertEqual(clusters[0].signature, "phase2:alpha")
+        self.assertEqual(clusters[0].top_terms[:3], ["alpha", "beta", "zeta"])
+        self.assertEqual(clusters[0].parent_node_id, "strategy_A")
 
     def test_recursive_runner_writeback_logs_frame_manifests(self):
         with tempfile.TemporaryDirectory() as td:

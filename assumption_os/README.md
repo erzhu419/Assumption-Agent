@@ -43,6 +43,9 @@ an Assumption Graph.
   quality, and harness governance.
 - `manifest_logger.py` records LLM calls, retrievals, judge calls, tool-use,
   simulator rollouts, and daemon iterations as redacted `TrialManifest`s.
+- `runtime_trace.py` is the first-party trace recorder used by live runners to
+  emit compact LLM/retrieval/tool events without relying on post-hoc log
+  parsing.
 - `harness_observer.py` audits existing judge/meta/log artifacts and backfills
   bounded manifest coverage for files that were produced before direct logging.
 - `world_model.py` is the cheap verifier: it predicts candidate acceptance
@@ -479,6 +482,22 @@ python3 -m assumption_os.manifest_logger \
   --writeback
 ```
 
+`assumption_os.runtime_trace` is the live-call bridge used by runners such as
+`phase2_v20_framework.py`. Enable it with the runner's
+`--runtime-trace-events-out` / `--runtime-trace-summary-out` flags, and add
+`--runtime-trace-writeback` when the trace should become graph
+`TrialManifest`s immediately.
+
+```bash
+python3 "phase one/scripts/validation/phase2_v20_framework.py" \
+  --variant phase2_v20_traced \
+  --assumption-graph "phase four/assumption_graph" \
+  --runtime-trace-events-out "phase four/assumption_graph/phase2_v20_traced_events.jsonl" \
+  --runtime-trace-summary-out "phase four/assumption_graph/phase2_v20_traced_manifests.json" \
+  --runtime-trace-eval-id phase2_v20_traced \
+  --runtime-trace-writeback
+```
+
 `assumption_os.harness_observer` is the artifact coverage bridge. It converts
 existing judgment JSON, answer meta JSON, and run logs into bounded
 `TrialManifest` events, then reports which artifact files are covered after
@@ -525,7 +544,7 @@ python3 -m assumption_os.performance_validation \
   --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md"
 ```
 
-The expanded performance validation passes all twelve sections. The initial run found
+The expanded performance validation passes all thirteen sections. The initial run found
 one real issue: post-acceptance world-model probabilities stayed too high after
 rejected evidence, with Brier score 0.2767. The calibrated version now scores
 Brier 0.0081 on the expanded 2 accepted / 14 rejected labeled set, while
@@ -533,7 +552,9 @@ preserving pre-acceptance ranking (`AUC=1.0`). The calibration payload also
 reports leave-one-out Brier 0.0090 versus raw 0.2182. Manifest validation now
 parses 12 real events from existing run/judge logs in addition to synthetic
 redaction probes. Those 12 real events are also persisted through
-`real_log_manifest_ingest_20260601` as observed trials in the graph. Harness
+`real_log_manifest_ingest_20260601` as observed trials in the graph. Runtime
+trace validation now proves live runner events can be emitted as redacted JSONL
+and TrialManifests before any post-hoc log parsing. Harness
 observer discovers 19 real artifact events from judgment/meta/log files and
 backfilled the 10 previously uncovered judgment/meta events, leaving full
 artifact-file coverage after writeback. The unified verifier stack validates

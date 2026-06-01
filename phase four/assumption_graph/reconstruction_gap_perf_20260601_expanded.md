@@ -12,8 +12,9 @@ Overall: PASS
 | recursive_daemon | PASS | applied=2/2 |
 | recursive_audit | PASS | score=1.0, issues=0/0 |
 | manifest_logger | PASS | events=112, real_logs=12, leak=False |
+| runtime_trace | PASS | events=3, written=3, leak=False |
 | harness_observer | PASS | artifacts=4, backfill=0/19, covered=True |
-| residual_clusterer | PASS | clusters=6, proposals=2 |
+| residual_clusterer | PASS | clusters=7, proposals=2 |
 | formal_metrics | PASS | mappings=9, warnings=0 |
 | evolution_context | PASS | decision=ready_for_manual_apply->gated_apply_allowed, resp={'pass': 9} |
 | memory_surfaces | PASS | types=11->11, edges=11->11 |
@@ -85,8 +86,17 @@ Overall: PASS
 - `real_log_paths`: ["phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log", "phase four/assumption_graph/recursive_scoped_ablation_run_gpt55_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt54mini_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt55_21_50.log", "phase six/autonomous/exp80_run.log"]
 - `written_trials`: 112
 - `secret_leak_detected`: false
-- `throughput_events_per_sec`: 1475.63
+- `throughput_events_per_sec`: 1087.38
 - `event_counts`: {"judge_call": 28, "llm_call": 21, "retrieval": 20, "simulator_rollout": 20, "tool_use": 23}
+
+### runtime_trace
+
+- `event_count`: 3
+- `event_counts`: {"llm_call": 1, "retrieval": 1, "tool_use": 1}
+- `written_trials`: 3
+- `events_out_written`: true
+- `summary_out_written`: true
+- `secret_leak_detected`: false
 
 ### harness_observer
 
@@ -106,10 +116,10 @@ Overall: PASS
 ### residual_clusterer
 
 - `record_count`: 109
-- `cluster_count`: 6
+- `cluster_count`: 7
 - `proposal_count`: 2
 - `residual_type_counts`: {"memory_defect": 8, "optimization": 40, "unknown": 61}
-- `proposal_parent_ids`: ["strategy_S08", "strategy_S21"]
+- `proposal_parent_ids`: ["strategy_S08", "strategy_S08"]
 - `validation_plans_complete`: true
 
 ### formal_metrics

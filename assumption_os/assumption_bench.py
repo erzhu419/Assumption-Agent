@@ -68,14 +68,24 @@ def build_assumption_bench_payload(
 
 def _score_assumption_explicitness(sections: dict[str, dict]) -> CapabilityScore:
     manifest = sections.get("manifest_logger", {})
-    event_count = int(manifest.get("event_count") or 0)
+    runtime_trace = sections.get("runtime_trace", {})
+    runtime_trace_events = int(runtime_trace.get("event_count") or 0)
+    event_count = int(manifest.get("event_count") or 0) + runtime_trace_events
     real_log_count = int(manifest.get("real_log_event_count") or 0)
-    no_leak = not manifest.get("secret_leak_detected", True)
+    no_leak = (
+        not manifest.get("secret_leak_detected", True)
+        and not runtime_trace.get("secret_leak_detected", False)
+    )
     score = 0.5 * _cap(event_count / 100) + 0.3 * _cap(real_log_count / 10) + 0.2 * float(no_leak)
     return _capability(
         "assumption_explicitness",
         score,
-        evidence={"event_count": event_count, "real_log_event_count": real_log_count, "secret_leak_detected": not no_leak},
+        evidence={
+            "event_count": event_count,
+            "real_log_event_count": real_log_count,
+            "runtime_trace_event_count": runtime_trace_events,
+            "secret_leak_detected": not no_leak,
+        },
         rationale="Key LLM/retrieval/judge/tool/simulator actions become redacted manifests.",
     )
 
