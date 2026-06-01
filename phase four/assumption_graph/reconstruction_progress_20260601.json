@@ -1,10 +1,10 @@
 {
   "closure": {
-    "behavior_percent": 73.4,
+    "behavior_percent": 73.8,
     "completed_item_count": 3,
     "item_count": 9,
-    "structure_percent": 83.0,
-    "weighted_percent": 77.7
+    "structure_percent": 83.2,
+    "weighted_percent": 78.0
   },
   "eval_id": "reconstruction_progress_20260601",
   "items": [
@@ -158,13 +158,16 @@
       "target": "Classify failures into execution, optimization, assumption, memory, evaluator, and simulator residuals before mutation."
     },
     {
-      "behavior_score": 0.7,
+      "behavior_score": 0.73,
       "evidence": {
+        "mean_acp_top_clade_metaproductivity": 0.6687,
+        "mean_immediate_top_clade_metaproductivity": 0.2225,
+        "metaproductivity_benchmark_pass": true,
         "multi_path_rate": 0.8,
         "positive_metaproductivity_nodes": 159,
         "reconstruction_ceiling": {
-          "behavior": 0.7,
-          "structure": 0.8
+          "behavior": 0.73,
+          "structure": 0.82
         },
         "top_path_label_hit_rate": 1.0,
         "trajectory_count": 26
@@ -176,11 +179,11 @@
       ],
       "remaining_gaps": [
         "Metaproductivity is scored in graph/trajectory artifacts, but ACP is not yet a learned long-horizon value model.",
-        "Cost/risk/novelty are present as features but not optimized as a unified scheduler objective.",
+        "ACP-aware selection now has a benchmark, but cost/risk/novelty are still hand-weighted rather than learned.",
         "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts."
       ],
       "status": "operational",
-      "structure_score": 0.8,
+      "structure_score": 0.82,
       "target": "Select assumption families by utility plus long-run clade productivity, cost, risk, and novelty."
     },
     {
@@ -296,16 +299,6 @@
       "priority": 0.268
     },
     {
-      "action": "Add a scheduler benchmark that compares ACP-aware selection to immediate-win selection.",
-      "item": "F_metaproductivity_selector",
-      "priority": 0.255
-    },
-    {
-      "action": "Use accepted/rejected descendants to update clade-level ACP after each recursive run.",
-      "item": "F_metaproductivity_selector",
-      "priority": 0.255
-    },
-    {
       "action": "Add a generator pass that turns evaluator/world-model residuals into candidate proposals.",
       "item": "B_hypothesis_generator",
       "priority": 0.2295
@@ -313,6 +306,16 @@
     {
       "action": "Run fresh ablation/judge for the preflight-ready trace policy proposals.",
       "item": "B_hypothesis_generator",
+      "priority": 0.2295
+    },
+    {
+      "action": "Add a scheduler benchmark that compares ACP-aware selection to immediate-win selection.",
+      "item": "F_metaproductivity_selector",
+      "priority": 0.2295
+    },
+    {
+      "action": "Use accepted/rejected descendants to update clade-level ACP after each recursive run.",
+      "item": "F_metaproductivity_selector",
       "priority": 0.2295
     },
     {
@@ -495,21 +498,6 @@
       "priority": 0.32
     },
     {
-      "gap": "Cost/risk/novelty are present as features but not optimized as a unified scheduler objective.",
-      "item": "F_metaproductivity_selector",
-      "priority": 0.3
-    },
-    {
-      "gap": "Metaproductivity is scored in graph/trajectory artifacts, but ACP is not yet a learned long-horizon value model.",
-      "item": "F_metaproductivity_selector",
-      "priority": 0.3
-    },
-    {
-      "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
-      "item": "F_metaproductivity_selector",
-      "priority": 0.3
-    },
-    {
       "gap": "Evaluator/world-model generators now emit proposals, but self-modification hypothesis generation is still mostly audit-driven.",
       "item": "B_hypothesis_generator",
       "priority": 0.27
@@ -523,11 +511,26 @@
       "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
       "item": "B_hypothesis_generator",
       "priority": 0.27
+    },
+    {
+      "gap": "ACP-aware selection now has a benchmark, but cost/risk/novelty are still hand-weighted rather than learned.",
+      "item": "F_metaproductivity_selector",
+      "priority": 0.27
+    },
+    {
+      "gap": "Metaproductivity is scored in graph/trajectory artifacts, but ACP is not yet a learned long-horizon value model.",
+      "item": "F_metaproductivity_selector",
+      "priority": 0.27
+    },
+    {
+      "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
+      "item": "F_metaproductivity_selector",
+      "priority": 0.27
     }
   ],
   "source": {
     "graph_dir": "phase four/assumption_graph",
-    "performance_eval_id": "reconstruction_gap_perf_20260601_surface_hypotheses",
+    "performance_eval_id": "reconstruction_gap_perf_20260601_metaproductivity_benchmark",
     "reconstruction_path": "reconstruction/md/reconstruction.md",
     "root": "."
   }

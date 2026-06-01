@@ -71,7 +71,7 @@ from assumption_os.schema import (
     TrialManifest,
     TrialStatus,
 )
-from assumption_os.selector import MetaproductivitySelector
+from assumption_os.selector import MetaproductivitySelector, build_metaproductivity_benchmark_payload
 from assumption_os.trajectory_search import build_trajectory_search_payload
 from assumption_os.trace_dataset import build_trace_dataset_collection_payload, build_trace_dataset_payload
 from assumption_os.trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
@@ -109,6 +109,26 @@ class AssumptionOSTest(unittest.TestCase):
             activated = graph.retrieve("世界模型外推失败，应该先做最小场景并替换一个核心模块", seeds=["S15"], top_k=2)
             self.assertEqual(activated.nodes[0].id, "strategy_S15")
             self.assertIn("strategy_S01", {n.id for n in activated.nodes})
+
+    def test_metaproductivity_benchmark_prefers_productive_clade(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="strategy_meta",
+                type=AssumptionType.METHOD,
+                claim="risk rollback guardrail reusable clade",
+                confidence=0.7,
+                metaproductivity=0.4,
+            ))
+            graph = SimpleAssumptionGraph(store)
+            payload = build_metaproductivity_benchmark_payload(
+                graph,
+                eval_id="unit_meta_benchmark",
+                queries=["risk rollback guardrail", "unmatched cold start"],
+            )
+            self.assertTrue(payload["positive_control"]["pass"])
+            self.assertTrue(payload["pass"])
+            self.assertEqual(payload["positive_control"]["acp_top_id"], "productive_parent")
 
     def test_retrieval_can_filter_primary_assumption_types(self):
         with tempfile.TemporaryDirectory() as td:

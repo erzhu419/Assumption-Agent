@@ -158,14 +158,27 @@ def _score_memory_transfer(sections: dict[str, dict], graph_stats: dict) -> Capa
 
 def _score_metaproductivity(sections: dict[str, dict], graph_stats: dict) -> CapabilityScore:
     trajectory = sections.get("trajectory_search", {})
+    meta_bench = sections.get("metaproductivity_benchmark", {})
     selected = trajectory.get("selected_path_types", {})
     selected_diversity = len([k for k, v in selected.items() if v])
     positive_meta = int(graph_stats.get("positive_metaproductivity_nodes") or 0)
-    score = 0.45 * _cap(selected_diversity / 3) + 0.35 * _cap(positive_meta / 20) + 0.2 * _cap(float(trajectory.get("multi_path_rate") or 0.0) / 0.8)
+    score = (
+        0.35 * _cap(selected_diversity / 3)
+        + 0.25 * _cap(positive_meta / 20)
+        + 0.2 * _cap(float(trajectory.get("multi_path_rate") or 0.0) / 0.8)
+        + 0.2 * float(bool(meta_bench.get("pass")))
+    )
     return _capability(
         "metaproductivity",
         score,
-        evidence={"selected_path_type_count": selected_diversity, "positive_metaproductivity_nodes": positive_meta, "multi_path_rate": trajectory.get("multi_path_rate")},
+        evidence={
+            "selected_path_type_count": selected_diversity,
+            "positive_metaproductivity_nodes": positive_meta,
+            "multi_path_rate": trajectory.get("multi_path_rate"),
+            "benchmark_pass": meta_bench.get("pass"),
+            "mean_acp_top_clade_metaproductivity": meta_bench.get("mean_acp_top_clade_metaproductivity"),
+            "mean_immediate_top_clade_metaproductivity": meta_bench.get("mean_immediate_top_clade_metaproductivity"),
+        },
         rationale="The selector preserves productive descendants instead of only immediate wins.",
     )
 

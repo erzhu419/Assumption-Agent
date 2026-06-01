@@ -89,6 +89,7 @@ Current gaps being addressed:
 - 2026-06-01: Added a feature-blend trace outcome predictor over problem features, activated-assumption counts, trace components, source reliability, and residual labels. Feature leave-one-out weighted Brier is 0.0621 versus 0.0858 for route-only, and current reconstruction closure is structure 82.6%, behavior 72.8%, weighted 77.2%.
 - 2026-06-01: Expanded formal-transfer evaluation from 5 hand-labeled queries to 9 mapping-covered queries with 72 explicit negative applications. Formal transfer now validates all complete mappings with top-1 hit rate 1.0 and pairwise AUC 1.0; current reconstruction closure is structure 82.8%, behavior 73.1%, weighted 77.5%.
 - 2026-06-01: Added `assumption_os.surface_hypotheses` so world-model and evaluator residual signals create reviewable failure-hypothesis proposals with manifests and verifiers. Current surface generation emits 4 proposals: 2 world-model and 2 evaluator; reconstruction closure is structure 83.0%, behavior 73.4%, weighted 77.7%.
+- 2026-06-01: Added a metaproductivity benchmark comparing ACP-aware selection to immediate-utility selection. Positive control picks the productive clade over a quick win, and live probes show mean ACP top clade metaproductivity 0.6687 vs 0.2225 for immediate selection. Reconstruction closure is structure 83.2%, behavior 73.8%, weighted 78.0%.
 
 ## Closure Notes
 
@@ -112,6 +113,7 @@ Current gaps being addressed:
 - Trace outcome calibration now prefers the collection artifact and weights first-party runtime rows at 1.0 and artifact-replay rows at 0.5, so replay evidence can expand coverage without overpowering live traces.
 - Trace outcome modeling now includes a feature-blend cheap predictor, so world-model validation is no longer only a route-frequency table.
 - Surface-level world-model/evaluator residuals now enter the proposal queue instead of staying as progress-report notes.
+- Metaproductivity selection now has an explicit scheduler benchmark instead of only graph-score evidence.
 - Reconstruction progress is now part of performance validation and is capped against the full `reconstruction.md` target, so passing local artifacts do not overstate maturity.
 
 ## Performance Validation - 2026-06-01
@@ -232,4 +234,25 @@ Results:
 - Overall: PASS.
 - Surface hypothesis generator: 4 `failure_hypothesis` proposals, 2 from `world_model_screen`, 2 from `evaluator_policy`, all with candidate nodes, manifests, and verifiers.
 - Reconstruction progress: structure 83.0%, behavior 73.4%, weighted 77.7%; `B_hypothesis_generator` is now 82.0% structure / 73.0% behavior.
+- AssumptionBench: 9 / 9 lifecycle capabilities pass; overall score 0.9968, minimum score 0.9716.
+
+## Performance Validation - Metaproductivity Benchmark - 2026-06-01
+
+Command:
+
+```bash
+python3 -m assumption_os.performance_validation \
+  --root . \
+  --graph-dir "phase four/assumption_graph" \
+  --eval-id reconstruction_gap_perf_20260601_metaproductivity_benchmark \
+  --summary-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_metaproductivity_benchmark.json" \
+  --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_metaproductivity_benchmark.md"
+```
+
+Results:
+
+- Overall: PASS.
+- Metaproductivity benchmark: positive control passes; ACP-aware selector chooses `productive_parent`, immediate selector chooses `quick_win`.
+- Live selector probe: 4 queries, mean ACP top clade metaproductivity 0.6687 vs immediate baseline 0.2225.
+- Reconstruction progress: structure 83.2%, behavior 73.8%, weighted 78.0%; `F_metaproductivity_selector` is now 82.0% structure / 73.0% behavior.
 - AssumptionBench: 9 / 9 lifecycle capabilities pass; overall score 0.9968, minimum score 0.9716.

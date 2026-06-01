@@ -316,8 +316,10 @@ def _residual_analyzer_item(sections: dict[str, dict]) -> ProgressItem:
 def _metaproductivity_selector_item(sections: dict[str, dict], graph_stats: dict) -> ProgressItem:
     trajectory = sections.get("trajectory_search", {})
     bench = sections.get("assumption_bench", {})
+    meta_bench = sections.get("metaproductivity_benchmark", {})
     structure = _avg([
         float(trajectory.get("pass", False)),
+        float(meta_bench.get("pass", False)),
         _cap(trajectory.get("multi_path_rate", 0.0) / 0.8),
         _cap(len(trajectory.get("selected_path_types", {})) / 4),
         _cap(graph_stats.get("positive_metaproductivity_nodes", 0) / 100),
@@ -327,6 +329,13 @@ def _metaproductivity_selector_item(sections: dict[str, dict], graph_stats: dict
         _cap(trajectory.get("trajectory_count", 0) / 26),
         _cap(trajectory.get("frontier_actions", 0) / 10),
         _cap(bench.get("score_by_capability", {}).get("metaproductivity", 0.0)),
+        float(meta_bench.get("positive_control", {}).get("pass", False)),
+        _cap(
+            (
+                float(meta_bench.get("mean_acp_top_clade_metaproductivity") or 0.0)
+                - float(meta_bench.get("mean_immediate_top_clade_metaproductivity") or 0.0)
+            ) / 0.25
+        ),
     ])
     return ProgressItem(
         key="F_metaproductivity_selector",
@@ -338,10 +347,13 @@ def _metaproductivity_selector_item(sections: dict[str, dict], graph_stats: dict
             "trajectory_count": trajectory.get("trajectory_count"),
             "top_path_label_hit_rate": trajectory.get("top_path_label_hit_rate"),
             "positive_metaproductivity_nodes": graph_stats.get("positive_metaproductivity_nodes"),
+            "metaproductivity_benchmark_pass": meta_bench.get("pass"),
+            "mean_acp_top_clade_metaproductivity": meta_bench.get("mean_acp_top_clade_metaproductivity"),
+            "mean_immediate_top_clade_metaproductivity": meta_bench.get("mean_immediate_top_clade_metaproductivity"),
         },
         remaining_gaps=[
             "Metaproductivity is scored in graph/trajectory artifacts, but ACP is not yet a learned long-horizon value model.",
-            "Cost/risk/novelty are present as features but not optimized as a unified scheduler objective.",
+            "ACP-aware selection now has a benchmark, but cost/risk/novelty are still hand-weighted rather than learned.",
         ],
         next_actions=[
             "Use accepted/rejected descendants to update clade-level ACP after each recursive run.",
@@ -546,7 +558,7 @@ RECONSTRUCTION_CEILINGS = {
     "C_world_model_simulator": (0.82, 0.66),
     "D_verifier_stack": (0.82, 0.74),
     "E_residual_analyzer": (0.82, 0.74),
-    "F_metaproductivity_selector": (0.80, 0.70),
+    "F_metaproductivity_selector": (0.82, 0.73),
     "G_formal_alignment_layer": (0.78, 0.68),
     "recursive_execution_loop": (0.85, 0.76),
     "assumption_bench_evaluation": (0.88, 0.82),

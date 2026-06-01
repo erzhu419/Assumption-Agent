@@ -46,7 +46,7 @@ from .formal_mapping import (
     build_formal_search_eval_payload,
     build_formal_transfer_eval_payload,
 )
-from .graph_memory import JsonlGraphStore
+from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .harness_observer import build_harness_observer_payload
 from .manifest_logger import build_component_manifest_payload, events_from_run_logs
 from .memory_surfaces import build_memory_surface_payload
@@ -58,6 +58,7 @@ from .recursive_runner import build_recursive_assumption_run
 from .residual_clusterer import build_residual_cluster_payload
 from .runtime_trace import RuntimeTraceRecorder
 from .surface_hypotheses import build_surface_hypothesis_payload
+from .selector import build_metaproductivity_benchmark_payload
 from .trajectory_search import build_trajectory_search_payload
 from .trace_dataset import build_trace_dataset_collection_payload, build_trace_dataset_payload
 from .trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
@@ -84,6 +85,10 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     trajectory = _validate_trajectory_search(root=root, world_model_payload=world["post_acceptance_payload"])
     timings["trajectory_search_sec"] = _elapsed(start)
+
+    start = time.perf_counter()
+    metaproductivity = _validate_metaproductivity_benchmark(graph_dir=graph_dir)
+    timings["metaproductivity_benchmark_sec"] = _elapsed(start)
 
     start = time.perf_counter()
     verifier = _validate_verifier_stack(root=root, world_model_payload=world["post_acceptance_payload"])
@@ -136,6 +141,7 @@ def build_performance_validation_payload(
     sections = {
         "world_model": _strip_payload(world),
         "trajectory_search": trajectory,
+        "metaproductivity_benchmark": metaproductivity,
         "verifier_stack": verifier,
         "recursive_daemon": daemon,
         "recursive_audit": recursive_audit,
@@ -338,6 +344,32 @@ def _validate_trajectory_search(*, root: Path, world_model_payload: dict) -> dic
         "top_path_label_hit_rate": round(top_hit_rate, 4),
         "path_type_counts": payload["path_type_counts"],
         "selected_path_types": Counter(row["path_type"] for row in payload["selected"]),
+    }
+
+
+def _validate_metaproductivity_benchmark(*, graph_dir: Path) -> dict:
+    payload = build_metaproductivity_benchmark_payload(
+        SimpleAssumptionGraph(JsonlGraphStore(graph_dir)),
+        eval_id="perf_metaproductivity_benchmark",
+    )
+    live = payload.get("live_probe", {})
+    mean_acp = live.get("mean_acp_top_clade_metaproductivity")
+    mean_immediate = live.get("mean_immediate_top_clade_metaproductivity")
+    return {
+        "pass": (
+            payload.get("pass", False)
+            and payload.get("positive_control", {}).get("pass", False)
+            and mean_acp is not None
+            and mean_immediate is not None
+            and mean_acp > mean_immediate
+        ),
+        "query_count": payload["query_count"],
+        "positive_control": payload["positive_control"],
+        "mean_acp_top_clade_metaproductivity": mean_acp,
+        "mean_immediate_top_clade_metaproductivity": mean_immediate,
+        "distinct_acp_top_count": live.get("distinct_acp_top_count"),
+        "distinct_immediate_top_count": live.get("distinct_immediate_top_count"),
+        "live_probe": live,
     }
 
 
@@ -1496,6 +1528,12 @@ def _key_metric(name: str, section: dict) -> str:
         return f"labels={section['matched_label_count']}, pre_auc={section['pre_acceptance']['auc']}, brier={section['post_calibration']['brier_score']}"
     if name == "trajectory_search":
         return f"multi_path={section['multi_path_rate']}, hit={section['top_path_label_hit_rate']}"
+    if name == "metaproductivity_benchmark":
+        return (
+            f"queries={section.get('query_count', 0)}, "
+            f"acp_meta={section.get('mean_acp_top_clade_metaproductivity')}, "
+            f"imm_meta={section.get('mean_immediate_top_clade_metaproductivity')}"
+        )
     if name == "verifier_stack":
         return (
             f"accepted={section['accepted_count']}, rejected={section['rejected_count']}, "

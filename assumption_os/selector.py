@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 
-from .graph_memory import SimpleAssumptionGraph
-from .schema import AssumptionNode
+from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
+from .schema import AssumptionEdge, AssumptionNode, AssumptionType, EdgeType
 
 
 @dataclass(frozen=True)
@@ -97,6 +99,52 @@ class MetaproductivitySelector:
         return sorted(scores, key=lambda x: x.score, reverse=True)[:top_k]
 
 
+def build_metaproductivity_benchmark_payload(
+    graph: SimpleAssumptionGraph,
+    *,
+    eval_id: str,
+    queries: list[str] | None = None,
+) -> dict:
+    """Compare ACP-aware selection to an immediate-utility baseline."""
+
+    queries = queries or [
+        "risk rollback guardrail",
+        "formal mapping verifier transfer",
+        "world model trace calibration",
+        "residual cluster evaluator policy",
+    ]
+    acp_weights = SelectionWeights()
+    immediate_weights = SelectionWeights(
+        retrieval=1.0,
+        immediate_utility=1.0,
+        metaproductivity=0.0,
+        confidence=0.2,
+        novelty=0.0,
+        risk=0.25,
+        cost=0.15,
+    )
+    live_rows = [
+        _benchmark_query(graph=graph, query=query, acp_weights=acp_weights, immediate_weights=immediate_weights)
+        for query in queries
+    ]
+    positive_control = _positive_control_benchmark(acp_weights=acp_weights, immediate_weights=immediate_weights)
+    acp_meta = [row["acp_top_clade_metaproductivity"] for row in live_rows if row.get("acp_top_id")]
+    immediate_meta = [row["immediate_top_clade_metaproductivity"] for row in live_rows if row.get("immediate_top_id")]
+    return {
+        "eval_id": eval_id,
+        "query_count": len(live_rows),
+        "positive_control": positive_control,
+        "live_probe": {
+            "queries": live_rows,
+            "mean_acp_top_clade_metaproductivity": round(sum(acp_meta) / len(acp_meta), 4) if acp_meta else None,
+            "mean_immediate_top_clade_metaproductivity": round(sum(immediate_meta) / len(immediate_meta), 4) if immediate_meta else None,
+            "distinct_acp_top_count": len({row.get("acp_top_id") for row in live_rows if row.get("acp_top_id")}),
+            "distinct_immediate_top_count": len({row.get("immediate_top_id") for row in live_rows if row.get("immediate_top_id")}),
+        },
+        "pass": bool(positive_control.get("pass")) and len(live_rows) >= min(4, len(queries)),
+    }
+
+
 def _immediate_utility(node: AssumptionNode) -> float:
     ev = node.payload.get("evidence", {}) if isinstance(node.payload, dict) else {}
     if isinstance(ev, dict):
@@ -136,3 +184,87 @@ def _cost(node: AssumptionNode) -> float:
     if "cross-judge-strict" in node.verifiers:
         return 0.2
     return 0.08
+
+
+def _benchmark_query(
+    *,
+    graph: SimpleAssumptionGraph,
+    query: str,
+    acp_weights: SelectionWeights,
+    immediate_weights: SelectionWeights,
+) -> dict:
+    acp = MetaproductivitySelector(graph, weights=acp_weights).rank(query, top_k=1)
+    immediate = MetaproductivitySelector(graph, weights=immediate_weights).rank(query, top_k=1)
+    acp_top = acp[0] if acp else None
+    immediate_top = immediate[0] if immediate else None
+    return {
+        "query": query,
+        "acp_top_id": acp_top.node.id if acp_top else None,
+        "acp_top_score": round(acp_top.score, 4) if acp_top else None,
+        "acp_top_immediate_utility": round(acp_top.immediate_utility, 4) if acp_top else None,
+        "acp_top_clade_metaproductivity": round(acp_top.metaproductivity, 4) if acp_top else None,
+        "immediate_top_id": immediate_top.node.id if immediate_top else None,
+        "immediate_top_score": round(immediate_top.score, 4) if immediate_top else None,
+        "immediate_top_immediate_utility": round(immediate_top.immediate_utility, 4) if immediate_top else None,
+        "immediate_top_clade_metaproductivity": round(immediate_top.metaproductivity, 4) if immediate_top else None,
+        "same_top": bool(acp_top and immediate_top and acp_top.node.id == immediate_top.node.id),
+    }
+
+
+def _positive_control_benchmark(*, acp_weights: SelectionWeights, immediate_weights: SelectionWeights) -> dict:
+    with tempfile.TemporaryDirectory() as td:
+        store = JsonlGraphStore(Path(td))
+        productive = AssumptionNode(
+            id="productive_parent",
+            type=AssumptionType.METHOD,
+            claim="risk rollback robust guardrail investigation",
+            predicted_effects=["build a reusable guardrail family"],
+            confidence=0.45,
+            metaproductivity=0.05,
+            payload={"evidence": {"delta": 0.03}},
+        )
+        quick = AssumptionNode(
+            id="quick_win",
+            type=AssumptionType.METHOD,
+            claim="risk rollback quick fix guardrail",
+            predicted_effects=["solve the immediate issue"],
+            confidence=0.9,
+            metaproductivity=0.0,
+            payload={"evidence": {"delta": 0.45}},
+        )
+        child_a = AssumptionNode(
+            id="productive_child_a",
+            type=AssumptionType.METHOD,
+            claim="risk rollback guardrail verifier child",
+            confidence=0.75,
+            metaproductivity=0.35,
+        )
+        child_b = AssumptionNode(
+            id="productive_child_b",
+            type=AssumptionType.METHOD,
+            claim="risk rollback observability child",
+            confidence=0.7,
+            metaproductivity=0.32,
+        )
+        for node in (productive, quick, child_a, child_b):
+            store.upsert_node(node)
+        store.add_edge(AssumptionEdge(source=productive.id, target=child_a.id, type=EdgeType.SPECIALIZES, weight=0.9))
+        store.add_edge(AssumptionEdge(source=productive.id, target=child_b.id, type=EdgeType.SPECIALIZES, weight=0.9))
+        graph = SimpleAssumptionGraph(store)
+        row = _benchmark_query(
+            graph=graph,
+            query="risk rollback guardrail",
+            acp_weights=acp_weights,
+            immediate_weights=immediate_weights,
+        )
+        return {
+            **row,
+            "expected_acp_top_id": productive.id,
+            "expected_immediate_top_id": quick.id,
+            "pass": (
+                row.get("acp_top_id") == productive.id
+                and row.get("immediate_top_id") == quick.id
+                and row.get("acp_top_clade_metaproductivity", 0.0)
+                > row.get("immediate_top_clade_metaproductivity", 0.0)
+            ),
+        }
