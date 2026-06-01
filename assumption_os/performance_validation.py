@@ -1,0 +1,591 @@
+"""Performance validation for reconstruction gap closures.
+
+This runner evaluates the six mechanisms added after reconstruction:
+
+1. component manifest logging
+2. cheap world model / simulator
+3. multi-path trajectory search
+4. recursive daemon execute/read/resume loop
+5. residual clustering -> hypothesis synthesis
+6. finite formal-mapping information geometry
+
+The validation uses existing real artifacts where available and deterministic
+positive controls where the mechanism needs a safe graph-mutation sandbox.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import tempfile
+import time
+from collections import Counter, defaultdict
+from pathlib import Path
+from typing import Any
+
+from .formal_mapping import build_categorical_info_geometry_payload, build_formal_mapping_payload
+from .graph_memory import JsonlGraphStore
+from .manifest_logger import build_component_manifest_payload
+from .recursive_daemon import build_recursive_daemon_payload
+from .recursive_executor import JudgmentSet
+from .residual_clusterer import build_residual_cluster_payload
+from .trajectory_search import build_trajectory_search_payload
+from .world_model import build_world_model_payload
+
+
+DEFAULT_ARTIFACT_DIR = Path("phase four/assumption_graph")
+
+
+def build_performance_validation_payload(
+    *,
+    root: Path,
+    graph_dir: Path,
+    eval_id: str,
+) -> dict:
+    timings: dict[str, float] = {}
+
+    start = time.perf_counter()
+    world = _validate_world_model(root=root, graph_dir=graph_dir)
+    timings["world_model_sec"] = _elapsed(start)
+
+    start = time.perf_counter()
+    trajectory = _validate_trajectory_search(root=root, world_model_payload=world["post_acceptance_payload"])
+    timings["trajectory_search_sec"] = _elapsed(start)
+
+    start = time.perf_counter()
+    daemon = _validate_recursive_daemon(root=root, graph_dir=graph_dir)
+    timings["recursive_daemon_sec"] = _elapsed(start)
+
+    start = time.perf_counter()
+    manifests = _validate_manifest_logger()
+    timings["manifest_logger_sec"] = _elapsed(start)
+
+    start = time.perf_counter()
+    residuals = _validate_residual_clusterer(graph_dir=graph_dir)
+    timings["residual_clusterer_sec"] = _elapsed(start)
+
+    start = time.perf_counter()
+    formal = _validate_formal_metrics(graph_dir=graph_dir)
+    timings["formal_metrics_sec"] = _elapsed(start)
+
+    sections = {
+        "world_model": _strip_payload(world),
+        "trajectory_search": trajectory,
+        "recursive_daemon": daemon,
+        "manifest_logger": manifests,
+        "residual_clusterer": residuals,
+        "formal_metrics": formal,
+    }
+    return {
+        "eval_id": eval_id,
+        "source": {
+            "root": ".",
+            "graph_dir": _display_path(root, graph_dir),
+        },
+        "timings": timings,
+        "overall_pass": all(section.get("pass", False) for section in sections.values()),
+        "sections": sections,
+    }
+
+
+def format_performance_report(payload: dict) -> str:
+    sections = payload["sections"]
+    lines = [
+        f"# Reconstruction Gap Performance Validation: {payload['eval_id']}",
+        "",
+        f"Overall: {'PASS' if payload['overall_pass'] else 'FAIL'}",
+        "",
+        "## Summary",
+        "",
+        "| Gap | Result | Key Metric |",
+        "| --- | --- | --- |",
+    ]
+    for name, section in sections.items():
+        lines.append(
+            f"| {name} | {'PASS' if section.get('pass') else 'FAIL'} | {_key_metric(name, section)} |"
+        )
+    lines.extend(["", "## Details", ""])
+    for name, section in sections.items():
+        lines.extend([f"### {name}", ""])
+        for key, value in section.items():
+            if key in {"pass", "notes"}:
+                continue
+            lines.append(f"- `{key}`: {json.dumps(value, ensure_ascii=False, sort_keys=True)}")
+        if section.get("notes"):
+            for note in section["notes"]:
+                lines.append(f"- note: {note}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _validate_world_model(*, root: Path, graph_dir: Path) -> dict:
+    bundle = _combined_candidate_bundle(root)
+    store = JsonlGraphStore(graph_dir)
+    pre = build_world_model_payload(
+        store=store,
+        proposal_payload=bundle["proposal_payload"],
+        preflight_payload=bundle["preflight_payload"],
+        falsification_payload=bundle["falsification_payload"],
+        regression_predictions=bundle["regression_predictions"],
+        formal_mapping_gate_payload=bundle["formal_gate_payload"],
+        eval_id="perf_world_pre_acceptance",
+    )
+    post = build_world_model_payload(
+        store=store,
+        proposal_payload=bundle["proposal_payload"],
+        preflight_payload=bundle["preflight_payload"],
+        falsification_payload=bundle["falsification_payload"],
+        acceptance_payload=bundle["acceptance_payload"],
+        regression_predictions=bundle["regression_predictions"],
+        formal_mapping_gate_payload=bundle["formal_gate_payload"],
+        eval_id="perf_world_post_acceptance",
+    )
+    labels = bundle["labels"]
+    pre_metrics = _rank_metrics(pre["predictions"], labels)
+    post_metrics = _rank_metrics(post["predictions"], labels)
+    calibration = post.get("calibration", {})
+    passed = (
+        pre_metrics["labeled_count"] >= 10
+        and pre_metrics["accepted_count"] >= 2
+        and pre_metrics["auc"] is not None
+        and pre_metrics["auc"] >= 0.85
+        and pre_metrics["accepted_recall_at_k"] >= 1.0
+        and (calibration.get("brier_score") is not None and calibration["brier_score"] <= 0.08)
+    )
+    return {
+        "pass": passed,
+        "label_counts": dict(Counter(labels.values())),
+        "pre_acceptance": pre_metrics,
+        "post_acceptance": post_metrics,
+        "post_calibration": calibration,
+        "prediction_count": pre["prediction_count"],
+        "post_acceptance_payload": post,
+        "notes": [
+            "pre_acceptance excludes candidate acceptance labels to avoid leakage",
+            "post_acceptance validates calibration/logging after real judgments are attached",
+        ],
+    }
+
+
+def _validate_trajectory_search(*, root: Path, world_model_payload: dict) -> dict:
+    recursive = {
+        "eval_id": "perf_trajectory_frontier",
+        "next_actions": [],
+    }
+    for name in [
+        "recursive_positive_ms_bridge_runner.json",
+        "recursive_positive_se_hard_policy_runner.json",
+        "recursive_runner_phase2_v20_gpt55_21_50_resumed.json",
+    ]:
+        payload = _load_json(root / DEFAULT_ARTIFACT_DIR / name)
+        recursive["next_actions"].extend(payload.get("next_actions", []))
+    payload = build_trajectory_search_payload(
+        recursive_payload=recursive,
+        world_model_payload=world_model_payload,
+        eval_id="perf_trajectory_search",
+        beam_width=20,
+        max_paths_per_candidate=4,
+    )
+    labels = _combined_candidate_bundle(root)["labels"]
+    trajectories_by_proposal = defaultdict(list)
+    for row in payload["trajectories"]:
+        trajectories_by_proposal[row["proposal_id"]].append(row)
+    top_hits = []
+    for proposal_id, rows in trajectories_by_proposal.items():
+        label = labels.get(proposal_id)
+        if label not in {"accept", "reject"}:
+            continue
+        top = sorted(rows, key=lambda r: -float(r["score"]))[0]
+        hit = (
+            top["path_type"] == "promote_after_verification"
+            if label == "accept"
+            else top["path_type"] != "promote_after_verification"
+        )
+        top_hits.append(hit)
+    multi_path = sum(1 for rows in trajectories_by_proposal.values() if len(rows) >= 2)
+    proposal_count = len(trajectories_by_proposal)
+    top_hit_rate = sum(top_hits) / len(top_hits) if top_hits else 0.0
+    multi_path_rate = multi_path / proposal_count if proposal_count else 0.0
+    return {
+        "pass": proposal_count >= 8 and multi_path_rate >= 0.7 and top_hit_rate >= 0.85,
+        "frontier_actions": len(recursive["next_actions"]),
+        "trajectory_count": payload["trajectory_count"],
+        "proposal_count": proposal_count,
+        "multi_path_rate": round(multi_path_rate, 4),
+        "top_path_label_hit_rate": round(top_hit_rate, 4),
+        "path_type_counts": payload["path_type_counts"],
+        "selected_path_types": Counter(row["path_type"] for row in payload["selected"]),
+    }
+
+
+def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
+    cases = [
+        ("ms_bridge", "recursive_positive_ms_bridge_runner.json", "recursive_positive_ms_bridge_evolution.json", "recursive_positive_ms_bridge_judgment_bundle.json"),
+        ("se_hard_policy", "recursive_positive_se_hard_policy_runner.json", "recursive_positive_se_hard_policy_evolution.json", "recursive_positive_se_hard_policy_judgment_bundle.json"),
+    ]
+    results = []
+    with tempfile.TemporaryDirectory() as td:
+        tmp_graph = Path(td) / "graph"
+        _copy_graph_store(graph_dir, tmp_graph)
+        for label, runner_name, evolution_name, bundle_name in cases:
+            recursive_payload = _load_json(root / DEFAULT_ARTIFACT_DIR / runner_name)
+            evolution_payload = _load_json(root / DEFAULT_ARTIFACT_DIR / evolution_name)
+            judgment_sets = _judgment_sets_from_bundle(root, _load_json(root / DEFAULT_ARTIFACT_DIR / bundle_name))
+            dry = build_recursive_daemon_payload(
+                root=root,
+                graph_dir=tmp_graph,
+                recursive_payload=recursive_payload,
+                evolution_payload=evolution_payload,
+                eval_id=f"perf_daemon_{label}_dry",
+                judgment_sets=judgment_sets,
+                apply_accepted=False,
+                writeback_manifests=False,
+            )
+            before_nodes = set(JsonlGraphStore(tmp_graph).nodes)
+            applied = build_recursive_daemon_payload(
+                root=root,
+                graph_dir=tmp_graph,
+                recursive_payload=recursive_payload,
+                evolution_payload=evolution_payload,
+                eval_id=f"perf_daemon_{label}_apply",
+                judgment_sets=judgment_sets,
+                apply_accepted=True,
+                writeback_manifests=True,
+            )
+            after_store = JsonlGraphStore(tmp_graph)
+            applied_ids = applied.get("applied_candidate_node_ids", [])
+            results.append({
+                "case": label,
+                "dry_applied_count": len(dry.get("applied_candidate_node_ids", [])),
+                "dry_mutated": set(JsonlGraphStore(tmp_graph).nodes) != before_nodes and not applied_ids,
+                "accepted_counts": applied["iterations"][0]["candidate_acceptance_counts"],
+                "applied_candidate_node_ids": applied_ids,
+                "applied_nodes_present": all(node_id in after_store.nodes for node_id in applied_ids),
+                "manifest_count": applied["manifest_count"],
+            })
+    passed = all(
+        row["dry_applied_count"] == 0
+        and row["accepted_counts"].get("accept") == 1
+        and len(row["applied_candidate_node_ids"]) == 1
+        and row["applied_nodes_present"]
+        and row["manifest_count"] >= 2
+        for row in results
+    )
+    return {
+        "pass": passed,
+        "case_count": len(results),
+        "accepted_apply_count": sum(len(r["applied_candidate_node_ids"]) for r in results),
+        "results": results,
+    }
+
+
+def _validate_manifest_logger() -> dict:
+    events = [
+        {
+            "event_type": kind,
+            "problem_id": f"manifest_perf_{idx}",
+            "component": f"component_{kind}",
+            "assumption": "Every component event should become a redacted TrialManifest.",
+            "why_selected": "Performance validation exercises high-volume manifest logging.",
+            "expected_effect": "Append a manifest without leaking secrets.",
+            "observed_effect": "event observed",
+            "artifacts": {"request": f"secret_token=redaction-probe-{idx}", "payload_size": idx},
+            "metadata": {"model": "validation-model", "iteration": idx},
+        }
+        for idx, kind in enumerate(["llm_call", "retrieval", "judge_call", "tool_use", "simulator_rollout"] * 20)
+    ]
+    with tempfile.TemporaryDirectory() as td:
+        store = JsonlGraphStore(td)
+        start = time.perf_counter()
+        payload = build_component_manifest_payload(
+            eval_id="perf_manifest_logger",
+            events=events,
+            store=store,
+            writeback=True,
+        )
+        elapsed = _elapsed(start)
+        text = json.dumps(payload, ensure_ascii=False)
+        leak = "redaction-probe-" in text
+        written = len(JsonlGraphStore(td).trials)
+    throughput = len(events) / elapsed if elapsed else float("inf")
+    return {
+        "pass": written == len(events) and not leak and throughput >= 100.0,
+        "event_count": len(events),
+        "written_trials": written,
+        "secret_leak_detected": leak,
+        "throughput_events_per_sec": round(throughput, 2),
+        "event_counts": payload["event_counts"],
+    }
+
+
+def _validate_residual_clusterer(*, graph_dir: Path) -> dict:
+    payload = build_residual_cluster_payload(
+        store=JsonlGraphStore(graph_dir),
+        eval_id="perf_residual_clusterer",
+        min_cluster_size=2,
+        writeback_manifests=False,
+    )
+    proposals = payload.get("proposals", [])
+    validation_complete = all(
+        p.get("candidate_node", {}).get("payload", {}).get("validation_plan", {}).get("trigger_problem_ids")
+        for p in proposals
+    )
+    return {
+        "pass": payload["record_count"] >= 20 and payload["cluster_count"] >= 2 and payload["proposal_count"] >= 2 and validation_complete,
+        "record_count": payload["record_count"],
+        "cluster_count": payload["cluster_count"],
+        "proposal_count": payload["proposal_count"],
+        "residual_type_counts": payload["residual_type_counts"],
+        "proposal_parent_ids": [p["parent_node_id"] for p in proposals],
+        "validation_plans_complete": validation_complete,
+    }
+
+
+def _validate_formal_metrics(*, graph_dir: Path) -> dict:
+    store = JsonlGraphStore(graph_dir)
+    formal_payload = build_formal_mapping_payload(store)
+    metric_payload = build_categorical_info_geometry_payload(formal_payload)
+    summaries = metric_payload["summaries"]
+    same_shape = sum(1 for row in summaries if row["metrics"].get("same_shape"))
+    warning_count = sum(len(row.get("warnings", [])) for row in summaries)
+    complete_count = formal_payload.get("status_counts", {}).get("complete", 0)
+    return {
+        "pass": complete_count >= 5 and same_shape == len(summaries) and warning_count == 0,
+        "mapping_count": metric_payload["mapping_count"],
+        "complete_count": complete_count,
+        "same_shape_count": same_shape,
+        "warning_count": warning_count,
+        "metric_summary": metric_payload["metric_summary"],
+    }
+
+
+def _combined_candidate_bundle(root: Path) -> dict:
+    artifact_dir = root / DEFAULT_ARTIFACT_DIR
+    cycle = _load_json(artifact_dir / "evolution_cycle_dryrun_phase2_v20_gpt55_21_50.json")
+    pos_ms = _load_json(artifact_dir / "recursive_positive_ms_bridge_evolution.json")
+    pos_se = _load_json(artifact_dir / "recursive_positive_se_hard_policy_evolution.json")
+    proposal_payload = _merge_proposal_payloads([
+        cycle["proposals"],
+        pos_ms["proposals"],
+        pos_se["proposals"],
+    ])
+    preflight_payload = _merge_list_payload("summaries", [
+        cycle["candidate_preflight"],
+        pos_ms["candidate_preflight"],
+        pos_se["candidate_preflight"],
+    ])
+    falsification_payload = _merge_list_payload("summaries", [
+        cycle["falsification_gate"],
+        pos_ms["falsification_gate"],
+        pos_se["falsification_gate"],
+    ])
+    formal_gate_payload = _merge_list_payload("gates", [
+        cycle.get("formal_mapping_gate", {}),
+        pos_ms.get("formal_mapping_gate", {}),
+        pos_se.get("formal_mapping_gate", {}),
+    ])
+    regression_predictions = [
+        *cycle.get("regression_predictions", []),
+        *pos_ms.get("regression_predictions", []),
+        *pos_se.get("regression_predictions", []),
+    ]
+    acceptance_sources = [
+        _load_json(artifact_dir / "recursive_candidate_acceptance_phase2_v20_gpt55_21_50.json"),
+        _load_json(artifact_dir / "candidate_acceptance_summary_gpt54mini_21_50.json"),
+        _load_json(artifact_dir / "recursive_positive_ms_bridge_acceptance.json"),
+        _load_json(artifact_dir / "recursive_positive_se_hard_policy_acceptance.json"),
+    ]
+    summaries = []
+    for payload in acceptance_sources:
+        summaries.extend(payload.get("summaries", []))
+    labels = {}
+    for row in summaries:
+        decision = row.get("decision")
+        if decision == "accept":
+            labels[row["proposal_id"]] = "accept"
+        elif decision in {"reject_benefit", "reject_harm"}:
+            labels[row["proposal_id"]] = "reject"
+    return {
+        "proposal_payload": proposal_payload,
+        "preflight_payload": preflight_payload,
+        "falsification_payload": falsification_payload,
+        "formal_gate_payload": formal_gate_payload,
+        "regression_predictions": regression_predictions,
+        "acceptance_payload": {
+            "eval_id": "perf_combined_acceptance",
+            "summaries": summaries,
+            "accepted_proposal_ids": sorted(pid for pid, label in labels.items() if label == "accept"),
+            "decision_counts": dict(Counter(row.get("decision") for row in summaries)),
+        },
+        "labels": labels,
+    }
+
+
+def _rank_metrics(predictions: list[dict], labels: dict[str, str]) -> dict:
+    rows = [
+        (p["proposal_id"], float(p["predicted_acceptance_probability"]), labels[p["proposal_id"]])
+        for p in predictions
+        if p["proposal_id"] in labels
+    ]
+    accepted = [score for _, score, label in rows if label == "accept"]
+    rejected = [score for _, score, label in rows if label == "reject"]
+    auc = _pairwise_auc(accepted, rejected)
+    ranked = sorted(rows, key=lambda row: row[1], reverse=True)
+    k = max(1, len(accepted))
+    accepted_in_top_k = sum(1 for _, _, label in ranked[:k] if label == "accept")
+    return {
+        "labeled_count": len(rows),
+        "accepted_count": len(accepted),
+        "rejected_count": len(rejected),
+        "accepted_mean_probability": round(sum(accepted) / len(accepted), 4) if accepted else None,
+        "rejected_mean_probability": round(sum(rejected) / len(rejected), 4) if rejected else None,
+        "accepted_rejected_margin": (
+            round((sum(accepted) / len(accepted)) - (sum(rejected) / len(rejected)), 4)
+            if accepted and rejected
+            else None
+        ),
+        "auc": auc,
+        "accepted_recall_at_k": round(accepted_in_top_k / len(accepted), 4) if accepted else 0.0,
+        "top_ranked": [
+            {"proposal_id": pid, "probability": round(score, 4), "label": label}
+            for pid, score, label in ranked[:5]
+        ],
+    }
+
+
+def _pairwise_auc(accepted: list[float], rejected: list[float]) -> float | None:
+    if not accepted or not rejected:
+        return None
+    wins = 0.0
+    total = 0
+    for a in accepted:
+        for r in rejected:
+            if a > r:
+                wins += 1.0
+            elif a == r:
+                wins += 0.5
+            total += 1
+    return round(wins / total, 4)
+
+
+def _merge_proposal_payloads(payloads: list[dict]) -> dict:
+    proposals = []
+    seen = set()
+    for payload in payloads:
+        for proposal in payload.get("proposals", []):
+            pid = proposal.get("proposal_id")
+            if pid in seen:
+                continue
+            seen.add(pid)
+            proposals.append(proposal)
+    return {
+        "eval_id": "perf_combined_proposals",
+        "proposal_counts": dict(Counter(p.get("proposal_type", "") for p in proposals)),
+        "proposals": proposals,
+    }
+
+
+def _merge_list_payload(key: str, payloads: list[dict]) -> dict:
+    rows = []
+    seen = set()
+    for payload in payloads:
+        for row in payload.get(key, []):
+            row_key = (row.get("proposal_id"), json.dumps(row, ensure_ascii=False, sort_keys=True))
+            if row_key in seen:
+                continue
+            seen.add(row_key)
+            rows.append(row)
+    return {"eval_id": f"perf_combined_{key}", key: rows}
+
+
+def _judgment_sets_from_bundle(root: Path, bundle: dict) -> list[JudgmentSet]:
+    sets = []
+    for run in bundle.get("runs", []):
+        sets.append(JudgmentSet(
+            candidate_variant=run["candidate_variant"],
+            baseline_variant=run.get("baseline_variant") or bundle.get("baseline_variant"),
+            judgment_paths=[_resolve(root, p) for p in run.get("judgments", [])],
+            proposal_ids=run.get("proposal_ids", []),
+        ))
+    return sets
+
+
+def _copy_graph_store(src: Path, dst: Path) -> None:
+    dst.mkdir(parents=True, exist_ok=True)
+    for name in ("nodes.jsonl", "edges.jsonl", "evidence.jsonl", "trials.jsonl"):
+        source = src / name
+        if source.exists():
+            shutil.copy2(source, dst / name)
+
+
+def _strip_payload(world: dict) -> dict:
+    return {k: v for k, v in world.items() if k != "post_acceptance_payload"}
+
+
+def _key_metric(name: str, section: dict) -> str:
+    if name == "world_model":
+        return f"pre_auc={section['pre_acceptance']['auc']}, brier={section['post_calibration']['brier_score']}"
+    if name == "trajectory_search":
+        return f"multi_path={section['multi_path_rate']}, hit={section['top_path_label_hit_rate']}"
+    if name == "recursive_daemon":
+        return f"applied={section['accepted_apply_count']}/{section['case_count']}"
+    if name == "manifest_logger":
+        return f"throughput={section['throughput_events_per_sec']}/s, leak={section['secret_leak_detected']}"
+    if name == "residual_clusterer":
+        return f"clusters={section['cluster_count']}, proposals={section['proposal_count']}"
+    if name == "formal_metrics":
+        return f"mappings={section['mapping_count']}, warnings={section['warning_count']}"
+    return ""
+
+
+def _load_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _resolve(root: Path, path: str | Path) -> Path:
+    p = Path(path)
+    return p if p.is_absolute() else root / p
+
+
+def _elapsed(start: float) -> float:
+    return round(time.perf_counter() - start, 4)
+
+
+def _display_path(root: Path, path: Path) -> str:
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--root", default=".")
+    ap.add_argument("--graph-dir", default="phase four/assumption_graph")
+    ap.add_argument("--eval-id", default="reconstruction_gap_performance_validation")
+    ap.add_argument("--summary-out", default=None)
+    ap.add_argument("--report-out", default=None)
+    args = ap.parse_args()
+
+    root = Path(args.root).resolve()
+    graph_dir = _resolve(root, args.graph_dir)
+    payload = build_performance_validation_payload(
+        root=root,
+        graph_dir=graph_dir,
+        eval_id=args.eval_id,
+    )
+    text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+    if args.summary_out:
+        out = _resolve(root, args.summary_out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text, encoding="utf-8")
+    if args.report_out:
+        out = _resolve(root, args.report_out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(format_performance_report(payload), encoding="utf-8")
+    print(text)
+
+
+if __name__ == "__main__":
+    main()

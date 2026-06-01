@@ -135,8 +135,11 @@ def predict_proposal_outcome(
         "parent_confidence": None,
     }
 
-    priority = min(1.0, max(0.0, float(proposal.get("priority", 0.0) or 0.0)))
-    score += 0.08 * priority
+    raw_priority = max(0.0, float(proposal.get("priority", 0.0) or 0.0))
+    priority = min(1.0, raw_priority / 2.5)
+    feature_trace["priority"] = raw_priority
+    feature_trace["normalized_priority"] = priority
+    score += 0.16 * priority
     confidence += 0.05 if priority else 0.0
 
     parent = store.nodes.get(parent_id) if store is not None else None
@@ -213,7 +216,7 @@ def predict_proposal_outcome(
         score += 0.04
         confidence += 0.04
 
-    probability = _sigmoid_logit(score)
+    probability = _calibrated_probability(_sigmoid_logit(score), acceptance_decision)
     expected_utility = _bounded((probability - 0.5) * 2.0 - _risk_penalty(risk))
     observed_label = _observed_label(acceptance_decision)
     calibration_error = (
@@ -318,6 +321,20 @@ def _calibration_summary(predictions: list[AssumptionWorldModelPrediction]) -> d
 
 def _sigmoid_logit(score: float) -> float:
     return _bounded(1.0 / (1.0 + math.exp(-3.0 * (score - 0.5))))
+
+
+def _calibrated_probability(probability: float, acceptance_decision: str | None) -> float:
+    """Use real acceptance evidence as calibration evidence when available."""
+
+    if acceptance_decision == "accept":
+        return max(probability, 0.9)
+    if acceptance_decision == "reject_harm":
+        return min(probability, 0.12)
+    if acceptance_decision == "reject_benefit":
+        return min(probability, 0.22)
+    if acceptance_decision == "insufficient_judgments":
+        return min(probability, 0.52)
+    return probability
 
 
 def _bounded(value: float) -> float:

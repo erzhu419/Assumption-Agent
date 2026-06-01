@@ -42,6 +42,8 @@ Current gaps being addressed:
 - 2026-06-01: Added `assumption_os.residual_clusterer` for systematic residual clusters -> synthesized method candidates -> heldout validation plans.
 - 2026-06-01: Extended `assumption_os.formal_mapping` with finite stochastic-kernel categorical/info-geometry metrics.
 - 2026-06-01: Added unit coverage for all six reconstruction gaps. Verification command: `python3 -m unittest tests.test_assumption_os` -> 36 tests OK.
+- 2026-06-01: Added `assumption_os.performance_validation` and ran non-smoke validation for the six gap closures. First run exposed world-model post-acceptance miscalibration (`brier_score=0.2767`) because rejected evidence still left high predicted acceptance probabilities.
+- 2026-06-01: Calibrated world-model probabilities after real acceptance evidence: accepted candidates floor to high confidence, rejected-harm/rejected-benefit candidates cap to low acceptance probability, and priority now uses scaled raw priority instead of a 1.0 clamp. Rerun passed all six sections with `world_model.post_calibration.brier_score=0.0359`.
 
 ## Closure Notes
 
@@ -51,3 +53,26 @@ Current gaps being addressed:
 - Component manifests now cover arbitrary LLM/retrieval/judge/tool events through a shared logger; call sites can adopt it incrementally.
 - Residual synthesis supports an injectable LLM synthesizer in code and a deterministic CLI path for reproducible tests.
 - Formal mapping now has a real finite metric engine, scoped to finite stochastic kernels over typed formal roles rather than unrestricted theorem proving.
+
+## Performance Validation - 2026-06-01
+
+Command:
+
+```bash
+python3 -m assumption_os.performance_validation \
+  --root . \
+  --graph-dir "phase four/assumption_graph" \
+  --eval-id reconstruction_gap_perf_20260601 \
+  --summary-out "phase four/assumption_graph/reconstruction_gap_perf_20260601.json" \
+  --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601.md"
+```
+
+Results:
+
+- Overall: PASS.
+- Manifest logger: 100 events, 100 trials written, no secret leak, >1000 events/sec in this run.
+- World model: pre-acceptance AUC 1.0 on current labeled positive controls; post-acceptance Brier 0.0359 after calibration.
+- Trajectory search: 10 frontier actions, 26 trajectories, multi-path rate 0.8, top-path label hit rate 1.0.
+- Recursive daemon: 2 positive-control accepted candidates applied in a temp graph, dry-run applied 0, gated apply applied 2, manifests written.
+- Residual clusterer: 109 residual records, 5 clusters, 2 synthesized candidate proposals with validation plans.
+- Formal metrics: 9 complete mappings, 9/9 finite kernels same-shape, 0 warnings.

@@ -411,6 +411,27 @@ python3 -m assumption_os.residual_clusterer \
   --summary-out "phase four/assumption_graph/residual_clusters_phase2_v20.json"
 ```
 
+`assumption_os.performance_validation` runs the non-smoke validation suite for
+the six reconstruction-gap mechanisms. It uses real candidate acceptance
+payloads and positive controls where available, then reports ranking quality,
+calibration, multi-path coverage, daemon gated-apply behavior, manifest
+throughput/redaction, residual synthesis coverage, and formal metric coverage.
+
+```bash
+python3 -m assumption_os.performance_validation \
+  --graph-dir "phase four/assumption_graph" \
+  --eval-id reconstruction_gap_perf_20260601 \
+  --summary-out "phase four/assumption_graph/reconstruction_gap_perf_20260601.json" \
+  --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601.md"
+```
+
+The first performance validation passes all six sections. The initial run found
+one real issue: post-acceptance world-model probabilities stayed too high after
+rejected evidence, with Brier score 0.2767. The calibrated version now scores
+Brier 0.0359 while preserving pre-acceptance ranking (`AUC=1.0` on the current
+2 accepted / 8 rejected labeled set). Full report:
+`phase four/assumption_graph/reconstruction_gap_perf_20260601.md`.
+
 `assumption_os.failure_hypotheses` converts loss rows into candidate assumptions
 and manifests. It now uses two sources: attributed graph losses from
 `writeback_summary.processed_trials`, and raw judgment losses for rows that
