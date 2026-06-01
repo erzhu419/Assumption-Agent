@@ -39,6 +39,7 @@ def build_trace_outcome_model_payload(
         row for row in trace_dataset_payload.get("rows", [])
         if row.get("trainable") and row.get("outcome") in {"win", "loss"}
     ]
+    weighted_trainable_row_count = sum(_row_weight(row) for row in rows)
     predictions = [
         _predict_leave_one_out(row=row, train_rows=[other for other in rows if other is not row])
         for row in rows
@@ -57,6 +58,9 @@ def build_trace_outcome_model_payload(
         "eval_id": eval_id,
         "source_trace_dataset_eval_id": trace_dataset_payload.get("eval_id"),
         "trainable_row_count": len(rows),
+        "weighted_trainable_row_count": round(weighted_trainable_row_count, 4),
+        "trace_source_counts": dict(Counter(_trace_source(row) for row in rows)),
+        "trace_source_weighted_counts": _trace_source_weighted_counts(rows),
         "route_group_count": len(route_stats),
         "component_group_count": len(component_stats),
         "domain_group_count": len(domain_stats),
@@ -128,19 +132,26 @@ def _predict_leave_one_out(*, row: dict[str, Any], train_rows: list[dict[str, An
             break
     wins = sum(1 for other in train_bucket if other.get("outcome") == "win")
     count = len(train_bucket)
-    probability = (wins + 1.0) / (count + 2.0) if count else 0.5
+    support_weight = sum(_row_weight(other) for other in train_bucket)
+    weighted_wins = sum(_row_weight(other) for other in train_bucket if other.get("outcome") == "win")
+    probability = (weighted_wins + 1.0) / (support_weight + 2.0) if support_weight else 0.5
     label = 1.0 if row.get("outcome") == "win" else 0.0
     predicted_outcome = "win" if probability >= 0.5 else "loss"
+    row_weight = _row_weight(row)
     return {
         "prediction_id": stable_id("trace_pred", row.get("row_id"), selected_key),
         "row_id": row.get("row_id"),
         "problem_id": row.get("problem_id"),
         "domain": row.get("domain"),
         "bypass_route": row.get("bypass_route"),
+        "trace_source": _trace_source(row),
+        "row_weight": row_weight,
         "selected_level": selected_level,
         "selected_key": selected_key,
         "support_count": count,
         "support_win_count": wins,
+        "support_weight": round(support_weight, 4),
+        "support_weighted_win_count": round(weighted_wins, 4),
         "predicted_win_probability": round(probability, 4),
         "predicted_outcome": predicted_outcome,
         "observed_outcome": row.get("outcome"),
@@ -160,17 +171,38 @@ def _group_stats(rows: list[dict[str, Any]], *, key_fn: Callable[[dict[str, Any]
         count = len(bucket)
         wins = sum(1 for row in bucket if row.get("outcome") == "win")
         losses = sum(1 for row in bucket if row.get("outcome") == "loss")
+        weighted_count = sum(_row_weight(row) for row in bucket)
+        weighted_wins = sum(_row_weight(row) for row in bucket if row.get("outcome") == "win")
+        weighted_losses = sum(_row_weight(row) for row in bucket if row.get("outcome") == "loss")
         deltas = [float(row["score_delta"]) for row in bucket if row.get("score_delta") is not None]
+        weighted_deltas = [
+            (float(row["score_delta"]), _row_weight(row))
+            for row in bucket
+            if row.get("score_delta") is not None
+        ]
+        weighted_delta_weight = sum(weight for _, weight in weighted_deltas)
         residual_counts = Counter(str(row.get("residual_type") or "unknown") for row in bucket)
         stats.append({
             "key": key,
             "count": count,
+            "weighted_count": round(weighted_count, 4),
             "win_count": wins,
             "loss_count": losses,
+            "weighted_win_count": round(weighted_wins, 4),
+            "weighted_loss_count": round(weighted_losses, 4),
             "win_rate": round(wins / count, 4) if count else 0.0,
             "smoothed_win_probability": round((wins + 1.0) / (count + 2.0), 4),
+            "weighted_win_rate": round(weighted_wins / weighted_count, 4) if weighted_count else 0.0,
+            "weighted_smoothed_win_probability": round((weighted_wins + 1.0) / (weighted_count + 2.0), 4)
+            if weighted_count else 0.5,
             "mean_score_delta": round(sum(deltas) / len(deltas), 4) if deltas else None,
+            "weighted_mean_score_delta": round(
+                sum(delta * weight for delta, weight in weighted_deltas) / weighted_delta_weight,
+                4,
+            ) if weighted_delta_weight else None,
             "residual_type_counts": dict(residual_counts),
+            "trace_source_counts": dict(Counter(_trace_source(row) for row in bucket)),
+            "trace_source_weighted_counts": _trace_source_weighted_counts(bucket),
             "problem_ids": [str(row.get("problem_id")) for row in bucket],
         })
     return sorted(stats, key=lambda row: (-row["count"], row["key"]))
@@ -193,6 +225,7 @@ def _residual_stats(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "bypass_route": route,
             "components": components.split(",") if components else [],
             "count": len(bucket),
+            "weighted_count": round(sum(_row_weight(row) for row in bucket), 4),
             "problem_ids": [str(row.get("problem_id")) for row in bucket],
             "residual_previews": [_preview(row.get("residual"), limit=140) for row in bucket[:5]],
         })
@@ -258,14 +291,58 @@ def _prediction_metrics(predictions: list[dict[str, Any]]) -> dict:
         }
     brier = sum(float(row["brier"]) for row in predictions) / len(predictions)
     mae = sum(float(row["absolute_error"]) for row in predictions) / len(predictions)
+    total_weight = sum(float(row.get("row_weight") or 0.0) for row in predictions)
+    weighted_brier = (
+        sum(float(row["brier"]) * float(row.get("row_weight") or 0.0) for row in predictions) / total_weight
+        if total_weight else None
+    )
+    weighted_mae = (
+        sum(float(row["absolute_error"]) * float(row.get("row_weight") or 0.0) for row in predictions) / total_weight
+        if total_weight else None
+    )
     accuracy = sum(1 for row in predictions if row["predicted_outcome"] == row["observed_outcome"]) / len(predictions)
+    weighted_accuracy = (
+        sum(
+            float(row.get("row_weight") or 0.0)
+            for row in predictions
+            if row["predicted_outcome"] == row["observed_outcome"]
+        ) / total_weight
+        if total_weight else None
+    )
     return {
         "prediction_count": len(predictions),
         "brier_score": round(brier, 4),
         "mean_absolute_error": round(mae, 4),
         "accuracy_at_half": round(accuracy, 4),
+        "weighted_prediction_count": round(total_weight, 4),
+        "weighted_brier_score": round(weighted_brier, 4) if weighted_brier is not None else None,
+        "weighted_mean_absolute_error": round(weighted_mae, 4) if weighted_mae is not None else None,
+        "weighted_accuracy_at_half": round(weighted_accuracy, 4) if weighted_accuracy is not None else None,
         "prediction_level_counts": dict(Counter(row["selected_level"] for row in predictions)),
     }
+
+
+def _trace_source(row: dict[str, Any]) -> str:
+    source = row.get("trace_source") or row.get("source_kind")
+    if source:
+        return str(source)
+    if row.get("first_party_trace"):
+        return "first_party_runtime"
+    return "unspecified"
+
+
+def _row_weight(row: dict[str, Any]) -> float:
+    source = _trace_source(row).lower()
+    if "artifact" in source or "replay" in source:
+        return 0.5
+    return 1.0
+
+
+def _trace_source_weighted_counts(rows: list[dict[str, Any]]) -> dict[str, float]:
+    counts: dict[str, float] = defaultdict(float)
+    for row in rows:
+        counts[_trace_source(row)] += _row_weight(row)
+    return {key: round(value, 4) for key, value in sorted(counts.items())}
 
 
 def _key_for_level(row: dict[str, Any], level: str) -> str:

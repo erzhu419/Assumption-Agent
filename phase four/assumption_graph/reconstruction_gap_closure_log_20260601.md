@@ -85,6 +85,7 @@ Current gaps being addressed:
 - 2026-06-01: Added formal-equivalence deduplication for complete formal mappings; current reconstruction closure is structure 82.1%, behavior 69.6%, weighted 75.2%.
 - 2026-06-01: Added trace-dataset collection across first-party and artifact-replay math/science slices; current reconstruction closure is structure 82.1%, behavior 71.2%, weighted 76.1%.
 - 2026-06-01: Added formal-transfer correlation audit; current reconstruction closure is structure 82.6%, behavior 72.0%, weighted 76.8%.
+- 2026-06-01: Connected the trace collection to the outcome world model with source reliability weights. The outcome model now calibrates over 67 trainable rows / 38.0 weighted rows, emits 4 trace-policy proposals, and current reconstruction closure is structure 82.6%, behavior 72.6%, weighted 77.1%.
 
 ## Closure Notes
 
@@ -104,6 +105,7 @@ Current gaps being addressed:
 - Trace outcome modeling now converts those rows into repair/reinforce route-policy candidates without mutating graph memory.
 - Trace policy proposals now bridge route-policy learning into the existing candidate/verifier/recursive-executor intake path.
 - Trace policy preflight verifies trigger routing before any expensive fresh ablation.
+- Trace outcome calibration now prefers the collection artifact and weights first-party runtime rows at 1.0 and artifact-replay rows at 0.5, so replay evidence can expand coverage without overpowering live traces.
 - Reconstruction progress is now part of performance validation and is capped against the full `reconstruction.md` target, so passing local artifacts do not overstate maturity.
 
 ## Performance Validation - 2026-06-01
@@ -140,3 +142,25 @@ Results:
 - Recursive daemon: 2 positive-control accepted candidates applied in a temp graph, dry-run applied 0, gated apply applied 2, manifests written.
 - Residual clusterer: 109 residual records, 7 deterministic clusters, 2 synthesized candidate proposals with validation plans.
 - Formal metrics: 9 complete mappings, 9/9 finite kernels same-shape, 0 warnings; dedup positive control found 1 duplicate cluster / 1 merge recommendation while the live graph has 9 unique formal signatures; formal-transfer audit passes with top-1 hit rate 1.0 and pairwise AUC 1.0.
+
+## Performance Validation - Weighted Trace Outcome - 2026-06-01
+
+Command:
+
+```bash
+python3 -m assumption_os.performance_validation \
+  --root . \
+  --graph-dir "phase four/assumption_graph" \
+  --eval-id reconstruction_gap_perf_20260601_weighted_trace \
+  --summary-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_weighted_trace.json" \
+  --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_weighted_trace.md"
+```
+
+Results:
+
+- Overall: PASS.
+- Trace outcome model: collection mode, 67 trainable rows, 38.0 weighted rows, weighted Brier 0.0858, 4 route groups, 4 policy updates, and 3 targeted-repair updates.
+- Trace policy proposals: 4 `assumption_revision` proposals, 3 targeted repairs, all with heldout-route ablation verifiers.
+- Trace policy preflight: 4/4 proposals ready for fresh ablation, 0 missed trigger rows, 0 outside-active rows, command hints emitted.
+- Reconstruction progress: structure 82.6%, behavior 72.6%, weighted 77.1%; lowest behavior items remain `C_world_model_simulator`, `G_formal_alignment_layer`, and `B_hypothesis_generator`.
+- AssumptionBench: 9 / 9 lifecycle capabilities pass; overall score 0.9968, minimum score 0.9716.

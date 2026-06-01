@@ -944,34 +944,53 @@ def _validate_trace_dataset(*, root: Path) -> dict:
 
 
 def _validate_trace_outcome_model(*, root: Path) -> dict:
-    trace_dataset_path = root / "phase four/assumption_graph/trace_dataset_ms_bridge_20260601.json"
+    trace_dataset_candidates = [
+        root / "phase four/assumption_graph/trace_dataset_collection_ms_bridge_20260601.json",
+        root / "phase four/assumption_graph/trace_dataset_ms_bridge_20260601.json",
+    ]
+    trace_dataset_path = next((path for path in trace_dataset_candidates if path.exists()), trace_dataset_candidates[0])
     if not trace_dataset_path.exists():
         return {
             "pass": False,
             "reason": "missing_trace_dataset_artifact",
             "trace_dataset_path": _display_path(root, trace_dataset_path),
         }
+    collection_mode = "collection" in trace_dataset_path.name
     payload = build_trace_outcome_model_payload(
         trace_dataset_payload=json.loads(trace_dataset_path.read_text(encoding="utf-8")),
         eval_id="perf_trace_outcome_model",
         min_policy_group_size=2,
     )
     metrics = payload["leave_one_out_metrics"]
+    brier = metrics.get("weighted_brier_score")
+    if brier is None:
+        brier = metrics.get("brier_score")
     loss_updates = [
         row for row in payload["policy_updates"]
         if row["decision"] in {"keep_with_targeted_repair", "repair_before_scaling"}
     ]
+    min_rows = 60 if collection_mode else 9
+    min_weighted_rows = 35.0 if collection_mode else 9.0
+    min_routes = 4 if collection_mode else 3
+    min_updates = 3 if collection_mode else 1
+    max_brier = 0.12 if collection_mode else 0.25
     return {
         "pass": (
-            payload["trainable_row_count"] >= 9
-            and payload["route_group_count"] >= 3
-            and payload["policy_update_count"] >= 1
+            payload["trainable_row_count"] >= min_rows
+            and payload["weighted_trainable_row_count"] >= min_weighted_rows
+            and payload["route_group_count"] >= min_routes
+            and payload["policy_update_count"] >= min_updates
             and len(loss_updates) >= 1
-            and metrics["brier_score"] is not None
-            and metrics["brier_score"] <= 0.25
+            and brier is not None
+            and brier <= max_brier
             and not payload["secret_leak_detected"]
         ),
+        "trace_dataset_path": _display_path(root, trace_dataset_path),
+        "collection_mode": collection_mode,
         "trainable_row_count": payload["trainable_row_count"],
+        "weighted_trainable_row_count": payload["weighted_trainable_row_count"],
+        "trace_source_counts": payload["trace_source_counts"],
+        "trace_source_weighted_counts": payload["trace_source_weighted_counts"],
         "route_group_count": payload["route_group_count"],
         "component_group_count": payload["component_group_count"],
         "residual_group_count": payload["residual_group_count"],
@@ -985,13 +1004,18 @@ def _validate_trace_outcome_model(*, root: Path) -> dict:
 
 
 def _validate_trace_policy_proposals(*, root: Path, graph_dir: Path) -> dict:
-    trace_outcome_path = root / "phase four/assumption_graph/trace_outcome_model_ms_bridge_20260601.json"
+    trace_outcome_candidates = [
+        root / "phase four/assumption_graph/trace_outcome_model_collection_ms_bridge_20260601.json",
+        root / "phase four/assumption_graph/trace_outcome_model_ms_bridge_20260601.json",
+    ]
+    trace_outcome_path = next((path for path in trace_outcome_candidates if path.exists()), trace_outcome_candidates[0])
     if not trace_outcome_path.exists():
         return {
             "pass": False,
             "reason": "missing_trace_outcome_model_artifact",
             "trace_outcome_path": _display_path(root, trace_outcome_path),
         }
+    collection_mode = "collection" in trace_outcome_path.name
     payload = build_trace_policy_proposal_payload(
         store=JsonlGraphStore(graph_dir),
         trace_outcome_payload=json.loads(trace_outcome_path.read_text(encoding="utf-8")),
@@ -1007,15 +1031,18 @@ def _validate_trace_policy_proposals(*, root: Path, graph_dir: Path) -> dict:
         1 for proposal in proposals
         if "heldout_route_ablation" in (proposal.get("candidate_node", {}).get("verifiers") or [])
     )
+    min_proposals = 4 if collection_mode else 3
     return {
         "pass": (
             payload["parent_node_id"] is not None
-            and payload["proposal_count"] >= 3
+            and payload["proposal_count"] >= min_proposals
             and candidate_count == payload["proposal_count"]
             and repair_count >= 1
             and verifier_count == payload["proposal_count"]
             and not payload["secret_leak_detected"]
         ),
+        "trace_outcome_path": _display_path(root, trace_outcome_path),
+        "collection_mode": collection_mode,
         "parent_node_id": payload["parent_node_id"],
         "proposal_count": payload["proposal_count"],
         "proposal_counts": payload["proposal_counts"],
@@ -1028,27 +1055,35 @@ def _validate_trace_policy_proposals(*, root: Path, graph_dir: Path) -> dict:
 
 
 def _validate_trace_policy_preflight(*, root: Path) -> dict:
-    preflight_path = root / "phase four/assumption_graph/trace_policy_preflight_ms_bridge_20260601.json"
+    preflight_candidates = [
+        root / "phase four/assumption_graph/trace_policy_preflight_collection_ms_bridge_20260601.json",
+        root / "phase four/assumption_graph/trace_policy_preflight_ms_bridge_20260601.json",
+    ]
+    preflight_path = next((path for path in preflight_candidates if path.exists()), preflight_candidates[0])
     if not preflight_path.exists():
         return {
             "pass": False,
             "reason": "missing_trace_policy_preflight_artifact",
             "preflight_path": _display_path(root, preflight_path),
         }
+    collection_mode = "collection" in preflight_path.name
     payload = json.loads(preflight_path.read_text(encoding="utf-8"))
     summaries = payload.get("summaries", [])
     ready = [row for row in summaries if row.get("readiness") == "ready_for_fresh_ablation"]
     missed = sum(len(row.get("missed_trigger_problem_ids", [])) for row in summaries)
     outside = sum(len(row.get("outside_active_problem_ids", [])) for row in summaries)
     command_hints = sum(1 for row in summaries if row.get("command_hint"))
+    min_proposals = 4 if collection_mode else 3
     return {
         "pass": (
-            len(summaries) >= 3
+            len(summaries) >= min_proposals
             and len(ready) == len(summaries)
             and missed == 0
             and outside == 0
             and command_hints == len(summaries)
         ),
+        "preflight_path": _display_path(root, preflight_path),
+        "collection_mode": collection_mode,
         "proposal_count": len(summaries),
         "readiness_counts": payload.get("readiness_counts", {}),
         "ready_count": len(ready),
