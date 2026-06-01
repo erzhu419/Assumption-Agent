@@ -27,6 +27,7 @@ from assumption_os.falsification import FalsificationDecision, build_falsificati
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
+    build_independent_formal_search_eval_payload,
     build_categorical_info_geometry_payload,
     build_formal_dedup_payload,
     build_formal_mapping_gate_payload,
@@ -1648,7 +1649,21 @@ class AssumptionOSTest(unittest.TestCase):
                 "verifier_stack": {"pass": True, "proposal_count": 33, "accepted_count": 2, "rejected_count": 14, "accepted_protocol_ok": True, "rejected_protocol_ok": True, "falsification_protocol_candidate_count": 27, "falsification_experiment_count": 135},
                 "trajectory_search": {"pass": True, "multi_path_rate": 0.8, "top_path_label_hit_rate": 1.0, "trajectory_count": 26, "frontier_actions": 10, "selected_path_types": {"a": 1, "b": 1, "c": 1, "d": 1}},
                 "assumption_bench": {"pass": True, "overall_score": 0.9968, "min_score": 0.9716, "capability_count": 9, "passed_capability_count": 9, "failed_capabilities": [], "score_by_capability": {"metaproductivity": 1.0}},
-                "formal_metrics": {"pass": True, "mapping_count": 9, "complete_count": 9, "same_shape_count": 9, "warning_count": 0},
+                "formal_metrics": {
+                    "pass": True,
+                    "mapping_count": 9,
+                    "complete_count": 9,
+                    "same_shape_count": 9,
+                    "warning_count": 0,
+                    "dedup_pass": True,
+                    "dedup_complete_mapping_count": 9,
+                    "transfer_search_query_count": 9,
+                    "transfer_pairwise_auc": 1.0,
+                    "transfer_top1_hit_rate": 1.0,
+                    "independent_transfer_search_query_count": 9,
+                    "independent_transfer_pairwise_auc": 1.0,
+                    "independent_transfer_top1_hit_rate": 1.0,
+                },
                 "recursive_audit": {"pass": True, "min_closure_score": 1.0, "actionable_count": 5, "critical_issue_count": 0},
                 "recursive_daemon": {"pass": True, "case_count": 2, "accepted_apply_count": 2},
             }
@@ -2227,6 +2242,41 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(search_eval["pass_count"], 2)
             self.assertEqual(search_eval["negative_application_count"], 2)
             self.assertEqual(search_eval["top1_hit_rate"], 1.0)
+
+    def test_independent_formal_search_uses_operator_intent(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            for seed, keyword, required, step in [
+                ("WCAND_EXPECTED", "risk", "rollback", "stage recovery"),
+                ("WCAND_OTHER", "speed", "latency", "profile bottleneck"),
+            ]:
+                base = {
+                    "type": AssumptionType.HARNESS,
+                    "claim": f"formal independent {seed}",
+                    "payload": {"seed_cid": seed},
+                    "tags": [seed],
+                }
+                for suffix, kind, expr in [
+                    ("feature", "feature", {"keywords_en": [keyword], "regex": []}),
+                    ("constraint", "constraint", {"required_substrings": [required]}),
+                    ("decomp", "decomposition", {"steps": [step]}),
+                    ("verify", "verification", {"instruction": f"check {required}"}),
+                    ("hp", "hp_change", {"temperature": 0.0, "max_tokens": 1000}),
+                ]:
+                    store.upsert_node(AssumptionNode(
+                        id=f"{seed}_{suffix}",
+                        kind=kind,
+                        formal_form={"kind": kind, "expr": expr},
+                        **base,
+                    ))
+            formal_payload = build_formal_mapping_payload(store)
+            search_eval = build_independent_formal_search_eval_payload(formal_payload)
+            self.assertEqual(search_eval["eval_kind"], "independent_operator_intent")
+            self.assertEqual(search_eval["query_count"], 2)
+            self.assertEqual(search_eval["top1_hit_rate"], 1.0)
+            first_app = search_eval["results"][0]["applications"][0]
+            self.assertGreater(first_app["operator_score"], 0.0)
+            self.assertTrue(first_app["matched_operator_terms"])
 
     def test_formal_transfer_eval_scores_expected_mapping_above_distractor(self):
         with tempfile.TemporaryDirectory() as td:

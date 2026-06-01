@@ -380,6 +380,9 @@ def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
         _cap(formal.get("transfer_search_query_count", formal.get("transfer_query_count", 0)) / max(1, formal.get("complete_count", 1))),
         _cap(formal.get("transfer_pairwise_auc", 0.0)),
         _cap(formal.get("transfer_top1_hit_rate", 0.0)),
+        _cap(formal.get("independent_transfer_search_query_count", 0) / max(1, formal.get("complete_count", 1))),
+        _cap(formal.get("independent_transfer_pairwise_auc", 0.0)),
+        _cap(formal.get("independent_transfer_top1_hit_rate", 0.0)),
     ])
     return ProgressItem(
         key="G_formal_alignment_layer",
@@ -398,13 +401,17 @@ def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
             "transfer_pairwise_auc": formal.get("transfer_pairwise_auc"),
             "transfer_search_query_count": formal.get("transfer_search_query_count"),
             "transfer_search_negative_application_count": formal.get("transfer_search_negative_application_count"),
+            "independent_transfer_search_query_count": formal.get("independent_transfer_search_query_count"),
+            "independent_transfer_search_negative_application_count": formal.get("independent_transfer_search_negative_application_count"),
+            "independent_transfer_top1_hit_rate": formal.get("independent_transfer_top1_hit_rate"),
+            "independent_transfer_pairwise_auc": formal.get("independent_transfer_pairwise_auc"),
         },
         remaining_gaps=[
             "Formal mapping is an audit/gate over finite kernels, not a full category-theoretic or information-geometric reasoning engine.",
-            "Formal transfer correlation now covers each complete mapping, but labels are still trigger-derived rather than a broad downstream task suite.",
+            "Formal transfer now has trigger-derived and operator-intent labels, but not yet a broad downstream task suite.",
         ],
         next_actions=[
-            "Expand formal-transfer labels beyond the current five-query audit.",
+            "Expand formal-transfer labels into a broader downstream heldout task suite.",
             "Use dedup recommendations to merge complete formal equivalents after verifier approval.",
         ],
     )
@@ -593,6 +600,13 @@ def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
             max_behavior = max(max_behavior, 0.70)
         if best_brier is not None and weighted_rows >= 150.0 and float(best_brier) <= 0.07:
             max_behavior = max(max_behavior, 0.74)
+    if item.key == "G_formal_alignment_layer":
+        independent_queries = int(item.evidence.get("independent_transfer_search_query_count") or 0)
+        independent_top1 = float(item.evidence.get("independent_transfer_top1_hit_rate") or 0.0)
+        independent_auc = float(item.evidence.get("independent_transfer_pairwise_auc") or 0.0)
+        if independent_queries >= 9 and independent_top1 >= 0.8 and independent_auc >= 0.8:
+            max_structure = max(max_structure, 0.80)
+            max_behavior = max(max_behavior, 0.72)
     return max_structure, max_behavior
 
 

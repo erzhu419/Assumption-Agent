@@ -125,15 +125,20 @@ def search_formal_mappings(
     for summary in formal_mapping_payload.get("summaries", []):
         if summary.get("status") != FormalMappingStatus.COMPLETE.value:
             continue
-        score, matched_keywords, matched_regex = _mapping_trigger_score(summary, text)
+        trigger_score, matched_keywords, matched_regex = _mapping_trigger_score(summary, text)
+        operator_score, matched_operator_terms = _mapping_operator_score(summary, text)
+        score = trigger_score + operator_score
         if score < min_score:
             continue
         applications.append({
             "mapping_id": summary.get("mapping_id"),
             "source_key": summary.get("source_key"),
             "score": score,
+            "trigger_score": trigger_score,
+            "operator_score": operator_score,
             "matched_keywords": matched_keywords,
             "matched_regex": matched_regex,
+            "matched_operator_terms": matched_operator_terms,
             "constraint_operator": _collect_role_invariants(summary, FormalRole.CONSTRAINT.value),
             "decomposition_operator": _collect_role_invariants(summary, FormalRole.DECOMPOSITION.value),
             "verification_operator": _collect_role_invariants(summary, FormalRole.VERIFICATION.value),
@@ -234,6 +239,23 @@ def build_formal_search_eval_payload(
         ),
         "results": results,
     }
+
+
+def build_independent_formal_search_eval_payload(
+    formal_mapping_payload: dict,
+    *,
+    top_n: int | None = None,
+) -> dict:
+    """Build a formal-transfer audit from operator intent, not trigger cues."""
+
+    payload = build_formal_search_eval_payload(
+        formal_mapping_payload,
+        labeled_queries=_default_independent_formal_queries(formal_mapping_payload),
+        top_n=top_n,
+    )
+    payload["eval_kind"] = "independent_operator_intent"
+    payload["label_source"] = "operator_constraints_and_decomposition"
+    return payload
 
 
 def finite_kernel_metrics(source_kernel: list[list[float]], target_kernel: list[list[float]]) -> dict:
@@ -764,6 +786,84 @@ def _mapping_trigger_score(summary: dict, text: str) -> tuple[float, list[str], 
     return score, sorted(set(matched_keywords)), sorted(set(matched_regex))
 
 
+def _mapping_operator_score(summary: dict, text: str) -> tuple[float, list[str]]:
+    matched_terms: list[str] = []
+    score = 0.0
+    for term in _operator_terms(summary):
+        term_s = str(term.get("term") or "").strip()
+        if not term_s:
+            continue
+        if term_s.lower() in text:
+            matched_terms.append(term_s)
+            score += float(term.get("weight") or 0.0)
+    return round(score, 4), sorted(set(matched_terms))
+
+
+def _operator_terms(summary: dict) -> list[dict]:
+    terms: list[dict] = []
+    for node in summary.get("nodes", []):
+        role = node.get("role")
+        invariants = node.get("invariants", {})
+        if role == FormalRole.CONSTRAINT.value:
+            for value in invariants.get("required_substrings", []):
+                terms.append({"term": value, "weight": 1.2, "source": "constraint"})
+            for value in invariants.get("forbidden_substrings", []):
+                terms.append({"term": value, "weight": 0.6, "source": "constraint"})
+        elif role == FormalRole.DECOMPOSITION.value:
+            for step in invariants.get("steps", [])[:5]:
+                for value in _salient_terms(str(step))[:6]:
+                    terms.append({"term": value, "weight": 0.25, "source": "decomposition"})
+        elif role == FormalRole.VERIFICATION.value:
+            for value in _salient_terms(str(invariants.get("instruction") or ""))[:8]:
+                terms.append({"term": value, "weight": 0.35, "source": "verification"})
+    deduped: dict[str, dict] = {}
+    for term in terms:
+        key = str(term["term"]).strip().lower()
+        if not key:
+            continue
+        if key not in deduped or float(term["weight"]) > float(deduped[key]["weight"]):
+            deduped[key] = term
+    return sorted(deduped.values(), key=lambda row: (-float(row["weight"]), str(row["term"])))
+
+
+STOP_TERMS = {
+    "about",
+    "after",
+    "before",
+    "candidate",
+    "clear",
+    "current",
+    "define",
+    "first",
+    "including",
+    "rather",
+    "should",
+    "solution",
+    "system",
+    "their",
+    "there",
+    "these",
+    "which",
+    "while",
+    "without",
+}
+
+
+def _salient_terms(text: str) -> list[str]:
+    text = re.sub(r"^step\s+\d+\s*:\s*", "", text.strip(), flags=re.IGNORECASE)
+    zh_terms = [
+        term.strip()
+        for term in re.split(r"[，。；：、,.!?;:\s]+", text)
+        if 2 <= len(term.strip()) <= 12 and re.search(r"[\u4e00-\u9fff]", term)
+    ]
+    en_terms = [
+        term.lower()
+        for term in re.findall(r"[A-Za-z][A-Za-z_-]{4,}", text)
+        if term.lower() not in STOP_TERMS
+    ]
+    return list(dict.fromkeys([*zh_terms, *en_terms]))
+
+
 def _default_formal_search_queries(formal_mapping_payload: dict) -> list[dict]:
     queries = []
     for summary in formal_mapping_payload.get("summaries", []):
@@ -791,6 +891,49 @@ def _default_formal_search_queries(formal_mapping_payload: dict) -> list[dict]:
             "expected": summary.get("source_key"),
             "label_source": "generated_from_mapping_triggers",
             "trigger_cues": cues,
+        })
+    return sorted(queries, key=lambda row: str(row.get("expected") or ""))
+
+
+def _default_independent_formal_queries(formal_mapping_payload: dict) -> list[dict]:
+    queries = []
+    for summary in formal_mapping_payload.get("summaries", []):
+        if summary.get("status") != FormalMappingStatus.COMPLETE.value:
+            continue
+        constraints = [
+            term["term"]
+            for term in _operator_terms(summary)
+            if term.get("source") == "constraint"
+        ][:5]
+        decomp = [
+            term["term"]
+            for term in _operator_terms(summary)
+            if term.get("source") == "decomposition"
+        ][:8]
+        verifier = [
+            term["term"]
+            for term in _operator_terms(summary)
+            if term.get("source") == "verification"
+        ][:4]
+        query_parts = []
+        if constraints:
+            query_parts.append("必须满足的答案约束：" + "、".join(str(x) for x in constraints))
+        if decomp:
+            query_parts.append("应采用的处理意图：" + "、".join(str(x) for x in decomp))
+        if verifier:
+            query_parts.append("验证关注：" + "、".join(str(x) for x in verifier))
+        if not query_parts:
+            continue
+        queries.append({
+            "id": f"formal_independent::{summary.get('source_key')}",
+            "query": "；".join(query_parts) + "。",
+            "expected": summary.get("source_key"),
+            "label_source": "operator_constraints_and_decomposition",
+            "operator_terms": {
+                "constraints": constraints,
+                "decomposition": decomp,
+                "verification": verifier,
+            },
         })
     return sorted(queries, key=lambda row: str(row.get("expected") or ""))
 
@@ -908,8 +1051,12 @@ def main() -> None:
     ap.add_argument("--formal-dedup", action="store_true")
     ap.add_argument("--formal-search-eval", action="store_true")
     ap.add_argument("--formal-search-eval-out", default=None)
+    ap.add_argument("--independent-formal-search-eval", action="store_true")
+    ap.add_argument("--independent-formal-search-eval-out", default=None)
     ap.add_argument("--formal-transfer-eval", default=None)
     ap.add_argument("--formal-transfer-eval-out", default=None)
+    ap.add_argument("--independent-formal-transfer-eval", default=None)
+    ap.add_argument("--independent-formal-transfer-eval-out", default=None)
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
@@ -931,6 +1078,15 @@ def main() -> None:
             out = _resolve(root, args.formal_search_eval_out)
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(json.dumps(payload["formal_search_eval"], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.independent_formal_search_eval or args.independent_formal_search_eval_out:
+        payload["independent_formal_search_eval"] = build_independent_formal_search_eval_payload(payload)
+        if args.independent_formal_search_eval_out:
+            out = _resolve(root, args.independent_formal_search_eval_out)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(
+                json.dumps(payload["independent_formal_search_eval"], ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
     if args.formal_transfer_eval:
         metric_payload = payload.get("categorical_info_geometry") or build_categorical_info_geometry_payload(payload)
         payload["formal_transfer_eval"] = build_formal_transfer_eval_payload(
@@ -942,6 +1098,20 @@ def main() -> None:
             out = _resolve(root, args.formal_transfer_eval_out)
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(json.dumps(payload["formal_transfer_eval"], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.independent_formal_transfer_eval:
+        metric_payload = payload.get("categorical_info_geometry") or build_categorical_info_geometry_payload(payload)
+        payload["independent_formal_transfer_eval"] = build_formal_transfer_eval_payload(
+            formal_mapping_payload=payload,
+            metric_payload=metric_payload,
+            search_eval_payload=json.loads(_resolve(root, args.independent_formal_transfer_eval).read_text(encoding="utf-8")),
+        )
+        if args.independent_formal_transfer_eval_out:
+            out = _resolve(root, args.independent_formal_transfer_eval_out)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(
+                json.dumps(payload["independent_formal_transfer_eval"], ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.summary_out:
         out = _resolve(root, args.summary_out)

@@ -615,8 +615,11 @@ proposal ablation slices, yielding 161 rows, 141 trainable outcome rows, and a
 conservative weighted trainable count of 75.0 without secrets.
 Reconstruction progress auditing now compares the current implementation
 against `reconstruction/md/reconstruction.md` and reports structure 83.2%,
-behavior 74.2%, weighted 78.3%; the lowest behavior items are formal
-alignment, world-model distillation, and broader hypothesis generation.
+behavior 74.2%, weighted 78.3% after recursive trace expansion. Formal
+alignment validation now also includes an independent operator-intent transfer
+suite over 9 mappings with top-1 hit rate 1.0 and pairwise AUC 1.0, bringing
+the current reconstruction audit to structure 83.4%, behavior 74.7%, weighted
+78.6%; all nine audited mechanisms are now at least operational.
 Harness
 observer discovers 19 real artifact events from judgment/meta/log files and
 keeps full artifact-file coverage after the original backfill; current reruns

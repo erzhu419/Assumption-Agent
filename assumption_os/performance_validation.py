@@ -40,6 +40,7 @@ from .assumption_bench import build_assumption_bench_payload
 from .falsification import build_falsification_payload
 from .evolution_context import build_evolution_context_payload
 from .formal_mapping import (
+    build_independent_formal_search_eval_payload,
     build_categorical_info_geometry_payload,
     build_formal_dedup_payload,
     build_formal_mapping_payload,
@@ -1244,6 +1245,12 @@ def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
         metric_payload=metric_payload,
         search_eval_payload=search_eval_payload,
     )
+    independent_search_payload = build_independent_formal_search_eval_payload(formal_payload)
+    independent_transfer_payload = build_formal_transfer_eval_payload(
+        formal_mapping_payload=formal_payload,
+        metric_payload=metric_payload,
+        search_eval_payload=independent_search_payload,
+    )
     summaries = metric_payload["summaries"]
     same_shape = sum(1 for row in summaries if row["metrics"].get("same_shape"))
     warning_count = sum(len(row.get("warnings", [])) for row in summaries)
@@ -1260,8 +1267,12 @@ def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
             and warning_count == 0
             and dedup_control_ok
             and transfer_payload.get("pass", False)
+            and independent_transfer_payload.get("pass", False)
+            and independent_search_payload.get("top1_hit_rate", 0.0) >= 0.8
             and search_eval_payload.get("query_count", 0) >= complete_count
             and search_eval_payload.get("negative_application_count", 0) >= complete_count * max(0, complete_count - 1)
+            and independent_search_payload.get("query_count", 0) >= complete_count
+            and independent_search_payload.get("negative_application_count", 0) >= complete_count * max(0, complete_count - 1)
         ),
         "mapping_count": metric_payload["mapping_count"],
         "complete_count": complete_count,
@@ -1290,6 +1301,16 @@ def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
         "transfer_pairwise_auc": transfer_payload.get("pairwise_auc"),
         "transfer_positive_mean_score": transfer_payload.get("positive_mean_transfer_score"),
         "transfer_negative_mean_score": transfer_payload.get("negative_mean_transfer_score"),
+        "independent_transfer_eval_pass": independent_transfer_payload.get("pass", False),
+        "independent_transfer_search_query_count": independent_search_payload.get("query_count", 0),
+        "independent_transfer_search_top1_hit_rate": independent_search_payload.get("top1_hit_rate"),
+        "independent_transfer_search_negative_application_count": independent_search_payload.get("negative_application_count", 0),
+        "independent_transfer_query_count": independent_transfer_payload.get("query_count", 0),
+        "independent_transfer_application_count": independent_transfer_payload.get("application_count", 0),
+        "independent_transfer_top1_hit_rate": independent_transfer_payload.get("top1_hit_rate"),
+        "independent_transfer_pairwise_auc": independent_transfer_payload.get("pairwise_auc"),
+        "independent_transfer_positive_mean_score": independent_transfer_payload.get("positive_mean_transfer_score"),
+        "independent_transfer_negative_mean_score": independent_transfer_payload.get("negative_mean_transfer_score"),
     }
 
 
@@ -1591,7 +1612,8 @@ def _key_metric(name: str, section: dict) -> str:
         return (
             f"mappings={section['mapping_count']}, warnings={section['warning_count']}, "
             f"dedup={section.get('dedup_duplicate_cluster_count', 0)}, "
-            f"transfer_auc={section.get('transfer_pairwise_auc')}"
+            f"transfer_auc={section.get('transfer_pairwise_auc')}, "
+            f"ind_auc={section.get('independent_transfer_pairwise_auc')}"
         )
     return ""
 
