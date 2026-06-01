@@ -87,6 +87,7 @@ Current gaps being addressed:
 - 2026-06-01: Added formal-transfer correlation audit; current reconstruction closure is structure 82.6%, behavior 72.0%, weighted 76.8%.
 - 2026-06-01: Connected the trace collection to the outcome world model with source reliability weights. The outcome model now calibrates over 67 trainable rows / 38.0 weighted rows, emits 4 trace-policy proposals, and current reconstruction closure is structure 82.6%, behavior 72.6%, weighted 77.1%.
 - 2026-06-01: Added a feature-blend trace outcome predictor over problem features, activated-assumption counts, trace components, source reliability, and residual labels. Feature leave-one-out weighted Brier is 0.0621 versus 0.0858 for route-only, and current reconstruction closure is structure 82.6%, behavior 72.8%, weighted 77.2%.
+- 2026-06-01: Expanded formal-transfer evaluation from 5 hand-labeled queries to 9 mapping-covered queries with 72 explicit negative applications. Formal transfer now validates all complete mappings with top-1 hit rate 1.0 and pairwise AUC 1.0; current reconstruction closure is structure 82.8%, behavior 73.1%, weighted 77.5%.
 
 ## Closure Notes
 
@@ -99,6 +100,7 @@ Current gaps being addressed:
 - Formal mapping now has a real finite metric engine, scoped to finite stochastic kernels over typed formal roles rather than unrestricted theorem proving.
 - Formal mapping now also emits exact formal-equivalence dedup recommendations for complete mappings while excluding partial/unsafe mappings from merge plans.
 - Formal mapping now checks whether trigger score times finite-kernel quality predicts transfer hits; current five-query audit has top-1 hit rate 1.0 and pairwise AUC 1.0.
+- Formal transfer evaluation now has one generated positive query per complete mapping plus zero-score negative applications for all other mappings, so transfer scoring covers the full current formal layer.
 - Runtime memory surfaces are now in the graph, so future retrieval can access system-level assumptions instead of relying only on code modules and reports.
 - Live phase2 runs can now emit redacted first-party runtime trace events and write them directly as TrialManifests instead of depending only on post-hoc log parsing.
 - Runtime/cache traces can now be joined to pairwise judgments as trainable trace/outcome/residual rows; historical runs can use bounded artifact replay when first-party trace does not exist.
@@ -186,4 +188,26 @@ Results:
 - Trace outcome model: feature schema has 24 features; feature-blend LOO Brier is 0.0565 unweighted / 0.0621 weighted, better than route-only 0.0758 / 0.0858.
 - Trace policy proposals and preflight remain stable: 4 proposals, 3 targeted repairs, 4/4 ready for fresh ablation.
 - Reconstruction progress: structure 82.6%, behavior 72.8%, weighted 77.2%; lowest behavior items are now `G_formal_alignment_layer`, `C_world_model_simulator`, and `B_hypothesis_generator`.
+- AssumptionBench: 9 / 9 lifecycle capabilities pass; overall score 0.9968, minimum score 0.9716.
+
+## Performance Validation - Expanded Formal Transfer - 2026-06-01
+
+Command:
+
+```bash
+python3 -m assumption_os.performance_validation \
+  --root . \
+  --graph-dir "phase four/assumption_graph" \
+  --eval-id reconstruction_gap_perf_20260601_formal_expanded \
+  --summary-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_formal_expanded.json" \
+  --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_formal_expanded.md"
+```
+
+Results:
+
+- Overall: PASS.
+- Formal metrics: 9 complete mappings, 9/9 same-shape finite kernels, 0 warnings.
+- Formal search eval: 9 mapping-covered queries, 9/9 top-1 hits, 72 explicit negative applications.
+- Formal transfer eval: 81 transfer applications, top-1 hit rate 1.0, pairwise AUC 1.0, positive mean score 8.00862, negative mean score 0.033369.
+- Reconstruction progress: structure 82.8%, behavior 73.1%, weighted 77.5%; lowest behavior items are `C_world_model_simulator`, `G_formal_alignment_layer`, and `B_hypothesis_generator`.
 - AssumptionBench: 9 / 9 lifecycle capabilities pass; overall score 0.9968, minimum score 0.9716.

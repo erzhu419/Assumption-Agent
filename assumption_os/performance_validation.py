@@ -43,6 +43,7 @@ from .formal_mapping import (
     build_categorical_info_geometry_payload,
     build_formal_dedup_payload,
     build_formal_mapping_payload,
+    build_formal_search_eval_payload,
     build_formal_transfer_eval_payload,
 )
 from .graph_memory import JsonlGraphStore
@@ -1176,12 +1177,21 @@ def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
     metric_payload = build_categorical_info_geometry_payload(formal_payload)
     dedup_payload = build_formal_dedup_payload(formal_payload)
     dedup_control = _formal_dedup_positive_control()
-    search_eval_path = root / "phase four/assumption_graph/formal_mapping_search_eval_phase2_graph.json"
+    search_eval_candidates = [
+        root / "phase four/assumption_graph/formal_mapping_search_eval_expanded_phase2_graph.json",
+        root / "phase four/assumption_graph/formal_mapping_search_eval_phase2_graph.json",
+    ]
+    search_eval_path = next((path for path in search_eval_candidates if path.exists()), None)
+    search_eval_payload = (
+        json.loads(search_eval_path.read_text(encoding="utf-8"))
+        if search_eval_path
+        else build_formal_search_eval_payload(formal_payload)
+    )
     transfer_payload = build_formal_transfer_eval_payload(
         formal_mapping_payload=formal_payload,
         metric_payload=metric_payload,
-        search_eval_payload=json.loads(search_eval_path.read_text(encoding="utf-8")),
-    ) if search_eval_path.exists() else {"pass": False}
+        search_eval_payload=search_eval_payload,
+    )
     summaries = metric_payload["summaries"]
     same_shape = sum(1 for row in summaries if row["metrics"].get("same_shape"))
     warning_count = sum(len(row.get("warnings", [])) for row in summaries)
@@ -1198,6 +1208,8 @@ def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
             and warning_count == 0
             and dedup_control_ok
             and transfer_payload.get("pass", False)
+            and search_eval_payload.get("query_count", 0) >= complete_count
+            and search_eval_payload.get("negative_application_count", 0) >= complete_count * max(0, complete_count - 1)
         ),
         "mapping_count": metric_payload["mapping_count"],
         "complete_count": complete_count,
@@ -1216,6 +1228,10 @@ def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
             "incomplete_mapping_excluded_count": dedup_control["incomplete_mapping_excluded_count"],
         },
         "transfer_eval_pass": transfer_payload.get("pass", False),
+        "transfer_search_eval_path": _display_path(root, search_eval_path) if search_eval_path else "generated_in_memory",
+        "transfer_search_query_count": search_eval_payload.get("query_count", 0),
+        "transfer_search_top1_hit_rate": search_eval_payload.get("top1_hit_rate"),
+        "transfer_search_negative_application_count": search_eval_payload.get("negative_application_count", 0),
         "transfer_query_count": transfer_payload.get("query_count", 0),
         "transfer_application_count": transfer_payload.get("application_count", 0),
         "transfer_top1_hit_rate": transfer_payload.get("top1_hit_rate"),

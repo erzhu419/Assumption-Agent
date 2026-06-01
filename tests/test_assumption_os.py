@@ -31,6 +31,7 @@ from assumption_os.formal_mapping import (
     build_formal_dedup_payload,
     build_formal_mapping_gate_payload,
     build_formal_mapping_payload,
+    build_formal_search_eval_payload,
     build_formal_transfer_eval_payload,
     finite_kernel_metrics,
     format_formal_mapping_applications,
@@ -2085,6 +2086,39 @@ class AssumptionOSTest(unittest.TestCase):
             cluster = dedup["clusters"][0]
             self.assertEqual(cluster["merge_action"], "merge_complete_formal_equivalent")
             self.assertEqual(len(cluster["duplicate_mapping_ids"]), 1)
+
+    def test_formal_search_eval_builds_positive_and_negative_labels(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            for seed, keyword, required in [
+                ("WCAND_EXPECTED", "risk", "rollback"),
+                ("WCAND_OTHER", "speed", "latency"),
+            ]:
+                base = {
+                    "type": AssumptionType.HARNESS,
+                    "claim": f"formal search {seed}",
+                    "payload": {"seed_cid": seed},
+                    "tags": [seed],
+                }
+                for suffix, kind, expr in [
+                    ("feature", "feature", {"keywords_en": [keyword], "regex": []}),
+                    ("constraint", "constraint", {"required_substrings": [required]}),
+                    ("decomp", "decomposition", {"steps": ["identify", "verify"]}),
+                    ("verify", "verification", {"instruction": f"check {required}"}),
+                    ("hp", "hp_change", {"temperature": 0.0, "max_tokens": 1000}),
+                ]:
+                    store.upsert_node(AssumptionNode(
+                        id=f"{seed}_{suffix}",
+                        kind=kind,
+                        formal_form={"kind": kind, "expr": expr},
+                        **base,
+                    ))
+            formal_payload = build_formal_mapping_payload(store)
+            search_eval = build_formal_search_eval_payload(formal_payload)
+            self.assertEqual(search_eval["query_count"], 2)
+            self.assertEqual(search_eval["pass_count"], 2)
+            self.assertEqual(search_eval["negative_application_count"], 2)
+            self.assertEqual(search_eval["top1_hit_rate"], 1.0)
 
     def test_formal_transfer_eval_scores_expected_mapping_above_distractor(self):
         with tempfile.TemporaryDirectory() as td:

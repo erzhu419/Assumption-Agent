@@ -179,6 +179,63 @@ def format_formal_mapping_applications(applications: list[dict], *, max_items: i
     return "\n".join(lines).strip()
 
 
+def build_formal_search_eval_payload(
+    formal_mapping_payload: dict,
+    *,
+    labeled_queries: list[dict] | None = None,
+    top_n: int | None = None,
+) -> dict:
+    """Build a labeled formal-transfer search audit.
+
+    The default query set creates one positive query for every complete mapping
+    from its trigger detector.  Search includes zero-score mappings as explicit
+    negatives so transfer correlation is measured over the whole formal layer,
+    not only over already-matched applications.
+    """
+
+    queries = labeled_queries or _default_formal_search_queries(formal_mapping_payload)
+    mapping_count = len([
+        summary for summary in formal_mapping_payload.get("summaries", [])
+        if summary.get("status") == FormalMappingStatus.COMPLETE.value
+    ])
+    top_n = top_n or max(1, mapping_count)
+    results = []
+    pass_count = 0
+    for query in queries:
+        applications = search_formal_mappings(
+            formal_mapping_payload,
+            str(query.get("query") or ""),
+            top_n=top_n,
+            min_score=0.0,
+        )
+        expected = query.get("expected")
+        top_source = applications[0].get("source_key") if applications else None
+        passed = top_source == expected
+        pass_count += int(passed)
+        results.append({
+            "id": query.get("id"),
+            "query": query.get("query"),
+            "expected": expected,
+            "label_source": query.get("label_source", "generated_from_mapping_triggers"),
+            "top_source_key": top_source,
+            "passed": passed,
+            "application_count": len(applications),
+            "applications": applications,
+        })
+    return {
+        "mapping_count": formal_mapping_payload.get("mapping_count", 0),
+        "status_counts": formal_mapping_payload.get("status_counts", {}),
+        "query_count": len(queries),
+        "pass_count": pass_count,
+        "top1_hit_rate": round(pass_count / len(queries), 4) if queries else 0.0,
+        "negative_application_count": sum(
+            1 for result in results for app in result["applications"]
+            if app.get("source_key") != result.get("expected")
+        ),
+        "results": results,
+    }
+
+
 def finite_kernel_metrics(source_kernel: list[list[float]], target_kernel: list[list[float]]) -> dict:
     """Compare two finite stochastic kernels with information-geometry metrics.
 
@@ -707,6 +764,37 @@ def _mapping_trigger_score(summary: dict, text: str) -> tuple[float, list[str], 
     return score, sorted(set(matched_keywords)), sorted(set(matched_regex))
 
 
+def _default_formal_search_queries(formal_mapping_payload: dict) -> list[dict]:
+    queries = []
+    for summary in formal_mapping_payload.get("summaries", []):
+        if summary.get("status") != FormalMappingStatus.COMPLETE.value:
+            continue
+        feature_nodes = [
+            node for node in summary.get("nodes", [])
+            if node.get("role") == FormalRole.FEATURE.value
+        ]
+        zh_keywords = []
+        en_keywords = []
+        regexes = []
+        for node in feature_nodes:
+            invariants = node.get("invariants", {})
+            zh_keywords.extend(str(value) for value in invariants.get("keywords_zh", []) if value)
+            en_keywords.extend(str(value) for value in invariants.get("keywords_en", []) if value)
+            regexes.extend(str(value) for value in invariants.get("regex", []) if value)
+        cues = sorted(set(zh_keywords))[:6] + sorted(set(en_keywords))[:2]
+        if not cues and regexes:
+            cues = regexes[:2]
+        query = "这个任务触发了形式映射信号：" + "、".join(cues) + "；需要选择对应的约束、分解、验证和运行策略。"
+        queries.append({
+            "id": f"formal_auto::{summary.get('source_key')}",
+            "query": query,
+            "expected": summary.get("source_key"),
+            "label_source": "generated_from_mapping_triggers",
+            "trigger_cues": cues,
+        })
+    return sorted(queries, key=lambda row: str(row.get("expected") or ""))
+
+
 def _collect_role_invariants(summary: dict, role: str) -> list[dict]:
     return [
         node.get("invariants", {})
@@ -818,7 +906,10 @@ def main() -> None:
     ap.add_argument("--top-n", type=int, default=3)
     ap.add_argument("--formal-metrics", action="store_true")
     ap.add_argument("--formal-dedup", action="store_true")
+    ap.add_argument("--formal-search-eval", action="store_true")
+    ap.add_argument("--formal-search-eval-out", default=None)
     ap.add_argument("--formal-transfer-eval", default=None)
+    ap.add_argument("--formal-transfer-eval-out", default=None)
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
@@ -834,6 +925,12 @@ def main() -> None:
         payload["categorical_info_geometry"] = build_categorical_info_geometry_payload(payload)
     if args.formal_dedup:
         payload["formal_dedup"] = build_formal_dedup_payload(payload)
+    if args.formal_search_eval or args.formal_search_eval_out:
+        payload["formal_search_eval"] = build_formal_search_eval_payload(payload)
+        if args.formal_search_eval_out:
+            out = _resolve(root, args.formal_search_eval_out)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps(payload["formal_search_eval"], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if args.formal_transfer_eval:
         metric_payload = payload.get("categorical_info_geometry") or build_categorical_info_geometry_payload(payload)
         payload["formal_transfer_eval"] = build_formal_transfer_eval_payload(
@@ -841,6 +938,10 @@ def main() -> None:
             metric_payload=metric_payload,
             search_eval_payload=json.loads(_resolve(root, args.formal_transfer_eval).read_text(encoding="utf-8")),
         )
+        if args.formal_transfer_eval_out:
+            out = _resolve(root, args.formal_transfer_eval_out)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps(payload["formal_transfer_eval"], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.summary_out:
         out = _resolve(root, args.summary_out)

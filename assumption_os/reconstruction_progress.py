@@ -357,6 +357,7 @@ def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
         float(formal.get("warning_count", 1) == 0),
         float(formal.get("dedup_pass", False)),
         _cap(formal.get("dedup_complete_mapping_count", 0) / max(1, formal.get("mapping_count", 1))),
+        _cap(formal.get("transfer_search_query_count", formal.get("transfer_query_count", 0)) / max(1, formal.get("complete_count", 1))),
         _cap(formal.get("transfer_pairwise_auc", 0.0)),
         _cap(formal.get("transfer_top1_hit_rate", 0.0)),
     ])
@@ -375,10 +376,12 @@ def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
             "dedup_positive_control": formal.get("dedup_positive_control"),
             "transfer_top1_hit_rate": formal.get("transfer_top1_hit_rate"),
             "transfer_pairwise_auc": formal.get("transfer_pairwise_auc"),
+            "transfer_search_query_count": formal.get("transfer_search_query_count"),
+            "transfer_search_negative_application_count": formal.get("transfer_search_negative_application_count"),
         },
         remaining_gaps=[
             "Formal mapping is an audit/gate over finite kernels, not a full category-theoretic or information-geometric reasoning engine.",
-            "Formal transfer correlation is validated on a small labeled query audit, not a broad downstream task suite.",
+            "Formal transfer correlation now covers each complete mapping, but labels are still trigger-derived rather than a broad downstream task suite.",
         ],
         next_actions=[
             "Expand formal-transfer labels beyond the current five-query audit.",
@@ -536,7 +539,7 @@ RECONSTRUCTION_CEILINGS = {
     "D_verifier_stack": (0.82, 0.74),
     "E_residual_analyzer": (0.82, 0.74),
     "F_metaproductivity_selector": (0.80, 0.70),
-    "G_formal_alignment_layer": (0.76, 0.65),
+    "G_formal_alignment_layer": (0.78, 0.68),
     "recursive_execution_loop": (0.85, 0.76),
     "assumption_bench_evaluation": (0.88, 0.82),
 }
