@@ -962,9 +962,13 @@ def _validate_trace_outcome_model(*, root: Path) -> dict:
         min_policy_group_size=2,
     )
     metrics = payload["leave_one_out_metrics"]
+    feature_metrics = payload["feature_leave_one_out_metrics"]
     brier = metrics.get("weighted_brier_score")
     if brier is None:
         brier = metrics.get("brier_score")
+    feature_brier = feature_metrics.get("weighted_brier_score")
+    if feature_brier is None:
+        feature_brier = feature_metrics.get("brier_score")
     loss_updates = [
         row for row in payload["policy_updates"]
         if row["decision"] in {"keep_with_targeted_repair", "repair_before_scaling"}
@@ -983,6 +987,8 @@ def _validate_trace_outcome_model(*, root: Path) -> dict:
             and len(loss_updates) >= 1
             and brier is not None
             and brier <= max_brier
+            and feature_brier is not None
+            and feature_brier <= brier
             and not payload["secret_leak_detected"]
         ),
         "trace_dataset_path": _display_path(root, trace_dataset_path),
@@ -997,6 +1003,8 @@ def _validate_trace_outcome_model(*, root: Path) -> dict:
         "policy_update_count": payload["policy_update_count"],
         "loss_policy_update_count": len(loss_updates),
         "leave_one_out_metrics": metrics,
+        "feature_leave_one_out_metrics": feature_metrics,
+        "feature_schema": payload["feature_schema"],
         "route_stats": payload["route_stats"],
         "policy_updates": payload["policy_updates"],
         "secret_leak_detected": payload["secret_leak_detected"],

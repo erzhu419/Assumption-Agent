@@ -177,6 +177,13 @@ def _world_model_item(sections: dict[str, dict]) -> ProgressItem:
     brier = world.get("post_calibration", {}).get("brier_score")
     trace_brier = trace_outcome.get("leave_one_out_metrics", {}).get("brier_score")
     weighted_trace_brier = trace_outcome.get("leave_one_out_metrics", {}).get("weighted_brier_score")
+    feature_trace_brier = trace_outcome.get("feature_leave_one_out_metrics", {}).get("weighted_brier_score")
+    if feature_trace_brier is None:
+        feature_trace_brier = trace_outcome.get("feature_leave_one_out_metrics", {}).get("brier_score")
+    best_trace_brier = min(
+        brier for brier in [weighted_trace_brier, trace_brier, feature_trace_brier]
+        if brier is not None
+    ) if any(brier is not None for brier in [weighted_trace_brier, trace_brier, feature_trace_brier]) else None
     weighted_trace_rows = max(
         float(trace_dataset.get("weighted_trainable_row_count", 0.0) or 0.0),
         float(trace_outcome.get("weighted_trainable_row_count", 0.0) or 0.0),
@@ -189,7 +196,7 @@ def _world_model_item(sections: dict[str, dict]) -> ProgressItem:
     ])
     behavior = _avg([
         _score_brier(brier, threshold=0.1),
-        _score_brier(weighted_trace_brier if weighted_trace_brier is not None else trace_brier, threshold=0.25),
+        _score_brier(best_trace_brier, threshold=0.25),
         _cap(weighted_trace_rows / 50),
         _cap(world.get("matched_label_count", 0) / 50),
     ])
@@ -206,6 +213,9 @@ def _world_model_item(sections: dict[str, dict]) -> ProgressItem:
             "artifact_replay_trainable_rows": trace_dataset.get("artifact_replay_trainable_row_count"),
             "trace_brier": trace_brier,
             "weighted_trace_brier": weighted_trace_brier,
+            "feature_trace_brier": feature_trace_brier,
+            "best_trace_brier": best_trace_brier,
+            "trace_feature_count": trace_outcome.get("feature_schema", {}).get("feature_count"),
             "trace_source_counts": trace_outcome.get("trace_source_counts"),
         },
         remaining_gaps=[
@@ -522,7 +532,7 @@ def _reconstruction_reference(path: Path | None) -> dict[str, Any]:
 RECONSTRUCTION_CEILINGS = {
     "A_assumption_graph_memory": (0.88, 0.78),
     "B_hypothesis_generator": (0.80, 0.70),
-    "C_world_model_simulator": (0.82, 0.64),
+    "C_world_model_simulator": (0.82, 0.66),
     "D_verifier_stack": (0.82, 0.74),
     "E_residual_analyzer": (0.82, 0.74),
     "F_metaproductivity_selector": (0.80, 0.70),

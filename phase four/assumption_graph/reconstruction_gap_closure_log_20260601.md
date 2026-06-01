@@ -86,6 +86,7 @@ Current gaps being addressed:
 - 2026-06-01: Added trace-dataset collection across first-party and artifact-replay math/science slices; current reconstruction closure is structure 82.1%, behavior 71.2%, weighted 76.1%.
 - 2026-06-01: Added formal-transfer correlation audit; current reconstruction closure is structure 82.6%, behavior 72.0%, weighted 76.8%.
 - 2026-06-01: Connected the trace collection to the outcome world model with source reliability weights. The outcome model now calibrates over 67 trainable rows / 38.0 weighted rows, emits 4 trace-policy proposals, and current reconstruction closure is structure 82.6%, behavior 72.6%, weighted 77.1%.
+- 2026-06-01: Added a feature-blend trace outcome predictor over problem features, activated-assumption counts, trace components, source reliability, and residual labels. Feature leave-one-out weighted Brier is 0.0621 versus 0.0858 for route-only, and current reconstruction closure is structure 82.6%, behavior 72.8%, weighted 77.2%.
 
 ## Closure Notes
 
@@ -106,6 +107,7 @@ Current gaps being addressed:
 - Trace policy proposals now bridge route-policy learning into the existing candidate/verifier/recursive-executor intake path.
 - Trace policy preflight verifies trigger routing before any expensive fresh ablation.
 - Trace outcome calibration now prefers the collection artifact and weights first-party runtime rows at 1.0 and artifact-replay rows at 0.5, so replay evidence can expand coverage without overpowering live traces.
+- Trace outcome modeling now includes a feature-blend cheap predictor, so world-model validation is no longer only a route-frequency table.
 - Reconstruction progress is now part of performance validation and is capped against the full `reconstruction.md` target, so passing local artifacts do not overstate maturity.
 
 ## Performance Validation - 2026-06-01
@@ -163,4 +165,25 @@ Results:
 - Trace policy proposals: 4 `assumption_revision` proposals, 3 targeted repairs, all with heldout-route ablation verifiers.
 - Trace policy preflight: 4/4 proposals ready for fresh ablation, 0 missed trigger rows, 0 outside-active rows, command hints emitted.
 - Reconstruction progress: structure 82.6%, behavior 72.6%, weighted 77.1%; lowest behavior items remain `C_world_model_simulator`, `G_formal_alignment_layer`, and `B_hypothesis_generator`.
+- AssumptionBench: 9 / 9 lifecycle capabilities pass; overall score 0.9968, minimum score 0.9716.
+
+## Performance Validation - Feature Trace Outcome - 2026-06-01
+
+Command:
+
+```bash
+python3 -m assumption_os.performance_validation \
+  --root . \
+  --graph-dir "phase four/assumption_graph" \
+  --eval-id reconstruction_gap_perf_20260601_feature_trace \
+  --summary-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_feature_trace.json" \
+  --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_feature_trace.md"
+```
+
+Results:
+
+- Overall: PASS.
+- Trace outcome model: feature schema has 24 features; feature-blend LOO Brier is 0.0565 unweighted / 0.0621 weighted, better than route-only 0.0758 / 0.0858.
+- Trace policy proposals and preflight remain stable: 4 proposals, 3 targeted repairs, 4/4 ready for fresh ablation.
+- Reconstruction progress: structure 82.6%, behavior 72.8%, weighted 77.2%; lowest behavior items are now `G_formal_alignment_layer`, `C_world_model_simulator`, and `B_hypothesis_generator`.
 - AssumptionBench: 9 / 9 lifecycle capabilities pass; overall score 0.9968, minimum score 0.9716.

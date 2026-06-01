@@ -44,6 +44,10 @@ def build_trace_outcome_model_payload(
         _predict_leave_one_out(row=row, train_rows=[other for other in rows if other is not row])
         for row in rows
     ]
+    feature_predictions = [
+        _predict_feature_leave_one_out(row=row, train_rows=[other for other in rows if other is not row])
+        for row in rows
+    ]
     route_stats = _group_stats(rows, key_fn=_route_key)
     component_stats = _group_stats(rows, key_fn=_component_key)
     domain_stats = _group_stats(rows, key_fn=lambda row: f"domain={row.get('domain') or 'unknown'}")
@@ -66,6 +70,8 @@ def build_trace_outcome_model_payload(
         "domain_group_count": len(domain_stats),
         "residual_group_count": len(residual_stats),
         "leave_one_out_metrics": _prediction_metrics(predictions),
+        "feature_leave_one_out_metrics": _prediction_metrics(feature_predictions),
+        "feature_schema": _trace_feature_schema(rows),
         "route_stats": route_stats,
         "component_stats": component_stats,
         "domain_stats": domain_stats,
@@ -73,6 +79,7 @@ def build_trace_outcome_model_payload(
         "policy_update_count": len(policy_updates),
         "policy_updates": policy_updates,
         "predictions": predictions,
+        "feature_predictions": feature_predictions,
     }
     clean = redact_secrets(payload)
     clean["secret_leak_detected"] = _contains_secret(clean)
@@ -152,6 +159,75 @@ def _predict_leave_one_out(*, row: dict[str, Any], train_rows: list[dict[str, An
         "support_win_count": wins,
         "support_weight": round(support_weight, 4),
         "support_weighted_win_count": round(weighted_wins, 4),
+        "predicted_win_probability": round(probability, 4),
+        "predicted_outcome": predicted_outcome,
+        "observed_outcome": row.get("outcome"),
+        "label": label,
+        "absolute_error": round(abs(probability - label), 4),
+        "brier": round((probability - label) ** 2, 4),
+        "residual_type": row.get("residual_type"),
+    }
+
+
+def _predict_feature_leave_one_out(*, row: dict[str, Any], train_rows: list[dict[str, Any]]) -> dict:
+    row_features = _trace_feature_keys(row)
+    global_weight = sum(_row_weight(other) for other in train_rows)
+    global_weighted_wins = sum(_row_weight(other) for other in train_rows if other.get("outcome") == "win")
+    global_probability = (
+        (global_weighted_wins + 1.0) / (global_weight + 2.0)
+        if global_weight else 0.5
+    )
+    terms = [{
+        "feature": "global_prior",
+        "support_count": len(train_rows),
+        "support_weight": round(global_weight, 4),
+        "weighted_win_count": round(global_weighted_wins, 4),
+        "blend_weight": 2.0,
+        "win_probability": round(global_probability, 4),
+    }]
+    train_feature_sets = [(other, _trace_feature_keys(other)) for other in train_rows]
+    for feature in row_features:
+        bucket = [other for other, feature_set in train_feature_sets if feature in feature_set]
+        support_weight = sum(_row_weight(other) for other in bucket)
+        if support_weight <= 0.0:
+            continue
+        weighted_wins = sum(_row_weight(other) for other in bucket if other.get("outcome") == "win")
+        probability = (weighted_wins + 1.0) / (support_weight + 2.0)
+        terms.append({
+            "feature": feature,
+            "support_count": len(bucket),
+            "support_weight": round(support_weight, 4),
+            "weighted_win_count": round(weighted_wins, 4),
+            "blend_weight": round(min(4.0, support_weight), 4),
+            "win_probability": round(probability, 4),
+        })
+    total_blend_weight = sum(float(term["blend_weight"]) for term in terms)
+    probability = (
+        sum(float(term["blend_weight"]) * float(term["win_probability"]) for term in terms) / total_blend_weight
+        if total_blend_weight else 0.5
+    )
+    label = 1.0 if row.get("outcome") == "win" else 0.0
+    predicted_outcome = "win" if probability >= 0.5 else "loss"
+    top_features = sorted(
+        [term for term in terms if term["feature"] != "global_prior"],
+        key=lambda term: (-float(term["blend_weight"]), str(term["feature"])),
+    )[:8]
+    return {
+        "prediction_id": stable_id("trace_feature_pred", row.get("row_id")),
+        "row_id": row.get("row_id"),
+        "problem_id": row.get("problem_id"),
+        "domain": row.get("domain"),
+        "bypass_route": row.get("bypass_route"),
+        "trace_source": _trace_source(row),
+        "row_weight": _row_weight(row),
+        "selected_level": "feature_blend",
+        "selected_key": "feature_blend",
+        "feature_count": len(row_features),
+        "matched_feature_count": len(terms) - 1,
+        "support_count": len(train_rows),
+        "support_weight": round(global_weight, 4),
+        "support_weighted_win_count": round(global_weighted_wins, 4),
+        "top_features": top_features,
         "predicted_win_probability": round(probability, 4),
         "predicted_outcome": predicted_outcome,
         "observed_outcome": row.get("outcome"),
@@ -343,6 +419,47 @@ def _trace_source_weighted_counts(rows: list[dict[str, Any]]) -> dict[str, float
     for row in rows:
         counts[_trace_source(row)] += _row_weight(row)
     return {key: round(value, 4) for key, value in sorted(counts.items())}
+
+
+def _trace_feature_keys(row: dict[str, Any]) -> set[str]:
+    features = row.get("features") or {}
+    out: set[str] = set()
+    for key in ("domain", "difficulty", "frame", "bypass_route", "residual_type"):
+        value = row.get(key)
+        if value is None:
+            value = features.get(key)
+        if value is not None:
+            out.add(f"{key}={value}")
+    out.add(f"trace_source={_trace_source(row)}")
+    for component in row.get("components") or []:
+        out.add(f"component={component}")
+    for event_name in (row.get("event_counts") or {}).keys():
+        out.add(f"event={event_name}")
+    for component_name, count in (row.get("component_counts") or {}).items():
+        out.add(f"component_count:{component_name}={count}")
+    for key in ("active_assumption_count", "gold_hit", "trace_event_count"):
+        if key in features:
+            out.add(f"{key}={features[key]}")
+    active_assumption_ids = row.get("activated_assumption_ids") or []
+    out.add("active_assumption_count_bucket=0" if not active_assumption_ids else "active_assumption_count_bucket=1plus")
+    for assumption_id in active_assumption_ids[:8]:
+        out.add(f"active_assumption={assumption_id}")
+    for prompt_kind in row.get("prompt_kinds") or []:
+        out.add(f"prompt_kind={prompt_kind}")
+    return out
+
+
+def _trace_feature_schema(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    feature_counts = Counter(feature for row in rows for feature in _trace_feature_keys(row))
+    family_counts = Counter(feature.split("=", 1)[0].split(":", 1)[0] for feature in feature_counts)
+    return {
+        "feature_count": len(feature_counts),
+        "feature_family_counts": dict(sorted(family_counts.items())),
+        "top_features": [
+            {"feature": feature, "count": count}
+            for feature, count in feature_counts.most_common(20)
+        ],
+    }
 
 
 def _key_for_level(row: dict[str, Any], level: str) -> str:

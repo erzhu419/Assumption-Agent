@@ -1084,6 +1084,8 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(payload["route_group_count"], 2)
         self.assertEqual(payload["leave_one_out_metrics"]["prediction_count"], 3)
         self.assertEqual(payload["leave_one_out_metrics"]["weighted_prediction_count"], 3.0)
+        self.assertEqual(payload["feature_leave_one_out_metrics"]["prediction_count"], 3)
+        self.assertGreater(payload["feature_schema"]["feature_count"], 0)
         self.assertEqual(payload["policy_update_count"], 1)
         self.assertEqual(payload["policy_updates"][0]["decision"], "keep_with_targeted_repair")
         self.assertEqual(payload["route_stats"][0]["weighted_count"], 2.0)
