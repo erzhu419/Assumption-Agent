@@ -1012,12 +1012,16 @@ def _validate_trace_outcome_model(*, root: Path) -> dict:
     )
     metrics = payload["leave_one_out_metrics"]
     feature_metrics = payload["feature_leave_one_out_metrics"]
+    trajectory_metrics = payload["trajectory_quality_metrics"]
     brier = metrics.get("weighted_brier_score")
     if brier is None:
         brier = metrics.get("brier_score")
     feature_brier = feature_metrics.get("weighted_brier_score")
     if feature_brier is None:
         feature_brier = feature_metrics.get("brier_score")
+    trajectory_brier = trajectory_metrics.get("weighted_brier_score")
+    if trajectory_brier is None:
+        trajectory_brier = trajectory_metrics.get("brier_score")
     best_brier = min(
         value for value in [brier, feature_brier]
         if value is not None
@@ -1042,6 +1046,10 @@ def _validate_trace_outcome_model(*, root: Path) -> dict:
             and best_brier <= max_brier
             and feature_brier is not None
             and (brier is None or feature_brier <= brier)
+            and trajectory_brier is not None
+            and trajectory_brier <= 0.2
+            and trajectory_metrics.get("complete_draft_audit_final_count", 0) >= min_rows
+            and payload.get("trajectory_phase_schema", {}).get("phase_count", 0) >= 5
             and not payload["secret_leak_detected"]
         ),
         "trace_dataset_path": _display_path(root, trace_dataset_path),
@@ -1057,6 +1065,8 @@ def _validate_trace_outcome_model(*, root: Path) -> dict:
         "loss_policy_update_count": len(loss_updates),
         "leave_one_out_metrics": metrics,
         "feature_leave_one_out_metrics": feature_metrics,
+        "trajectory_quality_metrics": trajectory_metrics,
+        "trajectory_phase_schema": payload["trajectory_phase_schema"],
         "best_brier_score": best_brier,
         "feature_schema": payload["feature_schema"],
         "route_stats": payload["route_stats"],
@@ -1593,7 +1603,13 @@ def _key_metric(name: str, section: dict) -> str:
         return f"rows={section['trainable_row_count']}/{section['row_count']}, coverage={section['traced_outcome_coverage']}, leak={section['secret_leak_detected']}"
     if name == "trace_outcome_model":
         metrics = section.get("leave_one_out_metrics", {})
-        return f"rows={section.get('trainable_row_count', 0)}, brier={metrics.get('brier_score')}, updates={section.get('policy_update_count', 0)}"
+        trajectory = section.get("trajectory_quality_metrics", {})
+        return (
+            f"rows={section.get('trainable_row_count', 0)}, "
+            f"brier={metrics.get('brier_score')}, "
+            f"traj_brier={trajectory.get('weighted_brier_score') or trajectory.get('brier_score')}, "
+            f"updates={section.get('policy_update_count', 0)}"
+        )
     if name == "trace_policy_proposals":
         return f"proposals={section.get('proposal_count', 0)}, repair={section.get('repair_policy_count', 0)}, parent={section.get('parent_node_id')}"
     if name == "trace_policy_preflight":

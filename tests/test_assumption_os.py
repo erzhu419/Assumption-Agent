@@ -914,6 +914,9 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertIn("[REDACTED]", text)
             self.assertNotIn("unit-secret", text)
             self.assertNotIn("runtime-trace-secret", text)
+            event_rows = [json.loads(line) for line in text.splitlines() if line.strip()]
+            self.assertEqual(event_rows[0]["artifacts"]["trajectory_phase"], "retrieval")
+            self.assertEqual(event_rows[1]["artifacts"]["trajectory_phase"], "draft")
             updated = JsonlGraphStore(graph_dir)
             self.assertEqual(len(updated.trials), 2)
 
@@ -1001,6 +1004,12 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(payload["rows"][0]["intervention_variant"], "candidate")
             self.assertEqual(payload["rows"][0]["baseline_variant"], "baseline")
             self.assertEqual(payload["rows"][0]["judgment_pair"], "candidate_vs_baseline")
+            self.assertIn("retrieval", payload["rows"][0]["trajectory_phases"])
+            self.assertIn("draft", payload["rows"][0]["trajectory_phases"])
+            self.assertIn("artifact_final_replay", payload["rows"][1]["trajectory_phases"])
+            self.assertTrue(payload["rows"][1]["draft_audit_final_coverage"])
+            self.assertTrue(payload["rows"][2]["draft_audit_final_coverage"])
+            self.assertGreaterEqual(payload["trajectory_complete_count"], 2)
             self.assertFalse(payload["secret_leak_detected"])
             self.assertNotIn("unit-secret", json.dumps(payload))
             self.assertNotIn("trace-secret", json.dumps(payload))
@@ -1121,6 +1130,9 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(payload["leave_one_out_metrics"]["prediction_count"], 3)
         self.assertEqual(payload["leave_one_out_metrics"]["weighted_prediction_count"], 3.0)
         self.assertEqual(payload["feature_leave_one_out_metrics"]["prediction_count"], 3)
+        self.assertEqual(payload["trajectory_quality_metrics"]["prediction_count"], 3)
+        self.assertGreaterEqual(payload["trajectory_phase_schema"]["phase_count"], 5)
+        self.assertIn("draft", payload["trajectory_quality_metrics"]["phase_prediction_counts"])
         self.assertGreater(payload["feature_schema"]["feature_count"], 0)
         self.assertIn("intervention_variant", payload["feature_schema"]["feature_family_counts"])
         self.assertIn("baseline_variant", payload["feature_schema"]["feature_family_counts"])
@@ -1710,6 +1722,11 @@ class AssumptionOSTest(unittest.TestCase):
                     "pass": True,
                     "weighted_trainable_row_count": 75.0,
                     "feature_leave_one_out_metrics": {"weighted_brier_score": 0.071},
+                    "trajectory_quality_metrics": {
+                        "weighted_brier_score": 0.16,
+                        "complete_draft_audit_final_count": 75,
+                    },
+                    "trajectory_phase_schema": {"phase_count": 5},
                     "feature_schema": {"feature_count": 47},
                 },
             }
@@ -1720,8 +1737,9 @@ class AssumptionOSTest(unittest.TestCase):
                 eval_id="unit_world_model_ceiling",
             )
             world = next(row for row in payload["items"] if row["key"] == "C_world_model_simulator")
-            self.assertEqual(world["evidence"]["reconstruction_ceiling"]["behavior"], 0.7)
-            self.assertGreaterEqual(world["behavior_score"], 0.7)
+            self.assertEqual(world["evidence"]["reconstruction_ceiling"]["behavior"], 0.73)
+            self.assertEqual(world["evidence"]["reconstruction_ceiling"]["structure"], 0.84)
+            self.assertGreaterEqual(world["behavior_score"], 0.73)
 
     def test_memory_surfaces_write_runtime_mechanisms_to_graph(self):
         with tempfile.TemporaryDirectory() as td:

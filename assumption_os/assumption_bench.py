@@ -215,6 +215,7 @@ def _score_world_model_quality(sections: dict[str, dict]) -> CapabilityScore:
     trace_rows = int(trace_dataset.get("trainable_row_count") or 0)
     trace_metrics = trace_outcome.get("leave_one_out_metrics", {})
     feature_trace_metrics = trace_outcome.get("feature_leave_one_out_metrics", {})
+    trajectory_metrics = trace_outcome.get("trajectory_quality_metrics", {})
     trace_brier_candidates = [
         trace_metrics.get("weighted_brier_score"),
         trace_metrics.get("brier_score"),
@@ -225,12 +226,25 @@ def _score_world_model_quality(sections: dict[str, dict]) -> CapabilityScore:
         value is not None for value in trace_brier_candidates
     ) else None
     trace_quality = 0.0 if trace_brier is None else _cap(1.0 - min(trace_brier / 0.25, 1.0))
+    trajectory_brier_candidates = [
+        trajectory_metrics.get("weighted_brier_score"),
+        trajectory_metrics.get("brier_score"),
+    ]
+    trajectory_brier = min(float(value) for value in trajectory_brier_candidates if value is not None) if any(
+        value is not None for value in trajectory_brier_candidates
+    ) else None
+    trajectory_quality = 0.0 if trajectory_brier is None else _cap(1.0 - min(trajectory_brier / 0.35, 1.0))
+    trajectory_phase_coverage = _cap(
+        float(trajectory_metrics.get("complete_draft_audit_final_count") or 0.0) / max(1.0, float(trace_rows or 1))
+    )
     proposal_score = 0.45 * _cap(auc) + 0.35 * _cap(1.0 - min(brier / 0.1, 1.0)) + 0.2 * _cap((labels + trace_rows) / 16)
     trace_enhanced_score = (
-        0.4 * _cap(auc)
-        + 0.3 * _cap(1.0 - min(brier / 0.1, 1.0))
+        0.35 * _cap(auc)
+        + 0.25 * _cap(1.0 - min(brier / 0.1, 1.0))
         + 0.15 * _cap((labels + trace_rows) / 16)
         + 0.15 * trace_quality
+        + 0.07 * trajectory_quality
+        + 0.03 * trajectory_phase_coverage
     )
     score = max(proposal_score, trace_enhanced_score)
     return _capability(
@@ -243,6 +257,8 @@ def _score_world_model_quality(sections: dict[str, dict]) -> CapabilityScore:
             "trace_trainable_row_count": trace_rows,
             "trace_outcome_brier_score": trace_brier,
             "trace_feature_brier_score": feature_trace_metrics.get("weighted_brier_score"),
+            "trajectory_quality_brier_score": trajectory_brier,
+            "trajectory_phase_coverage": round(trajectory_phase_coverage, 4),
         },
         rationale="The cheap simulator ranks accepted candidates above rejected ones and calibrates after evidence.",
     )

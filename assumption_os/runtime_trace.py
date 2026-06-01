@@ -33,7 +33,7 @@ class RuntimeTraceRecorder:
     def record(self, **event: Any) -> None:
         if not self.enabled:
             return
-        self.events.append(redact_secrets(event))
+        self.events.append(redact_secrets(_normalize_runtime_event(event)))
 
     def record_llm_call(
         self,
@@ -46,6 +46,7 @@ class RuntimeTraceRecorder:
         observed_effect: str,
         why_selected: str = "This runner step requires an LLM inference.",
         status: str = "observed",
+        trajectory_phase: str | None = None,
         artifacts: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
@@ -59,7 +60,15 @@ class RuntimeTraceRecorder:
             observed_effect=observed_effect,
             status=status,
             verifier="runtime_trace",
-            artifacts={"prompt_kind": prompt_kind, **(artifacts or {})},
+            artifacts={
+                "prompt_kind": prompt_kind,
+                "trajectory_phase": trajectory_phase or _infer_trajectory_phase(
+                    event_type="llm_call",
+                    component=component,
+                    prompt_kind=prompt_kind,
+                ),
+                **(artifacts or {}),
+            },
             metadata=metadata or {},
         )
 
@@ -86,6 +95,7 @@ class RuntimeTraceRecorder:
             observed_effect=observed_effect or f"activated={len(activated_assumption_ids)}",
             verifier="runtime_trace",
             artifacts={
+                "trajectory_phase": "retrieval",
                 "activated_assumption_ids": activated_assumption_ids,
                 **(artifacts or {}),
             },
@@ -120,3 +130,41 @@ class RuntimeTraceRecorder:
             self.summary_out.parent.mkdir(parents=True, exist_ok=True)
             self.summary_out.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return payload
+
+
+def _normalize_runtime_event(event: dict[str, Any]) -> dict[str, Any]:
+    clean = dict(event)
+    artifacts = dict(clean.get("artifacts") or {})
+    metadata = dict(clean.get("metadata") or {})
+    if "trajectory_phase" not in artifacts and "trajectory_phase" not in metadata:
+        phase = _infer_trajectory_phase(
+            event_type=str(clean.get("event_type") or clean.get("action_type") or ""),
+            component=str(clean.get("component") or ""),
+            prompt_kind=str(artifacts.get("prompt_kind") or ""),
+        )
+        if phase:
+            artifacts["trajectory_phase"] = phase
+    clean["artifacts"] = artifacts
+    clean["metadata"] = metadata
+    return clean
+
+
+def _infer_trajectory_phase(*, event_type: str, component: str, prompt_kind: str = "") -> str | None:
+    text = " ".join([event_type, component, prompt_kind]).lower()
+    if "retrieval" in text:
+        return "retrieval"
+    if "frame_rewrite" in text or "turn0" in text:
+        return "frame"
+    if "execute_v20" in text or "turn1" in text or "draft" in text:
+        return "draft"
+    if "reflect_v20" in text or "turn2" in text or "audit" in text or "revise" in text:
+        return "audit_final"
+    if "math_science" in text or "hygiene" in text or "bridge" in text:
+        return "direct_final"
+    if "cache_hit" in text or "artifact_replay" in text:
+        return "artifact_final_replay"
+    if event_type == "judge_call":
+        return "judge"
+    if event_type == "tool_use":
+        return "tool"
+    return None

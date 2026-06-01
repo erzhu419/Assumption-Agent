@@ -60,7 +60,7 @@ def build_trace_dataset_payload(
         trace_source = "first_party_runtime" if events else "missing"
         first_party_trace = bool(events)
         if not events and allow_artifact_trace:
-            events = [_artifact_replay_event(problem=problem, meta=meta, meta_path=meta_path)]
+            events = _artifact_replay_events(problem=problem, meta=meta, meta_path=meta_path)
             trace_source = "artifact_replay"
 
         rows.append(_build_row(
@@ -115,9 +115,11 @@ def build_trace_dataset_collection_payload(
     residual_type_counts = Counter(row.get("residual_type") for row in rows)
     event_counts: Counter[str] = Counter()
     component_counts: Counter[str] = Counter()
+    trajectory_phase_counts: Counter[str] = Counter()
     for row in rows:
         event_counts.update(row.get("event_counts", {}))
         component_counts.update(row.get("component_counts", {}))
+        trajectory_phase_counts.update(row.get("phase_event_counts", {}))
 
     trainable_rows = [row for row in rows if row.get("trainable")]
     first_party_trainable = [
@@ -150,6 +152,8 @@ def build_trace_dataset_collection_payload(
         "residual_type_counts": {str(k): v for k, v in residual_type_counts.items() if k},
         "event_counts": dict(event_counts),
         "component_counts": dict(component_counts),
+        "trajectory_phase_counts": dict(trajectory_phase_counts),
+        "trajectory_complete_count": sum(1 for row in rows if _has_draft_audit_final(row.get("trajectory_phases", []))),
         "rows": rows,
     }
     clean_payload = redact_secrets(payload)
@@ -187,6 +191,9 @@ def _build_row(
     )
     event_counts = Counter(str(event.get("event_type") or event.get("action_type") or "unknown") for event in events)
     component_counts = Counter(str(event.get("component") or "unknown") for event in events)
+    phase_counts = Counter(_trajectory_phase(event) for event in events)
+    phase_counts.pop(None, None)
+    trajectory_phases = sorted(phase_counts)
     active_ids = _collect_assumption_ids(events)
     gold_ids = {f"strategy_{sid}" for sid in problem.get("coverage_tags", [])}
     gold_hit = bool(gold_ids & set(active_ids))
@@ -216,6 +223,10 @@ def _build_row(
         "trace_event_count": len(events),
         "event_counts": dict(event_counts),
         "component_counts": dict(component_counts),
+        "phase_event_counts": dict(phase_counts),
+        "trajectory_phases": trajectory_phases,
+        "trajectory_phase_count": len(trajectory_phases),
+        "draft_audit_final_coverage": _has_draft_audit_final(trajectory_phases),
         "components": sorted(component_counts),
         "prompt_kinds": sorted({
             str((event.get("artifacts") or {}).get("prompt_kind"))
@@ -247,6 +258,9 @@ def _build_row(
             "trace_event_count": len(events),
             "event_counts": dict(event_counts),
             "component_counts": dict(component_counts),
+            "phase_event_counts": dict(phase_counts),
+            "trajectory_phase_count": len(trajectory_phases),
+            "draft_audit_final_coverage": _has_draft_audit_final(trajectory_phases),
             "active_assumption_count": len(active_ids),
             "gold_hit": gold_hit,
         },
@@ -271,9 +285,11 @@ def _summarize_rows(
     residual_type_counts = Counter(row["residual_type"] for row in rows)
     event_counts: Counter[str] = Counter()
     component_counts: Counter[str] = Counter()
+    trajectory_phase_counts: Counter[str] = Counter()
     for row in rows:
         event_counts.update(row["event_counts"])
         component_counts.update(row["component_counts"])
+        trajectory_phase_counts.update(row.get("phase_event_counts", {}))
     judged_rows = [row for row in rows if row["outcome"] in {"win", "loss", "tie"}]
     trace_rows = [row for row in judged_rows if row["trace_event_count"] > 0]
     trainable_rows = [row for row in rows if row["trainable"]]
@@ -300,6 +316,8 @@ def _summarize_rows(
         "residual_type_counts": dict(residual_type_counts),
         "event_counts": dict(event_counts),
         "component_counts": dict(component_counts),
+        "trajectory_phase_counts": dict(trajectory_phase_counts),
+        "trajectory_complete_count": sum(1 for row in rows if row.get("draft_audit_final_coverage")),
         "traced_outcome_coverage": round(len(trace_rows) / len(judged_rows), 4) if judged_rows else 0.0,
         "assumption_id_coverage": round(
             sum(1 for row in trace_rows if row["activated_assumption_ids"]) / len(trace_rows),
@@ -333,6 +351,18 @@ def _normalize_event(event: dict[str, Any], *, source: str) -> dict[str, Any]:
     clean.setdefault("event_type", clean.get("action_type", "unknown"))
     clean.setdefault("artifacts", {})
     clean.setdefault("metadata", {})
+    artifacts = dict(clean.get("artifacts") or {})
+    metadata = dict(clean.get("metadata") or {})
+    if "trajectory_phase" not in artifacts and "trajectory_phase" not in metadata:
+        phase = _infer_trajectory_phase(
+            event_type=str(clean.get("event_type") or ""),
+            component=str(clean.get("component") or ""),
+            prompt_kind=str(artifacts.get("prompt_kind") or ""),
+        )
+        if phase:
+            artifacts["trajectory_phase"] = phase
+    clean["artifacts"] = artifacts
+    clean["metadata"] = metadata
     clean["metadata"] = {**clean.get("metadata", {}), "trace_event_source": source}
     return clean
 
@@ -350,21 +380,42 @@ def _event_from_manifest(manifest: dict[str, Any], *, source: str) -> dict[str, 
     }, source=source)
 
 
-def _artifact_replay_event(*, problem: dict[str, Any], meta: dict[str, Any], meta_path: Path) -> dict[str, Any]:
-    return {
+def _artifact_replay_events(*, problem: dict[str, Any], meta: dict[str, Any], meta_path: Path) -> list[dict[str, Any]]:
+    base = {
         "event_type": "tool_use",
         "problem_id": problem.get("problem_id"),
-        "component": "artifact_replay_answer_meta",
         "assumption": "Cached answer metadata can be replayed as bounded trace input when first-party runtime trace is unavailable.",
-        "artifacts": {
-            "path": str(meta_path),
-            "domain": problem.get("domain"),
-            "difficulty": problem.get("difficulty"),
-            "frame": meta.get("frame"),
-            "bypass_route": meta.get("bypass_route"),
-        },
         "metadata": {"trace_event_source": "artifact_replay"},
     }
+    shared_artifacts = {
+        "path": str(meta_path),
+        "domain": problem.get("domain"),
+        "difficulty": problem.get("difficulty"),
+        "frame": meta.get("frame"),
+        "bypass_route": meta.get("bypass_route"),
+    }
+    return [
+        {
+            **base,
+            "component": "artifact_replay_frame_meta",
+            "artifacts": {**shared_artifacts, "trajectory_phase": "frame"},
+        },
+        {
+            **base,
+            "component": "artifact_replay_draft_proxy",
+            "artifacts": {**shared_artifacts, "trajectory_phase": "draft"},
+        },
+        {
+            **base,
+            "component": "artifact_replay_audit_proxy",
+            "artifacts": {**shared_artifacts, "trajectory_phase": "audit"},
+        },
+        {
+            **base,
+            "component": "artifact_replay_final_answer",
+            "artifacts": {**shared_artifacts, "trajectory_phase": "final"},
+        },
+    ]
 
 
 def _collect_assumption_ids(events: Iterable[dict[str, Any]]) -> list[str]:
@@ -465,7 +516,12 @@ def _residual_for_row(
             ResidualType.MEMORY_DEFECT,
             f"Active assumptions missed the sample gold tags and {baseline_variant} won; update retrieval memory. Judge: {reason}",
         )
-    if meta.get("bypass_route") or "phase2_math_science_bypass" in component_counts or "phase2_cache_hit" in component_counts:
+    if (
+        meta.get("bypass_route")
+        or "phase2_math_science_bypass" in component_counts
+        or "phase2_cache_hit" in component_counts
+        or any(str(component).startswith("artifact_replay") for component in component_counts)
+    ):
         return (
             ResidualType.OPTIMIZATION,
             f"No graph ids fired, but bypass/cache route {meta.get('bypass_route')} lost; optimize the bypass bridge. Judge: {reason}",
@@ -523,6 +579,48 @@ def _score_delta(a: float | None, b: float | None) -> float | None:
     if a is None or b is None:
         return None
     return round(a - b, 4)
+
+
+def _trajectory_phase(event: dict[str, Any]) -> str | None:
+    artifacts = event.get("artifacts") or {}
+    metadata = event.get("metadata") or {}
+    phase = artifacts.get("trajectory_phase") or metadata.get("trajectory_phase")
+    if phase:
+        return str(phase)
+    return _infer_trajectory_phase(
+        event_type=str(event.get("event_type") or event.get("action_type") or ""),
+        component=str(event.get("component") or ""),
+        prompt_kind=str(artifacts.get("prompt_kind") or ""),
+    )
+
+
+def _infer_trajectory_phase(*, event_type: str, component: str, prompt_kind: str = "") -> str | None:
+    text = " ".join([event_type, component, prompt_kind]).lower()
+    if "retrieval" in text:
+        return "retrieval"
+    if "frame_rewrite" in text or "turn0" in text:
+        return "frame"
+    if "execute_v20" in text or "turn1" in text or "draft" in text:
+        return "draft"
+    if "reflect_v20" in text or "turn2" in text or "audit" in text or "revise" in text:
+        return "audit_final"
+    if "math_science" in text or "hygiene" in text or "bridge" in text:
+        return "direct_final"
+    if "cache_hit" in text or "artifact_replay" in text:
+        return "artifact_final_replay"
+    if event_type == "judge_call":
+        return "judge"
+    if event_type == "tool_use":
+        return "tool"
+    return None
+
+
+def _has_draft_audit_final(phases: Iterable[str]) -> bool:
+    normalized = {str(phase) for phase in phases}
+    has_draft = bool(normalized & {"draft", "artifact_final_replay", "direct_final"})
+    has_audit = bool(normalized & {"audit", "audit_final", "artifact_final_replay", "direct_final"})
+    has_final = bool(normalized & {"final", "audit_final", "artifact_final_replay", "direct_final"})
+    return has_draft and has_audit and has_final
 
 
 def _resolve(root: Path, path: str | Path | None) -> Path | None:

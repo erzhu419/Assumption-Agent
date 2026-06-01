@@ -48,6 +48,10 @@ def build_trace_outcome_model_payload(
         _predict_feature_leave_one_out(row=row, train_rows=[other for other in rows if other is not row])
         for row in rows
     ]
+    trajectory_quality_predictions = [
+        _predict_trajectory_quality_leave_one_out(row=row, train_rows=[other for other in rows if other is not row])
+        for row in rows
+    ]
     route_stats = _group_stats(rows, key_fn=_route_key)
     component_stats = _group_stats(rows, key_fn=_component_key)
     domain_stats = _group_stats(rows, key_fn=lambda row: f"domain={row.get('domain') or 'unknown'}")
@@ -71,7 +75,9 @@ def build_trace_outcome_model_payload(
         "residual_group_count": len(residual_stats),
         "leave_one_out_metrics": _prediction_metrics(predictions),
         "feature_leave_one_out_metrics": _prediction_metrics(feature_predictions),
+        "trajectory_quality_metrics": _trajectory_quality_metrics(trajectory_quality_predictions),
         "feature_schema": _trace_feature_schema(rows),
+        "trajectory_phase_schema": _trajectory_phase_schema(rows),
         "route_stats": route_stats,
         "component_stats": component_stats,
         "domain_stats": domain_stats,
@@ -80,6 +86,7 @@ def build_trace_outcome_model_payload(
         "policy_updates": policy_updates,
         "predictions": predictions,
         "feature_predictions": feature_predictions,
+        "trajectory_quality_predictions": trajectory_quality_predictions,
     }
     clean = redact_secrets(payload)
     clean["secret_leak_detected"] = _contains_secret(clean)
@@ -231,6 +238,104 @@ def _predict_feature_leave_one_out(*, row: dict[str, Any], train_rows: list[dict
         "support_weight": round(global_weight, 4),
         "support_weighted_win_count": round(global_weighted_wins, 4),
         "top_features": top_features,
+        "predicted_win_probability": round(probability, 4),
+        "predicted_outcome": predicted_outcome,
+        "observed_outcome": row.get("outcome"),
+        "label": label,
+        "absolute_error": round(abs(probability - label), 4),
+        "brier": round((probability - label) ** 2, 4),
+        "residual_type": row.get("residual_type"),
+    }
+
+
+TRAJECTORY_PHASES = ("problem", "frame", "draft", "audit", "final")
+
+
+def _predict_trajectory_quality_leave_one_out(*, row: dict[str, Any], train_rows: list[dict[str, Any]]) -> dict:
+    row_phases = _trajectory_phase_feature_keys(row)
+    global_weight = sum(_row_weight(other) for other in train_rows)
+    global_weighted_wins = sum(_row_weight(other) for other in train_rows if other.get("outcome") == "win")
+    global_probability = (
+        (global_weighted_wins + 1.0) / (global_weight + 2.0)
+        if global_weight else 0.5
+    )
+    phase_terms = []
+    train_phase_sets = [(other, _trajectory_phase_feature_keys(other)) for other in train_rows]
+    for phase in TRAJECTORY_PHASES:
+        candidates = []
+        for feature in row_phases.get(phase, set()):
+            bucket = [other for other, phase_set in train_phase_sets if feature in phase_set.get(phase, set())]
+            support_weight = sum(_row_weight(other) for other in bucket)
+            if support_weight <= 0.0:
+                continue
+            weighted_wins = sum(_row_weight(other) for other in bucket if other.get("outcome") == "win")
+            probability = (weighted_wins + 1.0) / (support_weight + 2.0)
+            information_shift = abs(probability - global_probability)
+            candidates.append({
+                "phase": phase,
+                "feature": feature,
+                "support_count": len(bucket),
+                "support_weight": round(support_weight, 4),
+                "weighted_win_count": round(weighted_wins, 4),
+                "information_shift": round(information_shift, 4),
+                "blend_weight": round(min(4.0, support_weight) * max(0.05, 8.0 * information_shift * information_shift), 4),
+                "win_probability": round(probability, 4),
+            })
+        top = sorted(
+            candidates,
+            key=lambda term: (-float(term["blend_weight"]), str(term["feature"])),
+        )[:3]
+        if top:
+            phase_weight = sum(float(term["blend_weight"]) for term in top)
+            phase_probability = sum(
+                float(term["blend_weight"]) * float(term["win_probability"])
+                for term in top
+            ) / phase_weight if phase_weight else global_probability
+            phase_terms.append({
+                "phase": phase,
+                "feature_count": len(row_phases.get(phase, set())),
+                "matched_feature_count": len(candidates),
+                "phase_blend_weight": round(max(0.1, phase_weight), 4),
+                "phase_win_probability": round(phase_probability, 4),
+                "top_features": top,
+            })
+        else:
+            phase_terms.append({
+                "phase": phase,
+                "feature_count": len(row_phases.get(phase, set())),
+                "matched_feature_count": 0,
+                "phase_blend_weight": 0.1,
+                "phase_win_probability": round(global_probability, 4),
+                "top_features": [],
+            })
+
+    terms = [{
+        "phase": "global_prior",
+        "phase_blend_weight": 2.0,
+        "phase_win_probability": round(global_probability, 4),
+    }, *phase_terms]
+    total_blend_weight = sum(float(term["phase_blend_weight"]) for term in terms)
+    probability = (
+        sum(float(term["phase_blend_weight"]) * float(term["phase_win_probability"]) for term in terms) / total_blend_weight
+        if total_blend_weight else 0.5
+    )
+    label = 1.0 if row.get("outcome") == "win" else 0.0
+    predicted_outcome = "win" if probability >= 0.5 else "loss"
+    complete_phases = _has_draft_audit_final(row)
+    return {
+        "prediction_id": stable_id("trace_traj_pred", row.get("row_id")),
+        "row_id": row.get("row_id"),
+        "problem_id": row.get("problem_id"),
+        "domain": row.get("domain"),
+        "bypass_route": row.get("bypass_route"),
+        "trace_source": _trace_source(row),
+        "row_weight": _row_weight(row),
+        "selected_level": "trajectory_phase_blend",
+        "selected_key": "trajectory_phase_blend",
+        "trajectory_phases": sorted(row.get("trajectory_phases") or []),
+        "draft_audit_final_coverage": complete_phases,
+        "matched_phase_count": sum(1 for term in phase_terms if int(term.get("matched_feature_count") or 0) > 0),
+        "phase_terms": phase_terms,
         "predicted_win_probability": round(probability, 4),
         "predicted_outcome": predicted_outcome,
         "observed_outcome": row.get("outcome"),
@@ -401,6 +506,34 @@ def _prediction_metrics(predictions: list[dict[str, Any]]) -> dict:
     }
 
 
+def _trajectory_quality_metrics(predictions: list[dict[str, Any]]) -> dict:
+    metrics = _prediction_metrics(predictions)
+    if not predictions:
+        metrics.update({
+            "phase_prediction_counts": {},
+            "complete_draft_audit_final_count": 0,
+            "complete_draft_audit_final_rate": 0.0,
+            "mean_matched_phase_count": 0.0,
+        })
+        return metrics
+    phase_counts: Counter[str] = Counter()
+    for prediction in predictions:
+        for term in prediction.get("phase_terms", []):
+            if int(term.get("matched_feature_count") or 0) > 0:
+                phase_counts[str(term.get("phase"))] += 1
+    complete = sum(1 for prediction in predictions if prediction.get("draft_audit_final_coverage"))
+    metrics.update({
+        "phase_prediction_counts": dict(sorted(phase_counts.items())),
+        "complete_draft_audit_final_count": complete,
+        "complete_draft_audit_final_rate": round(complete / len(predictions), 4),
+        "mean_matched_phase_count": round(
+            sum(int(prediction.get("matched_phase_count") or 0) for prediction in predictions) / len(predictions),
+            4,
+        ),
+    })
+    return metrics
+
+
 def _trace_source(row: dict[str, Any]) -> str:
     source = row.get("trace_source") or row.get("source_kind")
     if source:
@@ -472,6 +605,106 @@ def _trace_feature_schema(rows: list[dict[str, Any]]) -> dict[str, Any]:
             for feature, count in feature_counts.most_common(20)
         ],
     }
+
+
+def _trajectory_phase_schema(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    phase_feature_counts: dict[str, Counter[str]] = {
+        phase: Counter()
+        for phase in TRAJECTORY_PHASES
+    }
+    for row in rows:
+        for phase, features in _trajectory_phase_feature_keys(row).items():
+            phase_feature_counts.setdefault(phase, Counter()).update(features)
+    return {
+        "phase_count": len(phase_feature_counts),
+        "phase_feature_counts": {
+            phase: len(counter)
+            for phase, counter in sorted(phase_feature_counts.items())
+        },
+        "top_phase_features": {
+            phase: [
+                {"feature": feature, "count": count}
+                for feature, count in counter.most_common(8)
+            ]
+            for phase, counter in sorted(phase_feature_counts.items())
+        },
+    }
+
+
+def _trajectory_phase_feature_keys(row: dict[str, Any]) -> dict[str, set[str]]:
+    features = row.get("features") or {}
+    phases = set(str(phase) for phase in (row.get("trajectory_phases") or []))
+    phase_event_counts = row.get("phase_event_counts") or features.get("phase_event_counts") or {}
+    components = row.get("components") or []
+    prompt_kinds = row.get("prompt_kinds") or []
+    active_assumption_ids = row.get("activated_assumption_ids") or []
+    return {
+        "problem": _clean_features({
+            f"domain={row.get('domain') or features.get('domain') or 'unknown'}",
+            f"difficulty={row.get('difficulty') or features.get('difficulty') or 'unknown'}",
+        }),
+        "frame": _clean_features({
+            f"frame={row.get('frame') or features.get('frame') or 'unknown'}",
+            f"bypass_route={row.get('bypass_route') or features.get('bypass_route') or 'no_route'}",
+            f"route_family={_route_family(row.get('bypass_route') or features.get('bypass_route'))}",
+        }),
+        "draft": _clean_features({
+            *(f"component={component}" for component in components),
+            *(f"prompt_kind={prompt_kind}" for prompt_kind in prompt_kinds),
+            f"active_assumption_count_bucket={_count_bucket(len(active_assumption_ids))}",
+            f"gold_hit={bool(row.get('gold_hit') or features.get('gold_hit'))}",
+            f"trace_source={_trace_source(row)}",
+            f"intervention_variant={row.get('intervention_variant') or features.get('intervention_variant') or 'unknown'}",
+        }),
+        "audit": _clean_features({
+            *(f"event={event_name}" for event_name in (row.get("event_counts") or {}).keys()),
+            *(f"phase_event={phase}:{_count_bucket(count)}" for phase, count in phase_event_counts.items()),
+            f"trace_event_count_bucket={_count_bucket(int(row.get('trace_event_count') or features.get('trace_event_count') or 0))}",
+            f"phase_count_bucket={_count_bucket(int(row.get('trajectory_phase_count') or features.get('trajectory_phase_count') or len(phases)))}",
+            *(f"observed_phase={phase}" for phase in phases),
+        }),
+        "final": _clean_features({
+            f"baseline_variant={row.get('baseline_variant') or features.get('baseline_variant') or 'unknown'}",
+            f"judgment_pair={row.get('judgment_pair') or features.get('judgment_pair') or 'unknown'}",
+            f"has_draft_audit_final={_has_draft_audit_final(row)}",
+            f"trace_source={_trace_source(row)}",
+        }),
+    }
+
+
+def _clean_features(features: set[str]) -> set[str]:
+    return {feature for feature in features if "None" not in feature}
+
+
+def _route_family(route: Any) -> str:
+    text = str(route or "no_route")
+    if text.startswith("math_"):
+        return "math"
+    if text.startswith("science_"):
+        return "science"
+    if text == "no_route":
+        return "no_route"
+    return text.split("_", 1)[0]
+
+
+def _count_bucket(count: int) -> str:
+    if count <= 0:
+        return "0"
+    if count == 1:
+        return "1"
+    if count <= 3:
+        return "2_3"
+    return "4plus"
+
+
+def _has_draft_audit_final(row: dict[str, Any]) -> bool:
+    if row.get("draft_audit_final_coverage") is True:
+        return True
+    phases = set(str(phase) for phase in (row.get("trajectory_phases") or []))
+    has_draft = bool(phases & {"draft", "artifact_final_replay", "direct_final"})
+    has_audit = bool(phases & {"audit", "audit_final", "artifact_final_replay", "direct_final"})
+    has_final = bool(phases & {"final", "audit_final", "artifact_final_replay", "direct_final"})
+    return has_draft and has_audit and has_final
 
 
 def _key_for_level(row: dict[str, Any], level: str) -> str:

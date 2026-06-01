@@ -603,8 +603,10 @@ and TrialManifests before any post-hoc log parsing. Trace dataset validation
 now proves first-party/cache trace events can be joined to judged outcomes and
 residual labels for world-model training. Trace outcome validation now uses the
 expanded 141-row trainable trace collection to calibrate route/component and
-feature-blend win probabilities (`feature weighted Brier=0.0711`) and emits
-repair/reinforce policy updates. Trace policy proposal validation converts
+feature-blend win probabilities (`feature weighted Brier=0.0577`). It also
+models draft/audit/final trajectory quality with a phase-blend leave-one-out
+predictor (`trajectory weighted Brier=0.1679`, complete phase coverage 141/141)
+and emits repair/reinforce policy updates. Trace policy proposal validation converts
 those updates into 5 verifier-ready
 `assumption_revision` proposals under the `domain_retrieval_policy` surface.
 Trace policy preflight then verifies all 5 proposals are ready for fresh
@@ -619,7 +621,9 @@ behavior 74.2%, weighted 78.3% after recursive trace expansion. Formal
 alignment validation now also includes an independent operator-intent transfer
 suite over 9 mappings with top-1 hit rate 1.0 and pairwise AUC 1.0, bringing
 the current reconstruction audit to structure 83.4%, behavior 74.7%, weighted
-78.6%; all nine audited mechanisms are now at least operational.
+78.6%. Phase-aware trajectory-quality validation raises the current
+reconstruction audit to structure 83.7%, behavior 75.0%, weighted 78.9%; all
+nine audited mechanisms are now at least operational.
 Harness
 observer discovers 19 real artifact events from judgment/meta/log files and
 keeps full artifact-file coverage after the original backfill; current reruns

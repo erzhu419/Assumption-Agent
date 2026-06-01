@@ -188,6 +188,12 @@ def _world_model_item(sections: dict[str, dict]) -> ProgressItem:
     feature_trace_brier = trace_outcome.get("feature_leave_one_out_metrics", {}).get("weighted_brier_score")
     if feature_trace_brier is None:
         feature_trace_brier = trace_outcome.get("feature_leave_one_out_metrics", {}).get("brier_score")
+    trajectory_metrics = trace_outcome.get("trajectory_quality_metrics", {})
+    trajectory_brier = trajectory_metrics.get("weighted_brier_score")
+    if trajectory_brier is None:
+        trajectory_brier = trajectory_metrics.get("brier_score")
+    trajectory_complete_count = int(trajectory_metrics.get("complete_draft_audit_final_count") or 0)
+    trajectory_phase_count = int(trace_outcome.get("trajectory_phase_schema", {}).get("phase_count") or 0)
     best_trace_brier = min(
         brier for brier in [weighted_trace_brier, trace_brier, feature_trace_brier]
         if brier is not None
@@ -201,12 +207,15 @@ def _world_model_item(sections: dict[str, dict]) -> ProgressItem:
         float(trace_dataset.get("pass", False)),
         float(trace_outcome.get("pass", False)),
         _cap(world.get("matched_label_count", 0) / 16),
+        _cap(trajectory_phase_count / 5),
     ])
     behavior = _avg([
         _score_brier(brier, threshold=0.1),
         _score_brier(best_trace_brier, threshold=0.25),
-        _cap(weighted_trace_rows / 50),
-        _cap(world.get("matched_label_count", 0) / 50),
+        _score_brier(trajectory_brier, threshold=0.35),
+        _cap(weighted_trace_rows / 75),
+        _cap((float(world.get("matched_label_count", 0) or 0) + weighted_trace_rows) / 150),
+        _cap(trajectory_complete_count / max(1.0, weighted_trace_rows)),
     ])
     return ProgressItem(
         key="C_world_model_simulator",
@@ -223,16 +232,19 @@ def _world_model_item(sections: dict[str, dict]) -> ProgressItem:
             "weighted_trace_brier": weighted_trace_brier,
             "feature_trace_brier": feature_trace_brier,
             "best_trace_brier": best_trace_brier,
+            "trajectory_quality_brier": trajectory_brier,
+            "trajectory_complete_count": trajectory_complete_count,
+            "trajectory_phase_count": trajectory_phase_count,
             "trace_feature_count": trace_outcome.get("feature_schema", {}).get("feature_count"),
             "trace_source_counts": trace_outcome.get("trace_source_counts"),
         },
         remaining_gaps=[
             "The predictor is calibrated on tens of labels, not the 1000+ distilled trajectories described in reconstruction.md.",
-            "It predicts proposal/route outcomes, but not yet full draft/audit/final trajectory quality.",
+            "Draft/audit/final trajectory quality is now phase-modeled, but still mostly artifact-replay rather than large first-party trajectories.",
         ],
         next_actions=[
             "Accumulate a larger trace dataset from real first-party runs.",
-            "Train/calibrate a cheap predictor over problem + activated assumptions + trace features + residual label.",
+            "Train/calibrate the phase-quality predictor on larger first-party draft/audit/final traces.",
         ],
     )
 
@@ -598,6 +610,18 @@ def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
         feature_count = int(item.evidence.get("trace_feature_count") or 0)
         if best_brier is not None and weighted_rows >= 75.0 and float(best_brier) <= 0.08 and feature_count >= 40:
             max_behavior = max(max_behavior, 0.70)
+        trajectory_brier = item.evidence.get("trajectory_quality_brier")
+        trajectory_complete = int(item.evidence.get("trajectory_complete_count") or 0)
+        trajectory_phase_count = int(item.evidence.get("trajectory_phase_count") or 0)
+        if (
+            trajectory_brier is not None
+            and weighted_rows >= 75.0
+            and float(trajectory_brier) <= 0.20
+            and trajectory_complete >= 60
+            and trajectory_phase_count >= 5
+        ):
+            max_structure = max(max_structure, 0.84)
+            max_behavior = max(max_behavior, 0.73)
         if best_brier is not None and weighted_rows >= 150.0 and float(best_brier) <= 0.07:
             max_behavior = max(max_behavior, 0.74)
     if item.key == "G_formal_alignment_layer":
