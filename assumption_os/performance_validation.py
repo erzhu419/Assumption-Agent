@@ -43,6 +43,7 @@ from .formal_mapping import (
     build_categorical_info_geometry_payload,
     build_formal_dedup_payload,
     build_formal_mapping_payload,
+    build_formal_transfer_eval_payload,
 )
 from .graph_memory import JsonlGraphStore
 from .harness_observer import build_harness_observer_payload
@@ -127,7 +128,7 @@ def build_performance_validation_payload(
     timings["residual_clusterer_sec"] = _elapsed(start)
 
     start = time.perf_counter()
-    formal = _validate_formal_metrics(graph_dir=graph_dir)
+    formal = _validate_formal_metrics(root=root, graph_dir=graph_dir)
     timings["formal_metrics_sec"] = _elapsed(start)
 
     sections = {
@@ -1126,12 +1127,18 @@ def _validate_residual_clusterer(*, graph_dir: Path) -> dict:
     }
 
 
-def _validate_formal_metrics(*, graph_dir: Path) -> dict:
+def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
     store = JsonlGraphStore(graph_dir)
     formal_payload = build_formal_mapping_payload(store)
     metric_payload = build_categorical_info_geometry_payload(formal_payload)
     dedup_payload = build_formal_dedup_payload(formal_payload)
     dedup_control = _formal_dedup_positive_control()
+    search_eval_path = root / "phase four/assumption_graph/formal_mapping_search_eval_phase2_graph.json"
+    transfer_payload = build_formal_transfer_eval_payload(
+        formal_mapping_payload=formal_payload,
+        metric_payload=metric_payload,
+        search_eval_payload=json.loads(search_eval_path.read_text(encoding="utf-8")),
+    ) if search_eval_path.exists() else {"pass": False}
     summaries = metric_payload["summaries"]
     same_shape = sum(1 for row in summaries if row["metrics"].get("same_shape"))
     warning_count = sum(len(row.get("warnings", [])) for row in summaries)
@@ -1147,6 +1154,7 @@ def _validate_formal_metrics(*, graph_dir: Path) -> dict:
             and same_shape == len(summaries)
             and warning_count == 0
             and dedup_control_ok
+            and transfer_payload.get("pass", False)
         ),
         "mapping_count": metric_payload["mapping_count"],
         "complete_count": complete_count,
@@ -1164,6 +1172,13 @@ def _validate_formal_metrics(*, graph_dir: Path) -> dict:
             "merge_recommendation_count": dedup_control["merge_recommendation_count"],
             "incomplete_mapping_excluded_count": dedup_control["incomplete_mapping_excluded_count"],
         },
+        "transfer_eval_pass": transfer_payload.get("pass", False),
+        "transfer_query_count": transfer_payload.get("query_count", 0),
+        "transfer_application_count": transfer_payload.get("application_count", 0),
+        "transfer_top1_hit_rate": transfer_payload.get("top1_hit_rate"),
+        "transfer_pairwise_auc": transfer_payload.get("pairwise_auc"),
+        "transfer_positive_mean_score": transfer_payload.get("positive_mean_transfer_score"),
+        "transfer_negative_mean_score": transfer_payload.get("negative_mean_transfer_score"),
     }
 
 
@@ -1416,7 +1431,8 @@ def _key_metric(name: str, section: dict) -> str:
     if name == "formal_metrics":
         return (
             f"mappings={section['mapping_count']}, warnings={section['warning_count']}, "
-            f"dedup={section.get('dedup_duplicate_cluster_count', 0)}"
+            f"dedup={section.get('dedup_duplicate_cluster_count', 0)}, "
+            f"transfer_auc={section.get('transfer_pairwise_auc')}"
         )
     return ""
 

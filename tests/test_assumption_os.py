@@ -31,6 +31,7 @@ from assumption_os.formal_mapping import (
     build_formal_dedup_payload,
     build_formal_mapping_gate_payload,
     build_formal_mapping_payload,
+    build_formal_transfer_eval_payload,
     finite_kernel_metrics,
     format_formal_mapping_applications,
     search_formal_mappings,
@@ -2078,6 +2079,56 @@ class AssumptionOSTest(unittest.TestCase):
             cluster = dedup["clusters"][0]
             self.assertEqual(cluster["merge_action"], "merge_complete_formal_equivalent")
             self.assertEqual(len(cluster["duplicate_mapping_ids"]), 1)
+
+    def test_formal_transfer_eval_scores_expected_mapping_above_distractor(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            for seed, keyword, required in [
+                ("WCAND_EXPECTED", "risk", "rollback"),
+                ("WCAND_OTHER", "speed", "latency"),
+            ]:
+                base = {
+                    "type": AssumptionType.HARNESS,
+                    "claim": f"formal transfer {seed}",
+                    "payload": {"seed_cid": seed},
+                    "tags": [seed],
+                }
+                for suffix, kind, expr in [
+                    ("feature", "feature", {"keywords_en": [keyword], "regex": []}),
+                    ("constraint", "constraint", {"required_substrings": [required]}),
+                    ("decomp", "decomposition", {"steps": ["identify", "verify"]}),
+                    ("verify", "verification", {"instruction": f"check {required}"}),
+                    ("hp", "hp_change", {"temperature": 0.0, "max_tokens": 1000}),
+                ]:
+                    store.upsert_node(AssumptionNode(
+                        id=f"{seed}_{suffix}",
+                        kind=kind,
+                        formal_form={"kind": kind, "expr": expr},
+                        **base,
+                    ))
+            formal_payload = build_formal_mapping_payload(store)
+            metric_payload = build_categorical_info_geometry_payload(formal_payload)
+            search_eval = {
+                "eval_id": "unit_formal_search",
+                "results": [{
+                    "id": "q1",
+                    "expected": "WCAND_EXPECTED",
+                    "top_source_key": "WCAND_EXPECTED",
+                    "applications": [
+                        {"source_key": "WCAND_EXPECTED", "score": 5.0},
+                        {"source_key": "WCAND_OTHER", "score": 1.0},
+                    ],
+                }] * 5,
+            }
+            payload = build_formal_transfer_eval_payload(
+                formal_mapping_payload=formal_payload,
+                metric_payload=metric_payload,
+                search_eval_payload=search_eval,
+            )
+            self.assertTrue(payload["pass"])
+            self.assertEqual(payload["top1_hit_rate"], 1.0)
+            self.assertEqual(payload["pairwise_auc"], 1.0)
+            self.assertGreater(payload["positive_mean_transfer_score"], payload["negative_mean_transfer_score"])
 
     def test_formal_mapping_audit_rejects_missing_trigger(self):
         with tempfile.TemporaryDirectory() as td:

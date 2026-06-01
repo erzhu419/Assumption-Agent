@@ -467,13 +467,17 @@ Add `--formal-dedup` to compute exact normalized formal-equivalence signatures
 for complete mappings and emit safe merge recommendations. Partial or unsafe
 mappings are excluded from deduplication, so this remains a verifier-gated
 recommendation layer rather than an automatic graph mutation.
+Add `--formal-transfer-eval` with a formal-search audit payload to measure
+whether trigger score times finite-kernel quality predicts transfer success;
+the current five-query audit has top-1 hit rate 1.0 and pairwise AUC 1.0.
 
 ```bash
 python3 -m assumption_os.formal_mapping \
   --graph-dir "phase four/assumption_graph" \
   --formal-metrics \
   --formal-dedup \
-  --summary-out "phase four/assumption_graph/formal_mapping_dedup_phase2_graph.json"
+  --formal-transfer-eval "phase four/assumption_graph/formal_mapping_search_eval_phase2_graph.json" \
+  --summary-out "phase four/assumption_graph/formal_mapping_transfer_eval_phase2_graph.json"
 ```
 
 `assumption_os.manifest_logger` is the generic log bridge for events outside
@@ -610,8 +614,8 @@ trace dataset with two artifact-replay ms100 judgment slices, yielding 69 rows,
 without secrets.
 Reconstruction progress auditing now compares the current implementation
 against `reconstruction/md/reconstruction.md` and reports structure 82.1%,
-behavior 71.2%, weighted 76.1%; the lowest behavior items are formal alignment,
-world-model distillation, and broader hypothesis generation.
+behavior 72.0%, weighted 76.8%; the lowest behavior items are world-model
+distillation, formal alignment, and broader hypothesis generation.
 Harness
 observer discovers 19 real artifact events from judgment/meta/log files and
 keeps full artifact-file coverage after the original backfill; current reruns

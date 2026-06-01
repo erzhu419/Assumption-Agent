@@ -335,6 +335,7 @@ def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
         float(formal.get("pass", False)),
         _cap(formal.get("mapping_count", 0) / 9),
         float(formal.get("dedup_pass", False)),
+        float(formal.get("transfer_eval_pass", False)),
         float(formal.get("warning_count", 1) == 0),
     ])
     behavior = _avg([
@@ -343,6 +344,8 @@ def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
         float(formal.get("warning_count", 1) == 0),
         float(formal.get("dedup_pass", False)),
         _cap(formal.get("dedup_complete_mapping_count", 0) / max(1, formal.get("mapping_count", 1))),
+        _cap(formal.get("transfer_pairwise_auc", 0.0)),
+        _cap(formal.get("transfer_top1_hit_rate", 0.0)),
     ])
     return ProgressItem(
         key="G_formal_alignment_layer",
@@ -357,13 +360,15 @@ def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
             "dedup_unique_signature_count": formal.get("dedup_unique_signature_count"),
             "dedup_duplicate_cluster_count": formal.get("dedup_duplicate_cluster_count"),
             "dedup_positive_control": formal.get("dedup_positive_control"),
+            "transfer_top1_hit_rate": formal.get("transfer_top1_hit_rate"),
+            "transfer_pairwise_auc": formal.get("transfer_pairwise_auc"),
         },
         remaining_gaps=[
             "Formal mapping is an audit/gate over finite kernels, not a full category-theoretic or information-geometric reasoning engine.",
-            "Downstream performance correlation for formal isomorphism quality is not yet established.",
+            "Formal transfer correlation is validated on a small labeled query audit, not a broad downstream task suite.",
         ],
         next_actions=[
-            "Measure whether formal-mapping quality predicts transfer success.",
+            "Expand formal-transfer labels beyond the current five-query audit.",
             "Use dedup recommendations to merge complete formal equivalents after verifier approval.",
         ],
     )
@@ -518,7 +523,7 @@ RECONSTRUCTION_CEILINGS = {
     "D_verifier_stack": (0.82, 0.74),
     "E_residual_analyzer": (0.82, 0.74),
     "F_metaproductivity_selector": (0.80, 0.70),
-    "G_formal_alignment_layer": (0.72, 0.58),
+    "G_formal_alignment_layer": (0.76, 0.65),
     "recursive_execution_loop": (0.85, 0.76),
     "assumption_bench_evaluation": (0.88, 0.82),
 }

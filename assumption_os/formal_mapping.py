@@ -334,6 +334,77 @@ def build_formal_dedup_payload(formal_mapping_payload: dict) -> dict:
     }
 
 
+def build_formal_transfer_eval_payload(
+    *,
+    formal_mapping_payload: dict,
+    metric_payload: dict,
+    search_eval_payload: dict,
+) -> dict:
+    """Measure whether formal mapping quality predicts transfer hits."""
+
+    metric_by_source = {
+        row.get("source_key"): _metric_quality(row.get("metrics", {}))
+        for row in metric_payload.get("summaries", [])
+        if row.get("source_key")
+    }
+    rows = []
+    top1_hits = 0
+    query_count = 0
+    for result in search_eval_payload.get("results", []):
+        expected = result.get("expected")
+        applications = result.get("applications", [])
+        if not expected or not applications:
+            continue
+        query_count += 1
+        top_source = result.get("top_source_key") or applications[0].get("source_key")
+        if top_source == expected:
+            top1_hits += 1
+        for rank, app in enumerate(applications, start=1):
+            source_key = app.get("source_key")
+            trigger_score = float(app.get("score") or 0.0)
+            metric_quality = metric_by_source.get(source_key, 0.0)
+            transfer_score = trigger_score * (0.5 + 0.5 * metric_quality)
+            rows.append({
+                "query_id": result.get("id"),
+                "expected_source_key": expected,
+                "source_key": source_key,
+                "rank": rank,
+                "label": 1 if source_key == expected else 0,
+                "trigger_score": round(trigger_score, 6),
+                "metric_quality": round(metric_quality, 6),
+                "transfer_score": round(transfer_score, 6),
+            })
+
+    positives = [row["transfer_score"] for row in rows if row["label"] == 1]
+    negatives = [row["transfer_score"] for row in rows if row["label"] == 0]
+    auc = _pairwise_auc(positives, negatives)
+    top1_hit_rate = round(top1_hits / query_count, 4) if query_count else 0.0
+    positive_mean = round(sum(positives) / len(positives), 6) if positives else None
+    negative_mean = round(sum(negatives) / len(negatives), 6) if negatives else None
+    return {
+        "query_count": query_count,
+        "application_count": len(rows),
+        "positive_count": len(positives),
+        "negative_count": len(negatives),
+        "top1_hit_rate": top1_hit_rate,
+        "pairwise_auc": auc,
+        "positive_mean_transfer_score": positive_mean,
+        "negative_mean_transfer_score": negative_mean,
+        "pass": (
+            query_count >= 5
+            and top1_hit_rate >= 0.8
+            and auc is not None
+            and auc >= 0.8
+            and positive_mean is not None
+            and negative_mean is not None
+            and positive_mean > negative_mean
+        ),
+        "rows": sorted(rows, key=lambda row: (row["query_id"] or "", row["rank"], row["source_key"] or "")),
+        "source_mapping_count": formal_mapping_payload.get("mapping_count", 0),
+        "source_search_eval_id": search_eval_payload.get("eval_id"),
+    }
+
+
 def _normalize_kernel(kernel: list[list[float]]) -> list[list[float]]:
     normalized = []
     width = max((len(row) for row in kernel), default=0)
@@ -468,6 +539,31 @@ def _normalize_signature_value(value):
 def _signature_id(signature: dict) -> str:
     raw = json.dumps(signature, ensure_ascii=False, sort_keys=True)
     return "formal_sig_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+
+
+def _metric_quality(metrics: dict) -> float:
+    if not metrics.get("same_shape"):
+        return 0.0
+    tv = float(metrics.get("total_variation") or 0.0)
+    frob = float(metrics.get("frobenius_distance") or 0.0)
+    dominance = float(metrics.get("blackwell_dominance_proxy") or 0.0)
+    quality = max(0.0, 1.0 - min(tv, 1.0)) * (0.5 + 0.5 * dominance) / (1.0 + frob)
+    return round(max(0.0, min(1.0, quality)), 6)
+
+
+def _pairwise_auc(positives: list[float], negatives: list[float]) -> float | None:
+    if not positives or not negatives:
+        return None
+    wins = 0.0
+    total = 0
+    for pos in positives:
+        for neg in negatives:
+            total += 1
+            if pos > neg:
+                wins += 1.0
+            elif pos == neg:
+                wins += 0.5
+    return round(wins / total, 4) if total else None
 
 
 def _summarize_group(source_key: str, nodes: list[AssumptionNode]) -> FormalMappingSummary:
@@ -722,6 +818,7 @@ def main() -> None:
     ap.add_argument("--top-n", type=int, default=3)
     ap.add_argument("--formal-metrics", action="store_true")
     ap.add_argument("--formal-dedup", action="store_true")
+    ap.add_argument("--formal-transfer-eval", default=None)
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
@@ -737,6 +834,13 @@ def main() -> None:
         payload["categorical_info_geometry"] = build_categorical_info_geometry_payload(payload)
     if args.formal_dedup:
         payload["formal_dedup"] = build_formal_dedup_payload(payload)
+    if args.formal_transfer_eval:
+        metric_payload = payload.get("categorical_info_geometry") or build_categorical_info_geometry_payload(payload)
+        payload["formal_transfer_eval"] = build_formal_transfer_eval_payload(
+            formal_mapping_payload=payload,
+            metric_payload=metric_payload,
+            search_eval_payload=json.loads(_resolve(root, args.formal_transfer_eval).read_text(encoding="utf-8")),
+        )
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.summary_out:
         out = _resolve(root, args.summary_out)

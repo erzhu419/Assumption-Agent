@@ -84,6 +84,7 @@ Current gaps being addressed:
 - 2026-06-01: Added `assumption_os.reconstruction_progress`; current reconstruction closure is structure 81.3%, behavior 68.5%, weighted 74.3%.
 - 2026-06-01: Added formal-equivalence deduplication for complete formal mappings; current reconstruction closure is structure 82.1%, behavior 69.6%, weighted 75.2%.
 - 2026-06-01: Added trace-dataset collection across first-party and artifact-replay math/science slices; current reconstruction closure is structure 82.1%, behavior 71.2%, weighted 76.1%.
+- 2026-06-01: Added formal-transfer correlation audit; current reconstruction closure is structure 82.6%, behavior 72.0%, weighted 76.8%.
 
 ## Closure Notes
 
@@ -95,6 +96,7 @@ Current gaps being addressed:
 - Residual synthesis supports an injectable LLM synthesizer in code and a deterministic CLI path for reproducible tests.
 - Formal mapping now has a real finite metric engine, scoped to finite stochastic kernels over typed formal roles rather than unrestricted theorem proving.
 - Formal mapping now also emits exact formal-equivalence dedup recommendations for complete mappings while excluding partial/unsafe mappings from merge plans.
+- Formal mapping now checks whether trigger score times finite-kernel quality predicts transfer hits; current five-query audit has top-1 hit rate 1.0 and pairwise AUC 1.0.
 - Runtime memory surfaces are now in the graph, so future retrieval can access system-level assumptions instead of relying only on code modules and reports.
 - Live phase2 runs can now emit redacted first-party runtime trace events and write them directly as TrialManifests instead of depending only on post-hoc log parsing.
 - Runtime/cache traces can now be joined to pairwise judgments as trainable trace/outcome/residual rows; historical runs can use bounded artifact replay when first-party trace does not exist.
@@ -126,7 +128,7 @@ Results:
 - Trace outcome model: 9 real trainable rows, 3 route groups, leave-one-out Brier 0.1605, and 3 policy updates: reinforce `math_research_bridge`, targeted repair for `science_mechanism`, reinforce `science_decision`.
 - Trace policy proposals: 3 `assumption_revision` proposals under `surface_6e7d9d238212`, with 1 targeted repair and 3 heldout-route verifiers.
 - Trace policy preflight: 3/3 proposals ready for fresh ablation, 0 missed trigger rows, 0 outside-active rows, command hints emitted.
-- Reconstruction progress: structure 82.1%, behavior 71.2%, weighted 76.1%; 3/9 mature-or-completed items; lowest behavior items are `G_formal_alignment_layer`, `C_world_model_simulator`, and `B_hypothesis_generator`.
+- Reconstruction progress: structure 82.6%, behavior 72.0%, weighted 76.8%; 3/9 mature-or-completed items; lowest behavior items are `C_world_model_simulator`, `G_formal_alignment_layer`, and `B_hypothesis_generator`.
 - Harness observer: 4 artifact files, 19 discovered events, full artifact-file coverage after writeback, no secret leak; current reruns skip already-covered events instead of duplicating persisted `harness_observer_backfill_20260601` trials.
 - Verifier stack: 33 proposals, 2 accepted-for-gated-apply, 14 rejected, 6 preflight-repair, 11 collect-more-evidence; V4 acceptance stages show 2 pass / 14 fail / 17 missing. The falsification protocol layer adds 135 experiment records across 27 candidate proposals; accepted protocol checks and rejected protocol checks both pass.
 - Recursive audit: dry frontier plus accepted-return cases pass with 12 total frames, 5 actionable frontier items, min closure score 1.0, 0 critical issues, and 0 warnings.
@@ -137,4 +139,4 @@ Results:
 - Trajectory search: 10 frontier actions, 26 trajectories, multi-path rate 0.8, top-path label hit rate 1.0.
 - Recursive daemon: 2 positive-control accepted candidates applied in a temp graph, dry-run applied 0, gated apply applied 2, manifests written.
 - Residual clusterer: 109 residual records, 7 deterministic clusters, 2 synthesized candidate proposals with validation plans.
-- Formal metrics: 9 complete mappings, 9/9 finite kernels same-shape, 0 warnings; dedup positive control found 1 duplicate cluster / 1 merge recommendation while the live graph has 9 unique formal signatures.
+- Formal metrics: 9 complete mappings, 9/9 finite kernels same-shape, 0 warnings; dedup positive control found 1 duplicate cluster / 1 merge recommendation while the live graph has 9 unique formal signatures; formal-transfer audit passes with top-1 hit rate 1.0 and pairwise AUC 1.0.

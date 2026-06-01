@@ -19,11 +19,11 @@ Overall: PASS
 | trace_policy_preflight | PASS | ready=3/3, missed=0, outside=0 |
 | harness_observer | PASS | artifacts=4, backfill=0/19, covered=True |
 | residual_clusterer | PASS | clusters=7, proposals=2 |
-| formal_metrics | PASS | mappings=9, warnings=0, dedup=0 |
+| formal_metrics | PASS | mappings=9, warnings=0, dedup=0, transfer_auc=1.0 |
 | evolution_context | PASS | decision=ready_for_manual_apply->gated_apply_allowed, resp={'pass': 9} |
 | memory_surfaces | PASS | types=11->11, edges=11->11 |
 | assumption_bench | PASS | score=0.9968, passed=9/9 |
-| reconstruction_progress | PASS | structure=82.1%, behavior=71.2%, weighted=76.1% |
+| reconstruction_progress | PASS | structure=82.6%, behavior=72.0%, weighted=76.8% |
 
 ## Details
 
@@ -91,7 +91,7 @@ Overall: PASS
 - `real_log_paths`: ["phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log", "phase four/assumption_graph/recursive_scoped_ablation_run_gpt55_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt54mini_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt55_21_50.log", "phase six/autonomous/exp80_run.log"]
 - `written_trials`: 112
 - `secret_leak_detected`: false
-- `throughput_events_per_sec`: 1038.0
+- `throughput_events_per_sec`: 2622.95
 - `event_counts`: {"judge_call": 28, "llm_call": 21, "retrieval": 20, "simulator_rollout": 20, "tool_use": 23}
 
 ### runtime_trace
@@ -193,6 +193,13 @@ Overall: PASS
 - `dedup_merge_recommendation_count`: 0
 - `dedup_incomplete_mapping_excluded_count`: 0
 - `dedup_positive_control`: {"duplicate_cluster_count": 1, "incomplete_mapping_excluded_count": 1, "merge_recommendation_count": 1}
+- `transfer_eval_pass`: true
+- `transfer_query_count`: 5
+- `transfer_application_count`: 7
+- `transfer_top1_hit_rate`: 1.0
+- `transfer_pairwise_auc`: 1.0
+- `transfer_positive_mean_score`: 5.926379
+- `transfer_negative_mean_score`: 0.800862
 
 ### evolution_context
 
@@ -231,11 +238,11 @@ Overall: PASS
 
 ### reconstruction_progress
 
-- `structure_percent`: 82.1
-- `behavior_percent`: 71.2
-- `weighted_percent`: 76.1
+- `structure_percent`: 82.6
+- `behavior_percent`: 72.0
+- `weighted_percent`: 76.8
 - `completed_item_count`: 3
 - `item_count`: 9
 - `status_counts`: {"operational": 7, "partial": 2}
-- `lowest_behavior_items`: [{"behavior_score": 0.58, "key": "G_formal_alignment_layer", "status": "partial", "structure_score": 0.72}, {"behavior_score": 0.5892, "key": "C_world_model_simulator", "status": "partial", "structure_score": 0.82}, {"behavior_score": 0.7, "key": "B_hypothesis_generator", "status": "operational", "structure_score": 0.8}]
-- `top_next_actions`: [{"action": "Measure whether formal-mapping quality predicts transfer success.", "item": "G_formal_alignment_layer", "priority": 0.357}, {"action": "Use dedup recommendations to merge complete formal equivalents after verifier approval.", "item": "G_formal_alignment_layer", "priority": 0.357}, {"action": "Accumulate a larger trace dataset from real first-party runs.", "item": "C_world_model_simulator", "priority": 0.3069}, {"action": "Train/calibrate a cheap predictor over problem + activated assumptions + trace features + residual label.", "item": "C_world_model_simulator", "priority": 0.3069}, {"action": "Add a generator pass that turns evaluator/world-model residuals into candidate proposals.", "item": "B_hypothesis_generator", "priority": 0.255}]
+- `lowest_behavior_items`: [{"behavior_score": 0.5892, "key": "C_world_model_simulator", "status": "partial", "structure_score": 0.82}, {"behavior_score": 0.65, "key": "G_formal_alignment_layer", "status": "partial", "structure_score": 0.76}, {"behavior_score": 0.7, "key": "B_hypothesis_generator", "status": "operational", "structure_score": 0.8}]
+- `top_next_actions`: [{"action": "Accumulate a larger trace dataset from real first-party runs.", "item": "C_world_model_simulator", "priority": 0.3069}, {"action": "Train/calibrate a cheap predictor over problem + activated assumptions + trace features + residual label.", "item": "C_world_model_simulator", "priority": 0.3069}, {"action": "Expand formal-transfer labels beyond the current five-query audit.", "item": "G_formal_alignment_layer", "priority": 0.3005}, {"action": "Use dedup recommendations to merge complete formal equivalents after verifier approval.", "item": "G_formal_alignment_layer", "priority": 0.3005}, {"action": "Add a generator pass that turns evaluator/world-model residuals into candidate proposals.", "item": "B_hypothesis_generator", "priority": 0.255}]
