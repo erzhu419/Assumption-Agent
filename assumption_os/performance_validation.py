@@ -17,6 +17,7 @@ This runner evaluates the reconstruction mechanisms added after reconstruction:
 13. first-party runtime tracing for live LLM/retrieval calls
 14. trace-to-outcome datasets for world-model/residual training
 15. trace outcome model for route/component policy calibration
+16. trace policy proposals for recursive verifier intake
 
 The validation uses existing real artifacts where available and deterministic
 positive controls where the mechanism needs a safe graph-mutation sandbox.
@@ -49,7 +50,7 @@ from .residual_clusterer import build_residual_cluster_payload
 from .runtime_trace import RuntimeTraceRecorder
 from .trajectory_search import build_trajectory_search_payload
 from .trace_dataset import build_trace_dataset_payload
-from .trace_outcome_model import build_trace_outcome_model_payload
+from .trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
 from .verifier_stack import build_verifier_stack_payload
 from .world_model import build_world_model_payload, train_world_model_calibration
 
@@ -102,6 +103,10 @@ def build_performance_validation_payload(
     timings["trace_outcome_model_sec"] = _elapsed(start)
 
     start = time.perf_counter()
+    trace_policy_proposals = _validate_trace_policy_proposals(root=root, graph_dir=graph_dir)
+    timings["trace_policy_proposals_sec"] = _elapsed(start)
+
+    start = time.perf_counter()
     harness = _validate_harness_observer(root=root, graph_dir=graph_dir)
     timings["harness_observer_sec"] = _elapsed(start)
 
@@ -123,6 +128,7 @@ def build_performance_validation_payload(
         "runtime_trace": runtime_trace,
         "trace_dataset": trace_dataset,
         "trace_outcome_model": trace_outcome_model,
+        "trace_policy_proposals": trace_policy_proposals,
         "harness_observer": harness,
         "residual_clusterer": residuals,
         "formal_metrics": formal,
@@ -885,6 +891,49 @@ def _validate_trace_outcome_model(*, root: Path) -> dict:
     }
 
 
+def _validate_trace_policy_proposals(*, root: Path, graph_dir: Path) -> dict:
+    trace_outcome_path = root / "phase four/assumption_graph/trace_outcome_model_ms_bridge_20260601.json"
+    if not trace_outcome_path.exists():
+        return {
+            "pass": False,
+            "reason": "missing_trace_outcome_model_artifact",
+            "trace_outcome_path": _display_path(root, trace_outcome_path),
+        }
+    payload = build_trace_policy_proposal_payload(
+        store=JsonlGraphStore(graph_dir),
+        trace_outcome_payload=json.loads(trace_outcome_path.read_text(encoding="utf-8")),
+        eval_id="perf_trace_policy_proposals",
+    )
+    proposals = payload.get("proposals", [])
+    repair_count = sum(
+        1 for proposal in proposals
+        if proposal.get("source_action", {}).get("decision") in {"keep_with_targeted_repair", "repair_before_scaling"}
+    )
+    candidate_count = sum(1 for proposal in proposals if proposal.get("candidate_node"))
+    verifier_count = sum(
+        1 for proposal in proposals
+        if "heldout_route_ablation" in (proposal.get("candidate_node", {}).get("verifiers") or [])
+    )
+    return {
+        "pass": (
+            payload["parent_node_id"] is not None
+            and payload["proposal_count"] >= 3
+            and candidate_count == payload["proposal_count"]
+            and repair_count >= 1
+            and verifier_count == payload["proposal_count"]
+            and not payload["secret_leak_detected"]
+        ),
+        "parent_node_id": payload["parent_node_id"],
+        "proposal_count": payload["proposal_count"],
+        "proposal_counts": payload["proposal_counts"],
+        "decision_counts": payload["decision_counts"],
+        "repair_policy_count": repair_count,
+        "candidate_count": candidate_count,
+        "heldout_verifier_count": verifier_count,
+        "secret_leak_detected": payload["secret_leak_detected"],
+    }
+
+
 def _validate_harness_observer(*, root: Path, graph_dir: Path) -> dict:
     artifact_paths = [
         root / "phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_phase2_v20_ms_bridge_gpt55_21_50.json",
@@ -1172,6 +1221,8 @@ def _key_metric(name: str, section: dict) -> str:
     if name == "trace_outcome_model":
         metrics = section.get("leave_one_out_metrics", {})
         return f"rows={section.get('trainable_row_count', 0)}, brier={metrics.get('brier_score')}, updates={section.get('policy_update_count', 0)}"
+    if name == "trace_policy_proposals":
+        return f"proposals={section.get('proposal_count', 0)}, repair={section.get('repair_policy_count', 0)}, parent={section.get('parent_node_id')}"
     if name == "harness_observer":
         return f"artifacts={section['artifact_file_count']}, backfill={section['backfilled_event_count']}/{section['discovered_event_count']}, covered={section['full_coverage_after_writeback']}"
     if name == "residual_clusterer":

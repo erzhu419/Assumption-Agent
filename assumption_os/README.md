@@ -521,12 +521,16 @@ python3 -m assumption_os.trace_dataset \
 `assumption_os.trace_outcome_model` turns those rows into route/component
 calibration and policy-update candidates. It uses leave-one-out route
 predictions and emits repair/reinforce decisions without mutating the graph.
+Add `--graph-dir` / `--proposals-out` to convert those policy updates into
+reviewable `CandidateProposal` objects for the recursive verifier stack.
 
 ```bash
 python3 -m assumption_os.trace_outcome_model \
   --trace-dataset "phase four/assumption_graph/trace_dataset_ms_bridge_20260601.json" \
   --eval-id trace_outcome_model_ms_bridge_20260601 \
-  --summary-out "phase four/assumption_graph/trace_outcome_model_ms_bridge_20260601.json"
+  --summary-out "phase four/assumption_graph/trace_outcome_model_ms_bridge_20260601.json" \
+  --graph-dir "phase four/assumption_graph" \
+  --proposals-out "phase four/assumption_graph/trace_policy_proposals_ms_bridge_20260601.json"
 ```
 
 `assumption_os.harness_observer` is the artifact coverage bridge. It converts
@@ -575,7 +579,7 @@ python3 -m assumption_os.performance_validation \
   --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md"
 ```
 
-The expanded performance validation passes all fifteen sections. The initial run found
+The expanded performance validation passes all sixteen sections. The initial run found
 one real issue: post-acceptance world-model probabilities stayed too high after
 rejected evidence, with Brier score 0.2767. The calibrated version now scores
 Brier 0.0081 on the expanded 2 accepted / 14 rejected labeled set, while
@@ -590,6 +594,8 @@ now proves first-party/cache trace events can be joined to judged outcomes and
 residual labels for world-model training. Trace outcome validation now uses the
 real 9-row math/science trace dataset to calibrate route/component win
 probabilities (`Brier=0.1605`) and emits repair/reinforce policy updates.
+Trace policy proposal validation converts those updates into 3 verifier-ready
+`assumption_revision` proposals under the `domain_retrieval_policy` surface.
 Harness
 observer discovers 19 real artifact events from judgment/meta/log files and
 keeps full artifact-file coverage after the original backfill; current reruns

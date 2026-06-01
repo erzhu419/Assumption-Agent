@@ -14,8 +14,19 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Callable
 
+from .graph_memory import JsonlGraphStore
 from .manifest_logger import redact_secrets
-from .schema import stable_id
+from .proposals import CandidateProposal, ProposalType
+from .schema import (
+    AssumptionEdge,
+    AssumptionNode,
+    AssumptionType,
+    EdgeType,
+    HypothesisKind,
+    TrialManifest,
+    TrialStatus,
+    stable_id,
+)
 
 
 def build_trace_outcome_model_payload(
@@ -58,6 +69,37 @@ def build_trace_outcome_model_payload(
         "policy_update_count": len(policy_updates),
         "policy_updates": policy_updates,
         "predictions": predictions,
+    }
+    clean = redact_secrets(payload)
+    clean["secret_leak_detected"] = _contains_secret(clean)
+    return clean
+
+
+def build_trace_policy_proposal_payload(
+    *,
+    store: JsonlGraphStore,
+    trace_outcome_payload: dict[str, Any],
+    eval_id: str,
+    parent_surface_key: str = "domain_retrieval_policy",
+) -> dict:
+    """Convert trace policy updates into reviewable candidate proposals."""
+
+    parent = _find_surface_parent(store, parent_surface_key)
+    proposals: list[CandidateProposal] = []
+    if parent is not None:
+        proposals = [
+            _proposal_from_policy_update(parent=parent, update=update, eval_id=eval_id)
+            for update in trace_outcome_payload.get("policy_updates", [])
+        ]
+    payload = {
+        "eval_id": eval_id,
+        "source_trace_outcome_eval_id": trace_outcome_payload.get("eval_id"),
+        "parent_surface_key": parent_surface_key,
+        "parent_node_id": parent.id if parent else None,
+        "proposal_count": len(proposals),
+        "proposal_counts": dict(Counter(p.proposal_type.value for p in proposals)),
+        "decision_counts": dict(Counter(p.source_action.get("decision") for p in proposals)),
+        "proposals": [p.to_dict() for p in proposals],
     }
     clean = redact_secrets(payload)
     clean["secret_leak_detected"] = _contains_secret(clean)
@@ -264,6 +306,112 @@ def _preview(value: Any, *, limit: int) -> str:
     return text[:limit] + ("..." if len(text) > limit else "")
 
 
+def _find_surface_parent(store: JsonlGraphStore, surface_key: str) -> AssumptionNode | None:
+    for node in store.nodes.values():
+        if (node.payload or {}).get("surface_key") == surface_key:
+            return node
+    for node in store.nodes.values():
+        if surface_key in node.tags:
+            return node
+    return None
+
+
+def _proposal_from_policy_update(
+    *,
+    parent: AssumptionNode,
+    update: dict[str, Any],
+    eval_id: str,
+) -> CandidateProposal:
+    decision = str(update.get("decision") or "trace_policy_update")
+    scope = str(update.get("scope") or "unknown_scope")
+    route = _route_name_from_key(scope)
+    cid = stable_id("cand", eval_id, update.get("policy_update_id"), route, decision)
+    repair = decision in {"keep_with_targeted_repair", "repair_before_scaling"}
+    claim = (
+        f"For route {route}, keep the route but add a targeted repair verifier before scaling."
+        if decision == "keep_with_targeted_repair"
+        else f"For route {route}, repair the route policy before further scaling."
+        if decision == "repair_before_scaling"
+        else f"For route {route}, reinforce the route prior while monitoring new residuals."
+    )
+    candidate = AssumptionNode(
+        id=cid,
+        type=AssumptionType.RETRIEVAL,
+        kind=HypothesisKind.RETRIEVAL_POLICY,
+        claim=claim,
+        context_conditions=[
+            f"trace_policy_decision={decision}",
+            f"scope={scope}",
+            *[f"trigger={pid}" for pid in update.get("trigger_problem_ids", [])[:6]],
+        ],
+        predicted_effects=[
+            update.get("expected_effect") or "Improve route-conditioned execution outcomes.",
+            "convert trace outcome evidence into a falsifiable route policy before graph mutation",
+        ],
+        risk_predictions=[
+            "route repair may overfit the small trace slice",
+            "reinforcing a route without outside controls can hide future regressions",
+        ],
+        verifiers=[
+            "trace_outcome_leave_one_out",
+            "heldout_route_ablation",
+            "outside_control_harm_check",
+        ],
+        confidence=0.46 if repair else 0.5,
+        metaproductivity=0.08 if repair else 0.05,
+        status="candidate",
+        tags=[
+            "candidate",
+            "trace_policy",
+            decision,
+            route,
+        ],
+        payload={
+            "source": "trace_outcome_model",
+            "policy_update": update,
+            "validation_plan": {
+                "trigger_problem_ids": update.get("trigger_problem_ids", []),
+                "control_policy": "sample outside-control rows from other routes before promotion",
+                "acceptance": "route trigger utility improves without outside-control harm",
+            },
+        },
+    )
+    edge = AssumptionEdge(
+        source=parent.id,
+        target=cid,
+        type=EdgeType.SPECIALIZES,
+        weight=0.62 if repair else 0.55,
+        payload={"source": "trace_outcome_model", "decision": decision, "scope": scope},
+    )
+    manifest = TrialManifest(
+        problem_id=f"trace_policy::{update.get('policy_update_id')}",
+        action_type="trace_policy_proposal",
+        component="trace_outcome_model",
+        assumption=claim,
+        why_selected=f"Trace outcome model emitted {decision} for {scope}.",
+        expected_effect=update.get("expected_effect") or "Improve route-conditioned outcomes.",
+        assumption_ids=[parent.id, cid],
+        verifier="trace_policy_proposal_gate",
+        verification_plan=json.dumps(update.get("verification_plan", []), ensure_ascii=False, sort_keys=True),
+        rollback_condition="Reject if heldout trigger rows fail or outside-control rows regress.",
+        status=TrialStatus.PENDING,
+        artifacts={"policy_update": update, "candidate_node": candidate.to_dict()},
+        metadata={"eval_id": eval_id, "decision": decision, "scope": scope},
+        trial_id=stable_id("trial", eval_id, update.get("policy_update_id"), cid),
+    )
+    return CandidateProposal(
+        proposal_id=stable_id("prop", eval_id, update.get("policy_update_id"), cid),
+        proposal_type=ProposalType.ASSUMPTION_REVISION,
+        parent_node_id=parent.id,
+        candidate_node=candidate.to_dict(),
+        edges=[edge.to_dict()],
+        manifest=manifest.to_dict(),
+        rationale=f"Trace policy update {decision} for {scope}.",
+        priority=0.72 if repair else 0.48,
+        source_action=update,
+    )
+
+
 def _resolve(root: Path, path: str | Path | None) -> Path | None:
     if not path:
         return None
@@ -278,6 +426,8 @@ def main() -> None:
     ap.add_argument("--eval-id", required=True)
     ap.add_argument("--min-policy-group-size", type=int, default=2)
     ap.add_argument("--summary-out", default=None)
+    ap.add_argument("--graph-dir", default=None)
+    ap.add_argument("--proposals-out", default=None)
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
@@ -292,6 +442,17 @@ def main() -> None:
         out = _resolve(root, args.summary_out)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(text + "\n", encoding="utf-8")
+    if args.proposals_out:
+        if not args.graph_dir:
+            raise SystemExit("--proposals-out requires --graph-dir")
+        proposal_payload = build_trace_policy_proposal_payload(
+            store=JsonlGraphStore(_resolve(root, args.graph_dir)),
+            trace_outcome_payload=payload,
+            eval_id=f"{args.eval_id}_proposals",
+        )
+        out = _resolve(root, args.proposals_out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(proposal_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(text)
 
 

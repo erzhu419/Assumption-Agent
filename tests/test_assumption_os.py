@@ -69,7 +69,7 @@ from assumption_os.schema import (
 from assumption_os.selector import MetaproductivitySelector
 from assumption_os.trajectory_search import build_trajectory_search_payload
 from assumption_os.trace_dataset import build_trace_dataset_payload
-from assumption_os.trace_outcome_model import build_trace_outcome_model_payload
+from assumption_os.trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
 from assumption_os.verifier_stack import build_verifier_stack_payload
 from assumption_os.world_model import build_world_model_payload, train_world_model_calibration
 
@@ -1025,6 +1025,29 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(payload["residual_stats"][0]["residual_type"], "optimization")
         self.assertFalse(payload["secret_leak_detected"])
         self.assertNotIn("trace-outcome-secret", json.dumps(payload))
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="surface_retrieval",
+                type=AssumptionType.RETRIEVAL,
+                kind="retrieval_policy",
+                claim="Domain retrieval policy surface",
+                tags=["domain_retrieval_policy"],
+                payload={"surface_key": "domain_retrieval_policy"},
+            ))
+            store.flush()
+            proposals = build_trace_policy_proposal_payload(
+                store=JsonlGraphStore(td),
+                trace_outcome_payload=payload,
+                eval_id="unit_trace_policy_proposals",
+            )
+            self.assertEqual(proposals["proposal_count"], 1)
+            proposal = proposals["proposals"][0]
+            self.assertEqual(proposal["proposal_type"], ProposalType.ASSUMPTION_REVISION.value)
+            self.assertEqual(proposal["parent_node_id"], "surface_retrieval")
+            self.assertEqual(proposal["candidate_node"]["type"], AssumptionType.RETRIEVAL.value)
+            self.assertIn("heldout_route_ablation", proposal["candidate_node"]["verifiers"])
+            self.assertFalse(proposals["secret_leak_detected"])
 
     def test_harness_observer_backfills_artifact_manifest_coverage(self):
         with tempfile.TemporaryDirectory() as td:
