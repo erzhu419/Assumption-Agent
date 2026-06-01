@@ -57,6 +57,7 @@ from .reconstruction_progress import build_reconstruction_progress_payload
 from .recursive_runner import build_recursive_assumption_run
 from .residual_clusterer import build_residual_cluster_payload
 from .runtime_trace import RuntimeTraceRecorder
+from .surface_hypotheses import build_surface_hypothesis_payload
 from .trajectory_search import build_trajectory_search_payload
 from .trace_dataset import build_trace_dataset_collection_payload, build_trace_dataset_payload
 from .trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
@@ -148,6 +149,12 @@ def build_performance_validation_payload(
         "residual_clusterer": residuals,
         "formal_metrics": formal,
     }
+    start = time.perf_counter()
+    sections["surface_hypothesis_generator"] = _validate_surface_hypothesis_generator(
+        graph_dir=graph_dir,
+        sections=sections,
+    )
+    timings["surface_hypothesis_generator_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["evolution_context"] = _validate_evolution_context(sections=sections)
     timings["evolution_context_sec"] = _elapsed(start)
@@ -1241,6 +1248,42 @@ def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
     }
 
 
+def _validate_surface_hypothesis_generator(*, graph_dir: Path, sections: dict[str, dict]) -> dict:
+    payload = build_surface_hypothesis_payload(
+        store=JsonlGraphStore(graph_dir),
+        performance_sections=sections,
+        eval_id="perf_surface_hypotheses",
+    )
+    proposals = payload.get("proposals", [])
+    candidate_count = sum(1 for proposal in proposals if proposal.get("candidate_node"))
+    manifest_count = payload.get("manifest_count", 0)
+    verifier_count = sum(
+        1 for proposal in proposals
+        if (proposal.get("candidate_node", {}).get("verifiers") or [])
+    )
+    return {
+        "pass": (
+            payload["proposal_count"] >= 4
+            and payload["world_model_proposal_count"] >= 2
+            and payload["evaluator_proposal_count"] >= 2
+            and candidate_count == payload["proposal_count"]
+            and manifest_count == payload["proposal_count"]
+            and verifier_count == payload["proposal_count"]
+            and not payload["secret_leak_detected"]
+        ),
+        "proposal_count": payload["proposal_count"],
+        "proposal_counts": payload["proposal_counts"],
+        "surface_counts": payload["surface_counts"],
+        "world_model_proposal_count": payload["world_model_proposal_count"],
+        "evaluator_proposal_count": payload["evaluator_proposal_count"],
+        "candidate_count": candidate_count,
+        "manifest_count": manifest_count,
+        "verifier_count": verifier_count,
+        "secret_leak_detected": payload["secret_leak_detected"],
+        "proposals": proposals,
+    }
+
+
 def _formal_dedup_positive_control() -> dict:
     with tempfile.TemporaryDirectory() as td:
         store = JsonlGraphStore(Path(td))
@@ -1487,6 +1530,12 @@ def _key_metric(name: str, section: dict) -> str:
         return f"artifacts={section['artifact_file_count']}, backfill={section['backfilled_event_count']}/{section['discovered_event_count']}, covered={section['full_coverage_after_writeback']}"
     if name == "residual_clusterer":
         return f"clusters={section['cluster_count']}, proposals={section['proposal_count']}"
+    if name == "surface_hypothesis_generator":
+        return (
+            f"proposals={section.get('proposal_count', 0)}, "
+            f"world={section.get('world_model_proposal_count', 0)}, "
+            f"evaluator={section.get('evaluator_proposal_count', 0)}"
+        )
     if name == "formal_metrics":
         return (
             f"mappings={section['mapping_count']}, warnings={section['warning_count']}, "

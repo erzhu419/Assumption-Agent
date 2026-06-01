@@ -136,15 +136,20 @@ def _hypothesis_generator_item(sections: dict[str, dict]) -> ProgressItem:
     residual = sections.get("residual_clusterer", {})
     trace_policy = sections.get("trace_policy_proposals", {})
     preflight = sections.get("trace_policy_preflight", {})
+    surface = sections.get("surface_hypothesis_generator", {})
     structure = _avg([
         float(residual.get("pass", False)),
         float(trace_policy.get("pass", False)),
+        float(surface.get("pass", False)),
         _cap(residual.get("proposal_count", 0) / 2),
         _cap(trace_policy.get("proposal_count", 0) / 3),
+        _cap(surface.get("proposal_count", 0) / 4),
     ])
     behavior = _avg([
         _cap(residual.get("cluster_count", 0) / 7),
         _cap(trace_policy.get("repair_policy_count", 0) / 1),
+        _cap(surface.get("world_model_proposal_count", 0) / 2),
+        _cap(surface.get("evaluator_proposal_count", 0) / 2),
         _cap(preflight.get("ready_count", 0) / max(1, preflight.get("proposal_count", 1))),
         float(preflight.get("pass", False)),
     ])
@@ -158,10 +163,13 @@ def _hypothesis_generator_item(sections: dict[str, dict]) -> ProgressItem:
             "residual_proposal_count": residual.get("proposal_count"),
             "trace_policy_proposal_count": trace_policy.get("proposal_count"),
             "trace_policy_ready_count": preflight.get("ready_count"),
+            "surface_hypothesis_proposal_count": surface.get("proposal_count"),
+            "surface_world_model_proposal_count": surface.get("world_model_proposal_count"),
+            "surface_evaluator_proposal_count": surface.get("evaluator_proposal_count"),
         },
         remaining_gaps=[
             "Generation is still mostly deterministic/residual-driven; broad LLM synthesis is injectable but not routinely validated.",
-            "Evaluator/world-model/self-modification hypothesis generators exist as surfaces but need more real proposal examples.",
+            "Evaluator/world-model generators now emit proposals, but self-modification hypothesis generation is still mostly audit-driven.",
         ],
         next_actions=[
             "Run fresh ablation/judge for the preflight-ready trace policy proposals.",
@@ -534,7 +542,7 @@ def _reconstruction_reference(path: Path | None) -> dict[str, Any]:
 
 RECONSTRUCTION_CEILINGS = {
     "A_assumption_graph_memory": (0.88, 0.78),
-    "B_hypothesis_generator": (0.80, 0.70),
+    "B_hypothesis_generator": (0.82, 0.73),
     "C_world_model_simulator": (0.82, 0.66),
     "D_verifier_stack": (0.82, 0.74),
     "E_residual_analyzer": (0.82, 0.74),

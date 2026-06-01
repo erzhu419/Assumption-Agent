@@ -88,6 +88,7 @@ Current gaps being addressed:
 - 2026-06-01: Connected the trace collection to the outcome world model with source reliability weights. The outcome model now calibrates over 67 trainable rows / 38.0 weighted rows, emits 4 trace-policy proposals, and current reconstruction closure is structure 82.6%, behavior 72.6%, weighted 77.1%.
 - 2026-06-01: Added a feature-blend trace outcome predictor over problem features, activated-assumption counts, trace components, source reliability, and residual labels. Feature leave-one-out weighted Brier is 0.0621 versus 0.0858 for route-only, and current reconstruction closure is structure 82.6%, behavior 72.8%, weighted 77.2%.
 - 2026-06-01: Expanded formal-transfer evaluation from 5 hand-labeled queries to 9 mapping-covered queries with 72 explicit negative applications. Formal transfer now validates all complete mappings with top-1 hit rate 1.0 and pairwise AUC 1.0; current reconstruction closure is structure 82.8%, behavior 73.1%, weighted 77.5%.
+- 2026-06-01: Added `assumption_os.surface_hypotheses` so world-model and evaluator residual signals create reviewable failure-hypothesis proposals with manifests and verifiers. Current surface generation emits 4 proposals: 2 world-model and 2 evaluator; reconstruction closure is structure 83.0%, behavior 73.4%, weighted 77.7%.
 
 ## Closure Notes
 
@@ -110,6 +111,7 @@ Current gaps being addressed:
 - Trace policy preflight verifies trigger routing before any expensive fresh ablation.
 - Trace outcome calibration now prefers the collection artifact and weights first-party runtime rows at 1.0 and artifact-replay rows at 0.5, so replay evidence can expand coverage without overpowering live traces.
 - Trace outcome modeling now includes a feature-blend cheap predictor, so world-model validation is no longer only a route-frequency table.
+- Surface-level world-model/evaluator residuals now enter the proposal queue instead of staying as progress-report notes.
 - Reconstruction progress is now part of performance validation and is capped against the full `reconstruction.md` target, so passing local artifacts do not overstate maturity.
 
 ## Performance Validation - 2026-06-01
@@ -210,4 +212,24 @@ Results:
 - Formal search eval: 9 mapping-covered queries, 9/9 top-1 hits, 72 explicit negative applications.
 - Formal transfer eval: 81 transfer applications, top-1 hit rate 1.0, pairwise AUC 1.0, positive mean score 8.00862, negative mean score 0.033369.
 - Reconstruction progress: structure 82.8%, behavior 73.1%, weighted 77.5%; lowest behavior items are `C_world_model_simulator`, `G_formal_alignment_layer`, and `B_hypothesis_generator`.
+- AssumptionBench: 9 / 9 lifecycle capabilities pass; overall score 0.9968, minimum score 0.9716.
+
+## Performance Validation - Surface Hypotheses - 2026-06-01
+
+Command:
+
+```bash
+python3 -m assumption_os.performance_validation \
+  --root . \
+  --graph-dir "phase four/assumption_graph" \
+  --eval-id reconstruction_gap_perf_20260601_surface_hypotheses \
+  --summary-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_surface_hypotheses.json" \
+  --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_surface_hypotheses.md"
+```
+
+Results:
+
+- Overall: PASS.
+- Surface hypothesis generator: 4 `failure_hypothesis` proposals, 2 from `world_model_screen`, 2 from `evaluator_policy`, all with candidate nodes, manifests, and verifiers.
+- Reconstruction progress: structure 83.0%, behavior 73.4%, weighted 77.7%; `B_hypothesis_generator` is now 82.0% structure / 73.0% behavior.
 - AssumptionBench: 9 / 9 lifecycle capabilities pass; overall score 0.9968, minimum score 0.9716.

@@ -1,10 +1,10 @@
 {
   "closure": {
-    "behavior_percent": 73.1,
+    "behavior_percent": 73.4,
     "completed_item_count": 3,
     "item_count": 9,
-    "structure_percent": 82.8,
-    "weighted_percent": 77.5
+    "structure_percent": 83.0,
+    "weighted_percent": 77.7
   },
   "eval_id": "reconstruction_progress_20260601",
   "items": [
@@ -36,14 +36,17 @@
       "target": "HippoRAG-style Assumption Graph with assumptions, cases, residuals, verifiers, and runtime surfaces."
     },
     {
-      "behavior_score": 0.7,
+      "behavior_score": 0.73,
       "evidence": {
         "reconstruction_ceiling": {
-          "behavior": 0.7,
-          "structure": 0.8
+          "behavior": 0.73,
+          "structure": 0.82
         },
         "residual_cluster_count": 7,
         "residual_proposal_count": 2,
+        "surface_evaluator_proposal_count": 2,
+        "surface_hypothesis_proposal_count": 4,
+        "surface_world_model_proposal_count": 2,
         "trace_policy_proposal_count": 4,
         "trace_policy_ready_count": 4
       },
@@ -54,11 +57,11 @@
       ],
       "remaining_gaps": [
         "Generation is still mostly deterministic/residual-driven; broad LLM synthesis is injectable but not routinely validated.",
-        "Evaluator/world-model/self-modification hypothesis generators exist as surfaces but need more real proposal examples.",
+        "Evaluator/world-model generators now emit proposals, but self-modification hypothesis generation is still mostly audit-driven.",
         "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts."
       ],
       "status": "operational",
-      "structure_score": 0.8,
+      "structure_score": 0.82,
       "target": "Generate framing, strategy, retrieval, evaluator, world-model, and self-modification hypotheses from residuals and traces."
     },
     {
@@ -293,16 +296,6 @@
       "priority": 0.268
     },
     {
-      "action": "Add a generator pass that turns evaluator/world-model residuals into candidate proposals.",
-      "item": "B_hypothesis_generator",
-      "priority": 0.255
-    },
-    {
-      "action": "Run fresh ablation/judge for the preflight-ready trace policy proposals.",
-      "item": "B_hypothesis_generator",
-      "priority": 0.255
-    },
-    {
       "action": "Add a scheduler benchmark that compares ACP-aware selection to immediate-win selection.",
       "item": "F_metaproductivity_selector",
       "priority": 0.255
@@ -311,6 +304,16 @@
       "action": "Use accepted/rejected descendants to update clade-level ACP after each recursive run.",
       "item": "F_metaproductivity_selector",
       "priority": 0.255
+    },
+    {
+      "action": "Add a generator pass that turns evaluator/world-model residuals into candidate proposals.",
+      "item": "B_hypothesis_generator",
+      "priority": 0.2295
+    },
+    {
+      "action": "Run fresh ablation/judge for the preflight-ready trace policy proposals.",
+      "item": "B_hypothesis_generator",
+      "priority": 0.2295
     },
     {
       "action": "Add objective-task and manual-review gates for high-impact graph mutations.",
@@ -492,21 +495,6 @@
       "priority": 0.32
     },
     {
-      "gap": "Evaluator/world-model/self-modification hypothesis generators exist as surfaces but need more real proposal examples.",
-      "item": "B_hypothesis_generator",
-      "priority": 0.3
-    },
-    {
-      "gap": "Generation is still mostly deterministic/residual-driven; broad LLM synthesis is injectable but not routinely validated.",
-      "item": "B_hypothesis_generator",
-      "priority": 0.3
-    },
-    {
-      "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
-      "item": "B_hypothesis_generator",
-      "priority": 0.3
-    },
-    {
       "gap": "Cost/risk/novelty are present as features but not optimized as a unified scheduler objective.",
       "item": "F_metaproductivity_selector",
       "priority": 0.3
@@ -520,11 +508,26 @@
       "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
       "item": "F_metaproductivity_selector",
       "priority": 0.3
+    },
+    {
+      "gap": "Evaluator/world-model generators now emit proposals, but self-modification hypothesis generation is still mostly audit-driven.",
+      "item": "B_hypothesis_generator",
+      "priority": 0.27
+    },
+    {
+      "gap": "Generation is still mostly deterministic/residual-driven; broad LLM synthesis is injectable but not routinely validated.",
+      "item": "B_hypothesis_generator",
+      "priority": 0.27
+    },
+    {
+      "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
+      "item": "B_hypothesis_generator",
+      "priority": 0.27
     }
   ],
   "source": {
     "graph_dir": "phase four/assumption_graph",
-    "performance_eval_id": "reconstruction_gap_perf_20260601_formal_expanded",
+    "performance_eval_id": "reconstruction_gap_perf_20260601_surface_hypotheses",
     "reconstruction_path": "reconstruction/md/reconstruction.md",
     "root": "."
   }

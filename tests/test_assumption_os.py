@@ -66,6 +66,7 @@ from assumption_os.schema import (
     AssumptionType,
     EdgeType,
     EvidenceRecord,
+    HypothesisKind,
     ResidualType,
     TrialManifest,
     TrialStatus,
@@ -74,6 +75,7 @@ from assumption_os.selector import MetaproductivitySelector
 from assumption_os.trajectory_search import build_trajectory_search_payload
 from assumption_os.trace_dataset import build_trace_dataset_collection_payload, build_trace_dataset_payload
 from assumption_os.trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
+from assumption_os.surface_hypotheses import build_surface_hypothesis_payload
 from assumption_os.verifier_stack import build_verifier_stack_payload
 from assumption_os.world_model import build_world_model_payload, train_world_model_calibration
 
@@ -1117,6 +1119,50 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertIn("heldout_route_ablation", proposal["candidate_node"]["verifiers"])
             self.assertEqual(proposal["candidate_node"]["payload"]["activation"]["problem_ids"], ["p1", "p2"])
             self.assertFalse(proposals["secret_leak_detected"])
+
+    def test_surface_hypotheses_generate_world_model_and_evaluator_proposals(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="surface_world",
+                type=AssumptionType.WORLD_MODEL,
+                kind=HypothesisKind.CLAIM,
+                claim="World model screen",
+                payload={"surface_key": "world_model_screen"},
+            ))
+            store.upsert_node(AssumptionNode(
+                id="surface_eval",
+                type=AssumptionType.EVALUATOR,
+                kind=HypothesisKind.CLAIM,
+                claim="Evaluator policy",
+                payload={"surface_key": "evaluator_policy"},
+            ))
+            sections = {
+                "trace_dataset": {
+                    "first_party_trainable_row_count": 1,
+                    "artifact_replay_trainable_row_count": 4,
+                },
+                "trace_outcome_model": {
+                    "leave_one_out_metrics": {"weighted_brier_score": 0.2},
+                    "feature_leave_one_out_metrics": {"weighted_brier_score": 0.1},
+                    "feature_schema": {"feature_count": 6},
+                },
+                "verifier_stack": {"stage_status_counts": {"V4:missing": 3, "V4:fail": 1}},
+                "formal_metrics": {
+                    "transfer_search_query_count": 2,
+                    "transfer_search_negative_application_count": 2,
+                },
+            }
+            payload = build_surface_hypothesis_payload(
+                store=store,
+                performance_sections=sections,
+                eval_id="unit_surface_hypotheses",
+            )
+            self.assertEqual(payload["proposal_count"], 4)
+            self.assertEqual(payload["world_model_proposal_count"], 2)
+            self.assertEqual(payload["evaluator_proposal_count"], 2)
+            self.assertEqual(payload["manifest_count"], 4)
+            self.assertFalse(payload["secret_leak_detected"])
 
     def test_harness_observer_backfills_artifact_manifest_coverage(self):
         with tempfile.TemporaryDirectory() as td:
