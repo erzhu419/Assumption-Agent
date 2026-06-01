@@ -1,0 +1,132 @@
+{
+  "eval_id": "recursive_positive_ms_bridge_phase2_v20_gpt55_21_50_proposals",
+  "source_eval_id": "math_science_bridge_eval_gpt55_21_50",
+  "proposal_counts": {
+    "assumption_revision": 1
+  },
+  "proposals": [
+    {
+      "proposal_id": "prop_e61e596b7f98",
+      "proposal_type": "assumption_revision",
+      "parent_node_id": "strategy_S22",
+      "candidate_node": {
+        "id": "cand_e61e596b7f98",
+        "type": "harness",
+        "claim": "Use an intent-aware math/science bypass: route mathematics into formal vs research-bridge prompts, and science into mechanism vs decision prompts, instead of one generic hygiene bypass.",
+        "kind": "evaluator_policy",
+        "formal_form": null,
+        "context_conditions": [
+          "domain in {mathematics, science}",
+          "mathematics route=math_formal for explicit computation/proof prompts",
+          "mathematics route=math_research_bridge for research-direction, unification, proof-vs-refutation, or advisor-context prompts",
+          "science route=science_mechanism for direct mechanism questions",
+          "science route=science_decision for publication, graduation, equipment, collaboration, or project-risk decisions",
+          "fallback to existing phase2_v20 behavior outside math/science domains"
+        ],
+        "predicted_effects": [
+          "recover concrete research bridge/action-plan answers on math/science rows where the old bypass was too formal",
+          "preserve strict formal/mechanistic answers for ordinary math/science problems"
+        ],
+        "risk_predictions": [
+          "may over-route formal math into methodology if cue matching is too broad",
+          "may over-answer pure science mechanism questions with project-management advice if decision cues are noisy"
+        ],
+        "verifiers": [
+          "candidate_acceptance_gate",
+          "bidirectional_pairwise_judge",
+          "outside-domain no-op audit"
+        ],
+        "evidence_ids": [],
+        "residual_ids": [],
+        "confidence": 0.62,
+        "metaproductivity": 0.11,
+        "status": "candidate",
+        "tags": [
+          "candidate",
+          "positive_control",
+          "math_science_bridge",
+          "recursive_acceptance"
+        ],
+        "source_refs": [
+          "phase four/assumption_graph/math_science_bridge_eval_gpt55_21_50.md",
+          "assumption_os/math_science_policy.py"
+        ],
+        "payload": {
+          "parent_node_id": "strategy_S22",
+          "proposal_type": "assumption_revision",
+          "implementation_flag": "--math-science-bridge",
+          "candidate_variant": "phase2_v20_ms_bridge_gpt55_21_50",
+          "baseline_variant": "phase2_v20_gpt55",
+          "sample": "phase two/analysis/cache/proposal_samples/math_science_21_50_sample.json"
+        },
+        "created_at": "2026-06-01T01:26:33Z",
+        "updated_at": "2026-06-01T01:26:33Z"
+      },
+      "edges": [
+        {
+          "source": "strategy_S22",
+          "target": "cand_e61e596b7f98",
+          "type": "specializes",
+          "weight": 0.72,
+          "evidence": null,
+          "payload": {
+            "proposal_type": "assumption_revision",
+            "eval_id": "recursive_positive_ms_bridge_phase2_v20_gpt55_21_50"
+          },
+          "created_at": "2026-06-01T01:26:33Z"
+        }
+      ],
+      "manifest": {
+        "problem_id": "proposal::cand_e61e596b7f98",
+        "action_type": "proposal_assumption_revision",
+        "assumption": "Intent-aware math/science bypass should beat the old math/science hygiene bypass on routed math/science rows.",
+        "why_selected": "Existing heldout math/science bridge evaluation is the strongest real positive signal available in the current artifacts.",
+        "expected_effect": "Acceptance gate should pass on routed trigger rows without mutating graph until gated apply is requested.",
+        "assumption_ids": [
+          "strategy_S22",
+          "cand_e61e596b7f98"
+        ],
+        "component": "recursive_positive_control",
+        "predicted_regressions": [],
+        "verifier": "candidate_acceptance_gate",
+        "verification_plan": "Use bidirectional gpt-5.5 pairwise judgments on the 21-50 math/science slice.",
+        "rollback_condition": "Do not apply if trigger lower bound fails or control harm is observed.",
+        "cost": 0.0,
+        "observed_effect": null,
+        "residual": null,
+        "residual_type": null,
+        "status": "pending",
+        "artifacts": {
+          "judgments": [
+            "phase two/analysis/cache/judgments/phase2_v20_ms_bridge_gpt55_21_50_vs_phase2_v20_gpt55.json",
+            "phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_phase2_v20_ms_bridge_gpt55_21_50.json"
+          ],
+          "sample": "phase two/analysis/cache/proposal_samples/math_science_21_50_sample.json",
+          "report": "phase four/assumption_graph/math_science_bridge_eval_gpt55_21_50.md"
+        },
+        "metadata": {
+          "eval_id": "recursive_positive_ms_bridge_phase2_v20_gpt55_21_50",
+          "proposal_type": "assumption_revision",
+          "parent_node_id": "strategy_S22",
+          "candidate_node_id": "cand_e61e596b7f98",
+          "positive_control": true
+        },
+        "parent_trial_id": null,
+        "trial_id": "trial_8b43dcf423c9",
+        "timestamp": "2026-06-01T01:26:33Z"
+      },
+      "rationale": "Strong domain-scoped bridge evidence from real gpt-5.5 math/science evaluation.",
+      "priority": 2.4,
+      "source_action": {
+        "action_type": "revise_assumption",
+        "node_id": "strategy_S22",
+        "rationale": "Old math/science bypass was over-formal on research/decision prompts.",
+        "proposed_updates": {
+          "expected_effect": "Improve math/science bridge rows without broad graph-policy exposure."
+        },
+        "verification_plan": "Run candidate acceptance on bidirectional bridge judgments.",
+        "rollback_condition": "Reject if acceptance gate fails."
+      }
+    }
+  ]
+}

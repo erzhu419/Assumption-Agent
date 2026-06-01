@@ -1,0 +1,288 @@
+{
+  "eval_id": "recursive_positive_ms_bridge_phase2_v20_gpt55_21_50",
+  "mode": {
+    "writeback": false,
+    "apply_accepted": false,
+    "autonomous_apply": false,
+    "positive_control": true,
+    "force_proposal_route": true
+  },
+  "source": {
+    "sample": "phase two/analysis/cache/proposal_samples/math_science_21_50_sample.json",
+    "judgments": [
+      "phase two/analysis/cache/judgments/phase2_v20_ms_bridge_gpt55_21_50_vs_phase2_v20_gpt55.json",
+      "phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_phase2_v20_ms_bridge_gpt55_21_50.json"
+    ],
+    "intervention_variant": "phase2_v20_ms_bridge_gpt55_21_50",
+    "baseline_variant": "phase2_v20_gpt55"
+  },
+  "proposals": {
+    "eval_id": "recursive_positive_ms_bridge_phase2_v20_gpt55_21_50_proposals",
+    "source_eval_id": "math_science_bridge_eval_gpt55_21_50",
+    "proposal_counts": {
+      "assumption_revision": 1
+    },
+    "proposals": [
+      {
+        "proposal_id": "prop_e61e596b7f98",
+        "proposal_type": "assumption_revision",
+        "parent_node_id": "strategy_S22",
+        "candidate_node": {
+          "id": "cand_e61e596b7f98",
+          "type": "harness",
+          "claim": "Use an intent-aware math/science bypass: route mathematics into formal vs research-bridge prompts, and science into mechanism vs decision prompts, instead of one generic hygiene bypass.",
+          "kind": "evaluator_policy",
+          "formal_form": null,
+          "context_conditions": [
+            "domain in {mathematics, science}",
+            "mathematics route=math_formal for explicit computation/proof prompts",
+            "mathematics route=math_research_bridge for research-direction, unification, proof-vs-refutation, or advisor-context prompts",
+            "science route=science_mechanism for direct mechanism questions",
+            "science route=science_decision for publication, graduation, equipment, collaboration, or project-risk decisions",
+            "fallback to existing phase2_v20 behavior outside math/science domains"
+          ],
+          "predicted_effects": [
+            "recover concrete research bridge/action-plan answers on math/science rows where the old bypass was too formal",
+            "preserve strict formal/mechanistic answers for ordinary math/science problems"
+          ],
+          "risk_predictions": [
+            "may over-route formal math into methodology if cue matching is too broad",
+            "may over-answer pure science mechanism questions with project-management advice if decision cues are noisy"
+          ],
+          "verifiers": [
+            "candidate_acceptance_gate",
+            "bidirectional_pairwise_judge",
+            "outside-domain no-op audit"
+          ],
+          "evidence_ids": [],
+          "residual_ids": [],
+          "confidence": 0.62,
+          "metaproductivity": 0.11,
+          "status": "candidate",
+          "tags": [
+            "candidate",
+            "positive_control",
+            "math_science_bridge",
+            "recursive_acceptance"
+          ],
+          "source_refs": [
+            "phase four/assumption_graph/math_science_bridge_eval_gpt55_21_50.md",
+            "assumption_os/math_science_policy.py"
+          ],
+          "payload": {
+            "parent_node_id": "strategy_S22",
+            "proposal_type": "assumption_revision",
+            "implementation_flag": "--math-science-bridge",
+            "candidate_variant": "phase2_v20_ms_bridge_gpt55_21_50",
+            "baseline_variant": "phase2_v20_gpt55",
+            "sample": "phase two/analysis/cache/proposal_samples/math_science_21_50_sample.json"
+          },
+          "created_at": "2026-06-01T01:26:33Z",
+          "updated_at": "2026-06-01T01:26:33Z"
+        },
+        "edges": [
+          {
+            "source": "strategy_S22",
+            "target": "cand_e61e596b7f98",
+            "type": "specializes",
+            "weight": 0.72,
+            "evidence": null,
+            "payload": {
+              "proposal_type": "assumption_revision",
+              "eval_id": "recursive_positive_ms_bridge_phase2_v20_gpt55_21_50"
+            },
+            "created_at": "2026-06-01T01:26:33Z"
+          }
+        ],
+        "manifest": {
+          "problem_id": "proposal::cand_e61e596b7f98",
+          "action_type": "proposal_assumption_revision",
+          "assumption": "Intent-aware math/science bypass should beat the old math/science hygiene bypass on routed math/science rows.",
+          "why_selected": "Existing heldout math/science bridge evaluation is the strongest real positive signal available in the current artifacts.",
+          "expected_effect": "Acceptance gate should pass on routed trigger rows without mutating graph until gated apply is requested.",
+          "assumption_ids": [
+            "strategy_S22",
+            "cand_e61e596b7f98"
+          ],
+          "component": "recursive_positive_control",
+          "predicted_regressions": [],
+          "verifier": "candidate_acceptance_gate",
+          "verification_plan": "Use bidirectional gpt-5.5 pairwise judgments on the 21-50 math/science slice.",
+          "rollback_condition": "Do not apply if trigger lower bound fails or control harm is observed.",
+          "cost": 0.0,
+          "observed_effect": null,
+          "residual": null,
+          "residual_type": null,
+          "status": "pending",
+          "artifacts": {
+            "judgments": [
+              "phase two/analysis/cache/judgments/phase2_v20_ms_bridge_gpt55_21_50_vs_phase2_v20_gpt55.json",
+              "phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_phase2_v20_ms_bridge_gpt55_21_50.json"
+            ],
+            "sample": "phase two/analysis/cache/proposal_samples/math_science_21_50_sample.json",
+            "report": "phase four/assumption_graph/math_science_bridge_eval_gpt55_21_50.md"
+          },
+          "metadata": {
+            "eval_id": "recursive_positive_ms_bridge_phase2_v20_gpt55_21_50",
+            "proposal_type": "assumption_revision",
+            "parent_node_id": "strategy_S22",
+            "candidate_node_id": "cand_e61e596b7f98",
+            "positive_control": true
+          },
+          "parent_trial_id": null,
+          "trial_id": "trial_8b43dcf423c9",
+          "timestamp": "2026-06-01T01:26:33Z"
+        },
+        "rationale": "Strong domain-scoped bridge evidence from real gpt-5.5 math/science evaluation.",
+        "priority": 2.4,
+        "source_action": {
+          "action_type": "revise_assumption",
+          "node_id": "strategy_S22",
+          "rationale": "Old math/science bypass was over-formal on research/decision prompts.",
+          "proposed_updates": {
+            "expected_effect": "Improve math/science bridge rows without broad graph-policy exposure."
+          },
+          "verification_plan": "Run candidate acceptance on bidirectional bridge judgments.",
+          "rollback_condition": "Reject if acceptance gate fails."
+        }
+      }
+    ]
+  },
+  "candidate_preflight": {
+    "eval_id": "recursive_positive_ms_bridge_phase2_v20_gpt55_21_50_candidate_preflight",
+    "source_eval_id": "recursive_positive_ms_bridge_phase2_v20_gpt55_21_50_proposals",
+    "summaries": [
+      {
+        "proposal_id": "prop_e61e596b7f98",
+        "proposal_type": "assumption_revision",
+        "parent_node_id": "strategy_S22",
+        "candidate_node_id": "cand_e61e596b7f98",
+        "readiness": "ready_for_fresh_ablation",
+        "trigger_problem_ids": [
+          "mathematics_0251",
+          "science_0083",
+          "science_0097",
+          "science_0180",
+          "science_0273",
+          "mathematics_0192",
+          "mathematics_0257",
+          "science_0204",
+          "mathematics_0243"
+        ],
+        "active_trigger_problem_ids": [
+          "mathematics_0251",
+          "science_0083",
+          "science_0097",
+          "science_0180",
+          "science_0273",
+          "mathematics_0192",
+          "mathematics_0257",
+          "science_0204",
+          "mathematics_0243"
+        ],
+        "missed_trigger_problem_ids": [],
+        "control_problem_ids": [],
+        "outside_active_problem_ids": [],
+        "command_hint": "python3 \"phase one/scripts/validation/phase2_v20_framework.py\" --variant phase2_v20_ms_bridge_next --sample \"proposal_samples/math_science_21_50_sample.json\" --math-science-bridge",
+        "rationale": "All rows in the selected slice are routed math/science triggers; outside-domain behavior is specified as fallback/no-op and not promoted by this positive-control gate.",
+        "acceptance_criteria": [
+          "trigger benefit lower bound clears acceptance gate",
+          "no control harm is observed before graph mutation"
+        ]
+      }
+    ]
+  },
+  "candidate_acceptance": null,
+  "falsification_gate": {
+    "eval_id": "recursive_positive_ms_bridge_phase2_v20_gpt55_21_50_falsification",
+    "decision_counts": {
+      "ready_for_ablation": 1
+    },
+    "summaries": [
+      {
+        "proposal_id": "prop_e61e596b7f98",
+        "decision": "ready_for_ablation",
+        "next_action": "run_fresh_ablation",
+        "rationale": "Bidirectional math/science bridge judgments are available and can be fed to acceptance.",
+        "ordered_checks": [
+          {
+            "name": "fresh_ablation_acceptance",
+            "status": "available",
+            "detail": "Use existing real gpt-5.5 bridge judgments."
+          },
+          {
+            "name": "outside_domain_harm",
+            "status": "scoped",
+            "detail": "Candidate is domain-gated to math/science bypass."
+          }
+        ]
+      }
+    ]
+  },
+  "regression_predictions": [
+    {
+      "proposal_id": "prop_e61e596b7f98",
+      "candidate_node_id": "cand_e61e596b7f98",
+      "risk": "low",
+      "readiness": "ready_for_fresh_ablation",
+      "outside_active_problem_ids": [],
+      "control_problem_ids": [],
+      "reasons": [
+        "math/science bypass is domain-scoped; no graph retrieval activation outside the routed domain"
+      ]
+    }
+  ],
+  "bayesian_policy": {
+    "eval_id": "recursive_positive_ms_bridge_phase2_v20_gpt55_21_50_bayesian_policy",
+    "scores": [
+      {
+        "proposal_id": "prop_e61e596b7f98",
+        "candidate_node_id": "cand_e61e596b7f98",
+        "posterior_priority": 2.4,
+        "expected_value": 1.6,
+        "recommended_action": "run_fresh_ablation",
+        "rationale": [
+          "strong real heldout trigger wins",
+          "low scope risk because policy is domain-gated"
+        ],
+        "command_hint": "python3 \"phase one/scripts/validation/phase2_v20_framework.py\" --variant phase2_v20_ms_bridge_next --sample \"proposal_samples/math_science_21_50_sample.json\" --math-science-bridge"
+      }
+    ]
+  },
+  "policy_update_plan": {
+    "accepted_proposal_ids": [],
+    "applied_candidate_node_ids": [],
+    "actions": [
+      {
+        "proposal_id": "prop_e61e596b7f98",
+        "proposal_type": "assumption_revision",
+        "parent_node_id": "strategy_S22",
+        "candidate_node_id": "cand_e61e596b7f98",
+        "preflight_readiness": "ready_for_fresh_ablation",
+        "formal_mapping_gate": {
+          "proposal_id": "prop_e61e596b7f98",
+          "decision": "allow_scoped_policy",
+          "blocks_policy_update": false,
+          "rationale": "This candidate is a domain-scoped harness policy, not an unsafe formal isomorphism claim."
+        },
+        "bayesian_action": "run_fresh_ablation",
+        "bayesian_priority": 2.4,
+        "bayesian_expected_value": 1.6,
+        "policy_action": "run_fresh_ablation_before_promotion",
+        "command_hint": "python3 \"phase one/scripts/validation/phase2_v20_framework.py\" --variant phase2_v20_ms_bridge_next --sample \"proposal_samples/math_science_21_50_sample.json\" --math-science-bridge"
+      }
+    ]
+  },
+  "formal_mapping_gate": {
+    "eval_id": "recursive_positive_ms_bridge_phase2_v20_gpt55_21_50_formal_mapping_gate",
+    "blocked_proposal_ids": [],
+    "gates": [
+      {
+        "proposal_id": "prop_e61e596b7f98",
+        "decision": "allow_scoped_policy",
+        "blocks_policy_update": false,
+        "rationale": "This candidate is a domain-scoped harness policy, not an unsafe formal isomorphism claim."
+      }
+    ]
+  }
+}

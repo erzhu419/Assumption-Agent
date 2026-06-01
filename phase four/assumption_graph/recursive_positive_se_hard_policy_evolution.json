@@ -1,0 +1,296 @@
+{
+  "eval_id": "recursive_positive_se_hard_policy_gpt55",
+  "mode": {
+    "writeback": false,
+    "apply_accepted": false,
+    "autonomous_apply": false,
+    "positive_control": true,
+    "force_proposal_route": true
+  },
+  "source": {
+    "sample": "phase two/analysis/cache/proposal_samples/proposal_se_mh_sample.json",
+    "judgments": [
+      "phase two/analysis/cache/judgments/proposal_ready_combo_se_hard_policy_gpt55_vs_phase2_v20_gpt55.json",
+      "phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_proposal_ready_combo_se_hard_policy_gpt55.json"
+    ],
+    "intervention_variant": "proposal_ready_combo_se_hard_policy_gpt55",
+    "baseline_variant": "phase2_v20_gpt55"
+  },
+  "proposals": {
+    "eval_id": "recursive_positive_se_hard_policy_gpt55_proposals",
+    "source_eval_id": "route_policy_ablation_gpt54mini_gpt55",
+    "proposal_counts": {
+      "assumption_revision": 1
+    },
+    "proposals": [
+      {
+        "proposal_id": "prop_50e44c655f61",
+        "proposal_type": "assumption_revision",
+        "parent_node_id": "strategy_S22",
+        "candidate_node": {
+          "id": "cand_50e44c655f61",
+          "type": "harness",
+          "claim": "Use proposal-forced Assumption Graph answers only on software_engineering hard rows where the routed proposal policy fires; fall back to phase2_v20 on software_engineering medium rows.",
+          "kind": "evaluator_policy",
+          "formal_form": null,
+          "context_conditions": [
+            "domain=software_engineering",
+            "difficulty=hard",
+            "proposal target route label should_fire",
+            "fallback to phase2_v20 for software_engineering medium rows until more evidence is collected"
+          ],
+          "predicted_effects": [
+            "preserve the software-engineering hard-row gain from proposal forcing",
+            "avoid the medium-row regression/noise observed in broader SE routing"
+          ],
+          "risk_predictions": [
+            "hard/medium boundary may be too coarse for future samples",
+            "proposal forcing can still overfit if routed should-fire labels drift"
+          ],
+          "verifiers": [
+            "candidate_acceptance_gate",
+            "bidirectional_pairwise_judge",
+            "medium-row fallback control check"
+          ],
+          "evidence_ids": [],
+          "residual_ids": [],
+          "confidence": 0.6,
+          "metaproductivity": 0.1,
+          "status": "candidate",
+          "tags": [
+            "candidate",
+            "positive_control",
+            "software_engineering",
+            "hard_only_policy",
+            "recursive_acceptance"
+          ],
+          "source_refs": [
+            "phase four/assumption_graph/route_policy_ablation_gpt54mini_gpt55.md",
+            "phase two/analysis/cache/answers/proposal_ready_combo_se_hard_policy_gpt55_meta.json"
+          ],
+          "payload": {
+            "parent_node_id": "strategy_S22",
+            "proposal_type": "assumption_revision",
+            "candidate_variant": "proposal_ready_combo_se_hard_policy_gpt55",
+            "baseline_variant": "phase2_v20_gpt55",
+            "route_policy": {
+              "domain": [
+                "software_engineering"
+              ],
+              "difficulty": [
+                "hard"
+              ]
+            },
+            "sample": "phase two/analysis/cache/proposal_samples/proposal_se_mh_sample.json"
+          },
+          "created_at": "2026-06-01T01:31:41Z",
+          "updated_at": "2026-06-01T01:31:41Z"
+        },
+        "edges": [
+          {
+            "source": "strategy_S22",
+            "target": "cand_50e44c655f61",
+            "type": "specializes",
+            "weight": 0.74,
+            "evidence": null,
+            "payload": {
+              "proposal_type": "assumption_revision",
+              "eval_id": "recursive_positive_se_hard_policy_gpt55"
+            },
+            "created_at": "2026-06-01T01:31:41Z"
+          }
+        ],
+        "manifest": {
+          "problem_id": "proposal::cand_50e44c655f61",
+          "action_type": "proposal_assumption_revision",
+          "assumption": "Software-engineering proposal forcing should be limited to hard rows until medium rows have stronger evidence.",
+          "why_selected": "The prior route-policy ablation showed hard-row gains and medium-row fallback ties, making this a clean trigger/control positive case.",
+          "expected_effect": "Acceptance should pass with trigger benefit and zero control loss on medium fallback rows.",
+          "assumption_ids": [
+            "strategy_S22",
+            "cand_50e44c655f61"
+          ],
+          "component": "recursive_positive_control",
+          "predicted_regressions": [],
+          "verifier": "candidate_acceptance_gate",
+          "verification_plan": "Use bidirectional gpt-5.5 pairwise judgments on the SE medium/hard scoped sample.",
+          "rollback_condition": "Reject if hard-row trigger LCB fails or medium controls show loss.",
+          "cost": 0.0,
+          "observed_effect": null,
+          "residual": null,
+          "residual_type": null,
+          "status": "pending",
+          "artifacts": {
+            "judgments": [
+              "phase two/analysis/cache/judgments/proposal_ready_combo_se_hard_policy_gpt55_vs_phase2_v20_gpt55.json",
+              "phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_proposal_ready_combo_se_hard_policy_gpt55.json"
+            ],
+            "sample": "phase two/analysis/cache/proposal_samples/proposal_se_mh_sample.json",
+            "report": "phase four/assumption_graph/route_policy_ablation_gpt54mini_gpt55.md"
+          },
+          "metadata": {
+            "eval_id": "recursive_positive_se_hard_policy_gpt55",
+            "proposal_type": "assumption_revision",
+            "parent_node_id": "strategy_S22",
+            "candidate_node_id": "cand_50e44c655f61",
+            "positive_control": true
+          },
+          "parent_trial_id": null,
+          "trial_id": "trial_0e5624e1c4f6",
+          "timestamp": "2026-06-01T01:31:41Z"
+        },
+        "rationale": "Clean trigger/control positive signal: hard SE rows improve, medium SE rows fall back to tie.",
+        "priority": 2.1,
+        "source_action": {
+          "action_type": "revise_assumption",
+          "node_id": "strategy_S22",
+          "rationale": "Broader SE policy had medium-row uncertainty; hard-only scope preserves the confirmed gain.",
+          "proposed_updates": {
+            "expected_effect": "Improve hard SE rows without medium-row harm."
+          },
+          "verification_plan": "Run candidate acceptance on bidirectional hard-policy judgments.",
+          "rollback_condition": "Reject if acceptance gate fails."
+        }
+      }
+    ]
+  },
+  "candidate_preflight": {
+    "eval_id": "recursive_positive_se_hard_policy_gpt55_candidate_preflight",
+    "source_eval_id": "recursive_positive_se_hard_policy_gpt55_proposals",
+    "summaries": [
+      {
+        "proposal_id": "prop_50e44c655f61",
+        "proposal_type": "assumption_revision",
+        "parent_node_id": "strategy_S22",
+        "candidate_node_id": "cand_50e44c655f61",
+        "readiness": "ready_for_fresh_ablation",
+        "trigger_problem_ids": [
+          "software_engineering_0322",
+          "software_engineering_0050",
+          "software_engineering_0364",
+          "software_engineering_0365"
+        ],
+        "active_trigger_problem_ids": [
+          "software_engineering_0322",
+          "software_engineering_0050",
+          "software_engineering_0364",
+          "software_engineering_0365"
+        ],
+        "missed_trigger_problem_ids": [],
+        "control_problem_ids": [
+          "software_engineering_0225",
+          "software_engineering_0355",
+          "software_engineering_0186",
+          "software_engineering_0086",
+          "software_engineering_0062"
+        ],
+        "outside_active_problem_ids": [],
+        "command_hint": "python3 \"phase one/scripts/validation/phase2_v20_framework.py\" --variant proposal_ready_combo_se_hard_policy_next --sample \"proposal_samples/proposal_se_mh_sample.json\" --assumption-graph \"phase four/assumption_graph\" --assumption-proposals \"phase four/assumption_graph/proposals_phase2_v20_gpt55_21_50.json\" --assumption-force-proposal-route --assumption-force-proposal-domains software_engineering --assumption-force-proposal-difficulties hard --assumption-graph-skip-domains \"\"",
+        "rationale": "Hard SE rows are the proposed activation route; medium SE rows are explicit fallback controls.",
+        "acceptance_criteria": [
+          "hard trigger benefit lower bound clears acceptance gate",
+          "medium control loss upper bound stays below harm gate"
+        ]
+      }
+    ]
+  },
+  "candidate_acceptance": null,
+  "falsification_gate": {
+    "eval_id": "recursive_positive_se_hard_policy_gpt55_falsification",
+    "decision_counts": {
+      "ready_for_ablation": 1
+    },
+    "summaries": [
+      {
+        "proposal_id": "prop_50e44c655f61",
+        "decision": "ready_for_ablation",
+        "next_action": "run_fresh_ablation",
+        "rationale": "Bidirectional hard-policy judgments include both hard trigger and medium control rows.",
+        "ordered_checks": [
+          {
+            "name": "fresh_ablation_acceptance",
+            "status": "available",
+            "detail": "Use existing real gpt-5.5 SE hard-policy judgments."
+          },
+          {
+            "name": "medium_control_harm",
+            "status": "available",
+            "detail": "Medium rows are fallback controls."
+          }
+        ]
+      }
+    ]
+  },
+  "regression_predictions": [
+    {
+      "proposal_id": "prop_50e44c655f61",
+      "candidate_node_id": "cand_50e44c655f61",
+      "risk": "low",
+      "readiness": "ready_for_fresh_ablation",
+      "outside_active_problem_ids": [],
+      "control_problem_ids": [
+        "software_engineering_0225",
+        "software_engineering_0355",
+        "software_engineering_0186",
+        "software_engineering_0086",
+        "software_engineering_0062"
+      ],
+      "reasons": [
+        "medium software-engineering rows are explicit fallback controls with judged zero losses"
+      ]
+    }
+  ],
+  "bayesian_policy": {
+    "eval_id": "recursive_positive_se_hard_policy_gpt55_bayesian_policy",
+    "scores": [
+      {
+        "proposal_id": "prop_50e44c655f61",
+        "candidate_node_id": "cand_50e44c655f61",
+        "posterior_priority": 2.1,
+        "expected_value": 1.25,
+        "recommended_action": "run_fresh_ablation",
+        "rationale": [
+          "hard SE trigger has positive LCB",
+          "medium SE controls are no-harm ties"
+        ],
+        "command_hint": "python3 \"phase one/scripts/validation/phase2_v20_framework.py\" --variant proposal_ready_combo_se_hard_policy_next --sample \"proposal_samples/proposal_se_mh_sample.json\" --assumption-graph \"phase four/assumption_graph\" --assumption-proposals \"phase four/assumption_graph/proposals_phase2_v20_gpt55_21_50.json\" --assumption-force-proposal-route --assumption-force-proposal-domains software_engineering --assumption-force-proposal-difficulties hard --assumption-graph-skip-domains \"\""
+      }
+    ]
+  },
+  "policy_update_plan": {
+    "accepted_proposal_ids": [],
+    "applied_candidate_node_ids": [],
+    "actions": [
+      {
+        "proposal_id": "prop_50e44c655f61",
+        "proposal_type": "assumption_revision",
+        "parent_node_id": "strategy_S22",
+        "candidate_node_id": "cand_50e44c655f61",
+        "preflight_readiness": "ready_for_fresh_ablation",
+        "formal_mapping_gate": {
+          "proposal_id": "prop_50e44c655f61",
+          "decision": "allow_scoped_policy",
+          "blocks_policy_update": false,
+          "rationale": "This is a scoped routing policy with explicit fallback controls, not an unsafe formal mapping."
+        },
+        "bayesian_action": "run_fresh_ablation",
+        "bayesian_priority": 2.1,
+        "bayesian_expected_value": 1.25,
+        "policy_action": "run_fresh_ablation_before_promotion",
+        "command_hint": "python3 \"phase one/scripts/validation/phase2_v20_framework.py\" --variant proposal_ready_combo_se_hard_policy_next --sample \"proposal_samples/proposal_se_mh_sample.json\" --assumption-graph \"phase four/assumption_graph\" --assumption-proposals \"phase four/assumption_graph/proposals_phase2_v20_gpt55_21_50.json\" --assumption-force-proposal-route --assumption-force-proposal-domains software_engineering --assumption-force-proposal-difficulties hard --assumption-graph-skip-domains \"\""
+      }
+    ]
+  },
+  "formal_mapping_gate": {
+    "eval_id": "recursive_positive_se_hard_policy_gpt55_formal_mapping_gate",
+    "blocked_proposal_ids": [],
+    "gates": [
+      {
+        "proposal_id": "prop_50e44c655f61",
+        "decision": "allow_scoped_policy",
+        "blocks_policy_update": false,
+        "rationale": "This is a scoped routing policy with explicit fallback controls, not an unsafe formal mapping."
+      }
+    ]
+  }
+}
