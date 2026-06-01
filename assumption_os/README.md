@@ -432,7 +432,8 @@ Brier 0.0081 on the expanded 2 accepted / 14 rejected labeled set, while
 preserving pre-acceptance ranking (`AUC=1.0`). The calibration payload also
 reports leave-one-out Brier 0.0064 versus raw 0.5316. Manifest validation now
 parses 12 real events from existing run/judge logs in addition to synthetic
-redaction probes. Full report:
+redaction probes. Those 12 real events are also persisted through
+`real_log_manifest_ingest_20260601` as observed trials in the graph. Full report:
 `phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md`.
 
 `assumption_os.failure_hypotheses` converts loss rows into candidate assumptions

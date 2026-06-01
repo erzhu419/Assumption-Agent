@@ -71,9 +71,9 @@ python3 -m assumption_os.performance_validation \
 Results:
 
 - Overall: PASS.
-- Manifest logger: 112 events, including 12 parsed real run/judge-log events, no secret leak.
+- Manifest logger: 112 events, including 12 parsed real run/judge-log events, no secret leak; the 12 real events are persisted in `trials.jsonl` via `real_log_manifest_ingest_20260601`.
 - World model: 16 matched labels from 2 accepted / 14 rejected proposal outcomes; raw pre-acceptance Brier 0.5316, trained calibration Brier 0.0060, leave-one-out Brier 0.0064, post-acceptance Brier 0.0081.
 - Trajectory search: 10 frontier actions, 26 trajectories, multi-path rate 0.8, top-path label hit rate 1.0.
 - Recursive daemon: 2 positive-control accepted candidates applied in a temp graph, dry-run applied 0, gated apply applied 2, manifests written.
-- Residual clusterer: 109 residual records, 5 clusters, 2 synthesized candidate proposals with validation plans.
+- Residual clusterer: 109 residual records, 6 clusters, 2 synthesized candidate proposals with validation plans.
 - Formal metrics: 9 complete mappings, 9/9 finite kernels same-shape, 0 warnings.

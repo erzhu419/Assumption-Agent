@@ -10,7 +10,7 @@ Overall: PASS
 | trajectory_search | PASS | multi_path=0.8, hit=1.0 |
 | recursive_daemon | PASS | applied=2/2 |
 | manifest_logger | PASS | events=112, real_logs=12, leak=False |
-| residual_clusterer | PASS | clusters=5, proposals=2 |
+| residual_clusterer | PASS | clusters=6, proposals=2 |
 | formal_metrics | PASS | mappings=9, warnings=0 |
 
 ## Details
@@ -53,13 +53,13 @@ Overall: PASS
 - `real_log_paths`: ["phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log", "phase four/assumption_graph/recursive_scoped_ablation_run_gpt55_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt54mini_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt55_21_50.log", "phase six/autonomous/exp80_run.log"]
 - `written_trials`: 112
 - `secret_leak_detected`: false
-- `throughput_events_per_sec`: 2299.79
+- `throughput_events_per_sec`: 2262.63
 - `event_counts`: {"judge_call": 28, "llm_call": 21, "retrieval": 20, "simulator_rollout": 20, "tool_use": 23}
 
 ### residual_clusterer
 
 - `record_count`: 109
-- `cluster_count`: 5
+- `cluster_count`: 6
 - `proposal_count`: 2
 - `residual_type_counts`: {"memory_defect": 8, "optimization": 40, "unknown": 61}
 - `proposal_parent_ids`: ["strategy_S08", "strategy_S21"]
