@@ -369,6 +369,11 @@ def _proposal_from_policy_update(
         payload={
             "source": "trace_outcome_model",
             "policy_update": update,
+            "activation": {
+                "problem_ids": update.get("trigger_problem_ids", []),
+                "keywords": [route, decision],
+                "min_keyword_hits": 1,
+            },
             "validation_plan": {
                 "trigger_problem_ids": update.get("trigger_problem_ids", []),
                 "control_policy": "sample outside-control rows from other routes before promotion",

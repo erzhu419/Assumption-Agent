@@ -16,6 +16,7 @@ Overall: PASS
 | trace_dataset | PASS | rows=2/2, coverage=1.0, leak=False |
 | trace_outcome_model | PASS | rows=9, brier=0.1605, updates=3 |
 | trace_policy_proposals | PASS | proposals=3, repair=1, parent=surface_6e7d9d238212 |
+| trace_policy_preflight | PASS | ready=3/3, missed=0, outside=0 |
 | harness_observer | PASS | artifacts=4, backfill=0/19, covered=True |
 | residual_clusterer | PASS | clusters=7, proposals=2 |
 | formal_metrics | PASS | mappings=9, warnings=0 |
@@ -89,7 +90,7 @@ Overall: PASS
 - `real_log_paths`: ["phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log", "phase four/assumption_graph/recursive_scoped_ablation_run_gpt55_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt54mini_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt55_21_50.log", "phase six/autonomous/exp80_run.log"]
 - `written_trials`: 112
 - `secret_leak_detected`: false
-- `throughput_events_per_sec`: 1609.2
+- `throughput_events_per_sec`: 2403.43
 - `event_counts`: {"judge_call": 28, "llm_call": 21, "retrieval": 20, "simulator_rollout": 20, "tool_use": 23}
 
 ### runtime_trace
@@ -138,6 +139,15 @@ Overall: PASS
 - `candidate_count`: 3
 - `heldout_verifier_count`: 3
 - `secret_leak_detected`: false
+
+### trace_policy_preflight
+
+- `proposal_count`: 3
+- `readiness_counts`: {"ready_for_fresh_ablation": 3}
+- `ready_count`: 3
+- `missed_trigger_count`: 0
+- `outside_active_count`: 0
+- `command_hint_count`: 3
 
 ### harness_observer
 

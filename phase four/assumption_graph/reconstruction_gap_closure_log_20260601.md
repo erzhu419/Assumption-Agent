@@ -40,6 +40,7 @@ Current gaps being addressed:
 12. Add trace-to-outcome dataset construction so runtime/cache events can train or calibrate the world model against judged wins/losses and residual labels.
 13. Add a trace outcome model so route/component traces generate calibrated policy updates before the next recursive run.
 14. Convert trace policy updates into verifier-ready candidate proposals so recursive execution can consume them.
+15. Preflight trace policy proposals so only route-ready candidates proceed to fresh ablation.
 
 ## Progress
 
@@ -78,6 +79,7 @@ Current gaps being addressed:
 - 2026-06-01: Added `assumption_os.trace_dataset`, plus cache-hit runtime tracing in `phase2_v20_framework.py`, so cached math/science runs can produce first-party trace rows without external API calls.
 - 2026-06-01: Added `assumption_os.trace_outcome_model`; the real 9-row math/science trace dataset now yields route/component leave-one-out calibration and three policy updates.
 - 2026-06-01: Extended trace outcome modeling to emit `CandidateProposal` payloads under the `domain_retrieval_policy` runtime surface.
+- 2026-06-01: Ran candidate preflight for trace policy proposals; all 3 are `ready_for_fresh_ablation` on the math/science trace slice.
 
 ## Closure Notes
 
@@ -93,6 +95,7 @@ Current gaps being addressed:
 - Runtime/cache traces can now be joined to pairwise judgments as trainable trace/outcome/residual rows; historical runs can use bounded artifact replay when first-party trace does not exist.
 - Trace outcome modeling now converts those rows into repair/reinforce route-policy candidates without mutating graph memory.
 - Trace policy proposals now bridge route-policy learning into the existing candidate/verifier/recursive-executor intake path.
+- Trace policy preflight verifies trigger routing before any expensive fresh ablation.
 
 ## Performance Validation - 2026-06-01
 
@@ -115,6 +118,7 @@ Results:
 - Trace dataset: first-party/cache trace events are joined to judged outcomes with residual labels and no secret leak, creating world-model training rows instead of only manifest coverage.
 - Trace outcome model: 9 real trainable rows, 3 route groups, leave-one-out Brier 0.1605, and 3 policy updates: reinforce `math_research_bridge`, targeted repair for `science_mechanism`, reinforce `science_decision`.
 - Trace policy proposals: 3 `assumption_revision` proposals under `surface_6e7d9d238212`, with 1 targeted repair and 3 heldout-route verifiers.
+- Trace policy preflight: 3/3 proposals ready for fresh ablation, 0 missed trigger rows, 0 outside-active rows, command hints emitted.
 - Harness observer: 4 artifact files, 19 discovered events, full artifact-file coverage after writeback, no secret leak; current reruns skip already-covered events instead of duplicating persisted `harness_observer_backfill_20260601` trials.
 - Verifier stack: 33 proposals, 2 accepted-for-gated-apply, 14 rejected, 6 preflight-repair, 11 collect-more-evidence; V4 acceptance stages show 2 pass / 14 fail / 17 missing. The falsification protocol layer adds 135 experiment records across 27 candidate proposals; accepted protocol checks and rejected protocol checks both pass.
 - Recursive audit: dry frontier plus accepted-return cases pass with 12 total frames, 5 actionable frontier items, min closure score 1.0, 0 critical issues, and 0 warnings.

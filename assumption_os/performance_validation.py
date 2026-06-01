@@ -18,6 +18,7 @@ This runner evaluates the reconstruction mechanisms added after reconstruction:
 14. trace-to-outcome datasets for world-model/residual training
 15. trace outcome model for route/component policy calibration
 16. trace policy proposals for recursive verifier intake
+17. trace policy preflight for fresh-ablation readiness
 
 The validation uses existing real artifacts where available and deterministic
 positive controls where the mechanism needs a safe graph-mutation sandbox.
@@ -107,6 +108,10 @@ def build_performance_validation_payload(
     timings["trace_policy_proposals_sec"] = _elapsed(start)
 
     start = time.perf_counter()
+    trace_policy_preflight = _validate_trace_policy_preflight(root=root)
+    timings["trace_policy_preflight_sec"] = _elapsed(start)
+
+    start = time.perf_counter()
     harness = _validate_harness_observer(root=root, graph_dir=graph_dir)
     timings["harness_observer_sec"] = _elapsed(start)
 
@@ -129,6 +134,7 @@ def build_performance_validation_payload(
         "trace_dataset": trace_dataset,
         "trace_outcome_model": trace_outcome_model,
         "trace_policy_proposals": trace_policy_proposals,
+        "trace_policy_preflight": trace_policy_preflight,
         "harness_observer": harness,
         "residual_clusterer": residuals,
         "formal_metrics": formal,
@@ -934,6 +940,37 @@ def _validate_trace_policy_proposals(*, root: Path, graph_dir: Path) -> dict:
     }
 
 
+def _validate_trace_policy_preflight(*, root: Path) -> dict:
+    preflight_path = root / "phase four/assumption_graph/trace_policy_preflight_ms_bridge_20260601.json"
+    if not preflight_path.exists():
+        return {
+            "pass": False,
+            "reason": "missing_trace_policy_preflight_artifact",
+            "preflight_path": _display_path(root, preflight_path),
+        }
+    payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+    summaries = payload.get("summaries", [])
+    ready = [row for row in summaries if row.get("readiness") == "ready_for_fresh_ablation"]
+    missed = sum(len(row.get("missed_trigger_problem_ids", [])) for row in summaries)
+    outside = sum(len(row.get("outside_active_problem_ids", [])) for row in summaries)
+    command_hints = sum(1 for row in summaries if row.get("command_hint"))
+    return {
+        "pass": (
+            len(summaries) >= 3
+            and len(ready) == len(summaries)
+            and missed == 0
+            and outside == 0
+            and command_hints == len(summaries)
+        ),
+        "proposal_count": len(summaries),
+        "readiness_counts": payload.get("readiness_counts", {}),
+        "ready_count": len(ready),
+        "missed_trigger_count": missed,
+        "outside_active_count": outside,
+        "command_hint_count": command_hints,
+    }
+
+
 def _validate_harness_observer(*, root: Path, graph_dir: Path) -> dict:
     artifact_paths = [
         root / "phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_phase2_v20_ms_bridge_gpt55_21_50.json",
@@ -1223,6 +1260,8 @@ def _key_metric(name: str, section: dict) -> str:
         return f"rows={section.get('trainable_row_count', 0)}, brier={metrics.get('brier_score')}, updates={section.get('policy_update_count', 0)}"
     if name == "trace_policy_proposals":
         return f"proposals={section.get('proposal_count', 0)}, repair={section.get('repair_policy_count', 0)}, parent={section.get('parent_node_id')}"
+    if name == "trace_policy_preflight":
+        return f"ready={section.get('ready_count', 0)}/{section.get('proposal_count', 0)}, missed={section.get('missed_trigger_count', 0)}, outside={section.get('outside_active_count', 0)}"
     if name == "harness_observer":
         return f"artifacts={section['artifact_file_count']}, backfill={section['backfilled_event_count']}/{section['discovered_event_count']}, covered={section['full_coverage_after_writeback']}"
     if name == "residual_clusterer":

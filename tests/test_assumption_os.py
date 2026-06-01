@@ -1047,6 +1047,7 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(proposal["parent_node_id"], "surface_retrieval")
             self.assertEqual(proposal["candidate_node"]["type"], AssumptionType.RETRIEVAL.value)
             self.assertIn("heldout_route_ablation", proposal["candidate_node"]["verifiers"])
+            self.assertEqual(proposal["candidate_node"]["payload"]["activation"]["problem_ids"], ["p1", "p2"])
             self.assertFalse(proposals["secret_leak_detected"])
 
     def test_harness_observer_backfills_artifact_manifest_coverage(self):

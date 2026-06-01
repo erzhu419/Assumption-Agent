@@ -579,7 +579,7 @@ python3 -m assumption_os.performance_validation \
   --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md"
 ```
 
-The expanded performance validation passes all sixteen sections. The initial run found
+The expanded performance validation passes all seventeen sections. The initial run found
 one real issue: post-acceptance world-model probabilities stayed too high after
 rejected evidence, with Brier score 0.2767. The calibrated version now scores
 Brier 0.0081 on the expanded 2 accepted / 14 rejected labeled set, while
@@ -596,6 +596,8 @@ real 9-row math/science trace dataset to calibrate route/component win
 probabilities (`Brier=0.1605`) and emits repair/reinforce policy updates.
 Trace policy proposal validation converts those updates into 3 verifier-ready
 `assumption_revision` proposals under the `domain_retrieval_policy` surface.
+Trace policy preflight then verifies all 3 proposals are ready for fresh
+ablation, with zero missed trigger rows and zero outside-active rows.
 Harness
 observer discovers 19 real artifact events from judgment/meta/log files and
 keeps full artifact-file coverage after the original backfill; current reruns
