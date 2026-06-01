@@ -56,7 +56,7 @@ from .recursive_runner import build_recursive_assumption_run
 from .residual_clusterer import build_residual_cluster_payload
 from .runtime_trace import RuntimeTraceRecorder
 from .trajectory_search import build_trajectory_search_payload
-from .trace_dataset import build_trace_dataset_payload
+from .trace_dataset import build_trace_dataset_collection_payload, build_trace_dataset_payload
 from .trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
 from .verifier_stack import build_verifier_stack_payload
 from .world_model import build_world_model_payload, train_world_model_calibration
@@ -103,7 +103,7 @@ def build_performance_validation_payload(
     timings["runtime_trace_sec"] = _elapsed(start)
 
     start = time.perf_counter()
-    trace_dataset = _validate_trace_dataset()
+    trace_dataset = _validate_trace_dataset(root=root)
     timings["trace_dataset_sec"] = _elapsed(start)
 
     start = time.perf_counter()
@@ -799,13 +799,13 @@ def _validate_runtime_trace() -> dict:
         }
 
 
-def _validate_trace_dataset() -> dict:
+def _validate_trace_dataset(*, root: Path) -> dict:
     with tempfile.TemporaryDirectory() as td:
-        root = Path(td)
-        sample_path = root / "sample.json"
-        meta_path = root / "meta.json"
-        judgments_path = root / "candidate_vs_baseline.json"
-        events_path = root / "events.jsonl"
+        temp_root = Path(td)
+        sample_path = temp_root / "sample.json"
+        meta_path = temp_root / "meta.json"
+        judgments_path = temp_root / "candidate_vs_baseline.json"
+        events_path = temp_root / "events.jsonl"
         sample_path.write_text(json.dumps([
             {
                 "problem_id": "trace_ds_win",
@@ -874,7 +874,7 @@ def _validate_trace_dataset() -> dict:
             encoding="utf-8",
         )
         payload = build_trace_dataset_payload(
-            root=root,
+            root=temp_root,
             sample_path=sample_path,
             meta_path=meta_path,
             judgments_path=judgments_path,
@@ -883,27 +883,62 @@ def _validate_trace_dataset() -> dict:
             baseline_variant="baseline",
             eval_id="perf_trace_dataset",
         )
+        real_paths = [
+            root / "phase four/assumption_graph/trace_dataset_ms_bridge_20260601.json",
+            root / "phase four/assumption_graph/trace_dataset_ms_bridge_ms100_20260601.json",
+            root / "phase four/assumption_graph/trace_dataset_ms_bridge_ms100_vs_v20_20260601.json",
+        ]
+        real_payloads = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in real_paths
+            if path.exists()
+        ]
+        collection = build_trace_dataset_collection_payload(
+            root=root,
+            trace_dataset_payloads=real_payloads,
+            eval_id="perf_trace_dataset_collection",
+        ) if real_payloads else {}
+        positive_control_pass = (
+            payload["row_count"] == 2
+            and payload["trainable_row_count"] == 2
+            and payload["first_party_trace_count"] == 2
+            and payload["traced_outcome_coverage"] == 1.0
+            and payload["outcome_counts"] == {"loss": 1, "win": 1}
+            and payload["residual_type_counts"].get("optimization") == 1
+            and not payload["secret_leak_detected"]
+        )
+        collection_pass = (
+            collection.get("dataset_count", 0) >= 3
+            and collection.get("trainable_row_count", 0) >= 60
+            and collection.get("first_party_trainable_row_count", 0) >= 9
+            and collection.get("artifact_replay_trainable_row_count", 0) >= 50
+            and collection.get("weighted_trainable_row_count", 0.0) >= 35.0
+            and not collection.get("secret_leak_detected", True)
+        )
         return {
-            "pass": (
-                payload["row_count"] == 2
-                and payload["trainable_row_count"] == 2
-                and payload["first_party_trace_count"] == 2
-                and payload["traced_outcome_coverage"] == 1.0
-                and payload["outcome_counts"] == {"loss": 1, "win": 1}
-                and payload["residual_type_counts"].get("optimization") == 1
-                and not payload["secret_leak_detected"]
-            ),
-            "row_count": payload["row_count"],
-            "trainable_row_count": payload["trainable_row_count"],
-            "first_party_trace_count": payload["first_party_trace_count"],
-            "artifact_replay_count": payload["artifact_replay_count"],
-            "missing_trace_count": payload["missing_trace_count"],
+            "pass": positive_control_pass and collection_pass,
+            "row_count": collection.get("row_count", payload["row_count"]),
+            "trainable_row_count": collection.get("trainable_row_count", payload["trainable_row_count"]),
+            "weighted_trainable_row_count": collection.get("weighted_trainable_row_count", payload["trainable_row_count"]),
+            "first_party_trace_count": collection.get("first_party_trace_count", payload["first_party_trace_count"]),
+            "first_party_trainable_row_count": collection.get("first_party_trainable_row_count", payload["first_party_trace_count"]),
+            "artifact_replay_count": collection.get("artifact_replay_count", payload["artifact_replay_count"]),
+            "artifact_replay_trainable_row_count": collection.get("artifact_replay_trainable_row_count", 0),
+            "missing_trace_count": collection.get("missing_trace_count", payload["missing_trace_count"]),
             "traced_outcome_coverage": payload["traced_outcome_coverage"],
             "assumption_id_coverage": payload["assumption_id_coverage"],
-            "outcome_counts": payload["outcome_counts"],
-            "residual_type_counts": payload["residual_type_counts"],
-            "event_counts": payload["event_counts"],
-            "secret_leak_detected": payload["secret_leak_detected"],
+            "outcome_counts": collection.get("outcome_counts", payload["outcome_counts"]),
+            "residual_type_counts": collection.get("residual_type_counts", payload["residual_type_counts"]),
+            "event_counts": collection.get("event_counts", payload["event_counts"]),
+            "source_eval_ids": collection.get("source", {}).get("source_eval_ids", []),
+            "positive_control": {
+                "pass": positive_control_pass,
+                "row_count": payload["row_count"],
+                "trainable_row_count": payload["trainable_row_count"],
+                "first_party_trace_count": payload["first_party_trace_count"],
+                "secret_leak_detected": payload["secret_leak_detected"],
+            },
+            "secret_leak_detected": payload["secret_leak_detected"] or collection.get("secret_leak_detected", False),
         }
 
 

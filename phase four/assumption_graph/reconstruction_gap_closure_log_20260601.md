@@ -83,6 +83,7 @@ Current gaps being addressed:
 - 2026-06-01: Ran candidate preflight for trace policy proposals; all 3 are `ready_for_fresh_ablation` on the math/science trace slice.
 - 2026-06-01: Added `assumption_os.reconstruction_progress`; current reconstruction closure is structure 81.3%, behavior 68.5%, weighted 74.3%.
 - 2026-06-01: Added formal-equivalence deduplication for complete formal mappings; current reconstruction closure is structure 82.1%, behavior 69.6%, weighted 75.2%.
+- 2026-06-01: Added trace-dataset collection across first-party and artifact-replay math/science slices; current reconstruction closure is structure 82.1%, behavior 71.2%, weighted 76.1%.
 
 ## Closure Notes
 
@@ -97,6 +98,7 @@ Current gaps being addressed:
 - Runtime memory surfaces are now in the graph, so future retrieval can access system-level assumptions instead of relying only on code modules and reports.
 - Live phase2 runs can now emit redacted first-party runtime trace events and write them directly as TrialManifests instead of depending only on post-hoc log parsing.
 - Runtime/cache traces can now be joined to pairwise judgments as trainable trace/outcome/residual rows; historical runs can use bounded artifact replay when first-party trace does not exist.
+- Trace dataset collection now separates first-party trainable rows from artifact-replay rows and uses a conservative weighted trainable count for world-model progress.
 - Trace outcome modeling now converts those rows into repair/reinforce route-policy candidates without mutating graph memory.
 - Trace policy proposals now bridge route-policy learning into the existing candidate/verifier/recursive-executor intake path.
 - Trace policy preflight verifies trigger routing before any expensive fresh ablation.
@@ -120,11 +122,11 @@ Results:
 - Overall: PASS.
 - Manifest logger: 112 events, including 12 parsed real run/judge-log events, no secret leak; the 12 real events are persisted in `trials.jsonl` via `real_log_manifest_ingest_20260601`.
 - Runtime trace: first-party LLM/retrieval/tool events are emitted as redacted JSONL, converted to TrialManifests, and can be written back to graph memory without post-hoc log parsing.
-- Trace dataset: first-party/cache trace events are joined to judged outcomes with residual labels and no secret leak, creating world-model training rows instead of only manifest coverage.
+- Trace dataset: first-party/cache trace events are joined to judged outcomes with residual labels and no secret leak; the current collection has 69 rows, 67 trainable outcome rows, 9 first-party trainable rows, 58 artifact-replay trainable rows, and weighted trainable count 38.0.
 - Trace outcome model: 9 real trainable rows, 3 route groups, leave-one-out Brier 0.1605, and 3 policy updates: reinforce `math_research_bridge`, targeted repair for `science_mechanism`, reinforce `science_decision`.
 - Trace policy proposals: 3 `assumption_revision` proposals under `surface_6e7d9d238212`, with 1 targeted repair and 3 heldout-route verifiers.
 - Trace policy preflight: 3/3 proposals ready for fresh ablation, 0 missed trigger rows, 0 outside-active rows, command hints emitted.
-- Reconstruction progress: structure 82.1%, behavior 69.6%, weighted 75.2%; 3/9 mature-or-completed items; lowest behavior items are `C_world_model_simulator`, `G_formal_alignment_layer`, and `B_hypothesis_generator`.
+- Reconstruction progress: structure 82.1%, behavior 71.2%, weighted 76.1%; 3/9 mature-or-completed items; lowest behavior items are `G_formal_alignment_layer`, `C_world_model_simulator`, and `B_hypothesis_generator`.
 - Harness observer: 4 artifact files, 19 discovered events, full artifact-file coverage after writeback, no secret leak; current reruns skip already-covered events instead of duplicating persisted `harness_observer_backfill_20260601` trials.
 - Verifier stack: 33 proposals, 2 accepted-for-gated-apply, 14 rejected, 6 preflight-repair, 11 collect-more-evidence; V4 acceptance stages show 2 pass / 14 fail / 17 missing. The falsification protocol layer adds 135 experiment records across 27 candidate proposals; accepted protocol checks and rejected protocol checks both pass.
 - Recursive audit: dry frontier plus accepted-return cases pass with 12 total frames, 5 actionable frontier items, min closure score 1.0, 0 critical issues, and 0 warnings.

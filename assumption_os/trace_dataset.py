@@ -95,6 +95,68 @@ def build_trace_dataset_payload(
     return clean_payload
 
 
+def build_trace_dataset_collection_payload(
+    *,
+    root: Path,
+    trace_dataset_payloads: list[dict[str, Any]],
+    eval_id: str,
+) -> dict:
+    rows: list[dict[str, Any]] = []
+    source_eval_ids = []
+    source_paths = []
+    for payload in trace_dataset_payloads:
+        source_eval_ids.append(payload.get("eval_id"))
+        source = payload.get("source") or {}
+        if source.get("judgments_path"):
+            source_paths.append(source["judgments_path"])
+        rows.extend(row for row in payload.get("rows", []) if isinstance(row, dict))
+
+    outcome_counts = Counter(row.get("outcome") for row in rows)
+    residual_type_counts = Counter(row.get("residual_type") for row in rows)
+    event_counts: Counter[str] = Counter()
+    component_counts: Counter[str] = Counter()
+    for row in rows:
+        event_counts.update(row.get("event_counts", {}))
+        component_counts.update(row.get("component_counts", {}))
+
+    trainable_rows = [row for row in rows if row.get("trainable")]
+    first_party_trainable = [
+        row for row in trainable_rows
+        if row.get("first_party_trace") or row.get("trace_source") == "first_party_runtime"
+    ]
+    artifact_trainable = [
+        row for row in trainable_rows
+        if row.get("trace_source") == "artifact_replay"
+    ]
+    weighted_trainable = len(first_party_trainable) + 0.5 * len(artifact_trainable)
+    payload = {
+        "eval_id": eval_id,
+        "source": {
+            "root": ".",
+            "source_eval_ids": [x for x in source_eval_ids if x],
+            "source_judgment_paths": sorted(set(source_paths)),
+        },
+        "dataset_count": len(trace_dataset_payloads),
+        "row_count": len(rows),
+        "distinct_problem_count": len({row.get("problem_id") for row in rows if row.get("problem_id")}),
+        "trainable_row_count": len(trainable_rows),
+        "first_party_trainable_row_count": len(first_party_trainable),
+        "artifact_replay_trainable_row_count": len(artifact_trainable),
+        "weighted_trainable_row_count": round(weighted_trainable, 2),
+        "first_party_trace_count": sum(1 for row in rows if row.get("first_party_trace")),
+        "artifact_replay_count": sum(1 for row in rows if row.get("trace_source") == "artifact_replay"),
+        "missing_trace_count": sum(1 for row in rows if row.get("trace_event_count", 0) == 0),
+        "outcome_counts": {str(k): v for k, v in outcome_counts.items() if k},
+        "residual_type_counts": {str(k): v for k, v in residual_type_counts.items() if k},
+        "event_counts": dict(event_counts),
+        "component_counts": dict(component_counts),
+        "rows": rows,
+    }
+    clean_payload = redact_secrets(payload)
+    clean_payload["secret_leak_detected"] = _contains_secret(clean_payload)
+    return clean_payload
+
+
 def _build_row(
     *,
     eval_id: str,
@@ -474,31 +536,54 @@ def _display_path(root: Path, path: Path) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=".")
-    ap.add_argument("--sample", required=True)
-    ap.add_argument("--meta", required=True)
-    ap.add_argument("--judgments", required=True)
+    ap.add_argument("--sample", default=None)
+    ap.add_argument("--meta", default=None)
+    ap.add_argument("--judgments", default=None)
     ap.add_argument("--trace-events", default=None)
     ap.add_argument("--trace-summary", default=None)
-    ap.add_argument("--intervention", required=True)
-    ap.add_argument("--baseline", required=True)
+    ap.add_argument("--intervention", default=None)
+    ap.add_argument("--baseline", default=None)
+    ap.add_argument("--merge-payloads", nargs="*", default=None)
     ap.add_argument("--eval-id", required=True)
     ap.add_argument("--allow-artifact-trace", action="store_true")
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
-    payload = build_trace_dataset_payload(
-        root=root,
-        sample_path=_resolve(root, args.sample),
-        meta_path=_resolve(root, args.meta),
-        judgments_path=_resolve(root, args.judgments),
-        trace_events_path=_resolve(root, args.trace_events),
-        trace_summary_path=_resolve(root, args.trace_summary),
-        intervention_variant=args.intervention,
-        baseline_variant=args.baseline,
-        eval_id=args.eval_id,
-        allow_artifact_trace=args.allow_artifact_trace,
-    )
+    if args.merge_payloads:
+        payload = build_trace_dataset_collection_payload(
+            root=root,
+            trace_dataset_payloads=[
+                json.loads(_resolve(root, path).read_text(encoding="utf-8"))
+                for path in args.merge_payloads
+            ],
+            eval_id=args.eval_id,
+        )
+    else:
+        missing = [
+            name for name, value in {
+                "--sample": args.sample,
+                "--meta": args.meta,
+                "--judgments": args.judgments,
+                "--intervention": args.intervention,
+                "--baseline": args.baseline,
+            }.items()
+            if not value
+        ]
+        if missing:
+            ap.error("missing required arguments without --merge-payloads: " + ", ".join(missing))
+        payload = build_trace_dataset_payload(
+            root=root,
+            sample_path=_resolve(root, args.sample),
+            meta_path=_resolve(root, args.meta),
+            judgments_path=_resolve(root, args.judgments),
+            trace_events_path=_resolve(root, args.trace_events),
+            trace_summary_path=_resolve(root, args.trace_summary),
+            intervention_variant=args.intervention,
+            baseline_variant=args.baseline,
+            eval_id=args.eval_id,
+            allow_artifact_trace=args.allow_artifact_trace,
+        )
     text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
     if args.summary_out:
         out = _resolve(root, args.summary_out)

@@ -604,10 +604,14 @@ Trace policy proposal validation converts those updates into 3 verifier-ready
 `assumption_revision` proposals under the `domain_retrieval_policy` surface.
 Trace policy preflight then verifies all 3 proposals are ready for fresh
 ablation, with zero missed trigger rows and zero outside-active rows.
+Trace dataset validation now aggregates the first-party 9-row math/science
+trace dataset with two artifact-replay ms100 judgment slices, yielding 69 rows,
+67 trainable outcome rows, and a conservative weighted trainable count of 38.0
+without secrets.
 Reconstruction progress auditing now compares the current implementation
 against `reconstruction/md/reconstruction.md` and reports structure 82.1%,
-behavior 69.6%, weighted 75.2%; the lowest behavior items are world-model
-distillation, formal alignment, and broader hypothesis generation.
+behavior 71.2%, weighted 76.1%; the lowest behavior items are formal alignment,
+world-model distillation, and broader hypothesis generation.
 Harness
 observer discovers 19 real artifact events from judgment/meta/log files and
 keeps full artifact-file coverage after the original backfill; current reruns

@@ -176,6 +176,10 @@ def _world_model_item(sections: dict[str, dict]) -> ProgressItem:
     trace_outcome = sections.get("trace_outcome_model", {})
     brier = world.get("post_calibration", {}).get("brier_score")
     trace_brier = trace_outcome.get("leave_one_out_metrics", {}).get("brier_score")
+    weighted_trace_rows = max(
+        float(trace_dataset.get("weighted_trainable_row_count", 0.0) or 0.0),
+        float(trace_outcome.get("trainable_row_count", 0) or 0.0),
+    )
     structure = _avg([
         float(world.get("pass", False)),
         float(trace_dataset.get("pass", False)),
@@ -185,7 +189,7 @@ def _world_model_item(sections: dict[str, dict]) -> ProgressItem:
     behavior = _avg([
         _score_brier(brier, threshold=0.1),
         _score_brier(trace_brier, threshold=0.25),
-        _cap(trace_outcome.get("trainable_row_count", 0) / 50),
+        _cap(weighted_trace_rows / 50),
         _cap(world.get("matched_label_count", 0) / 50),
     ])
     return ProgressItem(
@@ -197,6 +201,8 @@ def _world_model_item(sections: dict[str, dict]) -> ProgressItem:
             "proposal_label_count": world.get("matched_label_count"),
             "proposal_brier": brier,
             "trace_trainable_rows": trace_outcome.get("trainable_row_count"),
+            "weighted_trace_trainable_rows": weighted_trace_rows,
+            "artifact_replay_trainable_rows": trace_dataset.get("artifact_replay_trainable_row_count"),
             "trace_brier": trace_brier,
         },
         remaining_gaps=[

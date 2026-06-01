@@ -13,7 +13,7 @@ Overall: PASS
 | recursive_audit | PASS | score=1.0, issues=0/0 |
 | manifest_logger | PASS | events=112, real_logs=12, leak=False |
 | runtime_trace | PASS | events=3, written=3, leak=False |
-| trace_dataset | PASS | rows=2/2, coverage=1.0, leak=False |
+| trace_dataset | PASS | rows=67/69, coverage=1.0, leak=False |
 | trace_outcome_model | PASS | rows=9, brier=0.1605, updates=3 |
 | trace_policy_proposals | PASS | proposals=3, repair=1, parent=surface_6e7d9d238212 |
 | trace_policy_preflight | PASS | ready=3/3, missed=0, outside=0 |
@@ -23,7 +23,7 @@ Overall: PASS
 | evolution_context | PASS | decision=ready_for_manual_apply->gated_apply_allowed, resp={'pass': 9} |
 | memory_surfaces | PASS | types=11->11, edges=11->11 |
 | assumption_bench | PASS | score=0.9968, passed=9/9 |
-| reconstruction_progress | PASS | structure=82.1%, behavior=69.6%, weighted=75.2% |
+| reconstruction_progress | PASS | structure=82.1%, behavior=71.2%, weighted=76.1% |
 
 ## Details
 
@@ -91,7 +91,7 @@ Overall: PASS
 - `real_log_paths`: ["phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log", "phase four/assumption_graph/recursive_scoped_ablation_run_gpt55_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt54mini_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt55_21_50.log", "phase six/autonomous/exp80_run.log"]
 - `written_trials`: 112
 - `secret_leak_detected`: false
-- `throughput_events_per_sec`: 2299.79
+- `throughput_events_per_sec`: 1038.0
 - `event_counts`: {"judge_call": 28, "llm_call": 21, "retrieval": 20, "simulator_rollout": 20, "tool_use": 23}
 
 ### runtime_trace
@@ -105,16 +105,21 @@ Overall: PASS
 
 ### trace_dataset
 
-- `row_count`: 2
-- `trainable_row_count`: 2
-- `first_party_trace_count`: 2
-- `artifact_replay_count`: 0
+- `row_count`: 69
+- `trainable_row_count`: 67
+- `weighted_trainable_row_count`: 38.0
+- `first_party_trace_count`: 9
+- `first_party_trainable_row_count`: 9
+- `artifact_replay_count`: 60
+- `artifact_replay_trainable_row_count`: 58
 - `missing_trace_count`: 0
 - `traced_outcome_coverage`: 1.0
 - `assumption_id_coverage`: 0.5
-- `outcome_counts`: {"loss": 1, "win": 1}
-- `residual_type_counts`: {"no_residual": 1, "optimization": 1}
-- `event_counts`: {"llm_call": 1, "retrieval": 1, "tool_use": 1}
+- `outcome_counts`: {"loss": 4, "tie": 2, "win": 63}
+- `residual_type_counts`: {"no_residual": 63, "optimization": 4, "unknown": 2}
+- `event_counts`: {"tool_use": 69}
+- `source_eval_ids`: ["trace_dataset_ms_bridge_20260601", "trace_dataset_ms_bridge_ms100_20260601", "trace_dataset_ms_bridge_ms100_vs_v20_20260601"]
+- `positive_control`: {"first_party_trace_count": 2, "pass": true, "row_count": 2, "secret_leak_detected": false, "trainable_row_count": 2}
 - `secret_leak_detected`: false
 
 ### trace_outcome_model
@@ -227,10 +232,10 @@ Overall: PASS
 ### reconstruction_progress
 
 - `structure_percent`: 82.1
-- `behavior_percent`: 69.6
-- `weighted_percent`: 75.2
+- `behavior_percent`: 71.2
+- `weighted_percent`: 76.1
 - `completed_item_count`: 3
 - `item_count`: 9
-- `status_counts`: {"early": 1, "operational": 7, "partial": 1}
-- `lowest_behavior_items`: [{"behavior_score": 0.4443, "key": "C_world_model_simulator", "status": "early", "structure_score": 0.82}, {"behavior_score": 0.58, "key": "G_formal_alignment_layer", "status": "partial", "structure_score": 0.72}, {"behavior_score": 0.7, "key": "B_hypothesis_generator", "status": "operational", "structure_score": 0.8}]
-- `top_next_actions`: [{"action": "Accumulate a larger trace dataset from real first-party runs.", "item": "C_world_model_simulator", "priority": 0.3867}, {"action": "Train/calibrate a cheap predictor over problem + activated assumptions + trace features + residual label.", "item": "C_world_model_simulator", "priority": 0.3867}, {"action": "Measure whether formal-mapping quality predicts transfer success.", "item": "G_formal_alignment_layer", "priority": 0.357}, {"action": "Use dedup recommendations to merge complete formal equivalents after verifier approval.", "item": "G_formal_alignment_layer", "priority": 0.357}, {"action": "Add a generator pass that turns evaluator/world-model residuals into candidate proposals.", "item": "B_hypothesis_generator", "priority": 0.255}]
+- `status_counts`: {"operational": 7, "partial": 2}
+- `lowest_behavior_items`: [{"behavior_score": 0.58, "key": "G_formal_alignment_layer", "status": "partial", "structure_score": 0.72}, {"behavior_score": 0.5892, "key": "C_world_model_simulator", "status": "partial", "structure_score": 0.82}, {"behavior_score": 0.7, "key": "B_hypothesis_generator", "status": "operational", "structure_score": 0.8}]
+- `top_next_actions`: [{"action": "Measure whether formal-mapping quality predicts transfer success.", "item": "G_formal_alignment_layer", "priority": 0.357}, {"action": "Use dedup recommendations to merge complete formal equivalents after verifier approval.", "item": "G_formal_alignment_layer", "priority": 0.357}, {"action": "Accumulate a larger trace dataset from real first-party runs.", "item": "C_world_model_simulator", "priority": 0.3069}, {"action": "Train/calibrate a cheap predictor over problem + activated assumptions + trace features + residual label.", "item": "C_world_model_simulator", "priority": 0.3069}, {"action": "Add a generator pass that turns evaluator/world-model residuals into candidate proposals.", "item": "B_hypothesis_generator", "priority": 0.255}]

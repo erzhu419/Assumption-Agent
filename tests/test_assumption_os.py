@@ -70,7 +70,7 @@ from assumption_os.schema import (
 )
 from assumption_os.selector import MetaproductivitySelector
 from assumption_os.trajectory_search import build_trajectory_search_payload
-from assumption_os.trace_dataset import build_trace_dataset_payload
+from assumption_os.trace_dataset import build_trace_dataset_collection_payload, build_trace_dataset_payload
 from assumption_os.trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
 from assumption_os.verifier_stack import build_verifier_stack_payload
 from assumption_os.world_model import build_world_model_payload, train_world_model_calibration
@@ -976,6 +976,64 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertFalse(payload["secret_leak_detected"])
             self.assertNotIn("unit-secret", json.dumps(payload))
             self.assertNotIn("trace-secret", json.dumps(payload))
+
+    def test_trace_dataset_collection_weights_artifact_replay_rows(self):
+        first_party = {
+            "eval_id": "first_party",
+            "source": {"judgments_path": "first.json"},
+            "rows": [
+                {
+                    "problem_id": "p1",
+                    "outcome": "win",
+                    "residual_type": "no_residual",
+                    "trainable": True,
+                    "first_party_trace": True,
+                    "trace_source": "first_party_runtime",
+                    "event_counts": {"llm_call": 1},
+                    "component_counts": {"solver": 1},
+                },
+            ],
+        }
+        artifact = {
+            "eval_id": "artifact",
+            "source": {"judgments_path": "artifact.json"},
+            "rows": [
+                {
+                    "problem_id": "p1",
+                    "outcome": "loss",
+                    "residual_type": "optimization",
+                    "trainable": True,
+                    "first_party_trace": False,
+                    "trace_source": "artifact_replay",
+                    "trace_event_count": 1,
+                    "event_counts": {"tool_use": 1},
+                    "component_counts": {"artifact_replay_answer_meta": 1},
+                },
+                {
+                    "problem_id": "p2",
+                    "outcome": "tie",
+                    "residual_type": "unknown",
+                    "trainable": False,
+                    "first_party_trace": False,
+                    "trace_source": "artifact_replay",
+                    "trace_event_count": 1,
+                    "event_counts": {"tool_use": 1},
+                    "component_counts": {"artifact_replay_answer_meta": 1},
+                },
+            ],
+        }
+        payload = build_trace_dataset_collection_payload(
+            root=Path("."),
+            trace_dataset_payloads=[first_party, artifact],
+            eval_id="unit_trace_collection",
+        )
+        self.assertEqual(payload["dataset_count"], 2)
+        self.assertEqual(payload["row_count"], 3)
+        self.assertEqual(payload["distinct_problem_count"], 2)
+        self.assertEqual(payload["trainable_row_count"], 2)
+        self.assertEqual(payload["first_party_trainable_row_count"], 1)
+        self.assertEqual(payload["artifact_replay_trainable_row_count"], 1)
+        self.assertEqual(payload["weighted_trainable_row_count"], 1.5)
 
     def test_trace_outcome_model_calibrates_routes_and_policy_updates(self):
         rows = [
