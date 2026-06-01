@@ -395,6 +395,10 @@ def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
         _cap(formal.get("independent_transfer_search_query_count", 0) / max(1, formal.get("complete_count", 1))),
         _cap(formal.get("independent_transfer_pairwise_auc", 0.0)),
         _cap(formal.get("independent_transfer_top1_hit_rate", 0.0)),
+        _cap(formal.get("downstream_task_query_count", 0) / max(1, 3 * formal.get("complete_count", 1))),
+        _cap(formal.get("downstream_task_family_count", 0) / 3),
+        _cap(formal.get("downstream_transfer_pairwise_auc", 0.0)),
+        _cap(formal.get("downstream_transfer_top1_hit_rate", 0.0)),
     ])
     return ProgressItem(
         key="G_formal_alignment_layer",
@@ -417,10 +421,14 @@ def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
             "independent_transfer_search_negative_application_count": formal.get("independent_transfer_search_negative_application_count"),
             "independent_transfer_top1_hit_rate": formal.get("independent_transfer_top1_hit_rate"),
             "independent_transfer_pairwise_auc": formal.get("independent_transfer_pairwise_auc"),
+            "downstream_task_query_count": formal.get("downstream_task_query_count"),
+            "downstream_task_family_count": formal.get("downstream_task_family_count"),
+            "downstream_task_top1_hit_rate": formal.get("downstream_task_top1_hit_rate"),
+            "downstream_transfer_pairwise_auc": formal.get("downstream_transfer_pairwise_auc"),
         },
         remaining_gaps=[
             "Formal mapping is an audit/gate over finite kernels, not a full category-theoretic or information-geometric reasoning engine.",
-            "Formal transfer now has trigger-derived and operator-intent labels, but not yet a broad downstream task suite.",
+            "Formal transfer now has trigger-derived, operator-intent, and role-task labels, but not yet external downstream answer-quality probes.",
         ],
         next_actions=[
             "Expand formal-transfer labels into a broader downstream heldout task suite.",
@@ -631,6 +639,12 @@ def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
         if independent_queries >= 9 and independent_top1 >= 0.8 and independent_auc >= 0.8:
             max_structure = max(max_structure, 0.80)
             max_behavior = max(max_behavior, 0.72)
+        downstream_queries = int(item.evidence.get("downstream_task_query_count") or 0)
+        downstream_families = int(item.evidence.get("downstream_task_family_count") or 0)
+        downstream_auc = float(item.evidence.get("downstream_transfer_pairwise_auc") or 0.0)
+        if downstream_queries >= 27 and downstream_families >= 3 and downstream_auc >= 0.8:
+            max_structure = max(max_structure, 0.82)
+            max_behavior = max(max_behavior, 0.74)
     return max_structure, max_behavior
 
 

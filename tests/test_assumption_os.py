@@ -30,6 +30,7 @@ from assumption_os.formal_mapping import (
     build_independent_formal_search_eval_payload,
     build_categorical_info_geometry_payload,
     build_formal_dedup_payload,
+    build_formal_downstream_task_eval_payload,
     build_formal_mapping_gate_payload,
     build_formal_mapping_payload,
     build_formal_search_eval_payload,
@@ -2295,6 +2296,40 @@ class AssumptionOSTest(unittest.TestCase):
             first_app = search_eval["results"][0]["applications"][0]
             self.assertGreater(first_app["operator_score"], 0.0)
             self.assertTrue(first_app["matched_operator_terms"])
+
+    def test_formal_downstream_task_eval_covers_role_families(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            for seed, keyword, required, step, verifier in [
+                ("WCAND_EXPECTED", "risk", "rollback", "stage recovery", "check rollback"),
+                ("WCAND_OTHER", "speed", "latency", "profile bottleneck", "check latency"),
+            ]:
+                base = {
+                    "type": AssumptionType.HARNESS,
+                    "claim": f"formal downstream {seed}",
+                    "payload": {"seed_cid": seed},
+                    "tags": [seed],
+                }
+                for suffix, kind, expr in [
+                    ("feature", "feature", {"keywords_en": [keyword], "regex": []}),
+                    ("constraint", "constraint", {"required_substrings": [required]}),
+                    ("decomp", "decomposition", {"steps": [step]}),
+                    ("verify", "verification", {"instruction": verifier}),
+                    ("hp", "hp_change", {"temperature": 0.0, "max_tokens": 1000}),
+                ]:
+                    store.upsert_node(AssumptionNode(
+                        id=f"{seed}_{suffix}",
+                        kind=kind,
+                        formal_form={"kind": kind, "expr": expr},
+                        **base,
+                    ))
+            formal_payload = build_formal_mapping_payload(store)
+            payload = build_formal_downstream_task_eval_payload(formal_payload)
+            self.assertTrue(payload["pass"])
+            self.assertEqual(payload["query_count"], 6)
+            self.assertEqual(payload["task_family_count"], 3)
+            self.assertGreaterEqual(payload["top1_hit_rate"], 0.8)
+            self.assertEqual(payload["task_family_counts"]["constraint_application"], 2)
 
     def test_formal_transfer_eval_scores_expected_mapping_above_distractor(self):
         with tempfile.TemporaryDirectory() as td:

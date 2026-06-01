@@ -258,6 +258,38 @@ def build_independent_formal_search_eval_payload(
     return payload
 
 
+def build_formal_downstream_task_eval_payload(
+    formal_mapping_payload: dict,
+    *,
+    top_n: int | None = None,
+) -> dict:
+    """Evaluate mapping transfer on role-specific downstream task probes."""
+
+    tasks = _default_downstream_formal_tasks(formal_mapping_payload)
+    payload = build_formal_search_eval_payload(
+        formal_mapping_payload,
+        labeled_queries=tasks,
+        top_n=top_n,
+    )
+    family_counts = Counter(task.get("task_family") for task in tasks)
+    complete_count = len([
+        summary for summary in formal_mapping_payload.get("summaries", [])
+        if summary.get("status") == FormalMappingStatus.COMPLETE.value
+    ])
+    payload["eval_kind"] = "downstream_role_task_suite"
+    payload["label_source"] = "role_specific_downstream_tasks"
+    payload["task_family_counts"] = {str(k): v for k, v in sorted(family_counts.items()) if k}
+    payload["expected_task_count"] = complete_count * 3
+    payload["task_family_count"] = len([k for k in family_counts if k])
+    payload["pass"] = (
+        payload["query_count"] >= max(5, complete_count * 3)
+        and payload["task_family_count"] >= 3
+        and payload["top1_hit_rate"] >= 0.8
+        and payload["negative_application_count"] >= complete_count
+    )
+    return payload
+
+
 def finite_kernel_metrics(source_kernel: list[list[float]], target_kernel: list[list[float]]) -> dict:
     """Compare two finite stochastic kernels with information-geometry metrics.
 
@@ -938,6 +970,57 @@ def _default_independent_formal_queries(formal_mapping_payload: dict) -> list[di
     return sorted(queries, key=lambda row: str(row.get("expected") or ""))
 
 
+def _default_downstream_formal_tasks(formal_mapping_payload: dict) -> list[dict]:
+    tasks = []
+    for summary in formal_mapping_payload.get("summaries", []):
+        if summary.get("status") != FormalMappingStatus.COMPLETE.value:
+            continue
+        expected = summary.get("source_key")
+        constraints = [
+            term["term"]
+            for term in _operator_terms(summary)
+            if term.get("source") == "constraint"
+        ][:5]
+        decomp = [
+            term["term"]
+            for term in _operator_terms(summary)
+            if term.get("source") == "decomposition"
+        ][:8]
+        verifier = [
+            term["term"]
+            for term in _operator_terms(summary)
+            if term.get("source") == "verification"
+        ][:6]
+        if constraints:
+            tasks.append({
+                "id": f"formal_downstream::constraint::{expected}",
+                "query": "下游任务：答案必须保留这些约束信号：" + "、".join(str(x) for x in constraints) + "。",
+                "expected": expected,
+                "label_source": "role_specific_downstream_tasks",
+                "task_family": "constraint_application",
+                "operator_terms": constraints,
+            })
+        if decomp:
+            tasks.append({
+                "id": f"formal_downstream::decomposition::{expected}",
+                "query": "下游任务：需要采用这种处理流程或意图：" + "、".join(str(x) for x in decomp) + "。",
+                "expected": expected,
+                "label_source": "role_specific_downstream_tasks",
+                "task_family": "decomposition_planning",
+                "operator_terms": decomp,
+            })
+        if verifier:
+            tasks.append({
+                "id": f"formal_downstream::verification::{expected}",
+                "query": "下游任务：最终审查必须关注：" + "、".join(str(x) for x in verifier) + "。",
+                "expected": expected,
+                "label_source": "role_specific_downstream_tasks",
+                "task_family": "verification_review",
+                "operator_terms": verifier,
+            })
+    return sorted(tasks, key=lambda row: (str(row.get("task_family") or ""), str(row.get("expected") or "")))
+
+
 def _collect_role_invariants(summary: dict, role: str) -> list[dict]:
     return [
         node.get("invariants", {})
@@ -1053,10 +1136,14 @@ def main() -> None:
     ap.add_argument("--formal-search-eval-out", default=None)
     ap.add_argument("--independent-formal-search-eval", action="store_true")
     ap.add_argument("--independent-formal-search-eval-out", default=None)
+    ap.add_argument("--formal-downstream-task-eval", action="store_true")
+    ap.add_argument("--formal-downstream-task-eval-out", default=None)
     ap.add_argument("--formal-transfer-eval", default=None)
     ap.add_argument("--formal-transfer-eval-out", default=None)
     ap.add_argument("--independent-formal-transfer-eval", default=None)
     ap.add_argument("--independent-formal-transfer-eval-out", default=None)
+    ap.add_argument("--formal-downstream-transfer-eval", default=None)
+    ap.add_argument("--formal-downstream-transfer-eval-out", default=None)
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
@@ -1087,6 +1174,15 @@ def main() -> None:
                 json.dumps(payload["independent_formal_search_eval"], ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
+    if args.formal_downstream_task_eval or args.formal_downstream_task_eval_out:
+        payload["formal_downstream_task_eval"] = build_formal_downstream_task_eval_payload(payload)
+        if args.formal_downstream_task_eval_out:
+            out = _resolve(root, args.formal_downstream_task_eval_out)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(
+                json.dumps(payload["formal_downstream_task_eval"], ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
     if args.formal_transfer_eval:
         metric_payload = payload.get("categorical_info_geometry") or build_categorical_info_geometry_payload(payload)
         payload["formal_transfer_eval"] = build_formal_transfer_eval_payload(
@@ -1110,6 +1206,20 @@ def main() -> None:
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(
                 json.dumps(payload["independent_formal_transfer_eval"], ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+    if args.formal_downstream_transfer_eval:
+        metric_payload = payload.get("categorical_info_geometry") or build_categorical_info_geometry_payload(payload)
+        payload["formal_downstream_transfer_eval"] = build_formal_transfer_eval_payload(
+            formal_mapping_payload=payload,
+            metric_payload=metric_payload,
+            search_eval_payload=json.loads(_resolve(root, args.formal_downstream_transfer_eval).read_text(encoding="utf-8")),
+        )
+        if args.formal_downstream_transfer_eval_out:
+            out = _resolve(root, args.formal_downstream_transfer_eval_out)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(
+                json.dumps(payload["formal_downstream_transfer_eval"], ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
     text = json.dumps(payload, ensure_ascii=False, indent=2)

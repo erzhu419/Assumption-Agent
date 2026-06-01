@@ -623,7 +623,10 @@ suite over 9 mappings with top-1 hit rate 1.0 and pairwise AUC 1.0, bringing
 the current reconstruction audit to structure 83.4%, behavior 74.7%, weighted
 78.6%. Phase-aware trajectory-quality validation raises the current
 reconstruction audit to structure 83.7%, behavior 75.0%, weighted 78.9%; all
-nine audited mechanisms are now at least operational.
+nine audited mechanisms are now at least operational. Formal alignment now also
+has a 27-query downstream role-task suite over constraint, decomposition, and
+verification probes (`top1=1.0`, transfer AUC 0.9833), bringing the current
+audit to structure 83.9%, behavior 75.2%, weighted 79.1%.
 Harness
 observer discovers 19 real artifact events from judgment/meta/log files and
 keeps full artifact-file coverage after the original backfill; current reruns

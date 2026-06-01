@@ -43,6 +43,7 @@ from .formal_mapping import (
     build_independent_formal_search_eval_payload,
     build_categorical_info_geometry_payload,
     build_formal_dedup_payload,
+    build_formal_downstream_task_eval_payload,
     build_formal_mapping_payload,
     build_formal_search_eval_payload,
     build_formal_transfer_eval_payload,
@@ -1261,6 +1262,12 @@ def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
         metric_payload=metric_payload,
         search_eval_payload=independent_search_payload,
     )
+    downstream_search_payload = build_formal_downstream_task_eval_payload(formal_payload)
+    downstream_transfer_payload = build_formal_transfer_eval_payload(
+        formal_mapping_payload=formal_payload,
+        metric_payload=metric_payload,
+        search_eval_payload=downstream_search_payload,
+    )
     summaries = metric_payload["summaries"]
     same_shape = sum(1 for row in summaries if row["metrics"].get("same_shape"))
     warning_count = sum(len(row.get("warnings", [])) for row in summaries)
@@ -1283,6 +1290,8 @@ def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
             and search_eval_payload.get("negative_application_count", 0) >= complete_count * max(0, complete_count - 1)
             and independent_search_payload.get("query_count", 0) >= complete_count
             and independent_search_payload.get("negative_application_count", 0) >= complete_count * max(0, complete_count - 1)
+            and downstream_search_payload.get("pass", False)
+            and downstream_transfer_payload.get("pass", False)
         ),
         "mapping_count": metric_payload["mapping_count"],
         "complete_count": complete_count,
@@ -1321,6 +1330,20 @@ def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
         "independent_transfer_pairwise_auc": independent_transfer_payload.get("pairwise_auc"),
         "independent_transfer_positive_mean_score": independent_transfer_payload.get("positive_mean_transfer_score"),
         "independent_transfer_negative_mean_score": independent_transfer_payload.get("negative_mean_transfer_score"),
+        "downstream_task_eval_pass": downstream_search_payload.get("pass", False),
+        "downstream_task_query_count": downstream_search_payload.get("query_count", 0),
+        "downstream_task_expected_count": downstream_search_payload.get("expected_task_count", 0),
+        "downstream_task_family_count": downstream_search_payload.get("task_family_count", 0),
+        "downstream_task_family_counts": downstream_search_payload.get("task_family_counts", {}),
+        "downstream_task_top1_hit_rate": downstream_search_payload.get("top1_hit_rate"),
+        "downstream_task_negative_application_count": downstream_search_payload.get("negative_application_count", 0),
+        "downstream_transfer_eval_pass": downstream_transfer_payload.get("pass", False),
+        "downstream_transfer_query_count": downstream_transfer_payload.get("query_count", 0),
+        "downstream_transfer_application_count": downstream_transfer_payload.get("application_count", 0),
+        "downstream_transfer_top1_hit_rate": downstream_transfer_payload.get("top1_hit_rate"),
+        "downstream_transfer_pairwise_auc": downstream_transfer_payload.get("pairwise_auc"),
+        "downstream_transfer_positive_mean_score": downstream_transfer_payload.get("positive_mean_transfer_score"),
+        "downstream_transfer_negative_mean_score": downstream_transfer_payload.get("negative_mean_transfer_score"),
     }
 
 
@@ -1629,7 +1652,8 @@ def _key_metric(name: str, section: dict) -> str:
             f"mappings={section['mapping_count']}, warnings={section['warning_count']}, "
             f"dedup={section.get('dedup_duplicate_cluster_count', 0)}, "
             f"transfer_auc={section.get('transfer_pairwise_auc')}, "
-            f"ind_auc={section.get('independent_transfer_pairwise_auc')}"
+            f"ind_auc={section.get('independent_transfer_pairwise_auc')}, "
+            f"downstream_auc={section.get('downstream_transfer_pairwise_auc')}"
         )
     return ""
 
