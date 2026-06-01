@@ -60,6 +60,7 @@ from assumption_os.schema import (
 )
 from assumption_os.selector import MetaproductivitySelector
 from assumption_os.trajectory_search import build_trajectory_search_payload
+from assumption_os.verifier_stack import build_verifier_stack_payload
 from assumption_os.world_model import build_world_model_payload, train_world_model_calibration
 
 
@@ -1016,6 +1017,75 @@ class AssumptionOSTest(unittest.TestCase):
         path_types = {row["path_type"] for row in payload["trajectories"]}
         self.assertIn("repair_then_retest", path_types)
         self.assertEqual(payload["selected"][0]["proposal_id"], "prop_1")
+
+    def test_verifier_stack_combines_ordered_gate_verdicts(self):
+        proposal_payload = {
+            "eval_id": "unit_props",
+            "proposals": [
+                {
+                    "proposal_id": "prop_accept",
+                    "proposal_type": "assumption_revision",
+                    "parent_node_id": "strategy_S01",
+                    "candidate_node": {"id": "cand_accept"},
+                },
+                {
+                    "proposal_id": "prop_repair",
+                    "proposal_type": "assumption_revision",
+                    "parent_node_id": "strategy_S02",
+                    "candidate_node": {"id": "cand_repair"},
+                },
+            ],
+        }
+        preflight = {
+            "eval_id": "unit_preflight",
+            "summaries": [
+                {"proposal_id": "prop_accept", "readiness": "ready_for_fresh_ablation", "trigger_problem_ids": ["p1", "p2"]},
+                {"proposal_id": "prop_repair", "readiness": "needs_scope_fix", "outside_active_problem_ids": ["p3"]},
+            ],
+        }
+        world_model = {
+            "eval_id": "unit_world",
+            "predictions": [
+                {
+                    "proposal_id": "prop_accept",
+                    "predicted_acceptance_probability": 0.8,
+                    "predicted_regression_risk": "low",
+                    "recommended_next_action": "run_fresh_ablation",
+                },
+                {
+                    "proposal_id": "prop_repair",
+                    "predicted_acceptance_probability": 0.4,
+                    "predicted_regression_risk": "high",
+                    "recommended_next_action": "repair_scope_before_ablation",
+                },
+            ],
+        }
+        acceptance = {
+            "eval_id": "unit_acceptance",
+            "summaries": [
+                {
+                    "proposal_id": "prop_accept",
+                    "decision": "accept",
+                    "trigger_outcomes": {"win": 4},
+                    "control_outcomes": {},
+                    "trigger_lcb90": 0.7,
+                    "control_loss_ucb90": None,
+                },
+            ],
+        }
+        payload = build_verifier_stack_payload(
+            proposal_payload=proposal_payload,
+            preflight_payload=preflight,
+            world_model_payload=world_model,
+            acceptance_payload=acceptance,
+            formal_mapping_gate_payload={"gates": []},
+            eval_id="unit_verifier",
+        )
+        by_id = {row["proposal_id"]: row for row in payload["summaries"]}
+        self.assertEqual(by_id["prop_accept"]["verdict"], "accepted_for_gated_apply")
+        self.assertEqual(by_id["prop_accept"]["next_action"], "apply_accepted_candidate_if_requested")
+        self.assertEqual(by_id["prop_repair"]["verdict"], "needs_preflight_repair")
+        self.assertEqual(by_id["prop_repair"]["stages"][0]["status"], "repair")
 
     def test_recursive_daemon_resumes_and_applies_accepted_candidate(self):
         with tempfile.TemporaryDirectory() as td:

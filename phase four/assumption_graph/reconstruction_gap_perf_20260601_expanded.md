@@ -8,10 +8,11 @@ Overall: PASS
 | --- | --- | --- |
 | world_model | PASS | labels=16, pre_auc=1.0, brier=0.0081 |
 | trajectory_search | PASS | multi_path=0.8, hit=1.0 |
+| verifier_stack | PASS | accepted=2, rejected=14, proposals=33 |
 | recursive_daemon | PASS | applied=2/2 |
 | manifest_logger | PASS | events=112, real_logs=12, leak=False |
 | harness_observer | PASS | artifacts=4, backfill=0/19, covered=True |
-| residual_clusterer | PASS | clusters=7, proposals=3 |
+| residual_clusterer | PASS | clusters=6, proposals=2 |
 | formal_metrics | PASS | mappings=9, warnings=0 |
 
 ## Details
@@ -40,6 +41,16 @@ Overall: PASS
 - `path_type_counts`: {"evidence_first": 8, "promote_after_verification": 2, "reject_and_synthesize": 8, "repair_then_retest": 8}
 - `selected_path_types`: {"evidence_first": 8, "promote_after_verification": 2, "reject_and_synthesize": 8, "repair_then_retest": 2}
 
+### verifier_stack
+
+- `proposal_count`: 33
+- `verdict_counts`: {"accepted_for_gated_apply": 2, "collect_more_evidence": 11, "needs_preflight_repair": 6, "rejected_control_harm": 2, "rejected_weak_benefit": 12}
+- `confidence_counts`: {"high": 16, "low": 11, "medium": 6}
+- `next_action_counts`: {"apply_accepted_candidate_if_requested": 2, "collect_more_evidence": 11, "collect_more_trigger_rows": 6, "reject_or_narrow_scope": 2, "reject_or_revise_candidate": 12}
+- `accepted_count`: 2
+- `rejected_count`: 14
+- `stage_status_counts`: {"V0:defer": 6, "V0:pass": 21, "V0:repair": 6, "V1:defer": 31, "V1:pass": 2, "V2:not_applicable": 33, "V3:block": 5, "V3:defer": 4, "V3:missing": 9, "V3:pass": 15, "V4:fail": 14, "V4:missing": 17, "V4:pass": 2}
+
 ### recursive_daemon
 
 - `case_count`: 2
@@ -54,7 +65,7 @@ Overall: PASS
 - `real_log_paths`: ["phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log", "phase four/assumption_graph/recursive_scoped_ablation_run_gpt55_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt54mini_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt55_21_50.log", "phase six/autonomous/exp80_run.log"]
 - `written_trials`: 112
 - `secret_leak_detected`: false
-- `throughput_events_per_sec`: 1551.25
+- `throughput_events_per_sec`: 2153.85
 - `event_counts`: {"judge_call": 28, "llm_call": 21, "retrieval": 20, "simulator_rollout": 20, "tool_use": 23}
 
 ### harness_observer
@@ -75,10 +86,10 @@ Overall: PASS
 ### residual_clusterer
 
 - `record_count`: 109
-- `cluster_count`: 7
-- `proposal_count`: 3
+- `cluster_count`: 6
+- `proposal_count`: 2
 - `residual_type_counts`: {"memory_defect": 8, "optimization": 40, "unknown": 61}
-- `proposal_parent_ids`: ["strategy_S08", "strategy_S21", "strategy_S14"]
+- `proposal_parent_ids`: ["strategy_S08", "strategy_S21"]
 - `validation_plans_complete`: true
 
 ### formal_metrics

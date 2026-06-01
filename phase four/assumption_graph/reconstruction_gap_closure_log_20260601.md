@@ -49,7 +49,9 @@ Current gaps being addressed:
 - 2026-06-01: Promoted world-model calibration from report-only output into reusable artifacts: `world_model` can now train/save calibration from raw pre-acceptance predictions, and `evolution_cycle` can load or inline-train that calibration before screening candidate trajectories.
 - 2026-06-01: Persisted the expanded 16-label calibration artifacts: `world_model_raw_reconstruction_gap_20260601_expanded.json` and `world_model_calibration_reconstruction_gap_20260601_expanded.json`.
 - 2026-06-01: Harness observer discovered 19 real artifact events from one judgment JSON, one answer-meta JSON, and two run logs; it backfilled the 10 previously uncovered judgment/meta events into `trials.jsonl` and skipped 9 already covered log events.
-- 2026-06-01: Current verification command: `python3 -m unittest tests.test_assumption_os` -> 39 tests OK.
+- 2026-06-01: Current verification command: `python3 -m unittest tests.test_assumption_os` -> 40 tests OK.
+- 2026-06-01: Added `assumption_os.verifier_stack` to combine preflight, world-model, formal, falsification, and acceptance gates into one ordered V0-V4 verifier verdict per proposal.
+- 2026-06-01: Persisted `verifier_stack_reconstruction_gap_20260601_expanded.json`: 33 proposals, 2 accepted-for-apply, 14 rejected, 6 needing preflight repair, 11 collect-more-evidence.
 
 ## Closure Notes
 
@@ -79,6 +81,7 @@ Results:
 - Overall: PASS.
 - Manifest logger: 112 events, including 12 parsed real run/judge-log events, no secret leak; the 12 real events are persisted in `trials.jsonl` via `real_log_manifest_ingest_20260601`.
 - Harness observer: 4 artifact files, 19 discovered events, 10 newly backfilled events, 9 already-covered events skipped, full artifact-file coverage after writeback, no secret leak; persisted via `harness_observer_backfill_20260601`.
+- Verifier stack: 33 proposals, 2 accepted-for-gated-apply, 14 rejected, 6 preflight-repair, 11 collect-more-evidence; V4 acceptance stages show 2 pass / 14 fail / 17 missing.
 - World model: 16 matched labels from 2 accepted / 14 rejected proposal outcomes; raw pre-acceptance Brier 0.5316, trained calibration Brier 0.0060, leave-one-out Brier 0.0064, post-acceptance Brier 0.0081.
 - Trajectory search: 10 frontier actions, 26 trajectories, multi-path rate 0.8, top-path label hit rate 1.0.
 - Recursive daemon: 2 positive-control accepted candidates applied in a temp graph, dry-run applied 0, gated apply applied 2, manifests written.

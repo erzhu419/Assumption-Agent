@@ -40,6 +40,8 @@ an Assumption Graph.
   ablations.
 - `trajectory_search.py` performs multi-path rollout over recursive frontier
   actions using world-model scores.
+- `verifier_stack.py` combines preflight, world-model, formal, falsification,
+  and acceptance gates into one ordered V0-V4 verdict per proposal.
 - `recursive_daemon.py` runs the bounded execute/read/resume loop and can apply
   only accepted candidates when explicitly requested.
 - `residual_clusterer.py` clusters systematic residuals and synthesizes
@@ -467,7 +469,8 @@ redaction probes. Those 12 real events are also persisted through
 `real_log_manifest_ingest_20260601` as observed trials in the graph. Harness
 observer discovers 19 real artifact events from judgment/meta/log files and
 backfilled the 10 previously uncovered judgment/meta events, leaving full
-artifact-file coverage after writeback. Full report:
+artifact-file coverage after writeback. The unified verifier stack validates
+33 proposals with 2 accepted-for-apply and 14 rejected verdicts. Full report:
 `phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md`.
 
 `assumption_os.failure_hypotheses` converts loss rows into candidate assumptions

@@ -9,6 +9,7 @@ This runner evaluates the reconstruction mechanisms added after reconstruction:
 5. residual clustering -> hypothesis synthesis
 6. finite formal-mapping information geometry
 7. harness artifact observer coverage
+8. unified verifier stack
 
 The validation uses existing real artifacts where available and deterministic
 positive controls where the mechanism needs a safe graph-mutation sandbox.
@@ -33,6 +34,7 @@ from .recursive_daemon import build_recursive_daemon_payload
 from .recursive_executor import JudgmentSet
 from .residual_clusterer import build_residual_cluster_payload
 from .trajectory_search import build_trajectory_search_payload
+from .verifier_stack import build_verifier_stack_payload
 from .world_model import build_world_model_payload, train_world_model_calibration
 
 
@@ -54,6 +56,10 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     trajectory = _validate_trajectory_search(root=root, world_model_payload=world["post_acceptance_payload"])
     timings["trajectory_search_sec"] = _elapsed(start)
+
+    start = time.perf_counter()
+    verifier = _validate_verifier_stack(root=root, world_model_payload=world["post_acceptance_payload"])
+    timings["verifier_stack_sec"] = _elapsed(start)
 
     start = time.perf_counter()
     daemon = _validate_recursive_daemon(root=root, graph_dir=graph_dir)
@@ -78,6 +84,7 @@ def build_performance_validation_payload(
     sections = {
         "world_model": _strip_payload(world),
         "trajectory_search": trajectory,
+        "verifier_stack": verifier,
         "recursive_daemon": daemon,
         "manifest_logger": manifests,
         "harness_observer": harness,
@@ -250,6 +257,51 @@ def _validate_trajectory_search(*, root: Path, world_model_payload: dict) -> dic
         "top_path_label_hit_rate": round(top_hit_rate, 4),
         "path_type_counts": payload["path_type_counts"],
         "selected_path_types": Counter(row["path_type"] for row in payload["selected"]),
+    }
+
+
+def _validate_verifier_stack(*, root: Path, world_model_payload: dict) -> dict:
+    bundle = _combined_candidate_bundle(root)
+    payload = build_verifier_stack_payload(
+        proposal_payload=bundle["proposal_payload"],
+        preflight_payload=bundle["preflight_payload"],
+        world_model_payload=world_model_payload,
+        falsification_payload=bundle["falsification_payload"],
+        acceptance_payload=bundle["acceptance_payload"],
+        formal_mapping_gate_payload=bundle["formal_gate_payload"],
+        eval_id="perf_verifier_stack",
+    )
+    accepted = [
+        row for row in payload["summaries"]
+        if row["verdict"] == "accepted_for_gated_apply"
+    ]
+    rejected = [
+        row for row in payload["summaries"]
+        if row["verdict"] in {"rejected_control_harm", "rejected_weak_benefit"}
+    ]
+    staged = [
+        stage
+        for row in payload["summaries"]
+        for stage in row.get("stages", [])
+    ]
+    stage_status_counts = dict(Counter(f"{stage['tier']}:{stage['status']}" for stage in staged))
+    passed = (
+        payload["proposal_count"] >= 16
+        and len(accepted) >= 2
+        and len(rejected) >= 10
+        and all(row["next_action"] == "apply_accepted_candidate_if_requested" for row in accepted)
+        and stage_status_counts.get("V4:pass", 0) >= 2
+        and stage_status_counts.get("V4:fail", 0) >= 10
+    )
+    return {
+        "pass": passed,
+        "proposal_count": payload["proposal_count"],
+        "verdict_counts": payload["verdict_counts"],
+        "confidence_counts": payload["confidence_counts"],
+        "next_action_counts": payload["next_action_counts"],
+        "accepted_count": len(accepted),
+        "rejected_count": len(rejected),
+        "stage_status_counts": stage_status_counts,
     }
 
 
@@ -632,6 +684,8 @@ def _key_metric(name: str, section: dict) -> str:
         return f"labels={section['matched_label_count']}, pre_auc={section['pre_acceptance']['auc']}, brier={section['post_calibration']['brier_score']}"
     if name == "trajectory_search":
         return f"multi_path={section['multi_path_rate']}, hit={section['top_path_label_hit_rate']}"
+    if name == "verifier_stack":
+        return f"accepted={section['accepted_count']}, rejected={section['rejected_count']}, proposals={section['proposal_count']}"
     if name == "recursive_daemon":
         return f"applied={section['accepted_apply_count']}/{section['case_count']}"
     if name == "manifest_logger":
