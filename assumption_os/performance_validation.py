@@ -15,6 +15,7 @@ This runner evaluates the reconstruction mechanisms added after reconstruction:
 11. assumption lifecycle capability scoreboard
 12. runtime memory surfaces in graph memory
 13. first-party runtime tracing for live LLM/retrieval calls
+14. trace-to-outcome datasets for world-model/residual training
 
 The validation uses existing real artifacts where available and deterministic
 positive controls where the mechanism needs a safe graph-mutation sandbox.
@@ -46,6 +47,7 @@ from .recursive_runner import build_recursive_assumption_run
 from .residual_clusterer import build_residual_cluster_payload
 from .runtime_trace import RuntimeTraceRecorder
 from .trajectory_search import build_trajectory_search_payload
+from .trace_dataset import build_trace_dataset_payload
 from .verifier_stack import build_verifier_stack_payload
 from .world_model import build_world_model_payload, train_world_model_calibration
 
@@ -90,6 +92,10 @@ def build_performance_validation_payload(
     timings["runtime_trace_sec"] = _elapsed(start)
 
     start = time.perf_counter()
+    trace_dataset = _validate_trace_dataset()
+    timings["trace_dataset_sec"] = _elapsed(start)
+
+    start = time.perf_counter()
     harness = _validate_harness_observer(root=root, graph_dir=graph_dir)
     timings["harness_observer_sec"] = _elapsed(start)
 
@@ -109,6 +115,7 @@ def build_performance_validation_payload(
         "recursive_audit": recursive_audit,
         "manifest_logger": manifests,
         "runtime_trace": runtime_trace,
+        "trace_dataset": trace_dataset,
         "harness_observer": harness,
         "residual_clusterer": residuals,
         "formal_metrics": formal,
@@ -722,6 +729,114 @@ def _validate_runtime_trace() -> dict:
         }
 
 
+def _validate_trace_dataset() -> dict:
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        sample_path = root / "sample.json"
+        meta_path = root / "meta.json"
+        judgments_path = root / "candidate_vs_baseline.json"
+        events_path = root / "events.jsonl"
+        sample_path.write_text(json.dumps([
+            {
+                "problem_id": "trace_ds_win",
+                "domain": "software_engineering",
+                "difficulty": "hard",
+                "coverage_tags": ["S01"],
+            },
+            {
+                "problem_id": "trace_ds_loss",
+                "domain": "science",
+                "difficulty": "medium",
+                "coverage_tags": ["S12"],
+            },
+        ], ensure_ascii=False), encoding="utf-8")
+        meta_path.write_text(json.dumps({
+            "trace_ds_win": {"frame": "hybrid"},
+            "trace_ds_loss": {"frame": "object", "bypass_route": "science_mechanism"},
+        }, ensure_ascii=False), encoding="utf-8")
+        judgments_path.write_text(json.dumps({
+            "trace_ds_win": {
+                "winner": "candidate",
+                "score_a": 9,
+                "score_b": 7,
+                "a_was": "A",
+                "reasoning": "candidate used the active assumption concretely",
+            },
+            "trace_ds_loss": {
+                "winner": "baseline",
+                "score_a": 6,
+                "score_b": 8,
+                "a_was": "A",
+                "reasoning": "baseline gave a more concrete validation bridge",
+            },
+        }, ensure_ascii=False), encoding="utf-8")
+        events = [
+            {
+                "event_type": "retrieval",
+                "problem_id": "trace_ds_win",
+                "component": "phase2_assumption_graph_retrieval",
+                "assumption": "retrieval should activate useful graph context",
+                "artifacts": {
+                    "activated_assumption_ids": ["strategy_S01"],
+                    "query": "api_key=trace-dataset-probe",
+                },
+            },
+            {
+                "event_type": "llm_call",
+                "problem_id": "trace_ds_win",
+                "component": "phase2_turn1_draft",
+                "assumption": "draft call should use retrieved assumptions",
+                "artifacts": {"prompt_kind": "execute_v20"},
+            },
+            {
+                "event_type": "tool_use",
+                "problem_id": "trace_ds_loss",
+                "component": "phase2_cache_hit",
+                "assumption": "cached bypass output is trace evidence",
+                "artifacts": {
+                    "bypass_route": "science_mechanism",
+                    "request": "secret_token=trace-dataset-secret",
+                },
+            },
+        ]
+        events_path.write_text(
+            "\n".join(json.dumps(event, ensure_ascii=False, sort_keys=True) for event in events) + "\n",
+            encoding="utf-8",
+        )
+        payload = build_trace_dataset_payload(
+            root=root,
+            sample_path=sample_path,
+            meta_path=meta_path,
+            judgments_path=judgments_path,
+            trace_events_path=events_path,
+            intervention_variant="candidate",
+            baseline_variant="baseline",
+            eval_id="perf_trace_dataset",
+        )
+        return {
+            "pass": (
+                payload["row_count"] == 2
+                and payload["trainable_row_count"] == 2
+                and payload["first_party_trace_count"] == 2
+                and payload["traced_outcome_coverage"] == 1.0
+                and payload["outcome_counts"] == {"loss": 1, "win": 1}
+                and payload["residual_type_counts"].get("optimization") == 1
+                and not payload["secret_leak_detected"]
+            ),
+            "row_count": payload["row_count"],
+            "trainable_row_count": payload["trainable_row_count"],
+            "first_party_trace_count": payload["first_party_trace_count"],
+            "artifact_replay_count": payload["artifact_replay_count"],
+            "missing_trace_count": payload["missing_trace_count"],
+            "traced_outcome_coverage": payload["traced_outcome_coverage"],
+            "assumption_id_coverage": payload["assumption_id_coverage"],
+            "outcome_counts": payload["outcome_counts"],
+            "residual_type_counts": payload["residual_type_counts"],
+            "event_counts": payload["event_counts"],
+            "secret_leak_detected": payload["secret_leak_detected"],
+        }
+
+
 def _validate_harness_observer(*, root: Path, graph_dir: Path) -> dict:
     artifact_paths = [
         root / "phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_phase2_v20_ms_bridge_gpt55_21_50.json",
@@ -1004,6 +1119,8 @@ def _key_metric(name: str, section: dict) -> str:
         return f"events={section['event_count']}, real_logs={section['real_log_event_count']}, leak={section['secret_leak_detected']}"
     if name == "runtime_trace":
         return f"events={section['event_count']}, written={section['written_trials']}, leak={section['secret_leak_detected']}"
+    if name == "trace_dataset":
+        return f"rows={section['trainable_row_count']}/{section['row_count']}, coverage={section['traced_outcome_coverage']}, leak={section['secret_leak_detected']}"
     if name == "harness_observer":
         return f"artifacts={section['artifact_file_count']}, backfill={section['backfilled_event_count']}/{section['discovered_event_count']}, covered={section['full_coverage_after_writeback']}"
     if name == "residual_clusterer":

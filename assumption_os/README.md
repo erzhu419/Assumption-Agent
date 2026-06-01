@@ -486,7 +486,9 @@ python3 -m assumption_os.manifest_logger \
 `phase2_v20_framework.py`. Enable it with the runner's
 `--runtime-trace-events-out` / `--runtime-trace-summary-out` flags, and add
 `--runtime-trace-writeback` when the trace should become graph
-`TrialManifest`s immediately.
+`TrialManifest`s immediately. Add `--runtime-trace-cache-hits` when a cached
+run should still emit bounded first-party trace rows without replaying LLM
+calls.
 
 ```bash
 python3 "phase one/scripts/validation/phase2_v20_framework.py" \
@@ -496,6 +498,24 @@ python3 "phase one/scripts/validation/phase2_v20_framework.py" \
   --runtime-trace-summary-out "phase four/assumption_graph/phase2_v20_traced_manifests.json" \
   --runtime-trace-eval-id phase2_v20_traced \
   --runtime-trace-writeback
+```
+
+`assumption_os.trace_dataset` joins sample rows, answer metadata, first-party
+runtime events, and pairwise judgments into trainable `(trace, outcome,
+residual)` rows. If a historical run has no first-party runtime trace, use
+`--allow-artifact-trace` to replay only bounded answer-meta decisions; the
+judgment remains the target label, not an input feature.
+
+```bash
+python3 -m assumption_os.trace_dataset \
+  --sample "phase two/analysis/cache/proposal_samples/math_science_21_50_sample.json" \
+  --meta "phase two/analysis/cache/answers/phase2_v20_ms_bridge_gpt55_21_50_meta.json" \
+  --judgments "phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_phase2_v20_ms_bridge_gpt55_21_50.json" \
+  --trace-events "phase four/assumption_graph/phase2_v20_ms_bridge_gpt55_21_50_trace_events.jsonl" \
+  --intervention phase2_v20_ms_bridge_gpt55_21_50 \
+  --baseline phase2_v20_gpt55 \
+  --eval-id trace_dataset_ms_bridge_20260601 \
+  --summary-out "phase four/assumption_graph/trace_dataset_ms_bridge_20260601.json"
 ```
 
 `assumption_os.harness_observer` is the artifact coverage bridge. It converts
@@ -544,7 +564,7 @@ python3 -m assumption_os.performance_validation \
   --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md"
 ```
 
-The expanded performance validation passes all thirteen sections. The initial run found
+The expanded performance validation passes all fourteen sections. The initial run found
 one real issue: post-acceptance world-model probabilities stayed too high after
 rejected evidence, with Brier score 0.2767. The calibrated version now scores
 Brier 0.0081 on the expanded 2 accepted / 14 rejected labeled set, while
@@ -554,10 +574,13 @@ parses 12 real events from existing run/judge logs in addition to synthetic
 redaction probes. Those 12 real events are also persisted through
 `real_log_manifest_ingest_20260601` as observed trials in the graph. Runtime
 trace validation now proves live runner events can be emitted as redacted JSONL
-and TrialManifests before any post-hoc log parsing. Harness
+and TrialManifests before any post-hoc log parsing. Trace dataset validation
+now proves first-party/cache trace events can be joined to judged outcomes and
+residual labels for world-model training. Harness
 observer discovers 19 real artifact events from judgment/meta/log files and
-backfilled the 10 previously uncovered judgment/meta events, leaving full
-artifact-file coverage after writeback. The unified verifier stack validates
+keeps full artifact-file coverage after the original backfill; current reruns
+skip already covered rows instead of duplicating TrialManifests. The unified
+verifier stack validates
 33 proposals with 2 accepted-for-apply and 14 rejected verdicts, and its
 POPPER-style falsification protocols now cover 27 candidate proposals with 135
 planned/passed/failed experiment records. Recursive audit validates both dry

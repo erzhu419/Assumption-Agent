@@ -407,6 +407,8 @@ def main():
                     help="eval id for runtime trace manifests; defaults to <variant>_runtime_trace")
     ap.add_argument("--runtime-trace-writeback", action="store_true",
                     help="append runtime trace TrialManifests to --assumption-graph")
+    ap.add_argument("--runtime-trace-cache-hits", action="store_true",
+                    help="emit bounded first-party trace events for cached answer hits")
     args = ap.parse_args()
     if args.assumption_proposals and not args.assumption_graph:
         raise SystemExit("--assumption-proposals requires --assumption-graph")
@@ -467,7 +469,14 @@ def main():
             graph_dir=resolve_repo_path(args.assumption_graph),
             writeback=args.runtime_trace_writeback,
         )
-    client = create_client()
+    client = None
+
+    def get_client():
+        nonlocal client
+        if client is None:
+            client = create_client()
+        return client
+
     t0 = time.time()
     new = hit = hyg = full = 0
 
@@ -475,6 +484,32 @@ def main():
         pid = p["problem_id"]
         if pid in answers:
             hit += 1
+            if args.runtime_trace_cache_hits and trace_recorder:
+                dom = p.get("domain", "?")
+                diff = p.get("difficulty", "?")
+                cached_meta = meta.get(pid, {}) if isinstance(meta.get(pid), dict) else {}
+                trace_recorder.record(
+                    event_type="tool_use",
+                    problem_id=pid,
+                    component="phase2_cache_hit",
+                    assumption="Cached phase2 answer artifacts are evidence-bearing execution traces.",
+                    why_selected="The runner reused existing answer/meta/draft artifacts instead of issuing a fresh model call.",
+                    expected_effect="Expose cached execution decisions to trace-to-outcome training without replaying prompts.",
+                    observed_effect=(
+                        f"answer_cached={pid in answers}; "
+                        f"meta_cached={pid in meta}; draft_cached={pid in drafts}"
+                    ),
+                    verifier="runtime_trace",
+                    artifacts={
+                        "domain": dom,
+                        "difficulty": diff,
+                        "answer_cached": pid in answers,
+                        "meta_cached": pid in meta,
+                        "draft_cached": pid in drafts,
+                        "frame": cached_meta.get("frame"),
+                        "bypass_route": cached_meta.get("bypass_route"),
+                    },
+                )
             continue
         dom = p.get("domain", "?")
         diff = p.get("difficulty", "?")
@@ -501,7 +536,7 @@ def main():
                 }
                 cache_save(meta_path, meta)
             try:
-                resp = _generate_with_retry(client, prompt, max_tokens=max_tok, temperature=0.3)
+                resp = _generate_with_retry(get_client(), prompt, max_tokens=max_tok, temperature=0.3)
                 answers[pid] = resp["text"].strip()
                 if trace_recorder:
                     trace_recorder.record_llm_call(
@@ -529,7 +564,7 @@ def main():
                 m = meta[pid]
             else:
                 try:
-                    r0 = _generate_with_retry(client, FRAME_REWRITE_PROMPT.format(problem=problem),
+                    r0 = _generate_with_retry(get_client(), FRAME_REWRITE_PROMPT.format(problem=problem),
                                               max_tokens=700, temperature=0.2)
                     m = parse_json_from_llm(r0["text"])
                     required = {"frame", "critical_reframe", "anti_patterns",
@@ -592,7 +627,7 @@ def main():
                 draft = drafts[pid]
             else:
                 try:
-                    r1 = _generate_with_retry(client, EXECUTE_V20.format(
+                    r1 = _generate_with_retry(get_client(), EXECUTE_V20.format(
                         frame=m.get("frame", "hybrid"),
                         critical_reframe=m.get("critical_reframe", ""),
                         evaluation_criteria=m.get("evaluation_criteria", ""),
@@ -633,7 +668,7 @@ def main():
             # Turn 2 audit
             frame_summary = f"{m.get('frame', '?')}: {m.get('critical_reframe', '')}"
             try:
-                r2 = _generate_with_retry(client, REFLECT_PROMPT_V20.format(
+                r2 = _generate_with_retry(get_client(), REFLECT_PROMPT_V20.format(
                     problem=problem, frame_summary=frame_summary,
                     rewritten_problem=m.get("rewritten_problem", problem),
                     draft=draft

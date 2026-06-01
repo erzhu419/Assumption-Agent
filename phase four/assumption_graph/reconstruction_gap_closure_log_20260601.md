@@ -37,6 +37,7 @@ Current gaps being addressed:
 9. Add an AssumptionBench-style capability scoreboard for explicitness, selection, execution, residual attribution, memory transfer, metaproductivity, verifier reliability, world-model quality, and harness governance.
 10. Add runtime memory surfaces so retrieval policy, verifier stack, world model, evaluator policy, formal mapping, recursive runner, manifest logger, governance gate, and lifecycle scoreboard are typed graph memory.
 11. Add a first-party runtime trace recorder and wire it into `phase2_v20_framework.py` so live LLM/retrieval/tool events can become TrialManifests without parsing logs.
+12. Add trace-to-outcome dataset construction so runtime/cache events can train or calibrate the world model against judged wins/losses and residual labels.
 
 ## Progress
 
@@ -72,6 +73,7 @@ Current gaps being addressed:
 - 2026-06-01: Persisted `memory_surfaces_reconstruction_gap_20260601_expanded.json`: 10 runtime surface nodes, 16 typed edges, graph node-type coverage 4 -> 11, edge-type coverage 5 -> 11, `memory_transfer_ready=true`.
 - 2026-06-01: Regenerated `assumption_bench_reconstruction_gap_20260601_expanded.json`: 9 / 9 capabilities pass, overall score 0.9968, minimum score 0.9716, `memory_transfer=1.0`.
 - 2026-06-01: Added `assumption_os.runtime_trace` and wired optional runtime tracing flags into `phase2_v20_framework.py` for live LLM calls, graph retrieval calls, and tool/cache events.
+- 2026-06-01: Added `assumption_os.trace_dataset`, plus cache-hit runtime tracing in `phase2_v20_framework.py`, so cached math/science runs can produce first-party trace rows without external API calls.
 
 ## Closure Notes
 
@@ -84,6 +86,7 @@ Current gaps being addressed:
 - Formal mapping now has a real finite metric engine, scoped to finite stochastic kernels over typed formal roles rather than unrestricted theorem proving.
 - Runtime memory surfaces are now in the graph, so future retrieval can access system-level assumptions instead of relying only on code modules and reports.
 - Live phase2 runs can now emit redacted first-party runtime trace events and write them directly as TrialManifests instead of depending only on post-hoc log parsing.
+- Runtime/cache traces can now be joined to pairwise judgments as trainable trace/outcome/residual rows; historical runs can use bounded artifact replay when first-party trace does not exist.
 
 ## Performance Validation - 2026-06-01
 
@@ -103,7 +106,8 @@ Results:
 - Overall: PASS.
 - Manifest logger: 112 events, including 12 parsed real run/judge-log events, no secret leak; the 12 real events are persisted in `trials.jsonl` via `real_log_manifest_ingest_20260601`.
 - Runtime trace: first-party LLM/retrieval/tool events are emitted as redacted JSONL, converted to TrialManifests, and can be written back to graph memory without post-hoc log parsing.
-- Harness observer: 4 artifact files, 19 discovered events, 10 newly backfilled events, 9 already-covered events skipped, full artifact-file coverage after writeback, no secret leak; persisted via `harness_observer_backfill_20260601`.
+- Trace dataset: first-party/cache trace events are joined to judged outcomes with residual labels and no secret leak, creating world-model training rows instead of only manifest coverage.
+- Harness observer: 4 artifact files, 19 discovered events, full artifact-file coverage after writeback, no secret leak; current reruns skip already-covered events instead of duplicating persisted `harness_observer_backfill_20260601` trials.
 - Verifier stack: 33 proposals, 2 accepted-for-gated-apply, 14 rejected, 6 preflight-repair, 11 collect-more-evidence; V4 acceptance stages show 2 pass / 14 fail / 17 missing. The falsification protocol layer adds 135 experiment records across 27 candidate proposals; accepted protocol checks and rejected protocol checks both pass.
 - Recursive audit: dry frontier plus accepted-return cases pass with 12 total frames, 5 actionable frontier items, min closure score 1.0, 0 critical issues, and 0 warnings.
 - Evolution context: 9 / 9 harness responsibilities pass; dry mode reports `ready_for_manual_apply`, bounded permission reports `gated_apply_allowed`, and unpermitted apply is blocked with permission violations.

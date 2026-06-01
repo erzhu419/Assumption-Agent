@@ -192,16 +192,18 @@ def _score_verifier_reliability(sections: dict[str, dict]) -> CapabilityScore:
 
 def _score_world_model_quality(sections: dict[str, dict]) -> CapabilityScore:
     world = sections.get("world_model", {})
+    trace_dataset = sections.get("trace_dataset", {})
     pre = world.get("pre_acceptance", {})
     calibration = world.get("post_calibration", {})
     auc = float(pre.get("auc") or 0.0)
     brier = float(calibration.get("brier_score") if calibration.get("brier_score") is not None else 1.0)
     labels = int(world.get("matched_label_count") or 0)
-    score = 0.45 * _cap(auc) + 0.35 * _cap(1.0 - min(brier / 0.1, 1.0)) + 0.2 * _cap(labels / 16)
+    trace_rows = int(trace_dataset.get("trainable_row_count") or 0)
+    score = 0.45 * _cap(auc) + 0.35 * _cap(1.0 - min(brier / 0.1, 1.0)) + 0.2 * _cap((labels + trace_rows) / 16)
     return _capability(
         "world_model_quality",
         score,
-        evidence={"auc": auc, "brier_score": brier, "matched_label_count": labels},
+        evidence={"auc": auc, "brier_score": brier, "matched_label_count": labels, "trace_trainable_row_count": trace_rows},
         rationale="The cheap simulator ranks accepted candidates above rejected ones and calibrates after evidence.",
     )
 

@@ -68,6 +68,7 @@ from assumption_os.schema import (
 )
 from assumption_os.selector import MetaproductivitySelector
 from assumption_os.trajectory_search import build_trajectory_search_payload
+from assumption_os.trace_dataset import build_trace_dataset_payload
 from assumption_os.verifier_stack import build_verifier_stack_payload
 from assumption_os.world_model import build_world_model_payload, train_world_model_calibration
 
@@ -887,6 +888,91 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertNotIn("runtime-trace-secret", text)
             updated = JsonlGraphStore(graph_dir)
             self.assertEqual(len(updated.trials), 2)
+
+    def test_trace_dataset_links_runtime_trace_to_outcomes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            sample_path = root / "sample.json"
+            meta_path = root / "meta.json"
+            judgments_path = root / "candidate_vs_baseline.json"
+            events_path = root / "events.jsonl"
+            sample_path.write_text(json.dumps([
+                {
+                    "problem_id": "p1",
+                    "domain": "software_engineering",
+                    "difficulty": "hard",
+                    "coverage_tags": ["S01"],
+                },
+                {
+                    "problem_id": "p2",
+                    "domain": "science",
+                    "difficulty": "medium",
+                    "coverage_tags": ["S12"],
+                },
+                {
+                    "problem_id": "p3",
+                    "domain": "mathematics",
+                    "difficulty": "hard",
+                    "coverage_tags": ["S18"],
+                },
+            ]), encoding="utf-8")
+            meta_path.write_text(json.dumps({
+                "p1": {"frame": "hybrid"},
+                "p2": {"frame": "object", "bypass_route": "science_mechanism"},
+                "p3": {"frame": "hybrid", "bypass_route": "math_research_bridge"},
+            }), encoding="utf-8")
+            judgments_path.write_text(json.dumps({
+                "p1": {"winner": "candidate", "score_a": 9, "score_b": 7, "a_was": "A", "reasoning": "candidate wins"},
+                "p2": {"winner": "baseline", "score_a": 6, "score_b": 8, "a_was": "A", "reasoning": "baseline is more concrete"},
+                "p3": {"winner": "candidate", "score_a": 8, "score_b": 7, "a_was": "B", "reasoning": "B wins"},
+            }), encoding="utf-8")
+            events = [
+                {
+                    "event_type": "retrieval",
+                    "problem_id": "p1",
+                    "component": "phase2_assumption_graph_retrieval",
+                    "artifacts": {"activated_assumption_ids": ["strategy_S01"], "query": "api_key=trace-secret"},
+                },
+                {
+                    "event_type": "llm_call",
+                    "problem_id": "p1",
+                    "component": "phase2_turn1_draft",
+                    "artifacts": {"prompt_kind": "execute_v20"},
+                },
+                {
+                    "event_type": "tool_use",
+                    "problem_id": "p2",
+                    "component": "phase2_cache_hit",
+                    "artifacts": {"bypass_route": "science_mechanism", "request": "secret_token=unit-secret"},
+                },
+            ]
+            events_path.write_text(
+                "\n".join(json.dumps(event, sort_keys=True) for event in events) + "\n",
+                encoding="utf-8",
+            )
+            payload = build_trace_dataset_payload(
+                root=root,
+                sample_path=sample_path,
+                meta_path=meta_path,
+                judgments_path=judgments_path,
+                trace_events_path=events_path,
+                intervention_variant="candidate",
+                baseline_variant="baseline",
+                eval_id="unit_trace_dataset",
+                allow_artifact_trace=True,
+            )
+            self.assertEqual(payload["row_count"], 3)
+            self.assertEqual(payload["trainable_row_count"], 3)
+            self.assertEqual(payload["first_party_trace_count"], 2)
+            self.assertEqual(payload["artifact_replay_count"], 1)
+            self.assertEqual(payload["outcome_counts"], {"loss": 1, "win": 2})
+            self.assertEqual(payload["residual_type_counts"]["optimization"], 1)
+            self.assertEqual(payload["rows"][0]["activated_assumption_ids"], ["strategy_S01"])
+            self.assertTrue(payload["rows"][0]["gold_hit"])
+            self.assertEqual(payload["rows"][0]["score_delta"], 2.0)
+            self.assertFalse(payload["secret_leak_detected"])
+            self.assertNotIn("unit-secret", json.dumps(payload))
+            self.assertNotIn("trace-secret", json.dumps(payload))
 
     def test_harness_observer_backfills_artifact_manifest_coverage(self):
         with tempfile.TemporaryDirectory() as td:
