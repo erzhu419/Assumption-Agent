@@ -39,6 +39,7 @@ from assumption_os.harness_observer import build_harness_observer_payload, event
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
 from assumption_os.manifest_logger import build_component_manifest_payload, events_from_run_logs
 from assumption_os.math_science_policy import route_math_science_problem
+from assumption_os.memory_surfaces import build_memory_surface_payload
 from assumption_os.candidate_eval import CandidateReadiness, build_candidate_eval_payload
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
 from assumption_os.proposals import ProposalType, build_candidate_proposals
@@ -1231,6 +1232,44 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(payload["capability_count"], 9)
             self.assertEqual(payload["failed_capabilities"], [])
             self.assertGreaterEqual(payload["overall_score"], 0.9)
+
+    def test_memory_surfaces_write_runtime_mechanisms_to_graph(self):
+        with tempfile.TemporaryDirectory() as td:
+            graph_dir = Path(td) / "graph"
+            store = JsonlGraphStore(graph_dir)
+            store.upsert_node(AssumptionNode(
+                id="strategy_seed",
+                type=AssumptionType.METHOD,
+                claim="Seed method node.",
+            ))
+            store.flush()
+            payload = build_memory_surface_payload(
+                graph_dir=graph_dir,
+                eval_id="unit_memory_surfaces",
+                performance_payload={
+                    "eval_id": "unit_perf",
+                    "sections": {
+                        "world_model": {"pass": True, "post_calibration": {"brier_score": 0.01}},
+                        "verifier_stack": {"pass": True, "accepted_count": 1, "falsification_experiment_count": 5},
+                        "evolution_context": {"pass": True, "responsibility_status_counts": {"pass": 9}},
+                        "assumption_bench": {"pass": True, "overall_score": 0.95},
+                    },
+                },
+                writeback=True,
+            )
+            self.assertTrue(payload["memory_transfer_ready"])
+            self.assertGreaterEqual(payload["after_graph"]["node_type_count"], 8)
+            self.assertGreaterEqual(payload["after_graph"]["edge_type_count"], 8)
+            updated = JsonlGraphStore(graph_dir)
+            self.assertIn("world_model", payload["after_graph"]["node_type_counts"])
+            self.assertTrue(any(node.type == AssumptionType.VERIFIER for node in updated.nodes.values()))
+            second = build_memory_surface_payload(
+                graph_dir=graph_dir,
+                eval_id="unit_memory_surfaces",
+                writeback=True,
+            )
+            self.assertEqual(second["new_node_count"], 0)
+            self.assertEqual(second["new_edge_count"], 0)
 
     def test_recursive_daemon_resumes_and_applies_accepted_candidate(self):
         with tempfile.TemporaryDirectory() as td:

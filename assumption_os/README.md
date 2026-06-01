@@ -357,6 +357,22 @@ python3 -m assumption_os.assumption_bench \
   --summary-out "phase four/assumption_graph/assumption_bench_phase2_v20.json"
 ```
 
+`assumption_os.memory_surfaces` writes the runtime self-evolution mechanisms
+back into graph memory as typed assumption nodes and edges. This makes
+retrieval policy, verifier stack, world model, evaluator policy, formal mapping,
+recursive runner, manifest logger, governance gate, and lifecycle scoreboard
+available to future graph retrieval instead of leaving them only as modules or
+reports.
+
+```bash
+python3 -m assumption_os.memory_surfaces \
+  --graph-dir "phase four/assumption_graph" \
+  --performance-payload "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.json" \
+  --eval-id memory_surfaces_reconstruction_gap_20260601_expanded \
+  --writeback \
+  --summary-out "phase four/assumption_graph/memory_surfaces_reconstruction_gap_20260601_expanded.json"
+```
+
 `assumption_os.world_model` is the cheap verifier/simulator. It consumes the
 proposal, preflight, falsification, acceptance, regression, and formal-gate
 payloads, then predicts acceptance probability, regression risk, verifier tier,
@@ -509,7 +525,7 @@ python3 -m assumption_os.performance_validation \
   --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md"
 ```
 
-The expanded performance validation passes all eleven sections. The initial run found
+The expanded performance validation passes all twelve sections. The initial run found
 one real issue: post-acceptance world-model probabilities stayed too high after
 rejected evidence, with Brier score 0.2767. The calibrated version now scores
 Brier 0.0081 on the expanded 2 accepted / 14 rejected labeled set, while
@@ -529,7 +545,10 @@ warning issues. Evolution context validates 9 / 9 harness responsibilities:
 dry mode reports `ready_for_manual_apply`, bounded permission reports
 `gated_apply_allowed`, and an unpermitted apply request is blocked. The
 AssumptionBench scoreboard passes 9 / 9 lifecycle capabilities with overall
-score 0.9839 and minimum score 0.8833. Full report:
+score 0.9968 and minimum score 0.9716. Runtime memory surfaces are now written
+to the graph as 10 surface nodes and 16 typed edges, lifting graph coverage to
+11 node types and 11 edge types and bringing `memory_transfer` to 1.0. Full
+report:
 `phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md`.
 
 `assumption_os.failure_hypotheses` converts loss rows into candidate assumptions

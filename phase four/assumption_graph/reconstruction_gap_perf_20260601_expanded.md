@@ -16,7 +16,8 @@ Overall: PASS
 | residual_clusterer | PASS | clusters=6, proposals=2 |
 | formal_metrics | PASS | mappings=9, warnings=0 |
 | evolution_context | PASS | decision=ready_for_manual_apply->gated_apply_allowed, resp={'pass': 9} |
-| assumption_bench | PASS | score=0.9839, passed=9/9 |
+| memory_surfaces | PASS | types=11->11, edges=11->11 |
+| assumption_bench | PASS | score=0.9968, passed=9/9 |
 
 ## Details
 
@@ -84,7 +85,7 @@ Overall: PASS
 - `real_log_paths`: ["phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log", "phase four/assumption_graph/recursive_scoped_ablation_run_gpt55_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt54mini_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt55_21_50.log", "phase six/autonomous/exp80_run.log"]
 - `written_trials`: 112
 - `secret_leak_detected`: false
-- `throughput_events_per_sec`: 1530.05
+- `throughput_events_per_sec`: 1475.63
 - `event_counts`: {"judge_call": 28, "llm_call": 21, "retrieval": 20, "simulator_rollout": 20, "tool_use": 23}
 
 ### harness_observer
@@ -132,11 +133,24 @@ Overall: PASS
 - `procedure_update_count`: 4
 - `procedure_update_ids`: ["require_verifier_stack_before_apply", "require_recursive_audit_before_daemon_apply", "require_manifest_and_harness_coverage", "manual_apply_available"]
 
+### memory_surfaces
+
+- `surface_count`: 10
+- `edge_count`: 16
+- `new_node_count`: 0
+- `new_edge_count`: 0
+- `before_node_type_count`: 11
+- `after_node_type_count`: 11
+- `before_edge_type_count`: 11
+- `after_edge_type_count`: 11
+- `node_type_counts`: {"alignment": 1, "case": 150, "evaluator": 2, "harness": 49, "memory": 1, "method": 111, "residual": 85, "retrieval": 1, "self_modification": 1, "verifier": 1, "world_model": 1}
+- `edge_type_counts`: {"depends_on": 3, "derived_from": 46, "failed_because": 192, "generalizes": 1, "has_case": 150, "has_residual": 61, "has_verifier": 5, "is_formal_isomorphism_of": 1, "specializes": 3, "supports": 3, "uses_evaluator": 1}
+
 ### assumption_bench
 
-- `overall_score`: 0.9839
-- `min_score`: 0.8833
+- `overall_score`: 0.9968
+- `min_score`: 0.9716
 - `capability_count`: 9
 - `passed_capability_count`: 9
 - `failed_capabilities`: []
-- `score_by_capability`: {"assumption_explicitness": 1.0, "context_selection": 1.0, "execution_fidelity": 1.0, "harness_governance": 1.0, "memory_transfer": 0.8833, "metaproductivity": 1.0, "residual_attribution": 1.0, "verifier_reliability": 1.0, "world_model_quality": 0.9716}
+- `score_by_capability`: {"assumption_explicitness": 1.0, "context_selection": 1.0, "execution_fidelity": 1.0, "harness_governance": 1.0, "memory_transfer": 1.0, "metaproductivity": 1.0, "residual_attribution": 1.0, "verifier_reliability": 1.0, "world_model_quality": 0.9716}

@@ -13,6 +13,7 @@ This runner evaluates the reconstruction mechanisms added after reconstruction:
 9. recursive runner closure audit
 10. evolution context / harness responsibility gate
 11. assumption lifecycle capability scoreboard
+12. runtime memory surfaces in graph memory
 
 The validation uses existing real artifacts where available and deterministic
 positive controls where the mechanism needs a safe graph-mutation sandbox.
@@ -36,6 +37,7 @@ from .formal_mapping import build_categorical_info_geometry_payload, build_forma
 from .graph_memory import JsonlGraphStore
 from .harness_observer import build_harness_observer_payload
 from .manifest_logger import build_component_manifest_payload, events_from_run_logs
+from .memory_surfaces import build_memory_surface_payload
 from .recursive_audit import build_recursive_audit_payload
 from .recursive_daemon import build_recursive_daemon_payload
 from .recursive_executor import JudgmentSet
@@ -107,6 +109,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["evolution_context"] = _validate_evolution_context(sections=sections)
     timings["evolution_context_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["memory_surfaces"] = _validate_memory_surfaces(root=root, graph_dir=graph_dir, sections=sections)
+    timings["memory_surfaces_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["assumption_bench"] = _validate_assumption_bench(sections=sections, graph_dir=graph_dir)
     timings["assumption_bench_sec"] = _elapsed(start)
@@ -561,6 +566,32 @@ def _validate_assumption_bench(*, sections: dict[str, dict], graph_dir: Path) ->
     }
 
 
+def _validate_memory_surfaces(*, root: Path, graph_dir: Path, sections: dict[str, dict]) -> dict:
+    with tempfile.TemporaryDirectory() as td:
+        tmp_graph = Path(td) / "graph"
+        _copy_graph_store(graph_dir, tmp_graph)
+        payload = build_memory_surface_payload(
+            graph_dir=tmp_graph,
+            eval_id="perf_memory_surfaces",
+            performance_payload={"eval_id": "perf_partial_sections", "sections": sections},
+            writeback=True,
+        )
+    after = payload["after_graph"]
+    return {
+        "pass": payload["memory_transfer_ready"],
+        "surface_count": payload["surface_count"],
+        "edge_count": payload["edge_count"],
+        "new_node_count": payload["new_node_count"],
+        "new_edge_count": payload["new_edge_count"],
+        "before_node_type_count": payload["before_graph"]["node_type_count"],
+        "after_node_type_count": after["node_type_count"],
+        "before_edge_type_count": payload["before_graph"]["edge_type_count"],
+        "after_edge_type_count": after["edge_type_count"],
+        "node_type_counts": after["node_type_counts"],
+        "edge_type_counts": after["edge_type_counts"],
+    }
+
+
 def _validate_manifest_logger(*, root: Path) -> dict:
     events = [
         {
@@ -896,6 +927,8 @@ def _key_metric(name: str, section: dict) -> str:
         return f"decision={section['dry_policy_decision']}->{section['apply_policy_decision']}, resp={section['responsibility_status_counts']}"
     if name == "assumption_bench":
         return f"score={section['overall_score']}, passed={section['passed_capability_count']}/{section['capability_count']}"
+    if name == "memory_surfaces":
+        return f"types={section['before_node_type_count']}->{section['after_node_type_count']}, edges={section['before_edge_type_count']}->{section['after_edge_type_count']}"
     if name == "manifest_logger":
         return f"events={section['event_count']}, real_logs={section['real_log_event_count']}, leak={section['secret_leak_detected']}"
     if name == "harness_observer":

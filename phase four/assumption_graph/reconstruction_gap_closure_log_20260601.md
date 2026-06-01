@@ -14,6 +14,7 @@ Current gaps being addressed:
 6. Formal mapping is an audit/search layer, not yet an executable finite categorical / information-geometry reasoning layer.
 7. Evolution context / harness responsibility is implicit in commands rather than represented as an auditable assumption.
 8. Evaluation is still too easy to collapse into answer win-rate rather than lifecycle capabilities.
+9. Runtime self-evolution mechanisms exist as modules and reports, but are not yet first-class graph memory surfaces.
 
 ## Design Constraints
 
@@ -33,6 +34,7 @@ Current gaps being addressed:
 7. Add unit tests and README documentation for the new loop.
 8. Add an evolution-context gate for task specification, context selection, observability, failure attribution, verification, permission boundaries, intervention recording, rollback, and procedure updates.
 9. Add an AssumptionBench-style capability scoreboard for explicitness, selection, execution, residual attribution, memory transfer, metaproductivity, verifier reliability, world-model quality, and harness governance.
+10. Add runtime memory surfaces so retrieval policy, verifier stack, world model, evaluator policy, formal mapping, recursive runner, manifest logger, governance gate, and lifecycle scoreboard are typed graph memory.
 
 ## Progress
 
@@ -64,6 +66,9 @@ Current gaps being addressed:
 - 2026-06-01: Persisted `evolution_context_reconstruction_gap_20260601_expanded.json`: dry mode is `ready_for_manual_apply`, bounded apply is `gated_apply_allowed`, unpermitted apply is `blocked_by_permissions`, and all 9 responsibilities pass.
 - 2026-06-01: Added `assumption_os.assumption_bench` to evaluate lifecycle capabilities separately from answer win-rate.
 - 2026-06-01: Persisted `assumption_bench_reconstruction_gap_20260601_expanded.json`: 9 / 9 capabilities pass, overall score 0.9839, minimum score 0.8833.
+- 2026-06-01: Added `assumption_os.memory_surfaces` to materialize runtime self-evolution mechanisms as first-class graph nodes, edges, evidence, and an indexing TrialManifest.
+- 2026-06-01: Persisted `memory_surfaces_reconstruction_gap_20260601_expanded.json`: 10 runtime surface nodes, 16 typed edges, graph node-type coverage 4 -> 11, edge-type coverage 5 -> 11, `memory_transfer_ready=true`.
+- 2026-06-01: Regenerated `assumption_bench_reconstruction_gap_20260601_expanded.json`: 9 / 9 capabilities pass, overall score 0.9968, minimum score 0.9716, `memory_transfer=1.0`.
 
 ## Closure Notes
 
@@ -74,6 +79,7 @@ Current gaps being addressed:
 - Harness observer now covers pre-existing judgment/meta/log artifacts through bounded backfill, reducing black-box cache gaps while avoiding full prompt/answer import.
 - Residual synthesis supports an injectable LLM synthesizer in code and a deterministic CLI path for reproducible tests.
 - Formal mapping now has a real finite metric engine, scoped to finite stochastic kernels over typed formal roles rather than unrestricted theorem proving.
+- Runtime memory surfaces are now in the graph, so future retrieval can access system-level assumptions instead of relying only on code modules and reports.
 
 ## Performance Validation - 2026-06-01
 
@@ -96,9 +102,10 @@ Results:
 - Verifier stack: 33 proposals, 2 accepted-for-gated-apply, 14 rejected, 6 preflight-repair, 11 collect-more-evidence; V4 acceptance stages show 2 pass / 14 fail / 17 missing. The falsification protocol layer adds 135 experiment records across 27 candidate proposals; accepted protocol checks and rejected protocol checks both pass.
 - Recursive audit: dry frontier plus accepted-return cases pass with 12 total frames, 5 actionable frontier items, min closure score 1.0, 0 critical issues, and 0 warnings.
 - Evolution context: 9 / 9 harness responsibilities pass; dry mode reports `ready_for_manual_apply`, bounded permission reports `gated_apply_allowed`, and unpermitted apply is blocked with permission violations.
-- AssumptionBench: 9 / 9 lifecycle capabilities pass; overall score 0.9839, minimum score 0.8833. The weakest current capability is memory transfer because the persisted graph has 4 node-type surfaces and 5 edge-type surfaces.
+- Memory surfaces: 10 runtime surface nodes and 16 typed edges are indexed in graph memory; persisted graph coverage is now 11 node types and 11 edge types.
+- AssumptionBench: 9 / 9 lifecycle capabilities pass; overall score 0.9968, minimum score 0.9716. `memory_transfer` is now 1.0 after runtime mechanisms were written into the graph.
 - World model: 16 matched labels from 2 accepted / 14 rejected proposal outcomes; raw pre-acceptance Brier 0.2182, trained calibration Brier 0.0085, leave-one-out Brier 0.0090, post-acceptance Brier 0.0081.
 - Trajectory search: 10 frontier actions, 26 trajectories, multi-path rate 0.8, top-path label hit rate 1.0.
 - Recursive daemon: 2 positive-control accepted candidates applied in a temp graph, dry-run applied 0, gated apply applied 2, manifests written.
-- Residual clusterer: 109 residual records, 7 clusters, 3 synthesized candidate proposals with validation plans.
+- Residual clusterer: 109 residual records, 6 clusters, 2 synthesized candidate proposals with validation plans.
 - Formal metrics: 9 complete mappings, 9/9 finite kernels same-shape, 0 warnings.
