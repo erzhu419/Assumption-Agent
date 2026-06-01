@@ -47,6 +47,7 @@ def build_recursive_execution_payload(
     command_limit: int | None = None,
     execute: bool = False,
     timeout_sec: int = 3600,
+    include_full_resumed: bool = False,
 ) -> dict:
     """Plan/execute recursive frontier actions and optionally resume the tree."""
 
@@ -105,6 +106,7 @@ def build_recursive_execution_payload(
         "acceptance_error": acceptance_error,
         "candidate_acceptance": acceptance_payload,
         "resumed_recursive": _compact_resumed_payload(resumed_recursive_payload),
+        "resumed_recursive_full": resumed_recursive_payload if include_full_resumed else None,
     }
 
 

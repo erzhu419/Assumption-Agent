@@ -22,13 +22,16 @@ from assumption_os.falsification import FalsificationDecision, build_falsificati
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
+    build_categorical_info_geometry_payload,
     build_formal_mapping_gate_payload,
     build_formal_mapping_payload,
+    finite_kernel_metrics,
     format_formal_mapping_applications,
     search_formal_mappings,
 )
 from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
+from assumption_os.manifest_logger import build_component_manifest_payload
 from assumption_os.math_science_policy import route_math_science_problem
 from assumption_os.candidate_eval import CandidateReadiness, build_candidate_eval_payload
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
@@ -40,7 +43,9 @@ from assumption_os.recursive_runner import (
     RecursiveFrameType,
     build_recursive_assumption_run,
 )
+from assumption_os.recursive_daemon import build_recursive_daemon_payload
 from assumption_os.recursive_executor import JudgmentSet, build_recursive_execution_payload
+from assumption_os.residual_clusterer import build_residual_cluster_payload
 from assumption_os.residuals import classify_manifest
 from assumption_os.schema import (
     AssumptionEdge,
@@ -53,6 +58,8 @@ from assumption_os.schema import (
     TrialStatus,
 )
 from assumption_os.selector import MetaproductivitySelector
+from assumption_os.trajectory_search import build_trajectory_search_payload
+from assumption_os.world_model import build_world_model_payload
 
 
 class AssumptionOSTest(unittest.TestCase):
@@ -767,6 +774,287 @@ class AssumptionOSTest(unittest.TestCase):
                 RecursiveFrameType.CANDIDATE_HYPOTHESIS.value,
             )
 
+    def test_component_manifest_logger_records_and_redacts_agent_events(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            payload = build_component_manifest_payload(
+                eval_id="unit_manifest",
+                store=store,
+                writeback=True,
+                events=[{
+                    "event_type": "llm_call",
+                    "problem_id": "p1",
+                    "component": "judge",
+                    "assumption": "Judge calls should be auditable.",
+                    "why_selected": "Need cross-check evidence.",
+                    "expected_effect": "Record model, prompt hash, and outcome without secrets.",
+                    "artifacts": {"request": "secret_token=unit-test-secret"},
+                    "metadata": {"model": "gpt-5.5"},
+                    "observed_effect": "judge returned candidate win",
+                }],
+            )
+            self.assertEqual(payload["event_counts"], {"llm_call": 1})
+            updated = JsonlGraphStore(td)
+            self.assertEqual(len(updated.trials), 1)
+            manifest = next(iter(updated.trials.values()))
+            self.assertEqual(manifest.component, "judge")
+            self.assertIn("[REDACTED]", manifest.artifacts["request"])
+            self.assertNotIn("unit-test-secret", json.dumps(manifest.to_dict()))
+
+    def test_world_model_scores_candidates_and_logs_simulator_manifests(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S01",
+                type=AssumptionType.METHOD,
+                claim="Use controlled-variable tests.",
+                confidence=0.8,
+                metaproductivity=0.2,
+            ))
+            store.flush()
+            proposal_payload = {
+                "eval_id": "unit_props",
+                "proposals": [
+                    {
+                        "proposal_id": "prop_accept",
+                        "proposal_type": ProposalType.FAILURE_HYPOTHESIS.value,
+                        "parent_node_id": "strategy_S01",
+                        "priority": 0.9,
+                        "candidate_node": {"id": "cand_accept", "claim": "Add a concrete baseline gate."},
+                    },
+                    {
+                        "proposal_id": "prop_reject",
+                        "proposal_type": ProposalType.FAILURE_HYPOTHESIS.value,
+                        "parent_node_id": "strategy_S01",
+                        "priority": 0.2,
+                        "candidate_node": {"id": "cand_reject", "claim": "Use a broad generic warning."},
+                    },
+                ],
+            }
+            preflight = {
+                "summaries": [
+                    {"proposal_id": "prop_accept", "readiness": "ready_for_fresh_ablation"},
+                    {"proposal_id": "prop_reject", "readiness": "needs_scope_fix"},
+                ],
+            }
+            falsification = {
+                "summaries": [
+                    {"proposal_id": "prop_accept", "decision": "ready_for_ablation"},
+                    {"proposal_id": "prop_reject", "decision": "reject_benefit"},
+                ],
+            }
+            acceptance = {
+                "summaries": [
+                    {"proposal_id": "prop_accept", "decision": "accept"},
+                    {"proposal_id": "prop_reject", "decision": "reject_benefit"},
+                ],
+            }
+            payload = build_world_model_payload(
+                store=JsonlGraphStore(td),
+                proposal_payload=proposal_payload,
+                preflight_payload=preflight,
+                falsification_payload=falsification,
+                acceptance_payload=acceptance,
+                regression_predictions=[
+                    {"proposal_id": "prop_accept", "risk": "low"},
+                    {"proposal_id": "prop_reject", "risk": "high"},
+                ],
+                formal_mapping_gate_payload={"gates": []},
+                eval_id="unit_world_model",
+                writeback=True,
+            )
+            by_id = {p["proposal_id"]: p for p in payload["predictions"]}
+            self.assertGreater(
+                by_id["prop_accept"]["predicted_acceptance_probability"],
+                by_id["prop_reject"]["predicted_acceptance_probability"],
+            )
+            self.assertEqual(payload["calibration"]["labeled_predictions"], 2)
+            self.assertEqual(len(JsonlGraphStore(td).trials), 2)
+
+    def test_trajectory_search_returns_multiple_ranked_paths(self):
+        recursive_payload = {
+            "eval_id": "unit_recursive",
+            "next_actions": [{
+                "frame_id": "frame_1",
+                "problem_id": "verify::prop_1",
+                "proposal_id": "prop_1",
+                "next_action": "run_fresh_ablation",
+                "priority": 0.8,
+            }],
+        }
+        world_model_payload = {
+            "eval_id": "unit_world",
+            "predictions": [{
+                "proposal_id": "prop_1",
+                "predicted_acceptance_probability": 0.62,
+                "expected_utility": 0.25,
+                "predicted_regression_risk": "medium",
+                "recommended_next_action": "repair_scope_before_ablation",
+                "predicted_failure_modes": ["medium_regression_risk"],
+            }],
+        }
+        payload = build_trajectory_search_payload(
+            recursive_payload=recursive_payload,
+            world_model_payload=world_model_payload,
+            eval_id="unit_trajectory",
+            beam_width=3,
+        )
+        self.assertGreaterEqual(payload["trajectory_count"], 2)
+        path_types = {row["path_type"] for row in payload["trajectories"]}
+        self.assertIn("repair_then_retest", path_types)
+        self.assertEqual(payload["selected"][0]["proposal_id"], "prop_1")
+
+    def test_recursive_daemon_resumes_and_applies_accepted_candidate(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            graph_dir = root / "graph"
+            store = JsonlGraphStore(graph_dir)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S01",
+                type=AssumptionType.METHOD,
+                claim="Use controlled-variable tests.",
+                tags=["S01", "controlled"],
+                confidence=0.7,
+            ))
+            store.flush()
+            evolution_payload = {
+                "eval_id": "unit_cycle",
+                "proposals": {
+                    "eval_id": "unit_props",
+                    "proposals": [{
+                        "proposal_id": "prop_ready",
+                        "proposal_type": ProposalType.FAILURE_HYPOTHESIS.value,
+                        "parent_node_id": "strategy_S01",
+                        "priority": 0.8,
+                        "candidate_node": {
+                            "id": "cand_ready",
+                            "type": AssumptionType.METHOD.value,
+                            "kind": "claim",
+                            "claim": "Require a baseline and one intervention before answering.",
+                            "context_conditions": [],
+                            "predicted_effects": ["improve causal diagnosis"],
+                            "risk_predictions": [],
+                            "verifiers": [],
+                            "evidence_ids": [],
+                            "residual_ids": [],
+                            "confidence": 0.5,
+                            "metaproductivity": 0.0,
+                            "status": "candidate",
+                            "tags": ["candidate"],
+                            "source_refs": [],
+                            "payload": {},
+                        },
+                    }],
+                },
+                "candidate_preflight": {
+                    "eval_id": "unit_preflight",
+                    "summaries": [{
+                        "proposal_id": "prop_ready",
+                        "readiness": CandidateReadiness.READY_FOR_FRESH_ABLATION.value,
+                        "active_trigger_problem_ids": ["p1", "p2", "p3"],
+                        "trigger_problem_ids": ["p1", "p2", "p3"],
+                        "control_problem_ids": [],
+                        "command_hint": "python3 run_candidate.py --variant proposal_ready",
+                    }],
+                },
+                "falsification_gate": {
+                    "summaries": [{
+                        "proposal_id": "prop_ready",
+                        "decision": FalsificationDecision.READY_FOR_ABLATION.value,
+                        "next_action": "run_fresh_ablation",
+                    }],
+                },
+                "bayesian_policy": {
+                    "scores": [{
+                        "proposal_id": "prop_ready",
+                        "recommended_action": BayesianPolicyAction.RUN_ABLATION.value,
+                        "posterior_priority": 1.2,
+                        "expected_value": 0.7,
+                        "command_hint": "python3 run_candidate.py --variant proposal_ready",
+                    }],
+                },
+                "policy_update_plan": {
+                    "actions": [{
+                        "proposal_id": "prop_ready",
+                        "policy_action": "run_fresh_ablation_before_promotion",
+                    }],
+                },
+                "regression_predictions": [{"proposal_id": "prop_ready", "risk": "low"}],
+                "formal_mapping_gate": {"gates": []},
+            }
+            recursive_payload = build_recursive_assumption_run(
+                graph_dir=graph_dir,
+                problem="Diagnose a channel experiment failure with one controlled intervention.",
+                goal="Create a recursive assumption tree.",
+                eval_id="unit_recursive_daemon",
+                evolution_payload=evolution_payload,
+                max_children=1,
+            )
+            judgment_path = root / "judgments.json"
+            judgment_path.write_text(json.dumps({
+                "p1": {"winner": "proposal_ready"},
+                "p2": {"winner": "proposal_ready"},
+                "p3": {"winner": "proposal_ready"},
+            }), encoding="utf-8")
+            payload = build_recursive_daemon_payload(
+                root=root,
+                graph_dir=graph_dir,
+                recursive_payload=recursive_payload,
+                evolution_payload=evolution_payload,
+                eval_id="unit_daemon",
+                judgment_sets=[JudgmentSet(
+                    candidate_variant="proposal_ready",
+                    baseline_variant="base",
+                    judgment_paths=[judgment_path],
+                    proposal_ids=["prop_ready"],
+                )],
+                apply_accepted=True,
+                writeback_manifests=True,
+            )
+            self.assertEqual(payload["iteration_count"], 1)
+            self.assertEqual(payload["iterations"][0]["candidate_acceptance_counts"], {"accept": 1})
+            self.assertIn("cand_ready", JsonlGraphStore(graph_dir).nodes)
+            self.assertTrue(payload["applied_candidate_node_ids"])
+            self.assertGreaterEqual(len(JsonlGraphStore(graph_dir).trials), 2)
+
+    def test_residual_clusterer_synthesizes_candidate_from_systematic_residuals(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S03",
+                type=AssumptionType.METHOD,
+                claim="Use staged fallback planning.",
+            ))
+            for i in range(2):
+                store.append_trial(TrialManifest(
+                    problem_id=f"p{i}",
+                    action_type="retrieval",
+                    component="phase2",
+                    assumption="fallback planning should be retrieved",
+                    why_selected="coverage tag matched",
+                    expected_effect="activate staged fallback",
+                    assumption_ids=["strategy_S03"],
+                    residual="retrieval selected irrelevant memory and missed fallback trigger",
+                    residual_type=ResidualType.MEMORY_DEFECT,
+                    status=TrialStatus.FAILED,
+                    trial_id=f"trial_mem_{i}",
+                ))
+            store.flush()
+            payload = build_residual_cluster_payload(
+                store=JsonlGraphStore(td),
+                eval_id="unit_cluster",
+                min_cluster_size=2,
+                llm_synthesizer=lambda prompt: "LLM synthesized retrieval gate for fallback triggers.",
+                writeback_manifests=True,
+            )
+            self.assertEqual(payload["cluster_count"], 1)
+            self.assertEqual(payload["proposal_count"], 1)
+            proposal = payload["proposals"][0]
+            self.assertIn("LLM synthesized", proposal["candidate_node"]["claim"])
+            self.assertEqual(proposal["parent_node_id"], "strategy_S03")
+            self.assertTrue(proposal["candidate_node"]["payload"]["validation_plan"]["trigger_problem_ids"])
+            self.assertEqual(len(JsonlGraphStore(td).trials), 3)
+
     def test_recursive_runner_writeback_logs_frame_manifests(self):
         with tempfile.TemporaryDirectory() as td:
             graph_dir = Path(td) / "graph"
@@ -942,6 +1230,47 @@ class AssumptionOSTest(unittest.TestCase):
             formatted = format_formal_mapping_applications(applications)
             self.assertIn("Formal Mapping Reasoning", formatted)
             self.assertIn("identify risk", formatted)
+
+    def test_formal_mapping_metrics_build_finite_category_payload(self):
+        identical = finite_kernel_metrics(
+            [[0.2, 0.8], [0.1, 0.9]],
+            [[0.2, 0.8], [0.1, 0.9]],
+        )
+        shifted = finite_kernel_metrics(
+            [[0.2, 0.8], [0.1, 0.9]],
+            [[0.8, 0.2], [0.9, 0.1]],
+        )
+        self.assertEqual(identical["frobenius_distance"], 0.0)
+        self.assertGreater(shifted["frobenius_distance"], 0.0)
+
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            base = {
+                "type": AssumptionType.HARNESS,
+                "claim": "formal metric test",
+                "payload": {"seed_cid": "WCAND_METRIC"},
+                "tags": ["WCAND_METRIC"],
+            }
+            for node_id, kind, expr in [
+                ("feature_m", "feature", {"keywords_en": ["risk"]}),
+                ("constraint_m", "constraint", {"required_substrings": ["rollback"]}),
+                ("decomp_m", "decomposition", {"steps": ["identify", "verify"]}),
+                ("verify_m", "verification", {"instruction": "check rollback"}),
+                ("hp_m", "hp_change", {"temperature": 0.0}),
+            ]:
+                store.upsert_node(AssumptionNode(
+                    id=node_id,
+                    kind=kind,
+                    formal_form={"kind": kind, "expr": expr},
+                    **base,
+                ))
+            formal_payload = build_formal_mapping_payload(store)
+            metric_payload = build_categorical_info_geometry_payload(formal_payload)
+            self.assertEqual(metric_payload["mapping_count"], 1)
+            summary = metric_payload["summaries"][0]
+            self.assertIn("feature", summary["objects"])
+            self.assertTrue(summary["morphisms"])
+            self.assertTrue(summary["metrics"]["same_shape"])
 
     def test_formal_mapping_audit_rejects_missing_trigger(self):
         with tempfile.TemporaryDirectory() as td:

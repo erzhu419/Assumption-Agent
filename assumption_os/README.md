@@ -31,6 +31,17 @@ an Assumption Graph.
 - `recursive_runner.py` turns one-shot evolution artifacts into a recursive
   assumption tree with parent hypotheses, child verification subproblems,
   argument maps, return updates, and optional manifest writeback.
+- `manifest_logger.py` records LLM calls, retrievals, judge calls, tool-use,
+  simulator rollouts, and daemon iterations as redacted `TrialManifest`s.
+- `world_model.py` is the cheap verifier: it predicts candidate acceptance
+  probability, regression risk, verifier tier, and next action before expensive
+  ablations.
+- `trajectory_search.py` performs multi-path rollout over recursive frontier
+  actions using world-model scores.
+- `recursive_daemon.py` runs the bounded execute/read/resume loop and can apply
+  only accepted candidates when explicitly requested.
+- `residual_clusterer.py` clusters systematic residuals and synthesizes
+  candidate method hypotheses plus heldout validation plans.
 
 ## Build The Graph
 
@@ -184,9 +195,10 @@ For a single conservative entry point, `assumption_os.evolution_cycle` now runs
 the whole planning loop in dry-run mode: writeback preview, conditioned gate,
 formal mapping audit, lifecycle actions, failure-derived hypotheses, candidate
 proposals, candidate preflight, regression prediction, sequential
-falsification, Bayesian policy scoring, and policy update plan. It does not
-mutate the graph unless `--writeback`, `--apply-accepted`, or the gated
-`--autonomous-apply` mode is explicitly supplied.
+falsification, cheap world-model rollout, Bayesian policy scoring, and policy
+update plan. It does not mutate the graph unless `--writeback`,
+`--apply-accepted`, or the gated `--autonomous-apply` mode is explicitly
+supplied.
 
 ```bash
 python3 -m assumption_os.evolution_cycle \
@@ -274,6 +286,51 @@ the frontier commands should actually run. Add `--candidate-judgments`,
 acceptance resume, or `--judgment-bundle` for multiple per-proposal judgment
 runs.
 
+`assumption_os.recursive_daemon` wraps the executor in a bounded loop. It can
+dry-run or execute frontier `command_hint`s, ingest judgment sets, resume the
+recursive tree, record daemon/tool-use manifests, and apply only candidates
+accepted by the gate when `--apply-accepted` is explicitly supplied.
+
+```bash
+python3 -m assumption_os.recursive_daemon \
+  --graph-dir "phase four/assumption_graph" \
+  --recursive-payload "phase four/assumption_graph/recursive_runner_phase2_v20_gpt55_21_50.json" \
+  --evolution-payload "phase four/assumption_graph/evolution_cycle_dryrun_phase2_v20_gpt55_21_50.json" \
+  --eval-id recursive_daemon_phase2_v20_gpt55_21_50 \
+  --max-iterations 1 \
+  --writeback-manifests \
+  --summary-out "phase four/assumption_graph/recursive_daemon_phase2_v20_gpt55_21_50.json"
+```
+
+`assumption_os.world_model` is the cheap verifier/simulator. It consumes the
+proposal, preflight, falsification, acceptance, regression, and formal-gate
+payloads, then predicts acceptance probability, regression risk, verifier tier,
+and a recommended next action. It also emits simulator `TrialManifest`s; use
+real ablation/judge evidence to override it before promotion.
+
+```bash
+python3 -m assumption_os.world_model \
+  --graph-dir "phase four/assumption_graph" \
+  --proposals "phase four/assumption_graph/evolution_cycle_proposals.json" \
+  --preflight "phase four/assumption_graph/candidate_preflight_phase2_v20_gpt55_21_50.json" \
+  --eval-id world_model_phase2_v20_gpt55_21_50 \
+  --summary-out "phase four/assumption_graph/world_model_phase2_v20_gpt55_21_50.json"
+```
+
+`assumption_os.trajectory_search` uses those predictions to keep multiple
+hypothesis futures alive: promote-after-verification, repair-then-retest,
+evidence-first, or reject-and-synthesize. This is the multi-path search layer
+for the recursive runner's frontier.
+
+```bash
+python3 -m assumption_os.trajectory_search \
+  --recursive-payload "phase four/assumption_graph/recursive_runner_phase2_v20_gpt55_21_50.json" \
+  --world-model-payload "phase four/assumption_graph/world_model_phase2_v20_gpt55_21_50.json" \
+  --eval-id trajectory_search_phase2_v20_gpt55_21_50 \
+  --beam-width 5 \
+  --summary-out "phase four/assumption_graph/trajectory_search_phase2_v20_gpt55_21_50.json"
+```
+
 The first recursive dry run produced `root_problem=1`,
 `candidate_hypothesis=8`, and `verification_subproblem=8`, with 16 recursion
 edges and 8 leaf `run_fresh_ablation` next actions. By default this is a dry
@@ -313,6 +370,46 @@ constraints, ordered steps, verifier instructions, and runtime hints. Phase2
 graph retrieval injects these hits through `format_policy_context` as a `Formal
 Mapping Reasoning` section. The first five-query search audit passed 5 / 5; see
 `phase four/assumption_graph/formal_mapping_search_eval_phase2_graph.md`.
+
+Add `--formal-metrics` to also produce a finite categorical /
+information-geometry payload. The metric layer represents each formal bundle as
+a stochastic kernel over `feature`, `constraint`, `decomposition`,
+`verification`, and `hp_change`, then reports row KL divergence, total
+variation, Frobenius distance, and a Blackwell-style dominance proxy against
+the reference verifier pipeline.
+
+```bash
+python3 -m assumption_os.formal_mapping \
+  --graph-dir "phase four/assumption_graph" \
+  --formal-metrics \
+  --summary-out "phase four/assumption_graph/formal_mapping_metrics_phase2_graph.json"
+```
+
+`assumption_os.manifest_logger` is the generic log bridge for events outside
+graph mutation: LLM calls, retrievals, judge calls, tool-use, and simulator
+rollouts. It redacts secret-looking values before writing manifests.
+
+```bash
+python3 -m assumption_os.manifest_logger \
+  --graph-dir "phase four/assumption_graph" \
+  --events "phase four/assumption_graph/component_events.jsonl" \
+  --eval-id component_events_phase2_v20 \
+  --writeback
+```
+
+`assumption_os.residual_clusterer` closes the systematic-residual synthesis
+loop. It clusters residual manifests by residual type and signature, then emits
+candidate method hypotheses with heldout trigger/control validation plans. A
+callable LLM synthesizer can be injected by code; the CLI stays deterministic
+and environment-key-free.
+
+```bash
+python3 -m assumption_os.residual_clusterer \
+  --graph-dir "phase four/assumption_graph" \
+  --eval-id residual_clusters_phase2_v20 \
+  --min-cluster-size 2 \
+  --summary-out "phase four/assumption_graph/residual_clusters_phase2_v20.json"
+```
 
 `assumption_os.failure_hypotheses` converts loss rows into candidate assumptions
 and manifests. It now uses two sources: attributed graph losses from

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
@@ -175,6 +176,197 @@ def format_formal_mapping_applications(applications: list[dict], *, max_items: i
             if knobs:
                 lines.append("  Runtime hint: " + ", ".join(knobs))
     return "\n".join(lines).strip()
+
+
+def finite_kernel_metrics(source_kernel: list[list[float]], target_kernel: list[list[float]]) -> dict:
+    """Compare two finite stochastic kernels with information-geometry metrics.
+
+    This is deliberately finite and executable: a kernel is a row-stochastic
+    matrix over the same object set.  It gives the formal layer a real metric
+    substrate without pretending to be a general theorem prover.
+    """
+
+    source = _normalize_kernel(source_kernel)
+    target = _normalize_kernel(target_kernel)
+    same_shape = _same_shape(source, target)
+    if not same_shape:
+        return {
+            "same_shape": False,
+            "row_kl_divergence": None,
+            "total_variation": None,
+            "frobenius_distance": None,
+            "blackwell_dominance_proxy": None,
+            "warnings": ["kernel shapes differ"],
+        }
+    rows = len(source)
+    cols = len(source[0]) if source else 0
+    row_kls = []
+    tvs = []
+    frob_sum = 0.0
+    dominance_rows = 0
+    for i in range(rows):
+        kl = 0.0
+        tv = 0.0
+        source_entropy = _entropy(source[i])
+        target_entropy = _entropy(target[i])
+        if source_entropy <= target_entropy + 1e-9:
+            dominance_rows += 1
+        for j in range(cols):
+            p = source[i][j]
+            q = target[i][j]
+            if p > 0:
+                kl += p * math.log(p / max(q, 1e-12))
+            tv += abs(p - q)
+            frob_sum += (p - q) ** 2
+        row_kls.append(kl)
+        tvs.append(0.5 * tv)
+    return {
+        "same_shape": True,
+        "row_kl_divergence": round(sum(row_kls) / rows, 6) if rows else 0.0,
+        "max_row_kl_divergence": round(max(row_kls), 6) if row_kls else 0.0,
+        "total_variation": round(sum(tvs) / rows, 6) if rows else 0.0,
+        "max_total_variation": round(max(tvs), 6) if tvs else 0.0,
+        "frobenius_distance": round(math.sqrt(frob_sum), 6),
+        "blackwell_dominance_proxy": round(dominance_rows / rows, 6) if rows else 0.0,
+        "warnings": [],
+    }
+
+
+def build_categorical_info_geometry_payload(
+    formal_mapping_payload: dict,
+    *,
+    reference_kernel: list[list[float]] | None = None,
+) -> dict:
+    """Build finite category objects/morphisms and metric summaries."""
+
+    objects = [
+        FormalRole.FEATURE.value,
+        FormalRole.CONSTRAINT.value,
+        FormalRole.DECOMPOSITION.value,
+        FormalRole.VERIFICATION.value,
+        FormalRole.HP_CHANGE.value,
+    ]
+    reference = reference_kernel or _ideal_mapping_kernel()
+    summaries = []
+    for summary in formal_mapping_payload.get("summaries", []):
+        kernel = _summary_kernel(summary, objects)
+        metrics = finite_kernel_metrics(kernel, reference)
+        morphisms = _summary_morphisms(summary, objects)
+        warnings = list(summary.get("warnings", []))
+        if metrics.get("frobenius_distance") is not None and metrics["frobenius_distance"] > 1.5:
+            warnings.append("mapping kernel is far from the reference verifier pipeline")
+        summaries.append({
+            "mapping_id": summary.get("mapping_id"),
+            "source_key": summary.get("source_key"),
+            "status": summary.get("status"),
+            "objects": objects,
+            "morphisms": morphisms,
+            "kernel": kernel,
+            "reference_kernel": reference,
+            "metrics": metrics,
+            "warnings": sorted(set(warnings)),
+        })
+    return {
+        "mapping_count": len(summaries),
+        "object_count": len(objects),
+        "objects": objects,
+        "reference_kernel": reference,
+        "metric_summary": _metric_summary(summaries),
+        "summaries": summaries,
+    }
+
+
+def _normalize_kernel(kernel: list[list[float]]) -> list[list[float]]:
+    normalized = []
+    width = max((len(row) for row in kernel), default=0)
+    for row in kernel:
+        padded = [max(0.0, float(v)) for v in row] + [0.0] * (width - len(row))
+        total = sum(padded)
+        if total <= 0.0 and width:
+            padded = [1.0 / width for _ in range(width)]
+        elif total > 0.0:
+            padded = [v / total for v in padded]
+        normalized.append(padded)
+    return normalized
+
+
+def _same_shape(a: list[list[float]], b: list[list[float]]) -> bool:
+    return len(a) == len(b) and all(len(ra) == len(rb) for ra, rb in zip(a, b))
+
+
+def _entropy(row: list[float]) -> float:
+    return -sum(p * math.log(max(p, 1e-12)) for p in row if p > 0)
+
+
+def _ideal_mapping_kernel() -> list[list[float]]:
+    # feature -> constraint/decomposition -> verification -> runtime policy
+    return [
+        [0.05, 0.45, 0.35, 0.10, 0.05],
+        [0.00, 0.10, 0.35, 0.45, 0.10],
+        [0.00, 0.10, 0.15, 0.60, 0.15],
+        [0.00, 0.05, 0.05, 0.15, 0.75],
+        [0.05, 0.05, 0.05, 0.70, 0.15],
+    ]
+
+
+def _summary_kernel(summary: dict, objects: list[str]) -> list[list[float]]:
+    present = {
+        node.get("role")
+        for node in summary.get("nodes", [])
+        if node.get("role") in objects
+    }
+    idx = {role: i for i, role in enumerate(objects)}
+    matrix = [[0.0 for _ in objects] for _ in objects]
+
+    def add(src: str, dst: str, weight: float) -> None:
+        if src in present and dst in present:
+            matrix[idx[src]][idx[dst]] += weight
+
+    add(FormalRole.FEATURE.value, FormalRole.CONSTRAINT.value, 0.45)
+    add(FormalRole.FEATURE.value, FormalRole.DECOMPOSITION.value, 0.35)
+    add(FormalRole.FEATURE.value, FormalRole.VERIFICATION.value, 0.10)
+    add(FormalRole.CONSTRAINT.value, FormalRole.DECOMPOSITION.value, 0.35)
+    add(FormalRole.CONSTRAINT.value, FormalRole.VERIFICATION.value, 0.45)
+    add(FormalRole.DECOMPOSITION.value, FormalRole.VERIFICATION.value, 0.60)
+    add(FormalRole.VERIFICATION.value, FormalRole.HP_CHANGE.value, 0.75)
+    add(FormalRole.HP_CHANGE.value, FormalRole.VERIFICATION.value, 0.70)
+    for role in present:
+        matrix[idx[role]][idx[role]] += 0.1
+    return _normalize_kernel(matrix)
+
+
+def _summary_morphisms(summary: dict, objects: list[str]) -> list[dict]:
+    kernel = _summary_kernel(summary, objects)
+    morphisms = []
+    for i, src in enumerate(objects):
+        for j, dst in enumerate(objects):
+            weight = kernel[i][j]
+            if weight > 0.0:
+                morphisms.append({"source": src, "target": dst, "weight": round(weight, 6)})
+    return morphisms
+
+
+def _metric_summary(summaries: list[dict]) -> dict:
+    distances = [
+        row["metrics"].get("frobenius_distance")
+        for row in summaries
+        if row["metrics"].get("frobenius_distance") is not None
+    ]
+    tvs = [
+        row["metrics"].get("total_variation")
+        for row in summaries
+        if row["metrics"].get("total_variation") is not None
+    ]
+    dominance = [
+        row["metrics"].get("blackwell_dominance_proxy")
+        for row in summaries
+        if row["metrics"].get("blackwell_dominance_proxy") is not None
+    ]
+    return {
+        "mean_frobenius_distance": round(sum(distances) / len(distances), 6) if distances else None,
+        "mean_total_variation": round(sum(tvs) / len(tvs), 6) if tvs else None,
+        "mean_blackwell_dominance_proxy": round(sum(dominance) / len(dominance), 6) if dominance else None,
+    }
 
 
 def _summarize_group(source_key: str, nodes: list[AssumptionNode]) -> FormalMappingSummary:
@@ -427,6 +619,7 @@ def main() -> None:
     ap.add_argument("--node-ids", nargs="*", default=None)
     ap.add_argument("--query", default=None)
     ap.add_argument("--top-n", type=int, default=3)
+    ap.add_argument("--formal-metrics", action="store_true")
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
@@ -438,6 +631,8 @@ def main() -> None:
     if args.query:
         payload["search"] = search_formal_mappings(payload, args.query, top_n=args.top_n)
         payload["formatted_search"] = format_formal_mapping_applications(payload["search"])
+    if args.formal_metrics:
+        payload["categorical_info_geometry"] = build_categorical_info_geometry_payload(payload)
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.summary_out:
         out = _resolve(root, args.summary_out)

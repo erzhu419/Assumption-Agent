@@ -30,6 +30,7 @@ from .lifecycle import build_lifecycle_payload
 from .proposal_overlay import parse_csv_set
 from .proposals import build_proposal_payload
 from .record_phase2_eval import record_phase2_eval
+from .world_model import build_world_model_payload
 
 
 def build_evolution_cycle_payload(
@@ -197,6 +198,16 @@ def build_evolution_cycle_payload(
         preflight_payload=preflight_payload,
         acceptance_payload=acceptance_payload,
     )
+    world_model_payload = build_world_model_payload(
+        store=JsonlGraphStore(graph_dir),
+        proposal_payload=proposal_payload,
+        preflight_payload=preflight_payload,
+        falsification_payload=falsification_payload,
+        acceptance_payload=acceptance_payload,
+        regression_predictions=regression_predictions,
+        formal_mapping_gate_payload=formal_mapping_gate_payload,
+        eval_id=f"{eval_id}_world_model",
+    )
     bayesian_policy_payload = build_bayesian_policy_payload(
         store=JsonlGraphStore(graph_dir),
         proposal_payload=proposal_payload,
@@ -249,6 +260,7 @@ def build_evolution_cycle_payload(
         "candidate_preflight": preflight_payload,
         "candidate_acceptance": acceptance_payload,
         "falsification_gate": falsification_payload,
+        "world_model": world_model_payload,
         "regression_predictions": regression_predictions,
         "bayesian_policy": bayesian_policy_payload,
         "policy_update_plan": policy_update_plan,
