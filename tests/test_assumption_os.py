@@ -31,7 +31,7 @@ from assumption_os.formal_mapping import (
 )
 from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
-from assumption_os.manifest_logger import build_component_manifest_payload
+from assumption_os.manifest_logger import build_component_manifest_payload, events_from_run_logs
 from assumption_os.math_science_policy import route_math_science_problem
 from assumption_os.candidate_eval import CandidateReadiness, build_candidate_eval_payload
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
@@ -59,7 +59,7 @@ from assumption_os.schema import (
 )
 from assumption_os.selector import MetaproductivitySelector
 from assumption_os.trajectory_search import build_trajectory_search_payload
-from assumption_os.world_model import build_world_model_payload
+from assumption_os.world_model import build_world_model_payload, train_world_model_calibration
 
 
 class AssumptionOSTest(unittest.TestCase):
@@ -801,6 +801,25 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertIn("[REDACTED]", manifest.artifacts["request"])
             self.assertNotIn("unit-test-secret", json.dumps(manifest.to_dict()))
 
+    def test_manifest_logger_ingests_realistic_judge_run_log(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            log_path = root / "judge.log"
+            log_path.write_text(
+                "\n".join([
+                    "=== JUDGE prop_a proposal_a vs baseline rows=3 ===",
+                    "LLM provider: gemini, model: gpt-5.5",
+                    "  [judge proposal_a vs baseline] 3/3 (new=3 hit=0) 10s",
+                    "=== DONE JUDGE prop_a returncode=0 elapsed=12.3s ===",
+                ]),
+                encoding="utf-8",
+            )
+            events = events_from_run_logs(root=root, log_paths=[log_path])
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0]["event_type"], "judge_call")
+            self.assertEqual(events[0]["artifacts"]["candidate_variant"], "proposal_a")
+            self.assertEqual(events[0]["artifacts"]["returncode"], 0)
+
     def test_world_model_scores_candidates_and_logs_simulator_manifests(self):
         with tempfile.TemporaryDirectory() as td:
             store = JsonlGraphStore(td)
@@ -870,6 +889,40 @@ class AssumptionOSTest(unittest.TestCase):
             )
             self.assertEqual(payload["calibration"]["labeled_predictions"], 2)
             self.assertEqual(len(JsonlGraphStore(td).trials), 2)
+
+    def test_world_model_trains_priority_calibration(self):
+        prediction_payload = {
+            "eval_id": "unit_pre",
+            "predictions": [
+                {
+                    "proposal_id": "accept_high",
+                    "predicted_acceptance_probability": 0.8,
+                    "feature_trace": {"priority": 2.0, "readiness": "ready_for_fresh_ablation", "regression_risk": "low"},
+                },
+                {
+                    "proposal_id": "reject_low",
+                    "predicted_acceptance_probability": 0.78,
+                    "feature_trace": {"priority": 0.5, "readiness": "ready_for_fresh_ablation", "regression_risk": "low"},
+                },
+            ],
+        }
+        acceptance_payload = {
+            "eval_id": "unit_accept",
+            "summaries": [
+                {"proposal_id": "accept_high", "decision": "accept"},
+                {"proposal_id": "reject_low", "decision": "reject_benefit"},
+            ],
+        }
+        calibration = train_world_model_calibration(
+            prediction_payload=prediction_payload,
+            acceptance_payload=acceptance_payload,
+            eval_id="unit_calibration",
+        )
+        self.assertGreater(calibration["priority_boundary"], 0.5)
+        self.assertLess(
+            calibration["calibrated_metrics"]["brier_score"],
+            calibration["raw_metrics"]["brier_score"],
+        )
 
     def test_trajectory_search_returns_multiple_ranked_paths(self):
         recursive_payload = {

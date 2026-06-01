@@ -420,17 +420,20 @@ throughput/redaction, residual synthesis coverage, and formal metric coverage.
 ```bash
 python3 -m assumption_os.performance_validation \
   --graph-dir "phase four/assumption_graph" \
-  --eval-id reconstruction_gap_perf_20260601 \
-  --summary-out "phase four/assumption_graph/reconstruction_gap_perf_20260601.json" \
-  --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601.md"
+  --eval-id reconstruction_gap_perf_20260601_expanded \
+  --summary-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.json" \
+  --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md"
 ```
 
 The first performance validation passes all six sections. The initial run found
 one real issue: post-acceptance world-model probabilities stayed too high after
 rejected evidence, with Brier score 0.2767. The calibrated version now scores
-Brier 0.0359 while preserving pre-acceptance ranking (`AUC=1.0` on the current
-2 accepted / 8 rejected labeled set). Full report:
-`phase four/assumption_graph/reconstruction_gap_perf_20260601.md`.
+Brier 0.0081 on the expanded 2 accepted / 14 rejected labeled set, while
+preserving pre-acceptance ranking (`AUC=1.0`). The calibration payload also
+reports leave-one-out Brier 0.0064 versus raw 0.5316. Manifest validation now
+parses 12 real events from existing run/judge logs in addition to synthetic
+redaction probes. Full report:
+`phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md`.
 
 `assumption_os.failure_hypotheses` converts loss rows into candidate assumptions
 and manifests. It now uses two sources: attributed graph losses from

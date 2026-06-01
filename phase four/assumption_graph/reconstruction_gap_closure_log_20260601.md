@@ -44,6 +44,7 @@ Current gaps being addressed:
 - 2026-06-01: Added unit coverage for all six reconstruction gaps. Verification command: `python3 -m unittest tests.test_assumption_os` -> 36 tests OK.
 - 2026-06-01: Added `assumption_os.performance_validation` and ran non-smoke validation for the six gap closures. First run exposed world-model post-acceptance miscalibration (`brier_score=0.2767`) because rejected evidence still left high predicted acceptance probabilities.
 - 2026-06-01: Calibrated world-model probabilities after real acceptance evidence: accepted candidates floor to high confidence, rejected-harm/rejected-benefit candidates cap to low acceptance probability, and priority now uses scaled raw priority instead of a 1.0 clamp. Rerun passed all six sections with `world_model.post_calibration.brier_score=0.0359`.
+- 2026-06-01: Expanded validation coverage by adding the proposal-screening payload/preflight to the labeled set, training an explicit world-model calibration payload, adding leave-one-out calibration metrics, and parsing existing run/judge logs into component manifests.
 
 ## Closure Notes
 
@@ -62,16 +63,16 @@ Command:
 python3 -m assumption_os.performance_validation \
   --root . \
   --graph-dir "phase four/assumption_graph" \
-  --eval-id reconstruction_gap_perf_20260601 \
-  --summary-out "phase four/assumption_graph/reconstruction_gap_perf_20260601.json" \
-  --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601.md"
+  --eval-id reconstruction_gap_perf_20260601_expanded \
+  --summary-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.json" \
+  --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md"
 ```
 
 Results:
 
 - Overall: PASS.
-- Manifest logger: 100 events, 100 trials written, no secret leak, >1000 events/sec in this run.
-- World model: pre-acceptance AUC 1.0 on current labeled positive controls; post-acceptance Brier 0.0359 after calibration.
+- Manifest logger: 112 events, including 12 parsed real run/judge-log events, no secret leak.
+- World model: 16 matched labels from 2 accepted / 14 rejected proposal outcomes; raw pre-acceptance Brier 0.5316, trained calibration Brier 0.0060, leave-one-out Brier 0.0064, post-acceptance Brier 0.0081.
 - Trajectory search: 10 frontier actions, 26 trajectories, multi-path rate 0.8, top-path label hit rate 1.0.
 - Recursive daemon: 2 positive-control accepted candidates applied in a temp graph, dry-run applied 0, gated apply applied 2, manifests written.
 - Residual clusterer: 109 residual records, 5 clusters, 2 synthesized candidate proposals with validation plans.

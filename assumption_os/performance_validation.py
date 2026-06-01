@@ -26,12 +26,12 @@ from typing import Any
 
 from .formal_mapping import build_categorical_info_geometry_payload, build_formal_mapping_payload
 from .graph_memory import JsonlGraphStore
-from .manifest_logger import build_component_manifest_payload
+from .manifest_logger import build_component_manifest_payload, events_from_run_logs
 from .recursive_daemon import build_recursive_daemon_payload
 from .recursive_executor import JudgmentSet
 from .residual_clusterer import build_residual_cluster_payload
 from .trajectory_search import build_trajectory_search_payload
-from .world_model import build_world_model_payload
+from .world_model import build_world_model_payload, train_world_model_calibration
 
 
 DEFAULT_ARTIFACT_DIR = Path("phase four/assumption_graph")
@@ -58,7 +58,7 @@ def build_performance_validation_payload(
     timings["recursive_daemon_sec"] = _elapsed(start)
 
     start = time.perf_counter()
-    manifests = _validate_manifest_logger()
+    manifests = _validate_manifest_logger(root=root)
     timings["manifest_logger_sec"] = _elapsed(start)
 
     start = time.perf_counter()
@@ -122,6 +122,20 @@ def format_performance_report(payload: dict) -> str:
 def _validate_world_model(*, root: Path, graph_dir: Path) -> dict:
     bundle = _combined_candidate_bundle(root)
     store = JsonlGraphStore(graph_dir)
+    pre_raw = build_world_model_payload(
+        store=store,
+        proposal_payload=bundle["proposal_payload"],
+        preflight_payload=bundle["preflight_payload"],
+        falsification_payload=bundle["falsification_payload"],
+        regression_predictions=bundle["regression_predictions"],
+        formal_mapping_gate_payload=bundle["formal_gate_payload"],
+        eval_id="perf_world_pre_acceptance_raw",
+    )
+    calibration_model = train_world_model_calibration(
+        prediction_payload=pre_raw,
+        acceptance_payload=bundle["acceptance_payload"],
+        eval_id="perf_world_calibration",
+    )
     pre = build_world_model_payload(
         store=store,
         proposal_payload=bundle["proposal_payload"],
@@ -129,7 +143,8 @@ def _validate_world_model(*, root: Path, graph_dir: Path) -> dict:
         falsification_payload=bundle["falsification_payload"],
         regression_predictions=bundle["regression_predictions"],
         formal_mapping_gate_payload=bundle["formal_gate_payload"],
-        eval_id="perf_world_pre_acceptance",
+        calibration_payload=calibration_model,
+        eval_id="perf_world_pre_acceptance_calibrated",
     )
     post = build_world_model_payload(
         store=store,
@@ -139,26 +154,38 @@ def _validate_world_model(*, root: Path, graph_dir: Path) -> dict:
         acceptance_payload=bundle["acceptance_payload"],
         regression_predictions=bundle["regression_predictions"],
         formal_mapping_gate_payload=bundle["formal_gate_payload"],
+        calibration_payload=calibration_model,
         eval_id="perf_world_post_acceptance",
     )
     labels = bundle["labels"]
+    raw_pre_metrics = _rank_metrics(pre_raw["predictions"], labels)
     pre_metrics = _rank_metrics(pre["predictions"], labels)
     post_metrics = _rank_metrics(post["predictions"], labels)
     calibration = post.get("calibration", {})
     passed = (
-        pre_metrics["labeled_count"] >= 10
+        pre_metrics["labeled_count"] >= 16
         and pre_metrics["accepted_count"] >= 2
         and pre_metrics["auc"] is not None
         and pre_metrics["auc"] >= 0.85
         and pre_metrics["accepted_recall_at_k"] >= 1.0
+        and calibration_model["calibrated_metrics"]["brier_score"] < calibration_model["raw_metrics"]["brier_score"]
+        and calibration_model["leave_one_out_calibrated_metrics"]["brier_score"] < calibration_model["raw_metrics"]["brier_score"]
         and (calibration.get("brier_score") is not None and calibration["brier_score"] <= 0.08)
     )
     return {
         "pass": passed,
         "label_counts": dict(Counter(labels.values())),
+        "matched_label_count": pre_metrics["labeled_count"],
+        "unmatched_label_count": len(labels) - pre_metrics["labeled_count"],
+        "raw_pre_acceptance": raw_pre_metrics,
         "pre_acceptance": pre_metrics,
         "post_acceptance": post_metrics,
         "post_calibration": calibration,
+        "trained_calibration": {
+            key: value
+            for key, value in calibration_model.items()
+            if key != "training_rows"
+        },
         "prediction_count": pre["prediction_count"],
         "post_acceptance_payload": post,
         "notes": [
@@ -280,7 +307,7 @@ def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
     }
 
 
-def _validate_manifest_logger() -> dict:
+def _validate_manifest_logger(*, root: Path) -> dict:
     events = [
         {
             "event_type": kind,
@@ -295,12 +322,24 @@ def _validate_manifest_logger() -> dict:
         }
         for idx, kind in enumerate(["llm_call", "retrieval", "judge_call", "tool_use", "simulator_rollout"] * 20)
     ]
+    real_log_paths = [
+        root / "phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log",
+        root / "phase four/assumption_graph/recursive_scoped_ablation_run_gpt55_21_50.log",
+        root / "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt54mini_21_50.log",
+        root / "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt55_21_50.log",
+        root / "phase six/autonomous/exp80_run.log",
+    ]
+    real_events = events_from_run_logs(
+        root=root,
+        log_paths=real_log_paths,
+        max_events_per_file=20,
+    )
     with tempfile.TemporaryDirectory() as td:
         store = JsonlGraphStore(td)
         start = time.perf_counter()
         payload = build_component_manifest_payload(
             eval_id="perf_manifest_logger",
-            events=events,
+            events=[*events, *real_events],
             store=store,
             writeback=True,
         )
@@ -308,10 +347,18 @@ def _validate_manifest_logger() -> dict:
         text = json.dumps(payload, ensure_ascii=False)
         leak = "redaction-probe-" in text
         written = len(JsonlGraphStore(td).trials)
-    throughput = len(events) / elapsed if elapsed else float("inf")
+    total_events = len(events) + len(real_events)
+    throughput = total_events / elapsed if elapsed else float("inf")
     return {
-        "pass": written == len(events) and not leak and throughput >= 100.0,
-        "event_count": len(events),
+        "pass": written == total_events and len(real_events) >= 5 and not leak and throughput >= 100.0,
+        "event_count": total_events,
+        "synthetic_event_count": len(events),
+        "real_log_event_count": len(real_events),
+        "real_log_paths": [
+            _display_path(root, path)
+            for path in real_log_paths
+            if path.exists()
+        ],
         "written_trials": written,
         "secret_leak_detected": leak,
         "throughput_events_per_sec": round(throughput, 2),
@@ -363,15 +410,19 @@ def _validate_formal_metrics(*, graph_dir: Path) -> dict:
 def _combined_candidate_bundle(root: Path) -> dict:
     artifact_dir = root / DEFAULT_ARTIFACT_DIR
     cycle = _load_json(artifact_dir / "evolution_cycle_dryrun_phase2_v20_gpt55_21_50.json")
+    proposal_screen = _load_json(artifact_dir / "proposals_phase2_v20_gpt55_21_50.json")
+    proposal_preflight = _load_json(artifact_dir / "candidate_preflight_phase2_v20_gpt55_21_50.json")
     pos_ms = _load_json(artifact_dir / "recursive_positive_ms_bridge_evolution.json")
     pos_se = _load_json(artifact_dir / "recursive_positive_se_hard_policy_evolution.json")
     proposal_payload = _merge_proposal_payloads([
         cycle["proposals"],
+        proposal_screen,
         pos_ms["proposals"],
         pos_se["proposals"],
     ])
     preflight_payload = _merge_list_payload("summaries", [
         cycle["candidate_preflight"],
+        proposal_preflight,
         pos_ms["candidate_preflight"],
         pos_se["candidate_preflight"],
     ])
@@ -525,13 +576,13 @@ def _strip_payload(world: dict) -> dict:
 
 def _key_metric(name: str, section: dict) -> str:
     if name == "world_model":
-        return f"pre_auc={section['pre_acceptance']['auc']}, brier={section['post_calibration']['brier_score']}"
+        return f"labels={section['matched_label_count']}, pre_auc={section['pre_acceptance']['auc']}, brier={section['post_calibration']['brier_score']}"
     if name == "trajectory_search":
         return f"multi_path={section['multi_path_rate']}, hit={section['top_path_label_hit_rate']}"
     if name == "recursive_daemon":
         return f"applied={section['accepted_apply_count']}/{section['case_count']}"
     if name == "manifest_logger":
-        return f"throughput={section['throughput_events_per_sec']}/s, leak={section['secret_leak_detected']}"
+        return f"events={section['event_count']}, real_logs={section['real_log_event_count']}, leak={section['secret_leak_detected']}"
     if name == "residual_clusterer":
         return f"clusters={section['cluster_count']}, proposals={section['proposal_count']}"
     if name == "formal_metrics":

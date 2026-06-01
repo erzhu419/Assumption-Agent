@@ -50,6 +50,7 @@ def build_world_model_payload(
     acceptance_payload: dict | None = None,
     regression_predictions: Iterable[dict] | None = None,
     formal_mapping_gate_payload: dict | None = None,
+    calibration_payload: dict | None = None,
     eval_id: str,
     writeback: bool = False,
 ) -> dict:
@@ -76,6 +77,7 @@ def build_world_model_payload(
             acceptance=acceptance_by_id.get(proposal.get("proposal_id", ""), {}),
             regression=regression_by_id.get(proposal.get("proposal_id", ""), {}),
             formal_gate=formal_by_id.get(proposal.get("proposal_id", ""), {}),
+            calibration_payload=calibration_payload,
         )
         predictions.append(prediction)
         manifest = _prediction_manifest(eval_id=eval_id, proposal=proposal, prediction=prediction)
@@ -95,6 +97,7 @@ def build_world_model_payload(
         "verifier_tier_counts": dict(Counter(p.recommended_verifier_tier for p in predictions)),
         "recommended_action_counts": dict(Counter(p.recommended_next_action for p in predictions)),
         "calibration": calibration,
+        "calibration_model": _compact_calibration_model(calibration_payload),
         "predictions": [p.to_dict() for p in predictions],
         "simulator_manifests": [m.to_dict() for m in manifests],
     }
@@ -109,6 +112,7 @@ def predict_proposal_outcome(
     acceptance: dict | None = None,
     regression: dict | None = None,
     formal_gate: dict | None = None,
+    calibration_payload: dict | None = None,
 ) -> AssumptionWorldModelPrediction:
     """Score a single proposal with transparent, auditable features."""
 
@@ -216,7 +220,12 @@ def predict_proposal_outcome(
         score += 0.04
         confidence += 0.04
 
-    probability = _calibrated_probability(_sigmoid_logit(score), acceptance_decision)
+    probability = _calibrated_probability(
+        _sigmoid_logit(score),
+        acceptance_decision,
+        feature_trace=feature_trace,
+        calibration_payload=calibration_payload,
+    )
     expected_utility = _bounded((probability - 0.5) * 2.0 - _risk_penalty(risk))
     observed_label = _observed_label(acceptance_decision)
     calibration_error = (
@@ -319,13 +328,137 @@ def _calibration_summary(predictions: list[AssumptionWorldModelPrediction]) -> d
     }
 
 
+def train_world_model_calibration(
+    *,
+    prediction_payload: dict,
+    acceptance_payload: dict,
+    eval_id: str,
+) -> dict:
+    """Train a small transparent calibration payload from labeled predictions."""
+
+    labels = _acceptance_labels(acceptance_payload)
+    rows = []
+    for prediction in prediction_payload.get("predictions", []):
+        proposal_id = prediction.get("proposal_id")
+        if proposal_id not in labels:
+            continue
+        feature_trace = prediction.get("feature_trace", {})
+        rows.append({
+            "proposal_id": proposal_id,
+            "label": labels[proposal_id],
+            "probability": float(prediction.get("predicted_acceptance_probability", 0.5) or 0.5),
+            "raw_priority": float(feature_trace.get("priority", 0.0) or 0.0),
+            "readiness": feature_trace.get("readiness"),
+            "risk": feature_trace.get("regression_risk"),
+        })
+
+    accepted = [row for row in rows if row["label"] == "accept"]
+    rejected = [row for row in rows if row["label"] == "reject"]
+    decision_probabilities = _decision_probability_model(acceptance_payload)
+    priority_model = _priority_calibration_model(rows)
+    priority_boundary = priority_model.get("priority_boundary")
+    high_priority_accept_floor = priority_model.get("high_priority_accept_floor")
+    low_priority_probability_cap = priority_model.get("low_priority_probability_cap")
+
+    raw_metrics = _probability_metrics(rows, probability_key="probability")
+    calibrated_rows = [
+        {
+            **row,
+            "calibrated_probability": _apply_probability_calibration(
+                probability=row["probability"],
+                feature_trace={"priority": row["raw_priority"], "readiness": row["readiness"], "regression_risk": row["risk"]},
+                acceptance_decision=None,
+                calibration_payload={
+                    "priority_boundary": priority_boundary,
+                    "high_priority_accept_floor": high_priority_accept_floor,
+                    "low_priority_probability_cap": low_priority_probability_cap,
+                    "decision_probabilities": decision_probabilities,
+                },
+            ),
+        }
+        for row in rows
+    ]
+    calibrated_metrics = _probability_metrics(calibrated_rows, probability_key="calibrated_probability")
+    loo_metrics = _leave_one_out_priority_calibration_metrics(rows)
+    return {
+        "eval_id": eval_id,
+        "source_prediction_eval_id": prediction_payload.get("eval_id"),
+        "source_acceptance_eval_id": acceptance_payload.get("eval_id"),
+        "labeled_count": len(rows),
+        "label_counts": dict(Counter(row["label"] for row in rows)),
+        "priority_boundary": priority_boundary,
+        "high_priority_accept_floor": high_priority_accept_floor,
+        "low_priority_probability_cap": low_priority_probability_cap,
+        "decision_probabilities": decision_probabilities,
+        "raw_metrics": raw_metrics,
+        "calibrated_metrics": calibrated_metrics,
+        "leave_one_out_calibrated_metrics": loo_metrics,
+        "training_rows": calibrated_rows,
+    }
+
+
+def _priority_calibration_model(rows: list[dict]) -> dict:
+    accepted = [row for row in rows if row["label"] == "accept"]
+    rejected = [row for row in rows if row["label"] == "reject"]
+    if not accepted or not rejected:
+        return {
+            "priority_boundary": None,
+            "high_priority_accept_floor": None,
+            "low_priority_probability_cap": None,
+        }
+    min_accept_priority = min(row["raw_priority"] for row in accepted)
+    max_reject_priority = max(row["raw_priority"] for row in rejected)
+    if min_accept_priority <= max_reject_priority:
+        return {
+            "priority_boundary": None,
+            "high_priority_accept_floor": None,
+            "low_priority_probability_cap": None,
+        }
+    return {
+        "priority_boundary": round((min_accept_priority + max_reject_priority) / 2.0, 4),
+        "high_priority_accept_floor": _smoothed_rate(len(accepted), len(accepted), alpha=1.0),
+        "low_priority_probability_cap": _smoothed_rate(0, len(rejected), alpha=1.0),
+    }
+
+
+def _leave_one_out_priority_calibration_metrics(rows: list[dict]) -> dict:
+    heldout = []
+    for index, row in enumerate(rows):
+        train_rows = [other for j, other in enumerate(rows) if j != index]
+        model = _priority_calibration_model(train_rows)
+        heldout.append({
+            **row,
+            "loo_calibrated_probability": _apply_probability_calibration(
+                probability=row["probability"],
+                feature_trace={"priority": row["raw_priority"], "readiness": row["readiness"], "regression_risk": row["risk"]},
+                acceptance_decision=None,
+                calibration_payload=model,
+            ),
+        })
+    return _probability_metrics(heldout, probability_key="loo_calibrated_probability")
+
+
 def _sigmoid_logit(score: float) -> float:
     return _bounded(1.0 / (1.0 + math.exp(-3.0 * (score - 0.5))))
 
 
-def _calibrated_probability(probability: float, acceptance_decision: str | None) -> float:
+def _calibrated_probability(
+    probability: float,
+    acceptance_decision: str | None,
+    *,
+    feature_trace: dict,
+    calibration_payload: dict | None,
+) -> float:
     """Use real acceptance evidence as calibration evidence when available."""
 
+    calibrated = _apply_probability_calibration(
+        probability=probability,
+        feature_trace=feature_trace,
+        acceptance_decision=acceptance_decision,
+        calibration_payload=calibration_payload,
+    )
+    if calibrated is not None:
+        return calibrated
     if acceptance_decision == "accept":
         return max(probability, 0.9)
     if acceptance_decision == "reject_harm":
@@ -335,6 +468,98 @@ def _calibrated_probability(probability: float, acceptance_decision: str | None)
     if acceptance_decision == "insufficient_judgments":
         return min(probability, 0.52)
     return probability
+
+
+def _apply_probability_calibration(
+    *,
+    probability: float,
+    feature_trace: dict,
+    acceptance_decision: str | None,
+    calibration_payload: dict | None,
+) -> float | None:
+    if not calibration_payload:
+        return None
+    decision_probabilities = calibration_payload.get("decision_probabilities", {})
+    if acceptance_decision and acceptance_decision in decision_probabilities:
+        return float(decision_probabilities[acceptance_decision])
+
+    priority_boundary = calibration_payload.get("priority_boundary")
+    raw_priority = float(feature_trace.get("priority", 0.0) or 0.0)
+    if priority_boundary is not None:
+        if raw_priority >= float(priority_boundary) and calibration_payload.get("high_priority_accept_floor") is not None:
+            return max(probability, float(calibration_payload["high_priority_accept_floor"]))
+        if raw_priority < float(priority_boundary) and calibration_payload.get("low_priority_probability_cap") is not None:
+            return min(probability, float(calibration_payload["low_priority_probability_cap"]))
+    return probability
+
+
+def _acceptance_labels(acceptance_payload: dict) -> dict[str, str]:
+    labels = {}
+    for row in acceptance_payload.get("summaries", []):
+        decision = row.get("decision")
+        if decision == "accept":
+            labels[row.get("proposal_id", "")] = "accept"
+        elif decision in {"reject_benefit", "reject_harm"}:
+            labels[row.get("proposal_id", "")] = "reject"
+    return {k: v for k, v in labels.items() if k}
+
+
+def _decision_probability_model(acceptance_payload: dict) -> dict[str, float]:
+    counts: dict[str, Counter[str]] = {}
+    for row in acceptance_payload.get("summaries", []):
+        decision = row.get("decision")
+        if not decision:
+            continue
+        label = "accept" if decision == "accept" else "reject"
+        counts.setdefault(decision, Counter())[label] += 1
+    out = {}
+    for decision, counter in counts.items():
+        accepts = counter.get("accept", 0)
+        total = sum(counter.values())
+        out[decision] = round(_smoothed_rate(accepts, total, alpha=0.5), 4)
+    if "accept" not in out:
+        out["accept"] = 0.9
+    if "reject_benefit" not in out:
+        out["reject_benefit"] = 0.22
+    if "reject_harm" not in out:
+        out["reject_harm"] = 0.12
+    if "insufficient_judgments" not in out:
+        out["insufficient_judgments"] = 0.5
+    return out
+
+
+def _probability_metrics(rows: list[dict], *, probability_key: str) -> dict:
+    if not rows:
+        return {"labeled_count": 0, "brier_score": None, "mean_absolute_error": None}
+    brier = 0.0
+    mae = 0.0
+    for row in rows:
+        y = 1.0 if row["label"] == "accept" else 0.0
+        p = float(row[probability_key])
+        brier += (p - y) ** 2
+        mae += abs(p - y)
+    return {
+        "labeled_count": len(rows),
+        "brier_score": round(brier / len(rows), 4),
+        "mean_absolute_error": round(mae / len(rows), 4),
+    }
+
+
+def _smoothed_rate(successes: int, total: int, *, alpha: float) -> float:
+    return round((successes + alpha) / (total + 2 * alpha), 4)
+
+
+def _compact_calibration_model(calibration_payload: dict | None) -> dict | None:
+    if not calibration_payload:
+        return None
+    return {
+        "eval_id": calibration_payload.get("eval_id"),
+        "labeled_count": calibration_payload.get("labeled_count"),
+        "priority_boundary": calibration_payload.get("priority_boundary"),
+        "high_priority_accept_floor": calibration_payload.get("high_priority_accept_floor"),
+        "low_priority_probability_cap": calibration_payload.get("low_priority_probability_cap"),
+        "decision_probabilities": calibration_payload.get("decision_probabilities", {}),
+    }
 
 
 def _bounded(value: float) -> float:
@@ -421,6 +646,7 @@ def main() -> None:
     ap.add_argument("--acceptance", default=None)
     ap.add_argument("--regression-predictions", default=None)
     ap.add_argument("--formal-gate", default=None)
+    ap.add_argument("--calibration", default=None)
     ap.add_argument("--eval-id", required=True)
     ap.add_argument("--writeback", action="store_true")
     ap.add_argument("--summary-out", default=None)
@@ -436,6 +662,7 @@ def main() -> None:
         acceptance_payload=_load_json(_resolve(root, args.acceptance)),
         regression_predictions=(_load_json(_resolve(root, args.regression_predictions)) or []),
         formal_mapping_gate_payload=_load_json(_resolve(root, args.formal_gate)),
+        calibration_payload=_load_json(_resolve(root, args.calibration)),
         eval_id=args.eval_id,
         writeback=args.writeback,
     )
