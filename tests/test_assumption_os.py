@@ -28,6 +28,7 @@ from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
     build_categorical_info_geometry_payload,
+    build_formal_dedup_payload,
     build_formal_mapping_gate_payload,
     build_formal_mapping_payload,
     finite_kernel_metrics,
@@ -1977,6 +1978,48 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertIn("feature", summary["objects"])
             self.assertTrue(summary["morphisms"])
             self.assertTrue(summary["metrics"]["same_shape"])
+
+    def test_formal_mapping_dedup_recommends_only_complete_equivalence_merges(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            for seed in ["WCAND_DUP_A", "WCAND_DUP_B"]:
+                base = {
+                    "type": AssumptionType.HARNESS,
+                    "claim": f"formal dedup {seed}",
+                    "payload": {"seed_cid": seed},
+                    "tags": [seed],
+                }
+                for suffix, kind, expr in [
+                    ("feature", "feature", {"keywords_en": ["risk"], "regex": []}),
+                    ("constraint", "constraint", {"required_substrings": ["rollback"]}),
+                    ("decomp", "decomposition", {"steps": ["identify", "verify"]}),
+                    ("verify", "verification", {"instruction": "check rollback"}),
+                    ("hp", "hp_change", {"temperature": 0.0, "max_tokens": 1000}),
+                ]:
+                    store.upsert_node(AssumptionNode(
+                        id=f"{seed}_{suffix}",
+                        kind=kind,
+                        formal_form={"kind": kind, "expr": expr},
+                        **base,
+                    ))
+            store.upsert_node(AssumptionNode(
+                id="WCAND_UNSAFE_constraint",
+                type=AssumptionType.HARNESS,
+                kind="constraint",
+                claim="unsafe duplicate should be excluded",
+                formal_form={"kind": "constraint", "expr": {"required_substrings": ["rollback"]}},
+                payload={"seed_cid": "WCAND_UNSAFE"},
+                tags=["WCAND_UNSAFE"],
+            ))
+            formal_payload = build_formal_mapping_payload(store)
+            dedup = build_formal_dedup_payload(formal_payload)
+            self.assertEqual(dedup["complete_mapping_count"], 2)
+            self.assertEqual(dedup["incomplete_mapping_excluded_count"], 1)
+            self.assertEqual(dedup["duplicate_cluster_count"], 1)
+            self.assertEqual(dedup["merge_recommendation_count"], 1)
+            cluster = dedup["clusters"][0]
+            self.assertEqual(cluster["merge_action"], "merge_complete_formal_equivalent")
+            self.assertEqual(len(cluster["duplicate_mapping_ids"]), 1)
 
     def test_formal_mapping_audit_rejects_missing_trigger(self):
         with tempfile.TemporaryDirectory() as td:

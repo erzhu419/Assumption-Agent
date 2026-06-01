@@ -328,13 +328,15 @@ def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
     structure = _avg([
         float(formal.get("pass", False)),
         _cap(formal.get("mapping_count", 0) / 9),
+        float(formal.get("dedup_pass", False)),
         float(formal.get("warning_count", 1) == 0),
     ])
     behavior = _avg([
         _cap(formal.get("complete_count", 0) / 9),
         _cap(formal.get("same_shape_count", 0) / max(1, formal.get("mapping_count", 1))),
         float(formal.get("warning_count", 1) == 0),
-        0.35,
+        float(formal.get("dedup_pass", False)),
+        _cap(formal.get("dedup_complete_mapping_count", 0) / max(1, formal.get("mapping_count", 1))),
     ])
     return ProgressItem(
         key="G_formal_alignment_layer",
@@ -346,6 +348,9 @@ def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
             "complete_count": formal.get("complete_count"),
             "same_shape_count": formal.get("same_shape_count"),
             "warning_count": formal.get("warning_count"),
+            "dedup_unique_signature_count": formal.get("dedup_unique_signature_count"),
+            "dedup_duplicate_cluster_count": formal.get("dedup_duplicate_cluster_count"),
+            "dedup_positive_control": formal.get("dedup_positive_control"),
         },
         remaining_gaps=[
             "Formal mapping is an audit/gate over finite kernels, not a full category-theoretic or information-geometric reasoning engine.",
@@ -353,7 +358,7 @@ def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
         ],
         next_actions=[
             "Measure whether formal-mapping quality predicts transfer success.",
-            "Add a deduplication pass that merges candidates with complete formal/semantic equivalence.",
+            "Use dedup recommendations to merge complete formal equivalents after verifier approval.",
         ],
     )
 
@@ -507,7 +512,7 @@ RECONSTRUCTION_CEILINGS = {
     "D_verifier_stack": (0.82, 0.74),
     "E_residual_analyzer": (0.82, 0.74),
     "F_metaproductivity_selector": (0.80, 0.70),
-    "G_formal_alignment_layer": (0.65, 0.48),
+    "G_formal_alignment_layer": (0.72, 0.58),
     "recursive_execution_loop": (0.85, 0.76),
     "assumption_bench_evaluation": (0.88, 0.82),
 }

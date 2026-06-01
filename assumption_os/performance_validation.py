@@ -7,7 +7,7 @@ This runner evaluates the reconstruction mechanisms added after reconstruction:
 3. multi-path trajectory search
 4. recursive daemon execute/read/resume loop
 5. residual clustering -> hypothesis synthesis
-6. finite formal-mapping information geometry
+6. finite formal-mapping information geometry and safe deduplication
 7. harness artifact observer coverage
 8. unified verifier stack
 9. recursive runner closure audit
@@ -39,7 +39,11 @@ from typing import Any
 from .assumption_bench import build_assumption_bench_payload
 from .falsification import build_falsification_payload
 from .evolution_context import build_evolution_context_payload
-from .formal_mapping import build_categorical_info_geometry_payload, build_formal_mapping_payload
+from .formal_mapping import (
+    build_categorical_info_geometry_payload,
+    build_formal_dedup_payload,
+    build_formal_mapping_payload,
+)
 from .graph_memory import JsonlGraphStore
 from .harness_observer import build_harness_observer_payload
 from .manifest_logger import build_component_manifest_payload, events_from_run_logs
@@ -56,6 +60,7 @@ from .trace_dataset import build_trace_dataset_payload
 from .trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
 from .verifier_stack import build_verifier_stack_payload
 from .world_model import build_world_model_payload, train_world_model_calibration
+from .schema import AssumptionNode, AssumptionType
 
 
 DEFAULT_ARTIFACT_DIR = Path("phase four/assumption_graph")
@@ -1090,18 +1095,77 @@ def _validate_formal_metrics(*, graph_dir: Path) -> dict:
     store = JsonlGraphStore(graph_dir)
     formal_payload = build_formal_mapping_payload(store)
     metric_payload = build_categorical_info_geometry_payload(formal_payload)
+    dedup_payload = build_formal_dedup_payload(formal_payload)
+    dedup_control = _formal_dedup_positive_control()
     summaries = metric_payload["summaries"]
     same_shape = sum(1 for row in summaries if row["metrics"].get("same_shape"))
     warning_count = sum(len(row.get("warnings", [])) for row in summaries)
     complete_count = formal_payload.get("status_counts", {}).get("complete", 0)
+    dedup_control_ok = (
+        dedup_control["duplicate_cluster_count"] == 1
+        and dedup_control["merge_recommendation_count"] == 1
+        and dedup_control["incomplete_mapping_excluded_count"] == 1
+    )
     return {
-        "pass": complete_count >= 5 and same_shape == len(summaries) and warning_count == 0,
+        "pass": (
+            complete_count >= 5
+            and same_shape == len(summaries)
+            and warning_count == 0
+            and dedup_control_ok
+        ),
         "mapping_count": metric_payload["mapping_count"],
         "complete_count": complete_count,
         "same_shape_count": same_shape,
         "warning_count": warning_count,
         "metric_summary": metric_payload["metric_summary"],
+        "dedup_pass": dedup_control_ok,
+        "dedup_complete_mapping_count": dedup_payload["complete_mapping_count"],
+        "dedup_unique_signature_count": dedup_payload["unique_signature_count"],
+        "dedup_duplicate_cluster_count": dedup_payload["duplicate_cluster_count"],
+        "dedup_merge_recommendation_count": dedup_payload["merge_recommendation_count"],
+        "dedup_incomplete_mapping_excluded_count": dedup_payload["incomplete_mapping_excluded_count"],
+        "dedup_positive_control": {
+            "duplicate_cluster_count": dedup_control["duplicate_cluster_count"],
+            "merge_recommendation_count": dedup_control["merge_recommendation_count"],
+            "incomplete_mapping_excluded_count": dedup_control["incomplete_mapping_excluded_count"],
+        },
     }
+
+
+def _formal_dedup_positive_control() -> dict:
+    with tempfile.TemporaryDirectory() as td:
+        store = JsonlGraphStore(Path(td))
+        for seed in ["WCAND_DUP_A", "WCAND_DUP_B"]:
+            base = {
+                "type": AssumptionType.HARNESS,
+                "claim": f"formal dedup positive control {seed}",
+                "payload": {"seed_cid": seed},
+                "tags": [seed],
+            }
+            for suffix, kind, expr in [
+                ("feature", "feature", {"keywords_en": ["risk"], "regex": []}),
+                ("constraint", "constraint", {"required_substrings": ["rollback"]}),
+                ("decomp", "decomposition", {"steps": ["identify", "verify"]}),
+                ("verify", "verification", {"instruction": "check rollback"}),
+                ("hp", "hp_change", {"temperature": 0.0, "max_tokens": 1000}),
+            ]:
+                store.upsert_node(AssumptionNode(
+                    id=f"{seed}_{suffix}",
+                    kind=kind,
+                    formal_form={"kind": kind, "expr": expr},
+                    **base,
+                ))
+        store.upsert_node(AssumptionNode(
+            id="WCAND_UNSAFE_constraint",
+            type=AssumptionType.HARNESS,
+            kind="constraint",
+            claim="unsafe duplicate should be excluded",
+            formal_form={"kind": "constraint", "expr": {"required_substrings": ["rollback"]}},
+            payload={"seed_cid": "WCAND_UNSAFE"},
+            tags=["WCAND_UNSAFE"],
+        ))
+        formal_payload = build_formal_mapping_payload(store)
+        return build_formal_dedup_payload(formal_payload)
 
 
 def _combined_candidate_bundle(root: Path) -> dict:
@@ -1315,7 +1379,10 @@ def _key_metric(name: str, section: dict) -> str:
     if name == "residual_clusterer":
         return f"clusters={section['cluster_count']}, proposals={section['proposal_count']}"
     if name == "formal_metrics":
-        return f"mappings={section['mapping_count']}, warnings={section['warning_count']}"
+        return (
+            f"mappings={section['mapping_count']}, warnings={section['warning_count']}, "
+            f"dedup={section.get('dedup_duplicate_cluster_count', 0)}"
+        )
     return ""
 
 

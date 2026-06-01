@@ -463,11 +463,17 @@ a stochastic kernel over `feature`, `constraint`, `decomposition`,
 variation, Frobenius distance, and a Blackwell-style dominance proxy against
 the reference verifier pipeline.
 
+Add `--formal-dedup` to compute exact normalized formal-equivalence signatures
+for complete mappings and emit safe merge recommendations. Partial or unsafe
+mappings are excluded from deduplication, so this remains a verifier-gated
+recommendation layer rather than an automatic graph mutation.
+
 ```bash
 python3 -m assumption_os.formal_mapping \
   --graph-dir "phase four/assumption_graph" \
   --formal-metrics \
-  --summary-out "phase four/assumption_graph/formal_mapping_metrics_phase2_graph.json"
+  --formal-dedup \
+  --summary-out "phase four/assumption_graph/formal_mapping_dedup_phase2_graph.json"
 ```
 
 `assumption_os.manifest_logger` is the generic log bridge for events outside
@@ -599,8 +605,8 @@ Trace policy proposal validation converts those updates into 3 verifier-ready
 Trace policy preflight then verifies all 3 proposals are ready for fresh
 ablation, with zero missed trigger rows and zero outside-active rows.
 Reconstruction progress auditing now compares the current implementation
-against `reconstruction/md/reconstruction.md` and reports structure 81.3%,
-behavior 68.5%, weighted 74.3%; the lowest behavior items are world-model
+against `reconstruction/md/reconstruction.md` and reports structure 82.1%,
+behavior 69.6%, weighted 75.2%; the lowest behavior items are world-model
 distillation, formal alignment, and broader hypothesis generation.
 Harness
 observer discovers 19 real artifact events from judgment/meta/log files and

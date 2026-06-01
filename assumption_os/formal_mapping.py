@@ -10,6 +10,7 @@ problem signal -> answer transformation -> verification -> runtime policy.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -276,6 +277,63 @@ def build_categorical_info_geometry_payload(
     }
 
 
+def build_formal_dedup_payload(formal_mapping_payload: dict) -> dict:
+    """Find formally equivalent complete mappings and recommend safe merges.
+
+    This pass intentionally recommends merges instead of mutating the graph.  A
+    mapping must already be complete before it participates, and equivalence is
+    exact over normalized formal invariants.  That keeps the layer useful for
+    deduplication without letting vague semantic similarity collapse unrelated
+    hypothesis families.
+    """
+
+    complete = [
+        summary
+        for summary in formal_mapping_payload.get("summaries", [])
+        if summary.get("status") == FormalMappingStatus.COMPLETE.value
+    ]
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    signature_payloads: dict[str, dict] = {}
+    for summary in complete:
+        signature = _formal_equivalence_signature(summary)
+        signature_id = _signature_id(signature)
+        grouped[signature_id].append(summary)
+        signature_payloads[signature_id] = signature
+
+    clusters = []
+    unique_signatures = []
+    for signature_id, rows in sorted(grouped.items(), key=lambda item: item[0]):
+        rows = sorted(rows, key=lambda row: (row.get("source_key", ""), row.get("mapping_id", "")))
+        canonical = rows[0]
+        row = {
+            "signature_id": signature_id,
+            "formal_signature": signature_payloads[signature_id],
+            "mapping_ids": [r.get("mapping_id") for r in rows],
+            "source_keys": [r.get("source_key") for r in rows],
+            "canonical_mapping_id": canonical.get("mapping_id"),
+            "canonical_source_key": canonical.get("source_key"),
+            "duplicate_mapping_ids": [r.get("mapping_id") for r in rows[1:]],
+            "merge_recommendation_count": max(0, len(rows) - 1),
+            "merge_action": "merge_complete_formal_equivalent" if len(rows) > 1 else "keep_unique",
+        }
+        if len(rows) > 1:
+            clusters.append(row)
+        else:
+            unique_signatures.append(row)
+
+    incomplete_count = formal_mapping_payload.get("mapping_count", 0) - len(complete)
+    return {
+        "mapping_count": formal_mapping_payload.get("mapping_count", 0),
+        "complete_mapping_count": len(complete),
+        "incomplete_mapping_excluded_count": max(0, incomplete_count),
+        "unique_signature_count": len(grouped),
+        "duplicate_cluster_count": len(clusters),
+        "merge_recommendation_count": sum(row["merge_recommendation_count"] for row in clusters),
+        "clusters": clusters,
+        "unique_signatures": unique_signatures,
+    }
+
+
 def _normalize_kernel(kernel: list[list[float]]) -> list[list[float]]:
     normalized = []
     width = max((len(row) for row in kernel), default=0)
@@ -367,6 +425,49 @@ def _metric_summary(summaries: list[dict]) -> dict:
         "mean_total_variation": round(sum(tvs) / len(tvs), 6) if tvs else None,
         "mean_blackwell_dominance_proxy": round(sum(dominance) / len(dominance), 6) if dominance else None,
     }
+
+
+def _formal_equivalence_signature(summary: dict) -> dict:
+    roles = [
+        FormalRole.FEATURE.value,
+        FormalRole.CONSTRAINT.value,
+        FormalRole.DECOMPOSITION.value,
+        FormalRole.VERIFICATION.value,
+        FormalRole.HP_CHANGE.value,
+    ]
+    by_role = {}
+    for role in roles:
+        invariants = [
+            _normalize_signature_value(node.get("invariants", {}))
+            for node in summary.get("nodes", [])
+            if node.get("role") == role
+        ]
+        by_role[role] = sorted(invariants, key=lambda row: json.dumps(row, ensure_ascii=False, sort_keys=True))
+    return {
+        "status": FormalMappingStatus.COMPLETE.value,
+        "roles": by_role,
+    }
+
+
+def _normalize_signature_value(value):
+    if isinstance(value, dict):
+        return {
+            str(key): _normalize_signature_value(subvalue)
+            for key, subvalue in sorted(value.items())
+            if subvalue not in (None, "", [], {})
+        }
+    if isinstance(value, list):
+        return [_normalize_signature_value(item) for item in value]
+    if isinstance(value, str):
+        return re.sub(r"\s+", " ", value.strip().lower())
+    if isinstance(value, float):
+        return round(value, 6)
+    return value
+
+
+def _signature_id(signature: dict) -> str:
+    raw = json.dumps(signature, ensure_ascii=False, sort_keys=True)
+    return "formal_sig_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
 
 
 def _summarize_group(source_key: str, nodes: list[AssumptionNode]) -> FormalMappingSummary:
@@ -620,6 +721,7 @@ def main() -> None:
     ap.add_argument("--query", default=None)
     ap.add_argument("--top-n", type=int, default=3)
     ap.add_argument("--formal-metrics", action="store_true")
+    ap.add_argument("--formal-dedup", action="store_true")
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
@@ -633,6 +735,8 @@ def main() -> None:
         payload["formatted_search"] = format_formal_mapping_applications(payload["search"])
     if args.formal_metrics:
         payload["categorical_info_geometry"] = build_categorical_info_geometry_payload(payload)
+    if args.formal_dedup:
+        payload["formal_dedup"] = build_formal_dedup_payload(payload)
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.summary_out:
         out = _resolve(root, args.summary_out)
