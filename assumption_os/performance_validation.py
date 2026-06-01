@@ -26,6 +26,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from .falsification import build_falsification_payload
 from .formal_mapping import build_categorical_info_geometry_payload, build_formal_mapping_payload
 from .graph_memory import JsonlGraphStore
 from .harness_observer import build_harness_observer_payload
@@ -285,6 +286,51 @@ def _validate_verifier_stack(*, root: Path, world_model_payload: dict) -> dict:
         for stage in row.get("stages", [])
     ]
     stage_status_counts = dict(Counter(f"{stage['tier']}:{stage['status']}" for stage in staged))
+    falsification_experiments = [
+        (row, experiment)
+        for row in payload["summaries"]
+        for stage in row.get("stages", [])
+        if stage.get("tier") == "V3"
+        for experiment in stage.get("evidence", {}).get("experiments", [])
+    ]
+    experiment_status_counts = dict(Counter(
+        experiment.get("status") for _, experiment in falsification_experiments
+    ))
+    experiment_name_counts = dict(Counter(
+        experiment.get("name") for _, experiment in falsification_experiments
+    ))
+    protocol_candidate_count = len({
+        row["proposal_id"]
+        for row, experiment in falsification_experiments
+        if experiment.get("name") == "trigger_benefit_sequential"
+    })
+
+    def has_experiment(row: dict, name: str, statuses: set[str]) -> bool:
+        for stage in row.get("stages", []):
+            if stage.get("tier") != "V3":
+                continue
+            for experiment in stage.get("evidence", {}).get("experiments", []):
+                if experiment.get("name") == name and experiment.get("status") in statuses:
+                    return True
+        return False
+
+    accepted_protocol_ok = all(
+        has_experiment(row, "trigger_benefit_sequential", {"passed"})
+        and has_experiment(row, "control_harm_sequential", {"passed"})
+        and has_experiment(row, "fresh_cross_judge_replay", {"passed"})
+        for row in accepted
+    )
+    rejected_protocol_ok = all(
+        (
+            row["verdict"] == "rejected_weak_benefit"
+            and has_experiment(row, "trigger_benefit_sequential", {"failed"})
+        )
+        or (
+            row["verdict"] == "rejected_control_harm"
+            and has_experiment(row, "control_harm_sequential", {"failed"})
+        )
+        for row in rejected
+    )
     passed = (
         payload["proposal_count"] >= 16
         and len(accepted) >= 2
@@ -292,6 +338,9 @@ def _validate_verifier_stack(*, root: Path, world_model_payload: dict) -> dict:
         and all(row["next_action"] == "apply_accepted_candidate_if_requested" for row in accepted)
         and stage_status_counts.get("V4:pass", 0) >= 2
         and stage_status_counts.get("V4:fail", 0) >= 10
+        and protocol_candidate_count >= 16
+        and accepted_protocol_ok
+        and rejected_protocol_ok
     )
     return {
         "pass": passed,
@@ -302,6 +351,12 @@ def _validate_verifier_stack(*, root: Path, world_model_payload: dict) -> dict:
         "accepted_count": len(accepted),
         "rejected_count": len(rejected),
         "stage_status_counts": stage_status_counts,
+        "falsification_experiment_count": len(falsification_experiments),
+        "falsification_protocol_candidate_count": protocol_candidate_count,
+        "falsification_experiment_status_counts": experiment_status_counts,
+        "falsification_experiment_name_counts": experiment_name_counts,
+        "accepted_protocol_ok": accepted_protocol_ok,
+        "rejected_protocol_ok": rejected_protocol_ok,
     }
 
 
@@ -531,11 +586,6 @@ def _combined_candidate_bundle(root: Path) -> dict:
         pos_ms["candidate_preflight"],
         pos_se["candidate_preflight"],
     ])
-    falsification_payload = _merge_list_payload("summaries", [
-        cycle["falsification_gate"],
-        pos_ms["falsification_gate"],
-        pos_se["falsification_gate"],
-    ])
     formal_gate_payload = _merge_list_payload("gates", [
         cycle.get("formal_mapping_gate", {}),
         pos_ms.get("formal_mapping_gate", {}),
@@ -565,7 +615,16 @@ def _combined_candidate_bundle(root: Path) -> dict:
     return {
         "proposal_payload": proposal_payload,
         "preflight_payload": preflight_payload,
-        "falsification_payload": falsification_payload,
+        "falsification_payload": build_falsification_payload(
+            proposal_payload=proposal_payload,
+            preflight_payload=preflight_payload,
+            acceptance_payload={
+                "eval_id": "perf_combined_acceptance",
+                "summaries": summaries,
+                "accepted_proposal_ids": sorted(pid for pid, label in labels.items() if label == "accept"),
+                "decision_counts": dict(Counter(row.get("decision") for row in summaries)),
+            },
+        ),
         "formal_gate_payload": formal_gate_payload,
         "regression_predictions": regression_predictions,
         "acceptance_payload": {
@@ -685,7 +744,10 @@ def _key_metric(name: str, section: dict) -> str:
     if name == "trajectory_search":
         return f"multi_path={section['multi_path_rate']}, hit={section['top_path_label_hit_rate']}"
     if name == "verifier_stack":
-        return f"accepted={section['accepted_count']}, rejected={section['rejected_count']}, proposals={section['proposal_count']}"
+        return (
+            f"accepted={section['accepted_count']}, rejected={section['rejected_count']}, "
+            f"protocols={section['falsification_protocol_candidate_count']}/{section['proposal_count']}"
+        )
     if name == "recursive_daemon":
         return f"applied={section['accepted_apply_count']}/{section['case_count']}"
     if name == "manifest_logger":

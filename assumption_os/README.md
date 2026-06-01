@@ -458,7 +458,7 @@ python3 -m assumption_os.performance_validation \
   --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md"
 ```
 
-The expanded performance validation passes all seven sections. The initial run found
+The expanded performance validation passes all eight sections. The initial run found
 one real issue: post-acceptance world-model probabilities stayed too high after
 rejected evidence, with Brier score 0.2767. The calibrated version now scores
 Brier 0.0081 on the expanded 2 accepted / 14 rejected labeled set, while
@@ -470,7 +470,9 @@ redaction probes. Those 12 real events are also persisted through
 observer discovers 19 real artifact events from judgment/meta/log files and
 backfilled the 10 previously uncovered judgment/meta events, leaving full
 artifact-file coverage after writeback. The unified verifier stack validates
-33 proposals with 2 accepted-for-apply and 14 rejected verdicts. Full report:
+33 proposals with 2 accepted-for-apply and 14 rejected verdicts, and its
+POPPER-style falsification protocols now cover 27 candidate proposals with 135
+planned/passed/failed experiment records. Full report:
 `phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md`.
 
 `assumption_os.failure_hypotheses` converts loss rows into candidate assumptions

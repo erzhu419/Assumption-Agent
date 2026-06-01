@@ -8,7 +8,7 @@ Overall: PASS
 | --- | --- | --- |
 | world_model | PASS | labels=16, pre_auc=1.0, brier=0.0081 |
 | trajectory_search | PASS | multi_path=0.8, hit=1.0 |
-| verifier_stack | PASS | accepted=2, rejected=14, proposals=33 |
+| verifier_stack | PASS | accepted=2, rejected=14, protocols=27/33 |
 | recursive_daemon | PASS | applied=2/2 |
 | manifest_logger | PASS | events=112, real_logs=12, leak=False |
 | harness_observer | PASS | artifacts=4, backfill=0/19, covered=True |
@@ -22,11 +22,11 @@ Overall: PASS
 - `label_counts`: {"accept": 2, "reject": 14}
 - `matched_label_count`: 16
 - `unmatched_label_count`: 0
-- `raw_pre_acceptance`: {"accepted_count": 2, "accepted_mean_probability": 0.8577, "accepted_recall_at_k": 1.0, "accepted_rejected_margin": 0.0814, "auc": 1.0, "labeled_count": 16, "rejected_count": 14, "rejected_mean_probability": 0.7762, "top_ranked": [{"label": "accept", "probability": 0.8612, "proposal_id": "prop_e61e596b7f98"}, {"label": "accept", "probability": 0.8541, "proposal_id": "prop_50e44c655f61"}, {"label": "reject", "probability": 0.8196, "proposal_id": "prop_69d3d6dd67c7"}, {"label": "reject", "probability": 0.8184, "proposal_id": "prop_1382d47d213b"}, {"label": "reject", "probability": 0.8184, "proposal_id": "prop_2892408c37de"}]}
-- `pre_acceptance`: {"accepted_count": 2, "accepted_mean_probability": 0.8577, "accepted_recall_at_k": 1.0, "accepted_rejected_margin": 0.7952, "auc": 1.0, "labeled_count": 16, "rejected_count": 14, "rejected_mean_probability": 0.0625, "top_ranked": [{"label": "accept", "probability": 0.8612, "proposal_id": "prop_e61e596b7f98"}, {"label": "accept", "probability": 0.8541, "proposal_id": "prop_50e44c655f61"}, {"label": "reject", "probability": 0.0625, "proposal_id": "prop_2ec0255facee"}, {"label": "reject", "probability": 0.0625, "proposal_id": "prop_69d3d6dd67c7"}, {"label": "reject", "probability": 0.0625, "proposal_id": "prop_54db59587ab9"}]}
+- `raw_pre_acceptance`: {"accepted_count": 2, "accepted_mean_probability": 0.7984, "accepted_recall_at_k": 1.0, "accepted_rejected_margin": 0.3051, "auc": 1.0, "labeled_count": 16, "rejected_count": 14, "rejected_mean_probability": 0.4933, "top_ranked": [{"label": "accept", "probability": 0.803, "proposal_id": "prop_e61e596b7f98"}, {"label": "accept", "probability": 0.7937, "proposal_id": "prop_50e44c655f61"}, {"label": "reject", "probability": 0.5108, "proposal_id": "prop_69d3d6dd67c7"}, {"label": "reject", "probability": 0.5089, "proposal_id": "prop_1382d47d213b"}, {"label": "reject", "probability": 0.5089, "proposal_id": "prop_2892408c37de"}]}
+- `pre_acceptance`: {"accepted_count": 2, "accepted_mean_probability": 0.7984, "accepted_recall_at_k": 1.0, "accepted_rejected_margin": 0.7359, "auc": 1.0, "labeled_count": 16, "rejected_count": 14, "rejected_mean_probability": 0.0625, "top_ranked": [{"label": "accept", "probability": 0.803, "proposal_id": "prop_e61e596b7f98"}, {"label": "accept", "probability": 0.7937, "proposal_id": "prop_50e44c655f61"}, {"label": "reject", "probability": 0.0625, "proposal_id": "prop_2ec0255facee"}, {"label": "reject", "probability": 0.0625, "proposal_id": "prop_69d3d6dd67c7"}, {"label": "reject", "probability": 0.0625, "proposal_id": "prop_54db59587ab9"}]}
 - `post_acceptance`: {"accepted_count": 2, "accepted_mean_probability": 0.8333, "accepted_recall_at_k": 1.0, "accepted_rejected_margin": 0.7765, "auc": 1.0, "labeled_count": 16, "rejected_count": 14, "rejected_mean_probability": 0.0568, "top_ranked": [{"label": "accept", "probability": 0.8333, "proposal_id": "prop_e61e596b7f98"}, {"label": "accept", "probability": 0.8333, "proposal_id": "prop_50e44c655f61"}, {"label": "reject", "probability": 0.1667, "proposal_id": "prop_dfa8c5b146f9"}, {"label": "reject", "probability": 0.1667, "proposal_id": "prop_66a126a35878"}, {"label": "reject", "probability": 0.0385, "proposal_id": "prop_2ec0255facee"}]}
 - `post_calibration`: {"brier_score": 0.0081, "labeled_predictions": 16, "mean_absolute_error": 0.0705}
-- `trained_calibration`: {"calibrated_metrics": {"brier_score": 0.006, "labeled_count": 16, "mean_absolute_error": 0.0725}, "decision_probabilities": {"accept": 0.8333, "insufficient_judgments": 0.5, "reject_benefit": 0.0385, "reject_harm": 0.1667}, "eval_id": "perf_world_calibration", "high_priority_accept_floor": 0.75, "label_counts": {"accept": 2, "reject": 14}, "labeled_count": 16, "leave_one_out_calibrated_metrics": {"brier_score": 0.0064, "labeled_count": 16, "mean_absolute_error": 0.0762}, "low_priority_probability_cap": 0.0625, "matched_label_count": 16, "priority_boundary": 1.485, "raw_metrics": {"brier_score": 0.5316, "labeled_count": 16, "mean_absolute_error": 0.697}, "source_acceptance_eval_id": "perf_combined_acceptance", "source_prediction_eval_id": "perf_world_pre_acceptance_raw", "status": "trained", "unmatched_label_count": 0}
+- `trained_calibration`: {"calibrated_metrics": {"brier_score": 0.0085, "labeled_count": 16, "mean_absolute_error": 0.0799}, "decision_probabilities": {"accept": 0.8333, "insufficient_judgments": 0.5, "reject_benefit": 0.0385, "reject_harm": 0.1667}, "eval_id": "perf_world_calibration", "high_priority_accept_floor": 0.75, "label_counts": {"accept": 2, "reject": 14}, "labeled_count": 16, "leave_one_out_calibrated_metrics": {"brier_score": 0.009, "labeled_count": 16, "mean_absolute_error": 0.0836}, "low_priority_probability_cap": 0.0625, "matched_label_count": 16, "priority_boundary": 1.485, "raw_metrics": {"brier_score": 0.2182, "labeled_count": 16, "mean_absolute_error": 0.4568}, "source_acceptance_eval_id": "perf_combined_acceptance", "source_prediction_eval_id": "perf_world_pre_acceptance_raw", "status": "trained", "unmatched_label_count": 0}
 - `prediction_count`: 33
 - note: pre_acceptance excludes candidate acceptance labels to avoid leakage
 - note: post_acceptance validates calibration/logging after real judgments are attached
@@ -49,7 +49,13 @@ Overall: PASS
 - `next_action_counts`: {"apply_accepted_candidate_if_requested": 2, "collect_more_evidence": 11, "collect_more_trigger_rows": 6, "reject_or_narrow_scope": 2, "reject_or_revise_candidate": 12}
 - `accepted_count`: 2
 - `rejected_count`: 14
-- `stage_status_counts`: {"V0:defer": 6, "V0:pass": 21, "V0:repair": 6, "V1:defer": 31, "V1:pass": 2, "V2:not_applicable": 33, "V3:block": 5, "V3:defer": 4, "V3:missing": 9, "V3:pass": 15, "V4:fail": 14, "V4:missing": 17, "V4:pass": 2}
+- `stage_status_counts`: {"V0:defer": 6, "V0:pass": 21, "V0:repair": 6, "V1:defer": 31, "V1:pass": 2, "V2:not_applicable": 33, "V3:block": 6, "V3:defer": 6, "V3:fail": 14, "V3:pass": 7, "V4:fail": 14, "V4:missing": 17, "V4:pass": 2}
+- `falsification_experiment_count`: 135
+- `falsification_protocol_candidate_count`: 27
+- `falsification_experiment_status_counts`: {"blocked": 24, "failed": 34, "passed": 41, "planned": 36}
+- `falsification_experiment_name_counts`: {"control_harm_sequential": 27, "fresh_cross_judge_replay": 27, "placebo_context_control": 27, "route_power_and_scope_probe": 27, "trigger_benefit_sequential": 27}
+- `accepted_protocol_ok`: true
+- `rejected_protocol_ok`: true
 
 ### recursive_daemon
 
@@ -65,7 +71,7 @@ Overall: PASS
 - `real_log_paths`: ["phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log", "phase four/assumption_graph/recursive_scoped_ablation_run_gpt55_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt54mini_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt55_21_50.log", "phase six/autonomous/exp80_run.log"]
 - `written_trials`: 112
 - `secret_leak_detected`: false
-- `throughput_events_per_sec`: 2153.85
+- `throughput_events_per_sec`: 1265.54
 - `event_counts`: {"judge_call": 28, "llm_call": 21, "retrieval": 20, "simulator_rollout": 20, "tool_use": 23}
 
 ### harness_observer

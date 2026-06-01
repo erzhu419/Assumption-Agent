@@ -1073,10 +1073,16 @@ class AssumptionOSTest(unittest.TestCase):
                 },
             ],
         }
+        falsification = build_falsification_payload(
+            proposal_payload=proposal_payload,
+            preflight_payload=preflight,
+            acceptance_payload=acceptance,
+        )
         payload = build_verifier_stack_payload(
             proposal_payload=proposal_payload,
             preflight_payload=preflight,
             world_model_payload=world_model,
+            falsification_payload=falsification,
             acceptance_payload=acceptance,
             formal_mapping_gate_payload={"gates": []},
             eval_id="unit_verifier",
@@ -1086,6 +1092,9 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(by_id["prop_accept"]["next_action"], "apply_accepted_candidate_if_requested")
         self.assertEqual(by_id["prop_repair"]["verdict"], "needs_preflight_repair")
         self.assertEqual(by_id["prop_repair"]["stages"][0]["status"], "repair")
+        v3 = next(stage for stage in by_id["prop_accept"]["stages"] if stage["tier"] == "V3")
+        self.assertEqual(v3["evidence"]["experiment_name_counts"]["trigger_benefit_sequential"], 1)
+        self.assertEqual(v3["evidence"]["experiment_status_counts"]["passed"], 4)
 
     def test_recursive_daemon_resumes_and_applies_accepted_candidate(self):
         with tempfile.TemporaryDirectory() as td:
@@ -1280,6 +1289,9 @@ class AssumptionOSTest(unittest.TestCase):
             "summaries": [{
                 "proposal_id": "prop_1",
                 "readiness": "ready_for_fresh_ablation",
+                "trigger_problem_ids": ["p1", "p2", "p3"],
+                "control_problem_ids": ["p4"],
+                "command_hint": "run proposal prop_1",
             }],
         }
         ready = build_falsification_payload(
@@ -1290,6 +1302,10 @@ class AssumptionOSTest(unittest.TestCase):
             ready["summaries"][0]["decision"],
             FalsificationDecision.READY_FOR_ABLATION.value,
         )
+        self.assertEqual(ready["experiment_name_counts"]["trigger_benefit_sequential"], 1)
+        by_name = {row["name"]: row for row in ready["summaries"][0]["experiments"]}
+        self.assertEqual(by_name["trigger_benefit_sequential"]["status"], "planned")
+        self.assertEqual(by_name["route_power_and_scope_probe"]["status"], "passed")
 
         rejected = build_falsification_payload(
             proposal_payload=proposal_payload,
@@ -1299,6 +1315,9 @@ class AssumptionOSTest(unittest.TestCase):
                 "summaries": [{
                     "proposal_id": "prop_1",
                     "decision": "reject_benefit",
+                    "trigger_outcomes": {"loss": 3},
+                    "control_outcomes": {},
+                    "trigger_lcb90": 0.1,
                     "rationale": "benefit too weak",
                 }],
             },
@@ -1308,6 +1327,9 @@ class AssumptionOSTest(unittest.TestCase):
             FalsificationDecision.REJECT_BENEFIT.value,
         )
         self.assertEqual(rejected["summaries"][0]["next_action"], "reject_or_revise_candidate")
+        rejected_by_name = {row["name"]: row for row in rejected["summaries"][0]["experiments"]}
+        self.assertEqual(rejected_by_name["trigger_benefit_sequential"]["status"], "failed")
+        self.assertEqual(rejected_by_name["control_harm_sequential"]["status"], "passed")
 
     def test_bayesian_policy_scores_ready_candidate_for_ablation(self):
         with tempfile.TemporaryDirectory() as td:

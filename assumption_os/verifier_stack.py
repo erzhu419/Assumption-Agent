@@ -206,6 +206,7 @@ def _falsification_stage(falsification: dict) -> VerifierStage:
     if not falsification:
         return VerifierStage("V3", "sequential_falsification", "missing", "No falsification gate summary is available.")
     decision = falsification.get("decision")
+    experiments = falsification.get("experiments", [])
     if decision in {"accept", "ready_for_ablation"}:
         status = "pass"
     elif decision in {"reject_benefit", "reject_harm"}:
@@ -223,6 +224,10 @@ def _falsification_stage(falsification: dict) -> VerifierStage:
             "decision": decision,
             "next_action": falsification.get("next_action"),
             "ordered_checks": falsification.get("ordered_checks", []),
+            "experiment_count": len(experiments),
+            "experiment_status_counts": dict(Counter(e.get("status") for e in experiments)),
+            "experiment_name_counts": dict(Counter(e.get("name") for e in experiments)),
+            "experiments": experiments,
         },
     )
 
