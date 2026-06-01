@@ -73,7 +73,13 @@ from assumption_os.schema import (
     TrialManifest,
     TrialStatus,
 )
-from assumption_os.selector import MetaproductivitySelector, build_metaproductivity_benchmark_payload
+from assumption_os.selector import (
+    MetaproductivitySelector,
+    SelectionWeights,
+    apply_acp_learning_updates,
+    build_acp_learning_payload,
+    build_metaproductivity_benchmark_payload,
+)
 from assumption_os.trajectory_search import build_trajectory_search_payload
 from assumption_os.trace_dataset import build_trace_dataset_collection_payload, build_trace_dataset_payload
 from assumption_os.trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
@@ -131,6 +137,82 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertTrue(payload["positive_control"]["pass"])
             self.assertTrue(payload["pass"])
             self.assertEqual(payload["positive_control"]["acp_top_id"], "productive_parent")
+
+    def test_acp_learning_updates_clade_value_from_acceptance_descendants(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="learned_parent",
+                type=AssumptionType.METHOD,
+                claim="recursive acp scheduler rollback policy",
+                confidence=0.45,
+                metaproductivity=0.0,
+                payload={"evidence": {"delta": 0.02}},
+            ))
+            store.upsert_node(AssumptionNode(
+                id="quick_parent",
+                type=AssumptionType.METHOD,
+                claim="recursive acp scheduler rollback quick fix",
+                confidence=0.9,
+                metaproductivity=0.0,
+                payload={"evidence": {"delta": 0.45}},
+            ))
+            graph = SimpleAssumptionGraph(store)
+            acceptance = {
+                "eval_id": "unit_acp_acceptance",
+                "summaries": [
+                    {
+                        "proposal_id": "learned_accept_a",
+                        "parent_node_id": "learned_parent",
+                        "candidate_node_id": "learned_child_a",
+                        "decision": "accept",
+                    },
+                    {
+                        "proposal_id": "learned_accept_b",
+                        "parent_node_id": "learned_parent",
+                        "candidate_node_id": "learned_child_b",
+                        "decision": "accept",
+                    },
+                    {
+                        "proposal_id": "learned_accept_c",
+                        "parent_node_id": "learned_parent",
+                        "candidate_node_id": "learned_child_c",
+                        "decision": "accept",
+                    },
+                    {
+                        "proposal_id": "quick_reject",
+                        "parent_node_id": "quick_parent",
+                        "candidate_node_id": "quick_child",
+                        "decision": "reject_harm",
+                    },
+                ],
+            }
+            payload = build_acp_learning_payload(
+                graph,
+                eval_id="unit_acp_learning",
+                acceptance_payload=acceptance,
+            )
+            self.assertTrue(payload["pass"])
+            self.assertEqual(payload["accepted_descendant_count"], 3)
+            self.assertEqual(payload["rejected_descendant_count"], 1)
+            self.assertGreaterEqual(payload["policy_update_count"], 1)
+            self.assertTrue(payload["positive_control"]["pass"])
+            apply_acp_learning_updates(graph, payload, persist=False)
+            acp_top = MetaproductivitySelector(graph).rank("scheduler policy", top_k=1)[0]
+            immediate_top = MetaproductivitySelector(
+                graph,
+                weights=SelectionWeights(
+                    retrieval=1.0,
+                    immediate_utility=1.0,
+                    metaproductivity=0.0,
+                    confidence=0.2,
+                    novelty=0.0,
+                    risk=0.25,
+                    cost=0.15,
+                ),
+            ).rank("scheduler policy", top_k=1)[0]
+            self.assertEqual(acp_top.node.id, "learned_parent")
+            self.assertEqual(immediate_top.node.id, "quick_parent")
 
     def test_retrieval_can_filter_primary_assumption_types(self):
         with tempfile.TemporaryDirectory() as td:

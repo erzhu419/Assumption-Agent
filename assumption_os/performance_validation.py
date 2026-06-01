@@ -60,7 +60,7 @@ from .recursive_runner import build_recursive_assumption_run
 from .residual_clusterer import build_residual_cluster_payload
 from .runtime_trace import RuntimeTraceRecorder
 from .surface_hypotheses import build_surface_hypothesis_payload
-from .selector import build_metaproductivity_benchmark_payload
+from .selector import build_acp_learning_payload, build_metaproductivity_benchmark_payload
 from .trajectory_search import build_trajectory_search_payload
 from .trace_dataset import build_trace_dataset_collection_payload, build_trace_dataset_payload
 from .trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
@@ -89,7 +89,7 @@ def build_performance_validation_payload(
     timings["trajectory_search_sec"] = _elapsed(start)
 
     start = time.perf_counter()
-    metaproductivity = _validate_metaproductivity_benchmark(graph_dir=graph_dir)
+    metaproductivity = _validate_metaproductivity_benchmark(root=root, graph_dir=graph_dir)
     timings["metaproductivity_benchmark_sec"] = _elapsed(start)
 
     start = time.perf_counter()
@@ -349,10 +349,18 @@ def _validate_trajectory_search(*, root: Path, world_model_payload: dict) -> dic
     }
 
 
-def _validate_metaproductivity_benchmark(*, graph_dir: Path) -> dict:
+def _validate_metaproductivity_benchmark(*, root: Path, graph_dir: Path) -> dict:
+    graph = SimpleAssumptionGraph(JsonlGraphStore(graph_dir))
     payload = build_metaproductivity_benchmark_payload(
-        SimpleAssumptionGraph(JsonlGraphStore(graph_dir)),
+        graph,
         eval_id="perf_metaproductivity_benchmark",
+    )
+    bundle = _combined_candidate_bundle(root)
+    acp_learning = build_acp_learning_payload(
+        graph,
+        eval_id="perf_acp_learning",
+        acceptance_payload=bundle["acceptance_payload"],
+        proposal_payload=bundle["proposal_payload"],
     )
     live = payload.get("live_probe", {})
     mean_acp = live.get("mean_acp_top_clade_metaproductivity")
@@ -364,6 +372,7 @@ def _validate_metaproductivity_benchmark(*, graph_dir: Path) -> dict:
             and mean_acp is not None
             and mean_immediate is not None
             and mean_acp > mean_immediate
+            and acp_learning.get("pass", False)
         ),
         "query_count": payload["query_count"],
         "positive_control": payload["positive_control"],
@@ -372,6 +381,17 @@ def _validate_metaproductivity_benchmark(*, graph_dir: Path) -> dict:
         "distinct_acp_top_count": live.get("distinct_acp_top_count"),
         "distinct_immediate_top_count": live.get("distinct_immediate_top_count"),
         "live_probe": live,
+        "acp_learning_pass": acp_learning.get("pass"),
+        "acp_labeled_descendant_count": acp_learning.get("labeled_descendant_count"),
+        "acp_accepted_descendant_count": acp_learning.get("accepted_descendant_count"),
+        "acp_rejected_descendant_count": acp_learning.get("rejected_descendant_count"),
+        "acp_rejected_harm_descendant_count": acp_learning.get("rejected_harm_descendant_count"),
+        "acp_learned_clade_count": acp_learning.get("learned_clade_count"),
+        "acp_policy_update_count": acp_learning.get("policy_update_count"),
+        "acp_label_auc": acp_learning.get("label_metrics", {}).get("auc"),
+        "acp_accepted_rejected_margin": acp_learning.get("label_metrics", {}).get("accepted_rejected_margin"),
+        "acp_positive_control": acp_learning.get("positive_control"),
+        "acp_policy_updates": acp_learning.get("policy_updates"),
     }
 
 
@@ -1599,7 +1619,8 @@ def _key_metric(name: str, section: dict) -> str:
         return (
             f"queries={section.get('query_count', 0)}, "
             f"acp_meta={section.get('mean_acp_top_clade_metaproductivity')}, "
-            f"imm_meta={section.get('mean_immediate_top_clade_metaproductivity')}"
+            f"imm_meta={section.get('mean_immediate_top_clade_metaproductivity')}, "
+            f"learned={section.get('acp_policy_update_count', 0)}/{section.get('acp_labeled_descendant_count', 0)}"
         )
     if name == "verifier_stack":
         return (

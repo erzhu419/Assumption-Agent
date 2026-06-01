@@ -178,8 +178,12 @@ def _score_metaproductivity(sections: dict[str, dict], graph_stats: dict) -> Cap
             "benchmark_pass": meta_bench.get("pass"),
             "mean_acp_top_clade_metaproductivity": meta_bench.get("mean_acp_top_clade_metaproductivity"),
             "mean_immediate_top_clade_metaproductivity": meta_bench.get("mean_immediate_top_clade_metaproductivity"),
+            "acp_learning_pass": meta_bench.get("acp_learning_pass"),
+            "acp_labeled_descendant_count": meta_bench.get("acp_labeled_descendant_count"),
+            "acp_policy_update_count": meta_bench.get("acp_policy_update_count"),
+            "acp_label_auc": meta_bench.get("acp_label_auc"),
         },
-        rationale="The selector preserves productive descendants instead of only immediate wins.",
+        rationale="The selector preserves productive descendants and learns clade value from accepted/rejected candidates.",
     )
 
 

@@ -1,12 +1,12 @@
 {
   "closure": {
-    "behavior_percent": 75.2,
+    "behavior_percent": 75.6,
     "completed_item_count": 3,
     "item_count": 9,
-    "structure_percent": 83.9,
-    "weighted_percent": 79.1
+    "structure_percent": 84.1,
+    "weighted_percent": 79.4
   },
-  "eval_id": "reconstruction_progress_20260601",
+  "eval_id": "reconstruction_progress_20260601_acp_learning",
   "items": [
     {
       "behavior_score": 0.78,
@@ -161,32 +161,40 @@
       "target": "Classify failures into execution, optimization, assumption, memory, evaluator, and simulator residuals before mutation."
     },
     {
-      "behavior_score": 0.73,
+      "behavior_score": 0.76,
       "evidence": {
+        "acp_accepted_descendant_count": 2,
+        "acp_accepted_rejected_margin": 0.474,
+        "acp_label_auc": 1.0,
+        "acp_labeled_descendant_count": 16,
+        "acp_learned_clade_count": 11,
+        "acp_learning_pass": true,
+        "acp_policy_update_count": 6,
+        "acp_rejected_descendant_count": 14,
         "mean_acp_top_clade_metaproductivity": 0.6687,
         "mean_immediate_top_clade_metaproductivity": 0.2225,
         "metaproductivity_benchmark_pass": true,
         "multi_path_rate": 0.8,
         "positive_metaproductivity_nodes": 159,
         "reconstruction_ceiling": {
-          "behavior": 0.73,
-          "structure": 0.82
+          "behavior": 0.76,
+          "structure": 0.84
         },
         "top_path_label_hit_rate": 1.0,
         "trajectory_count": 26
       },
       "key": "F_metaproductivity_selector",
       "next_actions": [
-        "Use accepted/rejected descendants to update clade-level ACP after each recursive run.",
-        "Add a scheduler benchmark that compares ACP-aware selection to immediate-win selection."
+        "Calibrate ACP learning weights on larger recursive-run histories.",
+        "Add a scheduler benchmark that measures downstream task allocation, not only selector top-rank behavior."
       ],
       "remaining_gaps": [
-        "Metaproductivity is scored in graph/trajectory artifacts, but ACP is not yet a learned long-horizon value model.",
-        "ACP-aware selection now has a benchmark, but cost/risk/novelty are still hand-weighted rather than learned.",
+        "ACP now learns from accepted/rejected descendants, but cost/risk/novelty are still hand-weighted rather than learned.",
+        "The learned ACP update is gated and auditable; it still needs larger-run calibration before unattended graph mutation.",
         "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts."
       ],
       "status": "operational",
-      "structure_score": 0.82,
+      "structure_score": 0.84,
       "target": "Select assumption families by utility plus long-run clade productivity, cost, risk, and novelty."
     },
     {
@@ -300,16 +308,6 @@
       "priority": 0.2295
     },
     {
-      "action": "Add a scheduler benchmark that compares ACP-aware selection to immediate-win selection.",
-      "item": "F_metaproductivity_selector",
-      "priority": 0.2295
-    },
-    {
-      "action": "Use accepted/rejected descendants to update clade-level ACP after each recursive run.",
-      "item": "F_metaproductivity_selector",
-      "priority": 0.2295
-    },
-    {
       "action": "Add objective-task and manual-review gates for high-impact graph mutations.",
       "item": "D_verifier_stack",
       "priority": 0.224
@@ -348,6 +346,16 @@
       "action": "Train/calibrate the phase-quality predictor on larger first-party draft/audit/final traces.",
       "item": "C_world_model_simulator",
       "priority": 0.2205
+    },
+    {
+      "action": "Add a scheduler benchmark that measures downstream task allocation, not only selector top-rank behavior.",
+      "item": "F_metaproductivity_selector",
+      "priority": 0.204
+    },
+    {
+      "action": "Calibrate ACP learning weights on larger recursive-run histories.",
+      "item": "F_metaproductivity_selector",
+      "priority": 0.204
     }
   ],
   "overall_pass": true,
@@ -509,21 +517,6 @@
       "priority": 0.27
     },
     {
-      "gap": "ACP-aware selection now has a benchmark, but cost/risk/novelty are still hand-weighted rather than learned.",
-      "item": "F_metaproductivity_selector",
-      "priority": 0.27
-    },
-    {
-      "gap": "Metaproductivity is scored in graph/trajectory artifacts, but ACP is not yet a learned long-horizon value model.",
-      "item": "F_metaproductivity_selector",
-      "priority": 0.27
-    },
-    {
-      "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
-      "item": "F_metaproductivity_selector",
-      "priority": 0.27
-    },
-    {
       "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
       "item": "D_verifier_stack",
       "priority": 0.26
@@ -537,11 +530,26 @@
       "gap": "V0-V4 are represented; objective benchmark V5 and human-review V6 are still policy/documentation rather than active gates.",
       "item": "D_verifier_stack",
       "priority": 0.26
+    },
+    {
+      "gap": "Residual labels are deterministic and artifact-derived; no calibrated residual classifier has been validated on human labels.",
+      "item": "E_residual_analyzer",
+      "priority": 0.26
+    },
+    {
+      "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
+      "item": "E_residual_analyzer",
+      "priority": 0.26
+    },
+    {
+      "gap": "Skipped/non-attributed failures are improved but not exhaustively covered by first-party traces.",
+      "item": "E_residual_analyzer",
+      "priority": 0.26
     }
   ],
   "source": {
     "graph_dir": "phase four/assumption_graph",
-    "performance_eval_id": "reconstruction_gap_perf_20260601_formal_downstream",
+    "performance_eval_id": "reconstruction_gap_perf_20260601_acp_learning",
     "reconstruction_path": "reconstruction/md/reconstruction.md",
     "root": "."
   }

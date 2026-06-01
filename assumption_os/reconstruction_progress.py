@@ -332,9 +332,11 @@ def _metaproductivity_selector_item(sections: dict[str, dict], graph_stats: dict
     structure = _avg([
         float(trajectory.get("pass", False)),
         float(meta_bench.get("pass", False)),
+        float(meta_bench.get("acp_learning_pass", False)),
         _cap(trajectory.get("multi_path_rate", 0.0) / 0.8),
         _cap(len(trajectory.get("selected_path_types", {})) / 4),
         _cap(graph_stats.get("positive_metaproductivity_nodes", 0) / 100),
+        _cap(meta_bench.get("acp_learned_clade_count", 0) / 8),
     ])
     behavior = _avg([
         _cap(trajectory.get("top_path_label_hit_rate", 0.0)),
@@ -348,6 +350,10 @@ def _metaproductivity_selector_item(sections: dict[str, dict], graph_stats: dict
                 - float(meta_bench.get("mean_immediate_top_clade_metaproductivity") or 0.0)
             ) / 0.25
         ),
+        _cap(meta_bench.get("acp_labeled_descendant_count", 0) / 16),
+        _cap(meta_bench.get("acp_policy_update_count", 0) / 8),
+        _cap(float(meta_bench.get("acp_label_auc") or 0.0)),
+        _cap(float(meta_bench.get("acp_accepted_rejected_margin") or 0.0) / 0.35),
     ])
     return ProgressItem(
         key="F_metaproductivity_selector",
@@ -362,14 +368,22 @@ def _metaproductivity_selector_item(sections: dict[str, dict], graph_stats: dict
             "metaproductivity_benchmark_pass": meta_bench.get("pass"),
             "mean_acp_top_clade_metaproductivity": meta_bench.get("mean_acp_top_clade_metaproductivity"),
             "mean_immediate_top_clade_metaproductivity": meta_bench.get("mean_immediate_top_clade_metaproductivity"),
+            "acp_learning_pass": meta_bench.get("acp_learning_pass"),
+            "acp_labeled_descendant_count": meta_bench.get("acp_labeled_descendant_count"),
+            "acp_accepted_descendant_count": meta_bench.get("acp_accepted_descendant_count"),
+            "acp_rejected_descendant_count": meta_bench.get("acp_rejected_descendant_count"),
+            "acp_learned_clade_count": meta_bench.get("acp_learned_clade_count"),
+            "acp_policy_update_count": meta_bench.get("acp_policy_update_count"),
+            "acp_label_auc": meta_bench.get("acp_label_auc"),
+            "acp_accepted_rejected_margin": meta_bench.get("acp_accepted_rejected_margin"),
         },
         remaining_gaps=[
-            "Metaproductivity is scored in graph/trajectory artifacts, but ACP is not yet a learned long-horizon value model.",
-            "ACP-aware selection now has a benchmark, but cost/risk/novelty are still hand-weighted rather than learned.",
+            "ACP now learns from accepted/rejected descendants, but cost/risk/novelty are still hand-weighted rather than learned.",
+            "The learned ACP update is gated and auditable; it still needs larger-run calibration before unattended graph mutation.",
         ],
         next_actions=[
-            "Use accepted/rejected descendants to update clade-level ACP after each recursive run.",
-            "Add a scheduler benchmark that compares ACP-aware selection to immediate-win selection.",
+            "Calibrate ACP learning weights on larger recursive-run histories.",
+            "Add a scheduler benchmark that measures downstream task allocation, not only selector top-rank behavior.",
         ],
     )
 
@@ -645,6 +659,13 @@ def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
         if downstream_queries >= 27 and downstream_families >= 3 and downstream_auc >= 0.8:
             max_structure = max(max_structure, 0.82)
             max_behavior = max(max_behavior, 0.74)
+    if item.key == "F_metaproductivity_selector":
+        labeled = int(item.evidence.get("acp_labeled_descendant_count") or 0)
+        updates = int(item.evidence.get("acp_policy_update_count") or 0)
+        auc = float(item.evidence.get("acp_label_auc") or 0.0)
+        if item.evidence.get("acp_learning_pass") and labeled >= 16 and updates >= 4 and auc >= 0.8:
+            max_structure = max(max_structure, 0.84)
+            max_behavior = max(max_behavior, 0.76)
     return max_structure, max_behavior
 
 
