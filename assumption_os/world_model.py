@@ -338,10 +338,12 @@ def train_world_model_calibration(
 
     labels = _acceptance_labels(acceptance_payload)
     rows = []
+    matched_proposal_ids: set[str] = set()
     for prediction in prediction_payload.get("predictions", []):
         proposal_id = prediction.get("proposal_id")
         if proposal_id not in labels:
             continue
+        matched_proposal_ids.add(proposal_id)
         feature_trace = prediction.get("feature_trace", {})
         rows.append({
             "proposal_id": proposal_id,
@@ -384,7 +386,10 @@ def train_world_model_calibration(
         "eval_id": eval_id,
         "source_prediction_eval_id": prediction_payload.get("eval_id"),
         "source_acceptance_eval_id": acceptance_payload.get("eval_id"),
+        "status": "trained" if rows else "no_matched_labels",
         "labeled_count": len(rows),
+        "matched_label_count": len(rows),
+        "unmatched_label_count": len(set(labels) - matched_proposal_ids),
         "label_counts": dict(Counter(row["label"] for row in rows)),
         "priority_boundary": priority_boundary,
         "high_priority_accept_floor": high_priority_accept_floor,
@@ -629,6 +634,13 @@ def _load_json(path: Path | None) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _write_json(path: Path | None, payload: dict) -> None:
+    if not path:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def _resolve(root: Path, path: str | None) -> Path | None:
     if not path:
         return None
@@ -647,30 +659,85 @@ def main() -> None:
     ap.add_argument("--regression-predictions", default=None)
     ap.add_argument("--formal-gate", default=None)
     ap.add_argument("--calibration", default=None)
+    ap.add_argument("--train-calibration-out", default=None,
+                    help="train a reusable calibration artifact from raw pre-acceptance predictions and --acceptance")
+    ap.add_argument("--raw-prediction-out", default=None,
+                    help="optionally persist the raw pre-acceptance predictions used for calibration")
     ap.add_argument("--eval-id", required=True)
     ap.add_argument("--writeback", action="store_true")
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
-    store = JsonlGraphStore(_resolve(root, args.graph_dir))
+    graph_dir = _resolve(root, args.graph_dir)
+    proposal_payload = _load_json(_resolve(root, args.proposals)) or {}
+    preflight_payload = _load_json(_resolve(root, args.preflight))
+    falsification_payload = _load_json(_resolve(root, args.falsification))
+    acceptance_payload = _load_json(_resolve(root, args.acceptance))
+    regression_predictions = _load_json(_resolve(root, args.regression_predictions)) or []
+    formal_gate_payload = _load_json(_resolve(root, args.formal_gate))
+    calibration_payload = _load_json(_resolve(root, args.calibration))
+    raw_prediction_payload = None
+
+    if args.train_calibration_out:
+        if acceptance_payload is None:
+            raise SystemExit("--train-calibration-out requires --acceptance")
+        raw_prediction_payload = build_world_model_payload(
+            store=JsonlGraphStore(graph_dir),
+            proposal_payload=proposal_payload,
+            preflight_payload=preflight_payload,
+            falsification_payload=falsification_payload,
+            acceptance_payload=None,
+            regression_predictions=regression_predictions,
+            formal_mapping_gate_payload=formal_gate_payload,
+            calibration_payload=None,
+            eval_id=f"{args.eval_id}_raw_for_calibration",
+            writeback=False,
+        )
+        calibration_payload = train_world_model_calibration(
+            prediction_payload=raw_prediction_payload,
+            acceptance_payload=acceptance_payload,
+            eval_id=f"{args.eval_id}_calibration",
+        )
+        _write_json(_resolve(root, args.train_calibration_out), calibration_payload)
+    elif args.raw_prediction_out:
+        raw_prediction_payload = build_world_model_payload(
+            store=JsonlGraphStore(graph_dir),
+            proposal_payload=proposal_payload,
+            preflight_payload=preflight_payload,
+            falsification_payload=falsification_payload,
+            acceptance_payload=None,
+            regression_predictions=regression_predictions,
+            formal_mapping_gate_payload=formal_gate_payload,
+            calibration_payload=None,
+            eval_id=f"{args.eval_id}_raw_for_calibration",
+            writeback=False,
+        )
+
+    if raw_prediction_payload is not None:
+        _write_json(_resolve(root, args.raw_prediction_out), raw_prediction_payload)
+
     payload = build_world_model_payload(
-        store=store,
-        proposal_payload=_load_json(_resolve(root, args.proposals)) or {},
-        preflight_payload=_load_json(_resolve(root, args.preflight)),
-        falsification_payload=_load_json(_resolve(root, args.falsification)),
-        acceptance_payload=_load_json(_resolve(root, args.acceptance)),
-        regression_predictions=(_load_json(_resolve(root, args.regression_predictions)) or []),
-        formal_mapping_gate_payload=_load_json(_resolve(root, args.formal_gate)),
-        calibration_payload=_load_json(_resolve(root, args.calibration)),
+        store=JsonlGraphStore(graph_dir),
+        proposal_payload=proposal_payload,
+        preflight_payload=preflight_payload,
+        falsification_payload=falsification_payload,
+        acceptance_payload=acceptance_payload,
+        regression_predictions=regression_predictions,
+        formal_mapping_gate_payload=formal_gate_payload,
+        calibration_payload=calibration_payload,
         eval_id=args.eval_id,
         writeback=args.writeback,
     )
+    if raw_prediction_payload is not None:
+        payload["raw_prediction_eval_id"] = raw_prediction_payload.get("eval_id")
+    if args.train_calibration_out and calibration_payload:
+        payload["trained_calibration_artifact"] = {
+            key: value for key, value in calibration_payload.items() if key != "training_rows"
+        }
+
     text = json.dumps(payload, ensure_ascii=False, indent=2)
-    if args.summary_out:
-        out = _resolve(root, args.summary_out)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(text, encoding="utf-8")
+    _write_json(_resolve(root, args.summary_out), payload)
     print(text)
 
 

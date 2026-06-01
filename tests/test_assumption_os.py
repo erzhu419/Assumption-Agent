@@ -395,6 +395,8 @@ class AssumptionOSTest(unittest.TestCase):
                 candidate_variant="candidate",
                 candidate_baseline_variant="base",
                 autonomous_apply=True,
+                train_world_model_calibration_flag=True,
+                world_model_calibration_out=root / "world_model_calibration.json",
             )
 
             summary = payload["autonomous_apply_summary"]
@@ -406,6 +408,11 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertTrue(updated.trials)
             for node_id in summary["applied_candidate_node_ids"]:
                 self.assertEqual(updated.nodes[node_id].status, "active")
+            self.assertTrue(payload["world_model_calibration"]["active"])
+            self.assertEqual(payload["world_model_calibration"]["status"], "trained")
+            self.assertEqual(payload["world_model_calibration"]["labeled_count"], 1)
+            self.assertEqual(payload["world_model"]["calibration_model"]["labeled_count"], 1)
+            self.assertTrue((root / "world_model_calibration.json").exists())
 
     def test_recursive_runner_builds_argument_tree_from_evolution_payload(self):
         with tempfile.TemporaryDirectory() as td:
@@ -918,6 +925,9 @@ class AssumptionOSTest(unittest.TestCase):
             acceptance_payload=acceptance_payload,
             eval_id="unit_calibration",
         )
+        self.assertEqual(calibration["status"], "trained")
+        self.assertEqual(calibration["matched_label_count"], 2)
+        self.assertEqual(calibration["unmatched_label_count"], 0)
         self.assertGreater(calibration["priority_boundary"], 0.5)
         self.assertLess(
             calibration["calibrated_metrics"]["brier_score"],

@@ -313,9 +313,20 @@ python3 -m assumption_os.world_model \
   --graph-dir "phase four/assumption_graph" \
   --proposals "phase four/assumption_graph/evolution_cycle_proposals.json" \
   --preflight "phase four/assumption_graph/candidate_preflight_phase2_v20_gpt55_21_50.json" \
+  --acceptance "phase four/assumption_graph/recursive_positive_ms_bridge_acceptance.json" \
+  --train-calibration-out "phase four/assumption_graph/world_model_calibration_phase2_v20.json" \
+  --raw-prediction-out "phase four/assumption_graph/world_model_raw_phase2_v20.json" \
   --eval-id world_model_phase2_v20_gpt55_21_50 \
   --summary-out "phase four/assumption_graph/world_model_phase2_v20_gpt55_21_50.json"
 ```
+
+The calibration artifact is reusable: pass it back through
+`--calibration` in `world_model`, or through `--world-model-calibration` in
+`evolution_cycle`. When candidate acceptance evidence is available, the cycle
+can also train and persist it inline with `--train-world-model-calibration` and
+`--world-model-calibration-out`. The expanded reconstruction validation stores
+its reusable 16-label model at
+`phase four/assumption_graph/world_model_calibration_reconstruction_gap_20260601_expanded.json`.
 
 `assumption_os.trajectory_search` uses those predictions to keep multiple
 hypothesis futures alive: promote-after-verification, repair-then-retest,

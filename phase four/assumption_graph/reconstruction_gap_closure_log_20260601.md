@@ -45,6 +45,8 @@ Current gaps being addressed:
 - 2026-06-01: Added `assumption_os.performance_validation` and ran non-smoke validation for the six gap closures. First run exposed world-model post-acceptance miscalibration (`brier_score=0.2767`) because rejected evidence still left high predicted acceptance probabilities.
 - 2026-06-01: Calibrated world-model probabilities after real acceptance evidence: accepted candidates floor to high confidence, rejected-harm/rejected-benefit candidates cap to low acceptance probability, and priority now uses scaled raw priority instead of a 1.0 clamp. Rerun passed all six sections with `world_model.post_calibration.brier_score=0.0359`.
 - 2026-06-01: Expanded validation coverage by adding the proposal-screening payload/preflight to the labeled set, training an explicit world-model calibration payload, adding leave-one-out calibration metrics, and parsing existing run/judge logs into component manifests.
+- 2026-06-01: Promoted world-model calibration from report-only output into reusable artifacts: `world_model` can now train/save calibration from raw pre-acceptance predictions, and `evolution_cycle` can load or inline-train that calibration before screening candidate trajectories.
+- 2026-06-01: Persisted the expanded 16-label calibration artifacts: `world_model_raw_reconstruction_gap_20260601_expanded.json` and `world_model_calibration_reconstruction_gap_20260601_expanded.json`.
 
 ## Closure Notes
 
@@ -75,5 +77,5 @@ Results:
 - World model: 16 matched labels from 2 accepted / 14 rejected proposal outcomes; raw pre-acceptance Brier 0.5316, trained calibration Brier 0.0060, leave-one-out Brier 0.0064, post-acceptance Brier 0.0081.
 - Trajectory search: 10 frontier actions, 26 trajectories, multi-path rate 0.8, top-path label hit rate 1.0.
 - Recursive daemon: 2 positive-control accepted candidates applied in a temp graph, dry-run applied 0, gated apply applied 2, manifests written.
-- Residual clusterer: 109 residual records, 6 clusters, 2 synthesized candidate proposals with validation plans.
+- Residual clusterer: 109 residual records, 5 clusters, 2 synthesized candidate proposals with validation plans.
 - Formal metrics: 9 complete mappings, 9/9 finite kernels same-shape, 0 warnings.

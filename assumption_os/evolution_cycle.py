@@ -30,7 +30,7 @@ from .lifecycle import build_lifecycle_payload
 from .proposal_overlay import parse_csv_set
 from .proposals import build_proposal_payload
 from .record_phase2_eval import record_phase2_eval
-from .world_model import build_world_model_payload
+from .world_model import build_world_model_payload, train_world_model_calibration
 
 
 def build_evolution_cycle_payload(
@@ -62,6 +62,9 @@ def build_evolution_cycle_payload(
     apply_accepted: bool = False,
     autonomous_apply: bool = False,
     include_skipped_failure_hypotheses: bool = True,
+    world_model_calibration_path: Path | None = None,
+    train_world_model_calibration_flag: bool = False,
+    world_model_calibration_out: Path | None = None,
 ) -> dict:
     """Run one self-evolution planning cycle and return an audit payload."""
 
@@ -198,6 +201,28 @@ def build_evolution_cycle_payload(
         preflight_payload=preflight_payload,
         acceptance_payload=acceptance_payload,
     )
+    world_model_calibration_payload = (
+        _load_json(world_model_calibration_path) if world_model_calibration_path else None
+    )
+    raw_world_model_for_calibration = None
+    if train_world_model_calibration_flag and acceptance_payload is not None:
+        raw_world_model_for_calibration = build_world_model_payload(
+            store=JsonlGraphStore(graph_dir),
+            proposal_payload=proposal_payload,
+            preflight_payload=preflight_payload,
+            falsification_payload=falsification_payload,
+            acceptance_payload=None,
+            regression_predictions=regression_predictions,
+            formal_mapping_gate_payload=formal_mapping_gate_payload,
+            eval_id=f"{eval_id}_world_model_raw_for_calibration",
+        )
+        world_model_calibration_payload = train_world_model_calibration(
+            prediction_payload=raw_world_model_for_calibration,
+            acceptance_payload=acceptance_payload,
+            eval_id=f"{eval_id}_world_model_calibration",
+        )
+        if world_model_calibration_out:
+            _write_json(world_model_calibration_out, world_model_calibration_payload)
     world_model_payload = build_world_model_payload(
         store=JsonlGraphStore(graph_dir),
         proposal_payload=proposal_payload,
@@ -206,6 +231,7 @@ def build_evolution_cycle_payload(
         acceptance_payload=acceptance_payload,
         regression_predictions=regression_predictions,
         formal_mapping_gate_payload=formal_mapping_gate_payload,
+        calibration_payload=world_model_calibration_payload,
         eval_id=f"{eval_id}_world_model",
     )
     bayesian_policy_payload = build_bayesian_policy_payload(
@@ -241,6 +267,9 @@ def build_evolution_cycle_payload(
             "proposals_arg": proposals_arg,
             "failure_hypothesis_top_n": failure_hypothesis_top_n,
             "include_skipped_failure_hypotheses": include_skipped_failure_hypotheses,
+            "world_model_calibration_path": str(world_model_calibration_path) if world_model_calibration_path else None,
+            "train_world_model_calibration": train_world_model_calibration_flag,
+            "world_model_calibration_out": str(world_model_calibration_out) if world_model_calibration_out else None,
         },
         "source": {
             "graph_dir": str(graph_dir),
@@ -260,6 +289,14 @@ def build_evolution_cycle_payload(
         "candidate_preflight": preflight_payload,
         "candidate_acceptance": acceptance_payload,
         "falsification_gate": falsification_payload,
+        "world_model_calibration": build_world_model_calibration_summary(
+            requested=train_world_model_calibration_flag,
+            source_path=world_model_calibration_path,
+            output_path=world_model_calibration_out,
+            calibration_payload=world_model_calibration_payload,
+            raw_world_model_payload=raw_world_model_for_calibration,
+            acceptance_payload=acceptance_payload,
+        ),
         "world_model": world_model_payload,
         "regression_predictions": regression_predictions,
         "bayesian_policy": bayesian_policy_payload,
@@ -308,6 +345,45 @@ def predict_candidate_regressions(preflight_payload: dict) -> list[dict]:
             "reasons": reasons,
         })
     return predictions
+
+
+def build_world_model_calibration_summary(
+    *,
+    requested: bool,
+    source_path: Path | None,
+    output_path: Path | None,
+    calibration_payload: dict | None,
+    raw_world_model_payload: dict | None,
+    acceptance_payload: dict | None,
+) -> dict:
+    if calibration_payload is None:
+        return {
+            "active": False,
+            "requested": requested,
+            "source_path": str(source_path) if source_path else None,
+            "output_path": str(output_path) if output_path else None,
+            "reason": "candidate_acceptance_missing" if requested and acceptance_payload is None else "no_calibration_payload",
+        }
+    return {
+        "active": True,
+        "requested": requested,
+        "source_path": str(source_path) if source_path else None,
+        "output_path": str(output_path) if output_path else None,
+        "eval_id": calibration_payload.get("eval_id"),
+        "status": calibration_payload.get("status"),
+        "source_prediction_eval_id": calibration_payload.get("source_prediction_eval_id"),
+        "raw_prediction_eval_id": (raw_world_model_payload or {}).get("eval_id"),
+        "source_acceptance_eval_id": calibration_payload.get("source_acceptance_eval_id"),
+        "labeled_count": calibration_payload.get("labeled_count"),
+        "matched_label_count": calibration_payload.get("matched_label_count"),
+        "unmatched_label_count": calibration_payload.get("unmatched_label_count"),
+        "label_counts": calibration_payload.get("label_counts", {}),
+        "priority_boundary": calibration_payload.get("priority_boundary"),
+        "decision_probabilities": calibration_payload.get("decision_probabilities", {}),
+        "raw_metrics": calibration_payload.get("raw_metrics"),
+        "calibrated_metrics": calibration_payload.get("calibrated_metrics"),
+        "leave_one_out_calibrated_metrics": calibration_payload.get("leave_one_out_calibrated_metrics"),
+    }
 
 
 def build_policy_update_plan(
@@ -457,6 +533,11 @@ def _load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def _resolve(root: Path, path: str) -> Path:
     p = Path(path)
     return p if p.is_absolute() else root / p
@@ -495,6 +576,12 @@ def main() -> None:
                     help="apply writeback and accepted candidates automatically, still gated by acceptance and formal mapping checks")
     ap.add_argument("--exclude-skipped-failure-hypotheses", action="store_true",
                     help="do not generate failure hypotheses from judged rows skipped by writeback policy or missing meta")
+    ap.add_argument("--world-model-calibration", default=None,
+                    help="reuse a trained world-model calibration artifact")
+    ap.add_argument("--train-world-model-calibration", action="store_true",
+                    help="train a world-model calibration artifact from raw pre-acceptance predictions and candidate acceptance")
+    ap.add_argument("--world-model-calibration-out", default=None,
+                    help="where to persist the trained world-model calibration artifact")
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
@@ -527,6 +614,13 @@ def main() -> None:
         apply_accepted=args.apply_accepted,
         autonomous_apply=args.autonomous_apply,
         include_skipped_failure_hypotheses=not args.exclude_skipped_failure_hypotheses,
+        world_model_calibration_path=(
+            _resolve(root, args.world_model_calibration) if args.world_model_calibration else None
+        ),
+        train_world_model_calibration_flag=args.train_world_model_calibration,
+        world_model_calibration_out=(
+            _resolve(root, args.world_model_calibration_out) if args.world_model_calibration_out else None
+        ),
     )
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.proposal_artifact_out:
