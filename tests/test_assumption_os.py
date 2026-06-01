@@ -44,6 +44,7 @@ from assumption_os.recursive_runner import (
     RecursiveFrameType,
     build_recursive_assumption_run,
 )
+from assumption_os.recursive_audit import build_recursive_audit_payload
 from assumption_os.recursive_daemon import build_recursive_daemon_payload
 from assumption_os.recursive_executor import JudgmentSet, build_recursive_execution_payload
 from assumption_os.residual_clusterer import build_residual_cluster_payload
@@ -516,6 +517,14 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(child["parent_frame_id"], candidate["frame_id"])
             self.assertEqual(child["next_action"], "run_fresh_ablation")
             self.assertEqual(JsonlGraphStore(graph_dir).trials, {})
+            audit = build_recursive_audit_payload(
+                recursive_payload=payload,
+                eval_id="unit_recursive_audit",
+            )
+            self.assertTrue(audit["pass"])
+            self.assertEqual(audit["critical_issue_count"], 0)
+            self.assertGreaterEqual(audit["closure_score"], 0.9)
+            self.assertEqual(audit["declared_edge_count"], audit["reconstructed_edge_count"])
 
     def test_recursive_runner_propagates_acceptance_results_to_parent_frontier(self):
         def ready_evolution_payload():

@@ -31,6 +31,9 @@ an Assumption Graph.
 - `recursive_runner.py` turns one-shot evolution artifacts into a recursive
   assumption tree with parent hypotheses, child verification subproblems,
   argument maps, return updates, and optional manifest writeback.
+- `recursive_audit.py` checks recursive runner payloads for closed-loop
+  structure: parent/child consistency, argument contracts, return updates, and
+  actionable frontier integrity.
 - `manifest_logger.py` records LLM calls, retrievals, judge calls, tool-use,
   simulator rollouts, and daemon iterations as redacted `TrialManifest`s.
 - `harness_observer.py` audits existing judge/meta/log artifacts and backfills
@@ -306,6 +309,18 @@ python3 -m assumption_os.recursive_daemon \
   --summary-out "phase four/assumption_graph/recursive_daemon_phase2_v20_gpt55_21_50.json"
 ```
 
+`assumption_os.recursive_audit` checks whether a recursive payload is actually
+closed-loop: every child points back to its parent, arguments expose support
+and falsifiers, return updates can update parent frames, and `next_actions`
+match the actionable frontier.
+
+```bash
+python3 -m assumption_os.recursive_audit \
+  --recursive-payload "phase four/assumption_graph/recursive_runner_phase2_v20_gpt55_21_50.json" \
+  --eval-id recursive_audit_phase2_v20_gpt55_21_50 \
+  --summary-out "phase four/assumption_graph/recursive_audit_phase2_v20_gpt55_21_50.json"
+```
+
 `assumption_os.world_model` is the cheap verifier/simulator. It consumes the
 proposal, preflight, falsification, acceptance, regression, and formal-gate
 payloads, then predicts acceptance probability, regression risk, verifier tier,
@@ -446,9 +461,9 @@ python3 -m assumption_os.residual_clusterer \
 `assumption_os.performance_validation` runs the non-smoke validation suite for
 the reconstruction-gap mechanisms. It uses real candidate acceptance
 payloads and positive controls where available, then reports ranking quality,
-calibration, multi-path coverage, daemon gated-apply behavior, manifest
-throughput/redaction, harness artifact coverage, residual synthesis coverage,
-and formal metric coverage.
+calibration, multi-path coverage, daemon gated-apply behavior, recursive
+closure integrity, manifest throughput/redaction, harness artifact coverage,
+residual synthesis coverage, and formal metric coverage.
 
 ```bash
 python3 -m assumption_os.performance_validation \
@@ -458,12 +473,12 @@ python3 -m assumption_os.performance_validation \
   --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md"
 ```
 
-The expanded performance validation passes all eight sections. The initial run found
+The expanded performance validation passes all nine sections. The initial run found
 one real issue: post-acceptance world-model probabilities stayed too high after
 rejected evidence, with Brier score 0.2767. The calibrated version now scores
 Brier 0.0081 on the expanded 2 accepted / 14 rejected labeled set, while
 preserving pre-acceptance ranking (`AUC=1.0`). The calibration payload also
-reports leave-one-out Brier 0.0064 versus raw 0.5316. Manifest validation now
+reports leave-one-out Brier 0.0090 versus raw 0.2182. Manifest validation now
 parses 12 real events from existing run/judge logs in addition to synthetic
 redaction probes. Those 12 real events are also persisted through
 `real_log_manifest_ingest_20260601` as observed trials in the graph. Harness
@@ -472,7 +487,9 @@ backfilled the 10 previously uncovered judgment/meta events, leaving full
 artifact-file coverage after writeback. The unified verifier stack validates
 33 proposals with 2 accepted-for-apply and 14 rejected verdicts, and its
 POPPER-style falsification protocols now cover 27 candidate proposals with 135
-planned/passed/failed experiment records. Full report:
+planned/passed/failed experiment records. Recursive audit validates both dry
+frontier and accepted-return cases with closure score 1.0 and no critical or
+warning issues. Full report:
 `phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md`.
 
 `assumption_os.failure_hypotheses` converts loss rows into candidate assumptions

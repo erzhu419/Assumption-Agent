@@ -10,6 +10,7 @@ Overall: PASS
 | trajectory_search | PASS | multi_path=0.8, hit=1.0 |
 | verifier_stack | PASS | accepted=2, rejected=14, protocols=27/33 |
 | recursive_daemon | PASS | applied=2/2 |
+| recursive_audit | PASS | score=1.0, issues=0/0 |
 | manifest_logger | PASS | events=112, real_logs=12, leak=False |
 | harness_observer | PASS | artifacts=4, backfill=0/19, covered=True |
 | residual_clusterer | PASS | clusters=6, proposals=2 |
@@ -63,6 +64,16 @@ Overall: PASS
 - `accepted_apply_count`: 2
 - `results`: [{"accepted_counts": {"accept": 1}, "applied_candidate_node_ids": ["cand_e61e596b7f98"], "applied_nodes_present": true, "case": "ms_bridge", "dry_applied_count": 0, "dry_mutated": false, "manifest_count": 2}, {"accepted_counts": {"accept": 1}, "applied_candidate_node_ids": ["cand_50e44c655f61"], "applied_nodes_present": true, "case": "se_hard_policy", "dry_applied_count": 0, "dry_mutated": false, "manifest_count": 2}]
 
+### recursive_audit
+
+- `case_count`: 2
+- `frame_count`: 12
+- `actionable_count`: 5
+- `critical_issue_count`: 0
+- `warning_issue_count`: 0
+- `min_closure_score`: 1.0
+- `case_summaries`: [{"actionable_count": 4, "closure_score": 1.0, "eval_id": "perf_recursive_audit_dry", "frame_count": 9, "issue_counts": {}, "pass": true}, {"actionable_count": 1, "closure_score": 1.0, "eval_id": "perf_recursive_audit_accepted", "frame_count": 3, "issue_counts": {}, "pass": true}]
+
 ### manifest_logger
 
 - `event_count`: 112
@@ -71,7 +82,7 @@ Overall: PASS
 - `real_log_paths`: ["phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log", "phase four/assumption_graph/recursive_scoped_ablation_run_gpt55_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt54mini_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt55_21_50.log", "phase six/autonomous/exp80_run.log"]
 - `written_trials`: 112
 - `secret_leak_detected`: false
-- `throughput_events_per_sec`: 1265.54
+- `throughput_events_per_sec`: 2222.22
 - `event_counts`: {"judge_call": 28, "llm_call": 21, "retrieval": 20, "simulator_rollout": 20, "tool_use": 23}
 
 ### harness_observer

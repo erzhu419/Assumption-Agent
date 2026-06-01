@@ -10,6 +10,7 @@ This runner evaluates the reconstruction mechanisms added after reconstruction:
 6. finite formal-mapping information geometry
 7. harness artifact observer coverage
 8. unified verifier stack
+9. recursive runner closure audit
 
 The validation uses existing real artifacts where available and deterministic
 positive controls where the mechanism needs a safe graph-mutation sandbox.
@@ -31,8 +32,10 @@ from .formal_mapping import build_categorical_info_geometry_payload, build_forma
 from .graph_memory import JsonlGraphStore
 from .harness_observer import build_harness_observer_payload
 from .manifest_logger import build_component_manifest_payload, events_from_run_logs
+from .recursive_audit import build_recursive_audit_payload
 from .recursive_daemon import build_recursive_daemon_payload
 from .recursive_executor import JudgmentSet
+from .recursive_runner import build_recursive_assumption_run
 from .residual_clusterer import build_residual_cluster_payload
 from .trajectory_search import build_trajectory_search_payload
 from .verifier_stack import build_verifier_stack_payload
@@ -67,6 +70,10 @@ def build_performance_validation_payload(
     timings["recursive_daemon_sec"] = _elapsed(start)
 
     start = time.perf_counter()
+    recursive_audit = _validate_recursive_audit(root=root, graph_dir=graph_dir)
+    timings["recursive_audit_sec"] = _elapsed(start)
+
+    start = time.perf_counter()
     manifests = _validate_manifest_logger(root=root)
     timings["manifest_logger_sec"] = _elapsed(start)
 
@@ -87,6 +94,7 @@ def build_performance_validation_payload(
         "trajectory_search": trajectory,
         "verifier_stack": verifier,
         "recursive_daemon": daemon,
+        "recursive_audit": recursive_audit,
         "manifest_logger": manifests,
         "harness_observer": harness,
         "residual_clusterer": residuals,
@@ -421,6 +429,67 @@ def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
     }
 
 
+def _validate_recursive_audit(*, root: Path, graph_dir: Path) -> dict:
+    artifact_dir = root / DEFAULT_ARTIFACT_DIR
+    cycle = _load_json(artifact_dir / "evolution_cycle_dryrun_phase2_v20_gpt55_21_50.json")
+    positive = _load_json(artifact_dir / "recursive_positive_ms_bridge_evolution.json")
+    positive_acceptance = _load_json(artifact_dir / "recursive_positive_ms_bridge_acceptance.json")
+    dry_payload = build_recursive_assumption_run(
+        graph_dir=graph_dir,
+        problem="Audit dry recursive graph self-evolution frontier.",
+        goal="Verify that open hypothesis frames expose child evidence gaps.",
+        eval_id="perf_recursive_audit_dry",
+        problem_id="perf_recursive_audit_dry",
+        evolution_payload=cycle,
+        max_children=4,
+        max_depth=3,
+    )
+    accepted_payload = build_recursive_assumption_run(
+        graph_dir=graph_dir,
+        problem="Audit accepted recursive graph self-evolution frontier.",
+        goal="Verify that accepted child evidence returns a parent update.",
+        eval_id="perf_recursive_audit_accepted",
+        problem_id="perf_recursive_audit_accepted",
+        evolution_payload=positive,
+        acceptance_payload=positive_acceptance,
+        max_children=2,
+        max_depth=3,
+    )
+    audits = [
+        build_recursive_audit_payload(
+            recursive_payload=dry_payload,
+            eval_id="perf_recursive_audit_dry",
+        ),
+        build_recursive_audit_payload(
+            recursive_payload=accepted_payload,
+            eval_id="perf_recursive_audit_accepted",
+        ),
+    ]
+    critical = sum(audit.get("issue_counts", {}).get("critical", 0) for audit in audits)
+    warning = sum(audit.get("issue_counts", {}).get("warning", 0) for audit in audits)
+    min_score = min(audit["closure_score"] for audit in audits)
+    return {
+        "pass": all(audit["pass"] for audit in audits) and critical == 0,
+        "case_count": len(audits),
+        "frame_count": sum(audit["frame_count"] for audit in audits),
+        "actionable_count": sum(audit["actionable_count"] for audit in audits),
+        "critical_issue_count": critical,
+        "warning_issue_count": warning,
+        "min_closure_score": min_score,
+        "case_summaries": [
+            {
+                "eval_id": audit["eval_id"],
+                "pass": audit["pass"],
+                "frame_count": audit["frame_count"],
+                "actionable_count": audit["actionable_count"],
+                "closure_score": audit["closure_score"],
+                "issue_counts": audit["issue_counts"],
+            }
+            for audit in audits
+        ],
+    }
+
+
 def _validate_manifest_logger(*, root: Path) -> dict:
     events = [
         {
@@ -750,6 +819,8 @@ def _key_metric(name: str, section: dict) -> str:
         )
     if name == "recursive_daemon":
         return f"applied={section['accepted_apply_count']}/{section['case_count']}"
+    if name == "recursive_audit":
+        return f"score={section['min_closure_score']}, issues={section['critical_issue_count']}/{section['warning_issue_count']}"
     if name == "manifest_logger":
         return f"events={section['event_count']}, real_logs={section['real_log_event_count']}, leak={section['secret_leak_detected']}"
     if name == "harness_observer":

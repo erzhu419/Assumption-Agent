@@ -54,6 +54,8 @@ Current gaps being addressed:
 - 2026-06-01: Persisted `verifier_stack_reconstruction_gap_20260601_expanded.json`: 33 proposals, 2 accepted-for-apply, 14 rejected, 6 needing preflight repair, 11 collect-more-evidence.
 - 2026-06-01: Extended `assumption_os.falsification` from ordered checks into POPPER-style experiment protocols. Each candidate now gets explicit route-power, trigger-benefit, control-harm, placebo-context, and fresh cross-judge falsifiers with stop/pass/fail rules and Type-I-control notes.
 - 2026-06-01: Regenerated the unified verifier artifact with 135 falsification experiment records across 27 candidate proposals.
+- 2026-06-01: Added `assumption_os.recursive_audit` to verify recursive runner closure: parent/child consistency, argument contracts, return-update contracts, and actionable frontier integrity.
+- 2026-06-01: Persisted `recursive_audit_reconstruction_gap_20260601_expanded.json`: 2 cases, 12 frames, 5 actionable frontier items, min closure score 1.0, 0 critical issues, 0 warnings.
 
 ## Closure Notes
 
@@ -84,7 +86,8 @@ Results:
 - Manifest logger: 112 events, including 12 parsed real run/judge-log events, no secret leak; the 12 real events are persisted in `trials.jsonl` via `real_log_manifest_ingest_20260601`.
 - Harness observer: 4 artifact files, 19 discovered events, 10 newly backfilled events, 9 already-covered events skipped, full artifact-file coverage after writeback, no secret leak; persisted via `harness_observer_backfill_20260601`.
 - Verifier stack: 33 proposals, 2 accepted-for-gated-apply, 14 rejected, 6 preflight-repair, 11 collect-more-evidence; V4 acceptance stages show 2 pass / 14 fail / 17 missing. The falsification protocol layer adds 135 experiment records across 27 candidate proposals; accepted protocol checks and rejected protocol checks both pass.
-- World model: 16 matched labels from 2 accepted / 14 rejected proposal outcomes; raw pre-acceptance Brier 0.5316, trained calibration Brier 0.0060, leave-one-out Brier 0.0064, post-acceptance Brier 0.0081.
+- Recursive audit: dry frontier plus accepted-return cases pass with 12 total frames, 5 actionable frontier items, min closure score 1.0, 0 critical issues, and 0 warnings.
+- World model: 16 matched labels from 2 accepted / 14 rejected proposal outcomes; raw pre-acceptance Brier 0.2182, trained calibration Brier 0.0085, leave-one-out Brier 0.0090, post-acceptance Brier 0.0081.
 - Trajectory search: 10 frontier actions, 26 trajectories, multi-path rate 0.8, top-path label hit rate 1.0.
 - Recursive daemon: 2 positive-control accepted candidates applied in a temp graph, dry-run applied 0, gated apply applied 2, manifests written.
 - Residual clusterer: 109 residual records, 7 clusters, 3 synthesized candidate proposals with validation plans.
