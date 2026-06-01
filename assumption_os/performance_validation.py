@@ -1,6 +1,6 @@
 """Performance validation for reconstruction gap closures.
 
-This runner evaluates the six mechanisms added after reconstruction:
+This runner evaluates the reconstruction mechanisms added after reconstruction:
 
 1. component manifest logging
 2. cheap world model / simulator
@@ -8,6 +8,7 @@ This runner evaluates the six mechanisms added after reconstruction:
 4. recursive daemon execute/read/resume loop
 5. residual clustering -> hypothesis synthesis
 6. finite formal-mapping information geometry
+7. harness artifact observer coverage
 
 The validation uses existing real artifacts where available and deterministic
 positive controls where the mechanism needs a safe graph-mutation sandbox.
@@ -26,6 +27,7 @@ from typing import Any
 
 from .formal_mapping import build_categorical_info_geometry_payload, build_formal_mapping_payload
 from .graph_memory import JsonlGraphStore
+from .harness_observer import build_harness_observer_payload
 from .manifest_logger import build_component_manifest_payload, events_from_run_logs
 from .recursive_daemon import build_recursive_daemon_payload
 from .recursive_executor import JudgmentSet
@@ -62,6 +64,10 @@ def build_performance_validation_payload(
     timings["manifest_logger_sec"] = _elapsed(start)
 
     start = time.perf_counter()
+    harness = _validate_harness_observer(root=root, graph_dir=graph_dir)
+    timings["harness_observer_sec"] = _elapsed(start)
+
+    start = time.perf_counter()
     residuals = _validate_residual_clusterer(graph_dir=graph_dir)
     timings["residual_clusterer_sec"] = _elapsed(start)
 
@@ -74,6 +80,7 @@ def build_performance_validation_payload(
         "trajectory_search": trajectory,
         "recursive_daemon": daemon,
         "manifest_logger": manifests,
+        "harness_observer": harness,
         "residual_clusterer": residuals,
         "formal_metrics": formal,
     }
@@ -366,6 +373,52 @@ def _validate_manifest_logger(*, root: Path) -> dict:
     }
 
 
+def _validate_harness_observer(*, root: Path, graph_dir: Path) -> dict:
+    artifact_paths = [
+        root / "phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_phase2_v20_ms_bridge_gpt55_21_50.json",
+        root / "phase two/analysis/cache/answers/phase2_v20_ms_bridge_gpt55_21_50_meta.json",
+        root / "phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log",
+        root / "phase six/autonomous/exp80_run.log",
+    ]
+    existing = [path for path in artifact_paths if path.exists()]
+    with tempfile.TemporaryDirectory() as td:
+        temp_graph = Path(td) / "graph"
+        _copy_graph_store(graph_dir, temp_graph)
+        payload = build_harness_observer_payload(
+            root=root,
+            graph_dir=temp_graph,
+            eval_id="perf_harness_observer",
+            artifact_paths=existing,
+            max_events_per_file=12,
+            writeback=True,
+        )
+    coverage = payload["artifact_coverage"]
+    leak = bool(payload.get("secret_leak_detected"))
+    passed = (
+        len(existing) >= 3
+        and payload["discovered_event_count"] >= 10
+        and payload["backfilled_event_count"] + payload["skipped_covered_event_count"] == payload["discovered_event_count"]
+        and coverage["full_coverage_after_writeback"]
+        and coverage["post_covered_file_count"] == coverage["event_artifact_file_count"]
+        and not leak
+    )
+    return {
+        "pass": passed,
+        "artifact_file_count": coverage["artifact_file_count"],
+        "discovered_event_count": payload["discovered_event_count"],
+        "backfilled_event_count": payload["backfilled_event_count"],
+        "skipped_covered_event_count": payload["skipped_covered_event_count"],
+        "event_counts": payload["event_counts"],
+        "discovered_event_counts": payload["discovered_event_counts"],
+        "artifact_kind_counts": payload["artifact_kind_counts"],
+        "post_covered_file_count": coverage["post_covered_file_count"],
+        "uncovered_after_writeback": coverage["uncovered_after_writeback"],
+        "full_coverage_after_writeback": coverage["full_coverage_after_writeback"],
+        "secret_leak_detected": leak,
+        "artifact_paths": coverage["artifact_paths"],
+    }
+
+
 def _validate_residual_clusterer(*, graph_dir: Path) -> dict:
     payload = build_residual_cluster_payload(
         store=JsonlGraphStore(graph_dir),
@@ -583,6 +636,8 @@ def _key_metric(name: str, section: dict) -> str:
         return f"applied={section['accepted_apply_count']}/{section['case_count']}"
     if name == "manifest_logger":
         return f"events={section['event_count']}, real_logs={section['real_log_event_count']}, leak={section['secret_leak_detected']}"
+    if name == "harness_observer":
+        return f"artifacts={section['artifact_file_count']}, backfill={section['backfilled_event_count']}/{section['discovered_event_count']}, covered={section['full_coverage_after_writeback']}"
     if name == "residual_clusterer":
         return f"clusters={section['cluster_count']}, proposals={section['proposal_count']}"
     if name == "formal_metrics":

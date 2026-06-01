@@ -33,6 +33,8 @@ an Assumption Graph.
   argument maps, return updates, and optional manifest writeback.
 - `manifest_logger.py` records LLM calls, retrievals, judge calls, tool-use,
   simulator rollouts, and daemon iterations as redacted `TrialManifest`s.
+- `harness_observer.py` audits existing judge/meta/log artifacts and backfills
+  bounded manifest coverage for files that were produced before direct logging.
 - `world_model.py` is the cheap verifier: it predicts candidate acceptance
   probability, regression risk, verifier tier, and next action before expensive
   ablations.
@@ -408,6 +410,23 @@ python3 -m assumption_os.manifest_logger \
   --writeback
 ```
 
+`assumption_os.harness_observer` is the artifact coverage bridge. It converts
+existing judgment JSON, answer meta JSON, and run logs into bounded
+`TrialManifest` events, then reports which artifact files are covered after
+writeback.
+
+```bash
+python3 -m assumption_os.harness_observer \
+  --graph-dir "phase four/assumption_graph" \
+  --artifacts "phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_phase2_v20_ms_bridge_gpt55_21_50.json" \
+              "phase two/analysis/cache/answers/phase2_v20_ms_bridge_gpt55_21_50_meta.json" \
+              "phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log" \
+              "phase six/autonomous/exp80_run.log" \
+  --eval-id harness_observer_backfill_20260601 \
+  --writeback \
+  --summary-out "phase four/assumption_graph/harness_observer_backfill_20260601.json"
+```
+
 `assumption_os.residual_clusterer` closes the systematic-residual synthesis
 loop. It clusters residual manifests by residual type and signature, then emits
 candidate method hypotheses with heldout trigger/control validation plans. A
@@ -423,10 +442,11 @@ python3 -m assumption_os.residual_clusterer \
 ```
 
 `assumption_os.performance_validation` runs the non-smoke validation suite for
-the six reconstruction-gap mechanisms. It uses real candidate acceptance
+the reconstruction-gap mechanisms. It uses real candidate acceptance
 payloads and positive controls where available, then reports ranking quality,
 calibration, multi-path coverage, daemon gated-apply behavior, manifest
-throughput/redaction, residual synthesis coverage, and formal metric coverage.
+throughput/redaction, harness artifact coverage, residual synthesis coverage,
+and formal metric coverage.
 
 ```bash
 python3 -m assumption_os.performance_validation \
@@ -436,7 +456,7 @@ python3 -m assumption_os.performance_validation \
   --report-out "phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md"
 ```
 
-The first performance validation passes all six sections. The initial run found
+The expanded performance validation passes all seven sections. The initial run found
 one real issue: post-acceptance world-model probabilities stayed too high after
 rejected evidence, with Brier score 0.2767. The calibrated version now scores
 Brier 0.0081 on the expanded 2 accepted / 14 rejected labeled set, while
@@ -444,7 +464,10 @@ preserving pre-acceptance ranking (`AUC=1.0`). The calibration payload also
 reports leave-one-out Brier 0.0064 versus raw 0.5316. Manifest validation now
 parses 12 real events from existing run/judge logs in addition to synthetic
 redaction probes. Those 12 real events are also persisted through
-`real_log_manifest_ingest_20260601` as observed trials in the graph. Full report:
+`real_log_manifest_ingest_20260601` as observed trials in the graph. Harness
+observer discovers 19 real artifact events from judgment/meta/log files and
+backfilled the 10 previously uncovered judgment/meta events, leaving full
+artifact-file coverage after writeback. Full report:
 `phase four/assumption_graph/reconstruction_gap_perf_20260601_expanded.md`.
 
 `assumption_os.failure_hypotheses` converts loss rows into candidate assumptions

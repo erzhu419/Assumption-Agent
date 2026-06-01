@@ -30,6 +30,7 @@ from assumption_os.formal_mapping import (
     search_formal_mappings,
 )
 from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
+from assumption_os.harness_observer import build_harness_observer_payload, events_from_harness_artifacts
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
 from assumption_os.manifest_logger import build_component_manifest_payload, events_from_run_logs
 from assumption_os.math_science_policy import route_math_science_problem
@@ -826,6 +827,55 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(events[0]["event_type"], "judge_call")
             self.assertEqual(events[0]["artifacts"]["candidate_variant"], "proposal_a")
             self.assertEqual(events[0]["artifacts"]["returncode"], 0)
+
+    def test_harness_observer_backfills_artifact_manifest_coverage(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            graph_dir = root / "graph"
+            judgments = root / "phase two/analysis/cache/judgments"
+            answers = root / "phase two/analysis/cache/answers"
+            logs = root / "phase four/assumption_graph"
+            judgments.mkdir(parents=True)
+            answers.mkdir(parents=True)
+            logs.mkdir(parents=True)
+            judgment_path = judgments / "unit_judgments.json"
+            judgment_path.write_text(json.dumps({
+                "p1": {"winner": "candidate", "score_a": 8, "score_b": 7, "reasoning": "candidate wins"},
+                "p2": {"winner": "baseline", "score_a": 6, "score_b": 8, "reasoning": "baseline wins"},
+            }), encoding="utf-8")
+            meta_path = answers / "unit_meta.json"
+            meta_path.write_text(json.dumps({
+                "p1": {"frame": "hybrid", "bypass_route": "unit_route"},
+                "p2": {"frame": "object", "bypass_route": "unit_route"},
+            }), encoding="utf-8")
+            log_path = logs / "unit.log"
+            log_path.write_text(
+                "\n".join([
+                    "=== JUDGE prop_a proposal_a vs baseline rows=2 ===",
+                    "LLM provider: gemini, model: gpt-5.5",
+                    "=== DONE JUDGE prop_a returncode=0 elapsed=1.2s ===",
+                ]),
+                encoding="utf-8",
+            )
+
+            events = events_from_harness_artifacts(
+                root=root,
+                artifact_paths=[judgment_path, meta_path, log_path],
+                max_events_per_file=5,
+            )
+            self.assertEqual(len(events), 4)
+            payload = build_harness_observer_payload(
+                root=root,
+                graph_dir=graph_dir,
+                eval_id="unit_harness_observer",
+                artifact_paths=[judgment_path, meta_path, log_path],
+                max_events_per_file=5,
+                writeback=True,
+            )
+            self.assertTrue(payload["artifact_coverage"]["full_coverage_after_writeback"])
+            self.assertEqual(payload["event_counts"]["judge_call"], 3)
+            self.assertEqual(payload["event_counts"]["llm_call"], 1)
+            self.assertEqual(len(JsonlGraphStore(graph_dir).trials), 4)
 
     def test_world_model_scores_candidates_and_logs_simulator_manifests(self):
         with tempfile.TemporaryDirectory() as td:

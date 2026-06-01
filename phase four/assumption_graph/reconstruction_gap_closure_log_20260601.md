@@ -36,6 +36,7 @@ Current gaps being addressed:
 - 2026-06-01: Confirmed existing recursive runner/executor already supports planned frontier commands and gated acceptance resume; daemon can build on this instead of duplicating it.
 - 2026-06-01: Confirmed existing formal mapping layer has role audit/search but no metric kernel payload yet.
 - 2026-06-01: Added `assumption_os.manifest_logger` for redacted LLM/retrieval/judge/tool/simulator manifests.
+- 2026-06-01: Added `assumption_os.harness_observer` to audit existing judge/meta/log artifacts and backfill manifest coverage for pre-existing harness files.
 - 2026-06-01: Added `assumption_os.world_model` and integrated it into `evolution_cycle` as the cheap verifier/simulator stage.
 - 2026-06-01: Added `assumption_os.trajectory_search` for multi-path promote/repair/evidence/reject futures over recursive frontier actions.
 - 2026-06-01: Added `assumption_os.recursive_daemon` for bounded command planning/execution, judgment ingestion, recursive resume, manifest logging, and gated apply.
@@ -47,6 +48,8 @@ Current gaps being addressed:
 - 2026-06-01: Expanded validation coverage by adding the proposal-screening payload/preflight to the labeled set, training an explicit world-model calibration payload, adding leave-one-out calibration metrics, and parsing existing run/judge logs into component manifests.
 - 2026-06-01: Promoted world-model calibration from report-only output into reusable artifacts: `world_model` can now train/save calibration from raw pre-acceptance predictions, and `evolution_cycle` can load or inline-train that calibration before screening candidate trajectories.
 - 2026-06-01: Persisted the expanded 16-label calibration artifacts: `world_model_raw_reconstruction_gap_20260601_expanded.json` and `world_model_calibration_reconstruction_gap_20260601_expanded.json`.
+- 2026-06-01: Harness observer discovered 19 real artifact events from one judgment JSON, one answer-meta JSON, and two run logs; it backfilled the 10 previously uncovered judgment/meta events into `trials.jsonl` and skipped 9 already covered log events.
+- 2026-06-01: Current verification command: `python3 -m unittest tests.test_assumption_os` -> 39 tests OK.
 
 ## Closure Notes
 
@@ -54,6 +57,7 @@ Current gaps being addressed:
 - Multi-path search is active as a ranked trajectory planner; it does not silently choose and mutate the graph.
 - The daemon can run frontier commands with `--execute`, but defaults to dry-run and requires `--apply-accepted` for graph mutation.
 - Component manifests now cover arbitrary LLM/retrieval/judge/tool events through a shared logger; call sites can adopt it incrementally.
+- Harness observer now covers pre-existing judgment/meta/log artifacts through bounded backfill, reducing black-box cache gaps while avoiding full prompt/answer import.
 - Residual synthesis supports an injectable LLM synthesizer in code and a deterministic CLI path for reproducible tests.
 - Formal mapping now has a real finite metric engine, scoped to finite stochastic kernels over typed formal roles rather than unrestricted theorem proving.
 
@@ -74,8 +78,9 @@ Results:
 
 - Overall: PASS.
 - Manifest logger: 112 events, including 12 parsed real run/judge-log events, no secret leak; the 12 real events are persisted in `trials.jsonl` via `real_log_manifest_ingest_20260601`.
+- Harness observer: 4 artifact files, 19 discovered events, 10 newly backfilled events, 9 already-covered events skipped, full artifact-file coverage after writeback, no secret leak; persisted via `harness_observer_backfill_20260601`.
 - World model: 16 matched labels from 2 accepted / 14 rejected proposal outcomes; raw pre-acceptance Brier 0.5316, trained calibration Brier 0.0060, leave-one-out Brier 0.0064, post-acceptance Brier 0.0081.
 - Trajectory search: 10 frontier actions, 26 trajectories, multi-path rate 0.8, top-path label hit rate 1.0.
 - Recursive daemon: 2 positive-control accepted candidates applied in a temp graph, dry-run applied 0, gated apply applied 2, manifests written.
-- Residual clusterer: 109 residual records, 5 clusters, 2 synthesized candidate proposals with validation plans.
+- Residual clusterer: 109 residual records, 7 clusters, 3 synthesized candidate proposals with validation plans.
 - Formal metrics: 9 complete mappings, 9/9 finite kernels same-shape, 0 warnings.

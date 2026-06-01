@@ -10,7 +10,8 @@ Overall: PASS
 | trajectory_search | PASS | multi_path=0.8, hit=1.0 |
 | recursive_daemon | PASS | applied=2/2 |
 | manifest_logger | PASS | events=112, real_logs=12, leak=False |
-| residual_clusterer | PASS | clusters=5, proposals=2 |
+| harness_observer | PASS | artifacts=4, backfill=0/19, covered=True |
+| residual_clusterer | PASS | clusters=7, proposals=3 |
 | formal_metrics | PASS | mappings=9, warnings=0 |
 
 ## Details
@@ -53,16 +54,31 @@ Overall: PASS
 - `real_log_paths`: ["phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log", "phase four/assumption_graph/recursive_scoped_ablation_run_gpt55_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt54mini_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt55_21_50.log", "phase six/autonomous/exp80_run.log"]
 - `written_trials`: 112
 - `secret_leak_detected`: false
-- `throughput_events_per_sec`: 1043.8
+- `throughput_events_per_sec`: 1551.25
 - `event_counts`: {"judge_call": 28, "llm_call": 21, "retrieval": 20, "simulator_rollout": 20, "tool_use": 23}
+
+### harness_observer
+
+- `artifact_file_count`: 4
+- `discovered_event_count`: 19
+- `backfilled_event_count`: 0
+- `skipped_covered_event_count`: 19
+- `event_counts`: {}
+- `discovered_event_counts`: {"judge_call": 17, "llm_call": 2}
+- `artifact_kind_counts`: {"answer_meta_json": 1, "judgment_json": 9, "run_log": 9}
+- `post_covered_file_count`: 4
+- `uncovered_after_writeback`: []
+- `full_coverage_after_writeback`: true
+- `secret_leak_detected`: false
+- `artifact_paths`: ["phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_phase2_v20_ms_bridge_gpt55_21_50.json", "phase two/analysis/cache/answers/phase2_v20_ms_bridge_gpt55_21_50_meta.json", "phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log", "phase six/autonomous/exp80_run.log"]
 
 ### residual_clusterer
 
 - `record_count`: 109
-- `cluster_count`: 5
-- `proposal_count`: 2
+- `cluster_count`: 7
+- `proposal_count`: 3
 - `residual_type_counts`: {"memory_defect": 8, "optimization": 40, "unknown": 61}
-- `proposal_parent_ids`: ["strategy_S08", "strategy_S21"]
+- `proposal_parent_ids`: ["strategy_S08", "strategy_S21", "strategy_S14"]
 - `validation_plans_complete`: true
 
 ### formal_metrics
