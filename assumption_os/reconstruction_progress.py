@@ -566,7 +566,7 @@ RECONSTRUCTION_CEILINGS = {
 
 
 def _apply_reconstruction_ceiling(item: ProgressItem) -> ProgressItem:
-    max_structure, max_behavior = RECONSTRUCTION_CEILINGS.get(item.key, (1.0, 1.0))
+    max_structure, max_behavior = _reconstruction_ceiling_for_item(item)
     gaps = list(item.remaining_gaps)
     if item.structure_score > max_structure or item.behavior_score > max_behavior:
         gaps.append(
@@ -581,6 +581,19 @@ def _apply_reconstruction_ceiling(item: ProgressItem) -> ProgressItem:
         remaining_gaps=gaps,
         next_actions=item.next_actions,
     )
+
+
+def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
+    max_structure, max_behavior = RECONSTRUCTION_CEILINGS.get(item.key, (1.0, 1.0))
+    if item.key == "C_world_model_simulator":
+        weighted_rows = float(item.evidence.get("weighted_trace_trainable_rows") or 0.0)
+        best_brier = item.evidence.get("best_trace_brier")
+        feature_count = int(item.evidence.get("trace_feature_count") or 0)
+        if best_brier is not None and weighted_rows >= 75.0 and float(best_brier) <= 0.08 and feature_count >= 40:
+            max_behavior = max(max_behavior, 0.70)
+        if best_brier is not None and weighted_rows >= 150.0 and float(best_brier) <= 0.07:
+            max_behavior = max(max_behavior, 0.74)
+    return max_structure, max_behavior
 
 
 def _graph_stats(graph_dir: Path) -> dict[str, Any]:

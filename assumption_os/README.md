@@ -602,20 +602,21 @@ trace validation now proves live runner events can be emitted as redacted JSONL
 and TrialManifests before any post-hoc log parsing. Trace dataset validation
 now proves first-party/cache trace events can be joined to judged outcomes and
 residual labels for world-model training. Trace outcome validation now uses the
-real 9-row math/science trace dataset to calibrate route/component win
-probabilities (`Brier=0.1605`) and emits repair/reinforce policy updates.
-Trace policy proposal validation converts those updates into 3 verifier-ready
+expanded 141-row trainable trace collection to calibrate route/component and
+feature-blend win probabilities (`feature weighted Brier=0.0711`) and emits
+repair/reinforce policy updates. Trace policy proposal validation converts
+those updates into 5 verifier-ready
 `assumption_revision` proposals under the `domain_retrieval_policy` surface.
-Trace policy preflight then verifies all 3 proposals are ready for fresh
+Trace policy preflight then verifies all 5 proposals are ready for fresh
 ablation, with zero missed trigger rows and zero outside-active rows.
 Trace dataset validation now aggregates the first-party 9-row math/science
-trace dataset with two artifact-replay ms100 judgment slices, yielding 69 rows,
-67 trainable outcome rows, and a conservative weighted trainable count of 38.0
-without secrets.
+trace dataset, two artifact-replay ms100 judgment slices, and eight recursive
+proposal ablation slices, yielding 161 rows, 141 trainable outcome rows, and a
+conservative weighted trainable count of 75.0 without secrets.
 Reconstruction progress auditing now compares the current implementation
-against `reconstruction/md/reconstruction.md` and reports structure 82.1%,
-behavior 72.0%, weighted 76.8%; the lowest behavior items are world-model
-distillation, formal alignment, and broader hypothesis generation.
+against `reconstruction/md/reconstruction.md` and reports structure 83.2%,
+behavior 74.2%, weighted 78.3%; the lowest behavior items are formal
+alignment, world-model distillation, and broader hypothesis generation.
 Harness
 observer discovers 19 real artifact events from judgment/meta/log files and
 keeps full artifact-file coverage after the original backfill; current reruns

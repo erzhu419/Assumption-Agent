@@ -193,12 +193,15 @@ def _predict_feature_leave_one_out(*, row: dict[str, Any], train_rows: list[dict
             continue
         weighted_wins = sum(_row_weight(other) for other in bucket if other.get("outcome") == "win")
         probability = (weighted_wins + 1.0) / (support_weight + 2.0)
+        information_shift = abs(probability - global_probability)
+        blend_weight = min(8.0, support_weight) * max(0.05, 8.0 * information_shift * information_shift)
         terms.append({
             "feature": feature,
             "support_count": len(bucket),
             "support_weight": round(support_weight, 4),
             "weighted_win_count": round(weighted_wins, 4),
-            "blend_weight": round(min(4.0, support_weight), 4),
+            "information_shift": round(information_shift, 4),
+            "blend_weight": round(blend_weight, 4),
             "win_probability": round(probability, 4),
         })
     total_blend_weight = sum(float(term["blend_weight"]) for term in terms)
@@ -424,7 +427,16 @@ def _trace_source_weighted_counts(rows: list[dict[str, Any]]) -> dict[str, float
 def _trace_feature_keys(row: dict[str, Any]) -> set[str]:
     features = row.get("features") or {}
     out: set[str] = set()
-    for key in ("domain", "difficulty", "frame", "bypass_route", "residual_type"):
+    for key in (
+        "domain",
+        "difficulty",
+        "frame",
+        "bypass_route",
+        "residual_type",
+        "intervention_variant",
+        "baseline_variant",
+        "judgment_pair",
+    ):
         value = row.get(key)
         if value is None:
             value = features.get(key)

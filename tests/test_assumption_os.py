@@ -997,6 +997,9 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(payload["rows"][0]["activated_assumption_ids"], ["strategy_S01"])
             self.assertTrue(payload["rows"][0]["gold_hit"])
             self.assertEqual(payload["rows"][0]["score_delta"], 2.0)
+            self.assertEqual(payload["rows"][0]["intervention_variant"], "candidate")
+            self.assertEqual(payload["rows"][0]["baseline_variant"], "baseline")
+            self.assertEqual(payload["rows"][0]["judgment_pair"], "candidate_vs_baseline")
             self.assertFalse(payload["secret_leak_detected"])
             self.assertNotIn("unit-secret", json.dumps(payload))
             self.assertNotIn("trace-secret", json.dumps(payload))
@@ -1066,6 +1069,9 @@ class AssumptionOSTest(unittest.TestCase):
                 "problem_id": "p1",
                 "domain": "science",
                 "bypass_route": "science_mechanism",
+                "intervention_variant": "candidate_a",
+                "baseline_variant": "baseline",
+                "judgment_pair": "candidate_a_vs_baseline",
                 "components": ["phase2_cache_hit"],
                 "outcome": "win",
                 "score_delta": 1.0,
@@ -1077,6 +1083,9 @@ class AssumptionOSTest(unittest.TestCase):
                 "problem_id": "p2",
                 "domain": "science",
                 "bypass_route": "science_mechanism",
+                "intervention_variant": "candidate_a",
+                "baseline_variant": "baseline",
+                "judgment_pair": "candidate_a_vs_baseline",
                 "components": ["phase2_cache_hit"],
                 "outcome": "loss",
                 "score_delta": -1.0,
@@ -1089,6 +1098,9 @@ class AssumptionOSTest(unittest.TestCase):
                 "problem_id": "p3",
                 "domain": "mathematics",
                 "bypass_route": "math_research_bridge",
+                "intervention_variant": "candidate_b",
+                "baseline_variant": "baseline",
+                "judgment_pair": "candidate_b_vs_baseline",
                 "components": ["phase2_cache_hit"],
                 "outcome": "win",
                 "score_delta": 2.0,
@@ -1109,6 +1121,9 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(payload["leave_one_out_metrics"]["weighted_prediction_count"], 3.0)
         self.assertEqual(payload["feature_leave_one_out_metrics"]["prediction_count"], 3)
         self.assertGreater(payload["feature_schema"]["feature_count"], 0)
+        self.assertIn("intervention_variant", payload["feature_schema"]["feature_family_counts"])
+        self.assertIn("baseline_variant", payload["feature_schema"]["feature_family_counts"])
+        self.assertIn("judgment_pair", payload["feature_schema"]["feature_family_counts"])
         self.assertEqual(payload["policy_update_count"], 1)
         self.assertEqual(payload["policy_updates"][0]["decision"], "keep_with_targeted_repair")
         self.assertEqual(payload["route_stats"][0]["weighted_count"], 2.0)
@@ -1665,6 +1680,33 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertTrue(payload["remaining_gaps_ranked"])
             self.assertTrue(payload["next_actions_ranked"])
             self.assertEqual(payload["reconstruction_reference"]["matched_target_count"], 9)
+
+    def test_reconstruction_progress_raises_world_model_ceiling_with_trace_evidence(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            graph_dir = root / "graph"
+            store = JsonlGraphStore(graph_dir)
+            store.upsert_node(AssumptionNode(id="wm", type=AssumptionType.WORLD_MODEL, claim="world model"))
+            store.flush()
+            sections = {
+                "world_model": {"pass": True, "matched_label_count": 50, "post_calibration": {"brier_score": 0.01}},
+                "trace_dataset": {"pass": True, "weighted_trainable_row_count": 75.0},
+                "trace_outcome_model": {
+                    "pass": True,
+                    "weighted_trainable_row_count": 75.0,
+                    "feature_leave_one_out_metrics": {"weighted_brier_score": 0.071},
+                    "feature_schema": {"feature_count": 47},
+                },
+            }
+            payload = build_reconstruction_progress_payload(
+                root=root,
+                performance_payload={"eval_id": "unit_perf", "sections": sections},
+                graph_dir=graph_dir,
+                eval_id="unit_world_model_ceiling",
+            )
+            world = next(row for row in payload["items"] if row["key"] == "C_world_model_simulator")
+            self.assertEqual(world["evidence"]["reconstruction_ceiling"]["behavior"], 0.7)
+            self.assertGreaterEqual(world["behavior_score"], 0.7)
 
     def test_memory_surfaces_write_runtime_mechanisms_to_graph(self):
         with tempfile.TemporaryDirectory() as td:

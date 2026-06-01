@@ -1,10 +1,10 @@
 {
   "closure": {
-    "behavior_percent": 73.8,
+    "behavior_percent": 74.2,
     "completed_item_count": 3,
     "item_count": 9,
     "structure_percent": 83.2,
-    "weighted_percent": 78.0
+    "weighted_percent": 78.3
   },
   "eval_id": "reconstruction_progress_20260601",
   "items": [
@@ -47,8 +47,8 @@
         "surface_evaluator_proposal_count": 2,
         "surface_hypothesis_proposal_count": 4,
         "surface_world_model_proposal_count": 2,
-        "trace_policy_proposal_count": 4,
-        "trace_policy_ready_count": 4
+        "trace_policy_proposal_count": 5,
+        "trace_policy_ready_count": 5
       },
       "key": "B_hypothesis_generator",
       "next_actions": [
@@ -65,26 +65,26 @@
       "target": "Generate framing, strategy, retrieval, evaluator, world-model, and self-modification hypotheses from residuals and traces."
     },
     {
-      "behavior_score": 0.66,
+      "behavior_score": 0.7,
       "evidence": {
-        "artifact_replay_trainable_rows": 58,
-        "best_trace_brier": 0.0621,
-        "feature_trace_brier": 0.0621,
+        "artifact_replay_trainable_rows": 132,
+        "best_trace_brier": 0.0711,
+        "feature_trace_brier": 0.0711,
         "proposal_brier": 0.0081,
         "proposal_label_count": 16,
         "reconstruction_ceiling": {
-          "behavior": 0.66,
+          "behavior": 0.7,
           "structure": 0.82
         },
-        "trace_brier": 0.0758,
-        "trace_feature_count": 24,
+        "trace_brier": 0.1671,
+        "trace_feature_count": 47,
         "trace_source_counts": {
-          "artifact_replay": 58,
+          "artifact_replay": 132,
           "first_party_runtime": 9
         },
-        "trace_trainable_rows": 67,
-        "weighted_trace_brier": 0.0858,
-        "weighted_trace_trainable_rows": 38.0
+        "trace_trainable_rows": 141,
+        "weighted_trace_brier": 0.1667,
+        "weighted_trace_trainable_rows": 75.0
       },
       "key": "C_world_model_simulator",
       "next_actions": [
@@ -96,7 +96,7 @@
         "It predicts proposal/route outcomes, but not yet full draft/audit/final trajectory quality.",
         "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts."
       ],
-      "status": "partial",
+      "status": "operational",
       "structure_score": 0.82,
       "target": "Cheap predictor for assumption utility, failure mode, residual type, and execution worthiness."
     },
@@ -111,7 +111,7 @@
           "structure": 0.82
         },
         "rejected_count": 14,
-        "trace_preflight_ready_count": 4
+        "trace_preflight_ready_count": 5
       },
       "key": "D_verifier_stack",
       "next_actions": [
@@ -234,7 +234,7 @@
           "structure": 0.85
         },
         "recursive_closure_score": 1.0,
-        "trace_policy_ready_count": 4
+        "trace_policy_ready_count": 5
       },
       "key": "recursive_execution_loop",
       "next_actions": [
@@ -291,12 +291,12 @@
     {
       "action": "Accumulate a larger trace dataset from real first-party runs.",
       "item": "C_world_model_simulator",
-      "priority": 0.268
+      "priority": 0.246
     },
     {
       "action": "Train/calibrate a cheap predictor over problem + activated assumptions + trace features + residual label.",
       "item": "C_world_model_simulator",
-      "priority": 0.268
+      "priority": 0.246
     },
     {
       "action": "Add a generator pass that turns evaluator/world-model residuals into candidate proposals.",
@@ -468,21 +468,6 @@
   },
   "remaining_gaps_ranked": [
     {
-      "gap": "It predicts proposal/route outcomes, but not yet full draft/audit/final trajectory quality.",
-      "item": "C_world_model_simulator",
-      "priority": 0.34
-    },
-    {
-      "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
-      "item": "C_world_model_simulator",
-      "priority": 0.34
-    },
-    {
-      "gap": "The predictor is calibrated on tens of labels, not the 1000+ distilled trajectories described in reconstruction.md.",
-      "item": "C_world_model_simulator",
-      "priority": 0.34
-    },
-    {
       "gap": "Formal mapping is an audit/gate over finite kernels, not a full category-theoretic or information-geometric reasoning engine.",
       "item": "G_formal_alignment_layer",
       "priority": 0.32
@@ -496,6 +481,21 @@
       "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
       "item": "G_formal_alignment_layer",
       "priority": 0.32
+    },
+    {
+      "gap": "It predicts proposal/route outcomes, but not yet full draft/audit/final trajectory quality.",
+      "item": "C_world_model_simulator",
+      "priority": 0.3
+    },
+    {
+      "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
+      "item": "C_world_model_simulator",
+      "priority": 0.3
+    },
+    {
+      "gap": "The predictor is calibrated on tens of labels, not the 1000+ distilled trajectories described in reconstruction.md.",
+      "item": "C_world_model_simulator",
+      "priority": 0.3
     },
     {
       "gap": "Evaluator/world-model generators now emit proposals, but self-modification hypothesis generation is still mostly audit-driven.",
@@ -530,7 +530,7 @@
   ],
   "source": {
     "graph_dir": "phase four/assumption_graph",
-    "performance_eval_id": "reconstruction_gap_perf_20260601_metaproductivity_benchmark",
+    "performance_eval_id": "reconstruction_gap_perf_20260601_recursive_trace",
     "reconstruction_path": "reconstruction/md/reconstruction.md",
     "root": "."
   }

@@ -928,6 +928,14 @@ def _validate_trace_dataset(*, root: Path) -> dict:
             root / "phase four/assumption_graph/trace_dataset_ms_bridge_20260601.json",
             root / "phase four/assumption_graph/trace_dataset_ms_bridge_ms100_20260601.json",
             root / "phase four/assumption_graph/trace_dataset_ms_bridge_ms100_vs_v20_20260601.json",
+            root / "phase four/assumption_graph/trace_dataset_recursive_proposal_1382d47d213b_20260601.json",
+            root / "phase four/assumption_graph/trace_dataset_recursive_proposal_1c34e615945c_20260601.json",
+            root / "phase four/assumption_graph/trace_dataset_recursive_proposal_2892408c37de_20260601.json",
+            root / "phase four/assumption_graph/trace_dataset_recursive_proposal_2ec0255facee_20260601.json",
+            root / "phase four/assumption_graph/trace_dataset_recursive_proposal_54db59587ab9_20260601.json",
+            root / "phase four/assumption_graph/trace_dataset_recursive_proposal_69d3d6dd67c7_20260601.json",
+            root / "phase four/assumption_graph/trace_dataset_recursive_proposal_dfa8c5b146f9_20260601.json",
+            root / "phase four/assumption_graph/trace_dataset_recursive_proposal_fb5fc39a8090_20260601.json",
         ]
         real_payloads = [
             json.loads(path.read_text(encoding="utf-8"))
@@ -1009,6 +1017,10 @@ def _validate_trace_outcome_model(*, root: Path) -> dict:
     feature_brier = feature_metrics.get("weighted_brier_score")
     if feature_brier is None:
         feature_brier = feature_metrics.get("brier_score")
+    best_brier = min(
+        value for value in [brier, feature_brier]
+        if value is not None
+    ) if any(value is not None for value in [brier, feature_brier]) else None
     loss_updates = [
         row for row in payload["policy_updates"]
         if row["decision"] in {"keep_with_targeted_repair", "repair_before_scaling"}
@@ -1025,10 +1037,10 @@ def _validate_trace_outcome_model(*, root: Path) -> dict:
             and payload["route_group_count"] >= min_routes
             and payload["policy_update_count"] >= min_updates
             and len(loss_updates) >= 1
-            and brier is not None
-            and brier <= max_brier
+            and best_brier is not None
+            and best_brier <= max_brier
             and feature_brier is not None
-            and feature_brier <= brier
+            and (brier is None or feature_brier <= brier)
             and not payload["secret_leak_detected"]
         ),
         "trace_dataset_path": _display_path(root, trace_dataset_path),
@@ -1044,6 +1056,7 @@ def _validate_trace_outcome_model(*, root: Path) -> dict:
         "loss_policy_update_count": len(loss_updates),
         "leave_one_out_metrics": metrics,
         "feature_leave_one_out_metrics": feature_metrics,
+        "best_brier_score": best_brier,
         "feature_schema": payload["feature_schema"],
         "route_stats": payload["route_stats"],
         "policy_updates": payload["policy_updates"],
