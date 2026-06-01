@@ -14,6 +14,7 @@ Overall: PASS
 | manifest_logger | PASS | events=112, real_logs=12, leak=False |
 | runtime_trace | PASS | events=3, written=3, leak=False |
 | trace_dataset | PASS | rows=2/2, coverage=1.0, leak=False |
+| trace_outcome_model | PASS | rows=9, brier=0.1605, updates=3 |
 | harness_observer | PASS | artifacts=4, backfill=0/19, covered=True |
 | residual_clusterer | PASS | clusters=7, proposals=2 |
 | formal_metrics | PASS | mappings=9, warnings=0 |
@@ -87,7 +88,7 @@ Overall: PASS
 - `real_log_paths`: ["phase four/assumption_graph/recursive_scoped_judge_run_gpt55_21_50.log", "phase four/assumption_graph/recursive_scoped_ablation_run_gpt55_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt54mini_21_50.log", "phase four/assumption_graph/candidate_ablation_run_phase2_v20_gpt55_21_50.log", "phase six/autonomous/exp80_run.log"]
 - `written_trials`: 112
 - `secret_leak_detected`: false
-- `throughput_events_per_sec`: 2007.17
+- `throughput_events_per_sec`: 1818.18
 - `event_counts`: {"judge_call": 28, "llm_call": 21, "retrieval": 20, "simulator_rollout": 20, "tool_use": 23}
 
 ### runtime_trace
@@ -111,6 +112,19 @@ Overall: PASS
 - `outcome_counts`: {"loss": 1, "win": 1}
 - `residual_type_counts`: {"no_residual": 1, "optimization": 1}
 - `event_counts`: {"llm_call": 1, "retrieval": 1, "tool_use": 1}
+- `secret_leak_detected`: false
+
+### trace_outcome_model
+
+- `trainable_row_count`: 9
+- `route_group_count`: 3
+- `component_group_count`: 1
+- `residual_group_count`: 1
+- `policy_update_count`: 3
+- `loss_policy_update_count`: 1
+- `leave_one_out_metrics`: {"accuracy_at_half": 0.8889, "brier_score": 0.1605, "mean_absolute_error": 0.3574, "prediction_count": 9, "prediction_level_counts": {"route_component": 9}}
+- `route_stats`: [{"count": 4, "key": "route=math_research_bridge", "loss_count": 0, "mean_score_delta": 1.25, "problem_ids": ["mathematics_0192", "mathematics_0243", "mathematics_0251", "mathematics_0257"], "residual_type_counts": {"no_residual": 4}, "smoothed_win_probability": 0.8333, "win_count": 4, "win_rate": 1.0}, {"count": 3, "key": "route=science_mechanism", "loss_count": 1, "mean_score_delta": 0.3333, "problem_ids": ["science_0083", "science_0097", "science_0180"], "residual_type_counts": {"no_residual": 2, "optimization": 1}, "smoothed_win_probability": 0.6, "win_count": 2, "win_rate": 0.6667}, {"count": 2, "key": "route=science_decision", "loss_count": 0, "mean_score_delta": 1.0, "problem_ids": ["science_0204", "science_0273"], "residual_type_counts": {"no_residual": 2}, "smoothed_win_probability": 0.75, "win_count": 2, "win_rate": 1.0}]
+- `policy_updates`: [{"decision": "reinforce_route_prior", "expected_effect": "Preserve a route with clean observed wins as a prior for similar cached traces.", "policy_update_id": "trace_policy_93ab2ff1acbe", "residual_groups": [], "residual_type_counts": {"no_residual": 4}, "scope": "route=math_research_bridge", "trigger_problem_ids": ["mathematics_0192", "mathematics_0243", "mathematics_0251", "mathematics_0257"], "verification_plan": ["continue sampling outside controls", "demote if new losses cluster under the same route"]}, {"decision": "keep_with_targeted_repair", "expected_effect": "Reduce route-specific losses while preserving the observed win rate.", "policy_update_id": "trace_policy_a0241c19156c", "residual_groups": [{"bypass_route": "science_mechanism", "components": ["phase2_cache_hit"], "count": 1, "key": "residual=optimization|route=science_mechanism|components=phase2_cache_hit", "problem_ids": ["science_0097"], "residual_previews": ["No graph ids fired, but bypass/cache route science_mechanism lost; optimize the bypass bridge. Judge: A层级清晰，实验条件、因果干预与可证伪预测更完整；B机制细节好但实验展开略少..."], "residual_type": "optimization"}], "residual_type_counts": {"no_residual": 2, "optimization": 1}, "scope": "route=science_mechanism", "trigger_problem_ids": ["science_0083", "science_0097", "science_0180"], "verification_plan": ["rerun heldout trigger rows for the route", "include outside-control rows from other routes", "reject if repair lowers route win rate or increases control losses"]}, {"decision": "reinforce_route_prior", "expected_effect": "Preserve a route with clean observed wins as a prior for similar cached traces.", "policy_update_id": "trace_policy_0294837d133f", "residual_groups": [], "residual_type_counts": {"no_residual": 2}, "scope": "route=science_decision", "trigger_problem_ids": ["science_0204", "science_0273"], "verification_plan": ["continue sampling outside controls", "demote if new losses cluster under the same route"]}]
 - `secret_leak_detected`: false
 
 ### harness_observer

@@ -69,6 +69,7 @@ from assumption_os.schema import (
 from assumption_os.selector import MetaproductivitySelector
 from assumption_os.trajectory_search import build_trajectory_search_payload
 from assumption_os.trace_dataset import build_trace_dataset_payload
+from assumption_os.trace_outcome_model import build_trace_outcome_model_payload
 from assumption_os.verifier_stack import build_verifier_stack_payload
 from assumption_os.world_model import build_world_model_payload, train_world_model_calibration
 
@@ -973,6 +974,57 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertFalse(payload["secret_leak_detected"])
             self.assertNotIn("unit-secret", json.dumps(payload))
             self.assertNotIn("trace-secret", json.dumps(payload))
+
+    def test_trace_outcome_model_calibrates_routes_and_policy_updates(self):
+        rows = [
+            {
+                "row_id": "r1",
+                "problem_id": "p1",
+                "domain": "science",
+                "bypass_route": "science_mechanism",
+                "components": ["phase2_cache_hit"],
+                "outcome": "win",
+                "score_delta": 1.0,
+                "residual_type": "no_residual",
+                "trainable": True,
+            },
+            {
+                "row_id": "r2",
+                "problem_id": "p2",
+                "domain": "science",
+                "bypass_route": "science_mechanism",
+                "components": ["phase2_cache_hit"],
+                "outcome": "loss",
+                "score_delta": -1.0,
+                "residual_type": "optimization",
+                "residual": "secret_token=trace-outcome-secret optimize the bypass bridge",
+                "trainable": True,
+            },
+            {
+                "row_id": "r3",
+                "problem_id": "p3",
+                "domain": "mathematics",
+                "bypass_route": "math_research_bridge",
+                "components": ["phase2_cache_hit"],
+                "outcome": "win",
+                "score_delta": 2.0,
+                "residual_type": "no_residual",
+                "trainable": True,
+            },
+        ]
+        payload = build_trace_outcome_model_payload(
+            trace_dataset_payload={"eval_id": "unit_trace_dataset", "rows": rows},
+            eval_id="unit_trace_outcome_model",
+            min_policy_group_size=2,
+        )
+        self.assertEqual(payload["trainable_row_count"], 3)
+        self.assertEqual(payload["route_group_count"], 2)
+        self.assertEqual(payload["leave_one_out_metrics"]["prediction_count"], 3)
+        self.assertEqual(payload["policy_update_count"], 1)
+        self.assertEqual(payload["policy_updates"][0]["decision"], "keep_with_targeted_repair")
+        self.assertEqual(payload["residual_stats"][0]["residual_type"], "optimization")
+        self.assertFalse(payload["secret_leak_detected"])
+        self.assertNotIn("trace-outcome-secret", json.dumps(payload))
 
     def test_harness_observer_backfills_artifact_manifest_coverage(self):
         with tempfile.TemporaryDirectory() as td:

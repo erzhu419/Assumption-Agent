@@ -16,6 +16,7 @@ This runner evaluates the reconstruction mechanisms added after reconstruction:
 12. runtime memory surfaces in graph memory
 13. first-party runtime tracing for live LLM/retrieval calls
 14. trace-to-outcome datasets for world-model/residual training
+15. trace outcome model for route/component policy calibration
 
 The validation uses existing real artifacts where available and deterministic
 positive controls where the mechanism needs a safe graph-mutation sandbox.
@@ -48,6 +49,7 @@ from .residual_clusterer import build_residual_cluster_payload
 from .runtime_trace import RuntimeTraceRecorder
 from .trajectory_search import build_trajectory_search_payload
 from .trace_dataset import build_trace_dataset_payload
+from .trace_outcome_model import build_trace_outcome_model_payload
 from .verifier_stack import build_verifier_stack_payload
 from .world_model import build_world_model_payload, train_world_model_calibration
 
@@ -96,6 +98,10 @@ def build_performance_validation_payload(
     timings["trace_dataset_sec"] = _elapsed(start)
 
     start = time.perf_counter()
+    trace_outcome_model = _validate_trace_outcome_model(root=root)
+    timings["trace_outcome_model_sec"] = _elapsed(start)
+
+    start = time.perf_counter()
     harness = _validate_harness_observer(root=root, graph_dir=graph_dir)
     timings["harness_observer_sec"] = _elapsed(start)
 
@@ -116,6 +122,7 @@ def build_performance_validation_payload(
         "manifest_logger": manifests,
         "runtime_trace": runtime_trace,
         "trace_dataset": trace_dataset,
+        "trace_outcome_model": trace_outcome_model,
         "harness_observer": harness,
         "residual_clusterer": residuals,
         "formal_metrics": formal,
@@ -837,6 +844,47 @@ def _validate_trace_dataset() -> dict:
         }
 
 
+def _validate_trace_outcome_model(*, root: Path) -> dict:
+    trace_dataset_path = root / "phase four/assumption_graph/trace_dataset_ms_bridge_20260601.json"
+    if not trace_dataset_path.exists():
+        return {
+            "pass": False,
+            "reason": "missing_trace_dataset_artifact",
+            "trace_dataset_path": _display_path(root, trace_dataset_path),
+        }
+    payload = build_trace_outcome_model_payload(
+        trace_dataset_payload=json.loads(trace_dataset_path.read_text(encoding="utf-8")),
+        eval_id="perf_trace_outcome_model",
+        min_policy_group_size=2,
+    )
+    metrics = payload["leave_one_out_metrics"]
+    loss_updates = [
+        row for row in payload["policy_updates"]
+        if row["decision"] in {"keep_with_targeted_repair", "repair_before_scaling"}
+    ]
+    return {
+        "pass": (
+            payload["trainable_row_count"] >= 9
+            and payload["route_group_count"] >= 3
+            and payload["policy_update_count"] >= 1
+            and len(loss_updates) >= 1
+            and metrics["brier_score"] is not None
+            and metrics["brier_score"] <= 0.25
+            and not payload["secret_leak_detected"]
+        ),
+        "trainable_row_count": payload["trainable_row_count"],
+        "route_group_count": payload["route_group_count"],
+        "component_group_count": payload["component_group_count"],
+        "residual_group_count": payload["residual_group_count"],
+        "policy_update_count": payload["policy_update_count"],
+        "loss_policy_update_count": len(loss_updates),
+        "leave_one_out_metrics": metrics,
+        "route_stats": payload["route_stats"],
+        "policy_updates": payload["policy_updates"],
+        "secret_leak_detected": payload["secret_leak_detected"],
+    }
+
+
 def _validate_harness_observer(*, root: Path, graph_dir: Path) -> dict:
     artifact_paths = [
         root / "phase two/analysis/cache/judgments/phase2_v20_gpt55_vs_phase2_v20_ms_bridge_gpt55_21_50.json",
@@ -1121,6 +1169,9 @@ def _key_metric(name: str, section: dict) -> str:
         return f"events={section['event_count']}, written={section['written_trials']}, leak={section['secret_leak_detected']}"
     if name == "trace_dataset":
         return f"rows={section['trainable_row_count']}/{section['row_count']}, coverage={section['traced_outcome_coverage']}, leak={section['secret_leak_detected']}"
+    if name == "trace_outcome_model":
+        metrics = section.get("leave_one_out_metrics", {})
+        return f"rows={section.get('trainable_row_count', 0)}, brier={metrics.get('brier_score')}, updates={section.get('policy_update_count', 0)}"
     if name == "harness_observer":
         return f"artifacts={section['artifact_file_count']}, backfill={section['backfilled_event_count']}/{section['discovered_event_count']}, covered={section['full_coverage_after_writeback']}"
     if name == "residual_clusterer":

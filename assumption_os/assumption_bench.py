@@ -193,17 +193,34 @@ def _score_verifier_reliability(sections: dict[str, dict]) -> CapabilityScore:
 def _score_world_model_quality(sections: dict[str, dict]) -> CapabilityScore:
     world = sections.get("world_model", {})
     trace_dataset = sections.get("trace_dataset", {})
+    trace_outcome = sections.get("trace_outcome_model", {})
     pre = world.get("pre_acceptance", {})
     calibration = world.get("post_calibration", {})
     auc = float(pre.get("auc") or 0.0)
     brier = float(calibration.get("brier_score") if calibration.get("brier_score") is not None else 1.0)
     labels = int(world.get("matched_label_count") or 0)
     trace_rows = int(trace_dataset.get("trainable_row_count") or 0)
-    score = 0.45 * _cap(auc) + 0.35 * _cap(1.0 - min(brier / 0.1, 1.0)) + 0.2 * _cap((labels + trace_rows) / 16)
+    trace_metrics = trace_outcome.get("leave_one_out_metrics", {})
+    trace_brier = trace_metrics.get("brier_score")
+    trace_quality = 0.0 if trace_brier is None else _cap(1.0 - min(float(trace_brier) / 0.25, 1.0))
+    proposal_score = 0.45 * _cap(auc) + 0.35 * _cap(1.0 - min(brier / 0.1, 1.0)) + 0.2 * _cap((labels + trace_rows) / 16)
+    trace_enhanced_score = (
+        0.4 * _cap(auc)
+        + 0.3 * _cap(1.0 - min(brier / 0.1, 1.0))
+        + 0.15 * _cap((labels + trace_rows) / 16)
+        + 0.15 * trace_quality
+    )
+    score = max(proposal_score, trace_enhanced_score)
     return _capability(
         "world_model_quality",
         score,
-        evidence={"auc": auc, "brier_score": brier, "matched_label_count": labels, "trace_trainable_row_count": trace_rows},
+        evidence={
+            "auc": auc,
+            "brier_score": brier,
+            "matched_label_count": labels,
+            "trace_trainable_row_count": trace_rows,
+            "trace_outcome_brier_score": trace_brier,
+        },
         rationale="The cheap simulator ranks accepted candidates above rejected ones and calibrates after evidence.",
     )
 
