@@ -17,6 +17,10 @@ from .formal_mapping import (
     search_formal_mappings,
 )
 from .schema import ActivatedSubgraph, AssumptionNode, AssumptionType
+from .structural_patterns import (
+    format_structural_morphism_applications,
+    search_structural_patterns,
+)
 
 
 PRIMARY_TYPES = {
@@ -35,6 +39,7 @@ class RetrievalPolicyResult:
     policy_notes: list[str] = field(default_factory=list)
     diagnostics: dict = field(default_factory=dict)
     formal_mapping_applications: list[dict] = field(default_factory=list)
+    structural_morphism_applications: list[dict] = field(default_factory=list)
 
 
 def retrieve_phase2_assumptions(
@@ -73,11 +78,20 @@ def retrieve_phase2_assumptions(
         query,
         top_n=2,
     )
+    structural_morphism_applications = search_structural_patterns(
+        graph.store,
+        query,
+        top_n=2,
+    )
     if domain == "software_engineering":
         result = _rerank_software_engineering(subgraph, query=query, top_k=top_k)
         result.formal_mapping_applications = formal_mapping_applications
+        result.structural_morphism_applications = structural_morphism_applications
         result.diagnostics["formal_mapping_hits"] = [
             app["source_key"] for app in formal_mapping_applications
+        ]
+        result.diagnostics["structural_morphism_hits"] = [
+            app["pattern_id"] for app in structural_morphism_applications
         ]
         return result
     return RetrievalPolicyResult(
@@ -86,8 +100,10 @@ def retrieve_phase2_assumptions(
             "policy": "generic_primary",
             "domain": domain,
             "formal_mapping_hits": [app["source_key"] for app in formal_mapping_applications],
+            "structural_morphism_hits": [app["pattern_id"] for app in structural_morphism_applications],
         },
         formal_mapping_applications=formal_mapping_applications,
+        structural_morphism_applications=structural_morphism_applications,
     )
 
 
@@ -97,7 +113,8 @@ def format_policy_context(result: RetrievalPolicyResult | None, formatter, *, ma
     text = formatter(result.subgraph, max_nodes=max_nodes)
     if not result.policy_notes:
         formal_text = format_formal_mapping_applications(result.formal_mapping_applications)
-        return "\n\n".join(x for x in [text, formal_text] if x).strip()
+        structural_text = format_structural_morphism_applications(result.structural_morphism_applications)
+        return "\n\n".join(x for x in [text, formal_text, structural_text] if x).strip()
     lines = [
         text,
         "",
@@ -108,6 +125,9 @@ def format_policy_context(result: RetrievalPolicyResult | None, formatter, *, ma
     formal_text = format_formal_mapping_applications(result.formal_mapping_applications)
     if formal_text:
         lines.extend(["", formal_text])
+    structural_text = format_structural_morphism_applications(result.structural_morphism_applications)
+    if structural_text:
+        lines.extend(["", structural_text])
     return "\n".join(lines).strip()
 
 

@@ -480,6 +480,42 @@ python3 -m assumption_os.formal_mapping \
   --summary-out "phase four/assumption_graph/formal_mapping_transfer_eval_phase2_graph.json"
 ```
 
+### Structural Morphism Layer
+
+`assumption_os.structural_patterns` is the bounded structural-transfer layer
+that sits above Assumption Graph memory. It is category-inspired, but it is not
+a category-theory solver: it stores small typed diagrams as `alignment` /
+`formal_mapping` nodes and checks whether a new problem or proposal preserves
+the object roles, morphism roles, composition hints, invariants, and negative
+controls of an older structural pattern.
+
+The default seed library currently covers:
+
+- residual correction / identity-preserving update
+- controlled intervention / A-B falsification
+- incremental replacement / module-boundary preservation
+- negative feedback / equilibrium restoration
+- signal vs stochastic nuisance separation
+
+Run the structural probes with:
+
+```bash
+python3 -m assumption_os.structural_patterns \
+  --extraction-audit \
+  --pair-eval \
+  --retrieval-probe \
+  --behavior-probe \
+  --eval-id structural_validation_20260602 \
+  --summary-out "phase four/assumption_graph/structural_morphism_validation_20260602.json"
+```
+
+The first validation passed all four probes: deterministic extraction audit,
+positive/negative structural pair suite, non-lexical retrieval, and an offline
+behavior probe. `retrieval_policy` injects matches as a shadow-mode `Structural
+Morphism Reasoning` section. Promotion-sensitive structural candidates must
+pass `V2b structural_morphism_gate` in `verifier_stack`; negative-control or
+under-specified mappings block graph mutation.
+
 `assumption_os.manifest_logger` is the generic log bridge for events outside
 graph mutation: LLM calls, retrievals, judge calls, tool-use, and simulator
 rollouts. It redacts secret-looking values before writing manifests.

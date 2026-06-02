@@ -1,0 +1,3325 @@
+{
+  "eval_id": "structural_validation_20260602",
+  "pattern_count": 5,
+  "pattern_ids": [
+    "pat_controlled_intervention",
+    "pat_incremental_replacement",
+    "pat_negative_feedback",
+    "pat_residual_correction",
+    "pat_signal_nuisance_separation"
+  ],
+  "patterns": [
+    {
+      "formal_kind": "structural_pattern",
+      "pattern_id": "pat_controlled_intervention",
+      "name": "Controlled Intervention / A-B Falsification",
+      "claim": "Test one intervention against a matched control before promoting a new assumption.",
+      "trigger_terms": [
+        "control",
+        "controls",
+        "controlled variable",
+        "ablation",
+        "a/b",
+        "baseline",
+        "placebo",
+        "falsification"
+      ],
+      "objects": [
+        {
+          "id": "baseline_case",
+          "role": "control_row",
+          "terms": [
+            "baseline",
+            "control",
+            "controls",
+            "placebo",
+            "matched"
+          ]
+        },
+        {
+          "id": "intervention_case",
+          "role": "control_row",
+          "terms": [
+            "intervention",
+            "variant",
+            "candidate",
+            "ablation"
+          ]
+        },
+        {
+          "id": "outcome_measure",
+          "role": "control_row",
+          "terms": [
+            "metric",
+            "outcome",
+            "judge",
+            "acceptance"
+          ]
+        }
+      ],
+      "morphisms": [
+        {
+          "id": "change_one_factor",
+          "role": "control_row",
+          "terms": [
+            "one variable",
+            "single variable",
+            "one intervention"
+          ]
+        },
+        {
+          "id": "compare_outcomes",
+          "role": "control_row",
+          "terms": [
+            "compare",
+            "baseline",
+            "control",
+            "ablation"
+          ]
+        }
+      ],
+      "composition_laws": [
+        "one intervention plus matched control identifies causal effect"
+      ],
+      "invariants": [
+        {
+          "id": "single_intervention_isolated",
+          "terms": [
+            "one variable",
+            "single variable",
+            "one intervention",
+            "ablation"
+          ]
+        },
+        {
+          "id": "matched_control_required",
+          "terms": [
+            "matched control",
+            "control",
+            "baseline",
+            "placebo"
+          ]
+        }
+      ],
+      "negative_controls": [
+        "multiple changes",
+        "no control",
+        "unmatched baseline",
+        "post-hoc metric"
+      ],
+      "good_realizations": [
+        "controlled variable",
+        "a/b test",
+        "fresh ablation",
+        "trigger control"
+      ],
+      "bad_realizations": [
+        "bundle many changes",
+        "judge without baseline"
+      ],
+      "transfer_predictions": [
+        "A candidate with control-variable context should declare trigger and control rows before acceptance."
+      ],
+      "node_id": "struct_pat_controlled_intervention"
+    },
+    {
+      "formal_kind": "structural_pattern",
+      "pattern_id": "pat_incremental_replacement",
+      "name": "Incremental Replacement / Module Boundary Preservation",
+      "claim": "Keep a working pipeline and replace one bounded module at a time with rollback.",
+      "trigger_terms": [
+        "incremental",
+        "replace one",
+        "module",
+        "pipeline",
+        "rollback",
+        "mvp",
+        "adapter boundary"
+      ],
+      "objects": [
+        {
+          "id": "working_pipeline",
+          "role": "baseline_path",
+          "terms": [
+            "working pipeline",
+            "old path",
+            "baseline",
+            "verified path"
+          ]
+        },
+        {
+          "id": "module_boundary",
+          "role": "module_boundary",
+          "terms": [
+            "module",
+            "component",
+            "boundary",
+            "adapter"
+          ]
+        },
+        {
+          "id": "replacement_delta",
+          "role": "delta_update",
+          "terms": [
+            "replace one",
+            "local update",
+            "minimal replacement"
+          ]
+        }
+      ],
+      "morphisms": [
+        {
+          "id": "preserve_pipeline",
+          "role": "baseline_path",
+          "terms": [
+            "preserve",
+            "keep",
+            "fallback",
+            "old path"
+          ]
+        },
+        {
+          "id": "swap_one_module",
+          "role": "module_boundary",
+          "terms": [
+            "replace one",
+            "single module",
+            "component"
+          ]
+        },
+        {
+          "id": "rollback_if_failed",
+          "role": "baseline_path",
+          "terms": [
+            "rollback",
+            "revert",
+            "fallback"
+          ]
+        }
+      ],
+      "composition_laws": [
+        "preserved pipeline + one bounded replacement + rollback supports safe iteration"
+      ],
+      "invariants": [
+        {
+          "id": "module_boundary_preserved",
+          "terms": [
+            "module",
+            "boundary",
+            "component",
+            "adapter"
+          ]
+        },
+        {
+          "id": "rollback_path_available",
+          "terms": [
+            "rollback",
+            "fallback",
+            "revert",
+            "old path"
+          ]
+        },
+        {
+          "id": "identity_path_preserved",
+          "terms": [
+            "baseline",
+            "preserve",
+            "working path",
+            "old path"
+          ]
+        }
+      ],
+      "negative_controls": [
+        "rewrite whole system",
+        "many modules at once",
+        "no rollback",
+        "delete working path"
+      ],
+      "good_realizations": [
+        "mvp",
+        "adapter boundary",
+        "incremental replacement",
+        "strangler fig"
+      ],
+      "bad_realizations": [
+        "big bang rewrite",
+        "unbounded migration"
+      ],
+      "transfer_predictions": [
+        "For high-risk system changes, structural context should prefer one-module replacement with rollback over whole-system rewrite."
+      ],
+      "node_id": "struct_pat_incremental_replacement"
+    },
+    {
+      "formal_kind": "structural_pattern",
+      "pattern_id": "pat_negative_feedback",
+      "name": "Negative Feedback / Equilibrium Restoration",
+      "claim": "An induced response opposes an external perturbation under a constraint or stability principle.",
+      "trigger_terms": [
+        "negative feedback",
+        "perturbation",
+        "disturbance",
+        "opposes",
+        "equilibrium",
+        "lenz",
+        "le chatelier"
+      ],
+      "objects": [
+        {
+          "id": "system_state",
+          "role": "perturbation",
+          "terms": [
+            "state",
+            "equilibrium",
+            "system"
+          ]
+        },
+        {
+          "id": "external_perturbation",
+          "role": "perturbation",
+          "terms": [
+            "perturbation",
+            "disturbance",
+            "imposed change"
+          ]
+        },
+        {
+          "id": "induced_response",
+          "role": "opposing_response",
+          "terms": [
+            "response",
+            "opposes",
+            "compensates",
+            "resists"
+          ]
+        }
+      ],
+      "morphisms": [
+        {
+          "id": "perturb_state",
+          "role": "perturbation",
+          "terms": [
+            "perturb",
+            "disturbance",
+            "external change"
+          ]
+        },
+        {
+          "id": "induce_response",
+          "role": "opposing_response",
+          "terms": [
+            "induce",
+            "response",
+            "reaction"
+          ]
+        },
+        {
+          "id": "oppose_change",
+          "role": "opposing_response",
+          "terms": [
+            "opposes",
+            "compensates",
+            "resists",
+            "cancels"
+          ]
+        }
+      ],
+      "composition_laws": [
+        "perturbation induces response; response opposes perturbation",
+        "disturbance creates compensating reaction that cancels change"
+      ],
+      "invariants": [
+        {
+          "id": "response_opposes_perturbation",
+          "terms": [
+            "opposes",
+            "compensates",
+            "resists",
+            "cancels",
+            "negative feedback"
+          ]
+        },
+        {
+          "id": "constraint_explains_response",
+          "terms": [
+            "constraint",
+            "conservation",
+            "free energy",
+            "equilibrium",
+            "law"
+          ]
+        }
+      ],
+      "negative_controls": [
+        "positive feedback",
+        "random response",
+        "no constraint",
+        "amplifies disturbance"
+      ],
+      "good_realizations": [
+        "lenz law",
+        "le chatelier",
+        "control feedback",
+        "homeostasis"
+      ],
+      "bad_realizations": [
+        "positive feedback loop",
+        "runaway amplification"
+      ],
+      "transfer_predictions": [
+        "If the mapping is valid, an answer should identify the perturbation, induced response, and preserved constraint."
+      ],
+      "node_id": "struct_pat_negative_feedback"
+    },
+    {
+      "formal_kind": "structural_pattern",
+      "pattern_id": "pat_residual_correction",
+      "name": "Residual Correction / Identity-Preserving Update",
+      "claim": "Preserve a verified baseline or identity path while learning only the local delta.",
+      "trigger_terms": [
+        "residual",
+        "skip connection",
+        "identity",
+        "baseline",
+        "delta",
+        "fallback",
+        "lora",
+        "adapter",
+        "overwrite",
+        "rewrite",
+        "destructive overwrite"
+      ],
+      "objects": [
+        {
+          "id": "input_state",
+          "role": "baseline_path",
+          "terms": [
+            "baseline",
+            "identity",
+            "input",
+            "old path",
+            "verified path"
+          ]
+        },
+        {
+          "id": "delta_update",
+          "role": "delta_update",
+          "terms": [
+            "delta",
+            "residual",
+            "correction",
+            "deviation",
+            "local update"
+          ]
+        },
+        {
+          "id": "output_state",
+          "role": "baseline_path",
+          "terms": [
+            "output",
+            "fallback",
+            "recover",
+            "old behavior"
+          ]
+        }
+      ],
+      "morphisms": [
+        {
+          "id": "identity_path",
+          "role": "baseline_path",
+          "terms": [
+            "identity",
+            "skip",
+            "preserve",
+            "baseline",
+            "fallback"
+          ]
+        },
+        {
+          "id": "learn_delta",
+          "role": "delta_update",
+          "terms": [
+            "learn delta",
+            "residual",
+            "correction",
+            "deviation"
+          ]
+        },
+        {
+          "id": "compose_add",
+          "role": "delta_update",
+          "terms": [
+            "add",
+            "plus",
+            "compose",
+            "x + f",
+            "local patch"
+          ]
+        }
+      ],
+      "composition_laws": [
+        "output = identity(input) + delta(input)",
+        "zero delta recovers baseline"
+      ],
+      "invariants": [
+        {
+          "id": "identity_path_preserved",
+          "terms": [
+            "identity",
+            "baseline",
+            "fallback",
+            "preserve",
+            "old path"
+          ]
+        },
+        {
+          "id": "learned_part_models_deviation",
+          "terms": [
+            "delta",
+            "residual",
+            "correction",
+            "deviation",
+            "local update"
+          ]
+        },
+        {
+          "id": "zero_delta_recovers_baseline",
+          "terms": [
+            "zero",
+            "fallback",
+            "recover",
+            "rollback",
+            "old behavior"
+          ]
+        }
+      ],
+      "negative_controls": [
+        "plain stack",
+        "uncontrolled overwrite",
+        "no fallback",
+        "without identity",
+        "delete baseline"
+      ],
+      "good_realizations": [
+        "resnet",
+        "transformer residual",
+        "lora",
+        "adapter",
+        "iterative refinement"
+      ],
+      "bad_realizations": [
+        "plain feedforward stack",
+        "uncontrolled rewrite",
+        "delete working path"
+      ],
+      "transfer_predictions": [
+        "When a plan risks destructive overwrite, structural context should preserve the old path and apply only a local delta."
+      ],
+      "node_id": "struct_pat_residual_correction"
+    },
+    {
+      "formal_kind": "structural_pattern",
+      "pattern_id": "pat_signal_nuisance_separation",
+      "name": "Signal vs Stochastic Nuisance Separation",
+      "claim": "Bias estimation toward predictable structure while suppressing stochastic nuisance variation.",
+      "trigger_terms": [
+        "noise",
+        "uncorrelated",
+        "gaussian",
+        "latent",
+        "predictable",
+        "jepa",
+        "denoise",
+        "autocorrelation"
+      ],
+      "objects": [
+        {
+          "id": "stable_signal",
+          "role": "stable_signal",
+          "terms": [
+            "stable signal",
+            "predictable",
+            "correlated",
+            "latent state"
+          ]
+        },
+        {
+          "id": "nuisance_noise",
+          "role": "nuisance_noise",
+          "terms": [
+            "noise",
+            "nuisance",
+            "uncorrelated",
+            "random",
+            "gaussian"
+          ]
+        },
+        {
+          "id": "projection_operator",
+          "role": "stable_signal",
+          "terms": [
+            "projection",
+            "prediction",
+            "correlation",
+            "regularization"
+          ]
+        }
+      ],
+      "morphisms": [
+        {
+          "id": "suppress_noise",
+          "role": "nuisance_noise",
+          "terms": [
+            "suppress",
+            "ignore",
+            "denoise",
+            "not reconstruct"
+          ]
+        },
+        {
+          "id": "recover_signal",
+          "role": "stable_signal",
+          "terms": [
+            "recover",
+            "predict",
+            "latent",
+            "stable"
+          ]
+        }
+      ],
+      "composition_laws": [
+        "predictable structure is retained while uncorrelated nuisance is suppressed"
+      ],
+      "invariants": [
+        {
+          "id": "predictable_structure_separated",
+          "terms": [
+            "predictable",
+            "stable signal",
+            "correlated",
+            "latent state",
+            "world state"
+          ]
+        },
+        {
+          "id": "stochastic_nuisance_suppressed",
+          "terms": [
+            "noise",
+            "nuisance",
+            "uncorrelated",
+            "random",
+            "gaussian",
+            "irrelevant detail"
+          ]
+        }
+      ],
+      "negative_controls": [
+        "any gaussian",
+        "style noise only",
+        "no predictable signal",
+        "memorize noise",
+        "memorizes noise"
+      ],
+      "good_realizations": [
+        "seismic denoising",
+        "blind spot denoising",
+        "jepa",
+        "latent prediction"
+      ],
+      "bad_realizations": [
+        "arbitrary gaussian prior",
+        "cosmetic smoothing"
+      ],
+      "transfer_predictions": [
+        "A valid transfer should improve stable-state prediction or denoising while avoiding reconstruction of nuisance details."
+      ],
+      "node_id": "struct_pat_signal_nuisance_separation"
+    }
+  ],
+  "extraction_audit": {
+    "eval_id": "structural_validation_20260602",
+    "eval_kind": "structural_diagram_extraction_audit",
+    "case_count": 6,
+    "object_role_precision": 0.9167,
+    "object_role_recall": 1.0,
+    "morphism_role_precision": 0.9167,
+    "morphism_role_recall": 1.0,
+    "invariant_precision": 0.7368,
+    "invariant_recall": 1.0,
+    "broken_invariant_detection": 1.0,
+    "pass": true,
+    "rows": [
+      {
+        "id": "extract_residual",
+        "text": "Keep the verified baseline path, add a residual delta correction, and recover old behavior when the delta is zero.",
+        "expected_roles": [
+          "baseline_path",
+          "delta_update"
+        ],
+        "predicted_roles": [
+          "baseline_path",
+          "delta_update"
+        ],
+        "expected_invariants": [
+          "identity_path_preserved",
+          "learned_part_models_deviation",
+          "zero_delta_recovers_baseline"
+        ],
+        "predicted_invariants": [
+          "identity_path_preserved",
+          "learned_part_models_deviation",
+          "zero_delta_recovers_baseline"
+        ],
+        "expected_broken_invariant": false,
+        "predicted_negation_hits": [],
+        "passed": true
+      },
+      {
+        "id": "extract_control",
+        "text": "Run one intervention against a matched control baseline before accepting the candidate.",
+        "expected_roles": [
+          "control_row"
+        ],
+        "predicted_roles": [
+          "baseline_path",
+          "control_row"
+        ],
+        "expected_invariants": [
+          "matched_control_required",
+          "single_intervention_isolated"
+        ],
+        "predicted_invariants": [
+          "identity_path_preserved",
+          "matched_control_required",
+          "single_intervention_isolated"
+        ],
+        "expected_broken_invariant": false,
+        "predicted_negation_hits": [],
+        "passed": true
+      },
+      {
+        "id": "extract_incremental",
+        "text": "Preserve the working pipeline, replace one module at a component boundary, and keep rollback available.",
+        "expected_roles": [
+          "baseline_path",
+          "module_boundary"
+        ],
+        "predicted_roles": [
+          "baseline_path",
+          "module_boundary"
+        ],
+        "expected_invariants": [
+          "identity_path_preserved",
+          "module_boundary_preserved",
+          "rollback_path_available"
+        ],
+        "predicted_invariants": [
+          "identity_path_preserved",
+          "module_boundary_preserved",
+          "rollback_path_available",
+          "zero_delta_recovers_baseline"
+        ],
+        "expected_broken_invariant": false,
+        "predicted_negation_hits": [],
+        "passed": true
+      },
+      {
+        "id": "extract_feedback",
+        "text": "An external disturbance induces a response that opposes the imposed change because a conservation constraint must hold.",
+        "expected_roles": [
+          "opposing_response",
+          "perturbation"
+        ],
+        "predicted_roles": [
+          "opposing_response",
+          "perturbation"
+        ],
+        "expected_invariants": [
+          "constraint_explains_response",
+          "response_opposes_perturbation"
+        ],
+        "predicted_invariants": [
+          "constraint_explains_response",
+          "response_opposes_perturbation"
+        ],
+        "expected_broken_invariant": false,
+        "predicted_negation_hits": [],
+        "passed": true
+      },
+      {
+        "id": "extract_signal_noise",
+        "text": "The latent world state is predictable and correlated, while Gaussian uncorrelated noise is nuisance detail to suppress.",
+        "expected_roles": [
+          "nuisance_noise",
+          "stable_signal"
+        ],
+        "predicted_roles": [
+          "nuisance_noise",
+          "stable_signal"
+        ],
+        "expected_invariants": [
+          "predictable_structure_separated",
+          "stochastic_nuisance_suppressed"
+        ],
+        "predicted_invariants": [
+          "predictable_structure_separated",
+          "stochastic_nuisance_suppressed"
+        ],
+        "expected_broken_invariant": false,
+        "predicted_negation_hits": [],
+        "passed": true
+      },
+      {
+        "id": "extract_broken",
+        "text": "The rewrite has no baseline, no fallback, and no control row even though it mentions a candidate metric.",
+        "expected_roles": [
+          "baseline_path",
+          "control_row"
+        ],
+        "predicted_roles": [
+          "baseline_path",
+          "control_row"
+        ],
+        "expected_invariants": [
+          "identity_path_preserved",
+          "matched_control_required"
+        ],
+        "predicted_invariants": [
+          "identity_path_preserved",
+          "matched_control_required",
+          "rollback_path_available",
+          "single_intervention_isolated",
+          "zero_delta_recovers_baseline"
+        ],
+        "expected_broken_invariant": true,
+        "predicted_negation_hits": [
+          "no baseline",
+          "no control",
+          "no fallback"
+        ],
+        "passed": true
+      }
+    ]
+  },
+  "pair_eval": {
+    "eval_id": "structural_validation_20260602",
+    "eval_kind": "structural_pair_suite",
+    "positive_count": 5,
+    "negative_count": 3,
+    "positive_top1_rate": 1.0,
+    "negative_rejection_rate": 1.0,
+    "pass": true,
+    "positive_rows": [
+      {
+        "id": "pair_resnet_to_runner",
+        "query": "A solver keeps the baseline identity path, applies a residual delta correction, and can rollback to old behavior if the local update fails.",
+        "expected": "pat_residual_correction",
+        "top_pattern_id": "pat_residual_correction",
+        "top_score": 0.97,
+        "passed": true,
+        "applications": [
+          {
+            "pattern_id": "pat_residual_correction",
+            "pattern_name": "Residual Correction / Identity-Preserving Update",
+            "node_id": "struct_pat_residual_correction",
+            "score": 0.97,
+            "decision": "allow",
+            "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer.",
+            "matched_terms": [
+              "baseline",
+              "correction",
+              "delta",
+              "identity",
+              "local update",
+              "old behavior",
+              "residual",
+              "rollback"
+            ],
+            "preserved_invariants": [
+              "identity_path_preserved",
+              "learned_part_models_deviation",
+              "zero_delta_recovers_baseline"
+            ],
+            "broken_or_uncertain_invariants": [],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "When a plan risks destructive overwrite, structural context should preserve the old path and apply only a local delta."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_residual_correction",
+              "source_pattern_name": "Residual Correction / Identity-Preserving Update",
+              "object_map": {
+                "input_state": [
+                  "baseline",
+                  "identity"
+                ],
+                "delta_update": [
+                  "correction",
+                  "delta",
+                  "local update",
+                  "residual"
+                ],
+                "output_state": [
+                  "old behavior"
+                ]
+              },
+              "morphism_map": {
+                "identity_path": [
+                  "baseline",
+                  "identity"
+                ],
+                "learn_delta": [
+                  "correction",
+                  "residual"
+                ],
+                "compose_add": [
+                  "correction",
+                  "delta",
+                  "local update",
+                  "residual"
+                ]
+              },
+              "preserved_invariants": [
+                "identity_path_preserved",
+                "learned_part_models_deviation",
+                "zero_delta_recovers_baseline"
+              ],
+              "broken_or_uncertain_invariants": [],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "When a plan risks destructive overwrite, structural context should preserve the old path and apply only a local delta."
+              ],
+              "score": {
+                "pattern_id": "pat_residual_correction",
+                "score": 0.97,
+                "object_role_coverage": 1.0,
+                "morphism_role_coverage": 1.0,
+                "composition_preservation": 1.0,
+                "invariant_preservation": 1.0,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.97,
+                "matched_terms": [
+                  "baseline",
+                  "correction",
+                  "delta",
+                  "identity",
+                  "local update",
+                  "old behavior",
+                  "residual",
+                  "rollback"
+                ],
+                "preserved_invariants": [
+                  "identity_path_preserved",
+                  "learned_part_models_deviation",
+                  "zero_delta_recovers_baseline"
+                ],
+                "broken_or_uncertain_invariants": [],
+                "negative_control_hits": [],
+                "decision": "allow",
+                "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer."
+              },
+              "status": "gate_passed_shadow"
+            },
+            "metrics": {
+              "pattern_id": "pat_residual_correction",
+              "score": 0.97,
+              "object_role_coverage": 1.0,
+              "morphism_role_coverage": 1.0,
+              "composition_preservation": 1.0,
+              "invariant_preservation": 1.0,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.97,
+              "matched_terms": [
+                "baseline",
+                "correction",
+                "delta",
+                "identity",
+                "local update",
+                "old behavior",
+                "residual",
+                "rollback"
+              ],
+              "preserved_invariants": [
+                "identity_path_preserved",
+                "learned_part_models_deviation",
+                "zero_delta_recovers_baseline"
+              ],
+              "broken_or_uncertain_invariants": [],
+              "negative_control_hits": [],
+              "decision": "allow",
+              "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer."
+            }
+          },
+          {
+            "pattern_id": "pat_incremental_replacement",
+            "pattern_name": "Incremental Replacement / Module Boundary Preservation",
+            "node_id": "struct_pat_incremental_replacement",
+            "score": 0.6733,
+            "decision": "candidate_shadow_only",
+            "reason": "Structural mapping is plausible but should remain shadow-only until stronger evidence arrives.",
+            "matched_terms": [
+              "baseline",
+              "correction",
+              "delta",
+              "identity",
+              "local update",
+              "residual",
+              "rollback"
+            ],
+            "preserved_invariants": [
+              "rollback_path_available",
+              "identity_path_preserved"
+            ],
+            "broken_or_uncertain_invariants": [
+              "module_boundary_preserved"
+            ],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "For high-risk system changes, structural context should prefer one-module replacement with rollback over whole-system rewrite."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_incremental_replacement",
+              "source_pattern_name": "Incremental Replacement / Module Boundary Preservation",
+              "object_map": {
+                "working_pipeline": [
+                  "baseline"
+                ],
+                "replacement_delta": [
+                  "local update"
+                ]
+              },
+              "morphism_map": {
+                "preserve_pipeline": [
+                  "baseline",
+                  "identity"
+                ],
+                "rollback_if_failed": [
+                  "rollback"
+                ]
+              },
+              "preserved_invariants": [
+                "rollback_path_available",
+                "identity_path_preserved"
+              ],
+              "broken_or_uncertain_invariants": [
+                "module_boundary_preserved"
+              ],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "For high-risk system changes, structural context should prefer one-module replacement with rollback over whole-system rewrite."
+              ],
+              "score": {
+                "pattern_id": "pat_incremental_replacement",
+                "score": 0.6733,
+                "object_role_coverage": 0.6667,
+                "morphism_role_coverage": 0.6667,
+                "composition_preservation": 1.0,
+                "invariant_preservation": 0.6667,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.6733,
+                "matched_terms": [
+                  "baseline",
+                  "correction",
+                  "delta",
+                  "identity",
+                  "local update",
+                  "residual",
+                  "rollback"
+                ],
+                "preserved_invariants": [
+                  "rollback_path_available",
+                  "identity_path_preserved"
+                ],
+                "broken_or_uncertain_invariants": [
+                  "module_boundary_preserved"
+                ],
+                "negative_control_hits": [],
+                "decision": "candidate_shadow_only",
+                "reason": "Structural mapping is plausible but should remain shadow-only until stronger evidence arrives."
+              },
+              "status": "candidate"
+            },
+            "metrics": {
+              "pattern_id": "pat_incremental_replacement",
+              "score": 0.6733,
+              "object_role_coverage": 0.6667,
+              "morphism_role_coverage": 0.6667,
+              "composition_preservation": 1.0,
+              "invariant_preservation": 0.6667,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.6733,
+              "matched_terms": [
+                "baseline",
+                "correction",
+                "delta",
+                "identity",
+                "local update",
+                "residual",
+                "rollback"
+              ],
+              "preserved_invariants": [
+                "rollback_path_available",
+                "identity_path_preserved"
+              ],
+              "broken_or_uncertain_invariants": [
+                "module_boundary_preserved"
+              ],
+              "negative_control_hits": [],
+              "decision": "candidate_shadow_only",
+              "reason": "Structural mapping is plausible but should remain shadow-only until stronger evidence arrives."
+            }
+          },
+          {
+            "pattern_id": "pat_controlled_intervention",
+            "pattern_name": "Controlled Intervention / A-B Falsification",
+            "node_id": "struct_pat_controlled_intervention",
+            "score": 0.3567,
+            "decision": "repair_under_specified",
+            "reason": "The diagram lacks enough object, morphism, or invariant coverage.",
+            "matched_terms": [
+              "baseline"
+            ],
+            "preserved_invariants": [
+              "matched_control_required"
+            ],
+            "broken_or_uncertain_invariants": [
+              "single_intervention_isolated"
+            ],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "A candidate with control-variable context should declare trigger and control rows before acceptance."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_controlled_intervention",
+              "source_pattern_name": "Controlled Intervention / A-B Falsification",
+              "object_map": {
+                "baseline_case": [
+                  "baseline"
+                ]
+              },
+              "morphism_map": {
+                "compare_outcomes": [
+                  "baseline"
+                ]
+              },
+              "preserved_invariants": [
+                "matched_control_required"
+              ],
+              "broken_or_uncertain_invariants": [
+                "single_intervention_isolated"
+              ],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "A candidate with control-variable context should declare trigger and control rows before acceptance."
+              ],
+              "score": {
+                "pattern_id": "pat_controlled_intervention",
+                "score": 0.3567,
+                "object_role_coverage": 0.3333,
+                "morphism_role_coverage": 0.5,
+                "composition_preservation": 0.0,
+                "invariant_preservation": 0.5,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.3567,
+                "matched_terms": [
+                  "baseline"
+                ],
+                "preserved_invariants": [
+                  "matched_control_required"
+                ],
+                "broken_or_uncertain_invariants": [
+                  "single_intervention_isolated"
+                ],
+                "negative_control_hits": [],
+                "decision": "repair_under_specified",
+                "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+              },
+              "status": "candidate"
+            },
+            "metrics": {
+              "pattern_id": "pat_controlled_intervention",
+              "score": 0.3567,
+              "object_role_coverage": 0.3333,
+              "morphism_role_coverage": 0.5,
+              "composition_preservation": 0.0,
+              "invariant_preservation": 0.5,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.3567,
+              "matched_terms": [
+                "baseline"
+              ],
+              "preserved_invariants": [
+                "matched_control_required"
+              ],
+              "broken_or_uncertain_invariants": [
+                "single_intervention_isolated"
+              ],
+              "negative_control_hits": [],
+              "decision": "repair_under_specified",
+              "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+            }
+          }
+        ]
+      },
+      {
+        "id": "pair_control_ablation",
+        "query": "The candidate should change one variable, compare against a matched control baseline, and use ablation outcome before acceptance.",
+        "expected": "pat_controlled_intervention",
+        "top_pattern_id": "pat_controlled_intervention",
+        "top_score": 0.97,
+        "passed": true,
+        "applications": [
+          {
+            "pattern_id": "pat_controlled_intervention",
+            "pattern_name": "Controlled Intervention / A-B Falsification",
+            "node_id": "struct_pat_controlled_intervention",
+            "score": 0.97,
+            "decision": "allow",
+            "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer.",
+            "matched_terms": [
+              "ablation",
+              "acceptance",
+              "baseline",
+              "candidate",
+              "compare",
+              "control",
+              "matched",
+              "matched control",
+              "one variable",
+              "outcome"
+            ],
+            "preserved_invariants": [
+              "single_intervention_isolated",
+              "matched_control_required"
+            ],
+            "broken_or_uncertain_invariants": [],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "A candidate with control-variable context should declare trigger and control rows before acceptance."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_controlled_intervention",
+              "source_pattern_name": "Controlled Intervention / A-B Falsification",
+              "object_map": {
+                "baseline_case": [
+                  "baseline",
+                  "control",
+                  "matched"
+                ],
+                "intervention_case": [
+                  "ablation",
+                  "candidate"
+                ],
+                "outcome_measure": [
+                  "acceptance",
+                  "outcome"
+                ]
+              },
+              "morphism_map": {
+                "change_one_factor": [
+                  "one variable"
+                ],
+                "compare_outcomes": [
+                  "ablation",
+                  "baseline",
+                  "compare",
+                  "control"
+                ]
+              },
+              "preserved_invariants": [
+                "single_intervention_isolated",
+                "matched_control_required"
+              ],
+              "broken_or_uncertain_invariants": [],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "A candidate with control-variable context should declare trigger and control rows before acceptance."
+              ],
+              "score": {
+                "pattern_id": "pat_controlled_intervention",
+                "score": 0.97,
+                "object_role_coverage": 1.0,
+                "morphism_role_coverage": 1.0,
+                "composition_preservation": 1.0,
+                "invariant_preservation": 1.0,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.97,
+                "matched_terms": [
+                  "ablation",
+                  "acceptance",
+                  "baseline",
+                  "candidate",
+                  "compare",
+                  "control",
+                  "matched",
+                  "matched control",
+                  "one variable",
+                  "outcome"
+                ],
+                "preserved_invariants": [
+                  "single_intervention_isolated",
+                  "matched_control_required"
+                ],
+                "broken_or_uncertain_invariants": [],
+                "negative_control_hits": [],
+                "decision": "allow",
+                "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer."
+              },
+              "status": "gate_passed_shadow"
+            },
+            "metrics": {
+              "pattern_id": "pat_controlled_intervention",
+              "score": 0.97,
+              "object_role_coverage": 1.0,
+              "morphism_role_coverage": 1.0,
+              "composition_preservation": 1.0,
+              "invariant_preservation": 1.0,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.97,
+              "matched_terms": [
+                "ablation",
+                "acceptance",
+                "baseline",
+                "candidate",
+                "compare",
+                "control",
+                "matched",
+                "matched control",
+                "one variable",
+                "outcome"
+              ],
+              "preserved_invariants": [
+                "single_intervention_isolated",
+                "matched_control_required"
+              ],
+              "broken_or_uncertain_invariants": [],
+              "negative_control_hits": [],
+              "decision": "allow",
+              "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer."
+            }
+          },
+          {
+            "pattern_id": "pat_residual_correction",
+            "pattern_name": "Residual Correction / Identity-Preserving Update",
+            "node_id": "struct_pat_residual_correction",
+            "score": 0.4317,
+            "decision": "repair_under_specified",
+            "reason": "The diagram lacks enough object, morphism, or invariant coverage.",
+            "matched_terms": [
+              "baseline"
+            ],
+            "preserved_invariants": [
+              "identity_path_preserved"
+            ],
+            "broken_or_uncertain_invariants": [
+              "learned_part_models_deviation",
+              "zero_delta_recovers_baseline"
+            ],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "When a plan risks destructive overwrite, structural context should preserve the old path and apply only a local delta."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_residual_correction",
+              "source_pattern_name": "Residual Correction / Identity-Preserving Update",
+              "object_map": {
+                "input_state": [
+                  "baseline"
+                ],
+                "output_state": [
+                  "baseline"
+                ]
+              },
+              "morphism_map": {
+                "identity_path": [
+                  "baseline"
+                ]
+              },
+              "preserved_invariants": [
+                "identity_path_preserved"
+              ],
+              "broken_or_uncertain_invariants": [
+                "learned_part_models_deviation",
+                "zero_delta_recovers_baseline"
+              ],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "When a plan risks destructive overwrite, structural context should preserve the old path and apply only a local delta."
+              ],
+              "score": {
+                "pattern_id": "pat_residual_correction",
+                "score": 0.4317,
+                "object_role_coverage": 0.6667,
+                "morphism_role_coverage": 0.3333,
+                "composition_preservation": 0.5,
+                "invariant_preservation": 0.3333,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.4317,
+                "matched_terms": [
+                  "baseline"
+                ],
+                "preserved_invariants": [
+                  "identity_path_preserved"
+                ],
+                "broken_or_uncertain_invariants": [
+                  "learned_part_models_deviation",
+                  "zero_delta_recovers_baseline"
+                ],
+                "negative_control_hits": [],
+                "decision": "repair_under_specified",
+                "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+              },
+              "status": "candidate"
+            },
+            "metrics": {
+              "pattern_id": "pat_residual_correction",
+              "score": 0.4317,
+              "object_role_coverage": 0.6667,
+              "morphism_role_coverage": 0.3333,
+              "composition_preservation": 0.5,
+              "invariant_preservation": 0.3333,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.4317,
+              "matched_terms": [
+                "baseline"
+              ],
+              "preserved_invariants": [
+                "identity_path_preserved"
+              ],
+              "broken_or_uncertain_invariants": [
+                "learned_part_models_deviation",
+                "zero_delta_recovers_baseline"
+              ],
+              "negative_control_hits": [],
+              "decision": "repair_under_specified",
+              "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+            }
+          },
+          {
+            "pattern_id": "pat_incremental_replacement",
+            "pattern_name": "Incremental Replacement / Module Boundary Preservation",
+            "node_id": "struct_pat_incremental_replacement",
+            "score": 0.3333,
+            "decision": "repair_under_specified",
+            "reason": "The diagram lacks enough object, morphism, or invariant coverage.",
+            "matched_terms": [
+              "baseline"
+            ],
+            "preserved_invariants": [
+              "identity_path_preserved"
+            ],
+            "broken_or_uncertain_invariants": [
+              "module_boundary_preserved",
+              "rollback_path_available"
+            ],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "For high-risk system changes, structural context should prefer one-module replacement with rollback over whole-system rewrite."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_incremental_replacement",
+              "source_pattern_name": "Incremental Replacement / Module Boundary Preservation",
+              "object_map": {
+                "working_pipeline": [
+                  "baseline"
+                ]
+              },
+              "morphism_map": {
+                "preserve_pipeline": [
+                  "baseline"
+                ],
+                "rollback_if_failed": [
+                  "baseline"
+                ]
+              },
+              "preserved_invariants": [
+                "identity_path_preserved"
+              ],
+              "broken_or_uncertain_invariants": [
+                "module_boundary_preserved",
+                "rollback_path_available"
+              ],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "For high-risk system changes, structural context should prefer one-module replacement with rollback over whole-system rewrite."
+              ],
+              "score": {
+                "pattern_id": "pat_incremental_replacement",
+                "score": 0.3333,
+                "object_role_coverage": 0.3333,
+                "morphism_role_coverage": 0.6667,
+                "composition_preservation": 0.0,
+                "invariant_preservation": 0.3333,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.3333,
+                "matched_terms": [
+                  "baseline"
+                ],
+                "preserved_invariants": [
+                  "identity_path_preserved"
+                ],
+                "broken_or_uncertain_invariants": [
+                  "module_boundary_preserved",
+                  "rollback_path_available"
+                ],
+                "negative_control_hits": [],
+                "decision": "repair_under_specified",
+                "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+              },
+              "status": "candidate"
+            },
+            "metrics": {
+              "pattern_id": "pat_incremental_replacement",
+              "score": 0.3333,
+              "object_role_coverage": 0.3333,
+              "morphism_role_coverage": 0.6667,
+              "composition_preservation": 0.0,
+              "invariant_preservation": 0.3333,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.3333,
+              "matched_terms": [
+                "baseline"
+              ],
+              "preserved_invariants": [
+                "identity_path_preserved"
+              ],
+              "broken_or_uncertain_invariants": [
+                "module_boundary_preserved",
+                "rollback_path_available"
+              ],
+              "negative_control_hits": [],
+              "decision": "repair_under_specified",
+              "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+            }
+          }
+        ]
+      },
+      {
+        "id": "pair_incremental_replacement",
+        "query": "Keep the working pipeline, replace one module behind an adapter boundary, and rollback rather than rewrite the whole system.",
+        "expected": "pat_incremental_replacement",
+        "top_pattern_id": "pat_incremental_replacement",
+        "top_score": 0.9017,
+        "passed": true,
+        "applications": [
+          {
+            "pattern_id": "pat_incremental_replacement",
+            "pattern_name": "Incremental Replacement / Module Boundary Preservation",
+            "node_id": "struct_pat_incremental_replacement",
+            "score": 0.9017,
+            "decision": "candidate_shadow_only",
+            "reason": "Structural mapping is plausible but should remain shadow-only until stronger evidence arrives.",
+            "matched_terms": [
+              "adapter",
+              "adapter boundary",
+              "boundary",
+              "keep",
+              "module",
+              "pipeline",
+              "replace one",
+              "rollback",
+              "working pipeline"
+            ],
+            "preserved_invariants": [
+              "module_boundary_preserved",
+              "rollback_path_available"
+            ],
+            "broken_or_uncertain_invariants": [
+              "identity_path_preserved"
+            ],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "For high-risk system changes, structural context should prefer one-module replacement with rollback over whole-system rewrite."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_incremental_replacement",
+              "source_pattern_name": "Incremental Replacement / Module Boundary Preservation",
+              "object_map": {
+                "working_pipeline": [
+                  "working pipeline"
+                ],
+                "module_boundary": [
+                  "adapter",
+                  "boundary",
+                  "module"
+                ],
+                "replacement_delta": [
+                  "replace one"
+                ]
+              },
+              "morphism_map": {
+                "preserve_pipeline": [
+                  "keep"
+                ],
+                "swap_one_module": [
+                  "replace one"
+                ],
+                "rollback_if_failed": [
+                  "rollback"
+                ]
+              },
+              "preserved_invariants": [
+                "module_boundary_preserved",
+                "rollback_path_available"
+              ],
+              "broken_or_uncertain_invariants": [
+                "identity_path_preserved"
+              ],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "For high-risk system changes, structural context should prefer one-module replacement with rollback over whole-system rewrite."
+              ],
+              "score": {
+                "pattern_id": "pat_incremental_replacement",
+                "score": 0.9017,
+                "object_role_coverage": 1.0,
+                "morphism_role_coverage": 1.0,
+                "composition_preservation": 1.0,
+                "invariant_preservation": 0.6667,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.9017,
+                "matched_terms": [
+                  "adapter",
+                  "adapter boundary",
+                  "boundary",
+                  "keep",
+                  "module",
+                  "pipeline",
+                  "replace one",
+                  "rollback",
+                  "working pipeline"
+                ],
+                "preserved_invariants": [
+                  "module_boundary_preserved",
+                  "rollback_path_available"
+                ],
+                "broken_or_uncertain_invariants": [
+                  "identity_path_preserved"
+                ],
+                "negative_control_hits": [],
+                "decision": "candidate_shadow_only",
+                "reason": "Structural mapping is plausible but should remain shadow-only until stronger evidence arrives."
+              },
+              "status": "candidate"
+            },
+            "metrics": {
+              "pattern_id": "pat_incremental_replacement",
+              "score": 0.9017,
+              "object_role_coverage": 1.0,
+              "morphism_role_coverage": 1.0,
+              "composition_preservation": 1.0,
+              "invariant_preservation": 0.6667,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.9017,
+              "matched_terms": [
+                "adapter",
+                "adapter boundary",
+                "boundary",
+                "keep",
+                "module",
+                "pipeline",
+                "replace one",
+                "rollback",
+                "working pipeline"
+              ],
+              "preserved_invariants": [
+                "module_boundary_preserved",
+                "rollback_path_available"
+              ],
+              "broken_or_uncertain_invariants": [
+                "identity_path_preserved"
+              ],
+              "negative_control_hits": [],
+              "decision": "candidate_shadow_only",
+              "reason": "Structural mapping is plausible but should remain shadow-only until stronger evidence arrives."
+            }
+          },
+          {
+            "pattern_id": "pat_residual_correction",
+            "pattern_name": "Residual Correction / Identity-Preserving Update",
+            "node_id": "struct_pat_residual_correction",
+            "score": 0.395,
+            "decision": "repair_under_specified",
+            "reason": "The diagram lacks enough object, morphism, or invariant coverage.",
+            "matched_terms": [
+              "adapter",
+              "rewrite",
+              "rollback"
+            ],
+            "preserved_invariants": [
+              "zero_delta_recovers_baseline"
+            ],
+            "broken_or_uncertain_invariants": [
+              "identity_path_preserved",
+              "learned_part_models_deviation"
+            ],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "When a plan risks destructive overwrite, structural context should preserve the old path and apply only a local delta."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_residual_correction",
+              "source_pattern_name": "Residual Correction / Identity-Preserving Update",
+              "object_map": {
+                "delta_update": [
+                  "adapter"
+                ]
+              },
+              "morphism_map": {
+                "learn_delta": [
+                  "adapter"
+                ],
+                "compose_add": [
+                  "adapter"
+                ]
+              },
+              "preserved_invariants": [
+                "zero_delta_recovers_baseline"
+              ],
+              "broken_or_uncertain_invariants": [
+                "identity_path_preserved",
+                "learned_part_models_deviation"
+              ],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "When a plan risks destructive overwrite, structural context should preserve the old path and apply only a local delta."
+              ],
+              "score": {
+                "pattern_id": "pat_residual_correction",
+                "score": 0.395,
+                "object_role_coverage": 0.3333,
+                "morphism_role_coverage": 0.6667,
+                "composition_preservation": 0.0,
+                "invariant_preservation": 0.3333,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.395,
+                "matched_terms": [
+                  "adapter",
+                  "rewrite",
+                  "rollback"
+                ],
+                "preserved_invariants": [
+                  "zero_delta_recovers_baseline"
+                ],
+                "broken_or_uncertain_invariants": [
+                  "identity_path_preserved",
+                  "learned_part_models_deviation"
+                ],
+                "negative_control_hits": [],
+                "decision": "repair_under_specified",
+                "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+              },
+              "status": "candidate"
+            },
+            "metrics": {
+              "pattern_id": "pat_residual_correction",
+              "score": 0.395,
+              "object_role_coverage": 0.3333,
+              "morphism_role_coverage": 0.6667,
+              "composition_preservation": 0.0,
+              "invariant_preservation": 0.3333,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.395,
+              "matched_terms": [
+                "adapter",
+                "rewrite",
+                "rollback"
+              ],
+              "preserved_invariants": [
+                "zero_delta_recovers_baseline"
+              ],
+              "broken_or_uncertain_invariants": [
+                "identity_path_preserved",
+                "learned_part_models_deviation"
+              ],
+              "negative_control_hits": [],
+              "decision": "repair_under_specified",
+              "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+            }
+          }
+        ]
+      },
+      {
+        "id": "pair_feedback",
+        "query": "A disturbance perturbs equilibrium and induces a response that opposes the imposed change under a conservation law.",
+        "expected": "pat_negative_feedback",
+        "top_pattern_id": "pat_negative_feedback",
+        "top_score": 0.97,
+        "passed": true,
+        "applications": [
+          {
+            "pattern_id": "pat_negative_feedback",
+            "pattern_name": "Negative Feedback / Equilibrium Restoration",
+            "node_id": "struct_pat_negative_feedback",
+            "score": 0.97,
+            "decision": "allow",
+            "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer.",
+            "matched_terms": [
+              "conservation",
+              "disturbance",
+              "equilibrium",
+              "imposed change",
+              "law",
+              "opposes",
+              "response"
+            ],
+            "preserved_invariants": [
+              "response_opposes_perturbation",
+              "constraint_explains_response"
+            ],
+            "broken_or_uncertain_invariants": [],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "If the mapping is valid, an answer should identify the perturbation, induced response, and preserved constraint."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_negative_feedback",
+              "source_pattern_name": "Negative Feedback / Equilibrium Restoration",
+              "object_map": {
+                "system_state": [
+                  "equilibrium"
+                ],
+                "external_perturbation": [
+                  "disturbance",
+                  "imposed change"
+                ],
+                "induced_response": [
+                  "opposes",
+                  "response"
+                ]
+              },
+              "morphism_map": {
+                "perturb_state": [
+                  "disturbance"
+                ],
+                "induce_response": [
+                  "response"
+                ],
+                "oppose_change": [
+                  "opposes"
+                ]
+              },
+              "preserved_invariants": [
+                "response_opposes_perturbation",
+                "constraint_explains_response"
+              ],
+              "broken_or_uncertain_invariants": [],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "If the mapping is valid, an answer should identify the perturbation, induced response, and preserved constraint."
+              ],
+              "score": {
+                "pattern_id": "pat_negative_feedback",
+                "score": 0.97,
+                "object_role_coverage": 1.0,
+                "morphism_role_coverage": 1.0,
+                "composition_preservation": 1.0,
+                "invariant_preservation": 1.0,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.97,
+                "matched_terms": [
+                  "conservation",
+                  "disturbance",
+                  "equilibrium",
+                  "imposed change",
+                  "law",
+                  "opposes",
+                  "response"
+                ],
+                "preserved_invariants": [
+                  "response_opposes_perturbation",
+                  "constraint_explains_response"
+                ],
+                "broken_or_uncertain_invariants": [],
+                "negative_control_hits": [],
+                "decision": "allow",
+                "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer."
+              },
+              "status": "gate_passed_shadow"
+            },
+            "metrics": {
+              "pattern_id": "pat_negative_feedback",
+              "score": 0.97,
+              "object_role_coverage": 1.0,
+              "morphism_role_coverage": 1.0,
+              "composition_preservation": 1.0,
+              "invariant_preservation": 1.0,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.97,
+              "matched_terms": [
+                "conservation",
+                "disturbance",
+                "equilibrium",
+                "imposed change",
+                "law",
+                "opposes",
+                "response"
+              ],
+              "preserved_invariants": [
+                "response_opposes_perturbation",
+                "constraint_explains_response"
+              ],
+              "broken_or_uncertain_invariants": [],
+              "negative_control_hits": [],
+              "decision": "allow",
+              "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer."
+            }
+          }
+        ]
+      },
+      {
+        "id": "pair_signal_noise",
+        "query": "A latent world-state predictor should keep predictable correlated signal and suppress Gaussian uncorrelated nuisance noise instead of reconstructing irrelevant detail.",
+        "expected": "pat_signal_nuisance_separation",
+        "top_pattern_id": "pat_signal_nuisance_separation",
+        "top_score": 0.97,
+        "passed": true,
+        "applications": [
+          {
+            "pattern_id": "pat_signal_nuisance_separation",
+            "pattern_name": "Signal vs Stochastic Nuisance Separation",
+            "node_id": "struct_pat_signal_nuisance_separation",
+            "score": 0.97,
+            "decision": "allow",
+            "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer.",
+            "matched_terms": [
+              "correlated",
+              "gaussian",
+              "irrelevant detail",
+              "latent",
+              "noise",
+              "nuisance",
+              "predictable",
+              "suppress",
+              "uncorrelated"
+            ],
+            "preserved_invariants": [
+              "predictable_structure_separated",
+              "stochastic_nuisance_suppressed"
+            ],
+            "broken_or_uncertain_invariants": [],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "A valid transfer should improve stable-state prediction or denoising while avoiding reconstruction of nuisance details."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_signal_nuisance_separation",
+              "source_pattern_name": "Signal vs Stochastic Nuisance Separation",
+              "object_map": {
+                "stable_signal": [
+                  "correlated",
+                  "predictable"
+                ],
+                "nuisance_noise": [
+                  "gaussian",
+                  "noise",
+                  "nuisance",
+                  "uncorrelated"
+                ],
+                "projection_operator": [
+                  "correlated",
+                  "predictable"
+                ]
+              },
+              "morphism_map": {
+                "suppress_noise": [
+                  "suppress"
+                ],
+                "recover_signal": [
+                  "latent"
+                ]
+              },
+              "preserved_invariants": [
+                "predictable_structure_separated",
+                "stochastic_nuisance_suppressed"
+              ],
+              "broken_or_uncertain_invariants": [],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "A valid transfer should improve stable-state prediction or denoising while avoiding reconstruction of nuisance details."
+              ],
+              "score": {
+                "pattern_id": "pat_signal_nuisance_separation",
+                "score": 0.97,
+                "object_role_coverage": 1.0,
+                "morphism_role_coverage": 1.0,
+                "composition_preservation": 1.0,
+                "invariant_preservation": 1.0,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.97,
+                "matched_terms": [
+                  "correlated",
+                  "gaussian",
+                  "irrelevant detail",
+                  "latent",
+                  "noise",
+                  "nuisance",
+                  "predictable",
+                  "suppress",
+                  "uncorrelated"
+                ],
+                "preserved_invariants": [
+                  "predictable_structure_separated",
+                  "stochastic_nuisance_suppressed"
+                ],
+                "broken_or_uncertain_invariants": [],
+                "negative_control_hits": [],
+                "decision": "allow",
+                "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer."
+              },
+              "status": "gate_passed_shadow"
+            },
+            "metrics": {
+              "pattern_id": "pat_signal_nuisance_separation",
+              "score": 0.97,
+              "object_role_coverage": 1.0,
+              "morphism_role_coverage": 1.0,
+              "composition_preservation": 1.0,
+              "invariant_preservation": 1.0,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.97,
+              "matched_terms": [
+                "correlated",
+                "gaussian",
+                "irrelevant detail",
+                "latent",
+                "noise",
+                "nuisance",
+                "predictable",
+                "suppress",
+                "uncorrelated"
+              ],
+              "preserved_invariants": [
+                "predictable_structure_separated",
+                "stochastic_nuisance_suppressed"
+              ],
+              "broken_or_uncertain_invariants": [],
+              "negative_control_hits": [],
+              "decision": "allow",
+              "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer."
+            }
+          }
+        ]
+      }
+    ],
+    "negative_rows": [
+      {
+        "id": "neg_synonym_only",
+        "query": "Two papers use similar names and neighboring words, but no roles, morphisms, invariant, control, or transfer prediction are specified.",
+        "top_pattern_id": "pat_controlled_intervention",
+        "top_score": 0.5567,
+        "top_decision": "block_negative_control",
+        "rejected": true,
+        "applications": [
+          {
+            "pattern_id": "pat_controlled_intervention",
+            "pattern_name": "Controlled Intervention / A-B Falsification",
+            "node_id": "struct_pat_controlled_intervention",
+            "score": 0.5567,
+            "decision": "block_negative_control",
+            "reason": "A severe negative-control or explicit missing-structure signal is present.",
+            "matched_terms": [
+              "control"
+            ],
+            "preserved_invariants": [
+              "single_intervention_isolated",
+              "matched_control_required"
+            ],
+            "broken_or_uncertain_invariants": [
+              "explicit_negation::no roles"
+            ],
+            "negative_control_hits": [
+              "no roles"
+            ],
+            "transfer_predictions": [
+              "A candidate with control-variable context should declare trigger and control rows before acceptance."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_controlled_intervention",
+              "source_pattern_name": "Controlled Intervention / A-B Falsification",
+              "object_map": {
+                "baseline_case": [
+                  "control"
+                ],
+                "intervention_case": [
+                  "control"
+                ],
+                "outcome_measure": [
+                  "control"
+                ]
+              },
+              "morphism_map": {
+                "change_one_factor": [
+                  "control"
+                ],
+                "compare_outcomes": [
+                  "control"
+                ]
+              },
+              "preserved_invariants": [
+                "single_intervention_isolated",
+                "matched_control_required"
+              ],
+              "broken_or_uncertain_invariants": [
+                "explicit_negation::no roles"
+              ],
+              "negative_control_hits": [
+                "no roles"
+              ],
+              "transfer_predictions": [
+                "A candidate with control-variable context should declare trigger and control rows before acceptance."
+              ],
+              "score": {
+                "pattern_id": "pat_controlled_intervention",
+                "score": 0.5567,
+                "object_role_coverage": 1.0,
+                "morphism_role_coverage": 1.0,
+                "composition_preservation": 1.0,
+                "invariant_preservation": 1.0,
+                "negative_control_score": 0.3333,
+                "negative_control_margin": 0.59,
+                "matched_terms": [
+                  "control"
+                ],
+                "preserved_invariants": [
+                  "single_intervention_isolated",
+                  "matched_control_required"
+                ],
+                "broken_or_uncertain_invariants": [
+                  "explicit_negation::no roles"
+                ],
+                "negative_control_hits": [
+                  "no roles"
+                ],
+                "decision": "block_negative_control",
+                "reason": "A severe negative-control or explicit missing-structure signal is present."
+              },
+              "status": "candidate"
+            },
+            "metrics": {
+              "pattern_id": "pat_controlled_intervention",
+              "score": 0.5567,
+              "object_role_coverage": 1.0,
+              "morphism_role_coverage": 1.0,
+              "composition_preservation": 1.0,
+              "invariant_preservation": 1.0,
+              "negative_control_score": 0.3333,
+              "negative_control_margin": 0.59,
+              "matched_terms": [
+                "control"
+              ],
+              "preserved_invariants": [
+                "single_intervention_isolated",
+                "matched_control_required"
+              ],
+              "broken_or_uncertain_invariants": [
+                "explicit_negation::no roles"
+              ],
+              "negative_control_hits": [
+                "no roles"
+              ],
+              "decision": "block_negative_control",
+              "reason": "A severe negative-control or explicit missing-structure signal is present."
+            }
+          }
+        ]
+      },
+      {
+        "id": "neg_residual_control",
+        "query": "A plain stack rewrites every layer without identity, no fallback, and no residual path.",
+        "top_pattern_id": null,
+        "top_score": 0.0,
+        "top_decision": null,
+        "rejected": true,
+        "applications": []
+      },
+      {
+        "id": "neg_signal_noise",
+        "query": "A Gaussian style prior is mentioned, but there is no predictable signal and the method memorizes noise.",
+        "top_pattern_id": "pat_signal_nuisance_separation",
+        "top_score": 0.3867,
+        "top_decision": "block_negative_control",
+        "rejected": true,
+        "applications": [
+          {
+            "pattern_id": "pat_signal_nuisance_separation",
+            "pattern_name": "Signal vs Stochastic Nuisance Separation",
+            "node_id": "struct_pat_signal_nuisance_separation",
+            "score": 0.3867,
+            "decision": "block_negative_control",
+            "reason": "A severe negative-control or explicit missing-structure signal is present.",
+            "matched_terms": [
+              "gaussian",
+              "noise",
+              "predictable"
+            ],
+            "preserved_invariants": [
+              "predictable_structure_separated",
+              "stochastic_nuisance_suppressed"
+            ],
+            "broken_or_uncertain_invariants": [
+              "explicit_negation::no predictable signal"
+            ],
+            "negative_control_hits": [
+              "memorizes noise",
+              "no predictable signal"
+            ],
+            "transfer_predictions": [
+              "A valid transfer should improve stable-state prediction or denoising while avoiding reconstruction of nuisance details."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_signal_nuisance_separation",
+              "source_pattern_name": "Signal vs Stochastic Nuisance Separation",
+              "object_map": {
+                "stable_signal": [
+                  "predictable"
+                ],
+                "nuisance_noise": [
+                  "gaussian",
+                  "noise"
+                ],
+                "projection_operator": [
+                  "predictable"
+                ]
+              },
+              "morphism_map": {
+                "suppress_noise": [
+                  "gaussian",
+                  "noise"
+                ],
+                "recover_signal": [
+                  "predictable"
+                ]
+              },
+              "preserved_invariants": [
+                "predictable_structure_separated",
+                "stochastic_nuisance_suppressed"
+              ],
+              "broken_or_uncertain_invariants": [
+                "explicit_negation::no predictable signal"
+              ],
+              "negative_control_hits": [
+                "memorizes noise",
+                "no predictable signal"
+              ],
+              "transfer_predictions": [
+                "A valid transfer should improve stable-state prediction or denoising while avoiding reconstruction of nuisance details."
+              ],
+              "score": {
+                "pattern_id": "pat_signal_nuisance_separation",
+                "score": 0.3867,
+                "object_role_coverage": 1.0,
+                "morphism_role_coverage": 1.0,
+                "composition_preservation": 1.0,
+                "invariant_preservation": 1.0,
+                "negative_control_score": 0.6667,
+                "negative_control_margin": 0.3033,
+                "matched_terms": [
+                  "gaussian",
+                  "noise",
+                  "predictable"
+                ],
+                "preserved_invariants": [
+                  "predictable_structure_separated",
+                  "stochastic_nuisance_suppressed"
+                ],
+                "broken_or_uncertain_invariants": [
+                  "explicit_negation::no predictable signal"
+                ],
+                "negative_control_hits": [
+                  "memorizes noise",
+                  "no predictable signal"
+                ],
+                "decision": "block_negative_control",
+                "reason": "A severe negative-control or explicit missing-structure signal is present."
+              },
+              "status": "candidate"
+            },
+            "metrics": {
+              "pattern_id": "pat_signal_nuisance_separation",
+              "score": 0.3867,
+              "object_role_coverage": 1.0,
+              "morphism_role_coverage": 1.0,
+              "composition_preservation": 1.0,
+              "invariant_preservation": 1.0,
+              "negative_control_score": 0.6667,
+              "negative_control_margin": 0.3033,
+              "matched_terms": [
+                "gaussian",
+                "noise",
+                "predictable"
+              ],
+              "preserved_invariants": [
+                "predictable_structure_separated",
+                "stochastic_nuisance_suppressed"
+              ],
+              "broken_or_uncertain_invariants": [
+                "explicit_negation::no predictable signal"
+              ],
+              "negative_control_hits": [
+                "memorizes noise",
+                "no predictable signal"
+              ],
+              "decision": "block_negative_control",
+              "reason": "A severe negative-control or explicit missing-structure signal is present."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "retrieval_probe": {
+    "eval_id": "structural_validation_20260602",
+    "eval_kind": "nonlexical_structural_retrieval_probe",
+    "query_count": 5,
+    "top1_hit_rate": 1.0,
+    "pass": true,
+    "rows": [
+      {
+        "id": "probe_delta_path",
+        "query": "The new method should keep a verified path and only alter the part that differs, so the old behavior is recoverable.",
+        "expected": "pat_residual_correction",
+        "top_pattern_id": "pat_residual_correction",
+        "top_score": 0.3333,
+        "passed": true,
+        "applications": [
+          {
+            "pattern_id": "pat_residual_correction",
+            "pattern_name": "Residual Correction / Identity-Preserving Update",
+            "node_id": "struct_pat_residual_correction",
+            "score": 0.3333,
+            "decision": "repair_under_specified",
+            "reason": "The diagram lacks enough object, morphism, or invariant coverage.",
+            "matched_terms": [
+              "old behavior",
+              "verified path"
+            ],
+            "preserved_invariants": [
+              "zero_delta_recovers_baseline"
+            ],
+            "broken_or_uncertain_invariants": [
+              "identity_path_preserved",
+              "learned_part_models_deviation"
+            ],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "When a plan risks destructive overwrite, structural context should preserve the old path and apply only a local delta."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_residual_correction",
+              "source_pattern_name": "Residual Correction / Identity-Preserving Update",
+              "object_map": {
+                "input_state": [
+                  "verified path"
+                ],
+                "output_state": [
+                  "old behavior"
+                ]
+              },
+              "morphism_map": {
+                "identity_path": [
+                  "verified path"
+                ]
+              },
+              "preserved_invariants": [
+                "zero_delta_recovers_baseline"
+              ],
+              "broken_or_uncertain_invariants": [
+                "identity_path_preserved",
+                "learned_part_models_deviation"
+              ],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "When a plan risks destructive overwrite, structural context should preserve the old path and apply only a local delta."
+              ],
+              "score": {
+                "pattern_id": "pat_residual_correction",
+                "score": 0.3333,
+                "object_role_coverage": 0.6667,
+                "morphism_role_coverage": 0.3333,
+                "composition_preservation": 0.0,
+                "invariant_preservation": 0.3333,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.3333,
+                "matched_terms": [
+                  "old behavior",
+                  "verified path"
+                ],
+                "preserved_invariants": [
+                  "zero_delta_recovers_baseline"
+                ],
+                "broken_or_uncertain_invariants": [
+                  "identity_path_preserved",
+                  "learned_part_models_deviation"
+                ],
+                "negative_control_hits": [],
+                "decision": "repair_under_specified",
+                "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+              },
+              "status": "candidate"
+            },
+            "metrics": {
+              "pattern_id": "pat_residual_correction",
+              "score": 0.3333,
+              "object_role_coverage": 0.6667,
+              "morphism_role_coverage": 0.3333,
+              "composition_preservation": 0.0,
+              "invariant_preservation": 0.3333,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.3333,
+              "matched_terms": [
+                "old behavior",
+                "verified path"
+              ],
+              "preserved_invariants": [
+                "zero_delta_recovers_baseline"
+              ],
+              "broken_or_uncertain_invariants": [
+                "identity_path_preserved",
+                "learned_part_models_deviation"
+              ],
+              "negative_control_hits": [],
+              "decision": "repair_under_specified",
+              "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+            }
+          },
+          {
+            "pattern_id": "pat_incremental_replacement",
+            "pattern_name": "Incremental Replacement / Module Boundary Preservation",
+            "node_id": "struct_pat_incremental_replacement",
+            "score": 0.25,
+            "decision": "repair_under_specified",
+            "reason": "The diagram lacks enough object, morphism, or invariant coverage.",
+            "matched_terms": [
+              "keep",
+              "verified path"
+            ],
+            "preserved_invariants": [],
+            "broken_or_uncertain_invariants": [
+              "identity_path_preserved",
+              "module_boundary_preserved",
+              "rollback_path_available"
+            ],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "For high-risk system changes, structural context should prefer one-module replacement with rollback over whole-system rewrite."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_incremental_replacement",
+              "source_pattern_name": "Incremental Replacement / Module Boundary Preservation",
+              "object_map": {
+                "working_pipeline": [
+                  "verified path"
+                ]
+              },
+              "morphism_map": {
+                "preserve_pipeline": [
+                  "keep"
+                ],
+                "rollback_if_failed": [
+                  "verified path"
+                ]
+              },
+              "preserved_invariants": [],
+              "broken_or_uncertain_invariants": [
+                "identity_path_preserved",
+                "module_boundary_preserved",
+                "rollback_path_available"
+              ],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "For high-risk system changes, structural context should prefer one-module replacement with rollback over whole-system rewrite."
+              ],
+              "score": {
+                "pattern_id": "pat_incremental_replacement",
+                "score": 0.25,
+                "object_role_coverage": 0.3333,
+                "morphism_role_coverage": 0.6667,
+                "composition_preservation": 0.0,
+                "invariant_preservation": 0.0,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.25,
+                "matched_terms": [
+                  "keep",
+                  "verified path"
+                ],
+                "preserved_invariants": [],
+                "broken_or_uncertain_invariants": [
+                  "identity_path_preserved",
+                  "module_boundary_preserved",
+                  "rollback_path_available"
+                ],
+                "negative_control_hits": [],
+                "decision": "repair_under_specified",
+                "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+              },
+              "status": "candidate"
+            },
+            "metrics": {
+              "pattern_id": "pat_incremental_replacement",
+              "score": 0.25,
+              "object_role_coverage": 0.3333,
+              "morphism_role_coverage": 0.6667,
+              "composition_preservation": 0.0,
+              "invariant_preservation": 0.0,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.25,
+              "matched_terms": [
+                "keep",
+                "verified path"
+              ],
+              "preserved_invariants": [],
+              "broken_or_uncertain_invariants": [
+                "identity_path_preserved",
+                "module_boundary_preserved",
+                "rollback_path_available"
+              ],
+              "negative_control_hits": [],
+              "decision": "repair_under_specified",
+              "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+            }
+          }
+        ]
+      },
+      {
+        "id": "probe_single_factor",
+        "query": "Before promotion, isolate the candidate effect by comparing one changed factor with a matched baseline row.",
+        "expected": "pat_controlled_intervention",
+        "top_pattern_id": "pat_controlled_intervention",
+        "top_score": 0.59,
+        "passed": true,
+        "applications": [
+          {
+            "pattern_id": "pat_controlled_intervention",
+            "pattern_name": "Controlled Intervention / A-B Falsification",
+            "node_id": "struct_pat_controlled_intervention",
+            "score": 0.59,
+            "decision": "candidate_shadow_only",
+            "reason": "Structural mapping is plausible but should remain shadow-only until stronger evidence arrives.",
+            "matched_terms": [
+              "baseline",
+              "candidate",
+              "matched"
+            ],
+            "preserved_invariants": [
+              "matched_control_required"
+            ],
+            "broken_or_uncertain_invariants": [
+              "single_intervention_isolated"
+            ],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "A candidate with control-variable context should declare trigger and control rows before acceptance."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_controlled_intervention",
+              "source_pattern_name": "Controlled Intervention / A-B Falsification",
+              "object_map": {
+                "baseline_case": [
+                  "baseline",
+                  "matched"
+                ],
+                "intervention_case": [
+                  "candidate"
+                ]
+              },
+              "morphism_map": {
+                "compare_outcomes": [
+                  "baseline"
+                ]
+              },
+              "preserved_invariants": [
+                "matched_control_required"
+              ],
+              "broken_or_uncertain_invariants": [
+                "single_intervention_isolated"
+              ],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "A candidate with control-variable context should declare trigger and control rows before acceptance."
+              ],
+              "score": {
+                "pattern_id": "pat_controlled_intervention",
+                "score": 0.59,
+                "object_role_coverage": 0.6667,
+                "morphism_role_coverage": 0.5,
+                "composition_preservation": 1.0,
+                "invariant_preservation": 0.5,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.59,
+                "matched_terms": [
+                  "baseline",
+                  "candidate",
+                  "matched"
+                ],
+                "preserved_invariants": [
+                  "matched_control_required"
+                ],
+                "broken_or_uncertain_invariants": [
+                  "single_intervention_isolated"
+                ],
+                "negative_control_hits": [],
+                "decision": "candidate_shadow_only",
+                "reason": "Structural mapping is plausible but should remain shadow-only until stronger evidence arrives."
+              },
+              "status": "candidate"
+            },
+            "metrics": {
+              "pattern_id": "pat_controlled_intervention",
+              "score": 0.59,
+              "object_role_coverage": 0.6667,
+              "morphism_role_coverage": 0.5,
+              "composition_preservation": 1.0,
+              "invariant_preservation": 0.5,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.59,
+              "matched_terms": [
+                "baseline",
+                "candidate",
+                "matched"
+              ],
+              "preserved_invariants": [
+                "matched_control_required"
+              ],
+              "broken_or_uncertain_invariants": [
+                "single_intervention_isolated"
+              ],
+              "negative_control_hits": [],
+              "decision": "candidate_shadow_only",
+              "reason": "Structural mapping is plausible but should remain shadow-only until stronger evidence arrives."
+            }
+          },
+          {
+            "pattern_id": "pat_residual_correction",
+            "pattern_name": "Residual Correction / Identity-Preserving Update",
+            "node_id": "struct_pat_residual_correction",
+            "score": 0.4317,
+            "decision": "repair_under_specified",
+            "reason": "The diagram lacks enough object, morphism, or invariant coverage.",
+            "matched_terms": [
+              "baseline"
+            ],
+            "preserved_invariants": [
+              "identity_path_preserved"
+            ],
+            "broken_or_uncertain_invariants": [
+              "learned_part_models_deviation",
+              "zero_delta_recovers_baseline"
+            ],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "When a plan risks destructive overwrite, structural context should preserve the old path and apply only a local delta."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_residual_correction",
+              "source_pattern_name": "Residual Correction / Identity-Preserving Update",
+              "object_map": {
+                "input_state": [
+                  "baseline"
+                ],
+                "output_state": [
+                  "baseline"
+                ]
+              },
+              "morphism_map": {
+                "identity_path": [
+                  "baseline"
+                ]
+              },
+              "preserved_invariants": [
+                "identity_path_preserved"
+              ],
+              "broken_or_uncertain_invariants": [
+                "learned_part_models_deviation",
+                "zero_delta_recovers_baseline"
+              ],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "When a plan risks destructive overwrite, structural context should preserve the old path and apply only a local delta."
+              ],
+              "score": {
+                "pattern_id": "pat_residual_correction",
+                "score": 0.4317,
+                "object_role_coverage": 0.6667,
+                "morphism_role_coverage": 0.3333,
+                "composition_preservation": 0.5,
+                "invariant_preservation": 0.3333,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.4317,
+                "matched_terms": [
+                  "baseline"
+                ],
+                "preserved_invariants": [
+                  "identity_path_preserved"
+                ],
+                "broken_or_uncertain_invariants": [
+                  "learned_part_models_deviation",
+                  "zero_delta_recovers_baseline"
+                ],
+                "negative_control_hits": [],
+                "decision": "repair_under_specified",
+                "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+              },
+              "status": "candidate"
+            },
+            "metrics": {
+              "pattern_id": "pat_residual_correction",
+              "score": 0.4317,
+              "object_role_coverage": 0.6667,
+              "morphism_role_coverage": 0.3333,
+              "composition_preservation": 0.5,
+              "invariant_preservation": 0.3333,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.4317,
+              "matched_terms": [
+                "baseline"
+              ],
+              "preserved_invariants": [
+                "identity_path_preserved"
+              ],
+              "broken_or_uncertain_invariants": [
+                "learned_part_models_deviation",
+                "zero_delta_recovers_baseline"
+              ],
+              "negative_control_hits": [],
+              "decision": "repair_under_specified",
+              "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+            }
+          },
+          {
+            "pattern_id": "pat_incremental_replacement",
+            "pattern_name": "Incremental Replacement / Module Boundary Preservation",
+            "node_id": "struct_pat_incremental_replacement",
+            "score": 0.3333,
+            "decision": "repair_under_specified",
+            "reason": "The diagram lacks enough object, morphism, or invariant coverage.",
+            "matched_terms": [
+              "baseline"
+            ],
+            "preserved_invariants": [
+              "identity_path_preserved"
+            ],
+            "broken_or_uncertain_invariants": [
+              "module_boundary_preserved",
+              "rollback_path_available"
+            ],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "For high-risk system changes, structural context should prefer one-module replacement with rollback over whole-system rewrite."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_incremental_replacement",
+              "source_pattern_name": "Incremental Replacement / Module Boundary Preservation",
+              "object_map": {
+                "working_pipeline": [
+                  "baseline"
+                ]
+              },
+              "morphism_map": {
+                "preserve_pipeline": [
+                  "baseline"
+                ],
+                "rollback_if_failed": [
+                  "baseline"
+                ]
+              },
+              "preserved_invariants": [
+                "identity_path_preserved"
+              ],
+              "broken_or_uncertain_invariants": [
+                "module_boundary_preserved",
+                "rollback_path_available"
+              ],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "For high-risk system changes, structural context should prefer one-module replacement with rollback over whole-system rewrite."
+              ],
+              "score": {
+                "pattern_id": "pat_incremental_replacement",
+                "score": 0.3333,
+                "object_role_coverage": 0.3333,
+                "morphism_role_coverage": 0.6667,
+                "composition_preservation": 0.0,
+                "invariant_preservation": 0.3333,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.3333,
+                "matched_terms": [
+                  "baseline"
+                ],
+                "preserved_invariants": [
+                  "identity_path_preserved"
+                ],
+                "broken_or_uncertain_invariants": [
+                  "module_boundary_preserved",
+                  "rollback_path_available"
+                ],
+                "negative_control_hits": [],
+                "decision": "repair_under_specified",
+                "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+              },
+              "status": "candidate"
+            },
+            "metrics": {
+              "pattern_id": "pat_incremental_replacement",
+              "score": 0.3333,
+              "object_role_coverage": 0.3333,
+              "morphism_role_coverage": 0.6667,
+              "composition_preservation": 0.0,
+              "invariant_preservation": 0.3333,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.3333,
+              "matched_terms": [
+                "baseline"
+              ],
+              "preserved_invariants": [
+                "identity_path_preserved"
+              ],
+              "broken_or_uncertain_invariants": [
+                "module_boundary_preserved",
+                "rollback_path_available"
+              ],
+              "negative_control_hits": [],
+              "decision": "repair_under_specified",
+              "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+            }
+          }
+        ]
+      },
+      {
+        "id": "probe_safe_swap",
+        "query": "Use a component boundary and swap a single part while retaining a revert path for the rest of the pipeline.",
+        "expected": "pat_incremental_replacement",
+        "top_pattern_id": "pat_incremental_replacement",
+        "top_score": 0.59,
+        "passed": true,
+        "applications": [
+          {
+            "pattern_id": "pat_incremental_replacement",
+            "pattern_name": "Incremental Replacement / Module Boundary Preservation",
+            "node_id": "struct_pat_incremental_replacement",
+            "score": 0.59,
+            "decision": "repair_under_specified",
+            "reason": "The diagram lacks enough object, morphism, or invariant coverage.",
+            "matched_terms": [
+              "boundary",
+              "component",
+              "pipeline",
+              "revert"
+            ],
+            "preserved_invariants": [
+              "module_boundary_preserved",
+              "rollback_path_available"
+            ],
+            "broken_or_uncertain_invariants": [
+              "identity_path_preserved"
+            ],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "For high-risk system changes, structural context should prefer one-module replacement with rollback over whole-system rewrite."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_incremental_replacement",
+              "source_pattern_name": "Incremental Replacement / Module Boundary Preservation",
+              "object_map": {
+                "module_boundary": [
+                  "boundary",
+                  "component"
+                ]
+              },
+              "morphism_map": {
+                "swap_one_module": [
+                  "component"
+                ],
+                "rollback_if_failed": [
+                  "revert"
+                ]
+              },
+              "preserved_invariants": [
+                "module_boundary_preserved",
+                "rollback_path_available"
+              ],
+              "broken_or_uncertain_invariants": [
+                "identity_path_preserved"
+              ],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "For high-risk system changes, structural context should prefer one-module replacement with rollback over whole-system rewrite."
+              ],
+              "score": {
+                "pattern_id": "pat_incremental_replacement",
+                "score": 0.59,
+                "object_role_coverage": 0.3333,
+                "morphism_role_coverage": 0.6667,
+                "composition_preservation": 1.0,
+                "invariant_preservation": 0.6667,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.59,
+                "matched_terms": [
+                  "boundary",
+                  "component",
+                  "pipeline",
+                  "revert"
+                ],
+                "preserved_invariants": [
+                  "module_boundary_preserved",
+                  "rollback_path_available"
+                ],
+                "broken_or_uncertain_invariants": [
+                  "identity_path_preserved"
+                ],
+                "negative_control_hits": [],
+                "decision": "repair_under_specified",
+                "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+              },
+              "status": "candidate"
+            },
+            "metrics": {
+              "pattern_id": "pat_incremental_replacement",
+              "score": 0.59,
+              "object_role_coverage": 0.3333,
+              "morphism_role_coverage": 0.6667,
+              "composition_preservation": 1.0,
+              "invariant_preservation": 0.6667,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.59,
+              "matched_terms": [
+                "boundary",
+                "component",
+                "pipeline",
+                "revert"
+              ],
+              "preserved_invariants": [
+                "module_boundary_preserved",
+                "rollback_path_available"
+              ],
+              "broken_or_uncertain_invariants": [
+                "identity_path_preserved"
+              ],
+              "negative_control_hits": [],
+              "decision": "repair_under_specified",
+              "reason": "The diagram lacks enough object, morphism, or invariant coverage."
+            }
+          }
+        ]
+      },
+      {
+        "id": "probe_opposition",
+        "query": "A system change creates a compensating reaction that cancels the disturbance because a constraint must remain valid.",
+        "expected": "pat_negative_feedback",
+        "top_pattern_id": "pat_negative_feedback",
+        "top_score": 0.8483,
+        "passed": true,
+        "applications": [
+          {
+            "pattern_id": "pat_negative_feedback",
+            "pattern_name": "Negative Feedback / Equilibrium Restoration",
+            "node_id": "struct_pat_negative_feedback",
+            "score": 0.8483,
+            "decision": "allow",
+            "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer.",
+            "matched_terms": [
+              "cancels",
+              "constraint",
+              "disturbance",
+              "reaction",
+              "system"
+            ],
+            "preserved_invariants": [
+              "response_opposes_perturbation",
+              "constraint_explains_response"
+            ],
+            "broken_or_uncertain_invariants": [],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "If the mapping is valid, an answer should identify the perturbation, induced response, and preserved constraint."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_negative_feedback",
+              "source_pattern_name": "Negative Feedback / Equilibrium Restoration",
+              "object_map": {
+                "system_state": [
+                  "system"
+                ],
+                "external_perturbation": [
+                  "disturbance"
+                ],
+                "induced_response": [
+                  "cancels"
+                ]
+              },
+              "morphism_map": {
+                "perturb_state": [
+                  "disturbance"
+                ],
+                "induce_response": [
+                  "reaction"
+                ],
+                "oppose_change": [
+                  "cancels"
+                ]
+              },
+              "preserved_invariants": [
+                "response_opposes_perturbation",
+                "constraint_explains_response"
+              ],
+              "broken_or_uncertain_invariants": [],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "If the mapping is valid, an answer should identify the perturbation, induced response, and preserved constraint."
+              ],
+              "score": {
+                "pattern_id": "pat_negative_feedback",
+                "score": 0.8483,
+                "object_role_coverage": 1.0,
+                "morphism_role_coverage": 1.0,
+                "composition_preservation": 0.5,
+                "invariant_preservation": 1.0,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.8483,
+                "matched_terms": [
+                  "cancels",
+                  "constraint",
+                  "disturbance",
+                  "reaction",
+                  "system"
+                ],
+                "preserved_invariants": [
+                  "response_opposes_perturbation",
+                  "constraint_explains_response"
+                ],
+                "broken_or_uncertain_invariants": [],
+                "negative_control_hits": [],
+                "decision": "allow",
+                "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer."
+              },
+              "status": "gate_passed_shadow"
+            },
+            "metrics": {
+              "pattern_id": "pat_negative_feedback",
+              "score": 0.8483,
+              "object_role_coverage": 1.0,
+              "morphism_role_coverage": 1.0,
+              "composition_preservation": 0.5,
+              "invariant_preservation": 1.0,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.8483,
+              "matched_terms": [
+                "cancels",
+                "constraint",
+                "disturbance",
+                "reaction",
+                "system"
+              ],
+              "preserved_invariants": [
+                "response_opposes_perturbation",
+                "constraint_explains_response"
+              ],
+              "broken_or_uncertain_invariants": [],
+              "negative_control_hits": [],
+              "decision": "allow",
+              "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer."
+            }
+          }
+        ]
+      },
+      {
+        "id": "probe_predictable_structure",
+        "query": "The representation should model stable predictable structure and ignore random uncorrelated nuisance variation.",
+        "expected": "pat_signal_nuisance_separation",
+        "top_pattern_id": "pat_signal_nuisance_separation",
+        "top_score": 0.9467,
+        "passed": true,
+        "applications": [
+          {
+            "pattern_id": "pat_signal_nuisance_separation",
+            "pattern_name": "Signal vs Stochastic Nuisance Separation",
+            "node_id": "struct_pat_signal_nuisance_separation",
+            "score": 0.9467,
+            "decision": "allow",
+            "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer.",
+            "matched_terms": [
+              "ignore",
+              "nuisance",
+              "predictable",
+              "random",
+              "stable",
+              "uncorrelated"
+            ],
+            "preserved_invariants": [
+              "predictable_structure_separated",
+              "stochastic_nuisance_suppressed"
+            ],
+            "broken_or_uncertain_invariants": [],
+            "negative_control_hits": [],
+            "transfer_predictions": [
+              "A valid transfer should improve stable-state prediction or denoising while avoiding reconstruction of nuisance details."
+            ],
+            "candidate": {
+              "formal_kind": "structural_morphism_candidate",
+              "source_pattern_id": "pat_signal_nuisance_separation",
+              "source_pattern_name": "Signal vs Stochastic Nuisance Separation",
+              "object_map": {
+                "stable_signal": [
+                  "predictable"
+                ],
+                "nuisance_noise": [
+                  "nuisance",
+                  "random",
+                  "uncorrelated"
+                ],
+                "projection_operator": [
+                  "predictable"
+                ]
+              },
+              "morphism_map": {
+                "suppress_noise": [
+                  "ignore"
+                ],
+                "recover_signal": [
+                  "stable"
+                ]
+              },
+              "preserved_invariants": [
+                "predictable_structure_separated",
+                "stochastic_nuisance_suppressed"
+              ],
+              "broken_or_uncertain_invariants": [],
+              "negative_control_hits": [],
+              "transfer_predictions": [
+                "A valid transfer should improve stable-state prediction or denoising while avoiding reconstruction of nuisance details."
+              ],
+              "score": {
+                "pattern_id": "pat_signal_nuisance_separation",
+                "score": 0.9467,
+                "object_role_coverage": 1.0,
+                "morphism_role_coverage": 1.0,
+                "composition_preservation": 1.0,
+                "invariant_preservation": 1.0,
+                "negative_control_score": 0.0,
+                "negative_control_margin": 0.9467,
+                "matched_terms": [
+                  "ignore",
+                  "nuisance",
+                  "predictable",
+                  "random",
+                  "stable",
+                  "uncorrelated"
+                ],
+                "preserved_invariants": [
+                  "predictable_structure_separated",
+                  "stochastic_nuisance_suppressed"
+                ],
+                "broken_or_uncertain_invariants": [],
+                "negative_control_hits": [],
+                "decision": "allow",
+                "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer."
+              },
+              "status": "gate_passed_shadow"
+            },
+            "metrics": {
+              "pattern_id": "pat_signal_nuisance_separation",
+              "score": 0.9467,
+              "object_role_coverage": 1.0,
+              "morphism_role_coverage": 1.0,
+              "composition_preservation": 1.0,
+              "invariant_preservation": 1.0,
+              "negative_control_score": 0.0,
+              "negative_control_margin": 0.9467,
+              "matched_terms": [
+                "ignore",
+                "nuisance",
+                "predictable",
+                "random",
+                "stable",
+                "uncorrelated"
+              ],
+              "preserved_invariants": [
+                "predictable_structure_separated",
+                "stochastic_nuisance_suppressed"
+              ],
+              "broken_or_uncertain_invariants": [],
+              "negative_control_hits": [],
+              "decision": "allow",
+              "reason": "Structural mapping preserves enough roles and invariants for shadow-mode transfer."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "behavior_probe": {
+    "eval_id": "structural_validation_20260602",
+    "eval_kind": "structural_behavior_probe",
+    "task_count": 4,
+    "baseline_mean_score": 0.4583,
+    "guided_mean_score": 0.9458,
+    "mean_delta": 0.4875,
+    "guided_win_rate": 1.0,
+    "pass": true,
+    "rows": [
+      {
+        "id": "behavior_overwrite_repair",
+        "query": "A plan wants to rewrite the whole evaluator and risks destructive overwrite; keep a baseline fallback and apply only a local delta.",
+        "expected_pattern": "pat_residual_correction",
+        "required_terms": [
+          "baseline",
+          "delta",
+          "fallback"
+        ],
+        "forbidden_terms": [
+          "rewrite everything",
+          "delete baseline"
+        ],
+        "top_pattern_id": "pat_residual_correction",
+        "top_score": 0.97,
+        "baseline_score": 0.35,
+        "guided_score": 1.0,
+        "delta": 0.65,
+        "guided_wins": true,
+        "baseline_quality": {
+          "score": 0.35,
+          "required_hits": [],
+          "forbidden_hits": [],
+          "pattern_id": "pat_residual_correction"
+        },
+        "guided_quality": {
+          "score": 1.0,
+          "required_hits": [
+            "baseline",
+            "delta",
+            "fallback"
+          ],
+          "forbidden_hits": [],
+          "pattern_id": "pat_residual_correction"
+        }
+      },
+      {
+        "id": "behavior_candidate_gate",
+        "query": "A new route policy looks promising but has not been tested against controls.",
+        "expected_pattern": "pat_controlled_intervention",
+        "required_terms": [
+          "control",
+          "baseline",
+          "one intervention"
+        ],
+        "forbidden_terms": [
+          "accept immediately"
+        ],
+        "top_pattern_id": "pat_controlled_intervention",
+        "top_score": 0.9233,
+        "baseline_score": 0.35,
+        "guided_score": 0.7833,
+        "delta": 0.4333,
+        "guided_wins": true,
+        "baseline_quality": {
+          "score": 0.35,
+          "required_hits": [],
+          "forbidden_hits": [],
+          "pattern_id": "pat_controlled_intervention"
+        },
+        "guided_quality": {
+          "score": 0.7833,
+          "required_hits": [
+            "control",
+            "baseline"
+          ],
+          "forbidden_hits": [],
+          "pattern_id": "pat_controlled_intervention"
+        }
+      },
+      {
+        "id": "behavior_module_swap",
+        "query": "A world-model pipeline should improve one component without losing the current working path.",
+        "expected_pattern": "pat_incremental_replacement",
+        "required_terms": [
+          "module",
+          "pipeline",
+          "rollback"
+        ],
+        "forbidden_terms": [
+          "big bang rewrite"
+        ],
+        "top_pattern_id": "pat_incremental_replacement",
+        "top_score": 0.84,
+        "baseline_score": 0.5667,
+        "guided_score": 1.0,
+        "delta": 0.4333,
+        "guided_wins": true,
+        "baseline_quality": {
+          "score": 0.5667,
+          "required_hits": [
+            "module"
+          ],
+          "forbidden_hits": [],
+          "pattern_id": "pat_incremental_replacement"
+        },
+        "guided_quality": {
+          "score": 1.0,
+          "required_hits": [
+            "module",
+            "pipeline",
+            "rollback"
+          ],
+          "forbidden_hits": [],
+          "pattern_id": "pat_incremental_replacement"
+        }
+      },
+      {
+        "id": "behavior_latent_noise",
+        "query": "A latent predictor should avoid reconstructing random detail and focus on stable world-state features.",
+        "expected_pattern": "pat_signal_nuisance_separation",
+        "required_terms": [
+          "predictable",
+          "noise",
+          "suppress"
+        ],
+        "forbidden_terms": [
+          "memorize noise"
+        ],
+        "top_pattern_id": "pat_signal_nuisance_separation",
+        "top_score": 0.4817,
+        "baseline_score": 0.5667,
+        "guided_score": 1.0,
+        "delta": 0.4333,
+        "guided_wins": true,
+        "baseline_quality": {
+          "score": 0.5667,
+          "required_hits": [
+            "noise"
+          ],
+          "forbidden_hits": [],
+          "pattern_id": "pat_signal_nuisance_separation"
+        },
+        "guided_quality": {
+          "score": 1.0,
+          "required_hits": [
+            "predictable",
+            "noise",
+            "suppress"
+          ],
+          "forbidden_hits": [],
+          "pattern_id": "pat_signal_nuisance_separation"
+        }
+      }
+    ]
+  }
+}

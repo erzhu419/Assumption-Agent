@@ -53,6 +53,7 @@ def build_verifier_stack_payload(
     falsification_payload: dict | None = None,
     acceptance_payload: dict | None = None,
     formal_mapping_gate_payload: dict | None = None,
+    structural_morphism_gate_payload: dict | None = None,
     objective_benchmark_payload: dict | None = None,
     eval_id: str,
 ) -> dict:
@@ -63,6 +64,7 @@ def build_verifier_stack_payload(
     falsification_by_id = _index(falsification_payload, "summaries")
     acceptance_by_id = _index(acceptance_payload, "summaries")
     formal_by_id = _index(formal_mapping_gate_payload, "gates")
+    structural_by_id = _index(structural_morphism_gate_payload, "gates")
     objective_by_id = _index(objective_benchmark_payload, "summaries")
     summaries = [
         _summarize(
@@ -72,6 +74,7 @@ def build_verifier_stack_payload(
             falsification=falsification_by_id.get(proposal.get("proposal_id", ""), {}),
             acceptance=acceptance_by_id.get(proposal.get("proposal_id", ""), {}),
             formal=formal_by_id.get(proposal.get("proposal_id", ""), {}),
+            structural=structural_by_id.get(proposal.get("proposal_id", ""), {}),
             objective=objective_by_id.get(proposal.get("proposal_id", ""), {}),
         )
         for proposal in proposal_payload.get("proposals", [])
@@ -84,6 +87,7 @@ def build_verifier_stack_payload(
         "source_falsification_eval_id": (falsification_payload or {}).get("eval_id"),
         "source_acceptance_eval_id": (acceptance_payload or {}).get("eval_id"),
         "source_formal_gate_eval_id": (formal_mapping_gate_payload or {}).get("eval_id"),
+        "source_structural_gate_eval_id": (structural_morphism_gate_payload or {}).get("eval_id"),
         "source_objective_benchmark_eval_id": (objective_benchmark_payload or {}).get("eval_id"),
         "proposal_count": len(summaries),
         "verdict_counts": dict(Counter(s.verdict for s in summaries)),
@@ -101,6 +105,7 @@ def _summarize(
     falsification: dict,
     acceptance: dict,
     formal: dict,
+    structural: dict,
     objective: dict,
 ) -> VerifierStackSummary:
     proposal_id = proposal.get("proposal_id", "")
@@ -109,6 +114,7 @@ def _summarize(
         _preflight_stage(preflight),
         _world_stage(world),
         _formal_stage(formal),
+        _structural_stage(structural),
         _falsification_stage(falsification),
         _acceptance_stage(acceptance),
         _objective_stage(
@@ -117,7 +123,13 @@ def _summarize(
             acceptance=acceptance,
             objective=objective,
         ),
-        _manual_review_stage(proposal=proposal, world=world, formal=formal, acceptance=acceptance),
+        _manual_review_stage(
+            proposal=proposal,
+            world=world,
+            formal=formal,
+            structural=structural,
+            acceptance=acceptance,
+        ),
     ]
     verdict, confidence, next_action, rationale = _verdict(
         preflight=preflight,
@@ -125,6 +137,7 @@ def _summarize(
         falsification=falsification,
         acceptance=acceptance,
         formal=formal,
+        structural=structural,
         objective=objective,
     )
     return VerifierStackSummary(
@@ -211,6 +224,36 @@ def _formal_stage(formal: dict) -> VerifierStage:
             "decision": decision,
             "blocks_policy_update": blocks,
             "reason": formal.get("reason"),
+        },
+    )
+
+
+def _structural_stage(structural: dict) -> VerifierStage:
+    if not structural:
+        return VerifierStage("V2b", "structural_morphism_gate", "not_applicable", "No structural morphism gate applies.")
+    decision = structural.get("decision", "not_applicable")
+    blocks = bool(structural.get("blocks_policy_update"))
+    if blocks:
+        status = "block"
+    elif decision == "allow":
+        status = "pass"
+    elif decision == "not_applicable":
+        status = "not_applicable"
+    else:
+        status = "shadow"
+    return VerifierStage(
+        tier="V2b",
+        name="structural_morphism_gate",
+        status=status,
+        detail=f"structural_gate={decision}; blocks_policy_update={blocks}",
+        evidence={
+            "decision": decision,
+            "blocks_policy_update": blocks,
+            "reason": structural.get("reason"),
+            "source_pattern_id": structural.get("source_pattern_id"),
+            "preserved_invariants": structural.get("preserved_invariants", []),
+            "broken_or_uncertain_invariants": structural.get("broken_or_uncertain_invariants", []),
+            "negative_control_hits": structural.get("negative_control_hits", []),
         },
     )
 
@@ -336,10 +379,15 @@ def _objective_stage(*, preflight: dict, falsification: dict, acceptance: dict, 
     )
 
 
-def _manual_review_stage(*, proposal: dict, world: dict, formal: dict, acceptance: dict) -> VerifierStage:
+def _manual_review_stage(*, proposal: dict, world: dict, formal: dict, structural: dict, acceptance: dict) -> VerifierStage:
     decision = acceptance.get("decision")
     risk = world.get("predicted_regression_risk", "unknown")
-    policy_sensitive = bool(formal.get("blocks_policy_update")) or decision == "accept" or risk == "high"
+    policy_sensitive = (
+        bool(formal.get("blocks_policy_update"))
+        or bool(structural.get("blocks_policy_update"))
+        or decision == "accept"
+        or risk == "high"
+    )
     if decision == "accept":
         status = "required"
         detail = "Accepted candidate is ready only for gated manual apply, not automatic graph mutation."
@@ -359,6 +407,7 @@ def _manual_review_stage(*, proposal: dict, world: dict, formal: dict, acceptanc
             "acceptance_decision": decision,
             "predicted_regression_risk": risk,
             "formal_blocks_policy_update": bool(formal.get("blocks_policy_update")),
+            "structural_blocks_policy_update": bool(structural.get("blocks_policy_update")),
             "permission_boundary": "explicit_apply_or_writeback_required",
             "proposal_type": proposal.get("proposal_type"),
         },
@@ -372,6 +421,7 @@ def _verdict(
     falsification: dict,
     acceptance: dict,
     formal: dict,
+    structural: dict,
     objective: dict,
 ) -> tuple[str, str, str, str]:
     if formal.get("blocks_policy_update"):
@@ -380,6 +430,13 @@ def _verdict(
             "high",
             "repair_formal_mapping_before_policy_update",
             "Formal mapping gate blocks policy-sensitive promotion.",
+        )
+    if structural.get("blocks_policy_update"):
+        return (
+            "blocked_structural_morphism_gate",
+            "high",
+            "repair_structural_morphism_before_policy_update",
+            "Structural morphism gate blocks promotion because invariants or negative controls are unsafe.",
         )
 
     acceptance_decision = acceptance.get("decision")
@@ -526,6 +583,7 @@ def main() -> None:
     ap.add_argument("--falsification", default=None)
     ap.add_argument("--acceptance", default=None)
     ap.add_argument("--formal-gate", default=None)
+    ap.add_argument("--structural-gate", default=None)
     ap.add_argument("--objective-benchmark", default=None)
     ap.add_argument("--eval-id", required=True)
     ap.add_argument("--summary-out", default=None)
@@ -539,6 +597,7 @@ def main() -> None:
         falsification_payload=_load_json(_resolve(root, args.falsification)),
         acceptance_payload=_load_json(_resolve(root, args.acceptance)),
         formal_mapping_gate_payload=_load_json(_resolve(root, args.formal_gate)),
+        structural_morphism_gate_payload=_load_json(_resolve(root, args.structural_gate)),
         objective_benchmark_payload=_load_json(_resolve(root, args.objective_benchmark)),
         eval_id=args.eval_id,
     )

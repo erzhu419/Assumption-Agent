@@ -53,7 +53,7 @@ from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_cand
 from assumption_os.proposals import ProposalType, build_candidate_proposals
 from assumption_os.queue_artifact_eval import build_queue_artifact_eval_payload, judgment_sets_from_artifact_eval
 from assumption_os.record_phase2_eval import record_phase2_eval
-from assumption_os.retrieval_policy import retrieve_phase2_assumptions
+from assumption_os.retrieval_policy import format_policy_context, retrieve_phase2_assumptions
 from assumption_os.recursive_runner import (
     RecursiveFrameStatus,
     RecursiveFrameType,
@@ -92,6 +92,14 @@ from assumption_os.trajectory_search import build_trajectory_search_payload
 from assumption_os.trace_dataset import build_trace_dataset_collection_payload, build_trace_dataset_payload
 from assumption_os.trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
 from assumption_os.surface_hypotheses import build_surface_hypothesis_payload
+from assumption_os.structural_patterns import (
+    build_nonlexical_structural_retrieval_probe_payload,
+    build_structural_behavior_probe_payload,
+    build_structural_extraction_audit_payload,
+    build_structural_morphism_gate_payload,
+    build_structural_pair_eval_payload,
+    search_structural_patterns,
+)
 from assumption_os.verifier_stack import build_verifier_stack_payload
 from assumption_os.world_model import build_world_model_payload, train_world_model_calibration
 
@@ -3933,6 +3941,100 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(applied, [candidate_id])
             updated = JsonlGraphStore(root / "graph")
             self.assertEqual(updated.nodes[candidate_id].status, "active")
+
+    def test_structural_morphism_evals_and_verifier_gate(self):
+        self.assertTrue(build_structural_extraction_audit_payload(eval_id="unit_struct_extract")["pass"])
+        self.assertTrue(build_structural_pair_eval_payload(eval_id="unit_struct_pairs")["pass"])
+        self.assertTrue(build_nonlexical_structural_retrieval_probe_payload(eval_id="unit_struct_retrieval")["pass"])
+        self.assertTrue(build_structural_behavior_probe_payload(eval_id="unit_struct_behavior")["pass"])
+
+        good = search_structural_patterns(
+            None,
+            "Keep the baseline identity path, apply a residual delta correction, and keep fallback recovery.",
+            top_n=1,
+        )[0]
+        good_payload = {
+            "eval_id": "unit_struct_good",
+            "proposals": [{
+                "proposal_id": "prop_struct_good",
+                "proposal_type": "structural_transfer_hypothesis",
+                "parent_node_id": "parent",
+                "candidate_node": {
+                    "id": "cand_struct_good",
+                    "formal_form": good["candidate"],
+                },
+            }],
+        }
+        good_gate = build_structural_morphism_gate_payload(
+            proposal_payload=good_payload,
+            eval_id="unit_struct_good_gate",
+        )
+        self.assertEqual(good_gate["gates"][0]["decision"], "allow")
+        self.assertFalse(good_gate["gates"][0]["blocks_policy_update"])
+
+        bad = search_structural_patterns(
+            None,
+            "A Gaussian style prior is mentioned, but there is no predictable signal and the method memorizes noise.",
+            top_n=1,
+            min_score=0.0,
+        )[0]
+        bad_payload = {
+            "eval_id": "unit_struct_bad",
+            "proposals": [{
+                "proposal_id": "prop_struct_bad",
+                "proposal_type": "structural_transfer_hypothesis",
+                "parent_node_id": "parent",
+                "candidate_node": {
+                    "id": "cand_struct_bad",
+                    "formal_form": bad["candidate"],
+                },
+            }],
+        }
+        bad_gate = build_structural_morphism_gate_payload(
+            proposal_payload=bad_payload,
+            eval_id="unit_struct_bad_gate",
+        )
+        self.assertEqual(bad_gate["gates"][0]["decision"], "block_negative_control")
+        self.assertTrue(bad_gate["gates"][0]["blocks_policy_update"])
+
+        verifier = build_verifier_stack_payload(
+            proposal_payload=bad_payload,
+            structural_morphism_gate_payload=bad_gate,
+            eval_id="unit_struct_verifier",
+        )
+        self.assertEqual(verifier["verdict_counts"], {"blocked_structural_morphism_gate": 1})
+        stages = verifier["summaries"][0]["stages"]
+        self.assertIn("structural_morphism_gate", [stage["name"] for stage in stages])
+
+    def test_retrieval_injects_structural_morphism_shadow_context(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(Path(td) / "graph")
+            store.upsert_node(AssumptionNode(
+                id="strategy_rewrite_guard",
+                type=AssumptionType.METHOD,
+                claim="High-risk rewrites should preserve fallback behavior.",
+                tags=["rewrite", "fallback"],
+                confidence=0.6,
+            ))
+            store.flush()
+            graph = SimpleAssumptionGraph(JsonlGraphStore(Path(td) / "graph"))
+            result = retrieve_phase2_assumptions(
+                graph,
+                problem=(
+                    "A plan wants to rewrite the evaluator and risks destructive overwrite; "
+                    "keep a baseline fallback and apply only a local delta."
+                ),
+                meta={},
+                pid="p_struct",
+                domain="software_engineering",
+                difficulty="medium",
+                top_k=2,
+            )
+            self.assertIsNotNone(result)
+            self.assertIn("pat_residual_correction", result.diagnostics["structural_morphism_hits"])
+            text = format_policy_context(result, lambda subgraph, max_nodes=8: "base graph context")
+            self.assertIn("Structural Morphism Reasoning", text)
+            self.assertIn("pat_residual_correction", text)
 
 
 if __name__ == "__main__":
