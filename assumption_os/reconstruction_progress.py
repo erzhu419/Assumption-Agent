@@ -515,12 +515,16 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
     planned_queue = int(daemon.get("preflight_queue_planned_leaf_count") or 0)
     executable_queue = int(daemon.get("preflight_queue_executable_leaf_count") or 0)
     queue_manifest_count = int(daemon.get("preflight_queue_manifest_count") or 0)
+    executed_leaf_count = int(daemon.get("bounded_execute_succeeded_leaf_count") or 0)
+    executed_accept_count = int(daemon.get("bounded_execute_accept_count") or 0)
+    executed_resumed = bool(daemon.get("bounded_execute_resumed"))
     structure = _avg([
         float(audit.get("pass", False)),
         float(daemon.get("pass", False)),
         _cap(audit.get("min_closure_score", 0.0)),
         _cap(ready_count / max(1, trace_preflight.get("proposal_count", 1))),
         _cap(planned_queue / max(1, ready_count)),
+        _cap(executed_leaf_count / 1),
     ])
     behavior = _avg([
         _cap(audit.get("actionable_count", 0) / 5),
@@ -529,6 +533,8 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
         float(trace_preflight.get("pass", False)),
         _cap(executable_queue / max(1, ready_count)),
         _cap(queue_manifest_count / max(1, ready_count)),
+        _cap(executed_accept_count / 1),
+        float(executed_resumed),
     ])
     return ProgressItem(
         key="recursive_execution_loop",
@@ -545,14 +551,18 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
             "preflight_queue_executable_leaf_count": executable_queue,
             "preflight_queue_manifest_count": queue_manifest_count,
             "preflight_queue_consumed": daemon.get("preflight_queue_consumed"),
+            "bounded_execute_succeeded_leaf_count": executed_leaf_count,
+            "bounded_execute_accept_count": executed_accept_count,
+            "bounded_execute_resumed": executed_resumed,
+            "bounded_execute_applied_count": daemon.get("bounded_execute_applied_count"),
         },
         remaining_gaps=[
-            "The loop can consume ready proposal queues in dry-run form, but is not yet an unattended daemon running continuous fresh ablation/judge cycles.",
+            "The loop can execute and resume a bounded queue probe, but is not yet an unattended daemon running continuous fresh ablation/judge cycles.",
             "Actual graph mutation remains correctly gated by explicit apply/writeback permissions.",
         ],
         next_actions=[
-            "Run one bounded fresh-ablation queue with --execute and a small command limit.",
-            "Resume parents from the generated judgments and acceptance payload.",
+            "Run a real trace-policy fresh-ablation queue with --execute and command_limit=1.",
+            "Feed generated real judgments through acceptance and gated apply.",
         ],
     )
 
@@ -822,6 +832,11 @@ def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
         ):
             max_structure = max(max_structure, 0.87)
             max_behavior = max(max_behavior, 0.78)
+        executed_leaf_count = int(item.evidence.get("bounded_execute_succeeded_leaf_count") or 0)
+        executed_accept_count = int(item.evidence.get("bounded_execute_accept_count") or 0)
+        if item.evidence.get("bounded_execute_resumed") and executed_leaf_count >= 1 and executed_accept_count >= 1:
+            max_structure = max(max_structure, 0.89)
+            max_behavior = max(max_behavior, 0.80)
     return max_structure, max_behavior
 
 

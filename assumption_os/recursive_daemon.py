@@ -127,15 +127,20 @@ def build_preflight_queue_daemon_payload(
     graph_dir: Path,
     preflight_payload: dict,
     eval_id: str,
+    evolution_payload: dict | None = None,
+    judgment_sets: Iterable[JudgmentSet] | None = None,
+    resume_eval_id: str | None = None,
     queue_name: str = "preflight_queue",
     command_limit: int | None = None,
     execute: bool = False,
     timeout_sec: int = 3600,
+    apply_accepted: bool = False,
     writeback_manifests: bool = False,
 ) -> dict:
     """Convert a ready preflight queue into bounded daemon leaf work items."""
 
     store = JsonlGraphStore(graph_dir)
+    normalized_judgment_sets = list(judgment_sets or [])
     queue_recursive = _recursive_payload_from_preflight_queue(
         preflight_payload=preflight_payload,
         eval_id=eval_id,
@@ -145,17 +150,21 @@ def build_preflight_queue_daemon_payload(
         root=root,
         graph_dir=graph_dir,
         recursive_payload=queue_recursive,
+        evolution_payload=evolution_payload,
         eval_id=f"{eval_id}_execute_queue",
+        judgment_sets=normalized_judgment_sets,
+        resume_eval_id=resume_eval_id or f"{eval_id}_resume",
         command_limit=command_limit,
         execute=execute,
         timeout_sec=timeout_sec,
         include_full_resumed=False,
     )
-    apply_summary = {
-        "enabled": False,
-        "reason": "preflight queue adapter never applies graph mutations",
-        "applied_candidate_node_ids": [],
-    }
+    apply_summary = _apply_if_requested(
+        store=store,
+        evolution_payload=evolution_payload,
+        acceptance_payload=execution_payload.get("candidate_acceptance"),
+        apply_accepted=apply_accepted,
+    )
     manifests = _iteration_manifests(
         eval_id=eval_id,
         execution_payload=execution_payload,
@@ -175,7 +184,8 @@ def build_preflight_queue_daemon_payload(
             "timeout_sec": timeout_sec,
             "command_limit": command_limit,
             "writeback_manifests": writeback_manifests,
-            "apply_accepted": False,
+            "apply_accepted": apply_accepted,
+            "judgment_sets": len(normalized_judgment_sets),
         },
         "source": {
             "preflight_eval_id": preflight_payload.get("eval_id"),
@@ -184,8 +194,17 @@ def build_preflight_queue_daemon_payload(
         "ready_queue_count": len(ready_rows),
         "planned_leaf_count": execution_payload.get("frontier", {}).get("planned_actions", 0),
         "executable_leaf_count": execution_payload.get("frontier", {}).get("executable_actions", 0),
+        "succeeded_leaf_count": status_counts.get("succeeded", 0),
+        "failed_leaf_count": status_counts.get("failed", 0),
+        "timeout_leaf_count": status_counts.get("timeout", 0),
         "execution_status_counts": status_counts,
         "proposal_ids": execution_payload.get("frontier", {}).get("proposal_ids", []),
+        "candidate_acceptance_counts": (execution_payload.get("candidate_acceptance") or {}).get("decision_counts", {}),
+        "accepted_proposal_ids": (execution_payload.get("candidate_acceptance") or {}).get("accepted_proposal_ids", []),
+        "resumed": bool(execution_payload.get("resumed_recursive")),
+        "resumed_next_action_count": len((execution_payload.get("resumed_recursive") or {}).get("next_actions", [])),
+        "apply_summary": apply_summary,
+        "applied_candidate_node_ids": apply_summary.get("applied_candidate_node_ids", []),
         "execution_payload": _compact_execution_payload(execution_payload),
         "manifest_count": len(manifests),
         "manifest_trial_ids": [m.trial_id for m in manifests],
@@ -458,15 +477,26 @@ def main() -> None:
 
     root = Path(args.root).resolve()
     if args.preflight_payload:
+        judgment_sets = load_judgment_sets(
+            root=root,
+            judgment_bundle=_resolve(root, args.judgment_bundle) if args.judgment_bundle else None,
+            candidate_variant=args.candidate_variant,
+            baseline_variant=args.candidate_baseline,
+            judgment_paths=[_resolve(root, p) for p in args.candidate_judgments or []],
+            proposal_ids=args.proposal_ids,
+        )
         payload = build_preflight_queue_daemon_payload(
             root=root,
             graph_dir=_resolve(root, args.graph_dir),
             preflight_payload=_load_json(_resolve(root, args.preflight_payload)) or {},
+            evolution_payload=_load_json(_resolve(root, args.evolution_payload)) if args.evolution_payload else None,
+            judgment_sets=judgment_sets,
             eval_id=args.eval_id,
             queue_name=args.queue_name,
             command_limit=args.command_limit,
             execute=args.execute,
             timeout_sec=args.timeout_sec,
+            apply_accepted=args.apply_accepted,
             writeback_manifests=args.writeback_manifests,
         )
     else:

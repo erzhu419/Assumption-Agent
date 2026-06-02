@@ -1,4 +1,5 @@
 import json
+import base64
 import tempfile
 import unittest
 from pathlib import Path
@@ -2088,7 +2089,19 @@ class AssumptionOSTest(unittest.TestCase):
                     "answer_quality_mean_delta": 0.65,
                 },
                 "recursive_audit": {"pass": True, "min_closure_score": 1.0, "actionable_count": 5, "critical_issue_count": 0},
-                "recursive_daemon": {"pass": True, "case_count": 2, "accepted_apply_count": 2},
+                "recursive_daemon": {
+                    "pass": True,
+                    "case_count": 2,
+                    "accepted_apply_count": 2,
+                    "preflight_queue_planned_leaf_count": 3,
+                    "preflight_queue_executable_leaf_count": 3,
+                    "preflight_queue_manifest_count": 4,
+                    "preflight_queue_consumed": True,
+                    "bounded_execute_succeeded_leaf_count": 1,
+                    "bounded_execute_accept_count": 1,
+                    "bounded_execute_resumed": True,
+                    "bounded_execute_applied_count": 0,
+                },
             }
             (root / "reconstruction.md").write_text(
                 "\n".join([
@@ -2359,6 +2372,100 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(set(after_store.nodes), before_nodes)
             self.assertGreaterEqual(len(after_store.trials), 3)
             self.assertFalse(payload["mode"]["apply_accepted"])
+
+    def test_recursive_daemon_executes_queue_and_resumes_from_generated_judgments(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            graph_dir = root / "graph"
+            store = JsonlGraphStore(graph_dir)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S01",
+                type=AssumptionType.METHOD,
+                claim="Use controlled-variable tests.",
+            ))
+            store.flush()
+            judgment_path = root / "queue_judgments.json"
+            judgments = {
+                "p1": {"winner": "proposal_exec"},
+                "p2": {"winner": "proposal_exec"},
+                "p3": {"winner": "proposal_exec"},
+            }
+            encoded_judgments = base64.b64encode(json.dumps(judgments).encode("utf-8")).decode("ascii")
+            command = (
+                "python3 -c "
+                f"\"import base64; from pathlib import Path; Path({str(judgment_path)!r}).write_bytes("
+                f"base64.b64decode('{encoded_judgments}'))\""
+            )
+            preflight_payload = {
+                "eval_id": "unit_exec_preflight",
+                "summaries": [{
+                    "proposal_id": "prop_exec",
+                    "readiness": CandidateReadiness.READY_FOR_FRESH_ABLATION.value,
+                    "trigger_problem_ids": ["p1", "p2", "p3"],
+                    "control_problem_ids": [],
+                    "command_hint": command,
+                }],
+            }
+            evolution_payload = {
+                "eval_id": "unit_exec_evolution",
+                "proposals": {
+                    "eval_id": "unit_exec_props",
+                    "proposals": [{
+                        "proposal_id": "prop_exec",
+                        "proposal_type": ProposalType.FAILURE_HYPOTHESIS.value,
+                        "parent_node_id": "strategy_S01",
+                        "priority": 0.8,
+                        "candidate_node": {
+                            "id": "cand_exec",
+                            "claim": "Queue execution should resume from generated judgments.",
+                            "predicted_effects": ["close the execute-read-resume loop"],
+                        },
+                    }],
+                },
+                "candidate_preflight": preflight_payload,
+                "falsification_gate": {"summaries": [{
+                    "proposal_id": "prop_exec",
+                    "decision": FalsificationDecision.READY_FOR_ABLATION.value,
+                    "next_action": "run_fresh_ablation",
+                }]},
+                "bayesian_policy": {"scores": [{
+                    "proposal_id": "prop_exec",
+                    "recommended_action": BayesianPolicyAction.RUN_ABLATION.value,
+                    "posterior_priority": 1.2,
+                    "command_hint": command,
+                }]},
+                "policy_update_plan": {"actions": [{
+                    "proposal_id": "prop_exec",
+                    "policy_action": "run_fresh_ablation_before_promotion",
+                }]},
+                "regression_predictions": [{"proposal_id": "prop_exec", "risk": "low"}],
+                "formal_mapping_gate": {"gates": []},
+            }
+            before_nodes = set(JsonlGraphStore(graph_dir).nodes)
+            payload = build_preflight_queue_daemon_payload(
+                root=root,
+                graph_dir=graph_dir,
+                preflight_payload=preflight_payload,
+                evolution_payload=evolution_payload,
+                judgment_sets=[JudgmentSet(
+                    candidate_variant="proposal_exec",
+                    baseline_variant="baseline",
+                    judgment_paths=[judgment_path],
+                    proposal_ids=["prop_exec"],
+                )],
+                eval_id="unit_exec_queue",
+                queue_name="exec_queue",
+                command_limit=1,
+                execute=True,
+                writeback_manifests=True,
+            )
+            self.assertTrue(judgment_path.exists())
+            self.assertEqual(payload["execution_status_counts"], {"succeeded": 1})
+            self.assertEqual(payload["candidate_acceptance_counts"], {"accept": 1})
+            self.assertEqual(payload["accepted_proposal_ids"], ["prop_exec"])
+            self.assertTrue(payload["resumed"])
+            self.assertEqual(payload["applied_candidate_node_ids"], [])
+            self.assertEqual(set(JsonlGraphStore(graph_dir).nodes), before_nodes)
 
     def test_residual_clusterer_synthesizes_candidate_from_systematic_residuals(self):
         with tempfile.TemporaryDirectory() as td:

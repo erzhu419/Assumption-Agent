@@ -28,6 +28,7 @@ positive controls where the mechanism needs a safe graph-mutation sandbox.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import shutil
 import tempfile
@@ -577,6 +578,7 @@ def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
             execute=False,
             writeback_manifests=True,
         )
+        execute_resume_payload = _bounded_queue_execute_resume_probe(root=Path(td), graph_dir=tmp_graph)
     passed = all(
         row["dry_applied_count"] == 0
         and row["accepted_counts"].get("accept") == 1
@@ -590,6 +592,10 @@ def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
         and queue_payload.get("executable_leaf_count") == queue_payload.get("ready_queue_count")
         and queue_payload.get("execution_status_counts", {}).get("planned") == queue_payload.get("ready_queue_count")
         and queue_payload.get("manifest_count", 0) >= queue_payload.get("ready_queue_count", 0)
+        and execute_resume_payload.get("execution_status_counts", {}).get("succeeded") == 1
+        and execute_resume_payload.get("candidate_acceptance_counts", {}).get("accept") == 1
+        and execute_resume_payload.get("resumed")
+        and execute_resume_payload.get("applied_candidate_node_ids") == []
     )
     return {
         "pass": passed,
@@ -602,9 +608,93 @@ def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
         "preflight_queue_status_counts": queue_payload.get("execution_status_counts", {}),
         "preflight_queue_proposal_ids": queue_payload.get("proposal_ids", []),
         "preflight_queue_consumed": queue_payload.get("planned_leaf_count") == queue_payload.get("ready_queue_count"),
+        "bounded_execute_succeeded_leaf_count": execute_resume_payload.get("succeeded_leaf_count", 0),
+        "bounded_execute_accept_count": execute_resume_payload.get("candidate_acceptance_counts", {}).get("accept", 0),
+        "bounded_execute_resumed": execute_resume_payload.get("resumed", False),
+        "bounded_execute_applied_count": len(execute_resume_payload.get("applied_candidate_node_ids", [])),
+        "bounded_execute_status_counts": execute_resume_payload.get("execution_status_counts", {}),
         "results": results,
         "preflight_queue": queue_payload,
+        "bounded_execute_resume_probe": execute_resume_payload,
     }
+
+
+def _bounded_queue_execute_resume_probe(*, root: Path, graph_dir: Path) -> dict:
+    judgment_path = root / "bounded_queue_judgments.json"
+    judgments = {
+        "p_exec_1": {"winner": "proposal_exec"},
+        "p_exec_2": {"winner": "proposal_exec"},
+        "p_exec_3": {"winner": "proposal_exec"},
+    }
+    encoded_judgments = base64.b64encode(json.dumps(judgments).encode("utf-8")).decode("ascii")
+    command = (
+        "python3 -c "
+        f"\"import base64; from pathlib import Path; Path({str(judgment_path)!r}).write_bytes("
+        f"base64.b64decode('{encoded_judgments}'))\""
+    )
+    proposal = {
+        "proposal_id": "prop_exec",
+        "proposal_type": "failure_hypothesis",
+        "parent_node_id": "strategy_S01",
+        "priority": 0.8,
+        "candidate_node": {
+            "id": "cand_exec",
+            "claim": "Bounded queue execution should produce judgments that can resume the recursive parent.",
+            "predicted_effects": ["exercise execute-read-resume without ungated graph mutation"],
+        },
+    }
+    preflight = {
+        "eval_id": "perf_bounded_queue_preflight",
+        "summaries": [{
+            "proposal_id": "prop_exec",
+            "readiness": CandidateReadiness.READY_FOR_FRESH_ABLATION.value,
+            "trigger_problem_ids": ["p_exec_1", "p_exec_2", "p_exec_3"],
+            "control_problem_ids": [],
+            "command_hint": command,
+        }],
+    }
+    evolution = {
+        "eval_id": "perf_bounded_queue_evolution",
+        "proposals": {"eval_id": "perf_bounded_queue_proposals", "proposals": [proposal]},
+        "candidate_preflight": preflight,
+        "falsification_gate": {
+            "summaries": [{
+                "proposal_id": "prop_exec",
+                "decision": "ready_for_ablation",
+                "next_action": "run_fresh_ablation",
+            }],
+        },
+        "bayesian_policy": {
+            "scores": [{
+                "proposal_id": "prop_exec",
+                "recommended_action": "run_ablation",
+                "posterior_priority": 1.2,
+                "command_hint": command,
+            }],
+        },
+        "policy_update_plan": {"actions": [{"proposal_id": "prop_exec", "policy_action": "run_fresh_ablation_before_promotion"}]},
+        "regression_predictions": [{"proposal_id": "prop_exec", "risk": "low"}],
+        "formal_mapping_gate": {"gates": []},
+    }
+    return build_preflight_queue_daemon_payload(
+        root=root,
+        graph_dir=graph_dir,
+        preflight_payload=preflight,
+        evolution_payload=evolution,
+        judgment_sets=[JudgmentSet(
+            candidate_variant="proposal_exec",
+            baseline_variant="baseline_exec",
+            judgment_paths=[judgment_path],
+            proposal_ids=["prop_exec"],
+        )],
+        eval_id="perf_daemon_bounded_execute_resume",
+        queue_name="bounded_execute_resume",
+        command_limit=1,
+        execute=True,
+        timeout_sec=20,
+        apply_accepted=False,
+        writeback_manifests=True,
+    )
 
 
 def _validate_recursive_audit(*, root: Path, graph_dir: Path) -> dict:
@@ -1883,7 +1973,9 @@ def _key_metric(name: str, section: dict) -> str:
         return (
             f"applied={section['accepted_apply_count']}/{section['case_count']}, "
             f"queue={section.get('preflight_queue_planned_leaf_count', 0)}/"
-            f"{section.get('preflight_queue_ready_count', 0)}"
+            f"{section.get('preflight_queue_ready_count', 0)}, "
+            f"exec_resume={section.get('bounded_execute_succeeded_leaf_count', 0)}/"
+            f"{section.get('bounded_execute_accept_count', 0)}"
         )
     if name == "recursive_audit":
         return f"score={section['min_closure_score']}, issues={section['critical_issue_count']}/{section['warning_issue_count']}"
