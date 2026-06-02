@@ -192,17 +192,31 @@ def _score_verifier_reliability(sections: dict[str, dict]) -> CapabilityScore:
     stage_counts = verifier.get("stage_status_counts", {})
     v4_pass = int(stage_counts.get("V4:pass") or 0)
     v4_fail = int(stage_counts.get("V4:fail") or 0)
+    v5_pass = int(stage_counts.get("V5:pass") or 0)
+    v6_required = int(stage_counts.get("V6:required") or 0)
     experiments = int(verifier.get("falsification_experiment_count") or 0)
     score = (
-        0.25 * float(bool(verifier.get("accepted_protocol_ok")))
-        + 0.25 * float(bool(verifier.get("rejected_protocol_ok")))
-        + 0.25 * _cap(experiments / 100)
-        + 0.25 * _cap((v4_pass + v4_fail) / 16)
+        0.20 * float(bool(verifier.get("accepted_protocol_ok")))
+        + 0.20 * float(bool(verifier.get("rejected_protocol_ok")))
+        + 0.20 * _cap(experiments / 100)
+        + 0.20 * _cap((v4_pass + v4_fail) / 16)
+        + 0.10 * float(bool(verifier.get("objective_gate_ok")))
+        + 0.10 * float(bool(verifier.get("manual_gate_ok")))
     )
     return _capability(
         "verifier_reliability",
         score,
-        evidence={"accepted_protocol_ok": verifier.get("accepted_protocol_ok"), "rejected_protocol_ok": verifier.get("rejected_protocol_ok"), "falsification_experiment_count": experiments, "v4_pass": v4_pass, "v4_fail": v4_fail},
+        evidence={
+            "accepted_protocol_ok": verifier.get("accepted_protocol_ok"),
+            "rejected_protocol_ok": verifier.get("rejected_protocol_ok"),
+            "objective_gate_ok": verifier.get("objective_gate_ok"),
+            "manual_gate_ok": verifier.get("manual_gate_ok"),
+            "falsification_experiment_count": experiments,
+            "v4_pass": v4_pass,
+            "v4_fail": v4_fail,
+            "v5_pass": v5_pass,
+            "v6_required": v6_required,
+        },
         rationale="Verifier decisions include positive, negative, and falsification-protocol evidence.",
     )
 

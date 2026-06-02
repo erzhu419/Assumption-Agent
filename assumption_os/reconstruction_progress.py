@@ -267,6 +267,8 @@ def _verifier_stack_item(sections: dict[str, dict]) -> ProgressItem:
         float(verifier.get("pass", False)),
         float(verifier.get("accepted_protocol_ok", False)),
         float(verifier.get("rejected_protocol_ok", False)),
+        float(verifier.get("objective_gate_ok", False)),
+        float(verifier.get("manual_gate_ok", False)),
         _cap(verifier.get("falsification_protocol_candidate_count", 0) / max(1, verifier.get("proposal_count", 1))),
     ])
     behavior = _avg([
@@ -286,14 +288,18 @@ def _verifier_stack_item(sections: dict[str, dict]) -> ProgressItem:
             "rejected_count": verifier.get("rejected_count"),
             "falsification_experiment_count": verifier.get("falsification_experiment_count"),
             "trace_preflight_ready_count": preflight.get("ready_count"),
+            "objective_gate_ok": verifier.get("objective_gate_ok"),
+            "manual_gate_ok": verifier.get("manual_gate_ok"),
+            "v5_pass_count": verifier.get("stage_status_counts", {}).get("V5:pass"),
+            "v6_required_count": verifier.get("stage_status_counts", {}).get("V6:required"),
         },
         remaining_gaps=[
-            "V0-V4 are represented; objective benchmark V5 and human-review V6 are still policy/documentation rather than active gates.",
+            "V0-V6 are represented with active gates, but objective V5 still uses internal acceptance artifacts rather than external task benchmarks.",
             "Trace policy proposals are preflight-ready but have not yet run fresh ablation/judge.",
         ],
         next_actions=[
             "Execute the trace policy proposal ablation queue with cached/low-cost samples first.",
-            "Add objective-task and manual-review gates for high-impact graph mutations.",
+            "Add external objective-task benchmarks for V5 beyond internal trigger/control acceptance.",
         ],
     )
 
@@ -678,6 +684,13 @@ def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
         ):
             max_structure = max(max_structure, 0.86)
             max_behavior = max(max_behavior, 0.76)
+    if item.key == "D_verifier_stack":
+        if item.evidence.get("objective_gate_ok") and item.evidence.get("manual_gate_ok"):
+            v5_pass = int(item.evidence.get("v5_pass_count") or 0)
+            v6_required = int(item.evidence.get("v6_required_count") or 0)
+            if v5_pass >= 10 and v6_required >= 2:
+                max_structure = max(max_structure, 0.84)
+                max_behavior = max(max_behavior, 0.76)
     if item.key == "G_formal_alignment_layer":
         independent_queries = int(item.evidence.get("independent_transfer_search_query_count") or 0)
         independent_top1 = float(item.evidence.get("independent_transfer_top1_hit_rate") or 0.0)

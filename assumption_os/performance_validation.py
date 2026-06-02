@@ -467,6 +467,24 @@ def _validate_verifier_stack(*, root: Path, world_model_payload: dict) -> dict:
         )
         for row in rejected
     )
+    objective_gate_ok = all(
+        any(
+            stage.get("tier") == "V5"
+            and stage.get("status") == "pass"
+            and stage.get("evidence", {}).get("objective_gate_passed")
+            for stage in row.get("stages", [])
+        )
+        for row in [*accepted, *rejected]
+    )
+    manual_gate_ok = all(
+        any(
+            stage.get("tier") == "V6"
+            and stage.get("status") == "required"
+            and stage.get("evidence", {}).get("permission_boundary") == "explicit_apply_or_writeback_required"
+            for stage in row.get("stages", [])
+        )
+        for row in accepted
+    )
     passed = (
         payload["proposal_count"] >= 16
         and len(accepted) >= 2
@@ -477,6 +495,10 @@ def _validate_verifier_stack(*, root: Path, world_model_payload: dict) -> dict:
         and protocol_candidate_count >= 16
         and accepted_protocol_ok
         and rejected_protocol_ok
+        and stage_status_counts.get("V5:pass", 0) >= len(accepted) + len(rejected)
+        and stage_status_counts.get("V6:required", 0) >= len(accepted)
+        and objective_gate_ok
+        and manual_gate_ok
     )
     return {
         "pass": passed,
@@ -493,6 +515,8 @@ def _validate_verifier_stack(*, root: Path, world_model_payload: dict) -> dict:
         "falsification_experiment_name_counts": experiment_name_counts,
         "accepted_protocol_ok": accepted_protocol_ok,
         "rejected_protocol_ok": rejected_protocol_ok,
+        "objective_gate_ok": objective_gate_ok,
+        "manual_gate_ok": manual_gate_ok,
     }
 
 

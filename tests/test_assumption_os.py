@@ -1727,6 +1727,12 @@ class AssumptionOSTest(unittest.TestCase):
         v3 = next(stage for stage in by_id["prop_accept"]["stages"] if stage["tier"] == "V3")
         self.assertEqual(v3["evidence"]["experiment_name_counts"]["trigger_benefit_sequential"], 1)
         self.assertEqual(v3["evidence"]["experiment_status_counts"]["passed"], 4)
+        v5 = next(stage for stage in by_id["prop_accept"]["stages"] if stage["tier"] == "V5")
+        self.assertEqual(v5["status"], "pass")
+        self.assertTrue(v5["evidence"]["objective_gate_passed"])
+        v6 = next(stage for stage in by_id["prop_accept"]["stages"] if stage["tier"] == "V6")
+        self.assertEqual(v6["status"], "required")
+        self.assertEqual(v6["evidence"]["permission_boundary"], "explicit_apply_or_writeback_required")
 
     def test_evolution_context_gates_permissions_and_harness_responsibilities(self):
         sections = {

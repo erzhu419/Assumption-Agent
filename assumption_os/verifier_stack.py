@@ -106,6 +106,8 @@ def _summarize(
         _formal_stage(formal),
         _falsification_stage(falsification),
         _acceptance_stage(acceptance),
+        _objective_stage(preflight=preflight, falsification=falsification, acceptance=acceptance),
+        _manual_review_stage(proposal=proposal, world=world, formal=formal, acceptance=acceptance),
     ]
     verdict, confidence, next_action, rationale = _verdict(
         preflight=preflight,
@@ -257,6 +259,83 @@ def _acceptance_stage(acceptance: dict) -> VerifierStage:
     )
 
 
+def _objective_stage(*, preflight: dict, falsification: dict, acceptance: dict) -> VerifierStage:
+    decision = acceptance.get("decision")
+    if not acceptance:
+        readiness = preflight.get("readiness")
+        status = "planned" if readiness == "ready_for_fresh_ablation" else "defer"
+        return VerifierStage(
+            "V5",
+            "objective_task_regression",
+            status,
+            "Objective trigger/control regression gate awaits fresh acceptance evidence.",
+            evidence={
+                "readiness": readiness,
+                "acceptance_decision": None,
+                "objective_gate_passed": False,
+            },
+        )
+    objective_ok = _objective_acceptance_ok(acceptance=acceptance, falsification=falsification)
+    if decision == "accept":
+        status = "pass" if objective_ok else "block"
+        detail = "Accepted candidate satisfies objective trigger/control and falsification criteria." if objective_ok else (
+            "Accepted candidate is blocked because objective trigger/control criteria are incomplete."
+        )
+    elif decision in {"reject_benefit", "reject_harm"}:
+        status = "pass"
+        detail = f"Objective gate recorded a falsifying fresh-ablation decision: {decision}."
+    else:
+        status = "defer"
+        detail = f"Objective gate cannot decide from acceptance decision {decision}."
+    return VerifierStage(
+        "V5",
+        "objective_task_regression",
+        status,
+        detail,
+        evidence={
+            "acceptance_decision": decision,
+            "trigger_lcb90": acceptance.get("trigger_lcb90"),
+            "control_loss_ucb90": acceptance.get("control_loss_ucb90"),
+            "objective_gate_passed": objective_ok or decision in {"reject_benefit", "reject_harm"},
+            "required_experiments": [
+                "trigger_benefit_sequential",
+                "control_harm_sequential",
+                "fresh_cross_judge_replay",
+            ],
+            "passed_required_experiments": _passed_required_experiments(falsification),
+        },
+    )
+
+
+def _manual_review_stage(*, proposal: dict, world: dict, formal: dict, acceptance: dict) -> VerifierStage:
+    decision = acceptance.get("decision")
+    risk = world.get("predicted_regression_risk", "unknown")
+    policy_sensitive = bool(formal.get("blocks_policy_update")) or decision == "accept" or risk == "high"
+    if decision == "accept":
+        status = "required"
+        detail = "Accepted candidate is ready only for gated manual apply, not automatic graph mutation."
+    elif policy_sensitive:
+        status = "required"
+        detail = "Policy-sensitive or high-risk candidate requires manual review before mutation."
+    else:
+        status = "not_required"
+        detail = "Manual review is not required before the next verifier action."
+    return VerifierStage(
+        "V6",
+        "manual_review_gate",
+        status,
+        detail,
+        evidence={
+            "manual_gate_required": policy_sensitive,
+            "acceptance_decision": decision,
+            "predicted_regression_risk": risk,
+            "formal_blocks_policy_update": bool(formal.get("blocks_policy_update")),
+            "permission_boundary": "explicit_apply_or_writeback_required",
+            "proposal_type": proposal.get("proposal_type"),
+        },
+    )
+
+
 def _verdict(
     *,
     preflight: dict,
@@ -274,6 +353,16 @@ def _verdict(
         )
 
     acceptance_decision = acceptance.get("decision")
+    if acceptance_decision == "accept" and not _objective_acceptance_ok(
+        acceptance=acceptance,
+        falsification=falsification,
+    ):
+        return (
+            "blocked_objective_gate",
+            "high",
+            "repair_objective_gate_before_apply",
+            "Fresh acceptance passed, but V5 objective trigger/control criteria are incomplete.",
+        )
     if acceptance_decision == "accept":
         return (
             "accepted_for_gated_apply",
@@ -344,6 +433,25 @@ def _preflight_repair_action(readiness: str | None) -> str:
         "needs_retrieval_fix": "repair_retrieval_before_ablation",
         "needs_more_trigger_rows": "collect_more_trigger_rows",
     }.get(str(readiness), "run_candidate_preflight")
+
+
+def _objective_acceptance_ok(*, acceptance: dict, falsification: dict) -> bool:
+    if acceptance.get("decision") != "accept":
+        return False
+    trigger_lcb = acceptance.get("trigger_lcb90")
+    control_ucb = acceptance.get("control_loss_ucb90")
+    trigger_ok = trigger_lcb is not None and float(trigger_lcb) >= 0.54
+    control_ok = control_ucb is None or float(control_ucb) <= 0.35
+    required = {"trigger_benefit_sequential", "control_harm_sequential", "fresh_cross_judge_replay"}
+    return trigger_ok and control_ok and required <= set(_passed_required_experiments(falsification))
+
+
+def _passed_required_experiments(falsification: dict) -> list[str]:
+    return sorted({
+        str(experiment.get("name"))
+        for experiment in falsification.get("experiments", [])
+        if experiment.get("status") == "passed"
+    })
 
 
 def _index(payload: dict | None, key: str) -> dict[str, dict]:

@@ -1,12 +1,12 @@
 {
   "closure": {
-    "behavior_percent": 76.1,
+    "behavior_percent": 76.3,
     "completed_item_count": 4,
     "item_count": 9,
-    "structure_percent": 84.6,
-    "weighted_percent": 79.9
+    "structure_percent": 84.8,
+    "weighted_percent": 80.1
   },
-  "eval_id": "reconstruction_progress_20260602_world_distill",
+  "eval_id": "reconstruction_progress_20260602_verifier_v56",
   "items": [
     {
       "behavior_score": 0.78,
@@ -112,30 +112,34 @@
       "target": "Cheap predictor for assumption utility, failure mode, residual type, and execution worthiness."
     },
     {
-      "behavior_score": 0.74,
+      "behavior_score": 0.76,
       "evidence": {
         "accepted_count": 2,
         "falsification_experiment_count": 135,
+        "manual_gate_ok": true,
+        "objective_gate_ok": true,
         "proposal_count": 33,
         "reconstruction_ceiling": {
-          "behavior": 0.74,
-          "structure": 0.82
+          "behavior": 0.76,
+          "structure": 0.84
         },
         "rejected_count": 14,
-        "trace_preflight_ready_count": 5
+        "trace_preflight_ready_count": 5,
+        "v5_pass_count": 16,
+        "v6_required_count": 2
       },
       "key": "D_verifier_stack",
       "next_actions": [
         "Execute the trace policy proposal ablation queue with cached/low-cost samples first.",
-        "Add objective-task and manual-review gates for high-impact graph mutations."
+        "Add external objective-task benchmarks for V5 beyond internal trigger/control acceptance."
       ],
       "remaining_gaps": [
-        "V0-V4 are represented; objective benchmark V5 and human-review V6 are still policy/documentation rather than active gates.",
+        "V0-V6 are represented with active gates, but objective V5 still uses internal acceptance artifacts rather than external task benchmarks.",
         "Trace policy proposals are preflight-ready but have not yet run fresh ablation/judge.",
         "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts."
       ],
       "status": "operational",
-      "structure_score": 0.82,
+      "structure_score": 0.84,
       "target": "Layered V0-V6 verification with falsification, controls, fresh splits, and high-stakes gates."
     },
     {
@@ -306,16 +310,6 @@
   ],
   "next_actions_ranked": [
     {
-      "action": "Add objective-task and manual-review gates for high-impact graph mutations.",
-      "item": "D_verifier_stack",
-      "priority": 0.224
-    },
-    {
-      "action": "Execute the trace policy proposal ablation queue with cached/low-cost samples first.",
-      "item": "D_verifier_stack",
-      "priority": 0.224
-    },
-    {
       "action": "Add residual-label agreement tests using LLM/human-labeled examples.",
       "item": "E_residual_analyzer",
       "priority": 0.224
@@ -344,6 +338,16 @@
       "action": "Run fresh ablation/judge for the surface residual bridge proposals.",
       "item": "B_hypothesis_generator",
       "priority": 0.2095
+    },
+    {
+      "action": "Add external objective-task benchmarks for V5 beyond internal trigger/control acceptance.",
+      "item": "D_verifier_stack",
+      "priority": 0.204
+    },
+    {
+      "action": "Execute the trace policy proposal ablation queue with cached/low-cost samples first.",
+      "item": "D_verifier_stack",
+      "priority": 0.204
     },
     {
       "action": "Add a scheduler benchmark that measures downstream task allocation, not only selector top-rank behavior.",
@@ -495,21 +499,6 @@
   },
   "remaining_gaps_ranked": [
     {
-      "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
-      "item": "D_verifier_stack",
-      "priority": 0.26
-    },
-    {
-      "gap": "Trace policy proposals are preflight-ready but have not yet run fresh ablation/judge.",
-      "item": "D_verifier_stack",
-      "priority": 0.26
-    },
-    {
-      "gap": "V0-V4 are represented; objective benchmark V5 and human-review V6 are still policy/documentation rather than active gates.",
-      "item": "D_verifier_stack",
-      "priority": 0.26
-    },
-    {
       "gap": "Residual labels are deterministic and artifact-derived; no calibrated residual classifier has been validated on human labels.",
       "item": "E_residual_analyzer",
       "priority": 0.26
@@ -553,11 +542,26 @@
       "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
       "item": "B_hypothesis_generator",
       "priority": 0.25
+    },
+    {
+      "gap": "Raw first-party runtime coverage is still small and needs continuous collection from future recursive/daemon executions.",
+      "item": "C_world_model_simulator",
+      "priority": 0.24
+    },
+    {
+      "gap": "Score is capped because reconstruction.md targets full mature behavior, not only the existence of passing local artifacts.",
+      "item": "C_world_model_simulator",
+      "priority": 0.24
+    },
+    {
+      "gap": "The 1000+ world-model rows are distilled transitions from a small first-party seed, not 1000 independent live runs.",
+      "item": "C_world_model_simulator",
+      "priority": 0.24
     }
   ],
   "source": {
     "graph_dir": "phase four/assumption_graph",
-    "performance_eval_id": "reconstruction_gap_perf_20260602_world_distill",
+    "performance_eval_id": "reconstruction_gap_perf_20260602_verifier_v56",
     "reconstruction_path": "reconstruction/md/reconstruction.md",
     "root": "."
   }
