@@ -518,15 +518,26 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
     executed_leaf_count = int(daemon.get("bounded_execute_succeeded_leaf_count") or 0)
     executed_accept_count = int(daemon.get("bounded_execute_accept_count") or 0)
     executed_resumed = bool(daemon.get("bounded_execute_resumed"))
-    structure = _avg([
+    artifact_plan_count = int(daemon.get("artifact_queue_plan_count") or 0)
+    artifact_judge_command_count = int(daemon.get("artifact_queue_judge_command_count") or 0)
+    artifact_readback_sets = int(daemon.get("artifact_readback_auto_judgment_set_count") or 0)
+    artifact_readback_accept_count = int(daemon.get("artifact_readback_accept_count") or 0)
+    artifact_readback_resumed = bool(daemon.get("artifact_readback_resumed"))
+    structure_parts = [
         float(audit.get("pass", False)),
         float(daemon.get("pass", False)),
         _cap(audit.get("min_closure_score", 0.0)),
         _cap(ready_count / max(1, trace_preflight.get("proposal_count", 1))),
         _cap(planned_queue / max(1, ready_count)),
         _cap(executed_leaf_count / 1),
-    ])
-    behavior = _avg([
+    ]
+    if artifact_plan_count or artifact_judge_command_count:
+        structure_parts.extend([
+            _cap(artifact_plan_count / max(1, ready_count)),
+            _cap(artifact_judge_command_count / max(1, ready_count)),
+        ])
+    structure = _avg(structure_parts)
+    behavior_parts = [
         _cap(audit.get("actionable_count", 0) / 5),
         _cap(daemon.get("accepted_apply_count", 0) / max(1, daemon.get("case_count", 1))),
         float(audit.get("critical_issue_count", 1) == 0),
@@ -535,7 +546,14 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
         _cap(queue_manifest_count / max(1, ready_count)),
         _cap(executed_accept_count / 1),
         float(executed_resumed),
-    ])
+    ]
+    if artifact_readback_sets or artifact_readback_accept_count or artifact_readback_resumed:
+        behavior_parts.extend([
+            _cap(artifact_readback_sets / 1),
+            _cap(artifact_readback_accept_count / 1),
+            float(artifact_readback_resumed),
+        ])
+    behavior = _avg(behavior_parts)
     return ProgressItem(
         key="recursive_execution_loop",
         target="Problem -> retrieve -> generate trajectories -> simulate -> select -> act -> manifest -> residual -> update/generate.",
@@ -555,14 +573,22 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
             "bounded_execute_accept_count": executed_accept_count,
             "bounded_execute_resumed": executed_resumed,
             "bounded_execute_applied_count": daemon.get("bounded_execute_applied_count"),
+            "artifact_queue_plan_count": artifact_plan_count,
+            "artifact_queue_parsed_command_count": daemon.get("artifact_queue_parsed_command_count"),
+            "artifact_queue_sample_found_count": daemon.get("artifact_queue_sample_found_count"),
+            "artifact_queue_judge_command_count": artifact_judge_command_count,
+            "artifact_queue_existing_judgment_plan_count": daemon.get("artifact_queue_existing_judgment_plan_count"),
+            "artifact_readback_auto_judgment_set_count": artifact_readback_sets,
+            "artifact_readback_accept_count": artifact_readback_accept_count,
+            "artifact_readback_resumed": artifact_readback_resumed,
         },
         remaining_gaps=[
-            "The loop can execute and resume a bounded queue probe, but is not yet an unattended daemon running continuous fresh ablation/judge cycles.",
+            "The loop can execute, discover fresh-ablation artifacts, and resume from cached judgments, but is not yet an unattended daemon running continuous paid judge cycles.",
             "Actual graph mutation remains correctly gated by explicit apply/writeback permissions.",
         ],
         next_actions=[
-            "Run a real trace-policy fresh-ablation queue with --execute and command_limit=1.",
-            "Feed generated real judgments through acceptance and gated apply.",
+            "Inject API environment variables and run a real trace-policy fresh-ablation queue with --execute and command_limit=1.",
+            "Run cached_framework judge for generated proposal answers, then let artifact readback feed acceptance and gated apply.",
         ],
     )
 
@@ -837,6 +863,19 @@ def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
         if item.evidence.get("bounded_execute_resumed") and executed_leaf_count >= 1 and executed_accept_count >= 1:
             max_structure = max(max_structure, 0.89)
             max_behavior = max(max_behavior, 0.80)
+        artifact_plan_count = int(item.evidence.get("artifact_queue_plan_count") or 0)
+        artifact_judge_command_count = int(item.evidence.get("artifact_queue_judge_command_count") or 0)
+        artifact_readback_sets = int(item.evidence.get("artifact_readback_auto_judgment_set_count") or 0)
+        artifact_accept_count = int(item.evidence.get("artifact_readback_accept_count") or 0)
+        if (
+            artifact_plan_count >= ready_count
+            and artifact_judge_command_count >= ready_count
+            and artifact_readback_sets >= 1
+            and artifact_accept_count >= 1
+            and item.evidence.get("artifact_readback_resumed")
+        ):
+            max_structure = max(max_structure, 0.91)
+            max_behavior = max(max_behavior, 0.82)
     return max_structure, max_behavior
 
 

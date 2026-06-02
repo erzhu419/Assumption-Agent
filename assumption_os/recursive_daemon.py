@@ -17,6 +17,7 @@ from typing import Iterable
 from .candidate_acceptance import apply_accepted_candidates
 from .graph_memory import JsonlGraphStore
 from .manifest_logger import make_component_manifest
+from .queue_artifact_eval import build_queue_artifact_eval_payload, judgment_sets_from_artifact_eval
 from .recursive_executor import JudgmentSet, build_recursive_execution_payload, load_judgment_sets
 from .schema import ResidualType, TrialStatus, stable_id
 
@@ -136,11 +137,23 @@ def build_preflight_queue_daemon_payload(
     timeout_sec: int = 3600,
     apply_accepted: bool = False,
     writeback_manifests: bool = False,
+    artifact_baseline_variant: str | None = None,
 ) -> dict:
     """Convert a ready preflight queue into bounded daemon leaf work items."""
 
     store = JsonlGraphStore(graph_dir)
     normalized_judgment_sets = list(judgment_sets or [])
+    artifact_eval = None
+    artifact_judgment_sets: list[JudgmentSet] = []
+    if artifact_baseline_variant:
+        artifact_eval = build_queue_artifact_eval_payload(
+            root=root,
+            preflight_payload=preflight_payload,
+            eval_id=f"{eval_id}_artifact_eval",
+            baseline_variant=artifact_baseline_variant,
+        )
+        artifact_judgment_sets = judgment_sets_from_artifact_eval(artifact_eval)
+        normalized_judgment_sets.extend(artifact_judgment_sets)
     queue_recursive = _recursive_payload_from_preflight_queue(
         preflight_payload=preflight_payload,
         eval_id=eval_id,
@@ -186,6 +199,8 @@ def build_preflight_queue_daemon_payload(
             "writeback_manifests": writeback_manifests,
             "apply_accepted": apply_accepted,
             "judgment_sets": len(normalized_judgment_sets),
+            "artifact_baseline_variant": artifact_baseline_variant,
+            "artifact_auto_judgment_sets": len(artifact_judgment_sets),
         },
         "source": {
             "preflight_eval_id": preflight_payload.get("eval_id"),
@@ -205,6 +220,7 @@ def build_preflight_queue_daemon_payload(
         "resumed_next_action_count": len((execution_payload.get("resumed_recursive") or {}).get("next_actions", [])),
         "apply_summary": apply_summary,
         "applied_candidate_node_ids": apply_summary.get("applied_candidate_node_ids", []),
+        "artifact_evaluation": artifact_eval,
         "execution_payload": _compact_execution_payload(execution_payload),
         "manifest_count": len(manifests),
         "manifest_trial_ids": [m.trial_id for m in manifests],
@@ -472,6 +488,8 @@ def main() -> None:
     ap.add_argument("--timeout-sec", type=int, default=3600)
     ap.add_argument("--apply-accepted", action="store_true")
     ap.add_argument("--writeback-manifests", action="store_true")
+    ap.add_argument("--artifact-baseline-variant", default=None,
+                    help="auto-discover cached fresh-ablation judgments against this baseline variant")
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
@@ -498,6 +516,7 @@ def main() -> None:
             timeout_sec=args.timeout_sec,
             apply_accepted=args.apply_accepted,
             writeback_manifests=args.writeback_manifests,
+            artifact_baseline_variant=args.artifact_baseline_variant,
         )
     else:
         if not args.recursive_payload:

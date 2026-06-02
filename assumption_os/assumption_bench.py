@@ -113,11 +113,29 @@ def _score_execution_fidelity(sections: dict[str, dict]) -> CapabilityScore:
     case_count = int(daemon.get("case_count") or 0)
     applied = int(daemon.get("accepted_apply_count") or 0)
     apply_ratio = applied / case_count if case_count else 0.0
-    score = 0.55 * closure + 0.25 * _cap(apply_ratio) + 0.2 * float(critical == 0 and bool(audit.get("pass")))
+    artifact_ready = (
+        int(daemon.get("artifact_readback_auto_judgment_set_count") or 0) >= 1
+        and int(daemon.get("artifact_readback_accept_count") or 0) >= 1
+        and bool(daemon.get("artifact_readback_resumed"))
+    )
+    score = (
+        0.45 * closure
+        + 0.25 * _cap(apply_ratio)
+        + 0.15 * float(critical == 0 and bool(audit.get("pass")))
+        + 0.15 * float(artifact_ready)
+    )
     return _capability(
         "execution_fidelity",
         score,
-        evidence={"closure_score": closure, "critical_issue_count": critical, "accepted_apply_count": applied, "case_count": case_count},
+        evidence={
+            "closure_score": closure,
+            "critical_issue_count": critical,
+            "accepted_apply_count": applied,
+            "case_count": case_count,
+            "artifact_readback_auto_judgment_set_count": daemon.get("artifact_readback_auto_judgment_set_count"),
+            "artifact_readback_accept_count": daemon.get("artifact_readback_accept_count"),
+            "artifact_readback_resumed": daemon.get("artifact_readback_resumed"),
+        },
         rationale="Recursive actions expose parent returns and daemon apply stays gated.",
     )
 

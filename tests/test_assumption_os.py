@@ -50,6 +50,7 @@ from assumption_os.memory_surfaces import build_memory_surface_payload
 from assumption_os.candidate_eval import CandidateReadiness, build_candidate_eval_payload
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
 from assumption_os.proposals import ProposalType, build_candidate_proposals
+from assumption_os.queue_artifact_eval import build_queue_artifact_eval_payload, judgment_sets_from_artifact_eval
 from assumption_os.record_phase2_eval import record_phase2_eval
 from assumption_os.retrieval_policy import retrieve_phase2_assumptions
 from assumption_os.recursive_runner import (
@@ -2466,6 +2467,130 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertTrue(payload["resumed"])
             self.assertEqual(payload["applied_candidate_node_ids"], [])
             self.assertEqual(set(JsonlGraphStore(graph_dir).nodes), before_nodes)
+
+    def test_preflight_queue_auto_loads_artifact_judgments(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            graph_dir = root / "graph"
+            store = JsonlGraphStore(graph_dir)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S01",
+                type=AssumptionType.METHOD,
+                claim="Use controlled-variable tests.",
+            ))
+            store.flush()
+            sample_path = root / "phase four" / "assumption_graph" / "artifact sample.json"
+            sample_path.parent.mkdir(parents=True)
+            rows = [
+                {"problem_id": "p1", "description": "case one", "domain": "business", "difficulty": "medium"},
+                {"problem_id": "p2", "description": "case two", "domain": "business", "difficulty": "medium"},
+                {"problem_id": "p3", "description": "case three", "domain": "business", "difficulty": "medium"},
+                {"problem_id": "c1", "description": "control", "domain": "science", "difficulty": "hard"},
+            ]
+            sample_path.write_text(json.dumps(rows), encoding="utf-8")
+            answers_dir = root / "phase two" / "analysis" / "cache" / "answers"
+            judgments_dir = root / "phase two" / "analysis" / "cache" / "judgments"
+            answers_dir.mkdir(parents=True)
+            judgments_dir.mkdir(parents=True)
+            candidate_variant = "proposal_artifact"
+            baseline_variant = "baseline_artifact"
+            (answers_dir / f"{candidate_variant}_answers.json").write_text(json.dumps({
+                "p1": "candidate one",
+                "p2": "candidate two",
+                "p3": "candidate three",
+                "c1": "candidate control",
+            }), encoding="utf-8")
+            (answers_dir / f"{baseline_variant}_answers.json").write_text(json.dumps({
+                "p1": "baseline one",
+                "p2": "baseline two",
+                "p3": "baseline three",
+                "c1": "baseline control",
+            }), encoding="utf-8")
+            judgment_path = judgments_dir / f"{candidate_variant}_vs_{baseline_variant}.json"
+            judgment_path.write_text(json.dumps({
+                "p1": {"winner": candidate_variant},
+                "p2": {"winner": candidate_variant},
+                "p3": {"winner": candidate_variant},
+                "c1": {"winner": "tie"},
+            }), encoding="utf-8")
+            command = (
+                'python3 "phase one/scripts/validation/phase2_v20_framework.py" '
+                f"--variant {candidate_variant} --sample {json.dumps(str(sample_path))} "
+                '--assumption-proposal-ids prop_artifact --assumption-force-proposal-route'
+            )
+            preflight_payload = {
+                "eval_id": "unit_artifact_preflight",
+                "summaries": [{
+                    "proposal_id": "prop_artifact",
+                    "readiness": CandidateReadiness.READY_FOR_FRESH_ABLATION.value,
+                    "trigger_problem_ids": ["p1", "p2", "p3"],
+                    "control_problem_ids": ["c1"],
+                    "command_hint": command,
+                }],
+            }
+            artifact_payload = build_queue_artifact_eval_payload(
+                root=root,
+                preflight_payload=preflight_payload,
+                baseline_variant=baseline_variant,
+                eval_id="unit_artifact_eval",
+            )
+            self.assertEqual(artifact_payload["plan_count"], 1)
+            self.assertEqual(artifact_payload["candidate_answer_ready_count"], 1)
+            self.assertEqual(artifact_payload["baseline_answer_ready_count"], 1)
+            self.assertEqual(artifact_payload["judgment_set_count"], 1)
+            self.assertIn("cached_framework.py", artifact_payload["plans"][0]["judge_command"])
+            judgment_sets = judgment_sets_from_artifact_eval(artifact_payload)
+            self.assertEqual(judgment_sets[0].candidate_variant, candidate_variant)
+            evolution_payload = {
+                "eval_id": "unit_artifact_evolution",
+                "proposals": {
+                    "eval_id": "unit_artifact_props",
+                    "proposals": [{
+                        "proposal_id": "prop_artifact",
+                        "proposal_type": ProposalType.FAILURE_HYPOTHESIS.value,
+                        "parent_node_id": "strategy_S01",
+                        "priority": 0.8,
+                        "candidate_node": {
+                            "id": "cand_artifact",
+                            "claim": "Artifact judgments should return to the recursive parent.",
+                            "predicted_effects": ["close fresh-ablation artifact readback"],
+                        },
+                    }],
+                },
+                "candidate_preflight": preflight_payload,
+                "falsification_gate": {"summaries": [{
+                    "proposal_id": "prop_artifact",
+                    "decision": FalsificationDecision.READY_FOR_ABLATION.value,
+                    "next_action": "run_fresh_ablation",
+                }]},
+                "bayesian_policy": {"scores": [{
+                    "proposal_id": "prop_artifact",
+                    "recommended_action": BayesianPolicyAction.RUN_ABLATION.value,
+                    "posterior_priority": 1.2,
+                    "command_hint": command,
+                }]},
+                "policy_update_plan": {"actions": [{
+                    "proposal_id": "prop_artifact",
+                    "policy_action": "run_fresh_ablation_before_promotion",
+                }]},
+                "regression_predictions": [{"proposal_id": "prop_artifact", "risk": "low"}],
+                "formal_mapping_gate": {"gates": []},
+            }
+            payload = build_preflight_queue_daemon_payload(
+                root=root,
+                graph_dir=graph_dir,
+                preflight_payload=preflight_payload,
+                evolution_payload=evolution_payload,
+                eval_id="unit_artifact_queue",
+                queue_name="artifact_queue",
+                artifact_baseline_variant=baseline_variant,
+                execute=False,
+            )
+            self.assertEqual(payload["mode"]["artifact_auto_judgment_sets"], 1)
+            self.assertEqual(payload["candidate_acceptance_counts"], {"accept": 1})
+            self.assertEqual(payload["accepted_proposal_ids"], ["prop_artifact"])
+            self.assertTrue(payload["resumed"])
+            self.assertEqual(payload["artifact_evaluation"]["judgment_set_count"], 1)
 
     def test_residual_clusterer_synthesizes_candidate_from_systematic_residuals(self):
         with tempfile.TemporaryDirectory() as td:

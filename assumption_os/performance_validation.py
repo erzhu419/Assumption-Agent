@@ -576,9 +576,11 @@ def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
             eval_id="perf_daemon_trace_policy_queue",
             queue_name="trace_policy_preflight",
             execute=False,
+            artifact_baseline_variant="phase2_v20_gpt55",
             writeback_manifests=True,
         )
         execute_resume_payload = _bounded_queue_execute_resume_probe(root=Path(td), graph_dir=tmp_graph)
+        artifact_readback_payload = _bounded_queue_artifact_readback_probe(root=Path(td), graph_dir=tmp_graph)
     passed = all(
         row["dry_applied_count"] == 0
         and row["accepted_counts"].get("accept") == 1
@@ -596,7 +598,13 @@ def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
         and execute_resume_payload.get("candidate_acceptance_counts", {}).get("accept") == 1
         and execute_resume_payload.get("resumed")
         and execute_resume_payload.get("applied_candidate_node_ids") == []
+        and queue_payload.get("artifact_evaluation", {}).get("plan_count", 0) >= queue_payload.get("ready_queue_count", 0)
+        and queue_payload.get("artifact_evaluation", {}).get("judge_command_count", 0) >= queue_payload.get("ready_queue_count", 0)
+        and artifact_readback_payload.get("mode", {}).get("artifact_auto_judgment_sets") == 1
+        and artifact_readback_payload.get("candidate_acceptance_counts", {}).get("accept") == 1
+        and artifact_readback_payload.get("resumed")
     )
+    artifact_eval = queue_payload.get("artifact_evaluation") or {}
     return {
         "pass": passed,
         "case_count": len(results),
@@ -613,9 +621,18 @@ def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
         "bounded_execute_resumed": execute_resume_payload.get("resumed", False),
         "bounded_execute_applied_count": len(execute_resume_payload.get("applied_candidate_node_ids", [])),
         "bounded_execute_status_counts": execute_resume_payload.get("execution_status_counts", {}),
+        "artifact_queue_plan_count": artifact_eval.get("plan_count", 0),
+        "artifact_queue_parsed_command_count": artifact_eval.get("parsed_command_count", 0),
+        "artifact_queue_sample_found_count": artifact_eval.get("sample_found_count", 0),
+        "artifact_queue_judge_command_count": artifact_eval.get("judge_command_count", 0),
+        "artifact_queue_existing_judgment_plan_count": artifact_eval.get("existing_judgment_plan_count", 0),
+        "artifact_readback_auto_judgment_set_count": artifact_readback_payload.get("mode", {}).get("artifact_auto_judgment_sets", 0),
+        "artifact_readback_accept_count": artifact_readback_payload.get("candidate_acceptance_counts", {}).get("accept", 0),
+        "artifact_readback_resumed": artifact_readback_payload.get("resumed", False),
         "results": results,
         "preflight_queue": queue_payload,
         "bounded_execute_resume_probe": execute_resume_payload,
+        "bounded_artifact_readback_probe": artifact_readback_payload,
     }
 
 
@@ -694,6 +711,96 @@ def _bounded_queue_execute_resume_probe(*, root: Path, graph_dir: Path) -> dict:
         timeout_sec=20,
         apply_accepted=False,
         writeback_manifests=True,
+    )
+
+
+def _bounded_queue_artifact_readback_probe(*, root: Path, graph_dir: Path) -> dict:
+    sample_path = root / "phase four/assumption_graph/artifact_readback_sample.json"
+    answers_dir = root / "phase two/analysis/cache/answers"
+    judgments_dir = root / "phase two/analysis/cache/judgments"
+    sample_path.parent.mkdir(parents=True, exist_ok=True)
+    answers_dir.mkdir(parents=True, exist_ok=True)
+    judgments_dir.mkdir(parents=True, exist_ok=True)
+    sample_path.write_text(json.dumps([
+        {"problem_id": "p_art_1", "description": "artifact trigger one"},
+        {"problem_id": "p_art_2", "description": "artifact trigger two"},
+        {"problem_id": "p_art_3", "description": "artifact trigger three"},
+        {"problem_id": "c_art_1", "description": "artifact control"},
+    ]), encoding="utf-8")
+    candidate_variant = "proposal_artifact_readback"
+    baseline_variant = "baseline_artifact_readback"
+    answers = {pid: f"{candidate_variant}:{pid}" for pid in ["p_art_1", "p_art_2", "p_art_3", "c_art_1"]}
+    baseline_answers = {pid: f"{baseline_variant}:{pid}" for pid in ["p_art_1", "p_art_2", "p_art_3", "c_art_1"]}
+    (answers_dir / f"{candidate_variant}_answers.json").write_text(json.dumps(answers), encoding="utf-8")
+    (answers_dir / f"{baseline_variant}_answers.json").write_text(json.dumps(baseline_answers), encoding="utf-8")
+    (judgments_dir / f"{candidate_variant}_vs_{baseline_variant}.json").write_text(json.dumps({
+        "p_art_1": {"winner": candidate_variant},
+        "p_art_2": {"winner": candidate_variant},
+        "p_art_3": {"winner": candidate_variant},
+        "c_art_1": {"winner": "tie"},
+    }), encoding="utf-8")
+    command = (
+        'python3 "phase one/scripts/validation/phase2_v20_framework.py" '
+        f"--variant {candidate_variant} --sample {json.dumps(str(sample_path))} "
+        "--assumption-proposal-ids prop_artifact_readback --assumption-force-proposal-route"
+    )
+    proposal = {
+        "proposal_id": "prop_artifact_readback",
+        "proposal_type": "failure_hypothesis",
+        "parent_node_id": "strategy_S01",
+        "priority": 0.8,
+        "candidate_node": {
+            "id": "cand_artifact_readback",
+            "claim": "Existing fresh-ablation artifact judgments should resume the recursive parent.",
+            "predicted_effects": ["exercise artifact readback without rerunning paid judges"],
+        },
+    }
+    preflight = {
+        "eval_id": "perf_artifact_readback_preflight",
+        "summaries": [{
+            "proposal_id": "prop_artifact_readback",
+            "readiness": CandidateReadiness.READY_FOR_FRESH_ABLATION.value,
+            "trigger_problem_ids": ["p_art_1", "p_art_2", "p_art_3"],
+            "control_problem_ids": ["c_art_1"],
+            "command_hint": command,
+        }],
+    }
+    evolution = {
+        "eval_id": "perf_artifact_readback_evolution",
+        "proposals": {"eval_id": "perf_artifact_readback_proposals", "proposals": [proposal]},
+        "candidate_preflight": preflight,
+        "falsification_gate": {
+            "summaries": [{
+                "proposal_id": "prop_artifact_readback",
+                "decision": "ready_for_ablation",
+                "next_action": "run_fresh_ablation",
+            }],
+        },
+        "bayesian_policy": {
+            "scores": [{
+                "proposal_id": "prop_artifact_readback",
+                "recommended_action": "run_ablation",
+                "posterior_priority": 1.2,
+                "command_hint": command,
+            }],
+        },
+        "policy_update_plan": {"actions": [{"proposal_id": "prop_artifact_readback", "policy_action": "run_fresh_ablation_before_promotion"}]},
+        "regression_predictions": [{"proposal_id": "prop_artifact_readback", "risk": "low"}],
+        "formal_mapping_gate": {"gates": []},
+    }
+    return build_preflight_queue_daemon_payload(
+        root=root,
+        graph_dir=graph_dir,
+        preflight_payload=preflight,
+        evolution_payload=evolution,
+        eval_id="perf_daemon_artifact_readback",
+        queue_name="artifact_readback",
+        command_limit=1,
+        execute=False,
+        timeout_sec=20,
+        apply_accepted=False,
+        writeback_manifests=True,
+        artifact_baseline_variant=baseline_variant,
     )
 
 
@@ -1975,7 +2082,9 @@ def _key_metric(name: str, section: dict) -> str:
             f"queue={section.get('preflight_queue_planned_leaf_count', 0)}/"
             f"{section.get('preflight_queue_ready_count', 0)}, "
             f"exec_resume={section.get('bounded_execute_succeeded_leaf_count', 0)}/"
-            f"{section.get('bounded_execute_accept_count', 0)}"
+            f"{section.get('bounded_execute_accept_count', 0)}, "
+            f"artifact={section.get('artifact_readback_auto_judgment_set_count', 0)}/"
+            f"{section.get('artifact_readback_accept_count', 0)}"
         )
     if name == "recursive_audit":
         return f"score={section['min_closure_score']}, issues={section['critical_issue_count']}/{section['warning_issue_count']}"
