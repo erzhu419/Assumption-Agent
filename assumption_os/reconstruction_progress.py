@@ -144,12 +144,14 @@ def _hypothesis_generator_item(sections: dict[str, dict]) -> ProgressItem:
         _cap(residual.get("proposal_count", 0) / 2),
         _cap(trace_policy.get("proposal_count", 0) / 3),
         _cap(surface.get("proposal_count", 0) / 4),
+        _cap(surface.get("surface_residual_proposal_count", 0) / 2),
     ])
     behavior = _avg([
         _cap(residual.get("cluster_count", 0) / 7),
         _cap(trace_policy.get("repair_policy_count", 0) / 1),
         _cap(surface.get("world_model_proposal_count", 0) / 2),
         _cap(surface.get("evaluator_proposal_count", 0) / 2),
+        _cap(surface.get("surface_residual_ready_count", 0) / 2),
         _cap(preflight.get("ready_count", 0) / max(1, preflight.get("proposal_count", 1))),
         float(preflight.get("pass", False)),
     ])
@@ -166,14 +168,18 @@ def _hypothesis_generator_item(sections: dict[str, dict]) -> ProgressItem:
             "surface_hypothesis_proposal_count": surface.get("proposal_count"),
             "surface_world_model_proposal_count": surface.get("world_model_proposal_count"),
             "surface_evaluator_proposal_count": surface.get("evaluator_proposal_count"),
+            "surface_residual_proposal_count": surface.get("surface_residual_proposal_count"),
+            "surface_residual_ready_count": surface.get("surface_residual_ready_count"),
+            "world_model_residual_proposal_count": surface.get("world_model_residual_proposal_count"),
+            "evaluator_residual_proposal_count": surface.get("evaluator_residual_proposal_count"),
         },
         remaining_gaps=[
             "Generation is still mostly deterministic/residual-driven; broad LLM synthesis is injectable but not routinely validated.",
-            "Evaluator/world-model generators now emit proposals, but self-modification hypothesis generation is still mostly audit-driven.",
+            "Evaluator/world-model residuals now become proposal queues, but self-modification hypothesis generation is still mostly audit-driven.",
         ],
         next_actions=[
             "Run fresh ablation/judge for the preflight-ready trace policy proposals.",
-            "Add a generator pass that turns evaluator/world-model residuals into candidate proposals.",
+            "Run fresh ablation/judge for the surface residual bridge proposals.",
         ],
     )
 
@@ -626,6 +632,14 @@ def _apply_reconstruction_ceiling(item: ProgressItem) -> ProgressItem:
 
 def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
     max_structure, max_behavior = RECONSTRUCTION_CEILINGS.get(item.key, (1.0, 1.0))
+    if item.key == "B_hypothesis_generator":
+        residual_bridge = int(item.evidence.get("surface_residual_proposal_count") or 0)
+        residual_ready = int(item.evidence.get("surface_residual_ready_count") or 0)
+        wm_bridge = int(item.evidence.get("world_model_residual_proposal_count") or 0)
+        evaluator_bridge = int(item.evidence.get("evaluator_residual_proposal_count") or 0)
+        if residual_bridge >= 2 and residual_ready >= 2 and wm_bridge >= 1 and evaluator_bridge >= 1:
+            max_structure = max(max_structure, 0.84)
+            max_behavior = max(max_behavior, 0.75)
     if item.key == "C_world_model_simulator":
         weighted_rows = float(item.evidence.get("weighted_trace_trainable_rows") or 0.0)
         best_brier = item.evidence.get("best_trace_brier")

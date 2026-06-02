@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from .assumption_bench import build_assumption_bench_payload
+from .candidate_eval import CandidateReadiness, build_candidate_eval_payload
 from .falsification import build_falsification_payload
 from .evolution_context import build_evolution_context_payload
 from .formal_mapping import (
@@ -159,6 +160,7 @@ def build_performance_validation_payload(
     }
     start = time.perf_counter()
     sections["surface_hypothesis_generator"] = _validate_surface_hypothesis_generator(
+        root=root,
         graph_dir=graph_dir,
         sections=sections,
     )
@@ -1250,9 +1252,44 @@ def _validate_residual_clusterer(*, graph_dir: Path) -> dict:
         "cluster_count": payload["cluster_count"],
         "proposal_count": payload["proposal_count"],
         "residual_type_counts": payload["residual_type_counts"],
+        "cluster_summaries": _cluster_summaries_for_surface(payload.get("clusters", [])),
         "proposal_parent_ids": [p["parent_node_id"] for p in proposals],
         "validation_plans_complete": validation_complete,
     }
+
+
+def _cluster_summaries_for_surface(clusters: list[dict]) -> list[dict]:
+    rows = []
+    all_problem_ids = sorted({
+        _normalize_problem_id(record.get("problem_id"))
+        for cluster in clusters
+        for record in cluster.get("records", [])
+        if record.get("problem_id")
+    })
+    for cluster in clusters:
+        sample_problem_ids = sorted({
+            _normalize_problem_id(record.get("problem_id"))
+            for record in cluster.get("records", [])
+            if record.get("problem_id")
+        })[:12]
+        control_ids = [pid for pid in all_problem_ids if pid not in set(sample_problem_ids)][:12]
+        rows.append({
+            "cluster_id": cluster.get("cluster_id"),
+            "residual_type": cluster.get("residual_type"),
+            "signature": cluster.get("signature"),
+            "parent_node_id": cluster.get("parent_node_id"),
+            "record_count": len(cluster.get("records", [])),
+            "top_terms": cluster.get("top_terms", [])[:8],
+            "sample_problem_ids": sample_problem_ids,
+            "candidate_control_problem_ids": control_ids,
+            "component_counts": dict(Counter(record.get("component") for record in cluster.get("records", []))),
+            "action_type_counts": dict(Counter(record.get("action_type") for record in cluster.get("records", []))),
+        })
+    return rows
+
+
+def _normalize_problem_id(problem_id: Any) -> str:
+    return str(problem_id).split(";", 1)[0].strip()
 
 
 def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
@@ -1367,12 +1404,24 @@ def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
     }
 
 
-def _validate_surface_hypothesis_generator(*, graph_dir: Path, sections: dict[str, dict]) -> dict:
+def _validate_surface_hypothesis_generator(*, root: Path, graph_dir: Path, sections: dict[str, dict]) -> dict:
+    eval_id = "perf_surface_hypotheses"
+    proposal_path = graph_dir / f"surface_hypotheses_{eval_id}.json"
+    preflight_path = graph_dir / f"surface_hypotheses_{eval_id}_preflight.json"
+    proposal_path_display = _display_path(root, proposal_path)
+    preflight_path_display = _display_path(root, preflight_path)
+    sample_path_display = "phase two/analysis/cache/sample_100.json"
+    meta_path_display = "phase two/analysis/cache/answers/phase2_v20_ag_learned_gpt55_meta.json"
     payload = build_surface_hypothesis_payload(
         store=JsonlGraphStore(graph_dir),
         performance_sections=sections,
-        eval_id="perf_surface_hypotheses",
+        eval_id=eval_id,
+        proposal_path=proposal_path_display,
+        graph_path=_display_path(root, graph_dir),
+        sample_path=sample_path_display,
+        meta_path=meta_path_display,
     )
+    proposal_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     proposals = payload.get("proposals", [])
     candidate_count = sum(1 for proposal in proposals if proposal.get("candidate_node"))
     manifest_count = payload.get("manifest_count", 0)
@@ -1380,14 +1429,50 @@ def _validate_surface_hypothesis_generator(*, graph_dir: Path, sections: dict[st
         1 for proposal in proposals
         if (proposal.get("candidate_node", {}).get("verifiers") or [])
     )
+    residual_bridge = [
+        proposal for proposal in proposals
+        if proposal.get("source_action", {}).get("action_type") == "surface_residual_bridge"
+    ]
+    residual_bridge_ready = sum(
+        1
+        for proposal in residual_bridge
+        if proposal.get("source_action", {}).get("command_hint")
+        and proposal.get("source_action", {}).get("trigger_problem_ids")
+        and proposal.get("candidate_node", {}).get("payload", {}).get("validation_plan", {}).get("trigger_problem_ids")
+    )
+    residual_bridge_ids = [proposal["proposal_id"] for proposal in residual_bridge]
+    preflight_payload = build_candidate_eval_payload(
+        graph_dir=graph_dir,
+        proposal_payload=payload,
+        sample=_load_json(_resolve(root, sample_path_display)),
+        meta_by_pid=_load_json(_resolve(root, meta_path_display)),
+        eval_id=f"{eval_id}_preflight",
+        proposal_ids=residual_bridge_ids,
+        force_proposal_route=True,
+        proposals_arg=proposal_path_display,
+        sample_arg=sample_path_display,
+    )
+    preflight_path.write_text(json.dumps(preflight_payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    preflight_ready_count = sum(
+        1
+        for row in preflight_payload.get("summaries", [])
+        if row.get("readiness") == CandidateReadiness.READY_FOR_FRESH_ABLATION.value
+    )
     return {
         "pass": (
-            payload["proposal_count"] >= 4
+            payload["proposal_count"] >= 6
             and payload["world_model_proposal_count"] >= 2
             and payload["evaluator_proposal_count"] >= 2
+            and payload["surface_residual_proposal_count"] >= 2
+            and payload["world_model_residual_proposal_count"] >= 1
+            and payload["evaluator_residual_proposal_count"] >= 1
+            and residual_bridge_ready == payload["surface_residual_proposal_count"]
+            and preflight_ready_count == payload["surface_residual_proposal_count"]
             and candidate_count == payload["proposal_count"]
             and manifest_count == payload["proposal_count"]
             and verifier_count == payload["proposal_count"]
+            and proposal_path.exists()
+            and preflight_path.exists()
             and not payload["secret_leak_detected"]
         ),
         "proposal_count": payload["proposal_count"],
@@ -1395,6 +1480,16 @@ def _validate_surface_hypothesis_generator(*, graph_dir: Path, sections: dict[st
         "surface_counts": payload["surface_counts"],
         "world_model_proposal_count": payload["world_model_proposal_count"],
         "evaluator_proposal_count": payload["evaluator_proposal_count"],
+        "surface_residual_proposal_count": payload["surface_residual_proposal_count"],
+        "world_model_residual_proposal_count": payload["world_model_residual_proposal_count"],
+        "evaluator_residual_proposal_count": payload["evaluator_residual_proposal_count"],
+        "surface_residual_manifest_ready_count": residual_bridge_ready,
+        "surface_residual_ready_count": preflight_ready_count,
+        "surface_proposal_path": proposal_path_display,
+        "surface_proposal_path_exists": proposal_path.exists(),
+        "surface_preflight_path": preflight_path_display,
+        "surface_preflight_path_exists": preflight_path.exists(),
+        "surface_preflight_readiness_counts": preflight_payload.get("readiness_counts", {}),
         "candidate_count": candidate_count,
         "manifest_count": manifest_count,
         "verifier_count": verifier_count,
@@ -1666,7 +1761,8 @@ def _key_metric(name: str, section: dict) -> str:
         return (
             f"proposals={section.get('proposal_count', 0)}, "
             f"world={section.get('world_model_proposal_count', 0)}, "
-            f"evaluator={section.get('evaluator_proposal_count', 0)}"
+            f"evaluator={section.get('evaluator_proposal_count', 0)}, "
+            f"residual_bridge={section.get('surface_residual_ready_count', 0)}"
         )
     if name == "formal_metrics":
         return (

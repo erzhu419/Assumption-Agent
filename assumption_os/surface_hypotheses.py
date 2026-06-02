@@ -26,13 +26,27 @@ def build_surface_hypothesis_payload(
     store: JsonlGraphStore,
     performance_sections: dict[str, dict],
     eval_id: str,
+    proposal_path: str = "<surface_hypotheses.json>",
+    graph_path: str = "phase four/assumption_graph",
+    sample_path: str = "phase two/analysis/cache/sample_21_50.json",
+    meta_path: str = "phase two/analysis/cache/answers/phase2_v20_ag_learned_gpt55_meta.json",
 ) -> dict:
     """Turn system-level residual signals into reviewable proposals."""
 
     proposals = []
     proposals.extend(_world_model_proposals(store=store, sections=performance_sections, eval_id=eval_id))
     proposals.extend(_evaluator_proposals(store=store, sections=performance_sections, eval_id=eval_id))
+    proposals.extend(_surface_residual_bridge_proposals(
+        store=store,
+        sections=performance_sections,
+        eval_id=eval_id,
+        proposal_path=proposal_path,
+        graph_path=graph_path,
+        sample_path=sample_path,
+        meta_path=meta_path,
+    ))
     proposals = sorted(proposals, key=lambda p: (-p.priority, p.parent_node_id, p.proposal_id))
+    residual_bridge = [p for p in proposals if p.source_action.get("action_type") == "surface_residual_bridge"]
     payload = {
         "eval_id": eval_id,
         "proposal_count": len(proposals),
@@ -40,6 +54,18 @@ def build_surface_hypothesis_payload(
         "surface_counts": dict(Counter(p.source_action.get("surface_key") for p in proposals)),
         "world_model_proposal_count": sum(1 for p in proposals if p.source_action.get("surface_key") == "world_model_screen"),
         "evaluator_proposal_count": sum(1 for p in proposals if p.source_action.get("surface_key") == "evaluator_policy"),
+        "surface_residual_proposal_count": len(residual_bridge),
+        "world_model_residual_proposal_count": sum(
+            1 for p in residual_bridge if p.source_action.get("surface_key") == "world_model_screen"
+        ),
+        "evaluator_residual_proposal_count": sum(
+            1 for p in residual_bridge if p.source_action.get("surface_key") == "evaluator_policy"
+        ),
+        "surface_residual_ready_count": sum(
+            1
+            for p in residual_bridge
+            if p.source_action.get("command_hint") and p.source_action.get("trigger_problem_ids")
+        ),
         "manifest_count": sum(1 for p in proposals if p.manifest),
         "proposals": [p.to_dict() for p in proposals],
     }
@@ -117,6 +143,99 @@ def _world_model_proposals(*, store: JsonlGraphStore, sections: dict[str, dict],
     return proposals
 
 
+def _surface_residual_bridge_proposals(
+    *,
+    store: JsonlGraphStore,
+    sections: dict[str, dict],
+    eval_id: str,
+    proposal_path: str,
+    graph_path: str,
+    sample_path: str,
+    meta_path: str,
+) -> list[CandidateProposal]:
+    residual = sections.get("residual_clusterer", {})
+    clusters = [
+        row for row in residual.get("cluster_summaries", [])
+        if row.get("sample_problem_ids") and int(row.get("record_count") or 0) > 0
+    ]
+    if not clusters:
+        return []
+    proposals: list[CandidateProposal] = []
+    world_parent = _surface_parent(store, "world_model_screen")
+    evaluator_parent = _surface_parent(store, "evaluator_policy")
+    if world_parent:
+        trace_dataset = sections.get("trace_dataset", {})
+        trace_outcome = sections.get("trace_outcome_model", {})
+        world_clusters = [
+            row for row in clusters
+            if row.get("residual_type") in {"optimization", "unknown", "simulator_defect"}
+        ][:3]
+        if world_clusters:
+            proposals.append(_residual_bridge_proposal(
+                parent=world_parent,
+                eval_id=eval_id,
+                surface_key="world_model_screen",
+                issue_key="world_model_residual_to_trace_quota",
+                claim=(
+                    "Convert replay-heavy world-model residual clusters into a first-party trace quota before "
+                    "using their route policy predictions for promotion."
+                ),
+                predicted_effects=[
+                    "turn simulator residual clusters into concrete fresh trace collection tasks",
+                    "reduce replay-only calibration risk before accepting route-policy repairs",
+                ],
+                verifier="first_party_trace_quota_ablation",
+                clusters=world_clusters,
+                source_payload={
+                    "first_party_trainable_rows": trace_dataset.get("first_party_trainable_row_count"),
+                    "artifact_replay_trainable_rows": trace_dataset.get("artifact_replay_trainable_row_count"),
+                    "trace_brier": trace_outcome.get("leave_one_out_metrics", {}).get("weighted_brier_score"),
+                    "feature_brier": trace_outcome.get("feature_leave_one_out_metrics", {}).get("weighted_brier_score"),
+                },
+                proposal_path=proposal_path,
+                graph_path=graph_path,
+                sample_path=sample_path,
+                meta_path=meta_path,
+                priority=0.78,
+            ))
+    if evaluator_parent:
+        verifier = sections.get("verifier_stack", {})
+        formal = sections.get("formal_metrics", {})
+        stage_counts = verifier.get("stage_status_counts", {})
+        evaluator_clusters = [
+            row for row in clusters
+            if row.get("residual_type") in {"memory_defect", "optimization", "evaluator_defect"}
+        ][:3]
+        if evaluator_clusters:
+            proposals.append(_residual_bridge_proposal(
+                parent=evaluator_parent,
+                eval_id=eval_id,
+                surface_key="evaluator_policy",
+                issue_key="evaluator_residual_to_judge_probe",
+                claim=(
+                    "Convert evaluator and retrieval residual clusters into scoped judge probes before treating "
+                    "V4/formal-transfer signals as promotion evidence."
+                ),
+                predicted_effects=[
+                    "make evaluator uncertainty create trigger/control judge work instead of remaining an audit note",
+                    "separate retrieval failure, weak benefit, and evaluator-label uncertainty before graph mutation",
+                ],
+                verifier="cluster_conditioned_evaluator_probe",
+                clusters=evaluator_clusters,
+                source_payload={
+                    "stage_status_counts": stage_counts,
+                    "downstream_task_query_count": formal.get("downstream_task_query_count"),
+                    "downstream_transfer_pairwise_auc": formal.get("downstream_transfer_pairwise_auc"),
+                },
+                proposal_path=proposal_path,
+                graph_path=graph_path,
+                sample_path=sample_path,
+                meta_path=meta_path,
+                priority=0.76,
+            ))
+    return proposals
+
+
 def _evaluator_proposals(*, store: JsonlGraphStore, sections: dict[str, dict], eval_id: str) -> list[CandidateProposal]:
     parent = _surface_parent(store, "evaluator_policy")
     if parent is None:
@@ -180,6 +299,132 @@ def _evaluator_proposals(*, store: JsonlGraphStore, sections: dict[str, dict], e
             },
         ))
     return proposals
+
+
+def _residual_bridge_proposal(
+    *,
+    parent: AssumptionNode,
+    eval_id: str,
+    surface_key: str,
+    issue_key: str,
+    claim: str,
+    predicted_effects: list[str],
+    verifier: str,
+    clusters: list[dict],
+    source_payload: dict[str, Any],
+    proposal_path: str,
+    graph_path: str,
+    sample_path: str,
+    meta_path: str,
+    priority: float,
+) -> CandidateProposal:
+    trigger_ids = _cluster_problem_ids(clusters, limit=10)
+    control_ids = _control_problem_ids(clusters, trigger_ids=trigger_ids, limit=10)
+    validation_plan = {
+        "trigger_problem_ids": trigger_ids,
+        "control_problem_ids": control_ids,
+        "cluster_ids": [row.get("cluster_id") for row in clusters],
+        "residual_types": sorted({str(row.get("residual_type")) for row in clusters if row.get("residual_type")}),
+        "acceptance": (
+            "candidate beats the current policy on residual-cluster trigger rows while not increasing "
+            "outside-control losses"
+        ),
+    }
+    cid = stable_id("cand", eval_id, parent.id, issue_key, ",".join(validation_plan["cluster_ids"]))
+    candidate = AssumptionNode(
+        id=cid,
+        type=parent.type,
+        kind=HypothesisKind.EVALUATOR_POLICY if parent.type == AssumptionType.EVALUATOR else HypothesisKind.HP_CHANGE,
+        claim=claim,
+        context_conditions=[
+            f"surface_key={surface_key}",
+            f"issue_key={issue_key}",
+            *[f"residual_cluster={cid_}" for cid_ in validation_plan["cluster_ids"] if cid_],
+        ],
+        predicted_effects=predicted_effects,
+        risk_predictions=[
+            "may overfit the current residual clusters",
+            "must pass cluster trigger/control ablation before graph mutation",
+        ],
+        verifiers=[verifier, "residual_cluster_trigger_control_ablation", "candidate_acceptance_gate"],
+        confidence=0.45,
+        metaproductivity=0.13,
+        status="candidate",
+        tags=["candidate", "surface_residual_bridge", surface_key, issue_key],
+        payload={
+            "source": "surface_hypothesis_generator",
+            "surface_key": surface_key,
+            "issue_key": issue_key,
+            "residual_clusters": clusters,
+            "validation_plan": validation_plan,
+            "source_metrics": source_payload,
+            "readiness": "ready_for_fresh_ablation" if trigger_ids else "needs_trigger_rows",
+            "activation": {
+                "problem_ids": trigger_ids,
+                "control_problem_ids": control_ids,
+                "residual_cluster_ids": validation_plan["cluster_ids"],
+            },
+        },
+    )
+    edge = AssumptionEdge(
+        source=parent.id,
+        target=cid,
+        type=EdgeType.GENERATED_FROM_RESIDUAL,
+        weight=0.68,
+        payload={
+            "source": "surface_hypothesis_generator",
+            "surface_key": surface_key,
+            "issue_key": issue_key,
+            "cluster_ids": validation_plan["cluster_ids"],
+        },
+    )
+    proposal_id = stable_id("prop", eval_id, parent.id, issue_key, cid)
+    manifest = TrialManifest(
+        problem_id=f"surface_residual_bridge::{issue_key}",
+        action_type="surface_residual_bridge_synthesis",
+        component="surface_hypothesis_generator",
+        assumption=claim,
+        why_selected=f"Residual clusters exposed {issue_key} on {surface_key}.",
+        expected_effect="Convert evaluator/world-model residuals into a falsifiable candidate and ablation queue.",
+        assumption_ids=[parent.id, cid],
+        verifier=verifier,
+        verification_plan=json.dumps(validation_plan, ensure_ascii=False, sort_keys=True),
+        rollback_condition="Reject if residual-cluster triggers fail or outside controls regress.",
+        status=TrialStatus.PENDING,
+        artifacts={"candidate_node": candidate.to_dict(), "validation_plan": validation_plan},
+        metadata={"eval_id": eval_id, "surface_key": surface_key, "issue_key": issue_key},
+        trial_id=stable_id("trial", eval_id, parent.id, issue_key, "surface_residual_bridge"),
+    )
+    return CandidateProposal(
+        proposal_id=proposal_id,
+        proposal_type=ProposalType.FAILURE_HYPOTHESIS,
+        parent_node_id=parent.id,
+        candidate_node=candidate.to_dict(),
+        edges=[edge.to_dict()],
+        manifest=manifest.to_dict(),
+        rationale=f"Generated from {len(clusters)} residual clusters for {surface_key}.",
+        priority=priority,
+        source_action={
+            "action_type": "surface_residual_bridge",
+            "surface_key": surface_key,
+            "issue_key": issue_key,
+            "trigger_problem_ids": trigger_ids,
+            "control_problem_ids": control_ids,
+            "cluster_ids": validation_plan["cluster_ids"],
+            "command_hint": (
+                "python3 -m assumption_os.candidate_eval "
+                f'--graph-dir "{graph_path}" '
+                f'--proposals "{proposal_path}" '
+                f'--sample "{sample_path}" '
+                f'--meta "{meta_path}" '
+                f"--eval-id {stable_id('surface_residual_bridge_preflight', eval_id, issue_key)} "
+                f"--proposal-ids {proposal_id} "
+                "--force-proposal-route "
+                f'--summary-out "phase four/assumption_graph/{proposal_id}_surface_residual_bridge_preflight.json"'
+            ),
+            **source_payload,
+        },
+    )
 
 
 def _proposal(
@@ -262,6 +507,28 @@ def _proposal(
             **source_payload,
         },
     )
+
+
+def _cluster_problem_ids(clusters: list[dict], *, limit: int) -> list[str]:
+    ids: list[str] = []
+    for cluster in clusters:
+        ids.extend(_normalize_problem_id(pid) for pid in cluster.get("sample_problem_ids", []) if pid)
+    return sorted(dict.fromkeys(ids))[:limit]
+
+
+def _control_problem_ids(clusters: list[dict], *, trigger_ids: list[str], limit: int) -> list[str]:
+    trigger = set(trigger_ids)
+    ids: list[str] = []
+    for cluster in clusters:
+        for pid in cluster.get("candidate_control_problem_ids", []):
+            normalized = _normalize_problem_id(pid) if pid else ""
+            if normalized and normalized not in trigger:
+                ids.append(normalized)
+    return sorted(dict.fromkeys(ids))[:limit]
+
+
+def _normalize_problem_id(problem_id: Any) -> str:
+    return str(problem_id).split(";", 1)[0].strip()
 
 
 def _surface_parent(store: JsonlGraphStore, surface_key: str) -> AssumptionNode | None:

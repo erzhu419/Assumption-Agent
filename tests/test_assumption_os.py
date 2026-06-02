@@ -1295,6 +1295,80 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(payload["manifest_count"], 4)
             self.assertFalse(payload["secret_leak_detected"])
 
+    def test_surface_hypothesis_generator_bridges_residual_clusters_to_surface_proposals(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="surface_world",
+                type=AssumptionType.WORLD_MODEL,
+                kind=HypothesisKind.CLAIM,
+                claim="World model screen",
+                payload={"surface_key": "world_model_screen"},
+            ))
+            store.upsert_node(AssumptionNode(
+                id="surface_eval",
+                type=AssumptionType.EVALUATOR,
+                kind=HypothesisKind.CLAIM,
+                claim="Evaluator policy",
+                payload={"surface_key": "evaluator_policy"},
+            ))
+            cluster = {
+                "cluster_id": "rcluster_unit",
+                "residual_type": "optimization",
+                "signature": "unit_signature",
+                "parent_node_id": "strategy_S01",
+                "record_count": 3,
+                "top_terms": ["judge", "concrete"],
+                "sample_problem_ids": ["p1", "p2", "p3"],
+                "candidate_control_problem_ids": ["c1", "c2"],
+            }
+            memory_cluster = {
+                **cluster,
+                "cluster_id": "rcluster_memory",
+                "residual_type": "memory_defect",
+                "sample_problem_ids": ["p4", "p5"],
+                "candidate_control_problem_ids": ["c3", "c4"],
+            }
+            sections = {
+                "trace_dataset": {
+                    "first_party_trainable_row_count": 1,
+                    "artifact_replay_trainable_row_count": 4,
+                },
+                "trace_outcome_model": {
+                    "leave_one_out_metrics": {"weighted_brier_score": 0.2},
+                    "feature_leave_one_out_metrics": {"weighted_brier_score": 0.1},
+                    "feature_schema": {"feature_count": 6},
+                },
+                "verifier_stack": {"stage_status_counts": {"V4:missing": 3, "V4:fail": 1}},
+                "formal_metrics": {
+                    "transfer_search_query_count": 2,
+                    "transfer_search_negative_application_count": 2,
+                    "downstream_task_query_count": 9,
+                    "downstream_transfer_pairwise_auc": 0.9,
+                },
+                "residual_clusterer": {"cluster_summaries": [cluster, memory_cluster]},
+            }
+            payload = build_surface_hypothesis_payload(
+                store=store,
+                performance_sections=sections,
+                eval_id="unit_surface_residual_bridge",
+            )
+            self.assertGreaterEqual(payload["proposal_count"], 6)
+            self.assertEqual(payload["surface_residual_proposal_count"], 2)
+            self.assertEqual(payload["world_model_residual_proposal_count"], 1)
+            self.assertEqual(payload["evaluator_residual_proposal_count"], 1)
+            self.assertEqual(payload["surface_residual_ready_count"], 2)
+            bridge = [
+                p for p in payload["proposals"]
+                if p["source_action"].get("action_type") == "surface_residual_bridge"
+            ]
+            self.assertTrue(all(p["source_action"].get("command_hint") for p in bridge))
+            self.assertTrue(all("python3 -m assumption_os.candidate_eval" in p["source_action"]["command_hint"] for p in bridge))
+            self.assertTrue(all("--proposal-ids" in p["source_action"]["command_hint"] for p in bridge))
+            self.assertFalse(any("--proposal-id " in p["source_action"]["command_hint"] for p in bridge))
+            self.assertTrue(all(p["candidate_node"]["payload"]["validation_plan"]["trigger_problem_ids"] for p in bridge))
+            self.assertTrue(all(p["candidate_node"]["payload"]["activation"]["problem_ids"] for p in bridge))
+
     def test_harness_observer_backfills_artifact_manifest_coverage(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -1738,6 +1812,16 @@ class AssumptionOSTest(unittest.TestCase):
                 "residual_clusterer": {"pass": True, "cluster_count": 7, "proposal_count": 2, "record_count": 109, "residual_type_counts": {"optimization": 4, "memory_defect": 2, "unknown": 1}, "validation_plans_complete": True},
                 "trace_policy_proposals": {"pass": True, "proposal_count": 3, "repair_policy_count": 1},
                 "trace_policy_preflight": {"pass": True, "proposal_count": 3, "ready_count": 3},
+                "surface_hypothesis_generator": {
+                    "pass": True,
+                    "proposal_count": 6,
+                    "world_model_proposal_count": 3,
+                    "evaluator_proposal_count": 3,
+                    "surface_residual_proposal_count": 2,
+                    "surface_residual_ready_count": 2,
+                    "world_model_residual_proposal_count": 1,
+                    "evaluator_residual_proposal_count": 1,
+                },
                 "world_model": {"pass": True, "matched_label_count": 16, "post_calibration": {"brier_score": 0.0081}},
                 "trace_dataset": {"pass": True},
                 "trace_outcome_model": {"pass": True, "trainable_row_count": 9, "policy_update_count": 3, "residual_group_count": 1, "leave_one_out_metrics": {"brier_score": 0.1605}},
