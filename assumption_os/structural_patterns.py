@@ -18,6 +18,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Iterable
 
+from .formal_mapping import finite_kernel_metrics
 from .graph_memory import JsonlGraphStore, tokenize
 from .schema import (
     AssumptionEdge,
@@ -161,6 +162,91 @@ ROLE_MARKERS = {
         "pipeline",
         "replace one",
     ],
+    "root_problem": [
+        "root problem",
+        "whole problem",
+        "goal",
+        "overall task",
+        "parent problem",
+        "compose solution",
+    ],
+    "subproblem": [
+        "subproblem",
+        "subtask",
+        "decompose",
+        "split",
+        "factor",
+        "independent part",
+    ],
+    "interface_contract": [
+        "interface",
+        "contract",
+        "schema",
+        "boundary condition",
+        "input output",
+        "io contract",
+    ],
+    "bottleneck_resource": [
+        "bottleneck",
+        "capacity",
+        "throughput",
+        "rate limit",
+        "scarce resource",
+    ],
+    "flow_item": [
+        "flow",
+        "queue",
+        "traffic",
+        "throughput",
+        "token budget",
+    ],
+    "counterexample": [
+        "counterexample",
+        "adversarial",
+        "edge case",
+        "failure case",
+        "falsify",
+        "breaks",
+    ],
+    "refined_claim": [
+        "refine",
+        "patch",
+        "narrow",
+        "weaken claim",
+        "guardrail",
+        "revised claim",
+    ],
+    "conserved_quantity": [
+        "invariant quantity",
+        "mass balance",
+        "energy balance",
+        "budget balance",
+        "probability mass",
+        "budget",
+    ],
+    "transformation": [
+        "transform",
+        "transition",
+        "state change",
+        "mapping",
+        "conversion",
+        "update step",
+    ],
+    "ordered_state": [
+        "ordered",
+        "ranked",
+        "monotonic",
+        "partial order",
+        "non-decreasing",
+        "dominance",
+    ],
+    "objective_measure": [
+        "objective",
+        "score",
+        "loss",
+        "utility",
+        "progress",
+    ],
 }
 
 
@@ -176,6 +262,17 @@ INVARIANT_MARKERS = {
     "stochastic_nuisance_suppressed": ["noise", "nuisance", "uncorrelated", "random", "gaussian", "irrelevant detail"],
     "module_boundary_preserved": ["module", "boundary", "pipeline", "component"],
     "rollback_path_available": ["rollback", "fallback", "old path", "working path", "revert"],
+    "interface_contract_preserved": ["interface", "contract", "schema", "boundary condition", "input output"],
+    "subproblem_independence_preserved": ["independent", "subproblem", "subtask", "factor", "separable"],
+    "composed_solution_recovers_goal": ["compose solution", "recover goal", "overall task", "root problem", "join result"],
+    "bottleneck_controls_throughput": ["bottleneck", "throughput", "capacity", "rate limit", "scarce resource"],
+    "capacity_constraint_explicit": ["capacity constraint", "rate limit", "scarce resource", "resource budget"],
+    "counterexample_targets_claim": ["counterexample", "falsify", "breaks", "edge case", "adversarial"],
+    "refinement_handles_counterexample": ["refine", "patch", "narrow", "guardrail", "revised claim"],
+    "conserved_quantity_preserved": ["conserved quantity", "invariant quantity", "mass balance", "energy balance", "budget balance", "probability mass"],
+    "balance_check_closes": ["balance", "accounting", "check", "closed", "sum"],
+    "order_preserved": ["ordered", "monotonic", "non-decreasing", "partial order", "dominance"],
+    "progress_non_decreasing": ["progress", "objective", "score", "utility", "non-decreasing", "improve"],
 }
 
 
@@ -196,6 +293,17 @@ ROLE_OBJECT_HINTS = {
     "stable_signal": "predictable stable signal",
     "nuisance_noise": "stochastic nuisance variation",
     "module_boundary": "bounded module or adapter boundary",
+    "root_problem": "whole goal or parent problem",
+    "subproblem": "bounded subproblem or subtask",
+    "interface_contract": "interface contract that composes subsolutions",
+    "bottleneck_resource": "scarce capacity or rate-limiting resource",
+    "flow_item": "items or work flowing through a constrained path",
+    "counterexample": "adversarial counterexample or edge failure",
+    "refined_claim": "narrowed claim or patched hypothesis",
+    "conserved_quantity": "quantity that must balance through a transformation",
+    "transformation": "state transition or conversion step",
+    "ordered_state": "ordered state under a monotone relation",
+    "objective_measure": "objective, metric, or progress measure",
 }
 
 
@@ -213,6 +321,21 @@ MORPHISM_ENDPOINT_HINTS = {
     "oppose_change": ("induced_response", "system_state"),
     "suppress_noise": ("nuisance_noise", "projection_operator"),
     "recover_signal": ("stable_signal", "projection_operator"),
+    "split_problem": ("root_problem", "subproblem"),
+    "solve_subproblem": ("subproblem", "interface_contract"),
+    "compose_solution": ("interface_contract", "root_problem"),
+    "route_flow": ("flow_input", "bottleneck_resource"),
+    "constrain_capacity": ("bottleneck_resource", "flow_output"),
+    "relieve_bottleneck": ("bottleneck_resource", "flow_output"),
+    "generate_counterexample": ("claim_under_test", "counterexample_case"),
+    "falsify_claim": ("counterexample_case", "claim_under_test"),
+    "patch_claim": ("claim_under_test", "refined_claim"),
+    "transform_state": ("source_state", "target_state"),
+    "conserve_quantity": ("conserved_quantity", "target_state"),
+    "check_balance": ("target_state", "conserved_quantity"),
+    "apply_monotone_step": ("ordered_state", "ordered_state"),
+    "preserve_order": ("ordered_state", "objective_measure"),
+    "measure_progress": ("objective_measure", "objective_measure"),
 }
 
 
@@ -320,6 +443,126 @@ ROLE_MORPHISM_RULES = [
         "target_role": "stable_signal",
         "requires": ["stable_signal"],
         "terms": ["recover", "predict", "latent", "stable"],
+    },
+    {
+        "id": "split_problem",
+        "role": "subproblem",
+        "source_role": "root_problem",
+        "target_role": "subproblem",
+        "requires": ["root_problem", "subproblem"],
+        "terms": ["split", "decompose", "factor", "subproblem", "subtask"],
+    },
+    {
+        "id": "solve_subproblem",
+        "role": "subproblem",
+        "source_role": "subproblem",
+        "target_role": "interface_contract",
+        "requires": ["subproblem", "interface_contract"],
+        "terms": ["solve subproblem", "independent part", "interface", "contract"],
+    },
+    {
+        "id": "compose_solution",
+        "role": "interface_contract",
+        "source_role": "interface_contract",
+        "target_role": "root_problem",
+        "requires": ["root_problem", "subproblem", "interface_contract"],
+        "terms": ["compose solution", "join result", "recover goal", "overall task"],
+    },
+    {
+        "id": "route_flow",
+        "role": "flow_item",
+        "source_role": "flow_item",
+        "target_role": "bottleneck_resource",
+        "requires": ["flow_item", "bottleneck_resource"],
+        "terms": ["route", "flow", "queue", "traffic", "throughput"],
+    },
+    {
+        "id": "constrain_capacity",
+        "role": "bottleneck_resource",
+        "source_role": "bottleneck_resource",
+        "target_role": "flow_item",
+        "requires": ["flow_item", "bottleneck_resource"],
+        "terms": ["capacity", "constraint", "rate limit", "scarce resource"],
+    },
+    {
+        "id": "relieve_bottleneck",
+        "role": "bottleneck_resource",
+        "source_role": "bottleneck_resource",
+        "target_role": "flow_item",
+        "requires": ["flow_item", "bottleneck_resource"],
+        "terms": ["relieve", "widen", "remove bottleneck", "increase throughput"],
+    },
+    {
+        "id": "generate_counterexample",
+        "role": "counterexample",
+        "source_role": "refined_claim",
+        "target_role": "counterexample",
+        "requires": ["counterexample"],
+        "terms": ["generate counterexample", "adversarial", "edge case", "failure case"],
+    },
+    {
+        "id": "falsify_claim",
+        "role": "counterexample",
+        "source_role": "counterexample",
+        "target_role": "refined_claim",
+        "requires": ["counterexample", "refined_claim"],
+        "terms": ["falsify", "breaks", "disprove", "violates"],
+    },
+    {
+        "id": "patch_claim",
+        "role": "refined_claim",
+        "source_role": "counterexample",
+        "target_role": "refined_claim",
+        "requires": ["counterexample", "refined_claim"],
+        "terms": ["patch", "refine", "narrow", "guardrail", "revised claim"],
+    },
+    {
+        "id": "transform_state",
+        "role": "transformation",
+        "source_role": "transformation",
+        "target_role": "conserved_quantity",
+        "requires": ["transformation", "conserved_quantity"],
+        "terms": ["transform", "transition", "state change", "conversion"],
+    },
+    {
+        "id": "conserve_quantity",
+        "role": "conserved_quantity",
+        "source_role": "conserved_quantity",
+        "target_role": "transformation",
+        "requires": ["transformation", "conserved_quantity"],
+        "terms": ["conserve", "conservation", "balance", "invariant quantity"],
+    },
+    {
+        "id": "check_balance",
+        "role": "conserved_quantity",
+        "source_role": "transformation",
+        "target_role": "conserved_quantity",
+        "requires": ["transformation", "conserved_quantity"],
+        "terms": ["check balance", "accounting", "closed", "sum"],
+    },
+    {
+        "id": "apply_monotone_step",
+        "role": "ordered_state",
+        "source_role": "ordered_state",
+        "target_role": "ordered_state",
+        "requires": ["ordered_state"],
+        "terms": ["monotonic", "monotone step", "non-decreasing", "ordered"],
+    },
+    {
+        "id": "preserve_order",
+        "role": "ordered_state",
+        "source_role": "ordered_state",
+        "target_role": "objective_measure",
+        "requires": ["ordered_state", "objective_measure"],
+        "terms": ["preserve order", "dominance", "partial order"],
+    },
+    {
+        "id": "measure_progress",
+        "role": "objective_measure",
+        "source_role": "objective_measure",
+        "target_role": "objective_measure",
+        "requires": ["ordered_state", "objective_measure"],
+        "terms": ["measure progress", "score", "objective", "utility", "improve"],
     },
 ]
 
@@ -1060,7 +1303,12 @@ def format_structural_morphism_applications(applications: list[dict], *, max_ite
         "Shadow-mode structural hints. Use only when the current problem preserves the listed invariants.",
     ]
     for app in applications[:max_items]:
-        lines.append(f"\n- {app['pattern_name']} ({app['pattern_id']}, score={app['score']:.2f}, gate={app['decision']})")
+        if not app.get("pattern_id"):
+            continue
+        lines.append(
+            f"\n- {app.get('pattern_name', app['pattern_id'])} "
+            f"({app['pattern_id']}, score={float(app.get('score', 0.0)):.2f}, gate={app.get('decision', 'unknown')})"
+        )
         if app.get("matched_terms"):
             lines.append("  Matched terms: " + ", ".join(app["matched_terms"][:8]))
         if app.get("preserved_invariants"):
@@ -1722,6 +1970,189 @@ DEFAULT_STRUCTURAL_PATTERNS = [
             "A valid transfer should improve stable-state prediction or denoising while avoiding reconstruction of nuisance details.",
         ],
     },
+    {
+        "pattern_id": "pat_decomposition_composition",
+        "name": "Decomposition / Interface-Preserving Composition",
+        "claim": "Split a root problem into bounded subproblems whose interface contracts compose back into the whole goal.",
+        "trigger_terms": [
+            "decompose",
+            "decomposition",
+            "split",
+            "subproblem",
+            "subtask",
+            "interface",
+            "contract",
+            "compose solution",
+        ],
+        "objects": [
+            {"id": "root_problem", "role": "root_problem", "terms": ["root problem", "whole problem", "overall task", "goal"]},
+            {"id": "subproblem_node", "role": "subproblem", "terms": ["subproblem", "subtask", "decompose", "split", "factor"]},
+            {"id": "interface_contract", "role": "interface_contract", "terms": ["interface", "contract", "schema", "input output", "boundary condition"]},
+        ],
+        "morphisms": [
+            {"id": "split_problem", "role": "subproblem", "terms": ["split", "decompose", "factor", "subproblem", "subtask"]},
+            {"id": "solve_subproblem", "role": "subproblem", "terms": ["solve subproblem", "independent part", "interface", "contract"]},
+            {"id": "compose_solution", "role": "interface_contract", "terms": ["compose solution", "join result", "recover goal", "overall task"]},
+        ],
+        "composition_laws": [
+            "split problem then solve subproblems through interface contracts; composed solution recovers the root problem",
+        ],
+        "invariants": [
+            {"id": "interface_contract_preserved", "terms": ["interface", "contract", "schema", "input output", "boundary condition"]},
+            {"id": "subproblem_independence_preserved", "terms": ["independent", "subproblem", "subtask", "factor", "separable"]},
+            {"id": "composed_solution_recovers_goal", "terms": ["compose solution", "recover goal", "overall task", "root problem", "join result"]},
+        ],
+        "negative_controls": ["entangled subproblems", "no interface", "cannot compose", "hidden dependency", "lost root goal"],
+        "good_realizations": ["divide and conquer", "map reduce", "modular proof", "interface contract"],
+        "bad_realizations": ["arbitrary checklist", "split without join", "ambiguous handoff"],
+        "transfer_predictions": [
+            "A valid decomposition transfer should name subproblem interfaces and a composition check that recovers the root goal.",
+        ],
+    },
+    {
+        "pattern_id": "pat_bottleneck_capacity",
+        "name": "Bottleneck / Capacity-Limited Flow",
+        "claim": "System throughput is controlled by a scarce capacity constraint, so interventions should target the bottleneck rather than non-limiting parts.",
+        "trigger_terms": [
+            "bottleneck",
+            "capacity",
+            "throughput",
+            "queue",
+            "rate limit",
+            "traffic",
+            "scarce resource",
+            "token budget",
+        ],
+        "objects": [
+            {"id": "flow_input", "role": "flow_item", "terms": ["flow", "queue", "traffic", "token budget", "work item"]},
+            {"id": "bottleneck_resource", "role": "bottleneck_resource", "terms": ["bottleneck", "capacity", "rate limit", "scarce resource"]},
+            {"id": "flow_output", "role": "flow_item", "terms": ["throughput", "queue drained", "latency", "output flow"]},
+        ],
+        "morphisms": [
+            {"id": "route_flow", "role": "flow_item", "terms": ["route", "flow", "queue", "traffic", "throughput"]},
+            {"id": "constrain_capacity", "role": "bottleneck_resource", "terms": ["capacity", "capacity constraint", "rate limit", "scarce resource"]},
+            {"id": "relieve_bottleneck", "role": "bottleneck_resource", "terms": ["relieve", "widen", "remove bottleneck", "increase throughput"]},
+        ],
+        "composition_laws": ["flow routed through bottleneck capacity determines output throughput"],
+        "invariants": [
+            {"id": "bottleneck_controls_throughput", "terms": ["bottleneck", "throughput", "capacity", "rate limit", "scarce resource"]},
+            {"id": "capacity_constraint_explicit", "terms": ["capacity constraint", "rate limit", "scarce resource", "resource budget"]},
+        ],
+        "negative_controls": ["optimize non bottleneck", "no bottleneck", "unlimited capacity", "shift bottleneck without measuring"],
+        "good_realizations": ["queueing bottleneck", "critical path", "rate limiter", "resource contention"],
+        "bad_realizations": ["local optimization away from bottleneck", "throughput claim without capacity"],
+        "transfer_predictions": [
+            "A valid bottleneck transfer should identify the limiting resource and predict that relieving it improves throughput more than optimizing non-bottleneck steps.",
+        ],
+    },
+    {
+        "pattern_id": "pat_counterexample_refinement",
+        "name": "Counterexample-Guided Claim Refinement",
+        "claim": "Use an adversarial counterexample to falsify an overbroad claim, then narrow or patch the claim with a guardrail.",
+        "trigger_terms": [
+            "counterexample",
+            "adversarial",
+            "edge case",
+            "failure case",
+            "falsify",
+            "refine",
+            "patch",
+            "guardrail",
+        ],
+        "objects": [
+            {"id": "claim_under_test", "role": "refined_claim", "terms": ["claim", "hypothesis", "overbroad claim", "assumption"]},
+            {"id": "counterexample_case", "role": "counterexample", "terms": ["counterexample", "adversarial", "edge case", "failure case"]},
+            {"id": "refined_claim", "role": "refined_claim", "terms": ["refine", "patch", "narrow", "guardrail", "revised claim"]},
+        ],
+        "morphisms": [
+            {"id": "generate_counterexample", "role": "counterexample", "terms": ["generate counterexample", "adversarial", "edge case", "failure case"]},
+            {"id": "falsify_claim", "role": "counterexample", "terms": ["falsify", "breaks", "disprove", "violates"]},
+            {"id": "patch_claim", "role": "refined_claim", "terms": ["patch", "refine", "narrow", "guardrail", "revised claim"]},
+        ],
+        "composition_laws": ["counterexample falsifies claim; refined claim handles the counterexample with an explicit guardrail"],
+        "invariants": [
+            {"id": "counterexample_targets_claim", "terms": ["counterexample", "falsify", "breaks", "edge case", "adversarial"]},
+            {"id": "refinement_handles_counterexample", "terms": ["refine", "patch", "narrow", "guardrail", "revised claim"]},
+        ],
+        "negative_controls": ["ignore counterexample", "patch unrelated claim", "no falsification", "broaden claim after failure"],
+        "good_realizations": ["CEGIS", "red-team repair", "property-based testing", "refinement loop"],
+        "bad_realizations": ["post-hoc excuse", "unrelated guardrail", "counterexample discarded"],
+        "transfer_predictions": [
+            "A valid counterexample transfer should produce a specific failing case and a narrower claim that the same case no longer breaks.",
+        ],
+    },
+    {
+        "pattern_id": "pat_conservation_balance",
+        "name": "Conservation / Balance-Preserving Transformation",
+        "claim": "A transformation is valid only when a conserved quantity or budget remains balanced before and after the state change.",
+        "trigger_terms": [
+            "conservation",
+            "conserved quantity",
+            "mass balance",
+            "energy balance",
+            "budget balance",
+            "probability mass",
+            "accounting",
+            "invariant quantity",
+        ],
+        "objects": [
+            {"id": "source_state", "role": "transformation", "terms": ["source state", "before state", "input state", "state change"]},
+            {"id": "conserved_quantity", "role": "conserved_quantity", "terms": ["conserved quantity", "invariant quantity", "mass balance", "energy balance", "budget balance", "probability mass", "budget"]},
+            {"id": "target_state", "role": "transformation", "terms": ["target state", "after state", "output state", "transition"]},
+        ],
+        "morphisms": [
+            {"id": "transform_state", "role": "transformation", "terms": ["transform", "transition", "state change", "conversion"]},
+            {"id": "conserve_quantity", "role": "conserved_quantity", "terms": ["conserve", "conserved quantity", "balance", "invariant quantity"]},
+            {"id": "check_balance", "role": "conserved_quantity", "terms": ["check balance", "accounting", "closed", "sum"]},
+        ],
+        "composition_laws": ["state transformation plus balance check preserves the conserved quantity"],
+        "invariants": [
+            {"id": "conserved_quantity_preserved", "terms": ["conserved quantity", "invariant quantity", "mass balance", "energy balance", "budget balance", "probability mass"]},
+            {"id": "balance_check_closes", "terms": ["balance", "accounting", "check", "closed", "sum"]},
+        ],
+        "negative_controls": ["leaks budget", "unbalanced accounting", "creates quantity", "destroys quantity", "no balance check"],
+        "good_realizations": ["mass balance", "energy conservation", "budget accounting", "probability mass preservation"],
+        "bad_realizations": ["untracked loss", "magic resource creation", "normalization ignored"],
+        "transfer_predictions": [
+            "A valid conservation transfer should expose the conserved quantity and a before/after balance check.",
+        ],
+    },
+    {
+        "pattern_id": "pat_monotone_progress",
+        "name": "Monotone Progress / Order-Preserving Improvement",
+        "claim": "A safe iterative update should preserve an ordering or objective measure so progress does not regress.",
+        "trigger_terms": [
+            "monotonic",
+            "monotone",
+            "non-decreasing",
+            "ordered",
+            "partial order",
+            "dominance",
+            "progress",
+            "objective",
+        ],
+        "objects": [
+            {"id": "ordered_state", "role": "ordered_state", "terms": ["ordered state", "partial order", "ranked state", "dominance"]},
+            {"id": "objective_measure", "role": "objective_measure", "terms": ["objective", "score", "loss", "utility", "progress"]},
+            {"id": "updated_state", "role": "ordered_state", "terms": ["updated state", "non-decreasing", "monotonic", "improve"]},
+        ],
+        "morphisms": [
+            {"id": "apply_monotone_step", "role": "ordered_state", "terms": ["monotonic", "monotone step", "non-decreasing", "ordered"]},
+            {"id": "preserve_order", "role": "ordered_state", "terms": ["preserve order", "dominance", "partial order"]},
+            {"id": "measure_progress", "role": "objective_measure", "terms": ["measure progress", "score", "objective", "utility", "improve"]},
+        ],
+        "composition_laws": ["monotone update preserves order and produces non-decreasing objective progress"],
+        "invariants": [
+            {"id": "order_preserved", "terms": ["ordered", "monotonic", "non-decreasing", "partial order", "dominance"]},
+            {"id": "progress_non_decreasing", "terms": ["progress", "objective", "score", "utility", "non-decreasing", "improve"]},
+        ],
+        "negative_controls": ["regression allowed", "unmeasured progress", "order reversal", "improves metric by breaking invariant"],
+        "good_realizations": ["policy improvement", "coordinate ascent", "curriculum progress", "monotone optimization"],
+        "bad_realizations": ["oscillating update", "reward hacking", "metric-only improvement with broken order"],
+        "transfer_predictions": [
+            "A valid monotone-progress transfer should define the order/objective and detect any update that regresses it.",
+        ],
+    },
 ]
 
 
@@ -2115,6 +2546,31 @@ def _default_positive_pair_cases() -> list[dict]:
             "query": "A latent world-state predictor should keep predictable correlated signal and suppress Gaussian uncorrelated nuisance noise instead of reconstructing irrelevant detail.",
             "expected": "pat_signal_nuisance_separation",
         },
+        {
+            "id": "pair_decomposition_composition",
+            "query": "Decompose the root problem into independent subproblems, preserve interface contracts, and compose solution outputs back to the overall goal.",
+            "expected": "pat_decomposition_composition",
+        },
+        {
+            "id": "pair_bottleneck_capacity",
+            "query": "The queue throughput is limited by a bottleneck capacity constraint, so relieve the scarce resource instead of optimizing non-bottleneck steps.",
+            "expected": "pat_bottleneck_capacity",
+        },
+        {
+            "id": "pair_counterexample_refinement",
+            "query": "Generate an adversarial counterexample that falsifies the overbroad claim, then patch and narrow the revised claim with a guardrail.",
+            "expected": "pat_counterexample_refinement",
+        },
+        {
+            "id": "pair_conservation_balance",
+            "query": "A state transformation must preserve a conserved quantity with before and after mass balance accounting checks.",
+            "expected": "pat_conservation_balance",
+        },
+        {
+            "id": "pair_monotone_progress",
+            "query": "Each monotone update should preserve the partial order and show non-decreasing objective progress without regression.",
+            "expected": "pat_monotone_progress",
+        },
     ]
 
 
@@ -2162,6 +2618,31 @@ def _default_nonlexical_queries() -> list[dict]:
             "query": "The representation should model stable predictable structure and ignore random uncorrelated nuisance variation.",
             "expected": "pat_signal_nuisance_separation",
         },
+        {
+            "id": "probe_interface_join",
+            "query": "Factor the parent goal into separable parts, give each part a clear handoff contract, and verify the joined result still solves the parent goal.",
+            "expected": "pat_decomposition_composition",
+        },
+        {
+            "id": "probe_capacity_limiter",
+            "query": "Work piles up at one scarce capacity point; improving unrelated stages will not increase end-to-end output.",
+            "expected": "pat_bottleneck_capacity",
+        },
+        {
+            "id": "probe_failure_refines_claim",
+            "query": "Find a concrete edge failure that breaks the assumption, then narrow the assumption so that same failure is handled.",
+            "expected": "pat_counterexample_refinement",
+        },
+        {
+            "id": "probe_balance_accounting",
+            "query": "Track an invariant quantity through the transition and close the before-after accounting balance.",
+            "expected": "pat_conservation_balance",
+        },
+        {
+            "id": "probe_ordered_improvement",
+            "query": "Accept only updates that keep the dominance relation and make measured progress non-decreasing.",
+            "expected": "pat_monotone_progress",
+        },
     ]
 
 
@@ -2194,6 +2675,41 @@ def _default_behavior_tasks() -> list[dict]:
             "expected_pattern": "pat_signal_nuisance_separation",
             "required_terms": ["predictable", "noise", "suppress"],
             "forbidden_terms": ["memorize noise"],
+        },
+        {
+            "id": "behavior_decomposition_contract",
+            "query": "A complex task should be split into separable parts without losing the parent goal.",
+            "expected_pattern": "pat_decomposition_composition",
+            "required_terms": ["interface", "subproblem", "goal"],
+            "forbidden_terms": ["arbitrary checklist"],
+        },
+        {
+            "id": "behavior_bottleneck_capacity",
+            "query": "A pipeline has low throughput because one stage is capacity limited.",
+            "expected_pattern": "pat_bottleneck_capacity",
+            "required_terms": ["bottleneck", "capacity", "throughput"],
+            "forbidden_terms": ["optimize non bottleneck"],
+        },
+        {
+            "id": "behavior_counterexample_refinement",
+            "query": "A broad assumption failed on an edge case and needs a precise repair.",
+            "expected_pattern": "pat_counterexample_refinement",
+            "required_terms": ["counterexample", "refine", "patch"],
+            "forbidden_terms": ["ignore counterexample"],
+        },
+        {
+            "id": "behavior_conservation_balance",
+            "query": "A transformation changes state but should not leak budget or probability mass.",
+            "expected_pattern": "pat_conservation_balance",
+            "required_terms": ["conserved quantity", "balance", "check"],
+            "forbidden_terms": ["leaks budget"],
+        },
+        {
+            "id": "behavior_monotone_progress",
+            "query": "An iterative policy update should improve without regressing the ordering constraint.",
+            "expected_pattern": "pat_monotone_progress",
+            "required_terms": ["monotonic", "progress", "objective"],
+            "forbidden_terms": ["regression allowed"],
         },
     ]
 
