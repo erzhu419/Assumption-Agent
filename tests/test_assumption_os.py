@@ -60,6 +60,10 @@ from assumption_os.recursive_daemon import build_recursive_daemon_payload
 from assumption_os.recursive_executor import JudgmentSet, build_recursive_execution_payload
 from assumption_os.reconstruction_progress import build_reconstruction_progress_payload
 from assumption_os.residual_clusterer import ResidualRecord, build_residual_cluster_payload, cluster_residual_records
+from assumption_os.residual_diagnostics import (
+    build_residual_label_agreement_payload,
+    build_trace_residual_coverage_payload,
+)
 from assumption_os.residuals import classify_manifest
 from assumption_os.runtime_trace import RuntimeTraceRecorder
 from assumption_os.schema import (
@@ -272,6 +276,15 @@ class AssumptionOSTest(unittest.TestCase):
         )
         assessed = classify_manifest(trial)
         self.assertEqual(assessed.residual_type, ResidualType.EXECUTION_LAPSE)
+
+    def test_residual_label_agreement_uses_gold_examples(self):
+        payload = build_residual_label_agreement_payload(eval_id="unit_residual_gold")
+        self.assertTrue(payload["pass"])
+        self.assertGreaterEqual(payload["example_count"], 8)
+        self.assertEqual(payload["accuracy"], 1.0)
+        self.assertEqual(payload["macro_f1"], 1.0)
+        self.assertIn("memory_defect", payload["expected_type_counts"])
+        self.assertEqual(payload["confusion"]["optimization"]["optimization"], 2)
 
     def test_wisdom_and_exp82_adapters(self):
         with tempfile.TemporaryDirectory() as td:
@@ -1096,6 +1109,16 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertFalse(payload["secret_leak_detected"])
             self.assertNotIn("unit-secret", json.dumps(payload))
             self.assertNotIn("trace-secret", json.dumps(payload))
+            coverage = build_trace_residual_coverage_payload(
+                trace_dataset_payload=payload,
+                eval_id="unit_trace_residual_coverage",
+            )
+            self.assertTrue(coverage["pass"])
+            self.assertEqual(coverage["loss_row_count"], 1)
+            self.assertEqual(coverage["non_attributed_loss_count"], 1)
+            self.assertEqual(coverage["bypass_loss_count"], 1)
+            self.assertEqual(coverage["bypass_loss_coverage_rate"], 1.0)
+            self.assertEqual(coverage["bypass_loss_trainable_count"], 1)
 
     def test_trace_dataset_collection_weights_artifact_replay_rows(self):
         first_party = {
@@ -1830,7 +1853,21 @@ class AssumptionOSTest(unittest.TestCase):
                 },
                 "recursive_audit": {"pass": True, "min_closure_score": 1.0, "critical_issue_count": 0},
                 "recursive_daemon": {"pass": True, "accepted_apply_count": 2, "case_count": 2},
-                "residual_clusterer": {"pass": True, "cluster_count": 5, "proposal_count": 2, "validation_plans_complete": True},
+                "residual_clusterer": {
+                    "pass": True,
+                    "cluster_count": 5,
+                    "proposal_count": 2,
+                    "validation_plans_complete": True,
+                    "label_agreement_pass": True,
+                    "label_agreement_accuracy": 1.0,
+                    "label_agreement_macro_f1": 1.0,
+                },
+                "trace_dataset": {
+                    "pass": True,
+                    "non_attributed_loss_coverage_rate": 1.0,
+                    "bypass_loss_coverage_rate": 1.0,
+                    "residual_trace_coverage_pass": True,
+                },
                 "harness_observer": {"pass": True, "full_coverage_after_writeback": True, "artifact_file_count": 4},
                 "world_model": {
                     "pass": True,
@@ -1907,7 +1944,18 @@ class AssumptionOSTest(unittest.TestCase):
             sections = {
                 "memory_surfaces": {"pass": True, "surface_count": 10},
                 "harness_observer": {"pass": True, "full_coverage_after_writeback": True},
-                "residual_clusterer": {"pass": True, "cluster_count": 7, "proposal_count": 2, "record_count": 109, "residual_type_counts": {"optimization": 4, "memory_defect": 2, "unknown": 1}, "validation_plans_complete": True},
+                "residual_clusterer": {
+                    "pass": True,
+                    "cluster_count": 7,
+                    "proposal_count": 2,
+                    "record_count": 109,
+                    "residual_type_counts": {"optimization": 4, "memory_defect": 2, "unknown": 1},
+                    "validation_plans_complete": True,
+                    "label_agreement_pass": True,
+                    "label_agreement_accuracy": 1.0,
+                    "label_agreement_macro_f1": 1.0,
+                    "label_agreement_example_count": 10,
+                },
                 "trace_policy_proposals": {"pass": True, "proposal_count": 3, "repair_policy_count": 1},
                 "trace_policy_preflight": {"pass": True, "proposal_count": 3, "ready_count": 3},
                 "surface_hypothesis_generator": {
@@ -1921,7 +1969,16 @@ class AssumptionOSTest(unittest.TestCase):
                     "evaluator_residual_proposal_count": 1,
                 },
                 "world_model": {"pass": True, "matched_label_count": 16, "post_calibration": {"brier_score": 0.0081}},
-                "trace_dataset": {"pass": True},
+                "trace_dataset": {
+                    "pass": True,
+                    "non_attributed_loss_count": 7,
+                    "non_attributed_loss_coverage_rate": 1.0,
+                    "bypass_loss_count": 5,
+                    "bypass_loss_coverage_rate": 1.0,
+                    "skipped_loss_count": 2,
+                    "skipped_loss_coverage_rate": 1.0,
+                    "residual_trace_coverage_pass": True,
+                },
                 "trace_outcome_model": {"pass": True, "trainable_row_count": 9, "policy_update_count": 3, "residual_group_count": 1, "leave_one_out_metrics": {"brier_score": 0.1605}},
                 "verifier_stack": {"pass": True, "proposal_count": 33, "accepted_count": 2, "rejected_count": 14, "accepted_protocol_ok": True, "rejected_protocol_ok": True, "falsification_protocol_candidate_count": 27, "falsification_experiment_count": 135},
                 "trajectory_search": {"pass": True, "multi_path_rate": 0.8, "top_path_label_hit_rate": 1.0, "trajectory_count": 26, "frontier_actions": 10, "selected_path_types": {"a": 1, "b": 1, "c": 1, "d": 1}},

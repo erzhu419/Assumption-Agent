@@ -44,13 +44,19 @@ def classify_manifest(manifest: TrialManifest) -> ResidualAssessment:
             "No residual was recorded.",
             "Reinforce or leave confidence unchanged.",
         )
+    if _has_any(text, ["novel failure", "not explained", "unexplained", "new category", "new residual category"]):
+        return ResidualAssessment(
+            ResidualType.DISCOVERY,
+            "The failure pattern is explicitly outside the known residual categories.",
+            "Cluster with similar residuals and generate a new candidate only if systematic.",
+        )
     if _has_any(text, ["not applied", "didn't apply", "did not apply", "没用", "未应用", "没真正执行", "空转", "装饰"]):
         return ResidualAssessment(
             ResidualType.EXECUTION_LAPSE,
             "The active assumption appears valid but was not executed faithfully.",
             "Preserve the assumption; add execution reminder, constraint, or verifier.",
         )
-    if _has_any(text, ["partly", "partial", "方向对", "不够具体", "不够强", "refine", "优化"]):
+    if _has_any(text, ["partly", "partial", "方向对", "不够具体", "不够强", "refine", "optimize", "optimization", "优化"]):
         return ResidualAssessment(
             ResidualType.OPTIMIZATION,
             "The assumption direction helped but needs tighter operating conditions or payload.",

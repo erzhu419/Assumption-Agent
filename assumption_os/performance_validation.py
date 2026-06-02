@@ -59,6 +59,7 @@ from .recursive_executor import JudgmentSet
 from .reconstruction_progress import build_reconstruction_progress_payload
 from .recursive_runner import build_recursive_assumption_run
 from .residual_clusterer import build_residual_cluster_payload
+from .residual_diagnostics import build_residual_label_agreement_payload, build_trace_residual_coverage_payload
 from .runtime_trace import RuntimeTraceRecorder
 from .surface_hypotheses import build_surface_hypothesis_payload
 from .selector import build_acp_learning_payload, build_metaproductivity_benchmark_payload
@@ -972,6 +973,10 @@ def _validate_trace_dataset(*, root: Path) -> dict:
             baseline_variant="baseline",
             eval_id="perf_trace_dataset",
         )
+        residual_coverage = build_trace_residual_coverage_payload(
+            trace_dataset_payload=payload,
+            eval_id="perf_trace_dataset_residual_coverage",
+        )
         real_paths = [
             root / "phase four/assumption_graph/trace_dataset_ms_bridge_20260601.json",
             root / "phase four/assumption_graph/trace_dataset_ms_bridge_ms100_20260601.json",
@@ -997,6 +1002,10 @@ def _validate_trace_dataset(*, root: Path) -> dict:
             distill_first_party_transitions=True,
             target_distilled_rows=1000,
         ) if real_payloads else {}
+        collection_residual_coverage = build_trace_residual_coverage_payload(
+            trace_dataset_payload=collection,
+            eval_id="perf_trace_dataset_collection_residual_coverage",
+        ) if collection else {}
         collection_path = root / "phase four/assumption_graph/trace_dataset_collection_distilled_20260602.json"
         if collection:
             collection_path.write_text(json.dumps(collection, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
@@ -1007,6 +1016,8 @@ def _validate_trace_dataset(*, root: Path) -> dict:
             and payload["traced_outcome_coverage"] == 1.0
             and payload["outcome_counts"] == {"loss": 1, "win": 1}
             and payload["residual_type_counts"].get("optimization") == 1
+            and residual_coverage.get("pass", False)
+            and residual_coverage.get("bypass_loss_count", 0) == 1
             and not payload["secret_leak_detected"]
         )
         collection_pass = (
@@ -1016,6 +1027,8 @@ def _validate_trace_dataset(*, root: Path) -> dict:
             and collection.get("first_party_distilled_trainable_row_count", 0) >= 1000
             and collection.get("artifact_replay_trainable_row_count", 0) >= 50
             and collection.get("weighted_trainable_row_count", 0.0) >= 250.0
+            and collection_residual_coverage.get("pass", False)
+            and collection_residual_coverage.get("bypass_loss_count", 0) >= 1
             and not collection.get("secret_leak_detected", True)
         )
         return {
@@ -1034,16 +1047,38 @@ def _validate_trace_dataset(*, root: Path) -> dict:
             "missing_trace_count": collection.get("missing_trace_count", payload["missing_trace_count"]),
             "traced_outcome_coverage": payload["traced_outcome_coverage"],
             "assumption_id_coverage": payload["assumption_id_coverage"],
+            "residual_trace_coverage_pass": collection_residual_coverage.get("pass", residual_coverage.get("pass")),
+            "non_attributed_loss_count": collection_residual_coverage.get(
+                "non_attributed_loss_count",
+                residual_coverage.get("non_attributed_loss_count"),
+            ),
+            "non_attributed_loss_coverage_rate": collection_residual_coverage.get(
+                "non_attributed_loss_coverage_rate",
+                residual_coverage.get("non_attributed_loss_coverage_rate"),
+            ),
+            "bypass_loss_count": collection_residual_coverage.get("bypass_loss_count", residual_coverage.get("bypass_loss_count")),
+            "bypass_loss_coverage_rate": collection_residual_coverage.get(
+                "bypass_loss_coverage_rate",
+                residual_coverage.get("bypass_loss_coverage_rate"),
+            ),
+            "skipped_loss_count": collection_residual_coverage.get("skipped_loss_count", residual_coverage.get("skipped_loss_count")),
+            "skipped_loss_coverage_rate": collection_residual_coverage.get(
+                "skipped_loss_coverage_rate",
+                residual_coverage.get("skipped_loss_coverage_rate"),
+            ),
             "outcome_counts": collection.get("outcome_counts", payload["outcome_counts"]),
             "residual_type_counts": collection.get("residual_type_counts", payload["residual_type_counts"]),
             "event_counts": collection.get("event_counts", payload["event_counts"]),
             "source_eval_ids": collection.get("source", {}).get("source_eval_ids", []),
             "distilled_collection_path": _display_path(root, collection_path) if collection else None,
+            "residual_coverage_positive_control": residual_coverage,
+            "residual_coverage_collection": collection_residual_coverage,
             "positive_control": {
                 "pass": positive_control_pass,
                 "row_count": payload["row_count"],
                 "trainable_row_count": payload["trainable_row_count"],
                 "first_party_trace_count": payload["first_party_trace_count"],
+                "residual_trace_coverage_pass": residual_coverage.get("pass"),
                 "secret_leak_detected": payload["secret_leak_detected"],
             },
             "secret_leak_detected": payload["secret_leak_detected"] or collection.get("secret_leak_detected", False),
@@ -1277,13 +1312,22 @@ def _validate_residual_clusterer(*, graph_dir: Path) -> dict:
         min_cluster_size=2,
         writeback_manifests=False,
     )
+    label_agreement = build_residual_label_agreement_payload(
+        eval_id="perf_residual_label_agreement",
+    )
     proposals = payload.get("proposals", [])
     validation_complete = all(
         p.get("candidate_node", {}).get("payload", {}).get("validation_plan", {}).get("trigger_problem_ids")
         for p in proposals
     )
     return {
-        "pass": payload["record_count"] >= 20 and payload["cluster_count"] >= 2 and payload["proposal_count"] >= 2 and validation_complete,
+        "pass": (
+            payload["record_count"] >= 20
+            and payload["cluster_count"] >= 2
+            and payload["proposal_count"] >= 2
+            and validation_complete
+            and label_agreement.get("pass", False)
+        ),
         "record_count": payload["record_count"],
         "cluster_count": payload["cluster_count"],
         "proposal_count": payload["proposal_count"],
@@ -1291,6 +1335,12 @@ def _validate_residual_clusterer(*, graph_dir: Path) -> dict:
         "cluster_summaries": _cluster_summaries_for_surface(payload.get("clusters", [])),
         "proposal_parent_ids": [p["parent_node_id"] for p in proposals],
         "validation_plans_complete": validation_complete,
+        "label_agreement_pass": label_agreement.get("pass"),
+        "label_agreement_accuracy": label_agreement.get("accuracy"),
+        "label_agreement_macro_f1": label_agreement.get("macro_f1"),
+        "label_agreement_example_count": label_agreement.get("example_count"),
+        "label_agreement_label_count": label_agreement.get("label_count"),
+        "label_agreement_confusion": label_agreement.get("confusion"),
     }
 
 
@@ -1775,7 +1825,12 @@ def _key_metric(name: str, section: dict) -> str:
     if name == "runtime_trace":
         return f"events={section['event_count']}, written={section['written_trials']}, leak={section['secret_leak_detected']}"
     if name == "trace_dataset":
-        return f"rows={section['trainable_row_count']}/{section['row_count']}, coverage={section['traced_outcome_coverage']}, leak={section['secret_leak_detected']}"
+        return (
+            f"rows={section['trainable_row_count']}/{section['row_count']}, "
+            f"trace={section['traced_outcome_coverage']}, "
+            f"residual_cov={section.get('non_attributed_loss_coverage_rate')}, "
+            f"leak={section['secret_leak_detected']}"
+        )
     if name == "trace_outcome_model":
         metrics = section.get("leave_one_out_metrics", {})
         trajectory = section.get("trajectory_quality_metrics", {})
@@ -1792,7 +1847,10 @@ def _key_metric(name: str, section: dict) -> str:
     if name == "harness_observer":
         return f"artifacts={section['artifact_file_count']}, backfill={section['backfilled_event_count']}/{section['discovered_event_count']}, covered={section['full_coverage_after_writeback']}"
     if name == "residual_clusterer":
-        return f"clusters={section['cluster_count']}, proposals={section['proposal_count']}"
+        return (
+            f"clusters={section['cluster_count']}, proposals={section['proposal_count']}, "
+            f"label_f1={section.get('label_agreement_macro_f1')}"
+        )
     if name == "surface_hypothesis_generator":
         return (
             f"proposals={section.get('proposal_count', 0)}, "

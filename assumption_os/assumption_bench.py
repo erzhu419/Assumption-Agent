@@ -124,14 +124,33 @@ def _score_execution_fidelity(sections: dict[str, dict]) -> CapabilityScore:
 
 def _score_residual_attribution(sections: dict[str, dict]) -> CapabilityScore:
     residual = sections.get("residual_clusterer", {})
+    trace_dataset = sections.get("trace_dataset", {})
     clusters = int(residual.get("cluster_count") or 0)
     proposals = int(residual.get("proposal_count") or 0)
     plans = bool(residual.get("validation_plans_complete"))
-    score = 0.4 * _cap(clusters / 5) + 0.3 * _cap(proposals / 2) + 0.3 * float(plans)
+    label_score = _cap(float(residual.get("label_agreement_macro_f1") or 0.0))
+    trace_coverage = _cap(float(trace_dataset.get("non_attributed_loss_coverage_rate") or 0.0))
+    score = (
+        0.25 * _cap(clusters / 5)
+        + 0.20 * _cap(proposals / 2)
+        + 0.20 * float(plans)
+        + 0.20 * label_score
+        + 0.15 * trace_coverage
+    )
     return _capability(
         "residual_attribution",
         score,
-        evidence={"cluster_count": clusters, "proposal_count": proposals, "validation_plans_complete": plans},
+        evidence={
+            "cluster_count": clusters,
+            "proposal_count": proposals,
+            "validation_plans_complete": plans,
+            "label_agreement_pass": residual.get("label_agreement_pass"),
+            "label_agreement_accuracy": residual.get("label_agreement_accuracy"),
+            "label_agreement_macro_f1": residual.get("label_agreement_macro_f1"),
+            "non_attributed_loss_coverage_rate": trace_dataset.get("non_attributed_loss_coverage_rate"),
+            "bypass_loss_coverage_rate": trace_dataset.get("bypass_loss_coverage_rate"),
+            "residual_trace_coverage_pass": trace_dataset.get("residual_trace_coverage_pass"),
+        },
         rationale="Systematic residuals are clustered before new method hypotheses are synthesized.",
     )
 

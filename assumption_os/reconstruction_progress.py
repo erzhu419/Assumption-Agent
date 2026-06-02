@@ -308,9 +308,14 @@ def _residual_analyzer_item(sections: dict[str, dict]) -> ProgressItem:
     residual = sections.get("residual_clusterer", {})
     trace_dataset = sections.get("trace_dataset", {})
     trace_outcome = sections.get("trace_outcome_model", {})
+    label_macro_f1 = float(residual.get("label_agreement_macro_f1") or 0.0)
+    residual_coverage = float(trace_dataset.get("non_attributed_loss_coverage_rate") or 0.0)
+    bypass_coverage = float(trace_dataset.get("bypass_loss_coverage_rate") or 0.0)
     structure = _avg([
         float(residual.get("pass", False)),
         float(trace_dataset.get("pass", False)),
+        float(residual.get("label_agreement_pass", False)),
+        float(trace_dataset.get("residual_trace_coverage_pass", False)),
         _cap(len(residual.get("residual_type_counts", {})) / 3),
         _cap(trace_outcome.get("residual_group_count", 0) / 1),
     ])
@@ -319,6 +324,9 @@ def _residual_analyzer_item(sections: dict[str, dict]) -> ProgressItem:
         _cap(residual.get("cluster_count", 0) / 7),
         _cap(residual.get("proposal_count", 0) / 2),
         float(residual.get("validation_plans_complete", False)),
+        _cap(label_macro_f1),
+        _cap(residual_coverage),
+        _cap(bypass_coverage),
     ])
     return ProgressItem(
         key="E_residual_analyzer",
@@ -330,14 +338,25 @@ def _residual_analyzer_item(sections: dict[str, dict]) -> ProgressItem:
             "cluster_count": residual.get("cluster_count"),
             "residual_type_counts": residual.get("residual_type_counts"),
             "validation_plans_complete": residual.get("validation_plans_complete"),
+            "label_agreement_pass": residual.get("label_agreement_pass"),
+            "label_agreement_accuracy": residual.get("label_agreement_accuracy"),
+            "label_agreement_macro_f1": residual.get("label_agreement_macro_f1"),
+            "label_agreement_example_count": residual.get("label_agreement_example_count"),
+            "non_attributed_loss_count": trace_dataset.get("non_attributed_loss_count"),
+            "non_attributed_loss_coverage_rate": trace_dataset.get("non_attributed_loss_coverage_rate"),
+            "bypass_loss_count": trace_dataset.get("bypass_loss_count"),
+            "bypass_loss_coverage_rate": trace_dataset.get("bypass_loss_coverage_rate"),
+            "skipped_loss_count": trace_dataset.get("skipped_loss_count"),
+            "skipped_loss_coverage_rate": trace_dataset.get("skipped_loss_coverage_rate"),
+            "residual_trace_coverage_pass": trace_dataset.get("residual_trace_coverage_pass"),
         },
         remaining_gaps=[
-            "Residual labels are deterministic and artifact-derived; no calibrated residual classifier has been validated on human labels.",
-            "Skipped/non-attributed failures are improved but not exhaustively covered by first-party traces.",
+            "Residual labels now have curated-gold agreement tests; the remaining gap is broader human/LLM-labeled calibration.",
+            "Skipped/non-attributed losses now have trace residual coverage diagnostics; future runners still need continuous first-party enforcement.",
         ],
         next_actions=[
-            "Add residual-label agreement tests using LLM/human-labeled examples.",
-            "Ensure skipped and bypass losses always become trace residual rows.",
+            "Expand residual-label gold examples with real human/LLM adjudicated failures.",
+            "Promote trace residual coverage checks into every fresh-ablation and daemon runner.",
         ],
     )
 
@@ -691,6 +710,23 @@ def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
             if v5_pass >= 10 and v6_required >= 2:
                 max_structure = max(max_structure, 0.84)
                 max_behavior = max(max_behavior, 0.76)
+    if item.key == "E_residual_analyzer":
+        label_f1 = float(item.evidence.get("label_agreement_macro_f1") or 0.0)
+        residual_coverage = float(item.evidence.get("non_attributed_loss_coverage_rate") or 0.0)
+        bypass_coverage = float(item.evidence.get("bypass_loss_coverage_rate") or 0.0)
+        label_count = int(item.evidence.get("label_agreement_example_count") or 0)
+        bypass_count = int(item.evidence.get("bypass_loss_count") or 0)
+        if (
+            item.evidence.get("label_agreement_pass")
+            and item.evidence.get("residual_trace_coverage_pass")
+            and label_count >= 8
+            and label_f1 >= 0.8
+            and residual_coverage >= 1.0
+            and bypass_count >= 1
+            and bypass_coverage >= 1.0
+        ):
+            max_structure = max(max_structure, 0.84)
+            max_behavior = max(max_behavior, 0.76)
     if item.key == "G_formal_alignment_layer":
         independent_queries = int(item.evidence.get("independent_transfer_search_query_count") or 0)
         independent_top1 = float(item.evidence.get("independent_transfer_top1_hit_rate") or 0.0)
