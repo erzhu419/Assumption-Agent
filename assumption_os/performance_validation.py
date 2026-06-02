@@ -1536,6 +1536,29 @@ def _validate_surface_hypothesis_generator(*, root: Path, graph_dir: Path, secti
         and proposal.get("source_action", {}).get("trigger_problem_ids")
         and proposal.get("candidate_node", {}).get("payload", {}).get("validation_plan", {}).get("trigger_problem_ids")
     )
+    self_modification = [
+        proposal for proposal in proposals
+        if proposal.get("source_action", {}).get("surface_key") == "recursive_assumption_runner"
+    ]
+    self_mod_ready = sum(
+        1
+        for proposal in self_modification
+        if proposal.get("candidate_node", {}).get("type") == AssumptionType.SELF_MODIFICATION.value
+        and proposal.get("candidate_node", {}).get("payload", {}).get("validation_plan", {}).get("ready_trace_policy_proposals", 0) > 0
+    )
+    manifest_logger = [
+        proposal for proposal in proposals
+        if proposal.get("source_action", {}).get("surface_key") == "manifest_logger"
+    ]
+    manifest_logger_ready = sum(
+        1
+        for proposal in manifest_logger
+        if proposal.get("candidate_node", {}).get("type") == AssumptionType.HARNESS.value
+        and proposal.get("candidate_node", {}).get("payload", {}).get("validation_plan", {}).get(
+            "first_party_distilled_trainable_rows", 0
+        ) >= 1000
+        and proposal.get("source_action", {}).get("readiness") == "ready_for_manifest_quota_probe"
+    )
     residual_bridge_ids = [proposal["proposal_id"] for proposal in residual_bridge]
     preflight_payload = build_candidate_eval_payload(
         graph_dir=graph_dir,
@@ -1564,6 +1587,11 @@ def _validate_surface_hypothesis_generator(*, root: Path, graph_dir: Path, secti
             and payload["evaluator_residual_proposal_count"] >= 1
             and residual_bridge_ready == payload["surface_residual_proposal_count"]
             and preflight_ready_count == payload["surface_residual_proposal_count"]
+            and payload.get("self_modification_proposal_count", 0) >= 1
+            and self_mod_ready >= 1
+            and payload.get("manifest_logger_proposal_count", 0) >= 1
+            and manifest_logger_ready >= 1
+            and payload.get("synthesis_family_count", 0) >= 4
             and candidate_count == payload["proposal_count"]
             and manifest_count == payload["proposal_count"]
             and verifier_count == payload["proposal_count"]
@@ -1581,6 +1609,11 @@ def _validate_surface_hypothesis_generator(*, root: Path, graph_dir: Path, secti
         "evaluator_residual_proposal_count": payload["evaluator_residual_proposal_count"],
         "surface_residual_manifest_ready_count": residual_bridge_ready,
         "surface_residual_ready_count": preflight_ready_count,
+        "self_modification_proposal_count": payload.get("self_modification_proposal_count", 0),
+        "self_modification_ready_count": self_mod_ready,
+        "manifest_logger_proposal_count": payload.get("manifest_logger_proposal_count", 0),
+        "manifest_logger_ready_count": manifest_logger_ready,
+        "synthesis_family_count": payload.get("synthesis_family_count", 0),
         "surface_proposal_path": proposal_path_display,
         "surface_proposal_path_exists": proposal_path.exists(),
         "surface_preflight_path": preflight_path_display,
@@ -1866,7 +1899,10 @@ def _key_metric(name: str, section: dict) -> str:
             f"proposals={section.get('proposal_count', 0)}, "
             f"world={section.get('world_model_proposal_count', 0)}, "
             f"evaluator={section.get('evaluator_proposal_count', 0)}, "
-            f"residual_bridge={section.get('surface_residual_ready_count', 0)}"
+            f"residual_bridge={section.get('surface_residual_ready_count', 0)}, "
+            f"self_mod={section.get('self_modification_ready_count', 0)}, "
+            f"manifest={section.get('manifest_logger_ready_count', 0)}, "
+            f"families={section.get('synthesis_family_count', 0)}"
         )
     if name == "formal_metrics":
         return (

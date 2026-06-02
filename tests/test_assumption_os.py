@@ -1411,6 +1411,84 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(payload["manifest_count"], 4)
             self.assertFalse(payload["secret_leak_detected"])
 
+    def test_surface_hypotheses_generate_self_modification_proposal(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="surface_recursive",
+                type=AssumptionType.SELF_MODIFICATION,
+                kind=HypothesisKind.CLAIM,
+                claim="Recursive assumption runner",
+                payload={"surface_key": "recursive_assumption_runner"},
+            ))
+            sections = {
+                "trace_policy_preflight": {"proposal_count": 5, "ready_count": 5},
+                "recursive_audit": {"actionable_count": 4, "critical_issue_count": 0},
+                "recursive_daemon": {"case_count": 2},
+                "evolution_context": {
+                    "blocked_policy_decision": "blocked_by_permissions",
+                    "apply_policy_decision": "gated_apply_allowed",
+                },
+            }
+            payload = build_surface_hypothesis_payload(
+                store=store,
+                performance_sections=sections,
+                eval_id="unit_surface_self_mod",
+            )
+            self.assertEqual(payload["self_modification_proposal_count"], 1)
+            self.assertEqual(payload["synthesis_family_count"], 1)
+            proposal = payload["proposals"][0]
+            self.assertEqual(proposal["candidate_node"]["type"], AssumptionType.SELF_MODIFICATION.value)
+            self.assertEqual(proposal["candidate_node"]["kind"], HypothesisKind.HP_CHANGE.value)
+            self.assertEqual(
+                proposal["candidate_node"]["payload"]["validation_plan"]["ready_trace_policy_proposals"],
+                5,
+            )
+            self.assertEqual(
+                proposal["source_action"]["readiness"],
+                "ready_for_recursive_daemon_probe",
+            )
+
+    def test_surface_hypotheses_generate_manifest_logger_proposal(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="surface_manifest",
+                type=AssumptionType.HARNESS,
+                kind=HypothesisKind.CLAIM,
+                claim="Manifest logger",
+                payload={"surface_key": "manifest_logger"},
+            ))
+            sections = {
+                "manifest_logger": {
+                    "event_count": 112,
+                    "real_log_event_count": 12,
+                    "synthetic_event_count": 100,
+                    "secret_leak_detected": False,
+                },
+                "runtime_trace": {"event_count": 3, "secret_leak_detected": False},
+                "trace_dataset": {
+                    "first_party_trainable_row_count": 1009,
+                    "raw_first_party_trainable_row_count": 9,
+                    "first_party_distilled_trainable_row_count": 1000,
+                },
+            }
+            payload = build_surface_hypothesis_payload(
+                store=store,
+                performance_sections=sections,
+                eval_id="unit_surface_manifest",
+            )
+            self.assertEqual(payload["manifest_logger_proposal_count"], 1)
+            self.assertEqual(payload["synthesis_family_count"], 1)
+            proposal = payload["proposals"][0]
+            self.assertEqual(proposal["candidate_node"]["type"], AssumptionType.HARNESS.value)
+            self.assertEqual(proposal["candidate_node"]["kind"], HypothesisKind.HP_CHANGE.value)
+            self.assertEqual(
+                proposal["candidate_node"]["payload"]["validation_plan"]["first_party_distilled_trainable_rows"],
+                1000,
+            )
+            self.assertEqual(proposal["source_action"]["readiness"], "ready_for_manifest_quota_probe")
+
     def test_surface_hypothesis_generator_bridges_residual_clusters_to_surface_proposals(self):
         with tempfile.TemporaryDirectory() as td:
             store = JsonlGraphStore(td)
@@ -1968,6 +2046,11 @@ class AssumptionOSTest(unittest.TestCase):
                     "surface_residual_ready_count": 2,
                     "world_model_residual_proposal_count": 1,
                     "evaluator_residual_proposal_count": 1,
+                    "self_modification_proposal_count": 1,
+                    "self_modification_ready_count": 1,
+                    "manifest_logger_proposal_count": 1,
+                    "manifest_logger_ready_count": 1,
+                    "synthesis_family_count": 4,
                 },
                 "world_model": {"pass": True, "matched_label_count": 16, "post_calibration": {"brier_score": 0.0081}},
                 "trace_dataset": {

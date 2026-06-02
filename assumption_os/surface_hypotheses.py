@@ -1,4 +1,4 @@
-"""Generate candidate hypotheses from evaluator and world-model residuals."""
+"""Generate surface-level candidate hypotheses from performance residuals."""
 
 from __future__ import annotations
 
@@ -36,6 +36,8 @@ def build_surface_hypothesis_payload(
     proposals = []
     proposals.extend(_world_model_proposals(store=store, sections=performance_sections, eval_id=eval_id))
     proposals.extend(_evaluator_proposals(store=store, sections=performance_sections, eval_id=eval_id))
+    proposals.extend(_self_modification_proposals(store=store, sections=performance_sections, eval_id=eval_id))
+    proposals.extend(_manifest_logger_proposals(store=store, sections=performance_sections, eval_id=eval_id))
     proposals.extend(_surface_residual_bridge_proposals(
         store=store,
         sections=performance_sections,
@@ -54,6 +56,17 @@ def build_surface_hypothesis_payload(
         "surface_counts": dict(Counter(p.source_action.get("surface_key") for p in proposals)),
         "world_model_proposal_count": sum(1 for p in proposals if p.source_action.get("surface_key") == "world_model_screen"),
         "evaluator_proposal_count": sum(1 for p in proposals if p.source_action.get("surface_key") == "evaluator_policy"),
+        "self_modification_proposal_count": sum(
+            1 for p in proposals if p.source_action.get("surface_key") == "recursive_assumption_runner"
+        ),
+        "manifest_logger_proposal_count": sum(
+            1 for p in proposals if p.source_action.get("surface_key") == "manifest_logger"
+        ),
+        "synthesis_family_count": len({
+            str(p.source_action.get("surface_key") or p.source_action.get("action_type") or "")
+            for p in proposals
+            if p.source_action
+        }),
         "surface_residual_proposal_count": len(residual_bridge),
         "world_model_residual_proposal_count": sum(
             1 for p in residual_bridge if p.source_action.get("surface_key") == "world_model_screen"
@@ -301,6 +314,128 @@ def _evaluator_proposals(*, store: JsonlGraphStore, sections: dict[str, dict], e
     return proposals
 
 
+def _self_modification_proposals(*, store: JsonlGraphStore, sections: dict[str, dict], eval_id: str) -> list[CandidateProposal]:
+    parent = _surface_parent(store, "recursive_assumption_runner")
+    if parent is None:
+        return []
+    trace_preflight = sections.get("trace_policy_preflight", {})
+    recursive_audit = sections.get("recursive_audit", {})
+    recursive_daemon = sections.get("recursive_daemon", {})
+    evolution = sections.get("evolution_context", {})
+    ready_count = int(trace_preflight.get("ready_count") or 0)
+    proposal_count = int(trace_preflight.get("proposal_count") or 0)
+    actionable_count = int(recursive_audit.get("actionable_count") or 0)
+    critical_issues = int(recursive_audit.get("critical_issue_count") or 0)
+    daemon_cases = int(recursive_daemon.get("case_count") or 0)
+    blocked_decision = evolution.get("blocked_policy_decision")
+    apply_decision = evolution.get("apply_policy_decision")
+    if ready_count <= 0 or actionable_count <= 0:
+        return []
+    return [_proposal(
+        parent=parent,
+        eval_id=eval_id,
+        surface_key="recursive_assumption_runner",
+        issue_key="preflight_ready_queue_needs_daemon_leaf_execution",
+        claim=(
+            "The recursive runner should convert preflight-ready trace-policy proposal queues into "
+            "bounded daemon leaf work items, then resume parents from manifest/judgment bundles before "
+            "any gated apply."
+        ),
+        predicted_effects=[
+            "turn ready proposal queues into executable recursive leaves instead of passive audit notes",
+            "preserve explicit permission boundaries while allowing the loop to gather fresh evidence",
+        ],
+        verifier="recursive_daemon_queue_execution_probe",
+        validation_plan={
+            "ready_trace_policy_proposals": ready_count,
+            "trace_policy_proposal_count": proposal_count,
+            "recursive_actionable_count": actionable_count,
+            "recursive_critical_issue_count": critical_issues,
+            "daemon_case_count": daemon_cases,
+            "blocked_policy_decision": blocked_decision,
+            "apply_policy_decision": apply_decision,
+            "acceptance": (
+                "daemon creates bounded leaf execution/resume payloads for ready proposals and refuses "
+                "unpermissioned graph mutation"
+            ),
+        },
+        priority=0.73,
+        source_payload={
+            "ready_trace_policy_proposals": ready_count,
+            "trace_policy_proposal_count": proposal_count,
+            "recursive_actionable_count": actionable_count,
+            "recursive_critical_issue_count": critical_issues,
+            "daemon_case_count": daemon_cases,
+            "blocked_policy_decision": blocked_decision,
+            "apply_policy_decision": apply_decision,
+            "readiness": "ready_for_recursive_daemon_probe" if critical_issues == 0 else "needs_recursive_audit_repair",
+        },
+    )]
+
+
+def _manifest_logger_proposals(*, store: JsonlGraphStore, sections: dict[str, dict], eval_id: str) -> list[CandidateProposal]:
+    parent = _surface_parent(store, "manifest_logger")
+    if parent is None:
+        return []
+    manifest = sections.get("manifest_logger", {})
+    runtime = sections.get("runtime_trace", {})
+    trace_dataset = sections.get("trace_dataset", {})
+    event_count = int(manifest.get("event_count") or 0)
+    real_log_count = int(manifest.get("real_log_event_count") or 0)
+    synthetic_count = int(manifest.get("synthetic_event_count") or 0)
+    runtime_events = int(runtime.get("event_count") or 0)
+    first_party_rows = int(trace_dataset.get("first_party_trainable_row_count") or 0)
+    raw_first_party_rows = int(trace_dataset.get("raw_first_party_trainable_row_count") or 0)
+    distilled_rows = int(trace_dataset.get("first_party_distilled_trainable_row_count") or 0)
+    secret_leak = bool(manifest.get("secret_leak_detected") or runtime.get("secret_leak_detected"))
+    if event_count <= 0 or secret_leak:
+        return []
+    if real_log_count <= 0 and runtime_events <= 0:
+        return []
+    if synthetic_count <= real_log_count and distilled_rows <= raw_first_party_rows:
+        return []
+    return [_proposal(
+        parent=parent,
+        eval_id=eval_id,
+        surface_key="manifest_logger",
+        issue_key="first_party_trace_distillation_requires_manifest_quota",
+        claim=(
+            "First-party trace distillation should require a manifest quota that links each distilled "
+            "transition back to redacted LLM, retrieval, judge, tool, or simulator events."
+        ),
+        predicted_effects=[
+            "turn synthetic-heavy trace growth into auditable first-party manifest coverage",
+            "let the world model downweight distilled rows whose source event chain is incomplete",
+        ],
+        verifier="manifest_quota_trace_distillation_probe",
+        validation_plan={
+            "manifest_event_count": event_count,
+            "real_log_event_count": real_log_count,
+            "synthetic_event_count": synthetic_count,
+            "runtime_trace_event_count": runtime_events,
+            "first_party_trainable_rows": first_party_rows,
+            "raw_first_party_trainable_rows": raw_first_party_rows,
+            "first_party_distilled_trainable_rows": distilled_rows,
+            "acceptance": (
+                "world-model training reports source-linked manifest coverage for distilled rows and "
+                "keeps secret scans clean"
+            ),
+        },
+        priority=0.71,
+        source_payload={
+            "manifest_event_count": event_count,
+            "real_log_event_count": real_log_count,
+            "synthetic_event_count": synthetic_count,
+            "runtime_trace_event_count": runtime_events,
+            "first_party_trainable_rows": first_party_rows,
+            "raw_first_party_trainable_rows": raw_first_party_rows,
+            "first_party_distilled_trainable_rows": distilled_rows,
+            "secret_leak_detected": secret_leak,
+            "readiness": "ready_for_manifest_quota_probe",
+        },
+    )]
+
+
 def _residual_bridge_proposal(
     *,
     parent: AssumptionNode,
@@ -441,10 +576,20 @@ def _proposal(
     source_payload: dict[str, Any],
 ) -> CandidateProposal:
     cid = stable_id("cand", eval_id, parent.id, issue_key)
+    parent_type = getattr(parent.type, "value", parent.type)
+    kind = (
+        HypothesisKind.EVALUATOR_POLICY
+        if parent_type == AssumptionType.EVALUATOR.value
+        else HypothesisKind.HP_CHANGE
+        if parent_type == AssumptionType.SELF_MODIFICATION.value
+        else HypothesisKind.HP_CHANGE
+        if parent_type == AssumptionType.HARNESS.value
+        else HypothesisKind.CLAIM
+    )
     candidate = AssumptionNode(
         id=cid,
         type=parent.type,
-        kind=HypothesisKind.EVALUATOR_POLICY if parent.type == AssumptionType.EVALUATOR else HypothesisKind.CLAIM,
+        kind=kind,
         claim=claim,
         context_conditions=[
             f"surface_key={surface_key}",
