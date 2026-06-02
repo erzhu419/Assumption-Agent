@@ -1155,6 +1155,98 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(payload["artifact_replay_trainable_row_count"], 1)
         self.assertEqual(payload["weighted_trainable_row_count"], 1.5)
 
+    def test_trace_dataset_collection_distills_first_party_transition_rows(self):
+        first_party = {
+            "eval_id": "first_party",
+            "source": {"judgments_path": "first.json"},
+            "rows": [
+                {
+                    "row_id": "r1",
+                    "problem_id": "p1",
+                    "domain": "science",
+                    "difficulty": "hard",
+                    "outcome": "win",
+                    "residual_type": "no_residual",
+                    "trainable": True,
+                    "first_party_trace": True,
+                    "trace_source": "first_party_runtime",
+                    "trace_event_count": 2,
+                    "event_counts": {"retrieval": 1, "llm_call": 1},
+                    "component_counts": {"solver": 1},
+                    "phase_event_counts": {"draft": 1, "audit": 1},
+                    "trajectory_phases": ["draft", "audit", "final"],
+                    "components": ["solver"],
+                    "features": {"domain": "science", "difficulty": "hard"},
+                },
+            ],
+        }
+        payload = build_trace_dataset_collection_payload(
+            root=Path("."),
+            trace_dataset_payloads=[first_party],
+            eval_id="unit_trace_collection_distilled",
+            distill_first_party_transitions=True,
+            target_distilled_rows=12,
+        )
+        self.assertEqual(payload["raw_first_party_trainable_row_count"], 1)
+        self.assertEqual(payload["first_party_distilled_trainable_row_count"], 12)
+        self.assertEqual(payload["first_party_trainable_row_count"], 13)
+        self.assertEqual(payload["trainable_row_count"], 13)
+        self.assertEqual(payload["distillation_source_first_party_row_count"], 1)
+        self.assertEqual(payload["weighted_trainable_row_count"], 4.0)
+        self.assertEqual(payload["trace_source_counts"]["first_party_distilled_transition"], 12)
+        distilled = [row for row in payload["rows"] if row.get("distilled_transition")]
+        self.assertEqual(len(distilled), 12)
+        self.assertEqual(distilled[0]["source_row_id"], "r1")
+        self.assertIn("distilled_transition_phase", distilled[0]["features"])
+
+    def test_trace_outcome_model_downweights_distilled_transition_rows(self):
+        rows = [
+            {
+                "row_id": "raw",
+                "problem_id": "p1",
+                "domain": "science",
+                "outcome": "win",
+                "residual_type": "no_residual",
+                "trainable": True,
+                "trace_source": "first_party_runtime",
+            },
+            {
+                "row_id": "distilled",
+                "problem_id": "p1",
+                "domain": "science",
+                "outcome": "loss",
+                "residual_type": "optimization",
+                "trainable": True,
+                "trace_source": "first_party_distilled_transition",
+                "distilled_transition": True,
+                "features": {
+                    "distilled_transition_phase": "draft",
+                    "distilled_signal": "component_signature",
+                },
+            },
+            {
+                "row_id": "artifact",
+                "problem_id": "p2",
+                "domain": "science",
+                "outcome": "loss",
+                "residual_type": "optimization",
+                "trainable": True,
+                "trace_source": "artifact_replay",
+            },
+        ]
+        payload = build_trace_outcome_model_payload(
+            trace_dataset_payload={"eval_id": "unit_weighted_trace_dataset", "rows": rows},
+            eval_id="unit_weighted_trace_outcome_model",
+            min_policy_group_size=2,
+        )
+        self.assertEqual(payload["weighted_trainable_row_count"], 1.75)
+        self.assertEqual(payload["trace_source_weighted_counts"]["first_party_runtime"], 1.0)
+        self.assertEqual(payload["trace_source_weighted_counts"]["first_party_distilled_transition"], 0.25)
+        self.assertEqual(payload["trace_source_weighted_counts"]["artifact_replay"], 0.5)
+        feature_families = payload["feature_schema"]["feature_family_counts"]
+        self.assertIn("distilled_transition_phase", feature_families)
+        self.assertIn("distilled_signal", feature_families)
+
     def test_trace_outcome_model_calibrates_routes_and_policy_updates(self):
         rows = [
             {

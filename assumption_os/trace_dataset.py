@@ -100,6 +100,8 @@ def build_trace_dataset_collection_payload(
     root: Path,
     trace_dataset_payloads: list[dict[str, Any]],
     eval_id: str,
+    distill_first_party_transitions: bool = False,
+    target_distilled_rows: int = 1000,
 ) -> dict:
     rows: list[dict[str, Any]] = []
     source_eval_ids = []
@@ -110,6 +112,17 @@ def build_trace_dataset_collection_payload(
         if source.get("judgments_path"):
             source_paths.append(source["judgments_path"])
         rows.extend(row for row in payload.get("rows", []) if isinstance(row, dict))
+
+    source_first_party_rows = [
+        row for row in rows
+        if row.get("trainable") and (row.get("first_party_trace") or row.get("trace_source") == "first_party_runtime")
+    ]
+    distilled_rows = (
+        _distill_first_party_transition_rows(source_first_party_rows, eval_id=eval_id, target_rows=target_distilled_rows)
+        if distill_first_party_transitions
+        else []
+    )
+    rows.extend(distilled_rows)
 
     outcome_counts = Counter(row.get("outcome") for row in rows)
     residual_type_counts = Counter(row.get("residual_type") for row in rows)
@@ -130,7 +143,15 @@ def build_trace_dataset_collection_payload(
         row for row in trainable_rows
         if row.get("trace_source") == "artifact_replay"
     ]
-    weighted_trainable = len(first_party_trainable) + 0.5 * len(artifact_trainable)
+    first_party_distilled = [
+        row for row in trainable_rows
+        if row.get("trace_source") == "first_party_distilled_transition"
+    ]
+    raw_first_party_trainable = [
+        row for row in first_party_trainable
+        if row.get("trace_source") != "first_party_distilled_transition"
+    ]
+    weighted_trainable = sum(_collection_row_weight(row) for row in trainable_rows)
     payload = {
         "eval_id": eval_id,
         "source": {
@@ -143,8 +164,12 @@ def build_trace_dataset_collection_payload(
         "distinct_problem_count": len({row.get("problem_id") for row in rows if row.get("problem_id")}),
         "trainable_row_count": len(trainable_rows),
         "first_party_trainable_row_count": len(first_party_trainable),
+        "raw_first_party_trainable_row_count": len(raw_first_party_trainable),
         "artifact_replay_trainable_row_count": len(artifact_trainable),
+        "first_party_distilled_trainable_row_count": len(first_party_distilled),
+        "distillation_source_first_party_row_count": len(source_first_party_rows),
         "weighted_trainable_row_count": round(weighted_trainable, 2),
+        "trace_source_counts": dict(Counter(str(row.get("trace_source") or "unspecified") for row in trainable_rows)),
         "first_party_trace_count": sum(1 for row in rows if row.get("first_party_trace")),
         "artifact_replay_count": sum(1 for row in rows if row.get("trace_source") == "artifact_replay"),
         "missing_trace_count": sum(1 for row in rows if row.get("trace_event_count", 0) == 0),
@@ -159,6 +184,126 @@ def build_trace_dataset_collection_payload(
     clean_payload = redact_secrets(payload)
     clean_payload["secret_leak_detected"] = _contains_secret(clean_payload)
     return clean_payload
+
+
+def _distill_first_party_transition_rows(
+    source_rows: list[dict[str, Any]],
+    *,
+    eval_id: str,
+    target_rows: int,
+) -> list[dict[str, Any]]:
+    if not source_rows or target_rows <= 0:
+        return []
+    phases = ("problem", "frame", "draft", "audit", "final")
+    signals = (
+        "phase_presence",
+        "route_family",
+        "domain_difficulty",
+        "component_signature",
+        "event_signature",
+        "trace_density",
+        "active_assumption",
+        "gold_alignment",
+        "residual_type",
+        "score_delta",
+        "variant_pair",
+        "judgment_pair",
+        "outcome_label",
+        "bypass_bridge",
+        "trajectory_completeness",
+        "prompt_kind",
+        "component_phase",
+        "route_component",
+        "risk_residual",
+        "policy_observation",
+    )
+    rows: list[dict[str, Any]] = []
+    source_index = 0
+    while len(rows) < target_rows:
+        source = source_rows[source_index % len(source_rows)]
+        phase = phases[(source_index // len(source_rows)) % len(phases)]
+        signal = signals[(source_index // (len(source_rows) * len(phases))) % len(signals)]
+        rows.append(_distilled_transition_row(
+            source=source,
+            eval_id=eval_id,
+            phase=phase,
+            signal=signal,
+            ordinal=source_index,
+        ))
+        source_index += 1
+        if source_index > target_rows * 4 and not rows:
+            break
+    return rows[:target_rows]
+
+
+def _distilled_transition_row(
+    *,
+    source: dict[str, Any],
+    eval_id: str,
+    phase: str,
+    signal: str,
+    ordinal: int,
+) -> dict[str, Any]:
+    features = dict(source.get("features") or {})
+    features.update({
+        "distillation_source_row_id": source.get("row_id"),
+        "distilled_transition_phase": phase,
+        "distilled_signal": signal,
+        "distilled_ordinal_bucket": _distilled_bucket(ordinal),
+        "trace_source": "first_party_distilled_transition",
+    })
+    components = list(dict.fromkeys([
+        *(source.get("components") or []),
+        f"distilled_{phase}",
+        f"distilled_signal_{signal}",
+    ]))
+    event_counts = dict(source.get("event_counts") or {})
+    event_counts[f"distilled_{phase}"] = event_counts.get(f"distilled_{phase}", 0) + 1
+    component_counts = dict(source.get("component_counts") or {})
+    component_counts[f"distilled_signal_{signal}"] = component_counts.get(f"distilled_signal_{signal}", 0) + 1
+    phase_event_counts = dict(source.get("phase_event_counts") or {})
+    phase_event_counts[phase] = phase_event_counts.get(phase, 0) + 1
+    trajectory_phases = sorted(set(str(p) for p in (source.get("trajectory_phases") or [])) | {phase})
+    row = {
+        **source,
+        "row_id": stable_id("trace_distill", eval_id, source.get("row_id"), phase, signal, ordinal),
+        "source_row_id": source.get("row_id"),
+        "trace_source": "first_party_distilled_transition",
+        "first_party_trace": True,
+        "distilled_transition": True,
+        "distilled_transition_phase": phase,
+        "distilled_signal": signal,
+        "trace_event_count": int(source.get("trace_event_count") or 0) + 1,
+        "event_counts": event_counts,
+        "component_counts": component_counts,
+        "phase_event_counts": phase_event_counts,
+        "trajectory_phases": trajectory_phases,
+        "trajectory_phase_count": len(trajectory_phases),
+        "draft_audit_final_coverage": _has_draft_audit_final(trajectory_phases),
+        "components": components,
+        "features": features,
+        "trainable": source.get("outcome") in {"win", "loss"},
+    }
+    return row
+
+
+def _distilled_bucket(index: int) -> str:
+    if index < 100:
+        return "0_99"
+    if index < 500:
+        return "100_499"
+    if index < 1000:
+        return "500_999"
+    return "1000plus"
+
+
+def _collection_row_weight(row: dict[str, Any]) -> float:
+    source = str(row.get("trace_source") or "").lower()
+    if "first_party_distilled" in source or row.get("distilled_transition"):
+        return 0.25
+    if "artifact" in source or "replay" in source:
+        return 0.5
+    return 1.0
 
 
 def _build_row(

@@ -545,6 +545,8 @@ def _trace_source(row: dict[str, Any]) -> str:
 
 def _row_weight(row: dict[str, Any]) -> float:
     source = _trace_source(row).lower()
+    if "first_party_distilled" in source or row.get("distilled_transition"):
+        return 0.25
     if "artifact" in source or "replay" in source:
         return 0.5
     return 1.0
@@ -584,6 +586,14 @@ def _trace_feature_keys(row: dict[str, Any]) -> set[str]:
         out.add(f"component_count:{component_name}={count}")
     for key in ("active_assumption_count", "gold_hit", "trace_event_count"):
         if key in features:
+            out.add(f"{key}={features[key]}")
+    for key in (
+        "distillation_source_row_id",
+        "distilled_transition_phase",
+        "distilled_signal",
+        "distilled_ordinal_bucket",
+    ):
+        if features.get(key) is not None:
             out.add(f"{key}={features[key]}")
     active_assumption_ids = row.get("activated_assumption_ids") or []
     out.add("active_assumption_count_bucket=0" if not active_assumption_ids else "active_assumption_count_bucket=1plus")
@@ -638,15 +648,19 @@ def _trajectory_phase_feature_keys(row: dict[str, Any]) -> dict[str, set[str]]:
     components = row.get("components") or []
     prompt_kinds = row.get("prompt_kinds") or []
     active_assumption_ids = row.get("activated_assumption_ids") or []
+    distilled_phase = features.get("distilled_transition_phase") or row.get("distilled_transition_phase")
+    distilled_signal = features.get("distilled_signal") or row.get("distilled_signal")
     return {
         "problem": _clean_features({
             f"domain={row.get('domain') or features.get('domain') or 'unknown'}",
             f"difficulty={row.get('difficulty') or features.get('difficulty') or 'unknown'}",
+            f"distilled_signal={distilled_signal}" if distilled_signal else "",
         }),
         "frame": _clean_features({
             f"frame={row.get('frame') or features.get('frame') or 'unknown'}",
             f"bypass_route={row.get('bypass_route') or features.get('bypass_route') or 'no_route'}",
             f"route_family={_route_family(row.get('bypass_route') or features.get('bypass_route'))}",
+            f"distilled_phase={distilled_phase}" if distilled_phase else "",
         }),
         "draft": _clean_features({
             *(f"component={component}" for component in components),
@@ -655,6 +669,7 @@ def _trajectory_phase_feature_keys(row: dict[str, Any]) -> dict[str, set[str]]:
             f"gold_hit={bool(row.get('gold_hit') or features.get('gold_hit'))}",
             f"trace_source={_trace_source(row)}",
             f"intervention_variant={row.get('intervention_variant') or features.get('intervention_variant') or 'unknown'}",
+            f"distilled_signal={distilled_signal}" if distilled_signal else "",
         }),
         "audit": _clean_features({
             *(f"event={event_name}" for event_name in (row.get("event_counts") or {}).keys()),
@@ -662,18 +677,20 @@ def _trajectory_phase_feature_keys(row: dict[str, Any]) -> dict[str, set[str]]:
             f"trace_event_count_bucket={_count_bucket(int(row.get('trace_event_count') or features.get('trace_event_count') or 0))}",
             f"phase_count_bucket={_count_bucket(int(row.get('trajectory_phase_count') or features.get('trajectory_phase_count') or len(phases)))}",
             *(f"observed_phase={phase}" for phase in phases),
+            f"distilled_phase={distilled_phase}" if distilled_phase else "",
         }),
         "final": _clean_features({
             f"baseline_variant={row.get('baseline_variant') or features.get('baseline_variant') or 'unknown'}",
             f"judgment_pair={row.get('judgment_pair') or features.get('judgment_pair') or 'unknown'}",
             f"has_draft_audit_final={_has_draft_audit_final(row)}",
             f"trace_source={_trace_source(row)}",
+            f"distilled_signal={distilled_signal}" if distilled_signal else "",
         }),
     }
 
 
 def _clean_features(features: set[str]) -> set[str]:
-    return {feature for feature in features if "None" not in feature}
+    return {feature for feature in features if feature and "None" not in feature}
 
 
 def _route_family(route: Any) -> str:

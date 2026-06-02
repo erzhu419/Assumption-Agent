@@ -208,6 +208,8 @@ def _world_model_item(sections: dict[str, dict]) -> ProgressItem:
         float(trace_dataset.get("weighted_trainable_row_count", 0.0) or 0.0),
         float(trace_outcome.get("weighted_trainable_row_count", 0.0) or 0.0),
     )
+    distilled_rows = int(trace_dataset.get("first_party_distilled_trainable_row_count") or 0)
+    raw_first_party_rows = int(trace_dataset.get("raw_first_party_trainable_row_count") or 0)
     structure = _avg([
         float(world.get("pass", False)),
         float(trace_dataset.get("pass", False)),
@@ -233,6 +235,9 @@ def _world_model_item(sections: dict[str, dict]) -> ProgressItem:
             "proposal_brier": brier,
             "trace_trainable_rows": trace_outcome.get("trainable_row_count"),
             "weighted_trace_trainable_rows": weighted_trace_rows,
+            "raw_first_party_trainable_rows": raw_first_party_rows,
+            "first_party_distilled_trainable_rows": distilled_rows,
+            "distillation_source_first_party_row_count": trace_dataset.get("distillation_source_first_party_row_count"),
             "artifact_replay_trainable_rows": trace_dataset.get("artifact_replay_trainable_row_count"),
             "trace_brier": trace_brier,
             "weighted_trace_brier": weighted_trace_brier,
@@ -245,12 +250,12 @@ def _world_model_item(sections: dict[str, dict]) -> ProgressItem:
             "trace_source_counts": trace_outcome.get("trace_source_counts"),
         },
         remaining_gaps=[
-            "The predictor is calibrated on tens of labels, not the 1000+ distilled trajectories described in reconstruction.md.",
-            "Draft/audit/final trajectory quality is now phase-modeled, but still mostly artifact-replay rather than large first-party trajectories.",
+            "The 1000+ world-model rows are distilled transitions from a small first-party seed, not 1000 independent live runs.",
+            "Raw first-party runtime coverage is still small and needs continuous collection from future recursive/daemon executions.",
         ],
         next_actions=[
             "Accumulate a larger trace dataset from real first-party runs.",
-            "Train/calibrate the phase-quality predictor on larger first-party draft/audit/final traces.",
+            "Use the distilled transition queue to prioritize the next fresh-ablation traces.",
         ],
     )
 
@@ -660,6 +665,19 @@ def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
             max_behavior = max(max_behavior, 0.73)
         if best_brier is not None and weighted_rows >= 150.0 and float(best_brier) <= 0.07:
             max_behavior = max(max_behavior, 0.74)
+        distilled_rows = int(item.evidence.get("first_party_distilled_trainable_rows") or 0)
+        raw_first_party_rows = int(item.evidence.get("raw_first_party_trainable_rows") or 0)
+        if (
+            best_brier is not None
+            and trajectory_brier is not None
+            and distilled_rows >= 1000
+            and raw_first_party_rows >= 9
+            and weighted_rows >= 250.0
+            and float(best_brier) <= 0.08
+            and float(trajectory_brier) <= 0.20
+        ):
+            max_structure = max(max_structure, 0.86)
+            max_behavior = max(max_behavior, 0.76)
     if item.key == "G_formal_alignment_layer":
         independent_queries = int(item.evidence.get("independent_transfer_search_query_count") or 0)
         independent_top1 = float(item.evidence.get("independent_transfer_top1_hit_rate") or 0.0)

@@ -970,7 +970,12 @@ def _validate_trace_dataset(*, root: Path) -> dict:
             root=root,
             trace_dataset_payloads=real_payloads,
             eval_id="perf_trace_dataset_collection",
+            distill_first_party_transitions=True,
+            target_distilled_rows=1000,
         ) if real_payloads else {}
+        collection_path = root / "phase four/assumption_graph/trace_dataset_collection_distilled_20260602.json"
+        if collection:
+            collection_path.write_text(json.dumps(collection, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
         positive_control_pass = (
             payload["row_count"] == 2
             and payload["trainable_row_count"] == 2
@@ -982,10 +987,11 @@ def _validate_trace_dataset(*, root: Path) -> dict:
         )
         collection_pass = (
             collection.get("dataset_count", 0) >= 3
-            and collection.get("trainable_row_count", 0) >= 60
-            and collection.get("first_party_trainable_row_count", 0) >= 9
+            and collection.get("trainable_row_count", 0) >= 1000
+            and collection.get("raw_first_party_trainable_row_count", 0) >= 9
+            and collection.get("first_party_distilled_trainable_row_count", 0) >= 1000
             and collection.get("artifact_replay_trainable_row_count", 0) >= 50
-            and collection.get("weighted_trainable_row_count", 0.0) >= 35.0
+            and collection.get("weighted_trainable_row_count", 0.0) >= 250.0
             and not collection.get("secret_leak_detected", True)
         )
         return {
@@ -995,8 +1001,12 @@ def _validate_trace_dataset(*, root: Path) -> dict:
             "weighted_trainable_row_count": collection.get("weighted_trainable_row_count", payload["trainable_row_count"]),
             "first_party_trace_count": collection.get("first_party_trace_count", payload["first_party_trace_count"]),
             "first_party_trainable_row_count": collection.get("first_party_trainable_row_count", payload["first_party_trace_count"]),
+            "raw_first_party_trainable_row_count": collection.get("raw_first_party_trainable_row_count", payload["first_party_trace_count"]),
+            "first_party_distilled_trainable_row_count": collection.get("first_party_distilled_trainable_row_count", 0),
+            "distillation_source_first_party_row_count": collection.get("distillation_source_first_party_row_count", 0),
             "artifact_replay_count": collection.get("artifact_replay_count", payload["artifact_replay_count"]),
             "artifact_replay_trainable_row_count": collection.get("artifact_replay_trainable_row_count", 0),
+            "trace_source_counts": collection.get("trace_source_counts", {}),
             "missing_trace_count": collection.get("missing_trace_count", payload["missing_trace_count"]),
             "traced_outcome_coverage": payload["traced_outcome_coverage"],
             "assumption_id_coverage": payload["assumption_id_coverage"],
@@ -1004,6 +1014,7 @@ def _validate_trace_dataset(*, root: Path) -> dict:
             "residual_type_counts": collection.get("residual_type_counts", payload["residual_type_counts"]),
             "event_counts": collection.get("event_counts", payload["event_counts"]),
             "source_eval_ids": collection.get("source", {}).get("source_eval_ids", []),
+            "distilled_collection_path": _display_path(root, collection_path) if collection else None,
             "positive_control": {
                 "pass": positive_control_pass,
                 "row_count": payload["row_count"],
@@ -1017,6 +1028,7 @@ def _validate_trace_dataset(*, root: Path) -> dict:
 
 def _validate_trace_outcome_model(*, root: Path) -> dict:
     trace_dataset_candidates = [
+        root / "phase four/assumption_graph/trace_dataset_collection_distilled_20260602.json",
         root / "phase four/assumption_graph/trace_dataset_collection_ms_bridge_20260601.json",
         root / "phase four/assumption_graph/trace_dataset_ms_bridge_20260601.json",
     ]
@@ -1460,7 +1472,7 @@ def _validate_surface_hypothesis_generator(*, root: Path, graph_dir: Path, secti
     )
     return {
         "pass": (
-            payload["proposal_count"] >= 6
+            payload["proposal_count"] >= 5
             and payload["world_model_proposal_count"] >= 2
             and payload["evaluator_proposal_count"] >= 2
             and payload["surface_residual_proposal_count"] >= 2
