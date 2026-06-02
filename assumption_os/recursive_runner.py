@@ -238,6 +238,7 @@ class _EvolutionIndexes:
     regression_by_id: dict
     formal_gate_by_id: dict
     structural_gate_by_id: dict
+    structural_context_by_id: dict
     acceptance_by_id: dict
 
     def __init__(self, payload: dict, *, acceptance_payload: dict | None = None):
@@ -268,6 +269,18 @@ class _EvolutionIndexes:
         self.structural_gate_by_id = {
             row.get("proposal_id"): row
             for row in payload.get("structural_morphism_gate", {}).get("gates", [])
+        }
+        structural_context_source = (
+            payload.get("structural_context_validation")
+            or payload.get("structural_context_effect")
+            or {}
+        )
+        self.structural_context_by_id = {
+            row.get("proposal_id"): row
+            for row in (
+                structural_context_source.get("summaries", [])
+                or structural_context_source.get("proposal_summaries", [])
+            )
         }
         source_acceptance = (
             acceptance_payload
@@ -352,8 +365,17 @@ def _candidate_frame(
     regression = indexes.regression_by_id.get(proposal_id, {})
     formal_gate = indexes.formal_gate_by_id.get(proposal_id, {})
     structural_gate = indexes.structural_gate_by_id.get(proposal_id, {})
+    structural_context = indexes.structural_context_by_id.get(proposal_id, {})
     acceptance = indexes.acceptance_by_id.get(proposal_id, {})
-    action = _recommended_action(policy, bayes, falsification, preflight, acceptance, structural_gate)
+    action = _recommended_action(
+        policy,
+        bayes,
+        falsification,
+        preflight,
+        acceptance,
+        structural_gate,
+        structural_context,
+    )
     status = _status_for_action(action)
     hypothesis = candidate.get("claim") or (proposal.get("manifest") or {}).get("assumption", "")
     if not hypothesis:
@@ -390,6 +412,7 @@ def _candidate_frame(
             "bayesian_policy": bayes,
             "formal_mapping_gate": formal_gate,
             "structural_morphism_gate": structural_gate,
+            "structural_context_validation": structural_context,
             "regression_prediction": regression,
             "acceptance": acceptance,
         },
@@ -422,6 +445,7 @@ def _candidate_frame(
             regression=regression,
             formal_gate=formal_gate,
             structural_gate=structural_gate,
+            structural_context=structural_context,
             acceptance=acceptance,
         ),
         next_action=action,
@@ -454,6 +478,7 @@ def _child_frame_for_candidate(
     bayes = indexes.bayes_by_id.get(proposal_id, {})
     acceptance = indexes.acceptance_by_id.get(proposal_id, {})
     structural_gate = indexes.structural_gate_by_id.get(proposal_id, {})
+    structural_context = indexes.structural_context_by_id.get(proposal_id, {})
 
     if acceptance:
         return _verification_child(
@@ -470,6 +495,7 @@ def _child_frame_for_candidate(
             candidate_frame=candidate_frame,
             proposal_id=proposal_id,
             structural_gate=structural_gate,
+            structural_context=structural_context,
             eval_id=eval_id,
         )
     if action in {"run_fresh_ablation", "run_ablation", "run_fresh_ablation_before_promotion"}:
@@ -513,11 +539,26 @@ def _structural_transfer_child(
     candidate_frame: RecursiveFrame,
     proposal_id: str,
     structural_gate: dict,
+    structural_context: dict,
     eval_id: str,
 ) -> RecursiveFrame:
     decision = structural_gate.get("decision")
     blocks = bool(structural_gate.get("blocks_policy_update"))
-    if not structural_gate:
+    context_decision = structural_context.get("decision")
+    command_hint = ""
+    if context_decision == "accept_context_effect":
+        status = RecursiveFrameStatus.RESOLVED
+        next_action = "return_structural_context_effect_to_parent"
+        expected = "Controlled structural context-effect validation passed; parent can proceed to fresh acceptance."
+    elif context_decision in {"reject_context_effect", "blocked_by_structural_gate"}:
+        status = RecursiveFrameStatus.RESOLVED
+        next_action = "return_structural_context_rejection_to_parent"
+        expected = "Structural context did not beat baseline/placebo or was blocked; parent should revise or reject."
+    elif context_decision == "insufficient_context_evidence":
+        status = RecursiveFrameStatus.WAITING_FOR_EVIDENCE
+        next_action = "collect_more_structural_context_evidence"
+        expected = "More controlled structural context evidence is needed before parent promotion."
+    elif not structural_gate:
         status = RecursiveFrameStatus.READY_TO_ACT
         next_action = "run_structural_morphism_gate"
         expected = "Finite structural morphism gate returns allow, shadow, or repair/block."
@@ -529,6 +570,7 @@ def _structural_transfer_child(
         status = RecursiveFrameStatus.READY_TO_ACT
         next_action = "run_structural_context_effect_validation"
         expected = "Controlled context-effect validation shows the mapped structure helps the target task."
+        command_hint = _structural_context_effect_command(eval_id, proposal_id)
     else:
         status = RecursiveFrameStatus.OPEN
         next_action = "strengthen_structural_transfer_evidence"
@@ -563,6 +605,7 @@ def _structural_transfer_child(
         source={
             "proposal_id": proposal_id,
             "structural_gate": structural_gate,
+            "structural_context_validation": structural_context,
             "source_pattern_id": structural_gate.get("source_pattern_id"),
         },
         argument={
@@ -575,8 +618,14 @@ def _structural_transfer_child(
             ],
         },
         next_action=next_action,
+        command_hint=command_hint,
         residual_type=ResidualType.ASSUMPTION_DEFECT.value if blocks else None,
-        return_update=_structural_return_update(candidate_frame.frame_id, decision, blocks),
+        return_update=_structural_return_update(
+            candidate_frame.frame_id,
+            decision,
+            blocks,
+            structural_context=structural_context,
+        ),
         priority=candidate_frame.priority,
         manifest=manifest.to_dict(),
     )
@@ -727,7 +776,39 @@ def _structural_gate_objections(structural_gate: dict) -> list[str]:
     return objections
 
 
-def _structural_return_update(parent_frame_id: str, decision: str | None, blocks: bool) -> dict:
+def _structural_return_update(
+    parent_frame_id: str,
+    decision: str | None,
+    blocks: bool,
+    *,
+    structural_context: dict | None = None,
+) -> dict:
+    structural_context = structural_context or {}
+    context_decision = structural_context.get("decision")
+    if context_decision == "accept_context_effect":
+        return {
+            "parent_frame_id": parent_frame_id,
+            "outcome": "structural_context_effect_passed",
+            "parent_next_action": "run_fresh_ablation_before_promotion",
+            "on_success": "parent can run fresh trigger/control acceptance for the structural transfer",
+            "on_failure": "not applicable; context-effect validation already passed",
+        }
+    if context_decision in {"reject_context_effect", "blocked_by_structural_gate"}:
+        return {
+            "parent_frame_id": parent_frame_id,
+            "outcome": "structural_context_effect_rejected",
+            "parent_next_action": "reject_or_revise_candidate",
+            "on_success": "parent should revise the transfer or keep it shadow-only",
+            "on_failure": "keep parent unresolved until a narrower structural hypothesis exists",
+        }
+    if context_decision == "insufficient_context_evidence":
+        return {
+            "parent_frame_id": parent_frame_id,
+            "outcome": "structural_context_underpowered",
+            "parent_next_action": "collect_more_structural_context_evidence",
+            "on_success": "rerun structural context-effect validation with enough controlled rows",
+            "on_failure": "parent remains shadow-only",
+        }
     if blocks:
         return {
             "parent_frame_id": parent_frame_id,
@@ -740,14 +821,12 @@ def _structural_return_update(parent_frame_id: str, decision: str | None, blocks
         return {
             "parent_frame_id": parent_frame_id,
             "outcome": "structural_gate_allowed",
-            "parent_next_action": "run_acceptance_or_context_effect_validation",
             "on_success": "parent may proceed to controlled context-effect validation and fresh acceptance",
             "on_failure": "parent remains structural-shadow-only",
         }
     return {
         "parent_frame_id": parent_frame_id,
         "outcome": "structural_gate_pending",
-        "parent_next_action": "run_structural_morphism_gate",
         "on_success": "parent receives allow/block/shadow evidence",
         "on_failure": "parent remains unresolved until structural evidence exists",
     }
@@ -821,6 +900,15 @@ def _verification_return_update(parent_frame_id: str, decision: str | None) -> d
         "on_success": "mark parent candidate accepted or ready to apply",
         "on_failure": "reject, narrow, or revise the parent candidate",
     }
+
+
+def _structural_context_effect_command(eval_id: str, proposal_id: str) -> str:
+    command_eval_id = stable_id("struct_context", eval_id, proposal_id)
+    out = f"phase four/assumption_graph/{command_eval_id}.json"
+    return (
+        "python3 -m assumption_os.structural_patterns "
+        f"--context-effect --eval-id {command_eval_id} --summary-out \"{out}\""
+    )
 
 
 def _evidence_child(
@@ -1037,8 +1125,10 @@ def _recommended_action(
     preflight: dict,
     acceptance: dict,
     structural_gate: dict | None = None,
+    structural_context: dict | None = None,
 ) -> str:
     structural_gate = structural_gate or {}
+    structural_context = structural_context or {}
     decision = acceptance.get("decision")
     if decision == "accept":
         return "apply_accepted_candidate_if_requested"
@@ -1060,6 +1150,13 @@ def _recommended_action(
         return falsification["next_action"]
     if structural_gate.get("blocks_policy_update"):
         return "repair_structural_morphism_before_policy_update"
+    context_decision = structural_context.get("decision")
+    if context_decision == "accept_context_effect":
+        return "run_fresh_ablation_before_promotion"
+    if context_decision in {"reject_context_effect", "blocked_by_structural_gate"}:
+        return "reject_or_revise_candidate"
+    if context_decision == "insufficient_context_evidence":
+        return "collect_more_structural_context_evidence"
     if structural_gate.get("decision") == "allow":
         return "run_structural_context_effect_validation"
     if structural_gate.get("decision") and structural_gate.get("decision") != "not_applicable":
@@ -1095,6 +1192,7 @@ def _status_for_action(action: str) -> RecursiveFrameStatus:
         "collect_evidence",
         "collect_more_trigger_rows",
         "collect_more_judgments",
+        "collect_more_structural_context_evidence",
     }:
         return RecursiveFrameStatus.WAITING_FOR_EVIDENCE
     if action in {
@@ -1135,6 +1233,7 @@ def _candidate_goal(action: str) -> str:
         "reject_or_revise_candidate": "Reject this weak candidate or create a stronger revision child.",
         "run_structural_morphism_gate": "Check whether this structural transfer preserves its source diagram.",
         "run_structural_context_effect_validation": "Validate that structural context improves the target task before acceptance.",
+        "collect_more_structural_context_evidence": "Collect enough controlled structural context evidence before judging this transfer.",
         "repair_structural_morphism_before_policy_update": "Repair the structural transfer before it can affect graph policy.",
         "strengthen_structural_transfer_evidence": "Collect stronger diagram evidence for this structural transfer.",
         "wait_for_parent_preflight": "Wait for preflight readiness before judging this candidate.",
@@ -1176,6 +1275,7 @@ def _argument_map(
     regression: dict,
     formal_gate: dict,
     structural_gate: dict,
+    structural_context: dict,
     acceptance: dict,
 ) -> dict:
     support = []
@@ -1204,6 +1304,13 @@ def _argument_map(
         if functor:
             tests.append("finite_structural_functor_check")
             support.append(f"structural_functor_pass={functor.get('pass')}")
+    if structural_context:
+        context_decision = structural_context.get("decision")
+        tests.append("structural_context_effect_validation")
+        if context_decision == "accept_context_effect":
+            support.append("structural_context_effect=pass")
+        elif context_decision:
+            objections.append(f"structural_context_effect={context_decision}: {structural_context.get('reason', '')}")
     if regression:
         risk = regression.get("risk")
         if risk in {"medium", "high"}:

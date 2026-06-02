@@ -24,6 +24,7 @@ EXECUTABLE_NEXT_ACTIONS = {
     "run_fresh_ablation",
     "run_ablation",
     "run_fresh_ablation_before_promotion",
+    "run_structural_context_effect_validation",
 }
 
 
@@ -285,7 +286,7 @@ def _proposal_id(action: dict, frame: dict) -> str:
     if source.get("proposal_id"):
         return source["proposal_id"]
     problem_id = action.get("problem_id") or frame.get("problem_id", "")
-    for prefix in ("verify::", "proposal::", "evidence::", "repair::"):
+    for prefix in ("verify::", "structural_verify::", "proposal::", "evidence::", "repair::"):
         if problem_id.startswith(prefix):
             return problem_id.removeprefix(prefix)
     return ""

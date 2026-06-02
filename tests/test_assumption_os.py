@@ -95,6 +95,7 @@ from assumption_os.surface_hypotheses import build_surface_hypothesis_payload
 from assumption_os.structural_patterns import (
     apply_accepted_structural_morphisms,
     build_structural_context_effect_payload,
+    build_structural_context_validation_payload,
     build_nonlexical_structural_retrieval_probe_payload,
     build_structural_behavior_probe_payload,
     build_structural_extraction_audit_payload,
@@ -3962,7 +3963,8 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertTrue(build_structural_functor_eval_payload(eval_id="unit_struct_functor")["pass"])
         self.assertTrue(build_transfer_prediction_testability_eval_payload(eval_id="unit_struct_prediction")["pass"])
         self.assertTrue(build_structural_kernel_eval_payload(eval_id="unit_struct_kernel")["pass"])
-        self.assertTrue(build_structural_context_effect_payload(eval_id="unit_struct_context")["pass"])
+        context_effect = build_structural_context_effect_payload(eval_id="unit_struct_context")
+        self.assertTrue(context_effect["pass"])
 
         good = search_structural_patterns(
             None,
@@ -3989,6 +3991,14 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertFalse(good_gate["gates"][0]["blocks_policy_update"])
         self.assertTrue(good_gate["gates"][0]["functor_check"]["pass"])
         self.assertTrue(good_gate["gates"][0]["kernel_check"]["pass"])
+        context_validation = build_structural_context_validation_payload(
+            good_payload,
+            good_gate,
+            context_effect,
+            eval_id="unit_struct_context_validation",
+        )
+        self.assertTrue(context_validation["pass"])
+        self.assertEqual(context_validation["decision_counts"], {"accept_context_effect": 1})
 
         bad = search_structural_patterns(
             None,
@@ -4147,6 +4157,45 @@ class AssumptionOSTest(unittest.TestCase):
             ]
             self.assertEqual(len(structural_children), 1)
             self.assertEqual(structural_children[0]["next_action"], "run_structural_context_effect_validation")
+            self.assertIn("assumption_os.structural_patterns", structural_children[0]["command_hint"])
+
+            context_effect = build_structural_context_effect_payload(store, eval_id="unit_struct_context")
+            context_validation = build_structural_context_validation_payload(
+                proposal_payload,
+                gate,
+                context_effect,
+                eval_id="unit_struct_context_validation",
+            )
+            self.assertEqual(context_validation["decision_counts"], {"accept_context_effect": 1})
+            resumed = build_recursive_assumption_run(
+                graph_dir=graph_dir,
+                problem=problem,
+                goal="Validate the structural transfer hypothesis recursively before graph mutation.",
+                eval_id="unit_struct_recursive_resumed",
+                evolution_payload={
+                    "eval_id": "unit_struct_recursive_source",
+                    "proposals": proposal_payload,
+                    "structural_morphism_gate": gate,
+                    "structural_context_validation": context_validation,
+                },
+                top_k=3,
+                max_children=2,
+                max_depth=2,
+            )
+            resumed_child = next(
+                frame for frame in resumed["frames"]
+                if frame["verifier"] == "structural_morphism_gate"
+                and frame["frame_type"] == RecursiveFrameType.VERIFICATION_SUBPROBLEM.value
+            )
+            self.assertEqual(resumed_child["next_action"], "return_structural_context_effect_to_parent")
+            self.assertEqual(
+                resumed_child["return_update"]["outcome"],
+                "structural_context_effect_passed",
+            )
+            self.assertEqual(
+                resumed["next_actions"][0]["next_action"],
+                "run_fresh_ablation_before_promotion",
+            )
 
     def test_structural_morphism_performance_validation_passes(self):
         self.assertTrue(build_structural_writeback_eval_payload(eval_id="unit_struct_writeback")["pass"])

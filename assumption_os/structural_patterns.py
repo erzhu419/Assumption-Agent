@@ -1702,6 +1702,90 @@ def build_structural_context_effect_payload(
     }
 
 
+def build_structural_context_validation_payload(
+    proposal_payload: dict,
+    structural_gate_payload: dict,
+    context_effect_payload: dict | None = None,
+    *,
+    eval_id: str | None = None,
+) -> dict:
+    """Map a controlled context-effect probe back to structural proposals.
+
+    The probe is intentionally behavior-first: a structurally allowed transfer
+    only advances if the expected structural context beats generic baseline and
+    wrong-pattern placebo on controlled tasks.  This gives the recursive runner
+    a proposal-level readback instead of a loose global probe result.
+    """
+
+    context_effect_payload = context_effect_payload or build_structural_context_effect_payload(eval_id=eval_id)
+    gate_by_id = {
+        row.get("proposal_id"): row
+        for row in structural_gate_payload.get("gates", [])
+    }
+    summaries = []
+    for proposal in proposal_payload.get("proposals", []):
+        proposal_id = proposal.get("proposal_id", "")
+        gate = gate_by_id.get(proposal_id, {})
+        gate_decision = gate.get("decision")
+        if not gate:
+            decision = "insufficient_context_evidence"
+            reason = "structural morphism gate is missing"
+        elif gate.get("blocks_policy_update"):
+            decision = "blocked_by_structural_gate"
+            reason = gate.get("reason") or "structural gate blocked policy update"
+        elif gate_decision != "allow":
+            decision = "insufficient_context_evidence"
+            reason = f"structural gate decision={gate_decision}; context validation waits for allow"
+        elif context_effect_payload.get("pass"):
+            decision = "accept_context_effect"
+            reason = "structural context beats baseline and wrong-pattern placebo"
+        else:
+            decision = "reject_context_effect"
+            reason = "structural context failed controlled behavior or placebo discrimination"
+        summaries.append({
+            "proposal_id": proposal_id,
+            "decision": decision,
+            "gate_decision": gate_decision,
+            "context_effect_pass": bool(context_effect_payload.get("pass")),
+            "guided_win_rate": context_effect_payload.get("guided_win_rate"),
+            "placebo_discrimination_rate": context_effect_payload.get("placebo_discrimination_rate"),
+            "mean_guided_delta": context_effect_payload.get("mean_guided_delta"),
+            "mean_placebo_delta": context_effect_payload.get("mean_placebo_delta"),
+            "parent_next_action": (
+                "run_fresh_ablation_before_promotion"
+                if decision == "accept_context_effect"
+                else "reject_or_revise_candidate"
+                if decision in {"reject_context_effect", "blocked_by_structural_gate"}
+                else "collect_more_structural_context_evidence"
+            ),
+            "reason": reason,
+        })
+    counts = Counter(row["decision"] for row in summaries)
+    return {
+        "eval_id": eval_id,
+        "eval_kind": "structural_context_validation",
+        "source_proposal_eval_id": proposal_payload.get("eval_id"),
+        "source_gate_eval_id": structural_gate_payload.get("eval_id"),
+        "source_context_eval_id": context_effect_payload.get("eval_id"),
+        "summary_count": len(summaries),
+        "decision_counts": dict(counts),
+        "accepted_proposal_ids": [
+            row["proposal_id"] for row in summaries if row["decision"] == "accept_context_effect"
+        ],
+        "pass": bool(summaries) and all(
+            row["decision"] in {
+                "accept_context_effect",
+                "reject_context_effect",
+                "blocked_by_structural_gate",
+                "insufficient_context_evidence",
+            }
+            for row in summaries
+        ),
+        "context_effect": context_effect_payload,
+        "summaries": summaries,
+    }
+
+
 def build_transfer_prediction_testability_eval_payload(
     *,
     eval_id: str | None = None,
@@ -1923,8 +2007,10 @@ def build_structural_writeback_eval_payload(*, eval_id: str | None = None) -> di
 
 def build_structural_recursive_runner_eval_payload(*, eval_id: str | None = None) -> dict:
     from .recursive_runner import build_recursive_assumption_run
+    from .recursive_executor import build_recursive_execution_payload
 
     with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
         graph_dir = Path(td) / "graph"
         store = JsonlGraphStore(graph_dir)
         seed_structural_patterns(store, persist=True)
@@ -1958,11 +2044,55 @@ def build_structural_recursive_runner_eval_payload(*, eval_id: str | None = None
             max_depth=2,
             writeback=False,
         )
-    structural_children = [
-        frame
-        for frame in recursive.get("frames", [])
-        if frame.get("verifier") == "structural_morphism_gate"
-        and frame.get("frame_type") == "verification_subproblem"
+        execution = build_recursive_execution_payload(
+            root=root,
+            graph_dir=graph_dir,
+            recursive_payload=recursive,
+            evolution_payload=evolution_payload,
+            eval_id=f"{eval_id}_executor" if eval_id else "structural_recursive_executor_eval",
+            command_limit=1,
+            execute=False,
+        )
+        context_effect = build_structural_context_effect_payload(
+            store,
+            eval_id=f"{eval_id}_context" if eval_id else None,
+        )
+        context_validation = build_structural_context_validation_payload(
+            proposal_payload,
+            gate_payload,
+            context_effect,
+            eval_id=f"{eval_id}_context_validation" if eval_id else None,
+        )
+        resumed_evolution_payload = {
+            **evolution_payload,
+            "structural_context_validation": context_validation,
+        }
+        resumed = build_recursive_assumption_run(
+            graph_dir=graph_dir,
+            problem=problem,
+            goal="Validate the structural transfer hypothesis recursively before graph mutation.",
+            eval_id=f"{eval_id}_resumed" if eval_id else "structural_recursive_eval_resumed",
+            evolution_payload=resumed_evolution_payload,
+            top_k=3,
+            max_children=2,
+            max_depth=2,
+            writeback=False,
+        )
+    structural_children = _structural_runner_children(recursive)
+    resumed_structural_children = _structural_runner_children(resumed)
+    proposal = proposal_payload.get("proposals", [{}])[0] if proposal_payload.get("proposals") else {}
+    candidate_formal = ((proposal.get("candidate_node") or {}).get("formal_form") or {})
+    executable_structural_actions = [
+        row for row in execution.get("action_plan", [])
+        if row.get("next_action") == "run_structural_context_effect_validation"
+        and row.get("executable")
+    ]
+    resumed_parent_actions = [
+        row for row in resumed.get("next_actions", [])
+        if row.get("next_action") == "run_fresh_ablation_before_promotion"
+    ]
+    context_summary_decisions = [
+        row.get("decision") for row in context_validation.get("summaries", [])
     ]
     return {
         "eval_id": eval_id,
@@ -1971,12 +2101,50 @@ def build_structural_recursive_runner_eval_payload(*, eval_id: str | None = None
         "status_counts": recursive.get("status_counts", {}),
         "structural_child_count": len(structural_children),
         "structural_child_next_actions": [frame.get("next_action") for frame in structural_children],
-        "pass": bool(structural_children) and any(
-            action in {"run_structural_context_effect_validation", "return_structural_gate_to_parent"}
-            for action in [frame.get("next_action") for frame in structural_children]
+        "proposal_type": proposal.get("proposal_type"),
+        "candidate_formal_kind": candidate_formal.get("formal_kind"),
+        "executor_executable_structural_actions": len(executable_structural_actions),
+        "context_validation_decisions": context_summary_decisions,
+        "resumed_frame_counts": resumed.get("frame_counts", {}),
+        "resumed_status_counts": resumed.get("status_counts", {}),
+        "resumed_structural_child_next_actions": [
+            frame.get("next_action") for frame in resumed_structural_children
+        ],
+        "resumed_structural_return_outcomes": [
+            (frame.get("return_update") or {}).get("outcome")
+            for frame in resumed_structural_children
+        ],
+        "resumed_parent_next_actions": [row.get("next_action") for row in resumed_parent_actions],
+        "pass": (
+            bool(structural_children)
+            and structural_children[0].get("next_action") == "run_structural_context_effect_validation"
+            and structural_children[0].get("command_hint")
+            and len(executable_structural_actions) == 1
+            and proposal.get("proposal_type") == "structural_transfer_hypothesis"
+            and candidate_formal.get("formal_kind") == STRUCTURAL_MORPHISM_KIND
+            and context_effect.get("pass")
+            and context_summary_decisions == ["accept_context_effect"]
+            and bool(resumed_structural_children)
+            and resumed_structural_children[0].get("next_action") == "return_structural_context_effect_to_parent"
+            and (resumed_structural_children[0].get("return_update") or {}).get("outcome")
+            == "structural_context_effect_passed"
+            and bool(resumed_parent_actions)
         ),
         "recursive_payload": recursive,
+        "execution_payload": execution,
+        "context_effect": context_effect,
+        "context_validation": context_validation,
+        "resumed_recursive_payload": resumed,
     }
+
+
+def _structural_runner_children(payload: dict) -> list[dict]:
+    return [
+        frame
+        for frame in payload.get("frames", [])
+        if frame.get("verifier") == "structural_morphism_gate"
+        and frame.get("frame_type") == "verification_subproblem"
+    ]
 
 
 def build_structural_morphism_performance_payload(
