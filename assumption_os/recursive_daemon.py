@@ -121,6 +121,175 @@ def build_recursive_daemon_payload(
     }
 
 
+def build_preflight_queue_daemon_payload(
+    *,
+    root: Path,
+    graph_dir: Path,
+    preflight_payload: dict,
+    eval_id: str,
+    queue_name: str = "preflight_queue",
+    command_limit: int | None = None,
+    execute: bool = False,
+    timeout_sec: int = 3600,
+    writeback_manifests: bool = False,
+) -> dict:
+    """Convert a ready preflight queue into bounded daemon leaf work items."""
+
+    store = JsonlGraphStore(graph_dir)
+    queue_recursive = _recursive_payload_from_preflight_queue(
+        preflight_payload=preflight_payload,
+        eval_id=eval_id,
+        queue_name=queue_name,
+    )
+    execution_payload = build_recursive_execution_payload(
+        root=root,
+        graph_dir=graph_dir,
+        recursive_payload=queue_recursive,
+        eval_id=f"{eval_id}_execute_queue",
+        command_limit=command_limit,
+        execute=execute,
+        timeout_sec=timeout_sec,
+        include_full_resumed=False,
+    )
+    apply_summary = {
+        "enabled": False,
+        "reason": "preflight queue adapter never applies graph mutations",
+        "applied_candidate_node_ids": [],
+    }
+    manifests = _iteration_manifests(
+        eval_id=eval_id,
+        execution_payload=execution_payload,
+        apply_summary=apply_summary,
+    )
+    if writeback_manifests:
+        for manifest in manifests:
+            store.append_trial(manifest)
+        store.flush()
+    status_counts = dict(Counter(record.get("status") for record in execution_payload.get("execution_records", [])))
+    ready_rows = _ready_preflight_rows(preflight_payload)
+    return {
+        "eval_id": eval_id,
+        "queue_name": queue_name,
+        "mode": {
+            "execute": execute,
+            "timeout_sec": timeout_sec,
+            "command_limit": command_limit,
+            "writeback_manifests": writeback_manifests,
+            "apply_accepted": False,
+        },
+        "source": {
+            "preflight_eval_id": preflight_payload.get("eval_id"),
+            "graph_dir": str(graph_dir),
+        },
+        "ready_queue_count": len(ready_rows),
+        "planned_leaf_count": execution_payload.get("frontier", {}).get("planned_actions", 0),
+        "executable_leaf_count": execution_payload.get("frontier", {}).get("executable_actions", 0),
+        "execution_status_counts": status_counts,
+        "proposal_ids": execution_payload.get("frontier", {}).get("proposal_ids", []),
+        "execution_payload": _compact_execution_payload(execution_payload),
+        "manifest_count": len(manifests),
+        "manifest_trial_ids": [m.trial_id for m in manifests],
+        "manifests": [m.to_dict() for m in manifests],
+    }
+
+
+def _recursive_payload_from_preflight_queue(*, preflight_payload: dict, eval_id: str, queue_name: str) -> dict:
+    frames = []
+    next_actions = []
+    for row in _ready_preflight_rows(preflight_payload):
+        proposal_id = str(row.get("proposal_id") or "")
+        frame_id = stable_id("qframe", eval_id, proposal_id, row.get("command_hint", ""))
+        problem_id = f"verify::{proposal_id}"
+        frames.append({
+            "frame_id": frame_id,
+            "frame_type": "verification_subproblem",
+            "status": "ready_to_act",
+            "depth": 1,
+            "problem_id": problem_id,
+            "goal": "Run the queued fresh ablation command and return judgments to the parent proposal.",
+            "hypothesis": "Preflight-ready proposals can be consumed as daemon leaf work items.",
+            "expected_observation": "The command produces candidate outputs or judgments for later acceptance gating.",
+            "verifier": "candidate_acceptance_gate",
+            "parent_frame_id": stable_id("qframe", eval_id, queue_name, "root"),
+            "assumption_ids": [proposal_id],
+            "child_frame_ids": [],
+            "source": {
+                "proposal_id": proposal_id,
+                "preflight_eval_id": preflight_payload.get("eval_id"),
+                "queue_name": queue_name,
+            },
+            "argument": {
+                "support": [
+                    f"readiness={row.get('readiness')}",
+                    f"trigger_rows={len(row.get('trigger_problem_ids', []))}",
+                    f"control_rows={len(row.get('control_problem_ids', []))}",
+                    "command_hint_present=True",
+                ],
+                "objections": [
+                    "daemon queue execution is dry-run unless --execute is explicit",
+                    "acceptance and graph mutation still require later judgment and apply gates",
+                ],
+                "falsification_tests": [
+                    "command exists for every ready proposal",
+                    "execution record is written before any graph mutation",
+                ],
+            },
+            "next_action": "run_fresh_ablation",
+            "command_hint": row.get("command_hint", ""),
+            "return_update": {
+                "on_success": "attach generated judgments to candidate acceptance and resume the parent frame",
+                "on_failure": "record an execution_lapse residual and keep the parent unmutated",
+            },
+            "priority": float(row.get("priority", 0.0) or 0.0),
+            "manifest": {},
+        })
+        next_actions.append({
+            "frame_id": frame_id,
+            "parent_frame_id": stable_id("qframe", eval_id, queue_name, "root"),
+            "frame_type": "verification_subproblem",
+            "status": "ready_to_act",
+            "problem_id": problem_id,
+            "proposal_id": proposal_id,
+            "next_action": "run_fresh_ablation",
+            "priority": float(row.get("priority", 0.0) or 0.0),
+            "command_hint": row.get("command_hint", ""),
+            "return_update": {
+                "source_readiness": row.get("readiness"),
+                "on_success": "candidate_acceptance_resume",
+                "on_failure": "execution_lapse_residual",
+            },
+        })
+    return {
+        "eval_id": eval_id,
+        "mode": {
+            "source": "preflight_queue",
+            "queue_name": queue_name,
+            "source_preflight_eval_id": preflight_payload.get("eval_id"),
+        },
+        "root": {
+            "problem_id": f"queue::{queue_name}",
+            "problem": "Consume preflight-ready proposal commands as recursive daemon leaves.",
+            "goal": "Create bounded executable leaf records without applying graph mutations.",
+            "activated_assumption_ids": [],
+        },
+        "frame_counts": {"verification_subproblem": len(frames)},
+        "status_counts": {"ready_to_act": len(frames)} if frames else {},
+        "depth_counts": {"1": len(frames)} if frames else {},
+        "recursion_edges": [],
+        "open_frame_ids": [frame["frame_id"] for frame in frames],
+        "next_actions": next_actions,
+        "frames": frames,
+    }
+
+
+def _ready_preflight_rows(preflight_payload: dict) -> list[dict]:
+    return [
+        row
+        for row in preflight_payload.get("summaries", [])
+        if row.get("readiness") == "ready_for_fresh_ablation" and row.get("command_hint")
+    ]
+
+
 def _apply_if_requested(
     *,
     store: JsonlGraphStore,
@@ -268,9 +437,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=".")
     ap.add_argument("--graph-dir", default="phase four/assumption_graph")
-    ap.add_argument("--recursive-payload", required=True)
+    ap.add_argument("--recursive-payload", default=None)
+    ap.add_argument("--preflight-payload", default=None)
     ap.add_argument("--evolution-payload", default=None)
     ap.add_argument("--eval-id", required=True)
+    ap.add_argument("--queue-name", default="preflight_queue")
     ap.add_argument("--judgment-bundle", default=None)
     ap.add_argument("--candidate-judgments", nargs="*", default=None)
     ap.add_argument("--candidate-variant", default=None)
@@ -286,28 +457,43 @@ def main() -> None:
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
-    judgment_sets = load_judgment_sets(
-        root=root,
-        judgment_bundle=_resolve(root, args.judgment_bundle) if args.judgment_bundle else None,
-        candidate_variant=args.candidate_variant,
-        baseline_variant=args.candidate_baseline,
-        judgment_paths=[_resolve(root, p) for p in args.candidate_judgments or []],
-        proposal_ids=args.proposal_ids,
-    )
-    payload = build_recursive_daemon_payload(
-        root=root,
-        graph_dir=_resolve(root, args.graph_dir),
-        recursive_payload=_load_json(_resolve(root, args.recursive_payload)) or {},
-        evolution_payload=_load_json(_resolve(root, args.evolution_payload)),
-        eval_id=args.eval_id,
-        judgment_sets=judgment_sets,
-        max_iterations=args.max_iterations,
-        command_limit=args.command_limit,
-        execute=args.execute,
-        timeout_sec=args.timeout_sec,
-        apply_accepted=args.apply_accepted,
-        writeback_manifests=args.writeback_manifests,
-    )
+    if args.preflight_payload:
+        payload = build_preflight_queue_daemon_payload(
+            root=root,
+            graph_dir=_resolve(root, args.graph_dir),
+            preflight_payload=_load_json(_resolve(root, args.preflight_payload)) or {},
+            eval_id=args.eval_id,
+            queue_name=args.queue_name,
+            command_limit=args.command_limit,
+            execute=args.execute,
+            timeout_sec=args.timeout_sec,
+            writeback_manifests=args.writeback_manifests,
+        )
+    else:
+        if not args.recursive_payload:
+            raise SystemExit("--recursive-payload is required unless --preflight-payload is supplied")
+        judgment_sets = load_judgment_sets(
+            root=root,
+            judgment_bundle=_resolve(root, args.judgment_bundle) if args.judgment_bundle else None,
+            candidate_variant=args.candidate_variant,
+            baseline_variant=args.candidate_baseline,
+            judgment_paths=[_resolve(root, p) for p in args.candidate_judgments or []],
+            proposal_ids=args.proposal_ids,
+        )
+        payload = build_recursive_daemon_payload(
+            root=root,
+            graph_dir=_resolve(root, args.graph_dir),
+            recursive_payload=_load_json(_resolve(root, args.recursive_payload)) or {},
+            evolution_payload=_load_json(_resolve(root, args.evolution_payload)),
+            eval_id=args.eval_id,
+            judgment_sets=judgment_sets,
+            max_iterations=args.max_iterations,
+            command_limit=args.command_limit,
+            execute=args.execute,
+            timeout_sec=args.timeout_sec,
+            apply_accepted=args.apply_accepted,
+            writeback_manifests=args.writeback_manifests,
+        )
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.summary_out:
         out = _resolve(root, args.summary_out)

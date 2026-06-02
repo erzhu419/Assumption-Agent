@@ -166,6 +166,7 @@ def _execution_record(item: dict, *, status: str, reason: str, **extra) -> dict:
         "frame_id": item.get("frame_id"),
         "proposal_id": item.get("proposal_id"),
         "next_action": item.get("next_action"),
+        "command": item.get("command", ""),
         "status": status,
         "reason": reason,
         **extra,

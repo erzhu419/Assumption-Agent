@@ -511,17 +511,24 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
     audit = sections.get("recursive_audit", {})
     daemon = sections.get("recursive_daemon", {})
     trace_preflight = sections.get("trace_policy_preflight", {})
+    ready_count = int(trace_preflight.get("ready_count") or 0)
+    planned_queue = int(daemon.get("preflight_queue_planned_leaf_count") or 0)
+    executable_queue = int(daemon.get("preflight_queue_executable_leaf_count") or 0)
+    queue_manifest_count = int(daemon.get("preflight_queue_manifest_count") or 0)
     structure = _avg([
         float(audit.get("pass", False)),
         float(daemon.get("pass", False)),
         _cap(audit.get("min_closure_score", 0.0)),
-        _cap(trace_preflight.get("ready_count", 0) / max(1, trace_preflight.get("proposal_count", 1))),
+        _cap(ready_count / max(1, trace_preflight.get("proposal_count", 1))),
+        _cap(planned_queue / max(1, ready_count)),
     ])
     behavior = _avg([
         _cap(audit.get("actionable_count", 0) / 5),
         _cap(daemon.get("accepted_apply_count", 0) / max(1, daemon.get("case_count", 1))),
         float(audit.get("critical_issue_count", 1) == 0),
         float(trace_preflight.get("pass", False)),
+        _cap(executable_queue / max(1, ready_count)),
+        _cap(queue_manifest_count / max(1, ready_count)),
     ])
     return ProgressItem(
         key="recursive_execution_loop",
@@ -533,15 +540,19 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
             "actionable_count": audit.get("actionable_count"),
             "daemon_cases": daemon.get("case_count"),
             "accepted_apply_count": daemon.get("accepted_apply_count"),
-            "trace_policy_ready_count": trace_preflight.get("ready_count"),
+            "trace_policy_ready_count": ready_count,
+            "preflight_queue_planned_leaf_count": planned_queue,
+            "preflight_queue_executable_leaf_count": executable_queue,
+            "preflight_queue_manifest_count": queue_manifest_count,
+            "preflight_queue_consumed": daemon.get("preflight_queue_consumed"),
         },
         remaining_gaps=[
-            "The loop is executable and gated, but not yet an unattended daemon running continuous fresh ablation/judge cycles.",
+            "The loop can consume ready proposal queues in dry-run form, but is not yet an unattended daemon running continuous fresh ablation/judge cycles.",
             "Actual graph mutation remains correctly gated by explicit apply/writeback permissions.",
         ],
         next_actions=[
-            "Let the recursive daemon consume the preflight-ready trace policy proposals and record planned leaf commands.",
-            "Run one bounded fresh-ablation cycle and resume parents from judgments.",
+            "Run one bounded fresh-ablation queue with --execute and a small command limit.",
+            "Resume parents from the generated judgments and acceptance payload.",
         ],
     )
 
@@ -797,6 +808,20 @@ def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
         if item.evidence.get("acp_learning_pass") and labeled >= 16 and updates >= 4 and auc >= 0.8:
             max_structure = max(max_structure, 0.84)
             max_behavior = max(max_behavior, 0.76)
+    if item.key == "recursive_execution_loop":
+        ready_count = int(item.evidence.get("trace_policy_ready_count") or 0)
+        planned_queue = int(item.evidence.get("preflight_queue_planned_leaf_count") or 0)
+        executable_queue = int(item.evidence.get("preflight_queue_executable_leaf_count") or 0)
+        queue_manifest_count = int(item.evidence.get("preflight_queue_manifest_count") or 0)
+        if (
+            item.evidence.get("preflight_queue_consumed")
+            and ready_count >= 4
+            and planned_queue >= ready_count
+            and executable_queue >= ready_count
+            and queue_manifest_count >= ready_count
+        ):
+            max_structure = max(max_structure, 0.87)
+            max_behavior = max(max_behavior, 0.78)
     return max_structure, max_behavior
 
 

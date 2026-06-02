@@ -55,7 +55,7 @@ from .harness_observer import build_harness_observer_payload
 from .manifest_logger import build_component_manifest_payload, events_from_run_logs
 from .memory_surfaces import build_memory_surface_payload
 from .recursive_audit import build_recursive_audit_payload
-from .recursive_daemon import build_recursive_daemon_payload
+from .recursive_daemon import build_preflight_queue_daemon_payload, build_recursive_daemon_payload
 from .recursive_executor import JudgmentSet
 from .reconstruction_progress import build_reconstruction_progress_payload
 from .recursive_runner import build_recursive_assumption_run
@@ -567,6 +567,16 @@ def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
                 "applied_nodes_present": all(node_id in after_store.nodes for node_id in applied_ids),
                 "manifest_count": applied["manifest_count"],
             })
+        preflight_path = _trace_policy_preflight_path(root)
+        queue_payload = build_preflight_queue_daemon_payload(
+            root=root,
+            graph_dir=tmp_graph,
+            preflight_payload=_load_json(preflight_path) if preflight_path.exists() else {},
+            eval_id="perf_daemon_trace_policy_queue",
+            queue_name="trace_policy_preflight",
+            execute=False,
+            writeback_manifests=True,
+        )
     passed = all(
         row["dry_applied_count"] == 0
         and row["accepted_counts"].get("accept") == 1
@@ -574,12 +584,26 @@ def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
         and row["applied_nodes_present"]
         and row["manifest_count"] >= 2
         for row in results
+    ) and (
+        queue_payload.get("ready_queue_count", 0) >= 4
+        and queue_payload.get("planned_leaf_count") == queue_payload.get("ready_queue_count")
+        and queue_payload.get("executable_leaf_count") == queue_payload.get("ready_queue_count")
+        and queue_payload.get("execution_status_counts", {}).get("planned") == queue_payload.get("ready_queue_count")
+        and queue_payload.get("manifest_count", 0) >= queue_payload.get("ready_queue_count", 0)
     )
     return {
         "pass": passed,
         "case_count": len(results),
         "accepted_apply_count": sum(len(r["applied_candidate_node_ids"]) for r in results),
+        "preflight_queue_ready_count": queue_payload.get("ready_queue_count", 0),
+        "preflight_queue_planned_leaf_count": queue_payload.get("planned_leaf_count", 0),
+        "preflight_queue_executable_leaf_count": queue_payload.get("executable_leaf_count", 0),
+        "preflight_queue_manifest_count": queue_payload.get("manifest_count", 0),
+        "preflight_queue_status_counts": queue_payload.get("execution_status_counts", {}),
+        "preflight_queue_proposal_ids": queue_payload.get("proposal_ids", []),
+        "preflight_queue_consumed": queue_payload.get("planned_leaf_count") == queue_payload.get("ready_queue_count"),
         "results": results,
+        "preflight_queue": queue_payload,
     }
 
 
@@ -1222,11 +1246,7 @@ def _validate_trace_policy_proposals(*, root: Path, graph_dir: Path) -> dict:
 
 
 def _validate_trace_policy_preflight(*, root: Path) -> dict:
-    preflight_candidates = [
-        root / "phase four/assumption_graph/trace_policy_preflight_collection_ms_bridge_20260601.json",
-        root / "phase four/assumption_graph/trace_policy_preflight_ms_bridge_20260601.json",
-    ]
-    preflight_path = next((path for path in preflight_candidates if path.exists()), preflight_candidates[0])
+    preflight_path = _trace_policy_preflight_path(root)
     if not preflight_path.exists():
         return {
             "pass": False,
@@ -1258,6 +1278,14 @@ def _validate_trace_policy_preflight(*, root: Path) -> dict:
         "outside_active_count": outside,
         "command_hint_count": command_hints,
     }
+
+
+def _trace_policy_preflight_path(root: Path) -> Path:
+    preflight_candidates = [
+        root / "phase four/assumption_graph/trace_policy_preflight_collection_ms_bridge_20260601.json",
+        root / "phase four/assumption_graph/trace_policy_preflight_ms_bridge_20260601.json",
+    ]
+    return next((path for path in preflight_candidates if path.exists()), preflight_candidates[0])
 
 
 def _validate_harness_observer(*, root: Path, graph_dir: Path) -> dict:
@@ -1852,7 +1880,11 @@ def _key_metric(name: str, section: dict) -> str:
             f"protocols={section['falsification_protocol_candidate_count']}/{section['proposal_count']}"
         )
     if name == "recursive_daemon":
-        return f"applied={section['accepted_apply_count']}/{section['case_count']}"
+        return (
+            f"applied={section['accepted_apply_count']}/{section['case_count']}, "
+            f"queue={section.get('preflight_queue_planned_leaf_count', 0)}/"
+            f"{section.get('preflight_queue_ready_count', 0)}"
+        )
     if name == "recursive_audit":
         return f"score={section['min_closure_score']}, issues={section['critical_issue_count']}/{section['warning_issue_count']}"
     if name == "evolution_context":

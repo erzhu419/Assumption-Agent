@@ -57,7 +57,7 @@ from assumption_os.recursive_runner import (
     build_recursive_assumption_run,
 )
 from assumption_os.recursive_audit import build_recursive_audit_payload
-from assumption_os.recursive_daemon import build_recursive_daemon_payload
+from assumption_os.recursive_daemon import build_preflight_queue_daemon_payload, build_recursive_daemon_payload
 from assumption_os.recursive_executor import JudgmentSet, build_recursive_execution_payload
 from assumption_os.reconstruction_progress import build_reconstruction_progress_payload
 from assumption_os.residual_clusterer import ResidualRecord, build_residual_cluster_payload, cluster_residual_records
@@ -2302,6 +2302,63 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertIn("cand_ready", JsonlGraphStore(graph_dir).nodes)
             self.assertTrue(payload["applied_candidate_node_ids"])
             self.assertGreaterEqual(len(JsonlGraphStore(graph_dir).trials), 2)
+
+    def test_recursive_daemon_consumes_preflight_queue_as_leaf_work(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            graph_dir = root / "graph"
+            store = JsonlGraphStore(graph_dir)
+            store.upsert_node(AssumptionNode(
+                id="surface_recursive",
+                type=AssumptionType.SELF_MODIFICATION,
+                claim="Recursive daemon",
+            ))
+            store.flush()
+            before_nodes = set(JsonlGraphStore(graph_dir).nodes)
+            preflight_payload = {
+                "eval_id": "unit_preflight_queue",
+                "summaries": [
+                    {
+                        "proposal_id": "prop_a",
+                        "readiness": CandidateReadiness.READY_FOR_FRESH_ABLATION.value,
+                        "trigger_problem_ids": ["p1", "p2"],
+                        "control_problem_ids": ["c1"],
+                        "command_hint": "python3 run_candidate.py --variant proposal_a",
+                    },
+                    {
+                        "proposal_id": "prop_b",
+                        "readiness": CandidateReadiness.READY_FOR_FRESH_ABLATION.value,
+                        "trigger_problem_ids": ["p3"],
+                        "control_problem_ids": [],
+                        "command_hint": "python3 run_candidate.py --variant proposal_b",
+                    },
+                    {
+                        "proposal_id": "prop_not_ready",
+                        "readiness": CandidateReadiness.MANIFEST_ONLY.value,
+                        "command_hint": "python3 run_candidate.py --variant skipped",
+                    },
+                ],
+            }
+            payload = build_preflight_queue_daemon_payload(
+                root=root,
+                graph_dir=graph_dir,
+                preflight_payload=preflight_payload,
+                eval_id="unit_queue_daemon",
+                queue_name="trace_policy_preflight",
+                execute=False,
+                writeback_manifests=True,
+            )
+            self.assertEqual(payload["ready_queue_count"], 2)
+            self.assertEqual(payload["planned_leaf_count"], 2)
+            self.assertEqual(payload["executable_leaf_count"], 2)
+            self.assertEqual(payload["execution_status_counts"], {"planned": 2})
+            self.assertEqual(payload["proposal_ids"], ["prop_a", "prop_b"])
+            records = payload["execution_payload"]["execution_records"]
+            self.assertTrue(all(record["command"].startswith("python3 run_candidate.py") for record in records))
+            after_store = JsonlGraphStore(graph_dir)
+            self.assertEqual(set(after_store.nodes), before_nodes)
+            self.assertGreaterEqual(len(after_store.trials), 3)
+            self.assertFalse(payload["mode"]["apply_accepted"])
 
     def test_residual_clusterer_synthesizes_candidate_from_systematic_residuals(self):
         with tempfile.TemporaryDirectory() as td:
