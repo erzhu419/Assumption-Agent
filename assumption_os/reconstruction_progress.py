@@ -523,6 +523,10 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
     artifact_readback_sets = int(daemon.get("artifact_readback_auto_judgment_set_count") or 0)
     artifact_readback_accept_count = int(daemon.get("artifact_readback_accept_count") or 0)
     artifact_readback_resumed = bool(daemon.get("artifact_readback_resumed"))
+    real_artifact_sets = int(daemon.get("real_artifact_readback_judgment_set_count") or 0)
+    real_artifact_trigger_judgments = int(daemon.get("real_artifact_readback_trigger_judgment_count") or 0)
+    real_artifact_accept_count = int(daemon.get("real_artifact_readback_accept_count") or 0)
+    real_artifact_resumed = bool(daemon.get("real_artifact_readback_resumed"))
     structure_parts = [
         float(audit.get("pass", False)),
         float(daemon.get("pass", False)),
@@ -536,6 +540,8 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
             _cap(artifact_plan_count / max(1, ready_count)),
             _cap(artifact_judge_command_count / max(1, ready_count)),
         ])
+    if real_artifact_sets:
+        structure_parts.append(_cap(real_artifact_sets / 1))
     structure = _avg(structure_parts)
     behavior_parts = [
         _cap(audit.get("actionable_count", 0) / 5),
@@ -552,6 +558,12 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
             _cap(artifact_readback_sets / 1),
             _cap(artifact_readback_accept_count / 1),
             float(artifact_readback_resumed),
+        ])
+    if real_artifact_trigger_judgments or real_artifact_accept_count or real_artifact_resumed:
+        behavior_parts.extend([
+            _cap(real_artifact_trigger_judgments / 3),
+            _cap(real_artifact_accept_count / 1),
+            float(real_artifact_resumed),
         ])
     behavior = _avg(behavior_parts)
     return ProgressItem(
@@ -581,6 +593,12 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
             "artifact_readback_auto_judgment_set_count": artifact_readback_sets,
             "artifact_readback_accept_count": artifact_readback_accept_count,
             "artifact_readback_resumed": artifact_readback_resumed,
+            "real_artifact_readback_path": daemon.get("real_artifact_readback_path"),
+            "real_artifact_readback_judgment_set_count": real_artifact_sets,
+            "real_artifact_readback_trigger_judgment_count": real_artifact_trigger_judgments,
+            "real_artifact_readback_accept_count": real_artifact_accept_count,
+            "real_artifact_readback_resumed": real_artifact_resumed,
+            "real_artifact_readback_applied_count": daemon.get("real_artifact_readback_applied_count"),
         },
         remaining_gaps=[
             "The loop can execute, discover fresh-ablation artifacts, and resume from cached judgments, but is not yet an unattended daemon running continuous paid judge cycles.",
@@ -876,6 +894,15 @@ def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
         ):
             max_structure = max(max_structure, 0.91)
             max_behavior = max(max_behavior, 0.82)
+        real_trigger_judgments = int(item.evidence.get("real_artifact_readback_trigger_judgment_count") or 0)
+        real_accept_count = int(item.evidence.get("real_artifact_readback_accept_count") or 0)
+        if (
+            item.evidence.get("real_artifact_readback_resumed")
+            and real_trigger_judgments >= 3
+            and real_accept_count >= 1
+        ):
+            max_structure = max(max_structure, 0.92)
+            max_behavior = max(max_behavior, 0.84)
     return max_structure, max_behavior
 
 

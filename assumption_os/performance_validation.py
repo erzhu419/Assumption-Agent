@@ -581,6 +581,8 @@ def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
         )
         execute_resume_payload = _bounded_queue_execute_resume_probe(root=Path(td), graph_dir=tmp_graph)
         artifact_readback_payload = _bounded_queue_artifact_readback_probe(root=Path(td), graph_dir=tmp_graph)
+        real_artifact_payload = _latest_real_artifact_readback_payload(root)
+        real_artifact_ok = _real_artifact_readback_ok(real_artifact_payload)
     passed = all(
         row["dry_applied_count"] == 0
         and row["accepted_counts"].get("accept") == 1
@@ -603,6 +605,7 @@ def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
         and artifact_readback_payload.get("mode", {}).get("artifact_auto_judgment_sets") == 1
         and artifact_readback_payload.get("candidate_acceptance_counts", {}).get("accept") == 1
         and artifact_readback_payload.get("resumed")
+        and real_artifact_ok
     )
     artifact_eval = queue_payload.get("artifact_evaluation") or {}
     return {
@@ -629,11 +632,46 @@ def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
         "artifact_readback_auto_judgment_set_count": artifact_readback_payload.get("mode", {}).get("artifact_auto_judgment_sets", 0),
         "artifact_readback_accept_count": artifact_readback_payload.get("candidate_acceptance_counts", {}).get("accept", 0),
         "artifact_readback_resumed": artifact_readback_payload.get("resumed", False),
+        "real_artifact_readback_path": _display_path(root, Path(real_artifact_payload.get("_path"))) if real_artifact_payload else None,
+        "real_artifact_readback_judgment_set_count": (real_artifact_payload.get("artifact_evaluation") or {}).get("judgment_set_count", 0),
+        "real_artifact_readback_trigger_judgment_count": (real_artifact_payload.get("artifact_evaluation") or {}).get("trigger_judgment_count", 0),
+        "real_artifact_readback_accept_count": real_artifact_payload.get("candidate_acceptance_counts", {}).get("accept", 0) if real_artifact_payload else 0,
+        "real_artifact_readback_resumed": real_artifact_payload.get("resumed", False) if real_artifact_payload else False,
+        "real_artifact_readback_applied_count": len(real_artifact_payload.get("applied_candidate_node_ids", [])) if real_artifact_payload else 0,
         "results": results,
         "preflight_queue": queue_payload,
         "bounded_execute_resume_probe": execute_resume_payload,
         "bounded_artifact_readback_probe": artifact_readback_payload,
+        "real_artifact_readback": _strip_path_marker(real_artifact_payload),
     }
+
+
+def _latest_real_artifact_readback_payload(root: Path) -> dict:
+    artifact_dir = root / DEFAULT_ARTIFACT_DIR
+    paths = sorted(artifact_dir.glob("recursive_daemon_real_artifact_readback_*.json"))
+    if not paths:
+        return {}
+    payload = _load_json(paths[-1])
+    payload["_path"] = str(paths[-1])
+    return payload
+
+
+def _real_artifact_readback_ok(payload: dict) -> bool:
+    if not payload:
+        return True
+    artifact_eval = payload.get("artifact_evaluation") or {}
+    return (
+        artifact_eval.get("judgment_set_count", 0) >= 1
+        and artifact_eval.get("trigger_judgment_count", 0) >= 3
+        and payload.get("candidate_acceptance_counts", {}).get("accept", 0) >= 1
+        and bool(payload.get("resumed"))
+    )
+
+
+def _strip_path_marker(payload: dict) -> dict:
+    if not payload:
+        return {}
+    return {key: value for key, value in payload.items() if key != "_path"}
 
 
 def _bounded_queue_execute_resume_probe(*, root: Path, graph_dir: Path) -> dict:
@@ -2084,7 +2122,9 @@ def _key_metric(name: str, section: dict) -> str:
             f"exec_resume={section.get('bounded_execute_succeeded_leaf_count', 0)}/"
             f"{section.get('bounded_execute_accept_count', 0)}, "
             f"artifact={section.get('artifact_readback_auto_judgment_set_count', 0)}/"
-            f"{section.get('artifact_readback_accept_count', 0)}"
+            f"{section.get('artifact_readback_accept_count', 0)}, "
+            f"real={section.get('real_artifact_readback_trigger_judgment_count', 0)}/"
+            f"{section.get('real_artifact_readback_accept_count', 0)}"
         )
     if name == "recursive_audit":
         return f"score={section['min_closure_score']}, issues={section['critical_issue_count']}/{section['warning_issue_count']}"

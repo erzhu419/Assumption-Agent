@@ -430,7 +430,7 @@ def _iteration_manifests(*, eval_id: str, execution_payload: dict, apply_summary
         status=TrialStatus.OBSERVED,
         observed_effect=(
             f"planned={execution_payload.get('frontier', {}).get('planned_actions', 0)}; "
-            f"resumed={bool(execution_payload.get('resumed_recursive_full'))}; "
+            f"resumed={bool(execution_payload.get('resumed_recursive_full') or execution_payload.get('resumed_recursive'))}; "
             f"applied={len(apply_summary.get('applied_candidate_node_ids', []))}"
         ),
         artifacts={

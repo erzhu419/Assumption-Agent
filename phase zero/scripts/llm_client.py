@@ -1,15 +1,21 @@
 """
-Unified LLM client — supports both Gemini and Claude.
+Unified LLM client — supports Gemini, Claude, and OpenAI-compatible GPT proxies.
 Configure via .env file or environment variables.
 
-Priority: GEMINI_API_KEY → ANTHROPIC_API_KEY (uses whichever is set)
+Priority: GEMINI_API_KEY → GPT5_API_KEY → ANTHROPIC_API_KEY
 
 .env example:
     LLM_PROVIDER=gemini          # or "claude"
     GEMINI_API_KEY=AIza...
     GEMINI_MODEL=gemini-2.5-flash
+    GEMINI_BASE_URL=<openai-compatible-base-url>
     # or
-    ANTHROPIC_API_KEY=sk-ant-...
+    LLM_PROVIDER=gpt
+    GPT5_API_KEY=<api-key>
+    GPT5_MODEL=gpt-5.5
+    GPT5_BASE_URL=<openai-compatible-base-url>
+    # or
+    ANTHROPIC_API_KEY=<api-key>
     ANTHROPIC_MODEL=claude-sonnet-4-20250514
 """
 
@@ -40,15 +46,19 @@ def detect_provider() -> str:
     explicit = os.environ.get("LLM_PROVIDER", "").lower()
     if explicit in ("gemini", "google"):
         return "gemini"
+    if explicit in ("gpt", "openai", "gpt5"):
+        return "gpt"
     if explicit in ("claude", "anthropic"):
         return "claude"
     # Auto-detect by which key is set
     if os.environ.get("GEMINI_API_KEY"):
         return "gemini"
+    if os.environ.get("GPT5_API_KEY"):
+        return "gpt"
     if os.environ.get("ANTHROPIC_API_KEY"):
         return "claude"
     raise ValueError(
-        "No LLM provider configured. Set GEMINI_API_KEY or ANTHROPIC_API_KEY "
+        "No LLM provider configured. Set GEMINI_API_KEY, GPT5_API_KEY, or ANTHROPIC_API_KEY "
         "in environment or in phase zero/.env"
     )
 
@@ -58,7 +68,7 @@ def detect_provider() -> str:
 
 class GeminiClient:
     """Gemini client. If GEMINI_BASE_URL is set, routes through an OpenAI-compatible
-    proxy (e.g. NewAPI at ruoli.dev); otherwise uses native Google SDK."""
+    proxy; otherwise uses native Google SDK."""
 
     def __init__(self):
         api_key = os.environ.get("GEMINI_API_KEY")
@@ -187,6 +197,46 @@ class ClaudeClient:
 
 
 # ---------------------------------------------------------------------------
+# OpenAI-compatible GPT proxy client
+# ---------------------------------------------------------------------------
+
+class GPTProxyClient:
+    def __init__(self):
+        api_key = os.environ.get("GPT5_API_KEY")
+        if not api_key:
+            raise ValueError("GPT5_API_KEY not set")
+
+        from openai import OpenAI
+
+        self.model = os.environ.get("GPT5_MODEL", "gpt-5.5")
+        self.provider = "gpt"
+        base_url = os.environ.get("GPT5_BASE_URL", "").strip()
+        if not base_url:
+            raise ValueError("GPT5_BASE_URL not set")
+        self.client = OpenAI(
+            base_url=base_url,
+            api_key=api_key,
+            timeout=float(os.environ.get("OPENAI_TIMEOUT", "120")),
+        )
+
+    def generate(self, prompt: str, max_tokens: int = 4096,
+                 temperature: float = 0.3) -> dict:
+        resp = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        text = resp.choices[0].message.content or ""
+        usage = resp.usage
+        return {
+            "text": text,
+            "input_tokens": usage.prompt_tokens if usage else 0,
+            "output_tokens": usage.completion_tokens if usage else 0,
+        }
+
+
+# ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 
@@ -195,6 +245,8 @@ def create_client():
     provider = detect_provider()
     if provider == "gemini":
         client = GeminiClient()
+    elif provider == "gpt":
+        client = GPTProxyClient()
     else:
         client = ClaudeClient()
     print(f"LLM provider: {client.provider}, model: {client.model}")

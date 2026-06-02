@@ -118,11 +118,17 @@ def _score_execution_fidelity(sections: dict[str, dict]) -> CapabilityScore:
         and int(daemon.get("artifact_readback_accept_count") or 0) >= 1
         and bool(daemon.get("artifact_readback_resumed"))
     )
+    real_artifact_ready = (
+        int(daemon.get("real_artifact_readback_trigger_judgment_count") or 0) >= 3
+        and int(daemon.get("real_artifact_readback_accept_count") or 0) >= 1
+        and bool(daemon.get("real_artifact_readback_resumed"))
+    )
     score = (
         0.45 * closure
         + 0.25 * _cap(apply_ratio)
         + 0.15 * float(critical == 0 and bool(audit.get("pass")))
-        + 0.15 * float(artifact_ready)
+        + 0.10 * float(artifact_ready)
+        + 0.05 * float(real_artifact_ready)
     )
     return _capability(
         "execution_fidelity",
@@ -135,6 +141,9 @@ def _score_execution_fidelity(sections: dict[str, dict]) -> CapabilityScore:
             "artifact_readback_auto_judgment_set_count": daemon.get("artifact_readback_auto_judgment_set_count"),
             "artifact_readback_accept_count": daemon.get("artifact_readback_accept_count"),
             "artifact_readback_resumed": daemon.get("artifact_readback_resumed"),
+            "real_artifact_readback_trigger_judgment_count": daemon.get("real_artifact_readback_trigger_judgment_count"),
+            "real_artifact_readback_accept_count": daemon.get("real_artifact_readback_accept_count"),
+            "real_artifact_readback_resumed": daemon.get("real_artifact_readback_resumed"),
         },
         rationale="Recursive actions expose parent returns and daemon apply stays gated.",
     )
