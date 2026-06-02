@@ -496,6 +496,19 @@ The default seed library currently covers:
 - incremental replacement / module-boundary preservation
 - negative feedback / equilibrium restoration
 - signal vs stochastic nuisance separation
+- decomposition / interface-preserving composition
+- bottleneck / capacity-limited flow
+- counterexample-guided claim refinement
+- conservation / balance-preserving transformation
+- monotone progress / order-preserving improvement
+
+The layer also has a structural realization registry. Realizations bind an
+abstract pattern to a domain implementation, for example ResNet, LoRA/adapters,
+recursive-runner repair deltas, software ablations, Lenz/Le Chatelier feedback,
+seismic denoising, and queue bottlenecks. Controversial transfers such as
+JEPA-style latent prediction as signal/nuisance separation are stored as
+`candidate` realizations with explicit uncertain invariants, not as accepted
+lineage.
 
 Run the structural probes with:
 
@@ -505,16 +518,27 @@ python3 -m assumption_os.structural_patterns \
   --pair-eval \
   --retrieval-probe \
   --behavior-probe \
+  --functor-eval \
+  --prediction-testability-eval \
+  --kernel-eval \
+  --realization-eval \
+  --context-effect \
+  --recursive-runner-eval \
+  --performance-validation \
   --eval-id structural_validation_20260602 \
   --summary-out "phase four/assumption_graph/structural_morphism_validation_20260602.json"
 ```
 
-The first validation passed all four probes: deterministic extraction audit,
-positive/negative structural pair suite, non-lexical retrieval, and an offline
-behavior probe. `retrieval_policy` injects matches as a shadow-mode `Structural
-Morphism Reasoning` section. Promotion-sensitive structural candidates must
-pass `V2b structural_morphism_gate` in `verifier_stack`; negative-control or
-under-specified mappings block graph mutation.
+The current validation requires deterministic extraction, positive/negative
+structural pairs, non-lexical retrieval, finite functor checks, testable
+transfer predictions, finite role-transition kernel preservation, structural
+realization coverage, behavior/context-effect probes, writeback, and recursive
+runner readback. `retrieval_policy` injects matches as a shadow-mode
+`Structural Morphism Reasoning` section. Promotion-sensitive structural
+candidates must pass `V2b structural_morphism_gate` in `verifier_stack`;
+negative-control, under-specified, untestable, or kernel-breaking mappings
+block graph mutation. A structural runner child must then execute/read back
+context-effect validation before the parent proceeds to fresh acceptance.
 
 `assumption_os.manifest_logger` is the generic log bridge for events outside
 graph mutation: LLM calls, retrievals, judge calls, tool-use, and simulator

@@ -35,6 +35,7 @@ from .schema import (
 
 STRUCTURAL_PATTERN_KIND = "structural_pattern"
 STRUCTURAL_MORPHISM_KIND = "structural_morphism_candidate"
+STRUCTURAL_REALIZATION_KIND = "structural_realization"
 
 
 @dataclass(frozen=True)
@@ -589,6 +590,42 @@ def seed_structural_patterns(store: JsonlGraphStore, *, persist: bool = True) ->
     return node_ids
 
 
+def default_structural_realization_nodes() -> list[AssumptionNode]:
+    return [_realization_node(spec) for spec in DEFAULT_STRUCTURAL_REALIZATIONS]
+
+
+def seed_structural_realizations(store: JsonlGraphStore, *, persist: bool = True) -> list[str]:
+    """Upsert default domain realizations and lineage edges into the graph."""
+
+    seed_structural_patterns(store, persist=False)
+    node_ids = []
+    for spec in DEFAULT_STRUCTURAL_REALIZATIONS:
+        node = _realization_node(spec)
+        store.upsert_node(node)
+        node_ids.append(node.id)
+        weight = 0.74 if spec.get("status") == "accepted" else 0.42
+        edge_type = (
+            EdgeType.IS_FORMAL_ISOMORPHISM_OF
+            if spec.get("status") == "accepted"
+            else EdgeType.IS_ANALOGY_OF
+        )
+        store.add_edge(AssumptionEdge(
+            source=node.id,
+            target=f"struct_{spec['pattern_id']}",
+            type=edge_type,
+            weight=weight,
+            payload={
+                "source": "structural_realization_registry",
+                "pattern_id": spec["pattern_id"],
+                "realization_id": spec["realization_id"],
+                "status": spec.get("status", "candidate"),
+            },
+        ))
+    if persist:
+        store.flush()
+    return node_ids
+
+
 def load_structural_patterns(
     store: JsonlGraphStore | None = None,
     *,
@@ -605,6 +642,24 @@ def load_structural_patterns(
             if pattern:
                 patterns[pattern["pattern_id"]] = pattern
     return sorted(patterns.values(), key=lambda row: row["pattern_id"])
+
+
+def load_structural_realizations(
+    store: JsonlGraphStore | None = None,
+    *,
+    include_defaults: bool = True,
+) -> list[dict]:
+    realizations: dict[str, dict] = {}
+    if include_defaults:
+        for node in default_structural_realization_nodes():
+            realization = _node_to_realization(node)
+            realizations[realization["realization_id"]] = realization
+    if store:
+        for node in store.nodes.values():
+            realization = _node_to_realization(node)
+            if realization:
+                realizations[realization["realization_id"]] = realization
+    return sorted(realizations.values(), key=lambda row: row["realization_id"])
 
 
 def extract_structural_signature(source: str | dict) -> StructuralSignature:
@@ -1223,7 +1278,11 @@ def build_structural_lineage_payload(
         node
         for node in store.nodes.values()
         if isinstance(node.formal_form, dict)
-        and node.formal_form.get("formal_kind") in {STRUCTURAL_PATTERN_KIND, STRUCTURAL_MORPHISM_KIND}
+        and node.formal_form.get("formal_kind") in {
+            STRUCTURAL_PATTERN_KIND,
+            STRUCTURAL_MORPHISM_KIND,
+            STRUCTURAL_REALIZATION_KIND,
+        }
     ]
     lineage_edges = [
         edge
@@ -1243,12 +1302,17 @@ def build_structural_lineage_payload(
         formal = node.formal_form or {}
         if formal.get("formal_kind") == STRUCTURAL_MORPHISM_KIND:
             by_pattern[formal.get("source_pattern_id", "unknown")] += 1
+        if formal.get("formal_kind") == STRUCTURAL_REALIZATION_KIND:
+            by_pattern[formal.get("pattern_id", "unknown")] += 1
     return {
         "eval_id": eval_id,
         "eval_kind": "structural_morphism_lineage",
         "structural_node_count": len(structural_nodes),
         "structural_morphism_count": sum(
             1 for node in structural_nodes if (node.formal_form or {}).get("formal_kind") == STRUCTURAL_MORPHISM_KIND
+        ),
+        "structural_realization_count": sum(
+            1 for node in structural_nodes if (node.formal_form or {}).get("formal_kind") == STRUCTURAL_REALIZATION_KIND
         ),
         "lineage_edge_count": len(lineage_edges),
         "morphism_count_by_source_pattern": dict(by_pattern),
@@ -1259,11 +1323,101 @@ def build_structural_lineage_payload(
                 "claim": node.claim,
                 "formal_kind": (node.formal_form or {}).get("formal_kind"),
                 "source_pattern_id": (node.formal_form or {}).get("source_pattern_id"),
+                "pattern_id": (node.formal_form or {}).get("pattern_id"),
                 "status": node.status,
             }
             for node in sorted(structural_nodes, key=lambda n: n.id)
         ],
         "edges": [edge.to_dict() for edge in lineage_edges],
+    }
+
+
+def build_structural_realization_eval_payload(
+    store: JsonlGraphStore | None = None,
+    *,
+    eval_id: str | None = None,
+) -> dict:
+    realizations = load_structural_realizations(store)
+    rows = []
+    accepted_rows = []
+    candidate_rows = []
+    for realization in realizations:
+        validation = validate_structural_realization(realization, store=store)
+        row = {
+            "realization_id": realization.get("realization_id"),
+            "pattern_id": realization.get("pattern_id"),
+            "domain": realization.get("domain"),
+            "status": realization.get("status"),
+            "validation": validation,
+            "passed": bool(validation.get("pass")),
+        }
+        rows.append(row)
+        if realization.get("status") == "accepted":
+            accepted_rows.append(row)
+        elif realization.get("status") == "candidate":
+            candidate_rows.append(row)
+
+    negative = validate_structural_realization({
+        "formal_kind": STRUCTURAL_REALIZATION_KIND,
+        "realization_id": "neg_plain_stack_no_identity",
+        "pattern_id": "pat_residual_correction",
+        "domain": "negative_control",
+        "status": "accepted",
+        "object_bindings": {
+            "delta_update": "a learned transform with no identity path",
+        },
+        "morphism_bindings": {
+            "learn_delta": "plain feedforward layer",
+        },
+        "preserved_invariants": ["learned_part_models_deviation"],
+        "broken_or_uncertain_invariants": [],
+    }, store=store)
+
+    with tempfile.TemporaryDirectory() as td:
+        graph_dir = Path(td) / "graph"
+        tmp_store = JsonlGraphStore(graph_dir)
+        seeded_ids = seed_structural_realizations(tmp_store, persist=True)
+        reloaded = JsonlGraphStore(graph_dir)
+        persisted = all(node_id in reloaded.nodes for node_id in seeded_ids)
+        realization_edge_count = sum(
+            1
+            for edge in reloaded.edges
+            if (edge.payload or {}).get("source") == "structural_realization_registry"
+        )
+
+    accepted_rate = round(_ratio(sum(1 for row in accepted_rows if row["passed"]), len(accepted_rows)), 4)
+    candidate_uncertainty_rate = round(_ratio(
+        sum(
+            1
+            for row in candidate_rows
+            if row["passed"] and row["validation"].get("broken_or_uncertain_invariants")
+        ),
+        len(candidate_rows),
+    ), 4)
+    return {
+        "eval_id": eval_id,
+        "eval_kind": "structural_realization_eval",
+        "realization_count": len(rows),
+        "accepted_count": len(accepted_rows),
+        "candidate_count": len(candidate_rows),
+        "accepted_pass_rate": accepted_rate,
+        "candidate_uncertainty_rate": candidate_uncertainty_rate,
+        "negative_rejected": not negative.get("pass"),
+        "seeded_node_count": len(seeded_ids),
+        "realization_edge_count": realization_edge_count,
+        "persisted": persisted,
+        "pass": (
+            len(rows) >= 10
+            and len(accepted_rows) >= 8
+            and len(candidate_rows) >= 1
+            and accepted_rate >= 0.9
+            and candidate_uncertainty_rate >= 1.0
+            and not negative.get("pass")
+            and persisted
+            and realization_edge_count >= len(seeded_ids)
+        ),
+        "rows": rows,
+        "negative_control": negative,
     }
 
 
@@ -2159,6 +2313,7 @@ def build_structural_morphism_performance_payload(
         "functor_eval": build_structural_functor_eval_payload(store, eval_id=eval_id),
         "transfer_prediction_testability": build_transfer_prediction_testability_eval_payload(eval_id=eval_id),
         "kernel_eval": build_structural_kernel_eval_payload(store, eval_id=eval_id),
+        "realization_eval": build_structural_realization_eval_payload(store, eval_id=eval_id),
         "context_effect": build_structural_context_effect_payload(store, eval_id=eval_id),
         "behavior_probe": build_structural_behavior_probe_payload(store, eval_id=eval_id),
         "writeback_eval": build_structural_writeback_eval_payload(eval_id=eval_id),
@@ -2520,6 +2675,352 @@ DEFAULT_STRUCTURAL_PATTERNS = [
 ]
 
 
+DEFAULT_STRUCTURAL_REALIZATIONS = [
+    {
+        "realization_id": "real_resnet_residual_block",
+        "pattern_id": "pat_residual_correction",
+        "domain": "deep_learning",
+        "status": "accepted",
+        "claim": "A ResNet block realizes residual correction by preserving an identity path and learning F(x).",
+        "object_bindings": {
+            "input_state": "block input activation x",
+            "delta_update": "residual branch F(x)",
+            "output_state": "block output x + F(x)",
+        },
+        "morphism_bindings": {
+            "identity_path": "skip connection",
+            "learn_delta": "learned residual branch",
+            "compose_add": "elementwise addition",
+        },
+        "invariant_bindings": {
+            "identity_path_preserved": "skip path remains available",
+            "learned_part_models_deviation": "branch estimates the residual update",
+            "zero_delta_recovers_baseline": "F(x)=0 recovers the identity output",
+        },
+        "preserved_invariants": [
+            "identity_path_preserved",
+            "learned_part_models_deviation",
+            "zero_delta_recovers_baseline",
+        ],
+        "broken_or_uncertain_invariants": [],
+        "evidence_refs": [
+            "https://arxiv.org/abs/1512.03385",
+            "https://arxiv.org/abs/1603.05027",
+        ],
+    },
+    {
+        "realization_id": "real_lora_adapter_delta",
+        "pattern_id": "pat_residual_correction",
+        "domain": "parameter_efficient_finetuning",
+        "status": "accepted",
+        "claim": "LoRA/adapters realize residual correction by freezing the base path and learning a local delta.",
+        "object_bindings": {
+            "input_state": "base model behavior",
+            "delta_update": "low-rank or adapter update",
+            "output_state": "base behavior plus learned delta",
+        },
+        "morphism_bindings": {
+            "identity_path": "frozen/base weights remain available",
+            "learn_delta": "trainable adapter or low-rank delta",
+            "compose_add": "delta is composed with the base transform",
+        },
+        "invariant_bindings": {
+            "identity_path_preserved": "base path remains recoverable",
+            "learned_part_models_deviation": "small module models task-specific deviation",
+            "zero_delta_recovers_baseline": "zero adapter returns base model",
+        },
+        "preserved_invariants": [
+            "identity_path_preserved",
+            "learned_part_models_deviation",
+            "zero_delta_recovers_baseline",
+        ],
+        "broken_or_uncertain_invariants": [],
+        "evidence_refs": ["https://arxiv.org/abs/2106.09685"],
+    },
+    {
+        "realization_id": "real_recursive_runner_repair_delta",
+        "pattern_id": "pat_residual_correction",
+        "domain": "assumption_agent",
+        "status": "accepted",
+        "claim": "The recursive runner realizes residual correction when repair children preserve the parent path and add a local hypothesis delta.",
+        "object_bindings": {
+            "input_state": "parent candidate or baseline policy",
+            "delta_update": "repair/revision child frame",
+            "output_state": "updated parent candidate with fallback",
+        },
+        "morphism_bindings": {
+            "identity_path": "parent frame and previous graph policy remain available",
+            "learn_delta": "child proposes a bounded repair",
+            "compose_add": "resume merges child result into the parent action",
+        },
+        "invariant_bindings": {
+            "identity_path_preserved": "graph mutation remains gated",
+            "learned_part_models_deviation": "child addresses a specific residual",
+            "zero_delta_recovers_baseline": "failed child leaves parent unresolved/shadow-only",
+        },
+        "preserved_invariants": [
+            "identity_path_preserved",
+            "learned_part_models_deviation",
+            "zero_delta_recovers_baseline",
+        ],
+        "broken_or_uncertain_invariants": [],
+        "evidence_refs": ["assumption_os/recursive_runner.py"],
+    },
+    {
+        "realization_id": "real_software_ablation_gate",
+        "pattern_id": "pat_controlled_intervention",
+        "domain": "software_evaluation",
+        "status": "accepted",
+        "claim": "Trigger/control candidate ablation realizes controlled intervention.",
+        "object_bindings": {
+            "baseline_case": "baseline answer or policy row",
+            "intervention_case": "candidate answer or policy row",
+            "outcome_measure": "judge decision and acceptance metric",
+        },
+        "morphism_bindings": {
+            "change_one_factor": "activate one candidate proposal",
+            "compare_outcomes": "judge candidate versus baseline on matched rows",
+        },
+        "invariant_bindings": {
+            "single_intervention_isolated": "one proposal is evaluated per variant",
+            "matched_control_required": "control rows check outside harm",
+        },
+        "preserved_invariants": [
+            "single_intervention_isolated",
+            "matched_control_required",
+        ],
+        "broken_or_uncertain_invariants": [],
+        "evidence_refs": ["assumption_os/candidate_acceptance.py"],
+    },
+    {
+        "realization_id": "real_incremental_strangler_migration",
+        "pattern_id": "pat_incremental_replacement",
+        "domain": "software_migration",
+        "status": "accepted",
+        "claim": "A strangler-style migration realizes incremental replacement by keeping the old path and swapping one boundary at a time.",
+        "object_bindings": {
+            "working_pipeline": "existing production path",
+            "module_boundary": "adapter/API boundary",
+            "replacement_delta": "new bounded module",
+        },
+        "morphism_bindings": {
+            "preserve_pipeline": "route can fall back to the old path",
+            "swap_one_module": "replace one component behind a boundary",
+            "rollback_if_failed": "rollback route or feature flag",
+        },
+        "invariant_bindings": {
+            "module_boundary_preserved": "replacement stays behind the interface",
+            "rollback_path_available": "fallback route exists",
+            "identity_path_preserved": "old path remains live",
+        },
+        "preserved_invariants": [
+            "module_boundary_preserved",
+            "rollback_path_available",
+            "identity_path_preserved",
+        ],
+        "broken_or_uncertain_invariants": [],
+        "evidence_refs": ["reconstruction/md/category_structural_morphism_layer_plan_20260602.md"],
+    },
+    {
+        "realization_id": "real_lenz_negative_feedback",
+        "pattern_id": "pat_negative_feedback",
+        "domain": "electromagnetism",
+        "status": "accepted",
+        "claim": "Lenz law realizes negative feedback: induced current opposes the flux change that caused it.",
+        "object_bindings": {
+            "system_state": "magnetic flux through a circuit",
+            "external_perturbation": "change in magnetic flux",
+            "induced_response": "induced current and magnetic field",
+        },
+        "morphism_bindings": {
+            "perturb_state": "changing flux perturbs the circuit",
+            "induce_response": "Faraday induction creates current",
+            "oppose_change": "induced field opposes the flux change",
+        },
+        "invariant_bindings": {
+            "response_opposes_perturbation": "response is opposite in sign to flux change",
+            "constraint_explains_response": "energy conservation constrains the response",
+        },
+        "preserved_invariants": [
+            "response_opposes_perturbation",
+            "constraint_explains_response",
+        ],
+        "broken_or_uncertain_invariants": [],
+        "evidence_refs": ["reconstruction/md/category_morphism_dialogue_20260602.md"],
+    },
+    {
+        "realization_id": "real_le_chatelier_shift",
+        "pattern_id": "pat_negative_feedback",
+        "domain": "chemical_equilibrium",
+        "status": "accepted",
+        "claim": "Le Chatelier-style equilibrium shift realizes negative feedback when the response opposes an imposed disturbance.",
+        "object_bindings": {
+            "system_state": "chemical equilibrium state",
+            "external_perturbation": "concentration, pressure, or temperature disturbance",
+            "induced_response": "equilibrium shift",
+        },
+        "morphism_bindings": {
+            "perturb_state": "external change displaces equilibrium",
+            "induce_response": "system shifts reaction balance",
+            "oppose_change": "shift partially counteracts the imposed change",
+        },
+        "invariant_bindings": {
+            "response_opposes_perturbation": "shift counters the perturbation",
+            "constraint_explains_response": "equilibrium/free-energy constraint explains response direction",
+        },
+        "preserved_invariants": [
+            "response_opposes_perturbation",
+            "constraint_explains_response",
+        ],
+        "broken_or_uncertain_invariants": [],
+        "evidence_refs": ["reconstruction/md/category_morphism_dialogue_20260602.md"],
+    },
+    {
+        "realization_id": "real_seismic_random_noise_suppression",
+        "pattern_id": "pat_signal_nuisance_separation",
+        "domain": "signal_processing",
+        "status": "accepted",
+        "claim": "Seismic random-noise suppression realizes signal/nuisance separation by keeping coherent signal and suppressing weakly correlated noise.",
+        "object_bindings": {
+            "stable_signal": "coherent seismic event",
+            "nuisance_noise": "random weakly correlated noise",
+            "projection_operator": "correlation/stacking/denoising operator",
+        },
+        "morphism_bindings": {
+            "suppress_noise": "averaging or correlation suppresses uncorrelated noise",
+            "recover_signal": "coherent event is recovered",
+        },
+        "invariant_bindings": {
+            "predictable_structure_separated": "coherent structure persists across traces",
+            "stochastic_nuisance_suppressed": "random noise is attenuated",
+        },
+        "preserved_invariants": [
+            "predictable_structure_separated",
+            "stochastic_nuisance_suppressed",
+        ],
+        "broken_or_uncertain_invariants": [],
+        "evidence_refs": [
+            "https://arxiv.org/abs/2109.07344",
+            "https://arxiv.org/abs/2105.07250",
+        ],
+    },
+    {
+        "realization_id": "real_jepa_latent_prediction_candidate",
+        "pattern_id": "pat_signal_nuisance_separation",
+        "domain": "world_modeling",
+        "status": "candidate",
+        "claim": "JEPA-style latent prediction is a candidate realization of signal/nuisance separation, not accepted lineage.",
+        "object_bindings": {
+            "stable_signal": "predictable latent world state",
+            "nuisance_noise": "unpredictable pixel/detail variation",
+            "projection_operator": "latent prediction and distributional regularization",
+        },
+        "morphism_bindings": {
+            "suppress_noise": "avoid reconstructing irrelevant detail",
+            "recover_signal": "predict stable latent representation",
+        },
+        "invariant_bindings": {
+            "predictable_structure_separated": "latent prediction emphasizes predictable structure",
+            "stochastic_nuisance_suppressed": "regularization may suppress nuisance detail",
+        },
+        "preserved_invariants": [
+            "predictable_structure_separated",
+            "stochastic_nuisance_suppressed",
+        ],
+        "broken_or_uncertain_invariants": [
+            "classical correlation/stacking is explicit second-order signal processing; JEPA uses learned latent objectives and must be validated downstream",
+        ],
+        "evidence_refs": [
+            "https://arxiv.org/abs/2404.08471",
+            "https://arxiv.org/abs/2511.08544",
+        ],
+    },
+    {
+        "realization_id": "real_queue_rate_limiter",
+        "pattern_id": "pat_bottleneck_capacity",
+        "domain": "systems_engineering",
+        "status": "accepted",
+        "claim": "A rate-limited queue realizes bottleneck/capacity flow.",
+        "object_bindings": {
+            "flow_input": "incoming requests",
+            "bottleneck_resource": "rate limiter or scarce worker capacity",
+            "flow_output": "completed throughput",
+        },
+        "morphism_bindings": {
+            "route_flow": "requests enter the queue",
+            "constrain_capacity": "rate limiter bounds output",
+            "relieve_bottleneck": "increase capacity or remove contention",
+        },
+        "invariant_bindings": {
+            "bottleneck_controls_throughput": "limiting resource controls throughput",
+            "capacity_constraint_explicit": "capacity is explicit and measurable",
+        },
+        "preserved_invariants": [
+            "bottleneck_controls_throughput",
+            "capacity_constraint_explicit",
+        ],
+        "broken_or_uncertain_invariants": [],
+        "evidence_refs": ["reconstruction/md/category_structural_morphism_layer_plan_20260602.md"],
+    },
+    {
+        "realization_id": "real_divide_and_conquer_interfaces",
+        "pattern_id": "pat_decomposition_composition",
+        "domain": "algorithm_design",
+        "status": "accepted",
+        "claim": "Divide-and-conquer realizes decomposition/composition when subproblem interfaces compose back to the root goal.",
+        "object_bindings": {
+            "root_problem": "whole task",
+            "subproblem_node": "independent subtask",
+            "interface_contract": "input/output boundary",
+        },
+        "morphism_bindings": {
+            "split_problem": "factor the whole task",
+            "solve_subproblem": "solve each independent part",
+            "compose_solution": "merge partial solutions",
+        },
+        "invariant_bindings": {
+            "interface_contract_preserved": "subproblem input/output contracts are explicit",
+            "subproblem_independence_preserved": "parts are separable enough",
+            "composed_solution_recovers_goal": "merged solution solves the original task",
+        },
+        "preserved_invariants": [
+            "interface_contract_preserved",
+            "subproblem_independence_preserved",
+            "composed_solution_recovers_goal",
+        ],
+        "broken_or_uncertain_invariants": [],
+        "evidence_refs": ["reconstruction/md/category_structural_morphism_layer_plan_20260602.md"],
+    },
+    {
+        "realization_id": "real_budget_accounting_balance",
+        "pattern_id": "pat_conservation_balance",
+        "domain": "resource_accounting",
+        "status": "accepted",
+        "claim": "Budget accounting realizes conservation/balance by checking before/after resource totals.",
+        "object_bindings": {
+            "source_state": "budget before transfer",
+            "conserved_quantity": "total budget or probability mass",
+            "target_state": "budget after transfer",
+        },
+        "morphism_bindings": {
+            "transform_state": "move or reallocate budget",
+            "conserve_quantity": "preserve total budget",
+            "check_balance": "run before/after accounting check",
+        },
+        "invariant_bindings": {
+            "conserved_quantity_preserved": "total resource is preserved",
+            "balance_check_closes": "accounting closes after transfer",
+        },
+        "preserved_invariants": [
+            "conserved_quantity_preserved",
+            "balance_check_closes",
+        ],
+        "broken_or_uncertain_invariants": [],
+        "evidence_refs": ["reconstruction/md/category_structural_morphism_layer_plan_20260602.md"],
+    },
+]
+
+
 def _pattern_node(spec: dict) -> AssumptionNode:
     pattern_id = spec["pattern_id"]
     enriched = _pattern_with_endpoint_hints(spec)
@@ -2549,6 +3050,127 @@ def _node_to_pattern(node: AssumptionNode) -> dict | None:
     pattern = dict(formal)
     pattern["node_id"] = node.id
     return _pattern_with_endpoint_hints(pattern)
+
+
+def _realization_node(spec: dict) -> AssumptionNode:
+    realization_id = spec["realization_id"]
+    status = spec.get("status", "candidate")
+    pattern_id = spec["pattern_id"]
+    claim = spec.get("claim") or f"{realization_id} realizes {pattern_id}"
+    formal = {
+        "formal_kind": STRUCTURAL_REALIZATION_KIND,
+        **spec,
+    }
+    return AssumptionNode(
+        id=f"struct_real_{realization_id}",
+        type=AssumptionType.ALIGNMENT,
+        kind=HypothesisKind.FORMAL_MAPPING,
+        claim=claim,
+        formal_form=formal,
+        tags=[
+            "structural_realization",
+            "structural_morphism",
+            pattern_id,
+            spec.get("domain", ""),
+            status,
+        ],
+        context_conditions=["structural lineage", spec.get("domain", ""), pattern_id],
+        predicted_effects=spec.get("transfer_predictions", []),
+        risk_predictions=[
+            "domain realization can be over-generalized if bindings or uncertain invariants are ignored",
+        ],
+        verifiers=["structural_realization_eval", "structural_morphism_gate"],
+        confidence=0.7 if status == "accepted" else 0.46,
+        metaproductivity=0.16 if status == "accepted" else 0.08,
+        status="active" if status == "accepted" else "candidate",
+        source_refs=spec.get("evidence_refs", []),
+        payload={"structural_realization": formal},
+    )
+
+
+def _node_to_realization(node: AssumptionNode) -> dict | None:
+    formal = node.formal_form or {}
+    if not isinstance(formal, dict) or formal.get("formal_kind") != STRUCTURAL_REALIZATION_KIND:
+        return None
+    realization = dict(formal)
+    realization["node_id"] = node.id
+    return realization
+
+
+def validate_structural_realization(
+    realization: dict,
+    pattern: dict | None = None,
+    *,
+    store: JsonlGraphStore | None = None,
+) -> dict:
+    pattern_id = realization.get("pattern_id")
+    pattern = pattern or _pattern_by_id(pattern_id, store)
+    object_ids = [str(row.get("id")) for row in pattern.get("objects", []) if row.get("id")]
+    morphism_ids = [str(row.get("id")) for row in pattern.get("morphisms", []) if row.get("id")]
+    invariant_ids = [str(row.get("id")) for row in pattern.get("invariants", []) if row.get("id")]
+    object_bindings = realization.get("object_bindings", {}) or {}
+    morphism_bindings = realization.get("morphism_bindings", {}) or {}
+    invariant_bindings = realization.get("invariant_bindings", {}) or {}
+    preserved = set(str(x) for x in realization.get("preserved_invariants", []) or [])
+    uncertain = list(realization.get("broken_or_uncertain_invariants", []) or [])
+    status = realization.get("status", "candidate")
+
+    object_hits = sorted(set(object_ids) & set(object_bindings))
+    morphism_hits = sorted(set(morphism_ids) & set(morphism_bindings))
+    invariant_hits = sorted((set(invariant_ids) & preserved) | (set(invariant_ids) & set(invariant_bindings)))
+    object_rate = round(_ratio(len(object_hits), len(object_ids)), 4)
+    morphism_rate = round(_ratio(len(morphism_hits), len(morphism_ids)), 4)
+    invariant_rate = round(_ratio(len(invariant_hits), len(invariant_ids)), 4)
+    accepted_pass = (
+        bool(pattern)
+        and status == "accepted"
+        and object_rate >= 0.75
+        and morphism_rate >= 0.7
+        and invariant_rate >= 0.7
+        and not uncertain
+    )
+    candidate_pass = (
+        bool(pattern)
+        and status == "candidate"
+        and object_rate >= 0.5
+        and morphism_rate >= 0.5
+        and invariant_rate >= 0.5
+        and bool(uncertain)
+    )
+    missing = []
+    if not pattern:
+        missing.append("pattern")
+    if object_rate < (0.75 if status == "accepted" else 0.5):
+        missing.append("object_bindings")
+    if morphism_rate < (0.7 if status == "accepted" else 0.5):
+        missing.append("morphism_bindings")
+    if invariant_rate < (0.7 if status == "accepted" else 0.5):
+        missing.append("invariant_bindings")
+    if status == "accepted" and uncertain:
+        missing.append("accepted_realization_has_uncertain_invariants")
+    if status == "candidate" and not uncertain:
+        missing.append("candidate_missing_uncertainty")
+    passed = accepted_pass or candidate_pass
+    return {
+        "formal_kind": "structural_realization_validation",
+        "realization_id": realization.get("realization_id"),
+        "pattern_id": pattern_id,
+        "status": status,
+        "object_binding_rate": object_rate,
+        "morphism_binding_rate": morphism_rate,
+        "invariant_binding_rate": invariant_rate,
+        "object_hits": object_hits,
+        "morphism_hits": morphism_hits,
+        "invariant_hits": invariant_hits,
+        "broken_or_uncertain_invariants": uncertain,
+        "missing": missing,
+        "pass": passed,
+        "reason": (
+            "Realization has adequate typed bindings and invariant status."
+            if passed
+            else "Realization is under-specified or over-claimed."
+        ),
+    }
 
 
 def _pattern_with_endpoint_hints(pattern: dict) -> dict:
@@ -3289,6 +3911,7 @@ def main() -> None:
     ap.add_argument("--query", default=None)
     ap.add_argument("--top-n", type=int, default=3)
     ap.add_argument("--seed-defaults", action="store_true")
+    ap.add_argument("--seed-realizations", action="store_true")
     ap.add_argument("--extraction-audit", action="store_true")
     ap.add_argument("--pair-eval", action="store_true")
     ap.add_argument("--retrieval-probe", action="store_true")
@@ -3296,6 +3919,7 @@ def main() -> None:
     ap.add_argument("--functor-eval", action="store_true")
     ap.add_argument("--prediction-testability-eval", action="store_true")
     ap.add_argument("--kernel-eval", action="store_true")
+    ap.add_argument("--realization-eval", action="store_true")
     ap.add_argument("--context-effect", action="store_true")
     ap.add_argument("--writeback-eval", action="store_true")
     ap.add_argument("--recursive-runner-eval", action="store_true")
@@ -3311,6 +3935,10 @@ def main() -> None:
         if not store:
             raise SystemExit("--seed-defaults requires --graph-dir")
         payload["seeded_node_ids"] = seed_structural_patterns(store, persist=True)
+    if args.seed_realizations:
+        if not store:
+            raise SystemExit("--seed-realizations requires --graph-dir")
+        payload["seeded_realization_node_ids"] = seed_structural_realizations(store, persist=True)
     if args.query:
         payload["search"] = search_structural_patterns(store, args.query, top_n=args.top_n)
         payload["formatted_search"] = format_structural_morphism_applications(payload["search"])
@@ -3328,6 +3956,8 @@ def main() -> None:
         payload["prediction_testability_eval"] = build_transfer_prediction_testability_eval_payload(eval_id=args.eval_id)
     if args.kernel_eval:
         payload["kernel_eval"] = build_structural_kernel_eval_payload(store, eval_id=args.eval_id)
+    if args.realization_eval:
+        payload["realization_eval"] = build_structural_realization_eval_payload(store, eval_id=args.eval_id)
     if args.context_effect:
         payload["context_effect"] = build_structural_context_effect_payload(store, eval_id=args.eval_id)
     if args.writeback_eval:

@@ -105,6 +105,7 @@ from assumption_os.structural_patterns import (
     build_structural_morphism_gate_payload,
     build_structural_morphism_performance_payload,
     build_structural_pair_eval_payload,
+    build_structural_realization_eval_payload,
     build_structural_transfer_proposal_payload,
     build_structural_writeback_eval_payload,
     build_transfer_prediction_testability_eval_payload,
@@ -3963,6 +3964,11 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertTrue(build_structural_functor_eval_payload(eval_id="unit_struct_functor")["pass"])
         self.assertTrue(build_transfer_prediction_testability_eval_payload(eval_id="unit_struct_prediction")["pass"])
         self.assertTrue(build_structural_kernel_eval_payload(eval_id="unit_struct_kernel")["pass"])
+        realization_eval = build_structural_realization_eval_payload(eval_id="unit_struct_realization")
+        self.assertTrue(realization_eval["pass"])
+        self.assertGreaterEqual(realization_eval["accepted_count"], 8)
+        self.assertEqual(realization_eval["candidate_uncertainty_rate"], 1.0)
+        self.assertTrue(realization_eval["negative_rejected"])
         context_effect = build_structural_context_effect_payload(eval_id="unit_struct_context")
         self.assertTrue(context_effect["pass"])
 
