@@ -12,13 +12,24 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import tempfile
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Iterable
 
 from .graph_memory import JsonlGraphStore, tokenize
-from .schema import AssumptionNode, AssumptionType, HypothesisKind, stable_id
+from .schema import (
+    AssumptionEdge,
+    AssumptionNode,
+    AssumptionType,
+    EdgeType,
+    EvidenceRecord,
+    HypothesisKind,
+    TrialManifest,
+    TrialStatus,
+    stable_id,
+)
 
 
 STRUCTURAL_PATTERN_KIND = "structural_pattern"
@@ -36,6 +47,27 @@ class StructuralSignature:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class StructuralDiagram:
+    source_text: str
+    objects: list[dict] = field(default_factory=list)
+    morphisms: list[dict] = field(default_factory=list)
+    composition_laws: list[dict] = field(default_factory=list)
+    invariants: list[dict] = field(default_factory=list)
+    negation_hits: list[str] = field(default_factory=list)
+    pattern_hints: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "formal_kind": "structural_diagram",
+            **asdict(self),
+            "object_count": len(self.objects),
+            "morphism_count": len(self.morphisms),
+            "composition_law_count": len(self.composition_laws),
+            "invariant_count": len(self.invariants),
+        }
 
 
 @dataclass(frozen=True)
@@ -155,6 +187,143 @@ NEGATION_PATTERNS = [
 ]
 
 
+ROLE_OBJECT_HINTS = {
+    "baseline_path": "preserved baseline or identity path",
+    "delta_update": "local delta or residual update",
+    "control_row": "matched control or intervention row",
+    "perturbation": "external perturbation or imposed change",
+    "opposing_response": "induced opposing response",
+    "stable_signal": "predictable stable signal",
+    "nuisance_noise": "stochastic nuisance variation",
+    "module_boundary": "bounded module or adapter boundary",
+}
+
+
+MORPHISM_ENDPOINT_HINTS = {
+    "identity_path": ("input_state", "output_state"),
+    "learn_delta": ("input_state", "delta_update"),
+    "compose_add": ("delta_update", "output_state"),
+    "change_one_factor": ("baseline_case", "intervention_case"),
+    "compare_outcomes": ("intervention_case", "outcome_measure"),
+    "preserve_pipeline": ("working_pipeline", "working_pipeline"),
+    "swap_one_module": ("working_pipeline", "replacement_delta"),
+    "rollback_if_failed": ("replacement_delta", "working_pipeline"),
+    "perturb_state": ("system_state", "external_perturbation"),
+    "induce_response": ("external_perturbation", "induced_response"),
+    "oppose_change": ("induced_response", "system_state"),
+    "suppress_noise": ("nuisance_noise", "projection_operator"),
+    "recover_signal": ("stable_signal", "projection_operator"),
+}
+
+
+ROLE_MORPHISM_RULES = [
+    {
+        "id": "identity_path",
+        "role": "baseline_path",
+        "source_role": "baseline_path",
+        "target_role": "baseline_path",
+        "requires": ["baseline_path"],
+        "terms": ["identity", "baseline", "fallback", "preserve", "recover", "old behavior"],
+    },
+    {
+        "id": "learn_delta",
+        "role": "delta_update",
+        "source_role": "baseline_path",
+        "target_role": "delta_update",
+        "requires": ["baseline_path", "delta_update"],
+        "terms": ["delta", "residual", "correction", "deviation", "local update"],
+    },
+    {
+        "id": "compose_add",
+        "role": "delta_update",
+        "source_role": "delta_update",
+        "target_role": "baseline_path",
+        "requires": ["baseline_path", "delta_update"],
+        "terms": ["add", "compose", "local patch", "zero", "recover"],
+    },
+    {
+        "id": "change_one_factor",
+        "role": "control_row",
+        "source_role": "control_row",
+        "target_role": "control_row",
+        "requires": ["control_row"],
+        "terms": ["one variable", "single variable", "one intervention", "ablation"],
+    },
+    {
+        "id": "compare_outcomes",
+        "role": "control_row",
+        "source_role": "control_row",
+        "target_role": "control_row",
+        "requires": ["control_row"],
+        "terms": ["compare", "control", "baseline", "outcome", "acceptance"],
+    },
+    {
+        "id": "preserve_pipeline",
+        "role": "baseline_path",
+        "source_role": "baseline_path",
+        "target_role": "baseline_path",
+        "requires": ["baseline_path", "module_boundary"],
+        "terms": ["preserve", "keep", "pipeline", "fallback"],
+    },
+    {
+        "id": "swap_one_module",
+        "role": "module_boundary",
+        "source_role": "baseline_path",
+        "target_role": "delta_update",
+        "requires": ["baseline_path", "module_boundary"],
+        "terms": ["replace one", "single module", "component", "boundary"],
+    },
+    {
+        "id": "rollback_if_failed",
+        "role": "baseline_path",
+        "source_role": "delta_update",
+        "target_role": "baseline_path",
+        "requires": ["baseline_path", "module_boundary"],
+        "terms": ["rollback", "revert", "fallback"],
+    },
+    {
+        "id": "perturb_state",
+        "role": "perturbation",
+        "source_role": "perturbation",
+        "target_role": "perturbation",
+        "requires": ["perturbation"],
+        "terms": ["perturb", "disturbance", "external change", "imposed change"],
+    },
+    {
+        "id": "induce_response",
+        "role": "opposing_response",
+        "source_role": "perturbation",
+        "target_role": "opposing_response",
+        "requires": ["perturbation", "opposing_response"],
+        "terms": ["induce", "response", "reaction"],
+    },
+    {
+        "id": "oppose_change",
+        "role": "opposing_response",
+        "source_role": "opposing_response",
+        "target_role": "perturbation",
+        "requires": ["perturbation", "opposing_response"],
+        "terms": ["opposes", "compensates", "resists", "cancels"],
+    },
+    {
+        "id": "suppress_noise",
+        "role": "nuisance_noise",
+        "source_role": "nuisance_noise",
+        "target_role": "stable_signal",
+        "requires": ["stable_signal", "nuisance_noise"],
+        "terms": ["suppress", "ignore", "denoise", "not reconstruct"],
+    },
+    {
+        "id": "recover_signal",
+        "role": "stable_signal",
+        "source_role": "stable_signal",
+        "target_role": "stable_signal",
+        "requires": ["stable_signal"],
+        "terms": ["recover", "predict", "latent", "stable"],
+    },
+]
+
+
 def default_structural_pattern_nodes() -> list[AssumptionNode]:
     return [_pattern_node(spec) for spec in DEFAULT_STRUCTURAL_PATTERNS]
 
@@ -236,6 +405,61 @@ def extract_structural_signature(source: str | dict) -> StructuralSignature:
     )
 
 
+def extract_structural_diagram(source: str | dict | StructuralSignature | StructuralDiagram) -> StructuralDiagram:
+    """Extract an auditable object/morphism/composition diagram.
+
+    This is still deliberately bounded: it is a deterministic diagram extractor
+    for the structural motifs the project actually uses.  The important step is
+    that downstream gates reason over typed objects, morphisms, and composition
+    rows instead of only over surface overlap.
+    """
+
+    if isinstance(source, StructuralDiagram):
+        return source
+    signature = source if isinstance(source, StructuralSignature) else extract_structural_signature(source)
+    roles = set(signature.role_hits)
+    objects = [
+        {
+            "id": f"obj_{role}",
+            "role": role,
+            "label": ROLE_OBJECT_HINTS.get(role, role.replace("_", " ")),
+            "matched_terms": signature.role_hits.get(role, []),
+        }
+        for role in sorted(roles)
+    ]
+    morphisms = []
+    for rule in ROLE_MORPHISM_RULES:
+        required = set(rule.get("requires", []))
+        if required and not required <= roles:
+            continue
+        matched = _term_hits(signature.source_text.lower(), rule.get("terms", []))
+        if not matched and not signature.role_hits.get(rule["role"]):
+            continue
+        morphisms.append({
+            "id": rule["id"],
+            "role": rule["role"],
+            "source_role": rule["source_role"],
+            "target_role": rule["target_role"],
+            "source": f"obj_{rule['source_role']}",
+            "target": f"obj_{rule['target_role']}",
+            "matched_terms": matched or signature.role_hits.get(rule["role"], []),
+        })
+    invariants = [
+        {"id": inv_id, "matched_terms": hits}
+        for inv_id, hits in sorted(signature.invariant_hits.items())
+    ]
+    composition_laws = _infer_composition_laws(roles, {m["id"] for m in morphisms}, signature)
+    return StructuralDiagram(
+        source_text=signature.source_text,
+        objects=objects,
+        morphisms=morphisms,
+        composition_laws=composition_laws,
+        invariants=invariants,
+        negation_hits=signature.negation_hits,
+        pattern_hints=signature.pattern_hints,
+    )
+
+
 def score_pattern_match(query_diagram: str | dict | StructuralSignature, pattern: dict) -> StructuralMorphismScore:
     signature = query_diagram if isinstance(query_diagram, StructuralSignature) else extract_structural_signature(query_diagram)
     text = signature.source_text.lower()
@@ -309,8 +533,135 @@ def score_pattern_match(query_diagram: str | dict | StructuralSignature, pattern
     )
 
 
-def propose_structural_morphism(query_diagram: str | dict | StructuralSignature, pattern: dict) -> dict:
+def check_structural_functor(
+    query_diagram: str | dict | StructuralSignature | StructuralDiagram,
+    pattern: dict,
+) -> dict:
+    """Check whether a target diagram preserves source-pattern structure.
+
+    The check is intentionally finite and inspectable: every source object and
+    morphism gets an explicit mapped/unmapped row, and every composition law is
+    checked against target-side composition evidence.
+    """
+
+    diagram = _as_structural_diagram(query_diagram)
+    text = diagram.source_text.lower()
+    object_roles = {row.get("role") for row in diagram.objects}
+    target_morphisms_by_id = {row.get("id"): row for row in diagram.morphisms}
+    target_roles = {row.get("role") for row in diagram.morphisms}
+    pattern = _pattern_with_endpoint_hints(pattern)
+    pattern_objects = {row.get("id"): row for row in pattern.get("objects", [])}
+
+    object_checks = []
+    object_map = {}
+    for source_obj in pattern.get("objects", []):
+        role = source_obj.get("role")
+        hits = _term_hits(text, source_obj.get("terms", []))
+        mapped = bool(role in object_roles or hits)
+        target_id = f"obj_{role}" if mapped else None
+        if mapped:
+            object_map[source_obj["id"]] = target_id
+        object_checks.append({
+            "source_object": source_obj["id"],
+            "source_role": role,
+            "target_object": target_id,
+            "mapped": mapped,
+            "matched_terms": hits,
+        })
+
+    morphism_checks = []
+    morphism_map = {}
+    for source_morphism in pattern.get("morphisms", []):
+        src, dst = _morphism_endpoints(source_morphism)
+        src_role = pattern_objects.get(src, {}).get("role")
+        dst_role = pattern_objects.get(dst, {}).get("role")
+        endpoint_preserved = (
+            (not src_role or src_role in object_roles or src in object_map)
+            and (not dst_role or dst_role in object_roles or dst in object_map)
+        )
+        direct = target_morphisms_by_id.get(source_morphism.get("id"))
+        role_match = source_morphism.get("role") in target_roles
+        term_hits = _term_hits(text, source_morphism.get("terms", []))
+        mapped = bool(endpoint_preserved and (direct or role_match or term_hits))
+        target_id = direct.get("id") if direct else (f"morphism_{source_morphism.get('role')}" if mapped else None)
+        if mapped:
+            morphism_map[source_morphism["id"]] = target_id
+        morphism_checks.append({
+            "source_morphism": source_morphism["id"],
+            "source": src,
+            "target": dst,
+            "source_role": src_role,
+            "target_role": dst_role,
+            "target_morphism": target_id,
+            "endpoint_preserved": endpoint_preserved,
+            "mapped": mapped,
+            "matched_terms": term_hits,
+        })
+
+    invariant_checks = []
+    target_invariants = {row.get("id") for row in diagram.invariants}
+    for invariant in pattern.get("invariants", []):
+        hits = _term_hits(text, invariant.get("terms", []))
+        preserved = invariant.get("id") in target_invariants or bool(hits)
+        invariant_checks.append({
+            "source_invariant": invariant.get("id"),
+            "preserved": preserved,
+            "matched_terms": hits,
+        })
+
+    composition_checks = []
+    for idx, law in enumerate(pattern.get("composition_laws", [])):
+        text_hit = _composition_hits(text, [str(law)]) > 0
+        law_morphisms = _morphisms_for_law(str(law), pattern.get("morphisms", []))
+        mapped_morphisms = [mid for mid in law_morphisms if mid in morphism_map]
+        target_law_hit = _target_composition_law_hit(diagram, str(law), mapped_morphisms)
+        preserved = bool(text_hit or target_law_hit or (law_morphisms and set(law_morphisms) <= set(mapped_morphisms)))
+        composition_checks.append({
+            "source_law": str(law),
+            "law_index": idx,
+            "source_morphisms": law_morphisms,
+            "mapped_morphisms": mapped_morphisms,
+            "text_hit": text_hit,
+            "target_law_hit": target_law_hit,
+            "preserved": preserved,
+        })
+
+    object_rate = _ratio(sum(1 for row in object_checks if row["mapped"]), len(object_checks))
+    morphism_rate = _ratio(sum(1 for row in morphism_checks if row["mapped"]), len(morphism_checks))
+    invariant_rate = _ratio(sum(1 for row in invariant_checks if row["preserved"]), len(invariant_checks))
+    composition_rate = _ratio(sum(1 for row in composition_checks if row["preserved"]), len(composition_checks))
+    negative_hits = _negative_hits(text, extract_structural_signature(diagram.source_text), pattern)
+    severe_negative = _has_severe_negative(negative_hits)
+    passed = (
+        object_rate >= 0.67
+        and morphism_rate >= 0.55
+        and invariant_rate >= 0.5
+        and composition_rate >= 0.5
+        and not severe_negative
+    )
+    return {
+        "formal_kind": "finite_structural_functor_check",
+        "source_pattern_id": pattern.get("pattern_id"),
+        "object_map": object_map,
+        "morphism_map": morphism_map,
+        "object_map_rate": round(object_rate, 4),
+        "morphism_map_rate": round(morphism_rate, 4),
+        "invariant_map_rate": round(invariant_rate, 4),
+        "composition_preservation_rate": round(composition_rate, 4),
+        "negative_control_hits": negative_hits,
+        "severe_negative_control": severe_negative,
+        "pass": passed,
+        "object_checks": object_checks,
+        "morphism_checks": morphism_checks,
+        "invariant_checks": invariant_checks,
+        "composition_checks": composition_checks,
+    }
+
+
+def propose_structural_morphism(query_diagram: str | dict | StructuralSignature | StructuralDiagram, pattern: dict) -> dict:
     signature = query_diagram if isinstance(query_diagram, StructuralSignature) else extract_structural_signature(query_diagram)
+    diagram = extract_structural_diagram(signature)
+    pattern = _pattern_with_endpoint_hints(pattern)
     score = score_pattern_match(signature, pattern)
     text = signature.source_text.lower()
     object_map = {
@@ -327,6 +678,9 @@ def propose_structural_morphism(query_diagram: str | dict | StructuralSignature,
         "source_pattern_name": pattern.get("name", pattern["pattern_id"]),
         "object_map": {k: v for k, v in object_map.items() if v},
         "morphism_map": {k: v for k, v in morphism_map.items() if v},
+        "source_diagram": _pattern_diagram(pattern),
+        "target_diagram": diagram.to_dict(),
+        "functor_check": check_structural_functor(diagram, pattern),
         "preserved_invariants": score.preserved_invariants,
         "broken_or_uncertain_invariants": score.broken_or_uncertain_invariants,
         "negative_control_hits": score.negative_control_hits,
@@ -347,15 +701,29 @@ def score_structural_morphism(candidate: dict) -> dict:
             "reason": "Structural morphism candidate has no score payload.",
         }
     decision = score.get("decision", "repair_under_specified")
+    functor = candidate.get("functor_check") if isinstance(candidate, dict) else {}
+    if (
+        isinstance(functor, dict)
+        and functor
+        and not functor.get("pass")
+        and decision not in {"block_negative_control", "repair_missing_transfer_prediction"}
+    ):
+        decision = "repair_functor_not_preserved"
     return {
         "decision": decision,
         "blocks_policy_update": decision in {
             "block_negative_control",
             "repair_under_specified",
             "repair_missing_transfer_prediction",
+            "repair_functor_not_preserved",
         },
-        "reason": score.get("reason"),
+        "reason": (
+            "Finite functor check did not preserve object, morphism, invariant, or composition structure."
+            if decision == "repair_functor_not_preserved"
+            else score.get("reason")
+        ),
         "score": score,
+        "functor_check": functor if isinstance(functor, dict) else {},
     }
 
 
@@ -374,6 +742,250 @@ def build_structural_morphism_gate_payload(
         "decision_counts": dict(Counter(g["decision"] for g in gates)),
         "blocked_proposal_ids": sorted(g["proposal_id"] for g in gates if g.get("blocks_policy_update")),
         "gates": gates,
+    }
+
+
+def build_structural_transfer_proposal_payload(
+    store: JsonlGraphStore | None,
+    *,
+    problem: str,
+    eval_id: str | None = None,
+    parent_node_id: str | None = None,
+    top_n: int = 2,
+    min_score: float = 0.22,
+) -> dict:
+    """Create proposal payload rows from structural morphism retrieval."""
+
+    applications = search_structural_patterns(store, problem, top_n=top_n, min_score=min_score)
+    proposals = []
+    for app in applications:
+        pattern_node_id = app.get("node_id") or f"struct_{app['pattern_id']}"
+        parent_id = parent_node_id or pattern_node_id
+        candidate_id = stable_id("struct_cand", eval_id, problem, app["pattern_id"])
+        proposal_id = stable_id("prop", eval_id, problem, app["pattern_id"], STRUCTURAL_MORPHISM_KIND)
+        claim = (
+            f"Structural transfer from {app['pattern_name']} should guide this problem while preserving "
+            f"{', '.join(app.get('preserved_invariants', [])[:3]) or 'its finite diagram invariants'}."
+        )
+        candidate = AssumptionNode(
+            id=candidate_id,
+            type=AssumptionType.ALIGNMENT,
+            kind=HypothesisKind.FORMAL_MAPPING,
+            claim=claim,
+            formal_form=app["candidate"],
+            context_conditions=["structural_transfer_hypothesis", problem],
+            predicted_effects=app.get("transfer_predictions", []),
+            risk_predictions=[
+                "may over-transfer if target task lacks mapped objects, morphisms, or composition laws",
+            ],
+            verifiers=["structural_morphism_gate", "structural_context_effect_probe", "candidate_acceptance_gate"],
+            confidence=min(0.82, max(0.35, 0.35 + 0.45 * app.get("score", 0.0))),
+            metaproductivity=0.12,
+            status="candidate",
+            tags=["structural_transfer", "structural_morphism", app["pattern_id"]],
+            source_refs=["reconstruction/md/category_structural_morphism_layer_plan_20260602.md"],
+            payload={"structural_application": app},
+        )
+        manifest = TrialManifest(
+            problem_id=f"structural_transfer::{proposal_id}",
+            action_type="structural_transfer_hypothesis",
+            component="structural_patterns",
+            assumption=claim,
+            why_selected=f"Top structural pattern match {app['pattern_id']} with score={app.get('score')}.",
+            expected_effect="The transferred pattern should improve target reasoning only when the functor check and context-effect probe pass.",
+            assumption_ids=[parent_id, candidate_id],
+            verifier="structural_morphism_gate",
+            verification_plan="Run finite functor check, then controlled structural context-effect validation before graph writeback.",
+            rollback_condition="Reject or keep shadow-only if functor, negative controls, or behavior validation fail.",
+            status=TrialStatus.PENDING,
+            metadata={"eval_id": eval_id, "proposal_id": proposal_id, "source_pattern_id": app["pattern_id"]},
+            trial_id=stable_id("trial", eval_id, proposal_id, "structural_transfer"),
+        )
+        proposals.append({
+            "proposal_id": proposal_id,
+            "proposal_type": "structural_transfer_hypothesis",
+            "parent_node_id": parent_id,
+            "candidate_node": candidate.to_dict(),
+            "edges": [
+                AssumptionEdge(
+                    source=candidate_id,
+                    target=pattern_node_id,
+                    type=EdgeType.IS_ANALOGY_OF,
+                    weight=0.7,
+                    payload={
+                        "source": "structural_transfer_proposal",
+                        "source_pattern_id": app["pattern_id"],
+                        "structural_score": app.get("score"),
+                    },
+                ).to_dict(),
+                AssumptionEdge(
+                    source=candidate_id,
+                    target=parent_id,
+                    type=EdgeType.DERIVED_FROM,
+                    weight=0.5,
+                    payload={"source": "structural_transfer_proposal"},
+                ).to_dict(),
+            ],
+            "manifest": manifest.to_dict(),
+            "priority": app.get("score", 0.0),
+            "rationale": f"Structural morphism candidate from {app['pattern_id']}: {app.get('reason')}",
+        })
+    return {
+        "eval_id": eval_id,
+        "proposal_source": "structural_morphism_retrieval",
+        "problem": problem,
+        "proposal_count": len(proposals),
+        "proposals": proposals,
+        "applications": applications,
+    }
+
+
+def apply_accepted_structural_morphisms(
+    store: JsonlGraphStore,
+    proposal_payload: dict,
+    structural_gate_payload: dict,
+    acceptance_payload: dict | None = None,
+    *,
+    require_acceptance: bool = True,
+    persist: bool = True,
+) -> list[str]:
+    """Write accepted structural morphisms and lineage edges into the graph.
+
+    This deliberately does not bypass acceptance.  By default a candidate must
+    pass both the structural gate and the fresh acceptance gate before it can be
+    added as a graph node.
+    """
+
+    seed_structural_patterns(store, persist=False)
+    gate_by_id = {row.get("proposal_id"): row for row in structural_gate_payload.get("gates", [])}
+    accepted_ids = set((acceptance_payload or {}).get("accepted_proposal_ids", []))
+    acceptance_by_id = {row.get("proposal_id"): row for row in (acceptance_payload or {}).get("summaries", [])}
+    applied: list[str] = []
+    for proposal in proposal_payload.get("proposals", []):
+        proposal_id = proposal.get("proposal_id", "")
+        gate = gate_by_id.get(proposal_id, {})
+        if gate.get("decision") != "allow" or gate.get("blocks_policy_update"):
+            continue
+        if require_acceptance and proposal_id not in accepted_ids:
+            continue
+        node = _structural_candidate_node(proposal)
+        if not node:
+            continue
+        node.status = "active"
+        node.payload.setdefault("structural_morphism_gate", gate)
+        if acceptance_payload:
+            node.payload.setdefault("acceptance_summary", acceptance_by_id.get(proposal_id, {}))
+        store.upsert_node(node)
+        score = gate.get("score", {})
+        evidence = EvidenceRecord(
+            node_id=node.id,
+            source="structural_morphism_gate",
+            outcome="accepted",
+            metric="structural_morphism_score",
+            value=score.get("score"),
+            details={
+                "proposal_id": proposal_id,
+                "gate": gate,
+                "acceptance": acceptance_by_id.get(proposal_id, {}),
+            },
+            evidence_id=stable_id("ev", proposal_id, node.id, "structural_morphism_gate"),
+        )
+        store.add_evidence(evidence)
+        pattern_id = gate.get("source_pattern_id") or (node.formal_form or {}).get("source_pattern_id")
+        pattern_node_id = f"struct_{pattern_id}" if pattern_id else proposal.get("parent_node_id")
+        edge_type = (
+            EdgeType.IS_FORMAL_ISOMORPHISM_OF
+            if (gate.get("functor_check") or {}).get("pass")
+            else EdgeType.IS_ANALOGY_OF
+        )
+        if pattern_node_id:
+            store.add_edge(AssumptionEdge(
+                source=node.id,
+                target=pattern_node_id,
+                type=edge_type,
+                weight=max(0.5, min(1.0, float(score.get("score", 0.5) or 0.5))),
+                evidence=evidence.evidence_id,
+                payload={
+                    "source": "accepted_structural_morphism",
+                    "source_pattern_id": pattern_id,
+                    "functor_check": gate.get("functor_check", {}),
+                },
+            ))
+        parent_id = proposal.get("parent_node_id")
+        if parent_id and parent_id != pattern_node_id:
+            store.add_edge(AssumptionEdge(
+                source=node.id,
+                target=parent_id,
+                type=EdgeType.DERIVED_FROM,
+                weight=0.65,
+                evidence=evidence.evidence_id,
+                payload={"source": "accepted_structural_morphism"},
+            ))
+        if proposal.get("manifest"):
+            manifest = TrialManifest.from_dict(proposal["manifest"])
+            manifest.observe(
+                "Accepted structural morphism was written to the graph lineage.",
+                status=TrialStatus.ACCEPTED,
+            )
+            manifest.metadata["structural_gate"] = gate
+            manifest.metadata["acceptance_summary"] = acceptance_by_id.get(proposal_id, {})
+            store.append_trial(manifest)
+        applied.append(node.id)
+    if applied and persist:
+        store.flush()
+    return applied
+
+
+def build_structural_lineage_payload(
+    store: JsonlGraphStore,
+    *,
+    eval_id: str | None = None,
+) -> dict:
+    structural_nodes = [
+        node
+        for node in store.nodes.values()
+        if isinstance(node.formal_form, dict)
+        and node.formal_form.get("formal_kind") in {STRUCTURAL_PATTERN_KIND, STRUCTURAL_MORPHISM_KIND}
+    ]
+    lineage_edges = [
+        edge
+        for edge in store.edges
+        if _edge_type_value(edge) in {
+            EdgeType.IS_FORMAL_ISOMORPHISM_OF.value,
+            EdgeType.IS_ANALOGY_OF.value,
+            EdgeType.DERIVED_FROM.value,
+        }
+        and (
+            edge.source in {node.id for node in structural_nodes}
+            or edge.target in {node.id for node in structural_nodes}
+        )
+    ]
+    by_pattern = Counter()
+    for node in structural_nodes:
+        formal = node.formal_form or {}
+        if formal.get("formal_kind") == STRUCTURAL_MORPHISM_KIND:
+            by_pattern[formal.get("source_pattern_id", "unknown")] += 1
+    return {
+        "eval_id": eval_id,
+        "eval_kind": "structural_morphism_lineage",
+        "structural_node_count": len(structural_nodes),
+        "structural_morphism_count": sum(
+            1 for node in structural_nodes if (node.formal_form or {}).get("formal_kind") == STRUCTURAL_MORPHISM_KIND
+        ),
+        "lineage_edge_count": len(lineage_edges),
+        "morphism_count_by_source_pattern": dict(by_pattern),
+        "pass": bool(structural_nodes) and bool(lineage_edges),
+        "nodes": [
+            {
+                "id": node.id,
+                "claim": node.claim,
+                "formal_kind": (node.formal_form or {}).get("formal_kind"),
+                "source_pattern_id": (node.formal_form or {}).get("source_pattern_id"),
+                "status": node.status,
+            }
+            for node in sorted(structural_nodes, key=lambda n: n.id)
+        ],
+        "edges": [edge.to_dict() for edge in lineage_edges],
     }
 
 
@@ -432,6 +1044,7 @@ def _proposal_structural_gate(proposal: dict) -> dict:
         "blocks_policy_update": blocks,
         "reason": gate.get("reason"),
         "score": gate.get("score", {}),
+        "functor_check": gate.get("functor_check", {}),
         "preserved_invariants": formal.get("preserved_invariants", []),
         "broken_or_uncertain_invariants": formal.get("broken_or_uncertain_invariants", []),
         "negative_control_hits": formal.get("negative_control_hits", []),
@@ -484,6 +1097,7 @@ def build_structural_extraction_audit_payload(*, eval_id: str | None = None) -> 
     broken_hits = 0
     for case in _default_extraction_audit_cases():
         sig = extract_structural_signature(case["text"])
+        diagram = extract_structural_diagram(sig)
         role_pred = set(sig.role_hits)
         role_expected = set(case.get("expected_roles", []))
         inv_pred = set(sig.invariant_hits)
@@ -505,6 +1119,7 @@ def build_structural_extraction_audit_payload(*, eval_id: str | None = None) -> 
             "predicted_invariants": sorted(inv_pred),
             "expected_broken_invariant": bool(case.get("expected_broken_invariant")),
             "predicted_negation_hits": sig.negation_hits,
+            "predicted_diagram": diagram.to_dict(),
             "passed": role_expected <= role_pred and inv_expected <= inv_pred and broken_ok,
         })
     role_precision = _precision(role_tp, role_fp)
@@ -661,6 +1276,289 @@ def build_structural_behavior_probe_payload(
         "guided_win_rate": win_rate,
         "pass": count >= 4 and guided_mean >= 0.72 and win_rate >= 0.8 and guided_mean > baseline_mean + 0.25,
         "rows": rows,
+    }
+
+
+def build_structural_functor_eval_payload(
+    store: JsonlGraphStore | None = None,
+    *,
+    eval_id: str | None = None,
+) -> dict:
+    positive_rows = []
+    positive_pass = 0
+    for case in _default_positive_pair_cases():
+        apps = search_structural_patterns(store, case["query"], top_n=1, min_score=0.0)
+        top = apps[0] if apps else {}
+        functor = (top.get("candidate") or {}).get("functor_check", {})
+        passed = top.get("pattern_id") == case["expected"] and bool(functor.get("pass"))
+        positive_pass += int(passed)
+        positive_rows.append({
+            **case,
+            "top_pattern_id": top.get("pattern_id"),
+            "functor_pass": bool(functor.get("pass")),
+            "functor_check": functor,
+            "passed": passed,
+        })
+
+    negative_rows = []
+    negative_reject = 0
+    for case in _default_negative_pair_cases():
+        apps = search_structural_patterns(store, case["query"], top_n=1, min_score=0.0)
+        top = apps[0] if apps else {}
+        functor = (top.get("candidate") or {}).get("functor_check", {})
+        rejected = (not apps) or not functor.get("pass") or top.get("decision") == "block_negative_control"
+        negative_reject += int(rejected)
+        negative_rows.append({
+            **case,
+            "top_pattern_id": top.get("pattern_id"),
+            "functor_pass": bool(functor.get("pass")),
+            "top_decision": top.get("decision"),
+            "functor_check": functor,
+            "rejected": rejected,
+        })
+
+    positive_rate = round(_ratio(positive_pass, len(positive_rows)), 4)
+    negative_rate = round(_ratio(negative_reject, len(negative_rows)), 4)
+    return {
+        "eval_id": eval_id,
+        "eval_kind": "finite_structural_functor_eval",
+        "positive_count": len(positive_rows),
+        "negative_count": len(negative_rows),
+        "positive_functor_pass_rate": positive_rate,
+        "negative_functor_rejection_rate": negative_rate,
+        "pass": len(positive_rows) >= 5 and len(negative_rows) >= 3 and positive_rate >= 0.8 and negative_rate >= 0.8,
+        "positive_rows": positive_rows,
+        "negative_rows": negative_rows,
+    }
+
+
+def build_structural_context_effect_payload(
+    store: JsonlGraphStore | None = None,
+    *,
+    eval_id: str | None = None,
+) -> dict:
+    """Controlled offline behavior validation for structural context.
+
+    This is not an LLM benchmark.  It checks that the generated structural
+    context is discriminative: expected-pattern context beats both a generic
+    baseline and a wrong-pattern placebo on the controlled task rubric.
+    """
+
+    rows = []
+    guided_wins = 0
+    placebo_wins = 0
+    for case in _default_behavior_tasks():
+        apps = search_structural_patterns(store, case["query"], top_n=3)
+        guided = apps[0] if apps else {}
+        guided_pattern = _pattern_by_id(guided.get("pattern_id"), store)
+        placebo = next((app for app in apps[1:] if app.get("pattern_id") != case["expected_pattern"]), {})
+        if not placebo:
+            placebo = next(
+                ({
+                    "pattern_id": pattern["pattern_id"],
+                    "pattern_name": pattern.get("name", pattern["pattern_id"]),
+                    "score": 0.0,
+                    "decision": "placebo",
+                    "matched_terms": [],
+                    "preserved_invariants": [],
+                    "broken_or_uncertain_invariants": [],
+                    "negative_control_hits": [],
+                    "transfer_predictions": pattern.get("transfer_predictions", []),
+                }
+                 for pattern in load_structural_patterns(store)
+                 if pattern["pattern_id"] != case["expected_pattern"]),
+                {},
+            )
+        placebo_pattern = _pattern_by_id(placebo.get("pattern_id"), store)
+        baseline_quality = _structural_answer_quality(_generic_structural_baseline(case), case, {})
+        guided_context = format_structural_morphism_applications([guided], max_items=1)
+        placebo_context = format_structural_morphism_applications([placebo], max_items=1)
+        guided_quality = _structural_answer_quality(
+            " ".join([guided_context, _guided_structural_answer(guided, guided_pattern)]),
+            case,
+            guided_pattern,
+        )
+        placebo_quality = _structural_answer_quality(
+            " ".join([placebo_context, _guided_structural_answer(placebo, placebo_pattern)]),
+            case,
+            placebo_pattern,
+        )
+        guided_win = guided_quality["score"] > baseline_quality["score"]
+        placebo_margin_ok = guided_quality["score"] > placebo_quality["score"]
+        guided_wins += int(guided_win)
+        placebo_wins += int(placebo_margin_ok)
+        rows.append({
+            **case,
+            "guided_pattern_id": guided.get("pattern_id"),
+            "placebo_pattern_id": placebo.get("pattern_id"),
+            "baseline_score": baseline_quality["score"],
+            "guided_score": guided_quality["score"],
+            "placebo_score": placebo_quality["score"],
+            "guided_delta": round(guided_quality["score"] - baseline_quality["score"], 4),
+            "placebo_delta": round(guided_quality["score"] - placebo_quality["score"], 4),
+            "guided_beats_baseline": guided_win,
+            "guided_beats_placebo": placebo_margin_ok,
+        })
+    count = len(rows)
+    guided_rate = round(_ratio(guided_wins, count), 4)
+    placebo_rate = round(_ratio(placebo_wins, count), 4)
+    mean_guided_delta = round(sum(row["guided_delta"] for row in rows) / count, 4) if count else 0.0
+    mean_placebo_delta = round(sum(row["placebo_delta"] for row in rows) / count, 4) if count else 0.0
+    return {
+        "eval_id": eval_id,
+        "eval_kind": "structural_context_effect_probe",
+        "task_count": count,
+        "guided_win_rate": guided_rate,
+        "placebo_discrimination_rate": placebo_rate,
+        "mean_guided_delta": mean_guided_delta,
+        "mean_placebo_delta": mean_placebo_delta,
+        "pass": count >= 4 and guided_rate >= 0.8 and placebo_rate >= 0.75 and mean_guided_delta > 0.25,
+        "rows": rows,
+    }
+
+
+def build_structural_writeback_eval_payload(*, eval_id: str | None = None) -> dict:
+    with tempfile.TemporaryDirectory() as td:
+        store = JsonlGraphStore(Path(td) / "graph")
+        seed_structural_patterns(store, persist=False)
+        proposal_payload = build_structural_transfer_proposal_payload(
+            store,
+            problem=(
+                "Keep the verified baseline identity path, add a residual delta correction, "
+                "and recover old behavior through fallback when the delta is zero."
+            ),
+            eval_id=eval_id,
+            top_n=1,
+        )
+        gate_payload = build_structural_morphism_gate_payload(
+            proposal_payload=proposal_payload,
+            eval_id=f"{eval_id}_gate" if eval_id else None,
+        )
+        proposal_id = proposal_payload["proposals"][0]["proposal_id"] if proposal_payload["proposals"] else ""
+        acceptance_payload = {
+            "eval_id": f"{eval_id}_accept" if eval_id else None,
+            "accepted_proposal_ids": [proposal_id],
+            "summaries": [{
+                "proposal_id": proposal_id,
+                "decision": "accept",
+                "trigger_utility": 1.0,
+                "trigger_lcb90": 0.9,
+                "control_loss_ucb90": 0.0,
+                "rationale": "synthetic positive-control acceptance for structural writeback validation",
+            }],
+        }
+        applied = apply_accepted_structural_morphisms(
+            store,
+            proposal_payload,
+            gate_payload,
+            acceptance_payload,
+            persist=False,
+        )
+        lineage = build_structural_lineage_payload(store, eval_id=eval_id)
+        reloaded = JsonlGraphStore(Path(td) / "graph")
+        store.flush()
+        reloaded.load()
+        persisted = all(node_id in reloaded.nodes for node_id in applied)
+        edge_types = {_edge_type_value(edge) for edge in store.edges if edge.source in set(applied)}
+    return {
+        "eval_id": eval_id,
+        "eval_kind": "structural_writeback_eval",
+        "proposal_count": proposal_payload.get("proposal_count", 0),
+        "gate_decision_counts": gate_payload.get("decision_counts", {}),
+        "applied_node_ids": applied,
+        "lineage": lineage,
+        "persisted": persisted,
+        "edge_types_from_applied": sorted(edge_types),
+        "pass": (
+            len(applied) == 1
+            and gate_payload.get("decision_counts", {}).get("allow", 0) == 1
+            and lineage.get("pass")
+            and persisted
+            and EdgeType.IS_FORMAL_ISOMORPHISM_OF.value in edge_types
+        ),
+    }
+
+
+def build_structural_recursive_runner_eval_payload(*, eval_id: str | None = None) -> dict:
+    from .recursive_runner import build_recursive_assumption_run
+
+    with tempfile.TemporaryDirectory() as td:
+        graph_dir = Path(td) / "graph"
+        store = JsonlGraphStore(graph_dir)
+        seed_structural_patterns(store, persist=True)
+        problem = (
+            "Transfer the residual-correction idea to a risky evaluator rewrite: preserve the "
+            "baseline identity path, apply a local delta, and keep fallback recovery."
+        )
+        proposal_payload = build_structural_transfer_proposal_payload(
+            store,
+            problem=problem,
+            eval_id=eval_id,
+            top_n=1,
+        )
+        gate_payload = build_structural_morphism_gate_payload(
+            proposal_payload=proposal_payload,
+            eval_id=f"{eval_id}_gate" if eval_id else None,
+        )
+        evolution_payload = {
+            "eval_id": eval_id,
+            "proposals": proposal_payload,
+            "structural_morphism_gate": gate_payload,
+        }
+        recursive = build_recursive_assumption_run(
+            graph_dir=graph_dir,
+            problem=problem,
+            goal="Validate the structural transfer hypothesis recursively before graph mutation.",
+            eval_id=eval_id or "structural_recursive_eval",
+            evolution_payload=evolution_payload,
+            top_k=3,
+            max_children=2,
+            max_depth=2,
+            writeback=False,
+        )
+    structural_children = [
+        frame
+        for frame in recursive.get("frames", [])
+        if frame.get("verifier") == "structural_morphism_gate"
+        and frame.get("frame_type") == "verification_subproblem"
+    ]
+    return {
+        "eval_id": eval_id,
+        "eval_kind": "structural_recursive_runner_eval",
+        "frame_counts": recursive.get("frame_counts", {}),
+        "status_counts": recursive.get("status_counts", {}),
+        "structural_child_count": len(structural_children),
+        "structural_child_next_actions": [frame.get("next_action") for frame in structural_children],
+        "pass": bool(structural_children) and any(
+            action in {"run_structural_context_effect_validation", "return_structural_gate_to_parent"}
+            for action in [frame.get("next_action") for frame in structural_children]
+        ),
+        "recursive_payload": recursive,
+    }
+
+
+def build_structural_morphism_performance_payload(
+    store: JsonlGraphStore | None = None,
+    *,
+    eval_id: str | None = None,
+) -> dict:
+    components = {
+        "diagram_extraction": build_structural_extraction_audit_payload(eval_id=eval_id),
+        "pair_suite": build_structural_pair_eval_payload(store, eval_id=eval_id),
+        "nonlexical_retrieval": build_nonlexical_structural_retrieval_probe_payload(store, eval_id=eval_id),
+        "functor_eval": build_structural_functor_eval_payload(store, eval_id=eval_id),
+        "context_effect": build_structural_context_effect_payload(store, eval_id=eval_id),
+        "behavior_probe": build_structural_behavior_probe_payload(store, eval_id=eval_id),
+        "writeback_eval": build_structural_writeback_eval_payload(eval_id=eval_id),
+        "recursive_runner_eval": build_structural_recursive_runner_eval_payload(eval_id=eval_id),
+    }
+    return {
+        "eval_id": eval_id,
+        "eval_kind": "structural_morphism_performance_validation",
+        "component_count": len(components),
+        "pass": all(component.get("pass") for component in components.values()),
+        "component_pass": {name: bool(component.get("pass")) for name, component in components.items()},
+        "components": components,
     }
 
 
@@ -829,15 +1727,16 @@ DEFAULT_STRUCTURAL_PATTERNS = [
 
 def _pattern_node(spec: dict) -> AssumptionNode:
     pattern_id = spec["pattern_id"]
+    enriched = _pattern_with_endpoint_hints(spec)
     return AssumptionNode(
         id=f"struct_{pattern_id}",
         type=AssumptionType.ALIGNMENT,
         kind=HypothesisKind.FORMAL_MAPPING,
-        claim=spec["claim"],
-        formal_form={"formal_kind": STRUCTURAL_PATTERN_KIND, **spec},
+        claim=enriched["claim"],
+        formal_form={"formal_kind": STRUCTURAL_PATTERN_KIND, **enriched},
         tags=["structural_pattern", "structural_morphism", pattern_id, *spec.get("trigger_terms", [])[:6]],
         context_conditions=["structural transfer", "cross-domain analogy", "recursive assumption validation"],
-        predicted_effects=spec.get("transfer_predictions", []),
+        predicted_effects=enriched.get("transfer_predictions", []),
         risk_predictions=[
             "structural analogy can overfit if broken invariants or negative controls are ignored",
         ],
@@ -854,10 +1753,176 @@ def _node_to_pattern(node: AssumptionNode) -> dict | None:
         return None
     pattern = dict(formal)
     pattern["node_id"] = node.id
-    return pattern
+    return _pattern_with_endpoint_hints(pattern)
+
+
+def _pattern_with_endpoint_hints(pattern: dict) -> dict:
+    enriched = dict(pattern)
+    morphisms = []
+    for row in pattern.get("morphisms", []):
+        m = dict(row)
+        src, dst = _morphism_endpoints(m)
+        if src:
+            m.setdefault("source", src)
+        if dst:
+            m.setdefault("target", dst)
+        morphisms.append(m)
+    enriched["morphisms"] = morphisms
+    return enriched
+
+
+def _morphism_endpoints(morphism: dict) -> tuple[str | None, str | None]:
+    if morphism.get("source") or morphism.get("target"):
+        return morphism.get("source"), morphism.get("target")
+    return MORPHISM_ENDPOINT_HINTS.get(morphism.get("id"), (None, None))
+
+
+def _as_structural_diagram(source: str | dict | StructuralSignature | StructuralDiagram) -> StructuralDiagram:
+    if isinstance(source, StructuralDiagram):
+        return source
+    if isinstance(source, dict) and source.get("formal_kind") == "structural_diagram":
+        return StructuralDiagram(
+            source_text=source.get("source_text", ""),
+            objects=list(source.get("objects", [])),
+            morphisms=list(source.get("morphisms", [])),
+            composition_laws=list(source.get("composition_laws", [])),
+            invariants=list(source.get("invariants", [])),
+            negation_hits=list(source.get("negation_hits", [])),
+            pattern_hints=list(source.get("pattern_hints", [])),
+        )
+    return extract_structural_diagram(source)
+
+
+def _pattern_diagram(pattern: dict) -> dict:
+    pattern = _pattern_with_endpoint_hints(pattern)
+    return {
+        "formal_kind": "source_structural_diagram",
+        "pattern_id": pattern.get("pattern_id"),
+        "name": pattern.get("name"),
+        "objects": pattern.get("objects", []),
+        "morphisms": pattern.get("morphisms", []),
+        "composition_laws": pattern.get("composition_laws", []),
+        "invariants": pattern.get("invariants", []),
+        "negative_controls": pattern.get("negative_controls", []),
+    }
+
+
+def _infer_composition_laws(
+    roles: set[str],
+    morphism_ids: set[str],
+    signature: StructuralSignature,
+) -> list[dict]:
+    laws = []
+    if {"baseline_path", "delta_update"} <= roles and {"identity_path", "learn_delta"} & morphism_ids:
+        laws.append({
+            "id": "compose_identity_plus_delta",
+            "law": "baseline path composed with local delta yields updated output while zero delta recovers baseline",
+            "morphisms": ["identity_path", "learn_delta", "compose_add"],
+        })
+    if "control_row" in roles:
+        laws.append({
+            "id": "compose_intervention_control_compare",
+            "law": "single intervention and matched control compose into causal outcome comparison",
+            "morphisms": ["change_one_factor", "compare_outcomes"],
+        })
+    if {"baseline_path", "module_boundary"} <= roles:
+        laws.append({
+            "id": "compose_preserve_swap_rollback",
+            "law": "preserve pipeline, swap one module, and rollback compose into safe incremental replacement",
+            "morphisms": ["preserve_pipeline", "swap_one_module", "rollback_if_failed"],
+        })
+    if {"perturbation", "opposing_response"} <= roles:
+        laws.append({
+            "id": "compose_perturb_induce_oppose",
+            "law": "perturbation induces response and response opposes the perturbation",
+            "morphisms": ["perturb_state", "induce_response", "oppose_change"],
+        })
+    if {"stable_signal", "nuisance_noise"} <= roles:
+        laws.append({
+            "id": "compose_suppress_noise_recover_signal",
+            "law": "suppress nuisance variation while recovering predictable stable signal",
+            "morphisms": ["suppress_noise", "recover_signal"],
+        })
+    if signature.negation_hits:
+        laws.append({
+            "id": "broken_explicit_negation",
+            "law": "explicit negation breaks at least one claimed structural invariant",
+            "morphisms": [],
+            "broken": True,
+            "negation_hits": signature.negation_hits,
+        })
+    return laws
+
+
+def _morphisms_for_law(law: str, morphisms: list[dict]) -> list[str]:
+    low = law.lower()
+    out = []
+    for morphism in morphisms:
+        mid = str(morphism.get("id", ""))
+        if mid and mid.lower() in low:
+            out.append(mid)
+            continue
+        if _term_hits(low, morphism.get("terms", [])):
+            out.append(mid)
+    if out:
+        return sorted(set(out))
+    # Many seed laws are prose.  If no morphism name is mentioned, require the
+    # whole pattern's morphism set as the finite composition support.
+    return [str(m.get("id")) for m in morphisms if m.get("id")]
+
+
+def _target_composition_law_hit(diagram: StructuralDiagram, source_law: str, mapped_morphisms: list[str]) -> bool:
+    source_tokens = set(tokenize(source_law))
+    for law in diagram.composition_laws:
+        if law.get("broken"):
+            continue
+        if set(law.get("morphisms", [])) & set(mapped_morphisms):
+            return True
+        if source_tokens & set(tokenize(str(law.get("law", "")))):
+            return True
+    return False
+
+
+def _structural_candidate_node(proposal: dict) -> AssumptionNode | None:
+    candidate = proposal.get("candidate_node") or {}
+    if not candidate:
+        return None
+    try:
+        if {"type", "claim"}.issubset(candidate):
+            return AssumptionNode.from_dict(candidate)
+    except Exception:
+        pass
+    formal = candidate.get("formal_form") or {}
+    if not isinstance(formal, dict) or formal.get("formal_kind") != STRUCTURAL_MORPHISM_KIND:
+        return None
+    node_id = candidate.get("id") or stable_id("struct_cand", proposal.get("proposal_id"), formal.get("source_pattern_id"))
+    return AssumptionNode(
+        id=node_id,
+        type=AssumptionType.ALIGNMENT,
+        kind=HypothesisKind.FORMAL_MAPPING,
+        claim=candidate.get("claim") or f"Accepted structural morphism from {formal.get('source_pattern_id')}",
+        formal_form=formal,
+        context_conditions=candidate.get("context_conditions", ["structural_transfer_hypothesis"]),
+        predicted_effects=formal.get("transfer_predictions", []),
+        risk_predictions=["may over-transfer if target-side composition is not preserved"],
+        verifiers=["structural_morphism_gate", "candidate_acceptance_gate"],
+        confidence=float(candidate.get("confidence", 0.62) or 0.62),
+        metaproductivity=float(candidate.get("metaproductivity", 0.1) or 0.1),
+        status=candidate.get("status", "candidate"),
+        tags=["structural_transfer", "structural_morphism", str(formal.get("source_pattern_id", ""))],
+        payload=candidate.get("payload", {}),
+    )
+
+
+def _edge_type_value(edge: AssumptionEdge) -> str:
+    return edge.type.value if isinstance(edge.type, EdgeType) else str(edge.type)
 
 
 def _source_text(source: str | dict) -> str:
+    if isinstance(source, StructuralDiagram):
+        return source.source_text
+    if isinstance(source, StructuralSignature):
+        return source.source_text
     if isinstance(source, str):
         return source
     if not isinstance(source, dict):
@@ -1187,6 +2252,11 @@ def main() -> None:
     ap.add_argument("--pair-eval", action="store_true")
     ap.add_argument("--retrieval-probe", action="store_true")
     ap.add_argument("--behavior-probe", action="store_true")
+    ap.add_argument("--functor-eval", action="store_true")
+    ap.add_argument("--context-effect", action="store_true")
+    ap.add_argument("--writeback-eval", action="store_true")
+    ap.add_argument("--recursive-runner-eval", action="store_true")
+    ap.add_argument("--performance-validation", action="store_true")
     ap.add_argument("--eval-id", default=None)
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
@@ -1209,6 +2279,16 @@ def main() -> None:
         payload["retrieval_probe"] = build_nonlexical_structural_retrieval_probe_payload(store, eval_id=args.eval_id)
     if args.behavior_probe:
         payload["behavior_probe"] = build_structural_behavior_probe_payload(store, eval_id=args.eval_id)
+    if args.functor_eval:
+        payload["functor_eval"] = build_structural_functor_eval_payload(store, eval_id=args.eval_id)
+    if args.context_effect:
+        payload["context_effect"] = build_structural_context_effect_payload(store, eval_id=args.eval_id)
+    if args.writeback_eval:
+        payload["writeback_eval"] = build_structural_writeback_eval_payload(eval_id=args.eval_id)
+    if args.recursive_runner_eval:
+        payload["recursive_runner_eval"] = build_structural_recursive_runner_eval_payload(eval_id=args.eval_id)
+    if args.performance_validation:
+        payload["performance_validation"] = build_structural_morphism_performance_payload(store, eval_id=args.eval_id)
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.summary_out:
         out = _resolve(root, args.summary_out)

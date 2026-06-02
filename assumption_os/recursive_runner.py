@@ -237,6 +237,7 @@ class _EvolutionIndexes:
     policy_by_id: dict
     regression_by_id: dict
     formal_gate_by_id: dict
+    structural_gate_by_id: dict
     acceptance_by_id: dict
 
     def __init__(self, payload: dict, *, acceptance_payload: dict | None = None):
@@ -263,6 +264,10 @@ class _EvolutionIndexes:
         self.formal_gate_by_id = {
             row.get("proposal_id"): row
             for row in payload.get("formal_mapping_gate", {}).get("gates", [])
+        }
+        self.structural_gate_by_id = {
+            row.get("proposal_id"): row
+            for row in payload.get("structural_morphism_gate", {}).get("gates", [])
         }
         source_acceptance = (
             acceptance_payload
@@ -346,8 +351,9 @@ def _candidate_frame(
     policy = indexes.policy_by_id.get(proposal_id, {})
     regression = indexes.regression_by_id.get(proposal_id, {})
     formal_gate = indexes.formal_gate_by_id.get(proposal_id, {})
+    structural_gate = indexes.structural_gate_by_id.get(proposal_id, {})
     acceptance = indexes.acceptance_by_id.get(proposal_id, {})
-    action = _recommended_action(policy, bayes, falsification, preflight, acceptance)
+    action = _recommended_action(policy, bayes, falsification, preflight, acceptance, structural_gate)
     status = _status_for_action(action)
     hypothesis = candidate.get("claim") or (proposal.get("manifest") or {}).get("assumption", "")
     if not hypothesis:
@@ -383,6 +389,7 @@ def _candidate_frame(
             "falsification": falsification,
             "bayesian_policy": bayes,
             "formal_mapping_gate": formal_gate,
+            "structural_morphism_gate": structural_gate,
             "regression_prediction": regression,
             "acceptance": acceptance,
         },
@@ -414,6 +421,7 @@ def _candidate_frame(
             policy=policy,
             regression=regression,
             formal_gate=formal_gate,
+            structural_gate=structural_gate,
             acceptance=acceptance,
         ),
         next_action=action,
@@ -445,6 +453,7 @@ def _child_frame_for_candidate(
     falsification = indexes.falsification_by_id.get(proposal_id, {})
     bayes = indexes.bayes_by_id.get(proposal_id, {})
     acceptance = indexes.acceptance_by_id.get(proposal_id, {})
+    structural_gate = indexes.structural_gate_by_id.get(proposal_id, {})
 
     if acceptance:
         return _verification_child(
@@ -454,6 +463,13 @@ def _child_frame_for_candidate(
             falsification=falsification,
             bayes=bayes,
             acceptance=acceptance,
+            eval_id=eval_id,
+        )
+    if proposal.get("proposal_type") == "structural_transfer_hypothesis" or structural_gate:
+        return _structural_transfer_child(
+            candidate_frame=candidate_frame,
+            proposal_id=proposal_id,
+            structural_gate=structural_gate,
             eval_id=eval_id,
         )
     if action in {"run_fresh_ablation", "run_ablation", "run_fresh_ablation_before_promotion"}:
@@ -490,6 +506,80 @@ def _child_frame_for_candidate(
             eval_id=eval_id,
         )
     return None
+
+
+def _structural_transfer_child(
+    *,
+    candidate_frame: RecursiveFrame,
+    proposal_id: str,
+    structural_gate: dict,
+    eval_id: str,
+) -> RecursiveFrame:
+    decision = structural_gate.get("decision")
+    blocks = bool(structural_gate.get("blocks_policy_update"))
+    if not structural_gate:
+        status = RecursiveFrameStatus.READY_TO_ACT
+        next_action = "run_structural_morphism_gate"
+        expected = "Finite structural morphism gate returns allow, shadow, or repair/block."
+    elif blocks:
+        status = RecursiveFrameStatus.BLOCKED
+        next_action = "repair_structural_morphism_before_policy_update"
+        expected = "Object, morphism, invariant, or composition gaps are repaired before parent promotion."
+    elif decision == "allow":
+        status = RecursiveFrameStatus.READY_TO_ACT
+        next_action = "run_structural_context_effect_validation"
+        expected = "Controlled context-effect validation shows the mapped structure helps the target task."
+    else:
+        status = RecursiveFrameStatus.OPEN
+        next_action = "strengthen_structural_transfer_evidence"
+        expected = "Additional diagram evidence moves the candidate from shadow-only to allow or reject."
+
+    hypothesis = (
+        "A source structural diagram can transfer to the target only if its objects, morphisms, "
+        "composition laws, invariants, and negative controls are preserved."
+    )
+    manifest = _child_manifest(
+        eval_id=eval_id,
+        proposal_id=proposal_id,
+        child_kind=RecursiveFrameType.VERIFICATION_SUBPROBLEM,
+        parent=candidate_frame,
+        hypothesis=hypothesis,
+        expected_effect="Structural validation should decide whether the parent hypothesis can proceed to acceptance.",
+        verifier="structural_morphism_gate",
+        action_type="recursive_structural_transfer_subproblem",
+    )
+    return RecursiveFrame(
+        frame_id=stable_id("rframe", eval_id, proposal_id, "structural_transfer"),
+        frame_type=RecursiveFrameType.VERIFICATION_SUBPROBLEM,
+        status=status,
+        depth=candidate_frame.depth + 1,
+        parent_frame_id=candidate_frame.frame_id,
+        problem_id=f"structural_verify::{proposal_id}",
+        goal="Validate the structural transfer before the parent candidate can affect graph policy.",
+        hypothesis=hypothesis,
+        expected_observation=expected,
+        verifier="structural_morphism_gate",
+        assumption_ids=candidate_frame.assumption_ids,
+        source={
+            "proposal_id": proposal_id,
+            "structural_gate": structural_gate,
+            "source_pattern_id": structural_gate.get("source_pattern_id"),
+        },
+        argument={
+            "support": _structural_gate_support(structural_gate),
+            "objections": _structural_gate_objections(structural_gate),
+            "falsification_tests": [
+                "finite_functor_object_morphism_composition_check",
+                "negative_control_disconfirmation",
+                "controlled_structural_context_effect_probe",
+            ],
+        },
+        next_action=next_action,
+        residual_type=ResidualType.ASSUMPTION_DEFECT.value if blocks else None,
+        return_update=_structural_return_update(candidate_frame.frame_id, decision, blocks),
+        priority=candidate_frame.priority,
+        manifest=manifest.to_dict(),
+    )
 
 
 def _verification_child(
@@ -599,6 +689,68 @@ def _verification_expected_observation(decision: str | None) -> str:
     if decision == "insufficient_judgments":
         return "More judgments are needed before the parent can be updated."
     return "Candidate wins on trigger rows and does not add outside-control harm."
+
+
+def _structural_gate_support(structural_gate: dict) -> list[str]:
+    if not structural_gate:
+        return ["structural gate has not run yet"]
+    support = [f"structural_gate_decision={structural_gate.get('decision')}"]
+    score = structural_gate.get("score") or {}
+    if score.get("score") is not None:
+        support.append(f"structural_score={score.get('score')}")
+    functor = structural_gate.get("functor_check") or {}
+    if functor:
+        support.extend([
+            f"object_map_rate={functor.get('object_map_rate')}",
+            f"morphism_map_rate={functor.get('morphism_map_rate')}",
+            f"composition_preservation_rate={functor.get('composition_preservation_rate')}",
+            f"functor_pass={functor.get('pass')}",
+        ])
+    if structural_gate.get("preserved_invariants"):
+        support.append("preserved_invariants=" + ",".join(structural_gate.get("preserved_invariants", [])[:4]))
+    return [x for x in support if x]
+
+
+def _structural_gate_objections(structural_gate: dict) -> list[str]:
+    if not structural_gate:
+        return ["structural morphism is not yet gated"]
+    objections = []
+    if structural_gate.get("blocks_policy_update"):
+        objections.append(f"structural gate blocks update: {structural_gate.get('reason')}")
+    functor = structural_gate.get("functor_check") or {}
+    if functor and not functor.get("pass"):
+        objections.append("finite functor check did not preserve the required diagram")
+    if structural_gate.get("negative_control_hits"):
+        objections.append("negative_control_hits=" + ",".join(structural_gate.get("negative_control_hits", [])[:4]))
+    if structural_gate.get("broken_or_uncertain_invariants"):
+        objections.append("broken_or_uncertain=" + ",".join(structural_gate.get("broken_or_uncertain_invariants", [])[:4]))
+    return objections
+
+
+def _structural_return_update(parent_frame_id: str, decision: str | None, blocks: bool) -> dict:
+    if blocks:
+        return {
+            "parent_frame_id": parent_frame_id,
+            "outcome": "structural_gate_blocked",
+            "parent_next_action": "repair_structural_morphism_before_policy_update",
+            "on_success": "rerun structural gate after repairing object, morphism, invariant, or composition gaps",
+            "on_failure": "reject or keep the parent hypothesis shadow-only",
+        }
+    if decision == "allow":
+        return {
+            "parent_frame_id": parent_frame_id,
+            "outcome": "structural_gate_allowed",
+            "parent_next_action": "run_acceptance_or_context_effect_validation",
+            "on_success": "parent may proceed to controlled context-effect validation and fresh acceptance",
+            "on_failure": "parent remains structural-shadow-only",
+        }
+    return {
+        "parent_frame_id": parent_frame_id,
+        "outcome": "structural_gate_pending",
+        "parent_next_action": "run_structural_morphism_gate",
+        "on_success": "parent receives allow/block/shadow evidence",
+        "on_failure": "parent remains unresolved until structural evidence exists",
+    }
 
 
 def _acceptance_support(acceptance: dict) -> list[str]:
@@ -884,7 +1036,9 @@ def _recommended_action(
     falsification: dict,
     preflight: dict,
     acceptance: dict,
+    structural_gate: dict | None = None,
 ) -> str:
+    structural_gate = structural_gate or {}
     decision = acceptance.get("decision")
     if decision == "accept":
         return "apply_accepted_candidate_if_requested"
@@ -904,6 +1058,12 @@ def _recommended_action(
         return bayes["recommended_action"]
     if falsification.get("next_action"):
         return falsification["next_action"]
+    if structural_gate.get("blocks_policy_update"):
+        return "repair_structural_morphism_before_policy_update"
+    if structural_gate.get("decision") == "allow":
+        return "run_structural_context_effect_validation"
+    if structural_gate.get("decision") and structural_gate.get("decision") != "not_applicable":
+        return "strengthen_structural_transfer_evidence"
     readiness = preflight.get("readiness")
     if readiness == "ready_for_fresh_ablation":
         return "run_fresh_ablation"
@@ -926,6 +1086,8 @@ def _status_for_action(action: str) -> RecursiveFrameStatus:
         "reject_or_narrow_scope",
         "reject_or_revise_candidate",
         "inspect_acceptance_result",
+        "run_structural_morphism_gate",
+        "run_structural_context_effect_validation",
     }:
         return RecursiveFrameStatus.READY_TO_ACT
     if action in {
@@ -940,6 +1102,8 @@ def _status_for_action(action: str) -> RecursiveFrameStatus:
         "repair_retrieval",
         "narrow_scope_before_ablation",
         "repair_retrieval_before_ablation",
+        "repair_structural_morphism_before_policy_update",
+        "strengthen_structural_transfer_evidence",
     }:
         return RecursiveFrameStatus.OPEN
     if action in {
@@ -969,6 +1133,10 @@ def _candidate_goal(action: str) -> str:
         "apply_accepted_candidate_if_requested": "Apply this accepted candidate through the gated graph mutation path.",
         "reject_or_narrow_scope": "Reject this harmful candidate or create a narrower scope-repair child.",
         "reject_or_revise_candidate": "Reject this weak candidate or create a stronger revision child.",
+        "run_structural_morphism_gate": "Check whether this structural transfer preserves its source diagram.",
+        "run_structural_context_effect_validation": "Validate that structural context improves the target task before acceptance.",
+        "repair_structural_morphism_before_policy_update": "Repair the structural transfer before it can affect graph policy.",
+        "strengthen_structural_transfer_evidence": "Collect stronger diagram evidence for this structural transfer.",
         "wait_for_parent_preflight": "Wait for preflight readiness before judging this candidate.",
         "record_manifest_only_no_graph_policy_change": "Record the lifecycle decision without mutating graph policy.",
     }
@@ -1007,6 +1175,7 @@ def _argument_map(
     policy: dict,
     regression: dict,
     formal_gate: dict,
+    structural_gate: dict,
     acceptance: dict,
 ) -> dict:
     support = []
@@ -1025,6 +1194,16 @@ def _argument_map(
             objections.append(f"formal_mapping_gate blocks update: {decision}")
         else:
             support.append(f"formal_mapping_gate={decision}")
+    if structural_gate:
+        decision = structural_gate.get("decision")
+        if structural_gate.get("blocks_policy_update"):
+            objections.append(f"structural_morphism_gate blocks update: {decision}")
+        else:
+            support.append(f"structural_morphism_gate={decision}")
+        functor = structural_gate.get("functor_check") or {}
+        if functor:
+            tests.append("finite_structural_functor_check")
+            support.append(f"structural_functor_pass={functor.get('pass')}")
     if regression:
         risk = regression.get("risk")
         if risk in {"medium", "high"}:
@@ -1054,6 +1233,8 @@ def _argument_map(
 
 
 def _residual_type_for_action(action: str) -> str | None:
+    if "structural" in action:
+        return ResidualType.ASSUMPTION_DEFECT.value
     if "retrieval" in action:
         return ResidualType.MEMORY_DEFECT.value
     if "scope" in action or "formal" in action:

@@ -93,12 +93,22 @@ from assumption_os.trace_dataset import build_trace_dataset_collection_payload, 
 from assumption_os.trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
 from assumption_os.surface_hypotheses import build_surface_hypothesis_payload
 from assumption_os.structural_patterns import (
+    apply_accepted_structural_morphisms,
+    build_structural_context_effect_payload,
     build_nonlexical_structural_retrieval_probe_payload,
     build_structural_behavior_probe_payload,
     build_structural_extraction_audit_payload,
+    build_structural_functor_eval_payload,
+    build_structural_lineage_payload,
     build_structural_morphism_gate_payload,
+    build_structural_morphism_performance_payload,
     build_structural_pair_eval_payload,
+    build_structural_transfer_proposal_payload,
+    build_structural_writeback_eval_payload,
+    check_structural_functor,
+    extract_structural_diagram,
     search_structural_patterns,
+    seed_structural_patterns,
 )
 from assumption_os.verifier_stack import build_verifier_stack_payload
 from assumption_os.world_model import build_world_model_payload, train_world_model_calibration
@@ -3947,6 +3957,8 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertTrue(build_structural_pair_eval_payload(eval_id="unit_struct_pairs")["pass"])
         self.assertTrue(build_nonlexical_structural_retrieval_probe_payload(eval_id="unit_struct_retrieval")["pass"])
         self.assertTrue(build_structural_behavior_probe_payload(eval_id="unit_struct_behavior")["pass"])
+        self.assertTrue(build_structural_functor_eval_payload(eval_id="unit_struct_functor")["pass"])
+        self.assertTrue(build_structural_context_effect_payload(eval_id="unit_struct_context")["pass"])
 
         good = search_structural_patterns(
             None,
@@ -3971,6 +3983,7 @@ class AssumptionOSTest(unittest.TestCase):
         )
         self.assertEqual(good_gate["gates"][0]["decision"], "allow")
         self.assertFalse(good_gate["gates"][0]["blocks_policy_update"])
+        self.assertTrue(good_gate["gates"][0]["functor_check"]["pass"])
 
         bad = search_structural_patterns(
             None,
@@ -4005,6 +4018,87 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(verifier["verdict_counts"], {"blocked_structural_morphism_gate": 1})
         stages = verifier["summaries"][0]["stages"]
         self.assertIn("structural_morphism_gate", [stage["name"] for stage in stages])
+
+    def test_structural_morphism_diagram_functor_writeback_and_recursive_child(self):
+        diagram = extract_structural_diagram(
+            "Preserve the verified baseline identity path, learn a residual delta correction, "
+            "compose the local patch, and recover old behavior through fallback."
+        )
+        roles = {row["role"] for row in diagram.objects}
+        morphisms = {row["id"] for row in diagram.morphisms}
+        self.assertIn("baseline_path", roles)
+        self.assertIn("delta_update", roles)
+        self.assertIn("compose_add", morphisms)
+        self.assertGreaterEqual(len(diagram.composition_laws), 1)
+
+        residual = search_structural_patterns(None, diagram, top_n=1)[0]
+        functor = check_structural_functor(diagram, residual["candidate"]["source_diagram"])
+        self.assertTrue(functor["pass"])
+        self.assertGreaterEqual(functor["composition_preservation_rate"], 0.5)
+
+        with tempfile.TemporaryDirectory() as td:
+            graph_dir = Path(td) / "graph"
+            store = JsonlGraphStore(graph_dir)
+            seed_structural_patterns(store, persist=True)
+            problem = (
+                "Keep the verified baseline identity path, add a residual delta correction, "
+                "and recover old behavior through fallback when the delta is zero."
+            )
+            proposal_payload = build_structural_transfer_proposal_payload(
+                store,
+                problem=problem,
+                eval_id="unit_struct_prop",
+                top_n=1,
+            )
+            gate = build_structural_morphism_gate_payload(
+                proposal_payload=proposal_payload,
+                eval_id="unit_struct_gate",
+            )
+            proposal_id = proposal_payload["proposals"][0]["proposal_id"]
+            acceptance = {
+                "eval_id": "unit_struct_accept",
+                "accepted_proposal_ids": [proposal_id],
+                "summaries": [{"proposal_id": proposal_id, "decision": "accept"}],
+            }
+            applied = apply_accepted_structural_morphisms(
+                store,
+                proposal_payload,
+                gate,
+                acceptance,
+                persist=False,
+            )
+            self.assertEqual(len(applied), 1)
+            lineage = build_structural_lineage_payload(store, eval_id="unit_struct_lineage")
+            self.assertTrue(lineage["pass"])
+            self.assertGreaterEqual(lineage["structural_morphism_count"], 1)
+
+            recursive = build_recursive_assumption_run(
+                graph_dir=graph_dir,
+                problem=problem,
+                goal="Validate the structural transfer hypothesis recursively before graph mutation.",
+                eval_id="unit_struct_recursive",
+                evolution_payload={
+                    "eval_id": "unit_struct_recursive_source",
+                    "proposals": proposal_payload,
+                    "structural_morphism_gate": gate,
+                },
+                top_k=3,
+                max_children=2,
+                max_depth=2,
+            )
+            structural_children = [
+                frame for frame in recursive["frames"]
+                if frame["verifier"] == "structural_morphism_gate"
+                and frame["frame_type"] == RecursiveFrameType.VERIFICATION_SUBPROBLEM.value
+            ]
+            self.assertEqual(len(structural_children), 1)
+            self.assertEqual(structural_children[0]["next_action"], "run_structural_context_effect_validation")
+
+    def test_structural_morphism_performance_validation_passes(self):
+        self.assertTrue(build_structural_writeback_eval_payload(eval_id="unit_struct_writeback")["pass"])
+        perf = build_structural_morphism_performance_payload(eval_id="unit_struct_perf")
+        self.assertTrue(perf["pass"], perf["component_pass"])
+        self.assertTrue(all(perf["component_pass"].values()))
 
     def test_retrieval_injects_structural_morphism_shadow_context(self):
         with tempfile.TemporaryDirectory() as td:

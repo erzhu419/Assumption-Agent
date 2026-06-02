@@ -251,6 +251,7 @@ def _structural_stage(structural: dict) -> VerifierStage:
             "blocks_policy_update": blocks,
             "reason": structural.get("reason"),
             "source_pattern_id": structural.get("source_pattern_id"),
+            "functor_check": structural.get("functor_check", {}),
             "preserved_invariants": structural.get("preserved_invariants", []),
             "broken_or_uncertain_invariants": structural.get("broken_or_uncertain_invariants", []),
             "negative_control_hits": structural.get("negative_control_hits", []),
