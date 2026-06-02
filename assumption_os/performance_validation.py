@@ -635,6 +635,11 @@ def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
         "real_artifact_readback_path": _display_path(root, Path(real_artifact_payload.get("_path"))) if real_artifact_payload else None,
         "real_artifact_readback_judgment_set_count": (real_artifact_payload.get("artifact_evaluation") or {}).get("judgment_set_count", 0),
         "real_artifact_readback_trigger_judgment_count": (real_artifact_payload.get("artifact_evaluation") or {}).get("trigger_judgment_count", 0),
+        "real_artifact_readback_control_judgment_count": (real_artifact_payload.get("artifact_evaluation") or {}).get("control_judgment_count", 0),
+        "real_artifact_readback_trigger_judgment_event_count": (real_artifact_payload.get("artifact_evaluation") or {}).get("trigger_judgment_event_count", 0),
+        "real_artifact_readback_control_judgment_event_count": (real_artifact_payload.get("artifact_evaluation") or {}).get("control_judgment_event_count", 0),
+        "real_artifact_readback_control_loss_count": (real_artifact_payload.get("artifact_evaluation") or {}).get("control_loss_count", 0),
+        "real_artifact_readback_controlled_promotion_plan_count": (real_artifact_payload.get("artifact_evaluation") or {}).get("controlled_promotion_plan_count", 0),
         "real_artifact_readback_accept_count": real_artifact_payload.get("candidate_acceptance_counts", {}).get("accept", 0) if real_artifact_payload else 0,
         "real_artifact_readback_resumed": real_artifact_payload.get("resumed", False) if real_artifact_payload else False,
         "real_artifact_readback_applied_count": len(real_artifact_payload.get("applied_candidate_node_ids", [])) if real_artifact_payload else 0,
@@ -663,6 +668,9 @@ def _real_artifact_readback_ok(payload: dict) -> bool:
     return (
         artifact_eval.get("judgment_set_count", 0) >= 1
         and artifact_eval.get("trigger_judgment_count", 0) >= 3
+        and artifact_eval.get("control_judgment_count", 0) >= 1
+        and artifact_eval.get("control_loss_count", 0) == 0
+        and artifact_eval.get("controlled_promotion_plan_count", 0) >= 1
         and payload.get("candidate_acceptance_counts", {}).get("accept", 0) >= 1
         and bool(payload.get("resumed"))
     )
@@ -2123,8 +2131,9 @@ def _key_metric(name: str, section: dict) -> str:
             f"{section.get('bounded_execute_accept_count', 0)}, "
             f"artifact={section.get('artifact_readback_auto_judgment_set_count', 0)}/"
             f"{section.get('artifact_readback_accept_count', 0)}, "
-            f"real={section.get('real_artifact_readback_trigger_judgment_count', 0)}/"
-            f"{section.get('real_artifact_readback_accept_count', 0)}"
+            f"real=t{section.get('real_artifact_readback_trigger_judgment_count', 0)}/"
+            f"c{section.get('real_artifact_readback_control_judgment_count', 0)}/"
+            f"a{section.get('real_artifact_readback_accept_count', 0)}"
         )
     if name == "recursive_audit":
         return f"score={section['min_closure_score']}, issues={section['critical_issue_count']}/{section['warning_issue_count']}"

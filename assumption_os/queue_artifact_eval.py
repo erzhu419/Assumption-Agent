@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import shlex
+from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
@@ -52,6 +53,10 @@ def build_queue_artifact_eval_payload(
             judge_script=judge_script,
         ))
     ready_for_acceptance = [plan for plan in plans if plan["existing_judgment_paths"]]
+    trigger_outcomes = _sum_outcomes(plans, "trigger_outcomes")
+    control_outcomes = _sum_outcomes(plans, "control_outcomes")
+    control_event_count = sum(plan["control_judgment_event_count"] for plan in plans)
+    control_loss_count = control_outcomes.get("loss", 0)
     return {
         "eval_id": eval_id,
         "source_preflight_eval_id": preflight_payload.get("eval_id"),
@@ -68,6 +73,15 @@ def build_queue_artifact_eval_payload(
         "judgment_set_count": len(ready_for_acceptance),
         "trigger_judgment_count": sum(plan["judged_trigger_count"] for plan in plans),
         "control_judgment_count": sum(plan["judged_control_count"] for plan in plans),
+        "trigger_judgment_event_count": sum(plan["trigger_judgment_event_count"] for plan in plans),
+        "control_judgment_event_count": control_event_count,
+        "trigger_outcomes": dict(trigger_outcomes),
+        "control_outcomes": dict(control_outcomes),
+        "control_loss_count": control_loss_count,
+        "control_loss_rate": round(control_loss_count / control_event_count, 4) if control_event_count else None,
+        "control_covered_plan_count": sum(1 for plan in plans if plan["promotion_evidence"]["control_covered"]),
+        "controlled_promotion_plan_count": sum(1 for plan in plans if plan["promotion_evidence"]["ready_for_controlled_promotion"]),
+        "undercontrolled_plan_count": sum(1 for plan in plans if plan["promotion_evidence"]["undercontrolled"]),
         "missing_artifact_counts": _missing_counts(plans),
         "plans": plans,
     }
@@ -130,6 +144,36 @@ def _build_plan(
     judgments = _load_judgments(existing_judgment_paths)
     judged_trigger_count = sum(1 for pid in trigger_ids if pid in judgments)
     judged_control_count = sum(1 for pid in control_ids if pid in judgments)
+    trigger_outcomes = _outcome_counts_for_ids(
+        trigger_ids,
+        judgments,
+        candidate_variant=candidate_variant,
+        baseline_variant=baseline_variant,
+    )
+    control_outcomes = _outcome_counts_for_ids(
+        control_ids,
+        judgments,
+        candidate_variant=candidate_variant,
+        baseline_variant=baseline_variant,
+    )
+    trigger_event_count = sum(trigger_outcomes.values())
+    control_event_count = sum(control_outcomes.values())
+    control_loss_count = control_outcomes.get("loss", 0)
+    control_coverage = judged_control_count / len(control_ids) if control_ids else 0.0
+    promotion_evidence = {
+        "min_trigger_judgments_met": trigger_event_count >= 3,
+        "control_required": bool(control_ids),
+        "control_covered": bool(control_ids) and judged_control_count == len(control_ids),
+        "control_clean": bool(control_ids) and control_event_count > 0 and control_loss_count == 0,
+        "undercontrolled": not control_ids or judged_control_count == 0,
+        "ready_for_trigger_only_acceptance": trigger_event_count >= 3,
+        "ready_for_controlled_promotion": (
+            trigger_event_count >= 3
+            and bool(control_ids)
+            and judged_control_count == len(control_ids)
+            and control_loss_count == 0
+        ),
+    }
 
     judge_command = ""
     if sample_path is not None and candidate_variant and baseline_variant:
@@ -175,6 +219,14 @@ def _build_plan(
         "existing_judgment_paths": [str(path) for path in existing_judgment_paths],
         "judged_trigger_count": judged_trigger_count,
         "judged_control_count": judged_control_count,
+        "trigger_judgment_event_count": trigger_event_count,
+        "control_judgment_event_count": control_event_count,
+        "trigger_outcomes": dict(trigger_outcomes),
+        "control_outcomes": dict(control_outcomes),
+        "control_loss_count": control_loss_count,
+        "control_loss_rate": round(control_loss_count / control_event_count, 4) if control_event_count else None,
+        "control_coverage_rate": round(control_coverage, 4),
+        "promotion_evidence": promotion_evidence,
         "judge_command": judge_command,
         "missing_artifacts": missing,
     }
@@ -243,6 +295,50 @@ def _load_judgments(paths: Iterable[Path]) -> dict[str, list[dict]]:
         for pid, row in _load_mapping(path).items():
             if isinstance(row, dict):
                 out.setdefault(str(pid), []).append(row)
+    return out
+
+
+def _outcome_counts_for_ids(
+    problem_ids: Iterable[str],
+    judgments: dict[str, list[dict]],
+    *,
+    candidate_variant: str,
+    baseline_variant: str,
+) -> Counter[str]:
+    outcomes: Counter[str] = Counter()
+    for pid in problem_ids:
+        for judgment in judgments.get(pid, []):
+            outcomes[_normalize_winner(judgment, candidate_variant, baseline_variant)] += 1
+    return outcomes
+
+
+def _normalize_winner(judgment: dict, candidate_variant: str, baseline_variant: str) -> str:
+    winner = judgment.get("winner", "tie")
+    if winner == candidate_variant:
+        return "win"
+    if winner == baseline_variant:
+        return "loss"
+    if winner == "tie":
+        return "tie"
+    if winner in {"A", "B"}:
+        a_was = judgment.get("a_was", "A")
+        if a_was == candidate_variant:
+            candidate_side = "A"
+        elif a_was == baseline_variant:
+            candidate_side = "B"
+        else:
+            candidate_side = a_was if a_was in {"A", "B"} else None
+        if candidate_side and winner == candidate_side:
+            return "win"
+        if candidate_side and winner != candidate_side:
+            return "loss"
+    return "tie"
+
+
+def _sum_outcomes(plans: list[dict], key: str) -> Counter[str]:
+    out: Counter[str] = Counter()
+    for plan in plans:
+        out.update(plan.get(key, {}))
     return out
 
 

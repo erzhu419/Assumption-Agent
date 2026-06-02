@@ -2538,6 +2538,12 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(artifact_payload["candidate_answer_ready_count"], 1)
             self.assertEqual(artifact_payload["baseline_answer_ready_count"], 1)
             self.assertEqual(artifact_payload["judgment_set_count"], 1)
+            self.assertEqual(artifact_payload["trigger_outcomes"], {"win": 3})
+            self.assertEqual(artifact_payload["control_outcomes"], {"tie": 1})
+            self.assertEqual(artifact_payload["control_loss_count"], 0)
+            self.assertEqual(artifact_payload["controlled_promotion_plan_count"], 1)
+            self.assertEqual(artifact_payload["undercontrolled_plan_count"], 0)
+            self.assertTrue(artifact_payload["plans"][0]["promotion_evidence"]["ready_for_controlled_promotion"])
             self.assertIn("cached_framework.py", artifact_payload["plans"][0]["judge_command"])
             judgment_sets = judgment_sets_from_artifact_eval(artifact_payload)
             self.assertEqual(judgment_sets[0].candidate_variant, candidate_variant)
@@ -2591,6 +2597,57 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(payload["accepted_proposal_ids"], ["prop_artifact"])
             self.assertTrue(payload["resumed"])
             self.assertEqual(payload["artifact_evaluation"]["judgment_set_count"], 1)
+
+    def test_artifact_readback_does_not_promote_trigger_only_evidence_as_controlled(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            sample_path = root / "sample.json"
+            sample_path.write_text(json.dumps([
+                {"problem_id": "p1"},
+                {"problem_id": "p2"},
+                {"problem_id": "p3"},
+            ]), encoding="utf-8")
+            answers_dir = root / "phase two" / "analysis" / "cache" / "answers"
+            judgments_dir = root / "phase two" / "analysis" / "cache" / "judgments"
+            answers_dir.mkdir(parents=True)
+            judgments_dir.mkdir(parents=True)
+            candidate_variant = "proposal_trigger_only"
+            baseline_variant = "baseline_trigger_only"
+            answers = {"p1": "candidate one", "p2": "candidate two", "p3": "candidate three"}
+            baseline = {"p1": "baseline one", "p2": "baseline two", "p3": "baseline three"}
+            (answers_dir / f"{candidate_variant}_answers.json").write_text(json.dumps(answers), encoding="utf-8")
+            (answers_dir / f"{baseline_variant}_answers.json").write_text(json.dumps(baseline), encoding="utf-8")
+            (judgments_dir / f"{candidate_variant}_vs_{baseline_variant}.json").write_text(json.dumps({
+                "p1": {"winner": candidate_variant},
+                "p2": {"winner": candidate_variant},
+                "p3": {"winner": candidate_variant},
+            }), encoding="utf-8")
+            preflight_payload = {
+                "eval_id": "unit_trigger_only_preflight",
+                "summaries": [{
+                    "proposal_id": "prop_trigger_only",
+                    "readiness": CandidateReadiness.READY_FOR_FRESH_ABLATION.value,
+                    "trigger_problem_ids": ["p1", "p2", "p3"],
+                    "control_problem_ids": [],
+                    "command_hint": (
+                        "python3 run.py "
+                        f"--variant {candidate_variant} --sample {json.dumps(str(sample_path))}"
+                    ),
+                }],
+            }
+            payload = build_queue_artifact_eval_payload(
+                root=root,
+                preflight_payload=preflight_payload,
+                baseline_variant=baseline_variant,
+                eval_id="unit_trigger_only_artifact_eval",
+            )
+            self.assertEqual(payload["judgment_set_count"], 1)
+            self.assertEqual(payload["trigger_outcomes"], {"win": 3})
+            self.assertEqual(payload["control_judgment_count"], 0)
+            self.assertEqual(payload["controlled_promotion_plan_count"], 0)
+            self.assertEqual(payload["undercontrolled_plan_count"], 1)
+            self.assertFalse(payload["plans"][0]["promotion_evidence"]["ready_for_controlled_promotion"])
+            self.assertTrue(payload["plans"][0]["promotion_evidence"]["ready_for_trigger_only_acceptance"])
 
     def test_residual_clusterer_synthesizes_candidate_from_systematic_residuals(self):
         with tempfile.TemporaryDirectory() as td:

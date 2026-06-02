@@ -120,6 +120,9 @@ def _score_execution_fidelity(sections: dict[str, dict]) -> CapabilityScore:
     )
     real_artifact_ready = (
         int(daemon.get("real_artifact_readback_trigger_judgment_count") or 0) >= 3
+        and int(daemon.get("real_artifact_readback_control_judgment_count") or 0) >= 1
+        and int(daemon.get("real_artifact_readback_control_loss_count") or 0) == 0
+        and int(daemon.get("real_artifact_readback_controlled_promotion_plan_count") or 0) >= 1
         and int(daemon.get("real_artifact_readback_accept_count") or 0) >= 1
         and bool(daemon.get("real_artifact_readback_resumed"))
     )
@@ -142,6 +145,9 @@ def _score_execution_fidelity(sections: dict[str, dict]) -> CapabilityScore:
             "artifact_readback_accept_count": daemon.get("artifact_readback_accept_count"),
             "artifact_readback_resumed": daemon.get("artifact_readback_resumed"),
             "real_artifact_readback_trigger_judgment_count": daemon.get("real_artifact_readback_trigger_judgment_count"),
+            "real_artifact_readback_control_judgment_count": daemon.get("real_artifact_readback_control_judgment_count"),
+            "real_artifact_readback_control_loss_count": daemon.get("real_artifact_readback_control_loss_count"),
+            "real_artifact_readback_controlled_promotion_plan_count": daemon.get("real_artifact_readback_controlled_promotion_plan_count"),
             "real_artifact_readback_accept_count": daemon.get("real_artifact_readback_accept_count"),
             "real_artifact_readback_resumed": daemon.get("real_artifact_readback_resumed"),
         },

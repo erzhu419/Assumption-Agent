@@ -525,6 +525,9 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
     artifact_readback_resumed = bool(daemon.get("artifact_readback_resumed"))
     real_artifact_sets = int(daemon.get("real_artifact_readback_judgment_set_count") or 0)
     real_artifact_trigger_judgments = int(daemon.get("real_artifact_readback_trigger_judgment_count") or 0)
+    real_artifact_control_judgments = int(daemon.get("real_artifact_readback_control_judgment_count") or 0)
+    real_artifact_control_losses = int(daemon.get("real_artifact_readback_control_loss_count") or 0)
+    real_artifact_controlled_promotions = int(daemon.get("real_artifact_readback_controlled_promotion_plan_count") or 0)
     real_artifact_accept_count = int(daemon.get("real_artifact_readback_accept_count") or 0)
     real_artifact_resumed = bool(daemon.get("real_artifact_readback_resumed"))
     structure_parts = [
@@ -559,9 +562,11 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
             _cap(artifact_readback_accept_count / 1),
             float(artifact_readback_resumed),
         ])
-    if real_artifact_trigger_judgments or real_artifact_accept_count or real_artifact_resumed:
+    if real_artifact_trigger_judgments or real_artifact_control_judgments or real_artifact_accept_count or real_artifact_resumed:
         behavior_parts.extend([
             _cap(real_artifact_trigger_judgments / 3),
+            _cap(real_artifact_control_judgments / 1),
+            float(real_artifact_control_losses == 0 and real_artifact_controlled_promotions >= 1),
             _cap(real_artifact_accept_count / 1),
             float(real_artifact_resumed),
         ])
@@ -596,16 +601,21 @@ def _recursive_loop_item(sections: dict[str, dict]) -> ProgressItem:
             "real_artifact_readback_path": daemon.get("real_artifact_readback_path"),
             "real_artifact_readback_judgment_set_count": real_artifact_sets,
             "real_artifact_readback_trigger_judgment_count": real_artifact_trigger_judgments,
+            "real_artifact_readback_control_judgment_count": real_artifact_control_judgments,
+            "real_artifact_readback_control_loss_count": real_artifact_control_losses,
+            "real_artifact_readback_controlled_promotion_plan_count": real_artifact_controlled_promotions,
             "real_artifact_readback_accept_count": real_artifact_accept_count,
             "real_artifact_readback_resumed": real_artifact_resumed,
             "real_artifact_readback_applied_count": daemon.get("real_artifact_readback_applied_count"),
         },
         remaining_gaps=[
             "The loop can execute, discover fresh-ablation artifacts, and resume from cached judgments, but is not yet an unattended daemon running continuous paid judge cycles.",
+            "Real readback now requires control coverage for controlled promotion; trigger-only accepted examples remain useful smoke evidence but are not enough for graph promotion.",
             "Actual graph mutation remains correctly gated by explicit apply/writeback permissions.",
         ],
         next_actions=[
-            "Inject API environment variables and run a real trace-policy fresh-ablation queue with --execute and command_limit=1.",
+            "Read back existing cached controlled proposal artifacts before spending new API calls.",
+            "Inject API environment variables and run a real trace-policy fresh-ablation queue with trigger/control rows and command_limit=1.",
             "Run cached_framework judge for generated proposal answers, then let artifact readback feed acceptance and gated apply.",
         ],
     )
@@ -895,10 +905,16 @@ def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
             max_structure = max(max_structure, 0.91)
             max_behavior = max(max_behavior, 0.82)
         real_trigger_judgments = int(item.evidence.get("real_artifact_readback_trigger_judgment_count") or 0)
+        real_control_judgments = int(item.evidence.get("real_artifact_readback_control_judgment_count") or 0)
+        real_control_losses = int(item.evidence.get("real_artifact_readback_control_loss_count") or 0)
+        real_controlled_promotions = int(item.evidence.get("real_artifact_readback_controlled_promotion_plan_count") or 0)
         real_accept_count = int(item.evidence.get("real_artifact_readback_accept_count") or 0)
         if (
             item.evidence.get("real_artifact_readback_resumed")
             and real_trigger_judgments >= 3
+            and real_control_judgments >= 1
+            and real_control_losses == 0
+            and real_controlled_promotions >= 1
             and real_accept_count >= 1
         ):
             max_structure = max(max_structure, 0.92)
