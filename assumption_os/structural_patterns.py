@@ -101,6 +101,7 @@ ROLE_MARKERS = {
         "preserve",
         "old path",
         "working path",
+        "working pipeline",
         "verified path",
     ],
     "delta_update": [
@@ -112,6 +113,8 @@ ROLE_MARKERS = {
         "minimal patch",
         "lora",
         "adapter",
+        "replace one",
+        "replacement",
     ],
     "control_row": [
         "control",
@@ -226,11 +229,14 @@ ROLE_MARKERS = {
     ],
     "transformation": [
         "transform",
+        "transformation",
         "transition",
         "state change",
         "mapping",
         "conversion",
         "update step",
+        "before",
+        "after",
     ],
     "ordered_state": [
         "ordered",
@@ -520,9 +526,9 @@ ROLE_MORPHISM_RULES = [
         "id": "transform_state",
         "role": "transformation",
         "source_role": "transformation",
-        "target_role": "conserved_quantity",
+        "target_role": "transformation",
         "requires": ["transformation", "conserved_quantity"],
-        "terms": ["transform", "transition", "state change", "conversion"],
+        "terms": ["transform", "transformation", "transition", "state change", "conversion", "before", "after"],
     },
     {
         "id": "conserve_quantity",
@@ -530,7 +536,7 @@ ROLE_MORPHISM_RULES = [
         "source_role": "conserved_quantity",
         "target_role": "transformation",
         "requires": ["transformation", "conserved_quantity"],
-        "terms": ["conserve", "conservation", "balance", "invariant quantity"],
+        "terms": ["preserve", "conserve", "conservation", "conserved quantity", "balance", "invariant quantity"],
     },
     {
         "id": "check_balance",
@@ -538,7 +544,7 @@ ROLE_MORPHISM_RULES = [
         "source_role": "transformation",
         "target_role": "conserved_quantity",
         "requires": ["transformation", "conserved_quantity"],
-        "terms": ["check balance", "accounting", "closed", "sum"],
+        "terms": ["check balance", "mass balance", "budget balance", "accounting", "closed", "sum"],
     },
     {
         "id": "apply_monotone_step",
@@ -928,6 +934,7 @@ def propose_structural_morphism(query_diagram: str | dict | StructuralSignature 
         "source_diagram": _pattern_diagram(pattern),
         "target_diagram": diagram.to_dict(),
         "functor_check": check_structural_functor(diagram, pattern),
+        "kernel_check": assess_structural_kernel_alignment(_pattern_diagram(pattern), diagram.to_dict()),
         "preserved_invariants": score.preserved_invariants,
         "broken_or_uncertain_invariants": score.broken_or_uncertain_invariants,
         "negative_control_hits": score.negative_control_hits,
@@ -955,13 +962,21 @@ def score_structural_morphism(candidate: dict) -> dict:
         if isinstance(candidate, dict)
         else {}
     )
+    kernel_check = candidate.get("kernel_check") if isinstance(candidate, dict) else {}
     if isinstance(prediction_check, dict) and prediction_check and not prediction_check.get("pass"):
         decision = "repair_missing_testable_transfer_prediction"
+    if (
+        isinstance(kernel_check, dict)
+        and kernel_check
+        and not kernel_check.get("pass")
+        and decision not in {"block_negative_control", "repair_missing_transfer_prediction", "repair_missing_testable_transfer_prediction"}
+    ):
+        decision = "repair_structural_kernel_not_preserved"
     if (
         isinstance(functor, dict)
         and functor
         and not functor.get("pass")
-        and decision not in {"block_negative_control", "repair_missing_transfer_prediction"}
+        and decision not in {"block_negative_control", "repair_missing_transfer_prediction", "repair_missing_testable_transfer_prediction"}
     ):
         decision = "repair_functor_not_preserved"
     return {
@@ -971,11 +986,14 @@ def score_structural_morphism(candidate: dict) -> dict:
             "repair_under_specified",
             "repair_missing_transfer_prediction",
             "repair_missing_testable_transfer_prediction",
+            "repair_structural_kernel_not_preserved",
             "repair_functor_not_preserved",
         },
         "reason": (
             "Finite functor check did not preserve object, morphism, invariant, or composition structure."
             if decision == "repair_functor_not_preserved"
+            else "Structural role-transition kernel is too far from the source diagram."
+            if decision == "repair_structural_kernel_not_preserved"
             else prediction_check.get("reason")
             if decision == "repair_missing_testable_transfer_prediction" and isinstance(prediction_check, dict)
             else score.get("reason")
@@ -983,6 +1001,7 @@ def score_structural_morphism(candidate: dict) -> dict:
         "score": score,
         "functor_check": functor if isinstance(functor, dict) else {},
         "transfer_prediction_check": prediction_check if isinstance(prediction_check, dict) else {},
+        "kernel_check": kernel_check if isinstance(kernel_check, dict) else {},
     }
 
 
@@ -1305,6 +1324,7 @@ def _proposal_structural_gate(proposal: dict) -> dict:
         "score": gate.get("score", {}),
         "functor_check": gate.get("functor_check", {}),
         "transfer_prediction_check": gate.get("transfer_prediction_check", {}),
+        "kernel_check": gate.get("kernel_check", {}),
         "preserved_invariants": formal.get("preserved_invariants", []),
         "broken_or_uncertain_invariants": formal.get("broken_or_uncertain_invariants", []),
         "negative_control_hits": formal.get("negative_control_hits", []),
@@ -1775,6 +1795,70 @@ def build_transfer_prediction_testability_eval_payload(
     }
 
 
+def build_structural_kernel_eval_payload(
+    store: JsonlGraphStore | None = None,
+    *,
+    eval_id: str | None = None,
+) -> dict:
+    positive_rows = []
+    positive_pass = 0
+    for case in _default_positive_pair_cases():
+        apps = search_structural_patterns(store, case["query"], top_n=1, min_score=0.0)
+        top = apps[0] if apps else {}
+        kernel = (top.get("candidate") or {}).get("kernel_check", {})
+        passed = top.get("pattern_id") == case["expected"] and bool(kernel.get("pass"))
+        positive_pass += int(passed)
+        positive_rows.append({
+            **case,
+            "top_pattern_id": top.get("pattern_id"),
+            "kernel_pass": bool(kernel.get("pass")),
+            "kernel_check": kernel,
+            "passed": passed,
+        })
+
+    good = search_structural_patterns(
+        store,
+        "Keep the baseline identity path, apply a residual delta correction, and keep fallback recovery.",
+        top_n=1,
+    )[0]
+    bad_formal = dict(good["candidate"])
+    bad_formal["kernel_check"] = {
+        "formal_kind": "structural_role_transition_kernel_check",
+        "pass": False,
+        "reason": "unit-test kernel mismatch",
+        "preserved_transition_rate": 0.0,
+        "metrics": {"same_shape": True, "total_variation": 1.0, "frobenius_distance": 5.0},
+    }
+    bad_gate = build_structural_morphism_gate_payload(
+        proposal_payload={
+            "eval_id": eval_id,
+            "proposals": [{
+                "proposal_id": "prop_kernel_bad",
+                "proposal_type": "structural_transfer_hypothesis",
+                "parent_node_id": "parent",
+                "candidate_node": {"id": "cand_kernel_bad", "formal_form": bad_formal},
+            }],
+        },
+        eval_id=eval_id,
+    )
+    positive_rate = round(_ratio(positive_pass, len(positive_rows)), 4)
+    return {
+        "eval_id": eval_id,
+        "eval_kind": "structural_role_transition_kernel_eval",
+        "positive_count": len(positive_rows),
+        "positive_kernel_pass_rate": positive_rate,
+        "gate_negative_decision": bad_gate["gates"][0]["decision"],
+        "pass": (
+            len(positive_rows) >= 10
+            and positive_rate >= 0.9
+            and bad_gate["gates"][0]["decision"] == "repair_structural_kernel_not_preserved"
+            and bad_gate["gates"][0]["blocks_policy_update"]
+        ),
+        "positive_rows": positive_rows,
+        "bad_gate": bad_gate,
+    }
+
+
 def build_structural_writeback_eval_payload(*, eval_id: str | None = None) -> dict:
     with tempfile.TemporaryDirectory() as td:
         store = JsonlGraphStore(Path(td) / "graph")
@@ -1906,6 +1990,7 @@ def build_structural_morphism_performance_payload(
         "nonlexical_retrieval": build_nonlexical_structural_retrieval_probe_payload(store, eval_id=eval_id),
         "functor_eval": build_structural_functor_eval_payload(store, eval_id=eval_id),
         "transfer_prediction_testability": build_transfer_prediction_testability_eval_payload(eval_id=eval_id),
+        "kernel_eval": build_structural_kernel_eval_payload(store, eval_id=eval_id),
         "context_effect": build_structural_context_effect_payload(store, eval_id=eval_id),
         "behavior_probe": build_structural_behavior_probe_payload(store, eval_id=eval_id),
         "writeback_eval": build_structural_writeback_eval_payload(eval_id=eval_id),
@@ -2662,6 +2747,70 @@ def assess_transfer_prediction_testability(predictions: list[str]) -> dict:
     }
 
 
+def assess_structural_kernel_alignment(source_diagram: dict, target_diagram: dict) -> dict:
+    roles = sorted(ROLE_OBJECT_HINTS)
+    source_kernel, source_edges = _diagram_role_kernel(source_diagram, roles)
+    target_kernel, target_edges = _diagram_role_kernel(target_diagram, roles)
+    metrics = finite_kernel_metrics(source_kernel, target_kernel)
+    source_edge_set = set(source_edges)
+    target_edge_set = set(target_edges)
+    preserved = sorted(source_edge_set & target_edge_set)
+    missing = sorted(source_edge_set - target_edge_set)
+    preservation_rate = round(_ratio(len(preserved), len(source_edge_set)), 4)
+    tv = metrics.get("total_variation")
+    frob = metrics.get("frobenius_distance")
+    passed = (
+        bool(source_edge_set)
+        and metrics.get("same_shape") is True
+        and preservation_rate >= 0.5
+        and (tv is None or tv <= 0.55)
+        and (frob is None or frob <= 2.5)
+    )
+    return {
+        "formal_kind": "structural_role_transition_kernel_check",
+        "role_count": len(roles),
+        "source_transition_count": len(source_edge_set),
+        "target_transition_count": len(target_edge_set),
+        "preserved_transition_rate": preservation_rate,
+        "preserved_transitions": [list(edge) for edge in preserved],
+        "missing_transitions": [list(edge) for edge in missing],
+        "metrics": metrics,
+        "pass": passed,
+        "reason": (
+            "Structural role-transition kernel is preserved enough for bounded transfer."
+            if passed
+            else "Structural role-transition kernel loses too many source transitions."
+        ),
+    }
+
+
+def _diagram_role_kernel(diagram: dict, roles: list[str]) -> tuple[list[list[float]], list[tuple[str, str]]]:
+    idx = {role: i for i, role in enumerate(roles)}
+    matrix = [[0.0 for _ in roles] for _ in roles]
+    object_by_id = {row.get("id"): row for row in diagram.get("objects", [])}
+    object_role_by_id = {
+        oid: row.get("role")
+        for oid, row in object_by_id.items()
+        if row.get("role") in idx
+    }
+    edges: list[tuple[str, str]] = []
+    for morphism in diagram.get("morphisms", []):
+        src_role = morphism.get("source_role")
+        dst_role = morphism.get("target_role")
+        if not src_role and morphism.get("source") in object_role_by_id:
+            src_role = object_role_by_id[morphism.get("source")]
+        if not dst_role and morphism.get("target") in object_role_by_id:
+            dst_role = object_role_by_id[morphism.get("target")]
+        if src_role not in idx or dst_role not in idx:
+            continue
+        matrix[idx[src_role]][idx[dst_role]] += 1.0
+        edges.append((src_role, dst_role))
+    for role, row in idx.items():
+        if sum(matrix[row]) <= 0.0:
+            matrix[row][row] = 1.0
+    return matrix, sorted(set(edges))
+
+
 def _ratio(num: int, den: int) -> float:
     return num / den if den else 0.0
 
@@ -2978,6 +3127,7 @@ def main() -> None:
     ap.add_argument("--behavior-probe", action="store_true")
     ap.add_argument("--functor-eval", action="store_true")
     ap.add_argument("--prediction-testability-eval", action="store_true")
+    ap.add_argument("--kernel-eval", action="store_true")
     ap.add_argument("--context-effect", action="store_true")
     ap.add_argument("--writeback-eval", action="store_true")
     ap.add_argument("--recursive-runner-eval", action="store_true")
@@ -3008,6 +3158,8 @@ def main() -> None:
         payload["functor_eval"] = build_structural_functor_eval_payload(store, eval_id=args.eval_id)
     if args.prediction_testability_eval:
         payload["prediction_testability_eval"] = build_transfer_prediction_testability_eval_payload(eval_id=args.eval_id)
+    if args.kernel_eval:
+        payload["kernel_eval"] = build_structural_kernel_eval_payload(store, eval_id=args.eval_id)
     if args.context_effect:
         payload["context_effect"] = build_structural_context_effect_payload(store, eval_id=args.eval_id)
     if args.writeback_eval:

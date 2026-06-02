@@ -99,6 +99,7 @@ from assumption_os.structural_patterns import (
     build_structural_behavior_probe_payload,
     build_structural_extraction_audit_payload,
     build_structural_functor_eval_payload,
+    build_structural_kernel_eval_payload,
     build_structural_lineage_payload,
     build_structural_morphism_gate_payload,
     build_structural_morphism_performance_payload,
@@ -3960,6 +3961,7 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertTrue(build_structural_behavior_probe_payload(eval_id="unit_struct_behavior")["pass"])
         self.assertTrue(build_structural_functor_eval_payload(eval_id="unit_struct_functor")["pass"])
         self.assertTrue(build_transfer_prediction_testability_eval_payload(eval_id="unit_struct_prediction")["pass"])
+        self.assertTrue(build_structural_kernel_eval_payload(eval_id="unit_struct_kernel")["pass"])
         self.assertTrue(build_structural_context_effect_payload(eval_id="unit_struct_context")["pass"])
 
         good = search_structural_patterns(
@@ -3986,6 +3988,7 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(good_gate["gates"][0]["decision"], "allow")
         self.assertFalse(good_gate["gates"][0]["blocks_policy_update"])
         self.assertTrue(good_gate["gates"][0]["functor_check"]["pass"])
+        self.assertTrue(good_gate["gates"][0]["kernel_check"]["pass"])
 
         bad = search_structural_patterns(
             None,
@@ -4036,6 +4039,30 @@ class AssumptionOSTest(unittest.TestCase):
             "repair_missing_testable_transfer_prediction",
         )
         self.assertTrue(untestable_gate["gates"][0]["blocks_policy_update"])
+
+        kernel_bad_formal = dict(good["candidate"])
+        kernel_bad_formal["kernel_check"] = {
+            "formal_kind": "structural_role_transition_kernel_check",
+            "pass": False,
+            "reason": "unit-test kernel mismatch",
+        }
+        kernel_bad_gate = build_structural_morphism_gate_payload(
+            proposal_payload={
+                "eval_id": "unit_struct_kernel_bad",
+                "proposals": [{
+                    "proposal_id": "prop_struct_kernel_bad",
+                    "proposal_type": "structural_transfer_hypothesis",
+                    "parent_node_id": "parent",
+                    "candidate_node": {"id": "cand_struct_kernel_bad", "formal_form": kernel_bad_formal},
+                }],
+            },
+            eval_id="unit_struct_kernel_bad_gate",
+        )
+        self.assertEqual(
+            kernel_bad_gate["gates"][0]["decision"],
+            "repair_structural_kernel_not_preserved",
+        )
+        self.assertTrue(kernel_bad_gate["gates"][0]["blocks_policy_update"])
 
         verifier = build_verifier_stack_payload(
             proposal_payload=bad_payload,
