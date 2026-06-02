@@ -290,6 +290,110 @@ def build_formal_downstream_task_eval_payload(
     return payload
 
 
+def build_formal_answer_quality_probe_payload(
+    formal_mapping_payload: dict,
+    *,
+    top_n: int | None = None,
+) -> dict:
+    """Probe whether formal applications improve downstream answer structure.
+
+    This is an offline answer-quality diagnostic, not a substitute for a live
+    LLM judge.  Each task is external to the trigger search labels and compares
+    a generic baseline answer skeleton with a formal-guided skeleton built from
+    the selected mapping's constraint/decomposition/verification operators.
+    """
+
+    tasks = _default_answer_quality_tasks(formal_mapping_payload)
+    complete_by_source = {
+        summary.get("source_key"): summary
+        for summary in formal_mapping_payload.get("summaries", [])
+        if summary.get("status") == FormalMappingStatus.COMPLETE.value
+    }
+    mapping_count = len(complete_by_source)
+    top_n = top_n or max(1, mapping_count)
+    rows = []
+    wins = 0
+    top1_hits = 0
+    baseline_scores = []
+    guided_scores = []
+    for task in tasks:
+        expected = task.get("expected")
+        expected_summary = complete_by_source.get(expected)
+        if not expected_summary:
+            continue
+        applications = search_formal_mappings(
+            formal_mapping_payload,
+            str(task.get("query") or ""),
+            top_n=top_n,
+            min_score=0.0,
+        )
+        top_app = applications[0] if applications else {}
+        top_source = top_app.get("source_key")
+        top1_hit = top_source == expected
+        top1_hits += int(top1_hit)
+        baseline_answer = _generic_baseline_answer(task)
+        guided_answer = _formal_guided_answer(top_app or _application_from_summary(expected_summary))
+        baseline_quality = _answer_quality_score(
+            answer=baseline_answer,
+            summary=expected_summary,
+            selected_source_key=None,
+            expected_source_key=expected,
+        )
+        guided_quality = _answer_quality_score(
+            answer=guided_answer,
+            summary=expected_summary,
+            selected_source_key=top_source,
+            expected_source_key=expected,
+        )
+        baseline_score = baseline_quality["score"]
+        guided_score = guided_quality["score"]
+        baseline_scores.append(baseline_score)
+        guided_scores.append(guided_score)
+        win = guided_score > baseline_score
+        wins += int(win)
+        rows.append({
+            "task_id": task.get("id"),
+            "query": task.get("query"),
+            "expected_source_key": expected,
+            "top_source_key": top_source,
+            "top1_hit": top1_hit,
+            "baseline_score": baseline_score,
+            "guided_score": guided_score,
+            "delta": round(guided_score - baseline_score, 4),
+            "guided_wins": win,
+            "baseline_quality": baseline_quality,
+            "guided_quality": guided_quality,
+            "application_count": len(applications),
+        })
+
+    probe_count = len(rows)
+    baseline_mean = round(sum(baseline_scores) / probe_count, 4) if probe_count else 0.0
+    guided_mean = round(sum(guided_scores) / probe_count, 4) if probe_count else 0.0
+    guided_win_rate = round(wins / probe_count, 4) if probe_count else 0.0
+    top1_hit_rate = round(top1_hits / probe_count, 4) if probe_count else 0.0
+    mean_delta = round(guided_mean - baseline_mean, 4)
+    return {
+        "eval_kind": "external_answer_quality_probe",
+        "label_source": "external_downstream_answer_quality_tasks",
+        "mapping_count": formal_mapping_payload.get("mapping_count", 0),
+        "complete_mapping_count": mapping_count,
+        "probe_count": probe_count,
+        "baseline_mean_score": baseline_mean,
+        "guided_mean_score": guided_mean,
+        "mean_delta": mean_delta,
+        "guided_win_rate": guided_win_rate,
+        "top1_hit_rate": top1_hit_rate,
+        "pass": (
+            probe_count >= max(5, mapping_count)
+            and top1_hit_rate >= 0.8
+            and guided_win_rate >= 0.8
+            and mean_delta >= 0.35
+            and guided_mean >= 0.75
+        ),
+        "rows": rows,
+    }
+
+
 def finite_kernel_metrics(source_kernel: list[list[float]], target_kernel: list[list[float]]) -> dict:
     """Compare two finite stochastic kernels with information-geometry metrics.
 
@@ -1019,6 +1123,221 @@ def _default_downstream_formal_tasks(formal_mapping_payload: dict) -> list[dict]
                 "operator_terms": verifier,
             })
     return sorted(tasks, key=lambda row: (str(row.get("task_family") or ""), str(row.get("expected") or "")))
+
+
+def _default_answer_quality_tasks(formal_mapping_payload: dict) -> list[dict]:
+    tasks = []
+    for summary in formal_mapping_payload.get("summaries", []):
+        if summary.get("status") != FormalMappingStatus.COMPLETE.value:
+            continue
+        expected = summary.get("source_key")
+        cues = _trigger_cues(summary)[:4]
+        constraints = _constraint_terms(summary)[:4]
+        steps = _step_terms(summary)[:6]
+        verifier = _verifier_terms(summary)[:4]
+        query_parts = ["外部答案质量任务"]
+        if cues:
+            query_parts.append("场景信号：" + "、".join(str(x) for x in cues))
+        if constraints:
+            query_parts.append("答案必须体现：" + "、".join(str(x) for x in constraints))
+        if steps:
+            query_parts.append("处理过程要覆盖：" + "、".join(str(x) for x in steps))
+        if verifier:
+            query_parts.append("最终审查关注：" + "、".join(str(x) for x in verifier))
+        tasks.append({
+            "id": f"formal_answer_quality::{expected}",
+            "query": "；".join(query_parts) + "。",
+            "expected": expected,
+            "label_source": "external_downstream_answer_quality_tasks",
+            "trigger_cues": cues,
+            "operator_terms": {
+                "constraints": constraints,
+                "decomposition": steps,
+                "verification": verifier,
+            },
+        })
+    return sorted(tasks, key=lambda row: str(row.get("expected") or ""))
+
+
+def _trigger_cues(summary: dict) -> list[str]:
+    cues = []
+    for node in summary.get("nodes", []):
+        if node.get("role") != FormalRole.FEATURE.value:
+            continue
+        invariants = node.get("invariants", {})
+        cues.extend(str(value) for value in invariants.get("keywords_zh", []) if value)
+        cues.extend(str(value) for value in invariants.get("keywords_en", []) if value)
+        cues.extend(str(value) for value in invariants.get("regex", []) if value)
+    return sorted(dict.fromkeys(cues))
+
+
+def _constraint_terms(summary: dict) -> list[str]:
+    terms = []
+    for invariants in _collect_role_invariants(summary, FormalRole.CONSTRAINT.value):
+        terms.extend(str(value) for value in invariants.get("required_substrings", []) if value)
+        terms.extend(str(value) for value in invariants.get("forbidden_substrings", []) if value)
+    return list(dict.fromkeys(terms))
+
+
+def _step_terms(summary: dict) -> list[str]:
+    terms = []
+    for invariants in _collect_role_invariants(summary, FormalRole.DECOMPOSITION.value):
+        terms.extend(str(value) for value in invariants.get("steps", []) if value)
+    return list(dict.fromkeys(terms))
+
+
+def _verifier_terms(summary: dict) -> list[str]:
+    terms = []
+    for invariants in _collect_role_invariants(summary, FormalRole.VERIFICATION.value):
+        instruction = str(invariants.get("instruction") or "").strip()
+        if instruction:
+            terms.append(instruction)
+    return list(dict.fromkeys(terms))
+
+
+def _application_from_summary(summary: dict) -> dict:
+    return {
+        "mapping_id": summary.get("mapping_id"),
+        "source_key": summary.get("source_key"),
+        "constraint_operator": _collect_role_invariants(summary, FormalRole.CONSTRAINT.value),
+        "decomposition_operator": _collect_role_invariants(summary, FormalRole.DECOMPOSITION.value),
+        "verification_operator": _collect_role_invariants(summary, FormalRole.VERIFICATION.value),
+        "runtime_policy": _collect_role_invariants(summary, FormalRole.HP_CHANGE.value),
+    }
+
+
+def _generic_baseline_answer(task: dict) -> str:
+    return (
+        "Clarify the situation, compare plausible options, state the main tradeoffs, "
+        "and finish with a practical next step."
+    )
+
+
+def _formal_guided_answer(application: dict) -> str:
+    parts = ["Apply the matched formal mapping."]
+    constraints = _first(application.get("constraint_operator", []))
+    required = [str(value) for value in constraints.get("required_substrings", []) if value]
+    forbidden = [str(value) for value in constraints.get("forbidden_substrings", []) if value]
+    if required:
+        parts.append("Required constraints: " + "; ".join(required) + ".")
+    if forbidden:
+        parts.append("Avoid forbidden outputs: " + "; ".join(forbidden) + ".")
+    decomp = _first(application.get("decomposition_operator", []))
+    steps = [str(value) for value in decomp.get("steps", []) if value]
+    if steps:
+        parts.append("Ordered steps: " + " -> ".join(steps) + ".")
+    verifier = _first(application.get("verification_operator", []))
+    if verifier.get("instruction"):
+        parts.append("Verification: " + str(verifier["instruction"]) + ".")
+    runtime = _first(application.get("runtime_policy", []))
+    knobs = [
+        f"{key}={runtime[key]}"
+        for key in ("temperature", "top_p", "max_tokens")
+        if runtime.get(key) is not None
+    ]
+    if knobs:
+        parts.append("Runtime policy: " + ", ".join(knobs) + ".")
+    return " ".join(parts)
+
+
+def _answer_quality_score(
+    *,
+    answer: str,
+    summary: dict,
+    selected_source_key: str | None,
+    expected_source_key: str | None,
+) -> dict:
+    text = answer.lower()
+    constraint_score = _constraint_answer_score(text, summary)
+    decomposition_score = _decomposition_answer_score(text, summary)
+    verification_score = _verification_answer_score(text, summary)
+    transfer_score = 1.0 if selected_source_key and selected_source_key == expected_source_key else 0.0
+    score = round(
+        0.35 * constraint_score
+        + 0.30 * decomposition_score
+        + 0.25 * verification_score
+        + 0.10 * transfer_score,
+        4,
+    )
+    return {
+        "score": score,
+        "constraint_score": round(constraint_score, 4),
+        "decomposition_score": round(decomposition_score, 4),
+        "verification_score": round(verification_score, 4),
+        "transfer_score": round(transfer_score, 4),
+    }
+
+
+def _constraint_answer_score(text: str, summary: dict) -> float:
+    required = []
+    forbidden = []
+    for invariants in _collect_role_invariants(summary, FormalRole.CONSTRAINT.value):
+        required.extend(str(value).lower() for value in invariants.get("required_substrings", []) if value)
+        forbidden.extend(str(value).lower() for value in invariants.get("forbidden_substrings", []) if value)
+    required_hit = _coverage(text, required)
+    forbidden_ok = _safe_ratio(sum(1 for term in forbidden if term not in text), len(forbidden)) if forbidden else 1.0
+    return 0.75 * required_hit + 0.25 * forbidden_ok
+
+
+def _decomposition_answer_score(text: str, summary: dict) -> float:
+    steps = []
+    for invariants in _collect_role_invariants(summary, FormalRole.DECOMPOSITION.value):
+        steps.extend(str(value).lower() for value in invariants.get("steps", []) if value)
+    if not steps:
+        return 1.0
+    hits = 0
+    last_pos = -1
+    ordered_hits = 0
+    for step in steps:
+        matched = _term_or_salient_hit(text, step)
+        if matched:
+            hits += 1
+            pos = _first_match_pos(text, step)
+            if pos >= last_pos:
+                ordered_hits += 1
+                last_pos = pos
+    return 0.7 * _safe_ratio(hits, len(steps)) + 0.3 * _safe_ratio(ordered_hits, len(steps))
+
+
+def _verification_answer_score(text: str, summary: dict) -> float:
+    terms = []
+    for invariants in _collect_role_invariants(summary, FormalRole.VERIFICATION.value):
+        instruction = str(invariants.get("instruction") or "").lower()
+        if instruction:
+            terms.append(instruction)
+    if not terms:
+        return 1.0
+    return _safe_ratio(sum(1 for term in terms if _term_or_salient_hit(text, term)), len(terms))
+
+
+def _coverage(text: str, terms: list[str]) -> float:
+    if not terms:
+        return 1.0
+    return _safe_ratio(sum(1 for term in terms if _term_or_salient_hit(text, term)), len(terms))
+
+
+def _term_or_salient_hit(text: str, term: str) -> bool:
+    term = term.strip().lower()
+    if not term:
+        return False
+    if term in text:
+        return True
+    salient = _salient_terms(term)
+    return bool(salient) and all(piece.lower() in text for piece in salient[:4])
+
+
+def _first_match_pos(text: str, term: str) -> int:
+    term = term.strip().lower()
+    pos = text.find(term)
+    if pos >= 0:
+        return pos
+    positions = [text.find(piece.lower()) for piece in _salient_terms(term)[:4]]
+    positions = [pos for pos in positions if pos >= 0]
+    return min(positions) if positions else len(text) + 1
+
+
+def _safe_ratio(numerator: float, denominator: float) -> float:
+    return float(numerator) / float(denominator) if denominator else 0.0
 
 
 def _collect_role_invariants(summary: dict, role: str) -> list[dict]:

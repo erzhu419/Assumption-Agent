@@ -426,11 +426,13 @@ def _metaproductivity_selector_item(sections: dict[str, dict], graph_stats: dict
 
 def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
     formal = sections.get("formal_metrics", {})
+    answer_delta = float(formal.get("answer_quality_mean_delta") or 0.0)
     structure = _avg([
         float(formal.get("pass", False)),
         _cap(formal.get("mapping_count", 0) / 9),
         float(formal.get("dedup_pass", False)),
         float(formal.get("transfer_eval_pass", False)),
+        float(formal.get("answer_quality_probe_pass", False)),
         float(formal.get("warning_count", 1) == 0),
     ])
     behavior = _avg([
@@ -449,6 +451,9 @@ def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
         _cap(formal.get("downstream_task_family_count", 0) / 3),
         _cap(formal.get("downstream_transfer_pairwise_auc", 0.0)),
         _cap(formal.get("downstream_transfer_top1_hit_rate", 0.0)),
+        _cap(formal.get("answer_quality_probe_count", 0) / max(1, formal.get("complete_count", 1))),
+        _cap(formal.get("answer_quality_guided_win_rate", 0.0)),
+        _cap(answer_delta / 0.35),
     ])
     return ProgressItem(
         key="G_formal_alignment_layer",
@@ -475,13 +480,18 @@ def _formal_alignment_item(sections: dict[str, dict]) -> ProgressItem:
             "downstream_task_family_count": formal.get("downstream_task_family_count"),
             "downstream_task_top1_hit_rate": formal.get("downstream_task_top1_hit_rate"),
             "downstream_transfer_pairwise_auc": formal.get("downstream_transfer_pairwise_auc"),
+            "answer_quality_probe_pass": formal.get("answer_quality_probe_pass"),
+            "answer_quality_probe_count": formal.get("answer_quality_probe_count"),
+            "answer_quality_top1_hit_rate": formal.get("answer_quality_top1_hit_rate"),
+            "answer_quality_guided_win_rate": formal.get("answer_quality_guided_win_rate"),
+            "answer_quality_mean_delta": formal.get("answer_quality_mean_delta"),
         },
         remaining_gaps=[
             "Formal mapping is an audit/gate over finite kernels, not a full category-theoretic or information-geometric reasoning engine.",
-            "Formal transfer now has trigger-derived, operator-intent, and role-task labels, but not yet external downstream answer-quality probes.",
+            "Formal transfer now has external answer-quality probes; remaining gap is live heldout answer-quality validation with real model outputs.",
         ],
         next_actions=[
-            "Expand formal-transfer labels into a broader downstream heldout task suite.",
+            "Run live heldout answer-quality probes with real model outputs and cross-judge scoring.",
             "Use dedup recommendations to merge complete formal equivalents after verifier approval.",
         ],
     )
@@ -740,6 +750,18 @@ def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
         if downstream_queries >= 27 and downstream_families >= 3 and downstream_auc >= 0.8:
             max_structure = max(max_structure, 0.82)
             max_behavior = max(max_behavior, 0.74)
+        answer_quality_count = int(item.evidence.get("answer_quality_probe_count") or 0)
+        complete_count = int(item.evidence.get("complete_count") or 0)
+        answer_quality_win_rate = float(item.evidence.get("answer_quality_guided_win_rate") or 0.0)
+        answer_quality_delta = float(item.evidence.get("answer_quality_mean_delta") or 0.0)
+        if (
+            item.evidence.get("answer_quality_probe_pass")
+            and answer_quality_count >= max(5, complete_count)
+            and answer_quality_win_rate >= 0.8
+            and answer_quality_delta >= 0.35
+        ):
+            max_structure = max(max_structure, 0.84)
+            max_behavior = max(max_behavior, 0.76)
     if item.key == "F_metaproductivity_selector":
         labeled = int(item.evidence.get("acp_labeled_descendant_count") or 0)
         updates = int(item.evidence.get("acp_policy_update_count") or 0)

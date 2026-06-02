@@ -45,6 +45,7 @@ from .formal_mapping import (
     build_categorical_info_geometry_payload,
     build_formal_dedup_payload,
     build_formal_downstream_task_eval_payload,
+    build_formal_answer_quality_probe_payload,
     build_formal_mapping_payload,
     build_formal_search_eval_payload,
     build_formal_transfer_eval_payload,
@@ -1411,6 +1412,7 @@ def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
         metric_payload=metric_payload,
         search_eval_payload=downstream_search_payload,
     )
+    answer_quality_payload = build_formal_answer_quality_probe_payload(formal_payload)
     summaries = metric_payload["summaries"]
     same_shape = sum(1 for row in summaries if row["metrics"].get("same_shape"))
     warning_count = sum(len(row.get("warnings", [])) for row in summaries)
@@ -1435,6 +1437,7 @@ def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
             and independent_search_payload.get("negative_application_count", 0) >= complete_count * max(0, complete_count - 1)
             and downstream_search_payload.get("pass", False)
             and downstream_transfer_payload.get("pass", False)
+            and answer_quality_payload.get("pass", False)
         ),
         "mapping_count": metric_payload["mapping_count"],
         "complete_count": complete_count,
@@ -1487,6 +1490,13 @@ def _validate_formal_metrics(*, root: Path, graph_dir: Path) -> dict:
         "downstream_transfer_pairwise_auc": downstream_transfer_payload.get("pairwise_auc"),
         "downstream_transfer_positive_mean_score": downstream_transfer_payload.get("positive_mean_transfer_score"),
         "downstream_transfer_negative_mean_score": downstream_transfer_payload.get("negative_mean_transfer_score"),
+        "answer_quality_probe_pass": answer_quality_payload.get("pass", False),
+        "answer_quality_probe_count": answer_quality_payload.get("probe_count", 0),
+        "answer_quality_top1_hit_rate": answer_quality_payload.get("top1_hit_rate"),
+        "answer_quality_guided_win_rate": answer_quality_payload.get("guided_win_rate"),
+        "answer_quality_baseline_mean_score": answer_quality_payload.get("baseline_mean_score"),
+        "answer_quality_guided_mean_score": answer_quality_payload.get("guided_mean_score"),
+        "answer_quality_mean_delta": answer_quality_payload.get("mean_delta"),
     }
 
 
@@ -1864,7 +1874,8 @@ def _key_metric(name: str, section: dict) -> str:
             f"dedup={section.get('dedup_duplicate_cluster_count', 0)}, "
             f"transfer_auc={section.get('transfer_pairwise_auc')}, "
             f"ind_auc={section.get('independent_transfer_pairwise_auc')}, "
-            f"downstream_auc={section.get('downstream_transfer_pairwise_auc')}"
+            f"downstream_auc={section.get('downstream_transfer_pairwise_auc')}, "
+            f"answer_delta={section.get('answer_quality_mean_delta')}"
         )
     return ""
 
