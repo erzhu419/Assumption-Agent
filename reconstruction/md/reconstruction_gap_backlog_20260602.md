@@ -1,13 +1,14 @@
 # Reconstruction Gap Backlog - 2026-06-02
 
 This backlog records the remaining distance to `reconstruction.md` after the
-real artifact-readback validation pass.
+controlled artifact-readback and external V5 objective-gate validation passes.
 
 ## Current Completion Snapshot
 
-- Structure: 86.2%
-- Behavior: 77.9%
-- Weighted: 81.6%
+- Structure: 86.4%
+- Behavior: 78.1%
+- Weighted: 81.9%
+- Completed items: 6 / 9
 - Strongest component: recursive execution loop, currently 0.92 structure / 0.84 behavior on bounded and cached real readback.
 
 ## Remaining Gaps
@@ -23,9 +24,11 @@ real artifact-readback validation pass.
    promotion. Future real readbacks must report trigger benefit, control
    coverage, and no control harm before they count as controlled promotion.
 
-3. V5 objective gate is still mostly internal.
-   It needs external objective-task benchmarks beyond internal trigger/control
-   acceptance artifacts.
+3. V5 objective gate has an external benchmark hook, but not live heldout tasks.
+   The verifier now requires accepted candidates to pass external objective
+   tasks when an objective benchmark is supplied. Current validation uses
+   deterministic positive-control tasks; the remaining bar is live heldout
+   objective tasks with real model outputs and judge results.
 
 4. Residual labels need broader calibration.
    Curated-gold agreement tests exist, but the remaining bar is a larger
@@ -48,12 +51,16 @@ real artifact-readback validation pass.
 ## Next Work Order
 
 1. Harden real artifact readback so accepted evidence must include trigger and
-   control quality metrics.
+   control quality metrics. Done in `0a21462`.
 2. Re-read existing cached proposal artifacts to find at least one accepted
-   controlled promotion without spending new model calls.
-3. If no controlled cached artifact passes, run a small fresh GPT ablation with
+   controlled promotion without spending new model calls. Done in `0a21462`.
+3. Add an external V5 objective-task gate so accepted proposals are not promoted
+   solely by trigger/control acceptance. Done in current external-V5 pass.
+4. Replace deterministic V5 positive controls with live heldout objective tasks
+   once API environment variables are available.
+5. Run a small fresh GPT ablation with
    trigger and control rows once API environment variables are available.
-4. Feed the controlled result through recursive daemon readback, performance
+6. Feed the controlled result through recursive daemon readback, performance
    validation, reconstruction progress, and assumption bench.
-5. Only push when the validation evidence improves or exposes a stricter,
+7. Only push when the validation evidence improves or exposes a stricter,
    useful gate with passing tests.

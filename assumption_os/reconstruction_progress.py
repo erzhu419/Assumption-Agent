@@ -273,19 +273,24 @@ def _world_model_item(sections: dict[str, dict]) -> ProgressItem:
 def _verifier_stack_item(sections: dict[str, dict]) -> ProgressItem:
     verifier = sections.get("verifier_stack", {})
     preflight = sections.get("trace_policy_preflight", {})
+    external_objective_tasks = int(verifier.get("objective_benchmark_external_task_count") or 0)
     structure = _avg([
         float(verifier.get("pass", False)),
         float(verifier.get("accepted_protocol_ok", False)),
         float(verifier.get("rejected_protocol_ok", False)),
         float(verifier.get("objective_gate_ok", False)),
+        float(verifier.get("external_objective_gate_ok", False)),
         float(verifier.get("manual_gate_ok", False)),
         _cap(verifier.get("falsification_protocol_candidate_count", 0) / max(1, verifier.get("proposal_count", 1))),
+        _cap(external_objective_tasks / 16),
     ])
     behavior = _avg([
         _cap(verifier.get("falsification_experiment_count", 0) / 135),
         _cap((verifier.get("accepted_count", 0) + verifier.get("rejected_count", 0)) / max(1, verifier.get("proposal_count", 1))),
         float(preflight.get("pass", False)),
         _cap(preflight.get("ready_count", 0) / max(1, preflight.get("proposal_count", 1))),
+        float(verifier.get("objective_benchmark_pass", False)),
+        _cap(verifier.get("objective_benchmark_accepted_external_pass_count", 0) / max(1, verifier.get("accepted_count", 1))),
     ])
     return ProgressItem(
         key="D_verifier_stack",
@@ -299,17 +304,21 @@ def _verifier_stack_item(sections: dict[str, dict]) -> ProgressItem:
             "falsification_experiment_count": verifier.get("falsification_experiment_count"),
             "trace_preflight_ready_count": preflight.get("ready_count"),
             "objective_gate_ok": verifier.get("objective_gate_ok"),
+            "external_objective_gate_ok": verifier.get("external_objective_gate_ok"),
+            "objective_benchmark_pass": verifier.get("objective_benchmark_pass"),
+            "objective_benchmark_external_task_count": external_objective_tasks,
+            "objective_benchmark_accepted_external_pass_count": verifier.get("objective_benchmark_accepted_external_pass_count"),
             "manual_gate_ok": verifier.get("manual_gate_ok"),
             "v5_pass_count": verifier.get("stage_status_counts", {}).get("V5:pass"),
             "v6_required_count": verifier.get("stage_status_counts", {}).get("V6:required"),
         },
         remaining_gaps=[
-            "V0-V6 are represented with active gates, but objective V5 still uses internal acceptance artifacts rather than external task benchmarks.",
+            "V5 now has an external objective-task benchmark hook; the remaining gap is larger live heldout objective tasks rather than deterministic positive controls.",
             "Trace policy proposals are preflight-ready but have not yet run fresh ablation/judge.",
         ],
         next_actions=[
             "Execute the trace policy proposal ablation queue with cached/low-cost samples first.",
-            "Add external objective-task benchmarks for V5 beyond internal trigger/control acceptance.",
+            "Replace deterministic V5 positive controls with live heldout objective-task judgments.",
         ],
     )
 
@@ -823,6 +832,16 @@ def _reconstruction_ceiling_for_item(item: ProgressItem) -> tuple[float, float]:
             if v5_pass >= 10 and v6_required >= 2:
                 max_structure = max(max_structure, 0.84)
                 max_behavior = max(max_behavior, 0.76)
+        external_tasks = int(item.evidence.get("objective_benchmark_external_task_count") or 0)
+        external_accepted = int(item.evidence.get("objective_benchmark_accepted_external_pass_count") or 0)
+        if (
+            item.evidence.get("external_objective_gate_ok")
+            and item.evidence.get("objective_benchmark_pass")
+            and external_tasks >= 16
+            and external_accepted >= 2
+        ):
+            max_structure = max(max_structure, 0.86)
+            max_behavior = max(max_behavior, 0.78)
     if item.key == "E_residual_analyzer":
         label_f1 = float(item.evidence.get("label_agreement_macro_f1") or 0.0)
         residual_coverage = float(item.evidence.get("non_attributed_loss_coverage_rate") or 0.0)

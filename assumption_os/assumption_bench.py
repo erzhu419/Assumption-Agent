@@ -247,12 +247,15 @@ def _score_verifier_reliability(sections: dict[str, dict]) -> CapabilityScore:
     v5_pass = int(stage_counts.get("V5:pass") or 0)
     v6_required = int(stage_counts.get("V6:required") or 0)
     experiments = int(verifier.get("falsification_experiment_count") or 0)
+    external_objective_ok = bool(verifier.get("external_objective_gate_ok"))
+    objective_tasks = int(verifier.get("objective_benchmark_external_task_count") or 0)
     score = (
         0.20 * float(bool(verifier.get("accepted_protocol_ok")))
         + 0.20 * float(bool(verifier.get("rejected_protocol_ok")))
         + 0.20 * _cap(experiments / 100)
         + 0.20 * _cap((v4_pass + v4_fail) / 16)
-        + 0.10 * float(bool(verifier.get("objective_gate_ok")))
+        + 0.05 * float(bool(verifier.get("objective_gate_ok")))
+        + 0.05 * float(external_objective_ok)
         + 0.10 * float(bool(verifier.get("manual_gate_ok")))
     )
     return _capability(
@@ -262,6 +265,10 @@ def _score_verifier_reliability(sections: dict[str, dict]) -> CapabilityScore:
             "accepted_protocol_ok": verifier.get("accepted_protocol_ok"),
             "rejected_protocol_ok": verifier.get("rejected_protocol_ok"),
             "objective_gate_ok": verifier.get("objective_gate_ok"),
+            "external_objective_gate_ok": verifier.get("external_objective_gate_ok"),
+            "objective_benchmark_pass": verifier.get("objective_benchmark_pass"),
+            "objective_benchmark_external_task_count": objective_tasks,
+            "objective_benchmark_accepted_external_pass_count": verifier.get("objective_benchmark_accepted_external_pass_count"),
             "manual_gate_ok": verifier.get("manual_gate_ok"),
             "falsification_experiment_count": experiments,
             "v4_pass": v4_pass,

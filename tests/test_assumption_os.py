@@ -48,6 +48,7 @@ from assumption_os.manifest_logger import build_component_manifest_payload, even
 from assumption_os.math_science_policy import route_math_science_problem
 from assumption_os.memory_surfaces import build_memory_surface_payload
 from assumption_os.candidate_eval import CandidateReadiness, build_candidate_eval_payload
+from assumption_os.objective_bench import build_objective_benchmark_payload
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
 from assumption_os.proposals import ProposalType, build_candidate_proposals
 from assumption_os.queue_artifact_eval import build_queue_artifact_eval_payload, judgment_sets_from_artifact_eval
@@ -1838,6 +1839,117 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(v6["status"], "required")
         self.assertEqual(v6["evidence"]["permission_boundary"], "explicit_apply_or_writeback_required")
 
+    def test_v5_external_objective_benchmark_blocks_failed_acceptance(self):
+        proposal_payload = {
+            "eval_id": "unit_props",
+            "proposals": [{
+                "proposal_id": "prop_accept",
+                "proposal_type": "assumption_revision",
+                "parent_node_id": "strategy_S01",
+                "candidate_node": {"id": "cand_accept"},
+            }],
+        }
+        preflight = {
+            "eval_id": "unit_preflight",
+            "summaries": [{
+                "proposal_id": "prop_accept",
+                "readiness": "ready_for_fresh_ablation",
+                "trigger_problem_ids": ["p1", "p2", "p3"],
+                "control_problem_ids": ["c1", "c2"],
+            }],
+        }
+        acceptance = {
+            "eval_id": "unit_acceptance",
+            "summaries": [{
+                "proposal_id": "prop_accept",
+                "decision": "accept",
+                "trigger_outcomes": {"win": 4},
+                "control_outcomes": {"tie": 2},
+                "trigger_lcb90": 0.7,
+                "control_loss_ucb90": 0.0,
+            }],
+        }
+        falsification = build_falsification_payload(
+            proposal_payload=proposal_payload,
+            preflight_payload=preflight,
+            acceptance_payload=acceptance,
+        )
+        passing_objective = build_objective_benchmark_payload(
+            proposal_payload=proposal_payload,
+            acceptance_payload=acceptance,
+            eval_id="unit_objective_pass",
+            task_results=[
+                {
+                    "proposal_id": "prop_accept",
+                    "task_id": "external_transfer",
+                    "task_family": "transfer",
+                    "label_source": "external_objective_task",
+                    "candidate_score": 0.9,
+                    "baseline_score": 0.4,
+                },
+                {
+                    "proposal_id": "prop_accept",
+                    "task_id": "external_regression",
+                    "task_family": "regression",
+                    "label_source": "external_objective_task",
+                    "candidate_score": 0.8,
+                    "baseline_score": 0.5,
+                },
+            ],
+        )
+        self.assertTrue(passing_objective["pass"])
+        passed = build_verifier_stack_payload(
+            proposal_payload=proposal_payload,
+            preflight_payload=preflight,
+            falsification_payload=falsification,
+            acceptance_payload=acceptance,
+            objective_benchmark_payload=passing_objective,
+            eval_id="unit_verifier_external_pass",
+        )
+        pass_row = passed["summaries"][0]
+        pass_v5 = next(stage for stage in pass_row["stages"] if stage["tier"] == "V5")
+        self.assertEqual(pass_row["verdict"], "accepted_for_gated_apply")
+        self.assertEqual(pass_v5["evidence"]["objective_gate_source"], "external_objective_task_benchmark")
+        self.assertTrue(pass_v5["evidence"]["external_objective_passed"])
+
+        failing_objective = build_objective_benchmark_payload(
+            proposal_payload=proposal_payload,
+            acceptance_payload=acceptance,
+            eval_id="unit_objective_fail",
+            task_results=[
+                {
+                    "proposal_id": "prop_accept",
+                    "task_id": "external_transfer",
+                    "task_family": "transfer",
+                    "label_source": "external_objective_task",
+                    "candidate_score": 0.2,
+                    "baseline_score": 0.7,
+                },
+                {
+                    "proposal_id": "prop_accept",
+                    "task_id": "external_regression",
+                    "task_family": "regression",
+                    "label_source": "external_objective_task",
+                    "candidate_score": 0.3,
+                    "baseline_score": 0.6,
+                },
+            ],
+        )
+        self.assertFalse(failing_objective["summaries"][0]["objective_gate_passed"])
+        blocked = build_verifier_stack_payload(
+            proposal_payload=proposal_payload,
+            preflight_payload=preflight,
+            falsification_payload=falsification,
+            acceptance_payload=acceptance,
+            objective_benchmark_payload=failing_objective,
+            eval_id="unit_verifier_external_fail",
+        )
+        blocked_row = blocked["summaries"][0]
+        blocked_v5 = next(stage for stage in blocked_row["stages"] if stage["tier"] == "V5")
+        self.assertEqual(blocked_row["verdict"], "blocked_objective_gate")
+        self.assertEqual(blocked_v5["status"], "block")
+        self.assertFalse(blocked_v5["evidence"]["external_objective_passed"])
+
     def test_evolution_context_gates_permissions_and_harness_responsibilities(self):
         sections = {
             "trajectory_search": {"pass": True, "multi_path_rate": 0.8},
@@ -2066,7 +2178,23 @@ class AssumptionOSTest(unittest.TestCase):
                     "residual_trace_coverage_pass": True,
                 },
                 "trace_outcome_model": {"pass": True, "trainable_row_count": 9, "policy_update_count": 3, "residual_group_count": 1, "leave_one_out_metrics": {"brier_score": 0.1605}},
-                "verifier_stack": {"pass": True, "proposal_count": 33, "accepted_count": 2, "rejected_count": 14, "accepted_protocol_ok": True, "rejected_protocol_ok": True, "falsification_protocol_candidate_count": 27, "falsification_experiment_count": 135},
+                "verifier_stack": {
+                    "pass": True,
+                    "proposal_count": 33,
+                    "accepted_count": 2,
+                    "rejected_count": 14,
+                    "accepted_protocol_ok": True,
+                    "rejected_protocol_ok": True,
+                    "objective_gate_ok": True,
+                    "external_objective_gate_ok": True,
+                    "objective_benchmark_pass": True,
+                    "objective_benchmark_external_task_count": 36,
+                    "objective_benchmark_accepted_external_pass_count": 2,
+                    "manual_gate_ok": True,
+                    "stage_status_counts": {"V5:pass": 16, "V6:required": 2},
+                    "falsification_protocol_candidate_count": 27,
+                    "falsification_experiment_count": 135,
+                },
                 "trajectory_search": {"pass": True, "multi_path_rate": 0.8, "top_path_label_hit_rate": 1.0, "trajectory_count": 26, "frontier_actions": 10, "selected_path_types": {"a": 1, "b": 1, "c": 1, "d": 1}},
                 "assumption_bench": {"pass": True, "overall_score": 0.9968, "min_score": 0.9716, "capability_count": 9, "passed_capability_count": 9, "failed_capabilities": [], "score_by_capability": {"metaproductivity": 1.0}},
                 "formal_metrics": {

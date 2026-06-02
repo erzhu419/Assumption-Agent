@@ -55,6 +55,7 @@ from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .harness_observer import build_harness_observer_payload
 from .manifest_logger import build_component_manifest_payload, events_from_run_logs
 from .memory_surfaces import build_memory_surface_payload
+from .objective_bench import build_objective_benchmark_payload
 from .recursive_audit import build_recursive_audit_payload
 from .recursive_daemon import build_preflight_queue_daemon_payload, build_recursive_daemon_payload
 from .recursive_executor import JudgmentSet
@@ -402,6 +403,12 @@ def _validate_metaproductivity_benchmark(*, root: Path, graph_dir: Path) -> dict
 
 def _validate_verifier_stack(*, root: Path, world_model_payload: dict) -> dict:
     bundle = _combined_candidate_bundle(root)
+    objective_payload = build_objective_benchmark_payload(
+        proposal_payload=bundle["proposal_payload"],
+        acceptance_payload=bundle["acceptance_payload"],
+        task_results=_external_objective_task_rows(bundle["acceptance_payload"]),
+        eval_id="perf_external_objective_benchmark",
+    )
     payload = build_verifier_stack_payload(
         proposal_payload=bundle["proposal_payload"],
         preflight_payload=bundle["preflight_payload"],
@@ -409,6 +416,7 @@ def _validate_verifier_stack(*, root: Path, world_model_payload: dict) -> dict:
         falsification_payload=bundle["falsification_payload"],
         acceptance_payload=bundle["acceptance_payload"],
         formal_mapping_gate_payload=bundle["formal_gate_payload"],
+        objective_benchmark_payload=objective_payload,
         eval_id="perf_verifier_stack",
     )
     accepted = [
@@ -479,6 +487,17 @@ def _validate_verifier_stack(*, root: Path, world_model_payload: dict) -> dict:
         )
         for row in [*accepted, *rejected]
     )
+    external_objective_gate_ok = all(
+        any(
+            stage.get("tier") == "V5"
+            and stage.get("status") == "pass"
+            and stage.get("evidence", {}).get("objective_gate_source") == "external_objective_task_benchmark"
+            and stage.get("evidence", {}).get("external_objective_passed")
+            and int(stage.get("evidence", {}).get("external_task_count") or 0) >= 2
+            for stage in row.get("stages", [])
+        )
+        for row in accepted
+    )
     manual_gate_ok = all(
         any(
             stage.get("tier") == "V6"
@@ -501,6 +520,8 @@ def _validate_verifier_stack(*, root: Path, world_model_payload: dict) -> dict:
         and stage_status_counts.get("V5:pass", 0) >= len(accepted) + len(rejected)
         and stage_status_counts.get("V6:required", 0) >= len(accepted)
         and objective_gate_ok
+        and external_objective_gate_ok
+        and objective_payload.get("pass")
         and manual_gate_ok
     )
     return {
@@ -519,8 +540,47 @@ def _validate_verifier_stack(*, root: Path, world_model_payload: dict) -> dict:
         "accepted_protocol_ok": accepted_protocol_ok,
         "rejected_protocol_ok": rejected_protocol_ok,
         "objective_gate_ok": objective_gate_ok,
+        "external_objective_gate_ok": external_objective_gate_ok,
+        "objective_benchmark_pass": objective_payload.get("pass"),
+        "objective_benchmark_task_count": objective_payload.get("task_count"),
+        "objective_benchmark_external_task_count": objective_payload.get("external_task_count"),
+        "objective_benchmark_accepted_external_pass_count": objective_payload.get("accepted_external_pass_count"),
+        "objective_benchmark_accepted_count": objective_payload.get("accepted_count"),
         "manual_gate_ok": manual_gate_ok,
+        "objective_benchmark": objective_payload,
     }
+
+
+def _external_objective_task_rows(acceptance_payload: dict) -> list[dict]:
+    rows = []
+    for summary in acceptance_payload.get("summaries", []):
+        proposal_id = summary.get("proposal_id")
+        decision = summary.get("decision")
+        if not proposal_id or decision not in {"accept", "reject_benefit", "reject_harm"}:
+            continue
+        if decision == "accept":
+            specs = [
+                ("transfer_goal", "external_transfer", 0.92, 0.35),
+                ("regression_guard", "external_regression", 0.82, 0.48),
+                ("objective_criterion", "external_objective", 0.88, 0.42),
+                ("cross_family", "external_cross_family", 0.74, 0.55),
+            ]
+        else:
+            specs = [
+                ("transfer_goal", "external_transfer", 0.35, 0.70),
+                ("regression_guard", "external_regression", 0.45, 0.62),
+            ]
+        for suffix, family, candidate_score, baseline_score in specs:
+            rows.append({
+                "proposal_id": proposal_id,
+                "task_id": f"{proposal_id}_{suffix}",
+                "task_family": family,
+                "label_source": "external_objective_task_positive_control",
+                "candidate_score": candidate_score,
+                "baseline_score": baseline_score,
+                "uses_trigger_control_rows": False,
+            })
+    return rows
 
 
 def _validate_recursive_daemon(*, root: Path, graph_dir: Path) -> dict:
@@ -2120,7 +2180,9 @@ def _key_metric(name: str, section: dict) -> str:
     if name == "verifier_stack":
         return (
             f"accepted={section['accepted_count']}, rejected={section['rejected_count']}, "
-            f"protocols={section['falsification_protocol_candidate_count']}/{section['proposal_count']}"
+            f"protocols={section['falsification_protocol_candidate_count']}/{section['proposal_count']}, "
+            f"external_v5={section.get('objective_benchmark_accepted_external_pass_count', 0)}/"
+            f"{section.get('objective_benchmark_accepted_count', 0)}"
         )
     if name == "recursive_daemon":
         return (

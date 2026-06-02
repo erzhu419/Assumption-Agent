@@ -53,6 +53,7 @@ def build_verifier_stack_payload(
     falsification_payload: dict | None = None,
     acceptance_payload: dict | None = None,
     formal_mapping_gate_payload: dict | None = None,
+    objective_benchmark_payload: dict | None = None,
     eval_id: str,
 ) -> dict:
     """Combine gate outputs into a unified per-proposal verifier verdict."""
@@ -62,6 +63,7 @@ def build_verifier_stack_payload(
     falsification_by_id = _index(falsification_payload, "summaries")
     acceptance_by_id = _index(acceptance_payload, "summaries")
     formal_by_id = _index(formal_mapping_gate_payload, "gates")
+    objective_by_id = _index(objective_benchmark_payload, "summaries")
     summaries = [
         _summarize(
             proposal=proposal,
@@ -70,6 +72,7 @@ def build_verifier_stack_payload(
             falsification=falsification_by_id.get(proposal.get("proposal_id", ""), {}),
             acceptance=acceptance_by_id.get(proposal.get("proposal_id", ""), {}),
             formal=formal_by_id.get(proposal.get("proposal_id", ""), {}),
+            objective=objective_by_id.get(proposal.get("proposal_id", ""), {}),
         )
         for proposal in proposal_payload.get("proposals", [])
     ]
@@ -81,6 +84,7 @@ def build_verifier_stack_payload(
         "source_falsification_eval_id": (falsification_payload or {}).get("eval_id"),
         "source_acceptance_eval_id": (acceptance_payload or {}).get("eval_id"),
         "source_formal_gate_eval_id": (formal_mapping_gate_payload or {}).get("eval_id"),
+        "source_objective_benchmark_eval_id": (objective_benchmark_payload or {}).get("eval_id"),
         "proposal_count": len(summaries),
         "verdict_counts": dict(Counter(s.verdict for s in summaries)),
         "confidence_counts": dict(Counter(s.confidence for s in summaries)),
@@ -97,6 +101,7 @@ def _summarize(
     falsification: dict,
     acceptance: dict,
     formal: dict,
+    objective: dict,
 ) -> VerifierStackSummary:
     proposal_id = proposal.get("proposal_id", "")
     candidate = proposal.get("candidate_node") or {}
@@ -106,7 +111,12 @@ def _summarize(
         _formal_stage(formal),
         _falsification_stage(falsification),
         _acceptance_stage(acceptance),
-        _objective_stage(preflight=preflight, falsification=falsification, acceptance=acceptance),
+        _objective_stage(
+            preflight=preflight,
+            falsification=falsification,
+            acceptance=acceptance,
+            objective=objective,
+        ),
         _manual_review_stage(proposal=proposal, world=world, formal=formal, acceptance=acceptance),
     ]
     verdict, confidence, next_action, rationale = _verdict(
@@ -115,6 +125,7 @@ def _summarize(
         falsification=falsification,
         acceptance=acceptance,
         formal=formal,
+        objective=objective,
     )
     return VerifierStackSummary(
         proposal_id=proposal_id,
@@ -259,7 +270,7 @@ def _acceptance_stage(acceptance: dict) -> VerifierStage:
     )
 
 
-def _objective_stage(*, preflight: dict, falsification: dict, acceptance: dict) -> VerifierStage:
+def _objective_stage(*, preflight: dict, falsification: dict, acceptance: dict, objective: dict) -> VerifierStage:
     decision = acceptance.get("decision")
     if not acceptance:
         readiness = preflight.get("readiness")
@@ -273,13 +284,22 @@ def _objective_stage(*, preflight: dict, falsification: dict, acceptance: dict) 
                 "readiness": readiness,
                 "acceptance_decision": None,
                 "objective_gate_passed": False,
+                "objective_gate_source": "external_objective_task_benchmark" if objective else "internal_trigger_control",
+                "external_objective_available": bool(objective),
             },
         )
-    objective_ok = _objective_acceptance_ok(acceptance=acceptance, falsification=falsification)
+    internal_ok = _internal_objective_acceptance_ok(acceptance=acceptance, falsification=falsification)
+    external_available = bool(objective)
+    external_ok = bool(objective.get("objective_gate_passed")) if external_available else True
+    objective_ok = internal_ok and external_ok
     if decision == "accept":
         status = "pass" if objective_ok else "block"
-        detail = "Accepted candidate satisfies objective trigger/control and falsification criteria." if objective_ok else (
-            "Accepted candidate is blocked because objective trigger/control criteria are incomplete."
+        detail = (
+            "Accepted candidate satisfies internal and external objective criteria."
+            if objective_ok and external_available
+            else "Accepted candidate satisfies objective trigger/control and falsification criteria."
+            if objective_ok
+            else "Accepted candidate is blocked because objective criteria are incomplete."
         )
     elif decision in {"reject_benefit", "reject_harm"}:
         status = "pass"
@@ -297,6 +317,15 @@ def _objective_stage(*, preflight: dict, falsification: dict, acceptance: dict) 
             "trigger_lcb90": acceptance.get("trigger_lcb90"),
             "control_loss_ucb90": acceptance.get("control_loss_ucb90"),
             "objective_gate_passed": objective_ok or decision in {"reject_benefit", "reject_harm"},
+            "objective_gate_source": "external_objective_task_benchmark" if external_available else "internal_trigger_control",
+            "internal_objective_passed": internal_ok,
+            "external_objective_available": external_available,
+            "external_objective_passed": external_ok if external_available else None,
+            "external_objective_decision": objective.get("objective_decision"),
+            "external_task_count": objective.get("external_task_count", 0),
+            "external_family_count": objective.get("family_count", 0),
+            "external_mean_score_delta": objective.get("mean_score_delta"),
+            "external_loss_rate": objective.get("loss_rate"),
             "required_experiments": [
                 "trigger_benefit_sequential",
                 "control_harm_sequential",
@@ -343,6 +372,7 @@ def _verdict(
     falsification: dict,
     acceptance: dict,
     formal: dict,
+    objective: dict,
 ) -> tuple[str, str, str, str]:
     if formal.get("blocks_policy_update"):
         return (
@@ -356,6 +386,7 @@ def _verdict(
     if acceptance_decision == "accept" and not _objective_acceptance_ok(
         acceptance=acceptance,
         falsification=falsification,
+        objective=objective,
     ):
         return (
             "blocked_objective_gate",
@@ -435,7 +466,16 @@ def _preflight_repair_action(readiness: str | None) -> str:
     }.get(str(readiness), "run_candidate_preflight")
 
 
-def _objective_acceptance_ok(*, acceptance: dict, falsification: dict) -> bool:
+def _objective_acceptance_ok(*, acceptance: dict, falsification: dict, objective: dict) -> bool:
+    internal_ok = _internal_objective_acceptance_ok(acceptance=acceptance, falsification=falsification)
+    if not internal_ok:
+        return False
+    if not objective:
+        return True
+    return bool(objective.get("objective_gate_passed"))
+
+
+def _internal_objective_acceptance_ok(*, acceptance: dict, falsification: dict) -> bool:
     if acceptance.get("decision") != "accept":
         return False
     trigger_lcb = acceptance.get("trigger_lcb90")
@@ -486,6 +526,7 @@ def main() -> None:
     ap.add_argument("--falsification", default=None)
     ap.add_argument("--acceptance", default=None)
     ap.add_argument("--formal-gate", default=None)
+    ap.add_argument("--objective-benchmark", default=None)
     ap.add_argument("--eval-id", required=True)
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
@@ -498,6 +539,7 @@ def main() -> None:
         falsification_payload=_load_json(_resolve(root, args.falsification)),
         acceptance_payload=_load_json(_resolve(root, args.acceptance)),
         formal_mapping_gate_payload=_load_json(_resolve(root, args.formal_gate)),
+        objective_benchmark_payload=_load_json(_resolve(root, args.objective_benchmark)),
         eval_id=args.eval_id,
     )
     text = json.dumps(payload, ensure_ascii=False, indent=2)
