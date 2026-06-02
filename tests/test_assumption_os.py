@@ -105,6 +105,7 @@ from assumption_os.structural_patterns import (
     build_structural_pair_eval_payload,
     build_structural_transfer_proposal_payload,
     build_structural_writeback_eval_payload,
+    build_transfer_prediction_testability_eval_payload,
     check_structural_functor,
     extract_structural_diagram,
     search_structural_patterns,
@@ -3958,6 +3959,7 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertTrue(build_nonlexical_structural_retrieval_probe_payload(eval_id="unit_struct_retrieval")["pass"])
         self.assertTrue(build_structural_behavior_probe_payload(eval_id="unit_struct_behavior")["pass"])
         self.assertTrue(build_structural_functor_eval_payload(eval_id="unit_struct_functor")["pass"])
+        self.assertTrue(build_transfer_prediction_testability_eval_payload(eval_id="unit_struct_prediction")["pass"])
         self.assertTrue(build_structural_context_effect_payload(eval_id="unit_struct_context")["pass"])
 
         good = search_structural_patterns(
@@ -4009,6 +4011,31 @@ class AssumptionOSTest(unittest.TestCase):
         )
         self.assertEqual(bad_gate["gates"][0]["decision"], "block_negative_control")
         self.assertTrue(bad_gate["gates"][0]["blocks_policy_update"])
+
+        untestable_formal = dict(good["candidate"])
+        untestable_formal["transfer_predictions"] = ["This analogy is elegant and might help."]
+        untestable_formal["transfer_prediction_check"] = {
+            "formal_kind": "transfer_prediction_testability",
+            "pass": False,
+            "reason": "unit-test untestable prediction",
+        }
+        untestable_gate = build_structural_morphism_gate_payload(
+            proposal_payload={
+                "eval_id": "unit_struct_untestable",
+                "proposals": [{
+                    "proposal_id": "prop_struct_untestable",
+                    "proposal_type": "structural_transfer_hypothesis",
+                    "parent_node_id": "parent",
+                    "candidate_node": {"id": "cand_struct_untestable", "formal_form": untestable_formal},
+                }],
+            },
+            eval_id="unit_struct_untestable_gate",
+        )
+        self.assertEqual(
+            untestable_gate["gates"][0]["decision"],
+            "repair_missing_testable_transfer_prediction",
+        )
+        self.assertTrue(untestable_gate["gates"][0]["blocks_policy_update"])
 
         verifier = build_verifier_stack_payload(
             proposal_payload=bad_payload,

@@ -754,6 +754,10 @@ def score_pattern_match(query_diagram: str | dict | StructuralSignature, pattern
         severe_negative=severe_negative,
         transfer_predictions=pattern.get("transfer_predictions", []),
     )
+    prediction_check = assess_transfer_prediction_testability(pattern.get("transfer_predictions", []))
+    if decision not in {"block_negative_control"} and not prediction_check.get("pass"):
+        decision = "repair_missing_testable_transfer_prediction"
+        reason = prediction_check.get("reason", "Transfer prediction is not testable enough for promotion.")
     return StructuralMorphismScore(
         pattern_id=pattern["pattern_id"],
         score=round(score, 4),
@@ -928,6 +932,7 @@ def propose_structural_morphism(query_diagram: str | dict | StructuralSignature 
         "broken_or_uncertain_invariants": score.broken_or_uncertain_invariants,
         "negative_control_hits": score.negative_control_hits,
         "transfer_predictions": pattern.get("transfer_predictions", []),
+        "transfer_prediction_check": assess_transfer_prediction_testability(pattern.get("transfer_predictions", [])),
         "score": score.to_dict(),
         "status": "candidate" if score.decision != "allow" else "gate_passed_shadow",
     }
@@ -945,6 +950,13 @@ def score_structural_morphism(candidate: dict) -> dict:
         }
     decision = score.get("decision", "repair_under_specified")
     functor = candidate.get("functor_check") if isinstance(candidate, dict) else {}
+    prediction_check = (
+        candidate.get("transfer_prediction_check")
+        if isinstance(candidate, dict)
+        else {}
+    )
+    if isinstance(prediction_check, dict) and prediction_check and not prediction_check.get("pass"):
+        decision = "repair_missing_testable_transfer_prediction"
     if (
         isinstance(functor, dict)
         and functor
@@ -958,15 +970,19 @@ def score_structural_morphism(candidate: dict) -> dict:
             "block_negative_control",
             "repair_under_specified",
             "repair_missing_transfer_prediction",
+            "repair_missing_testable_transfer_prediction",
             "repair_functor_not_preserved",
         },
         "reason": (
             "Finite functor check did not preserve object, morphism, invariant, or composition structure."
             if decision == "repair_functor_not_preserved"
+            else prediction_check.get("reason")
+            if decision == "repair_missing_testable_transfer_prediction" and isinstance(prediction_check, dict)
             else score.get("reason")
         ),
         "score": score,
         "functor_check": functor if isinstance(functor, dict) else {},
+        "transfer_prediction_check": prediction_check if isinstance(prediction_check, dict) else {},
     }
 
 
@@ -1288,6 +1304,7 @@ def _proposal_structural_gate(proposal: dict) -> dict:
         "reason": gate.get("reason"),
         "score": gate.get("score", {}),
         "functor_check": gate.get("functor_check", {}),
+        "transfer_prediction_check": gate.get("transfer_prediction_check", {}),
         "preserved_invariants": formal.get("preserved_invariants", []),
         "broken_or_uncertain_invariants": formal.get("broken_or_uncertain_invariants", []),
         "negative_control_hits": formal.get("negative_control_hits", []),
@@ -1665,6 +1682,99 @@ def build_structural_context_effect_payload(
     }
 
 
+def build_transfer_prediction_testability_eval_payload(
+    *,
+    eval_id: str | None = None,
+) -> dict:
+    pattern_rows = []
+    pattern_pass = 0
+    for pattern in load_structural_patterns(None):
+        check = assess_transfer_prediction_testability(pattern.get("transfer_predictions", []))
+        pattern_pass += int(check.get("pass"))
+        pattern_rows.append({
+            "pattern_id": pattern["pattern_id"],
+            "transfer_predictions": pattern.get("transfer_predictions", []),
+            "check": check,
+            "passed": bool(check.get("pass")),
+        })
+
+    negative_cases = [
+        {
+            "id": "empty_prediction",
+            "predictions": [],
+        },
+        {
+            "id": "inspirational_prediction",
+            "predictions": ["This mapping is probably useful and elegant."],
+        },
+        {
+            "id": "no_observable_outcome",
+            "predictions": ["Prefer this structural idea when the domain feels similar."],
+        },
+    ]
+    negative_rows = []
+    negative_reject = 0
+    for case in negative_cases:
+        check = assess_transfer_prediction_testability(case["predictions"])
+        rejected = not check.get("pass")
+        negative_reject += int(rejected)
+        negative_rows.append({**case, "check": check, "rejected": rejected})
+
+    # Gate-level positive and negative controls.
+    good = search_structural_patterns(
+        None,
+        "Keep the baseline identity path, apply a residual delta correction, and keep fallback recovery.",
+        top_n=1,
+    )[0]
+    good_payload = {
+        "eval_id": eval_id,
+        "proposals": [{
+            "proposal_id": "prop_testable_prediction_good",
+            "proposal_type": "structural_transfer_hypothesis",
+            "parent_node_id": "parent",
+            "candidate_node": {"id": "cand_testable_prediction_good", "formal_form": good["candidate"]},
+        }],
+    }
+    bad_formal = dict(good["candidate"])
+    bad_formal["transfer_predictions"] = ["This analogy is conceptually interesting."]
+    bad_formal["transfer_prediction_check"] = assess_transfer_prediction_testability(bad_formal["transfer_predictions"])
+    bad_payload = {
+        "eval_id": eval_id,
+        "proposals": [{
+            "proposal_id": "prop_testable_prediction_bad",
+            "proposal_type": "structural_transfer_hypothesis",
+            "parent_node_id": "parent",
+            "candidate_node": {"id": "cand_testable_prediction_bad", "formal_form": bad_formal},
+        }],
+    }
+    good_gate = build_structural_morphism_gate_payload(proposal_payload=good_payload, eval_id=eval_id)
+    bad_gate = build_structural_morphism_gate_payload(proposal_payload=bad_payload, eval_id=eval_id)
+    pattern_rate = round(_ratio(pattern_pass, len(pattern_rows)), 4)
+    negative_rate = round(_ratio(negative_reject, len(negative_rows)), 4)
+    return {
+        "eval_id": eval_id,
+        "eval_kind": "transfer_prediction_testability_eval",
+        "pattern_count": len(pattern_rows),
+        "pattern_pass_rate": pattern_rate,
+        "negative_count": len(negative_rows),
+        "negative_rejection_rate": negative_rate,
+        "gate_positive_decision": good_gate["gates"][0]["decision"],
+        "gate_negative_decision": bad_gate["gates"][0]["decision"],
+        "pass": (
+            len(pattern_rows) >= 10
+            and pattern_rate >= 1.0
+            and negative_rate >= 1.0
+            and good_gate["gates"][0]["decision"] == "allow"
+            and bad_gate["gates"][0]["decision"] == "repair_missing_testable_transfer_prediction"
+            and bad_gate["gates"][0]["blocks_policy_update"]
+        ),
+        "pattern_rows": pattern_rows,
+        "negative_rows": negative_rows,
+        "good_gate": good_gate,
+        "bad_gate": bad_gate,
+    }
+
+
 def build_structural_writeback_eval_payload(*, eval_id: str | None = None) -> dict:
     with tempfile.TemporaryDirectory() as td:
         store = JsonlGraphStore(Path(td) / "graph")
@@ -1795,6 +1905,7 @@ def build_structural_morphism_performance_payload(
         "pair_suite": build_structural_pair_eval_payload(store, eval_id=eval_id),
         "nonlexical_retrieval": build_nonlexical_structural_retrieval_probe_payload(store, eval_id=eval_id),
         "functor_eval": build_structural_functor_eval_payload(store, eval_id=eval_id),
+        "transfer_prediction_testability": build_transfer_prediction_testability_eval_payload(eval_id=eval_id),
         "context_effect": build_structural_context_effect_payload(store, eval_id=eval_id),
         "behavior_probe": build_structural_behavior_probe_payload(store, eval_id=eval_id),
         "writeback_eval": build_structural_writeback_eval_payload(eval_id=eval_id),
@@ -1902,7 +2013,7 @@ DEFAULT_STRUCTURAL_PATTERNS = [
         "good_realizations": ["mvp", "adapter boundary", "incremental replacement", "strangler fig"],
         "bad_realizations": ["big bang rewrite", "unbounded migration"],
         "transfer_predictions": [
-            "For high-risk system changes, structural context should prefer one-module replacement with rollback over whole-system rewrite.",
+            "For high-risk system changes, one-module replacement should preserve the rollback path and reduce failure versus whole-system rewrite.",
         ],
     },
     {
@@ -2454,6 +2565,103 @@ def _gate_decision(
     return "candidate_shadow_only", "Structural mapping is plausible but should remain shadow-only until stronger evidence arrives."
 
 
+def assess_transfer_prediction_testability(predictions: list[str]) -> dict:
+    """Check whether transfer predictions can become falsification work.
+
+    This is a bounded lexical audit, not a judge.  It blocks empty or purely
+    inspirational predictions before they can affect graph policy.
+    """
+
+    text = " ".join(str(p) for p in predictions or []).lower()
+    action_hits = _term_hits(text, [
+        "predict",
+        "improve",
+        "identify",
+        "declare",
+        "name",
+        "produce",
+        "define",
+        "detect",
+        "expose",
+        "preserve",
+        "apply",
+        "prefer",
+        "check",
+        "verify",
+        "compare",
+        "relieve",
+        "reduce",
+    ])
+    observable_hits = _term_hits(text, [
+        "throughput",
+        "control rows",
+        "trigger",
+        "acceptance",
+        "before",
+        "after",
+        "balance",
+        "objective",
+        "progress",
+        "regress",
+        "failing case",
+        "same case",
+        "subproblem",
+        "interface",
+        "composition check",
+        "stable-state prediction",
+        "denoising",
+        "old path",
+        "local delta",
+        "rollback",
+        "failure",
+        "perturbation",
+        "response",
+        "constraint",
+    ])
+    control_hits = _term_hits(text, [
+        "control",
+        "negative",
+        "regress",
+        "before",
+        "after",
+        "same case",
+        "non-bottleneck",
+        "without",
+        "check",
+        "compare",
+        "versus",
+        "whole-system rewrite",
+    ])
+    score = (
+        0.45 * min(1.0, len(action_hits) / 2)
+        + 0.45 * min(1.0, len(observable_hits) / 2)
+        + 0.10 * min(1.0, len(control_hits))
+    )
+    passed = bool(predictions) and score >= 0.55 and bool(action_hits) and bool(observable_hits)
+    missing = []
+    if not predictions:
+        missing.append("prediction_text")
+    if not action_hits:
+        missing.append("action_or_claim")
+    if not observable_hits:
+        missing.append("observable_outcome")
+    return {
+        "formal_kind": "transfer_prediction_testability",
+        "prediction_count": len(predictions or []),
+        "score": round(score, 4),
+        "pass": passed,
+        "action_hits": action_hits,
+        "observable_hits": observable_hits,
+        "control_hits": control_hits,
+        "missing": missing,
+        "reason": (
+            "Transfer prediction is testable."
+            if passed
+            else "Transfer prediction lacks " + ", ".join(missing or ["enough falsifiable detail"])
+        ),
+    }
+
+
 def _ratio(num: int, den: int) -> float:
     return num / den if den else 0.0
 
@@ -2769,6 +2977,7 @@ def main() -> None:
     ap.add_argument("--retrieval-probe", action="store_true")
     ap.add_argument("--behavior-probe", action="store_true")
     ap.add_argument("--functor-eval", action="store_true")
+    ap.add_argument("--prediction-testability-eval", action="store_true")
     ap.add_argument("--context-effect", action="store_true")
     ap.add_argument("--writeback-eval", action="store_true")
     ap.add_argument("--recursive-runner-eval", action="store_true")
@@ -2797,6 +3006,8 @@ def main() -> None:
         payload["behavior_probe"] = build_structural_behavior_probe_payload(store, eval_id=args.eval_id)
     if args.functor_eval:
         payload["functor_eval"] = build_structural_functor_eval_payload(store, eval_id=args.eval_id)
+    if args.prediction_testability_eval:
+        payload["prediction_testability_eval"] = build_transfer_prediction_testability_eval_payload(eval_id=args.eval_id)
     if args.context_effect:
         payload["context_effect"] = build_structural_context_effect_payload(store, eval_id=args.eval_id)
     if args.writeback_eval:
