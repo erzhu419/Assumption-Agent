@@ -159,8 +159,8 @@ STRATEGY_TAG_TRANSFER_GUIDANCE = {
 
 NATURAL_STRATEGY_CUES = {
     "S01": {
-        "strong": ["控制变量", "对照组", "A/B", "AB测试", "单变量", "只改变一个", "固定其他", "同一优惠", "同一物料", "逐一测试", "故障排除", "精确诊断", "隔离故障", "定位是哪一次提交", "空调系统不制冷"],
-        "medium": ["渠道", "参数", "试验", "比较效果", "归因", "哪一个", "影响最大", "可能源于", "可能的问题包括", "可能是", "尝试了三种", "三条新的"],
+        "strong": ["控制变量", "对照组", "A/B", "AB测试", "单变量", "只改变一个", "固定其他", "同一优惠", "同一物料", "逐一测试", "故障排除", "精确诊断", "隔离故障", "定位是哪一次提交", "精确找出是哪一次提交", "代码提交", "提交导致", "git bisect", "空调系统不制冷"],
+        "medium": ["渠道", "参数", "试验", "比较效果", "归因", "哪一个", "影响最大", "可能源于", "可能的问题包括", "可能是", "尝试了三种", "三条新的", "最近一周内", "过去七天内"],
     },
     "S02": {
         "strong": ["分解", "子问题", "子任务", "拆分", "分而治之", "模块化", "接口"],
@@ -179,8 +179,8 @@ NATURAL_STRATEGY_CUES = {
         "medium": ["可维护", "采用成本", "学习成本", "方案选择"],
     },
     "S06": {
-        "strong": ["特殊情况", "先特殊", "简单情形", "从1到n", "逐步推广", "推广到一般"],
-        "medium": ["公式", "归纳", "先解决", "一般性问题"],
+        "strong": ["特殊情况", "先特殊", "简单情形", "从1到n", "逐步推广", "推广到一般", "树状", "树形", "星形结构", "先在这类特定结构", "再考虑如何扩展"],
+        "medium": ["公式", "归纳", "先解决", "一般性问题", "特定结构", "分层结构", "扩展到更复杂"],
     },
     "S07": {
         "strong": ["反推", "倒推", "从目标", "前提条件", "逆向", "需要什么条件", "晋升机会", "职业发展规划", "未来十年"],
@@ -295,6 +295,76 @@ TRACE_LEARNED_PATTERN_ABSTAIN = {
 }
 
 
+TRACE_REPAIR_GUIDANCE = {
+    "pat_bottleneck_capacity": {
+        "_default": (
+            "修复版瓶颈迁移: 先把当前系统拆成可观测阶段，列出每个阶段的等待时间、失败率、影响用户/收入/安全的范围；"
+            "只把资源投向证据最强的限制环节，并给出 owner、验收阈值、回滚或回归检查。不要停留在“找瓶颈”这句话。"
+        ),
+        "S19": (
+            "约束松弛版: 先确认哪些约束是硬红线不能突破，再设计不违反红线的替代路径，"
+            "例如局部环境、催化剂、压力/湿度替代、协商式缓冲或短周期小试；最后把原约束逐步加回验证。"
+        ),
+        "S23": (
+            "资源耗尽版: 不追求完整最优，先定义可投稿/可交付的最低证据包和停止条件；"
+            "把剩余资源只投向会改变 go/no-go 的关键缺口，其他工作放入后续计划。"
+        ),
+        "S24": (
+            "关键节点版: 先做分阶段 profiling 或严重度×影响面×阻塞程度排序，"
+            "优先处理 release/blocker/revenue/safety 级别的第一限制点；每个动作必须带负责人、验证脚本、阈值和回归防护。"
+        ),
+    },
+    "pat_incremental_replacement": {
+        "_default": (
+            "修复版增量替换: 明确旧路径继续服务的边界，新能力走旁路或外部壳层，先只读/shadow/MVP，再 feature flag 灰度；"
+            "每一步都要有回滚、数据兼容、验收指标和不直接重写核心系统的限制。"
+        ),
+        "S15": (
+            "S15 增量构建: 把“保留当前可工作版本”落到系统边界上，区分内部稳定版、外部试点版和可复用核心能力；"
+            "先做最小付费/预警/人工确认闭环，再决定是否扩大产品化或自动化范围。"
+        ),
+    },
+    "pat_negative_feedback": {
+        "_default": (
+            "修复版反作用/激励迁移: 不只画参与方，还要列每方利益、风险、退出选项和会抵消方案的自然反应；"
+            "方案必须包含激励对齐、透明治理、硬底线、试点指标和退出机制。"
+        ),
+        "S20": (
+            "对立视角版: 把保守方和激进方的目标都转成不可破坏的约束与可优化目标，"
+            "用分层阈值、仲裁规则和 shadow/仿真验证避免任一边压倒系统目标。"
+        ),
+        "S27": (
+            "激励版: 先识别谁会因方案受损或套利，再用补偿、担保、分层定价、透明监督、责任边界或退出条款让行为回到共同目标。"
+        ),
+    },
+    "pat_residual_correction": {
+        "_default": (
+            "修复版残差/路径依赖迁移: 先把当前可工作路径或先验判断当 baseline，再列新增证据/故障/机会作为 delta；"
+            "只允许局部修正，不要把历史投入当继续投入的理由。输出要包含量化阈值、保留/切换条件和回退路径。"
+        ),
+        "S12": (
+            "贝叶斯/期望值版: 先列旧先验和当前证据，估计继续、修理、替换或试点的期望收益/成本/失败概率；"
+            "明确哪些新证据会改变决策，并设置最坏情况边界与止损阈值。"
+        ),
+        "S26": (
+            "路径依赖版: 识别哪些约束来自历史锁定、团队技能、接口兼容、客户习惯或供应链；"
+            "把不可立即改变的部分保留为 baseline，对可改变部分做旁路、培训、适配层、双轨迁移或小规模替换，并给出迁移触发条件。"
+            "技术/运营遗留系统要补知识封存、返聘/带教、备件或供应商兜底、标准平台分段替换；商业服务迁移要先选一个低风险产品线/客户群试点，保留高触感人工兜底。"
+        ),
+    },
+    "pat_signal_nuisance_separation": {
+        "_default": (
+            "修复版信号/噪声迁移: 先定义要保留的稳定关系和可丢弃的扰动维度；"
+            "用降维、对数/坐标变换、重复测量、代理模型或屏蔽变量降低复杂度，并明确何时必须回到原问题验证。"
+        ),
+        "S09": (
+            "S09 简化版: 不能只说简化。要说明保留哪个核心变量/不变量，去掉哪些自由度或噪声，"
+            "使用什么变换或近似，以及怎样检查简化后的结论没有破坏原问题约束。"
+        ),
+    },
+}
+
+
 def build_structural_live_ablation_payload(
     *,
     sample_path: Path,
@@ -311,6 +381,9 @@ def build_structural_live_ablation_payload(
     judge_transport: str = "requests",
     resume: bool = True,
     dry_run: bool = False,
+    focus_pattern_id: str | None = None,
+    repair_patterns: set[str] | None = None,
+    extra_abstain_patterns: set[str] | None = None,
 ) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     forensic_path = out_dir / f"{eval_id}_forensic.jsonl"
@@ -320,7 +393,17 @@ def build_structural_live_ablation_payload(
 
     sample = json.loads(sample_path.read_text(encoding="utf-8"))[:max_cases]
     store = JsonlGraphStore(graph_dir) if graph_dir else None
-    cases = _select_cases(sample, store=store, min_score=min_score, selection_mode=selection_mode)
+    repair_patterns = repair_patterns or set()
+    abstain_patterns = set(TRACE_LEARNED_PATTERN_ABSTAIN) | (extra_abstain_patterns or set())
+    cases = _select_cases(
+        sample,
+        store=store,
+        min_score=min_score,
+        selection_mode=selection_mode,
+        focus_pattern_id=focus_pattern_id,
+        repair_patterns=repair_patterns,
+        abstain_patterns=abstain_patterns,
+    )
     answers = _load_json(answers_path) if resume else {}
     judgments = _load_json(judgments_path) if resume else {}
 
@@ -335,6 +418,9 @@ def build_structural_live_ablation_payload(
         "solver_model": solver_model,
         "judge_model": judge_model,
         "judge_transport": judge_transport,
+        "focus_pattern_id": focus_pattern_id,
+        "repair_patterns": sorted(repair_patterns),
+        "abstain_patterns": sorted(abstain_patterns),
         "answer_cells": len(cases) * 3,
         "judge_pairs": len(cases) * 2,
         "case_pattern_counts": dict(Counter(c["top_pattern_id"] for c in cases)),
@@ -374,6 +460,7 @@ def build_structural_live_ablation_payload(
         cases=cases,
         answers=answers,
         judgments=judgments,
+        focus_pattern_id=focus_pattern_id,
     )
     summary_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return payload
@@ -385,8 +472,11 @@ def _select_cases(
     store: JsonlGraphStore | None,
     min_score: float,
     selection_mode: str,
+    focus_pattern_id: str | None,
+    repair_patterns: set[str],
+    abstain_patterns: set[str],
 ) -> list[dict]:
-    if selection_mode not in {"retrieval", "natural", "natural_gated", "natural_safe", "coverage", "hybrid"}:
+    if selection_mode not in {"retrieval", "natural", "natural_gated", "natural_safe", "natural_repaired", "coverage", "hybrid"}:
         raise ValueError(f"unknown selection_mode={selection_mode}")
     patterns = load_structural_patterns(store)
     pattern_by_id = {p["pattern_id"]: p for p in patterns}
@@ -400,6 +490,8 @@ def _select_cases(
             pattern_by_id=pattern_by_id,
             min_score=min_score,
             selection_mode=selection_mode,
+            repair_patterns=repair_patterns,
+            abstain_patterns=abstain_patterns,
         )
         if not top:
             continue
@@ -411,10 +503,10 @@ def _select_cases(
                 row,
                 patterns=patterns,
                 exclude_pattern_id=top.get("pattern_id"),
-                exclude_reference_patterns=(route_source == "coverage_gold"),
+                exclude_reference_patterns=True,
             )
         retrieval_top = retrieval_apps[0] if retrieval_apps else {}
-        out.append({
+        case = {
             "problem_id": row.get("problem_id"),
             "domain": row.get("domain"),
             "difficulty": row.get("difficulty"),
@@ -436,7 +528,10 @@ def _select_cases(
             "placebo_context": format_structural_morphism_applications([placebo], max_items=1),
             "top_application": _compact_app(top),
             "placebo_application": _compact_app(placebo),
-        })
+        }
+        if focus_pattern_id and _case_focus_pattern_id(case) != focus_pattern_id:
+            continue
+        out.append(case)
     return out
 
 
@@ -447,6 +542,8 @@ def _choose_top_application(
     pattern_by_id: dict[str, dict],
     min_score: float,
     selection_mode: str,
+    repair_patterns: set[str],
+    abstain_patterns: set[str],
 ) -> tuple[dict | None, str]:
     retrieval_top = retrieval_apps[0] if retrieval_apps else None
     retrieval_ok = bool(retrieval_top and float(retrieval_top.get("score", 0.0) or 0.0) >= min_score)
@@ -460,7 +557,7 @@ def _choose_top_application(
             return natural_app, "natural_cue"
         return (retrieval_top, "retrieval") if retrieval_ok else (None, "none")
     if selection_mode == "natural_gated":
-        if natural_app and _passes_trace_learned_policy(natural_app):
+        if natural_app and _passes_trace_learned_policy(natural_app, abstain_patterns=abstain_patterns):
             natural_app = dict(natural_app)
             natural_app["decision"] = "natural_trace_policy_route"
             natural_app["route_policy"] = {
@@ -472,7 +569,7 @@ def _choose_top_application(
         return None, "trace_policy_abstain"
     if selection_mode == "natural_safe":
         if natural_app:
-            if _passes_trace_learned_policy(natural_app):
+            if _passes_trace_learned_policy(natural_app, abstain_patterns=abstain_patterns):
                 natural_app = dict(natural_app)
                 natural_app["decision"] = "natural_trace_policy_route"
                 natural_app["route_policy"] = {
@@ -481,7 +578,23 @@ def _choose_top_application(
                     "decision": "accepted",
                 }
                 return natural_app, "natural_trace_policy"
-            return _safe_abstain_app(row, natural_app), "natural_safe_abstain"
+            return _safe_abstain_app(row, natural_app, abstain_patterns=abstain_patterns), "natural_safe_abstain"
+        return (retrieval_top, "retrieval") if retrieval_ok else (None, "none")
+    if selection_mode == "natural_repaired":
+        if natural_app:
+            repaired = _repaired_pattern_app(row, natural_app, repair_patterns=repair_patterns)
+            if repaired:
+                return repaired, "natural_repaired_pattern"
+            if _passes_trace_learned_policy(natural_app, abstain_patterns=abstain_patterns):
+                natural_app = dict(natural_app)
+                natural_app["decision"] = "natural_trace_policy_route"
+                natural_app["route_policy"] = {
+                    "policy_id": "trace_learned_repair_policy_20260603",
+                    "source_eval_id": "structural_live_natural100_v1_gpt54mini_gpt55_20260603",
+                    "decision": "accepted",
+                }
+                return natural_app, "natural_trace_policy"
+            return _safe_abstain_app(row, natural_app, abstain_patterns=abstain_patterns), "natural_safe_abstain"
         return (retrieval_top, "retrieval") if retrieval_ok else (None, "none")
     if selection_mode == "coverage":
         return (coverage_app, "coverage_gold") if coverage_app else (None, "none")
@@ -632,13 +745,55 @@ def _strategy_transfer_prediction(
     return "；".join(part for part in parts if part)
 
 
-def _passes_trace_learned_policy(app: dict) -> bool:
-    return app.get("pattern_id") not in TRACE_LEARNED_PATTERN_ABSTAIN
+def _passes_trace_learned_policy(app: dict, *, abstain_patterns: set[str]) -> bool:
+    return app.get("pattern_id") not in abstain_patterns
 
 
-def _safe_abstain_app(row: dict, routed_app: dict) -> dict:
+def _repaired_pattern_app(row: dict, routed_app: dict, *, repair_patterns: set[str]) -> dict | None:
+    pattern_id = str(routed_app.get("pattern_id") or "")
+    if pattern_id not in repair_patterns:
+        return None
+    guidance = TRACE_REPAIR_GUIDANCE.get(pattern_id)
+    if not guidance:
+        return None
+    repaired = dict(routed_app)
+    tag = str(repaired.get("route_strategy_tag") or "")
+    repair_text = guidance.get(tag) or guidance.get("_default", "")
+    if not repair_text:
+        return None
+    existing_predictions = [
+        pred for pred in repaired.get("transfer_predictions", [])
+        if isinstance(pred, str) and pred.strip()
+    ]
+    repaired["decision"] = "natural_repaired_route"
+    repaired["score"] = max(float(repaired.get("score", 0.0) or 0.0), 0.91)
+    repaired["matched_terms"] = [
+        *repaired.get("matched_terms", []),
+        "trace_repair",
+        f"repair:{pattern_id}",
+    ]
+    repaired["transfer_predictions"] = [
+        f"Pattern-local repair guidance: {repair_text}",
+        (
+            "Problem-detail guard: 先抽取当前题面中的至少3个具体约束/数字/对象名，"
+            "并把它们分别转成行动、验收指标或风险控制；不要只给结构化原则。"
+        ),
+        *existing_predictions[:2],
+    ]
+    repaired["route_policy"] = {
+        "policy_id": "trace_learned_repair_policy_20260603",
+        "source_eval_id": "structural_live_natural100_v1_gpt54mini_gpt55_20260603",
+        "decision": "repair_promoted",
+        "repaired_pattern_id": pattern_id,
+        "repair_strategy_tag": tag,
+        "previous_abstain_reason": TRACE_LEARNED_PATTERN_ABSTAIN.get(pattern_id, ""),
+    }
+    return repaired
+
+
+def _safe_abstain_app(row: dict, routed_app: dict, *, abstain_patterns: set[str]) -> dict:
     abstained_pattern = routed_app.get("pattern_id", "unknown")
-    abstained_reason = TRACE_LEARNED_PATTERN_ABSTAIN.get(abstained_pattern, "trace evidence below gate")
+    abstained_reason = TRACE_LEARNED_PATTERN_ABSTAIN.get(abstained_pattern, "extra trace-policy abstain candidate")
     tag = routed_app.get("route_strategy_tag")
     prediction = (
         "安全弃权: 当前问题的结构映射不够可靠。不要强行套用抽象结构；"
@@ -753,6 +908,16 @@ def _compact_app(app: dict) -> dict:
         "broken_or_uncertain_invariants": app.get("broken_or_uncertain_invariants", [])[:8],
         "negative_control_hits": app.get("negative_control_hits", [])[:8],
     }
+
+
+def _case_focus_pattern_id(case: dict) -> str | None:
+    app = case.get("top_application") or {}
+    policy = app.get("route_policy") or {}
+    return (
+        policy.get("repaired_pattern_id")
+        or policy.get("abstained_pattern_id")
+        or case.get("top_pattern_id")
+    )
 
 
 class RequestsChatClient:
@@ -1030,7 +1195,15 @@ def _call_with_retry(client, prompt: str, *, max_tokens: int, temperature: float
     return {"text": "", "model": "", "error": str(last_error)[:300]}
 
 
-def _summarize(*, eval_id: str, plan: dict, cases: list[dict], answers: dict, judgments: dict) -> dict:
+def _summarize(
+    *,
+    eval_id: str,
+    plan: dict,
+    cases: list[dict],
+    answers: dict,
+    judgments: dict,
+    focus_pattern_id: str | None,
+) -> dict:
     pair_summaries = {}
     for pair, positive_arm in [
         ("structural_vs_base", "structural"),
@@ -1085,7 +1258,7 @@ def _summarize(*, eval_id: str, plan: dict, cases: list[dict], answers: dict, ju
         for case in cases
         if not all(answers.get(case["problem_id"], {}).get(arm) for arm in ("base", "structural", "placebo"))
     ]
-    pass_gate = (
+    global_pass_gate = (
         pair_summaries.get("structural_vs_base", {}).get("n", 0) >= 50
         and pair_summaries["structural_vs_base"]["utility"] >= 0.55
         and pair_summaries["structural_vs_base"]["win_rate"] > pair_summaries["structural_vs_base"]["loss_rate"]
@@ -1094,15 +1267,47 @@ def _summarize(*, eval_id: str, plan: dict, cases: list[dict], answers: dict, ju
         and pair_summaries["structural_vs_placebo"]["win_rate"] > pair_summaries["structural_vs_placebo"]["loss_rate"]
         and not missing_answers
     )
+    focus_pass_gate = _focus_pass_gate(
+        pair_summaries=pair_summaries,
+        case_count=len(cases),
+        missing_answers=missing_answers,
+    ) if focus_pattern_id else None
+    validation_gate = {
+        "scope": "focus_pattern" if focus_pattern_id else "global",
+        "focus_pattern_id": focus_pattern_id,
+        "global_pass": global_pass_gate,
+        "focus_pass": focus_pass_gate,
+        "criteria": (
+            "focus requires n>=2, utility>=0.55 vs base/placebo, and win_rate>=loss_rate"
+            if focus_pattern_id
+            else "global requires n>=50, utility>=0.55 vs base, utility>=0.58 vs placebo, and win_rate>loss_rate"
+        ),
+    }
+    pass_gate = bool(focus_pass_gate) if focus_pattern_id else global_pass_gate
     return {
         "eval_id": eval_id,
         "eval_kind": "structural_live_large_ablation",
         "pass": pass_gate,
+        "validation_gate": validation_gate,
         "plan": plan,
         "answer_count": sum(len(v) for v in answers.values() if isinstance(v, dict)),
         "missing_answer_problem_ids": missing_answers,
         "pair_summaries": pair_summaries,
     }
+
+
+def _focus_pass_gate(*, pair_summaries: dict, case_count: int, missing_answers: list[str]) -> bool:
+    if case_count < 2 or missing_answers:
+        return False
+    for pair in ("structural_vs_base", "structural_vs_placebo"):
+        summary = pair_summaries.get(pair, {})
+        if summary.get("n", 0) != case_count:
+            return False
+        if summary.get("utility", 0.0) < 0.55:
+            return False
+        if summary.get("win_rate", 0.0) < summary.get("loss_rate", 0.0):
+            return False
+    return True
 
 
 def _route_quality(cases: list[dict]) -> dict:
@@ -1207,6 +1412,14 @@ def _resolve(path: str) -> Path:
     return p if p.is_absolute() else PROJECT / p
 
 
+def _parse_csv_set(value: str | None) -> set[str]:
+    if not value:
+        return set()
+    if value.strip().lower() in {"all", "*"}:
+        return set(TRACE_REPAIR_GUIDANCE)
+    return {part.strip() for part in value.split(",") if part.strip()}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sample", default="phase two/analysis/cache/sample_100.json")
@@ -1215,7 +1428,10 @@ def main() -> None:
     ap.add_argument("--eval-id", required=True)
     ap.add_argument("--max-cases", type=int, default=100)
     ap.add_argument("--min-score", type=float, default=0.22)
-    ap.add_argument("--selection-mode", choices=["retrieval", "natural", "natural_gated", "natural_safe", "coverage", "hybrid"], default="hybrid")
+    ap.add_argument("--selection-mode", choices=["retrieval", "natural", "natural_gated", "natural_safe", "natural_repaired", "coverage", "hybrid"], default="hybrid")
+    ap.add_argument("--focus-pattern-id", default="")
+    ap.add_argument("--repair-patterns", default="")
+    ap.add_argument("--extra-abstain-patterns", default="")
     ap.add_argument("--solver-model", default="gpt_mini")
     ap.add_argument("--judge-model", default="gpt55")
     ap.add_argument("--judge-transport", choices=["requests", "router"], default="requests")
@@ -1240,6 +1456,9 @@ def main() -> None:
         judge_transport=args.judge_transport,
         resume=not args.no_resume,
         dry_run=args.dry_run,
+        focus_pattern_id=args.focus_pattern_id or None,
+        repair_patterns=_parse_csv_set(args.repair_patterns),
+        extra_abstain_patterns=_parse_csv_set(args.extra_abstain_patterns),
     )
     print(json.dumps(_stdout_payload(payload, print_cases=args.print_cases), ensure_ascii=False, indent=2))
 

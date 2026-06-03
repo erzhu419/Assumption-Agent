@@ -193,3 +193,112 @@ Operator status:
 - Default operator injection remains disabled.
 - The failed operator run showed that long, generic operator text made answers too structure-led and less problem-specific.
 - Operators should be promoted only after pattern-local validation, not as a global default.
+
+## Weak-Pattern Repair Round 1
+
+Objective: repair the weakest natural-routing patterns one at a time, with a focused performance gate before allowing the repair back into the full 100-case policy.
+
+Code changes:
+
+- Added `selection_mode=natural_repaired`.
+- Added `--repair-patterns`, so a repair can be tested on one pattern family without promoting all unvalidated repairs.
+- Added `--focus-pattern-id`, with a focused validation gate: `n>=2`, utility `>=0.55` vs base and placebo, win rate `>=` loss rate, and no missing answers.
+- Added `--extra-abstain-patterns` for negative-control tests.
+- Made placebo routing exclude reference patterns by default. A placebo structural arm should not accidentally receive the gold/reference pattern.
+
+### Failed: Bottleneck Repair
+
+Eval id: `structural_live_bottleneck_repair_v1_gpt54mini_gpt55_20260603`
+
+Result: `pass=false`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 12 | 5 | 6 | 1 | 0.4583 | 0.4167 | 0.5000 |
+| structural vs placebo | 12 | 2 | 8 | 2 | 0.2500 | 0.1667 | 0.6667 |
+
+Decision: not promoted.
+
+Diagnosis: direct bottleneck guidance still made answers too structural and did not reliably recover problem-specific action plans. Some of the previous bottleneck losses were also route-boundary errors, especially git-bisect and tree/special-case problems.
+
+### Route-Cue Repair
+
+The natural cue router was updated before another full run:
+
+- Git-bisect/code-commit localization cues now route to controlled intervention.
+- Tree/star/specific-structure cues now route to the special-case/generalization family instead of bottleneck.
+
+Eval id: `structural_live_natural_safe_cuefix_placebo100_v1_gpt54mini_gpt55_20260603`
+
+Result: `pass=false`, but better than the broken placebo run.
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 100 | 55 | 36 | 9 | 0.5950 | 0.5500 | 0.3600 |
+| structural vs placebo | 100 | 51 | 39 | 10 | 0.5600 | 0.5100 | 0.3900 |
+
+Decision: cue changes are useful but insufficient alone. The remaining blocker was `pat_residual_correction`.
+
+### Failed: Residual Abstention
+
+Eval id: `structural_live_residual_extra_abstain_v1_gpt54mini_gpt55_20260603`
+
+Result: `pass=false`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 12 | 5 | 7 | 0 | 0.4167 | 0.4167 | 0.5833 |
+| structural vs placebo | 12 | 5 | 6 | 1 | 0.4583 | 0.4167 | 0.5000 |
+
+Decision: residual should not be fixed by simply abstaining. It needs a pattern-local repair.
+
+### Passed: Residual Pattern Repair
+
+Eval id: `structural_live_residual_repair_v4_gpt54mini_gpt55_20260603`
+
+The passing repair added two pieces:
+
+- Residual-specific decision framing: keep the current working path as baseline, treat new evidence as delta, estimate continue/repair/replace/try costs, and set stop-loss thresholds.
+- Problem-detail guard: extract at least three concrete constraints, numbers, or object names from the problem and convert them into actions, acceptance metrics, or risk controls.
+
+Result: `pass=true`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 12 | 8 | 4 | 0 | 0.6667 | 0.6667 | 0.3333 |
+| structural vs placebo | 12 | 8 | 3 | 1 | 0.7083 | 0.6667 | 0.2500 |
+
+Decision: promote only `pat_residual_correction` repair into the full natural policy.
+
+### Full 100-Case Integration
+
+Eval id: `structural_live_natural_repaired_residual100_v1_gpt54mini_gpt55_20260603`
+
+Route split:
+
+- `natural_trace_policy`: `64`
+- `natural_safe_abstain`: `24`
+- `natural_repaired_pattern`: `12`
+
+Result: `pass=true`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 100 | 56 | 36 | 8 | 0.6000 | 0.5600 | 0.3600 |
+| structural vs placebo | 100 | 55 | 34 | 11 | 0.6050 | 0.5500 | 0.3400 |
+
+This improves over the previous pushed `natural_safe100` result:
+
+| Run | vs base utility | vs placebo utility |
+|---|---:|---:|
+| `structural_live_natural_safe100_v1_gpt54mini_gpt55_20260603` | 0.5950 | 0.5800 |
+| `structural_live_natural_repaired_residual100_v1_gpt54mini_gpt55_20260603` | 0.6000 | 0.6050 |
+
+Important validation note: the final 100-case integration is a compositional replay from first-party live traces: non-residual rows reused the first-party cue-fix run and the 12 residual rows reused the first-party residual repair run. It is not a synthetic judge-only estimate, but it is also not a single monolithic fresh 300-call run.
+
+Remaining weak families:
+
+- `pat_bottleneck_capacity`: direct repair failed; next step should separate true bottleneck cases from route-boundary cases.
+- `pat_incremental_replacement`: repair guidance exists but is not promoted until focused validation passes.
+- `pat_negative_feedback`: repair guidance exists but is not promoted until focused validation passes.
+- `pat_signal_nuisance_separation`: repair guidance exists but is not promoted until focused validation passes.
