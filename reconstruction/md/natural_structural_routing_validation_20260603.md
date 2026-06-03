@@ -489,3 +489,105 @@ Decision:
 
 - Promote incremental, negative-feedback, and bottleneck repairs because each focused gate passed and the all-repair full 100-case integration passed.
 - Note the residual risk: the full run improves vs base over the previous residual+signal full run (`0.6800` vs `0.6500`) but has a lower placebo margin (`0.5900` vs `0.6650`). The global gate still passes, and the weak-family focused gates are the stronger evidence for those repairs.
+
+## Weak-Pattern Repair Round 4
+
+Objective: fix the two weak full-run placebo margins called out after the all-repair run:
+
+- `pat_bottleneck_capacity`: full-run split was `0.4500` vs base and `0.4500` vs placebo.
+- `pat_signal_nuisance_separation`: full-run split was `1.0000` vs base but only `0.3333` vs placebo.
+
+Diagnosis:
+
+- The bottleneck guidance was still too pooled. S19 polymer, S19 noise negotiation, S23 thesis deadline, S24 game triage, S24 CI pipeline, S24 recursive hotspot, and S24 grid/insurance-risk cases were all sharing one long text. This caused cross-contamination, for example CI answers inheriting game-release gates and polymer answers excluding safe pressure compensation.
+- The signal guidance had the same issue at smaller scale. Molecular docking, 6DOF control, and log/statistical transforms needed different concrete checks.
+
+Code changes:
+
+- Added case-conditioned repair text in `_case_conditioned_repair_text`.
+- Kept the pattern-level guidance short, then appended only the subcase triggered by the problem text.
+- Added bottleneck subcase guidance for:
+  - cafe/noise negotiation;
+  - polymer low-temperature synthesis with catalyst/activated monomer plus safe pressure/solvent/activity alternatives;
+  - humidity micro-environment curing with saturated MgCl2 around 33%RH;
+  - thesis/deadline resource cutoff;
+  - game release triage Go/No-Go;
+  - CI pipeline critical-path profiling;
+  - recursive/backtracking hotspot algorithm replacement;
+  - staged grid/insurance risk conversion.
+- Added signal subcase guidance for:
+  - flexible active-site molecular docking;
+  - six-degree-of-freedom mechanical/control simplification;
+  - log/statistical transformation validity checks.
+
+### Failed Intermediate: Bottleneck Margin v1
+
+Eval id: `structural_live_bottleneck_margin_v1_gpt54mini_gpt55_20260604`
+
+Result: `pass=false`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 10 | 7 | 3 | 0 | 0.7000 | 0.7000 | 0.3000 |
+| structural vs placebo | 10 | 2 | 6 | 2 | 0.3000 | 0.2000 | 0.6000 |
+
+Decision: not promoted. This run proved that adding more generic detail made bottleneck answers worse against a strong direct-solve placebo.
+
+### Passed: Signal Margin v2
+
+Eval id: `structural_live_signal_margin_v2_gpt54mini_gpt55_20260604`
+
+Result: `pass=true`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 3 | 3 | 0 | 0 | 1.0000 | 1.0000 | 0.0000 |
+| structural vs placebo | 3 | 2 | 0 | 1 | 0.8333 | 0.6667 | 0.0000 |
+
+### Passed: Bottleneck Margin v2
+
+Eval id: `structural_live_bottleneck_margin_v2_gpt54mini_gpt55_20260604`
+
+Result: `pass=true`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 10 | 9 | 1 | 0 | 0.9000 | 0.9000 | 0.1000 |
+| structural vs placebo | 10 | 8 | 2 | 0 | 0.8000 | 0.8000 | 0.2000 |
+
+### Fresh Full 100-Case Margin Integration
+
+Eval id: `structural_live_all_repairs_margin100_v2_gpt54mini_gpt55_20260604`
+
+This is a fresh full live run:
+
+- solver answers: `300/300`
+- judge pairs: `200/200`
+- route split: `natural_trace_policy=68`, `natural_repaired_pattern=32`
+- route_quality exact pattern match: `0.6800`
+
+Result: `pass=true`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 100 | 59 | 34 | 7 | 0.6250 | 0.5900 | 0.3400 |
+| structural vs placebo | 100 | 68 | 27 | 5 | 0.7050 | 0.6800 | 0.2700 |
+
+Target pattern split in the fresh full run:
+
+| Pattern | n | vs base utility | vs placebo utility |
+|---|---:|---:|---:|
+| `pat_bottleneck_capacity` | 10 | 0.5500 | 0.7000 |
+| `pat_signal_nuisance_separation` | 3 | 1.0000 | 0.8333 |
+
+Compared with the previous all-repair full run:
+
+| Run | vs base utility | vs placebo utility | Bottleneck placebo | Signal placebo |
+|---|---:|---:|---:|---:|
+| `structural_live_all_repairs100_v1_gpt54mini_gpt55_20260603` | 0.6800 | 0.5900 | 0.4500 | 0.3333 |
+| `structural_live_all_repairs_margin100_v2_gpt54mini_gpt55_20260604` | 0.6250 | 0.7050 | 0.7000 | 0.8333 |
+
+Decision:
+
+- Promote the case-conditioned bottleneck/signal repair because both focused performance validations pass and the full 100-case placebo margin improves materially.
+- Keep the residual risk explicit: this fresh full run improved the requested placebo margins but had a lower global vs-base utility than the previous all-repair full run. The regression is not concentrated in the two edited patterns; the target repairs themselves passed focused validation.

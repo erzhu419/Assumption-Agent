@@ -1,0 +1,502 @@
+{
+  "eval_id": "structural_live_signal_margin_v2_gpt54mini_gpt55_20260604",
+  "eval_kind": "structural_live_large_ablation",
+  "pass": true,
+  "validation_gate": {
+    "scope": "focus_pattern",
+    "focus_pattern_id": "pat_signal_nuisance_separation",
+    "global_pass": false,
+    "focus_pass": true,
+    "criteria": "focus requires n>=2, utility>=0.55 vs base/placebo, and win_rate>=loss_rate"
+  },
+  "plan": {
+    "eval_id": "structural_live_signal_margin_v2_gpt54mini_gpt55_20260604",
+    "sample_path": "/home/erzhu419/mine_code/Asumption Agent/phase two/analysis/cache/sample_100.json",
+    "graph_dir": "/home/erzhu419/mine_code/Asumption Agent/phase four/assumption_graph",
+    "max_cases": 100,
+    "selected_case_count": 3,
+    "min_score": 0.22,
+    "selection_mode": "natural_repaired",
+    "solver_model": "gpt_mini",
+    "judge_model": "gpt55",
+    "judge_transport": "requests",
+    "focus_pattern_id": "pat_signal_nuisance_separation",
+    "repair_patterns": [
+      "pat_signal_nuisance_separation"
+    ],
+    "abstain_patterns": [
+      "pat_bottleneck_capacity",
+      "pat_incremental_replacement",
+      "pat_negative_feedback",
+      "pat_signal_nuisance_separation"
+    ],
+    "answer_cells": 9,
+    "judge_pairs": 6,
+    "case_pattern_counts": {
+      "pat_signal_nuisance_separation": 3
+    },
+    "route_source_counts": {
+      "natural_repaired_pattern": 3
+    },
+    "cases": [
+      {
+        "problem_id": "science_0154",
+        "domain": "science",
+        "difficulty": "medium",
+        "description": "一家农业生物技术公司希望开发一种新型杀虫剂，该杀虫剂通过靶向昆虫体内的特定酶来发挥作用。你需要设计一种小分子抑制剂，使其与酶的活性位点紧密结合，从而抑制酶的活性。然而，这个酶的活性位点具有高度柔性，可以采取多种构象。你需要从数万种小分子-酶结合构型中，找出能达到最低结合自由能（即最稳定结合）的构型，以指导药物分子的优化和设计。直接对每种构型进行分子动力学模拟耗时巨大。",
+        "reference_answer": {
+          "optimal_strategies": [
+            "S09",
+            "S10"
+          ],
+          "acceptable_strategies": [
+            "S08"
+          ],
+          "explicitly_bad_strategies": [],
+          "reasoning": "降维简化：先在简化的能量模型上搜索。对称性利用：蛋白质结构的对称性可以减少搜索空间。"
+        },
+        "coverage_tags": [
+          "S09",
+          "S10",
+          "S08"
+        ],
+        "route_source": "natural_repaired_pattern",
+        "route_strategy_tag": "S09",
+        "route_strategy_source": "natural_cue",
+        "route_confidence": 0.96,
+        "top_pattern_id": "pat_signal_nuisance_separation",
+        "top_pattern_name": "Signal vs Stochastic Nuisance Separation",
+        "top_score": 0.96,
+        "retrieval_top_pattern_id": "pat_bottleneck_capacity",
+        "retrieval_top_score": 0.0,
+        "placebo_pattern_id": "pat_conservation_balance",
+        "placebo_pattern_name": "Conservation / Balance-Preserving Transformation",
+        "structural_context": "## Structural Morphism Reasoning\nShadow-mode structural hints. Use only when the current problem preserves the listed invariants.\n\n- Signal vs Stochastic Nuisance Separation (pat_signal_nuisance_separation, score=0.96, gate=natural_repaired_route)\n  Matched terms: S09, natural_cue, Signal vs Stochastic Nuisance Separation, 活性位点, 构型, 最低结合自由能, 分子动力学模拟, trace_repair\n  Preserved invariants: predictable_structure_separated; stochastic_nuisance_suppressed\n  Transfer prediction: Pattern-local repair guidance: S09 类型化简化版: 先判断当前题是哪类简化。计算搜索题先做粗筛/聚类/分层重打分；控制题要锁定无用自由度但保留未来接口；统计/不等式题要先检查正值、0值、比例变量和不等号方向；遗留模型题要把旧模型封装成 oracle，保留复杂路径，只在高流动、低波动、简单结构等特例触发近似，并用 shadow 回测，超阈值立刻回退。答案必须点名保留的不变量、丢弃的维度、验收指标和回到原问题的验证。当前题特化: 分子 docking 题必须写层级筛选: 受体构象集/normal mode/短MD采样 -> ensemble docking -> interaction fingerprints(氢键、疏水、pi-pi、盐桥、金属配位) -> 姿势/接触模式聚类去冗余 -> MM/GBSA或MM/PBSA复筛 -> 只对代表性Top候选做短MD、FEP/TI、umbrella或metadynamics估算DeltaG；若存在对称/等价残基，用它合并等价构型并检查重复收敛。",
+        "placebo_context": "## Structural Morphism Reasoning\nShadow-mode structural hints. Use only when the current problem preserves the listed invariants.\n\n- Conservation / Balance-Preserving Transformation (pat_conservation_balance, score=0.00, gate=repair_under_specified)\n  Broken/uncertain: balance_check_closes; conserved_quantity_preserved\n  Transfer prediction: A valid conservation transfer should expose the conserved quantity and a before/after balance check.",
+        "top_application": {
+          "pattern_id": "pat_signal_nuisance_separation",
+          "pattern_name": "Signal vs Stochastic Nuisance Separation",
+          "score": 0.96,
+          "decision": "natural_repaired_route",
+          "route_strategy_tag": "S09",
+          "route_strategy_source": "natural_cue",
+          "route_confidence": 0.96,
+          "route_policy": {
+            "policy_id": "trace_learned_repair_policy_20260603",
+            "source_eval_id": "structural_live_natural100_v1_gpt54mini_gpt55_20260603",
+            "decision": "repair_promoted",
+            "repaired_pattern_id": "pat_signal_nuisance_separation",
+            "repair_strategy_tag": "S09",
+            "previous_abstain_reason": "natural100 trace: base utility 0.3750, placebo utility 0.1250"
+          },
+          "route_cue_score": 12.0,
+          "route_cue_terms": [
+            "活性位点",
+            "构型",
+            "最低结合自由能",
+            "分子动力学模拟"
+          ],
+          "matched_terms": [
+            "S09",
+            "natural_cue",
+            "Signal vs Stochastic Nuisance Separation",
+            "活性位点",
+            "构型",
+            "最低结合自由能",
+            "分子动力学模拟",
+            "trace_repair",
+            "repair:pat_signal_nuisance_separation"
+          ],
+          "preserved_invariants": [
+            "predictable_structure_separated",
+            "stochastic_nuisance_suppressed"
+          ],
+          "broken_or_uncertain_invariants": [],
+          "negative_control_hits": []
+        },
+        "placebo_application": {
+          "pattern_id": "pat_conservation_balance",
+          "pattern_name": "Conservation / Balance-Preserving Transformation",
+          "score": 0.0,
+          "decision": "repair_under_specified",
+          "route_strategy_tag": null,
+          "route_strategy_source": null,
+          "route_confidence": null,
+          "route_policy": null,
+          "route_cue_score": null,
+          "route_cue_terms": [],
+          "matched_terms": [],
+          "preserved_invariants": [],
+          "broken_or_uncertain_invariants": [
+            "balance_check_closes",
+            "conserved_quantity_preserved"
+          ],
+          "negative_control_hits": []
+        }
+      },
+      {
+        "problem_id": "engineering_0160",
+        "domain": "engineering",
+        "difficulty": "medium",
+        "description": "作为一名在能源领域工作的机械工程师，你正在为一座新型核电站设计燃料棒装卸系统。该系统使用一个高度复杂的机械臂，具备在三维空间内进行平移（x, y, z）和旋转（绕x, 绕y, 绕z轴）的六个自由度，以应对未来可能出现的各种复杂维护任务。然而，目前的初期装载阶段，燃料棒只能通过一个垂直通道精确地插入反应堆核心，并且只能进行简单的上下直线运动。为了确保操作的安全性、简化操作员的培训流程并降低初期调试的风险，你需要在不影响未来扩展性的前提下，优化当前的控制方案。",
+        "reference_answer": {
+          "optimal_strategies": [
+            "S09"
+          ],
+          "acceptable_strategies": [],
+          "explicitly_bad_strategies": [],
+          "reasoning": "降维简化：锁定不需要的3个自由度，降低控制复杂度。"
+        },
+        "coverage_tags": [
+          "S09"
+        ],
+        "route_source": "natural_repaired_pattern",
+        "route_strategy_tag": "S09",
+        "route_strategy_source": "natural_cue",
+        "route_confidence": 0.96,
+        "top_pattern_id": "pat_signal_nuisance_separation",
+        "top_pattern_name": "Signal vs Stochastic Nuisance Separation",
+        "top_score": 0.96,
+        "retrieval_top_pattern_id": "pat_bottleneck_capacity",
+        "retrieval_top_score": 0.0,
+        "placebo_pattern_id": "pat_conservation_balance",
+        "placebo_pattern_name": "Conservation / Balance-Preserving Transformation",
+        "structural_context": "## Structural Morphism Reasoning\nShadow-mode structural hints. Use only when the current problem preserves the listed invariants.\n\n- Signal vs Stochastic Nuisance Separation (pat_signal_nuisance_separation, score=0.96, gate=natural_repaired_route)\n  Matched terms: S09, natural_cue, Signal vs Stochastic Nuisance Separation, 简化, 六个自由度, 自由度, trace_repair, repair:pat_signal_nuisance_separation\n  Preserved invariants: predictable_structure_separated; stochastic_nuisance_suppressed\n  Transfer prediction: Pattern-local repair guidance: S09 类型化简化版: 先判断当前题是哪类简化。计算搜索题先做粗筛/聚类/分层重打分；控制题要锁定无用自由度但保留未来接口；统计/不等式题要先检查正值、0值、比例变量和不等号方向；遗留模型题要把旧模型封装成 oracle，保留复杂路径，只在高流动、低波动、简单结构等特例触发近似，并用 shadow 回测，超阈值立刻回退。答案必须点名保留的不变量、丢弃的维度、验收指标和回到原问题的验证。当前题特化: 六自由度控制题必须同时写机械和控制降维: 导向套/键槽/夹具、硬限位、软件互锁，状态流home->pre-align->low-speed insert->hold，位置/姿态/力/电流/速度阈值，空载、假棒、低速带载验证，以及急停/回退；保留6DOF接口、坐标变换和驱动通道。",
+        "placebo_context": "## Structural Morphism Reasoning\nShadow-mode structural hints. Use only when the current problem preserves the listed invariants.\n\n- Conservation / Balance-Preserving Transformation (pat_conservation_balance, score=0.00, gate=repair_under_specified)\n  Broken/uncertain: balance_check_closes; conserved_quantity_preserved\n  Transfer prediction: A valid conservation transfer should expose the conserved quantity and a before/after balance check.",
+        "top_application": {
+          "pattern_id": "pat_signal_nuisance_separation",
+          "pattern_name": "Signal vs Stochastic Nuisance Separation",
+          "score": 0.96,
+          "decision": "natural_repaired_route",
+          "route_strategy_tag": "S09",
+          "route_strategy_source": "natural_cue",
+          "route_confidence": 0.96,
+          "route_policy": {
+            "policy_id": "trace_learned_repair_policy_20260603",
+            "source_eval_id": "structural_live_natural100_v1_gpt54mini_gpt55_20260603",
+            "decision": "repair_promoted",
+            "repaired_pattern_id": "pat_signal_nuisance_separation",
+            "repair_strategy_tag": "S09",
+            "previous_abstain_reason": "natural100 trace: base utility 0.3750, placebo utility 0.1250"
+          },
+          "route_cue_score": 9.0,
+          "route_cue_terms": [
+            "简化",
+            "六个自由度",
+            "自由度"
+          ],
+          "matched_terms": [
+            "S09",
+            "natural_cue",
+            "Signal vs Stochastic Nuisance Separation",
+            "简化",
+            "六个自由度",
+            "自由度",
+            "trace_repair",
+            "repair:pat_signal_nuisance_separation"
+          ],
+          "preserved_invariants": [
+            "predictable_structure_separated",
+            "stochastic_nuisance_suppressed"
+          ],
+          "broken_or_uncertain_invariants": [],
+          "negative_control_hits": []
+        },
+        "placebo_application": {
+          "pattern_id": "pat_conservation_balance",
+          "pattern_name": "Conservation / Balance-Preserving Transformation",
+          "score": 0.0,
+          "decision": "repair_under_specified",
+          "route_strategy_tag": null,
+          "route_strategy_source": null,
+          "route_confidence": null,
+          "route_policy": null,
+          "route_cue_score": null,
+          "route_cue_terms": [],
+          "matched_terms": [],
+          "preserved_invariants": [],
+          "broken_or_uncertain_invariants": [
+            "balance_check_closes",
+            "conserved_quantity_preserved"
+          ],
+          "negative_control_hits": []
+        }
+      },
+      {
+        "problem_id": "mathematics_0111",
+        "domain": "mathematics",
+        "difficulty": "medium",
+        "description": "你是一名数据科学家，正在分析一家大型电商平台的用户行为数据。你想要证明某个用户群体的转化率与他们浏览商品数量之间存在一个非线性的正向关系，具体表现为一个复杂的多项式不等式。直接处理这个不等式非常棘手，因为其中的系数和指数都很大，且项数众多。你尝试了几种传统的统计方法都无法得到清晰的结论。然而，你突然想到，如果对转化率和浏览商品数量进行对数变换，或许能将这个复杂的非线性关系简化为一个更容易处理的线性不等式或近似线性关系，从而更容易地进行统计推断和证明。",
+        "reference_answer": {
+          "optimal_strategies": [
+            "S18",
+            "S09"
+          ],
+          "acceptable_strategies": [],
+          "explicitly_bad_strategies": [],
+          "reasoning": "抽象化/泛化：通过取对数变换抽象化问题结构。降维简化：变换使问题更简单。"
+        },
+        "coverage_tags": [
+          "S18",
+          "S09"
+        ],
+        "route_source": "natural_repaired_pattern",
+        "route_strategy_tag": "S09",
+        "route_strategy_source": "natural_cue",
+        "route_confidence": 0.915,
+        "top_pattern_id": "pat_signal_nuisance_separation",
+        "top_pattern_name": "Signal vs Stochastic Nuisance Separation",
+        "top_score": 0.915,
+        "retrieval_top_pattern_id": "pat_bottleneck_capacity",
+        "retrieval_top_score": 0.0,
+        "placebo_pattern_id": "pat_conservation_balance",
+        "placebo_pattern_name": "Conservation / Balance-Preserving Transformation",
+        "structural_context": "## Structural Morphism Reasoning\nShadow-mode structural hints. Use only when the current problem preserves the listed invariants.\n\n- Signal vs Stochastic Nuisance Separation (pat_signal_nuisance_separation, score=0.92, gate=natural_repaired_route)\n  Matched terms: S09, natural_cue, Signal vs Stochastic Nuisance Separation, 简化, trace_repair, repair:pat_signal_nuisance_separation\n  Preserved invariants: predictable_structure_separated; stochastic_nuisance_suppressed\n  Transfer prediction: Pattern-local repair guidance: S09 类型化简化版: 先判断当前题是哪类简化。计算搜索题先做粗筛/聚类/分层重打分；控制题要锁定无用自由度但保留未来接口；统计/不等式题要先检查正值、0值、比例变量和不等号方向；遗留模型题要把旧模型封装成 oracle，保留复杂路径，只在高流动、低波动、简单结构等特例触发近似，并用 shadow 回测，超阈值立刻回退。答案必须点名保留的不变量、丢弃的维度、验收指标和回到原问题的验证。当前题特化: 统计/不等式题聚焦变换有效性: 检查正值和0值，区分乘法/幂律结构与加法多项式，使用log/log1p/logit、控制变量、残差与异方差诊断、bootstrap或分段近似验证，不要承诺对数一定严格线性化。",
+        "placebo_context": "## Structural Morphism Reasoning\nShadow-mode structural hints. Use only when the current problem preserves the listed invariants.\n\n- Conservation / Balance-Preserving Transformation (pat_conservation_balance, score=0.00, gate=repair_under_specified)\n  Broken/uncertain: balance_check_closes; conserved_quantity_preserved\n  Transfer prediction: A valid conservation transfer should expose the conserved quantity and a before/after balance check.",
+        "top_application": {
+          "pattern_id": "pat_signal_nuisance_separation",
+          "pattern_name": "Signal vs Stochastic Nuisance Separation",
+          "score": 0.915,
+          "decision": "natural_repaired_route",
+          "route_strategy_tag": "S09",
+          "route_strategy_source": "natural_cue",
+          "route_confidence": 0.915,
+          "route_policy": {
+            "policy_id": "trace_learned_repair_policy_20260603",
+            "source_eval_id": "structural_live_natural100_v1_gpt54mini_gpt55_20260603",
+            "decision": "repair_promoted",
+            "repaired_pattern_id": "pat_signal_nuisance_separation",
+            "repair_strategy_tag": "S09",
+            "previous_abstain_reason": "natural100 trace: base utility 0.3750, placebo utility 0.1250"
+          },
+          "route_cue_score": 3.0,
+          "route_cue_terms": [
+            "简化"
+          ],
+          "matched_terms": [
+            "S09",
+            "natural_cue",
+            "Signal vs Stochastic Nuisance Separation",
+            "简化",
+            "trace_repair",
+            "repair:pat_signal_nuisance_separation"
+          ],
+          "preserved_invariants": [
+            "predictable_structure_separated",
+            "stochastic_nuisance_suppressed"
+          ],
+          "broken_or_uncertain_invariants": [],
+          "negative_control_hits": []
+        },
+        "placebo_application": {
+          "pattern_id": "pat_conservation_balance",
+          "pattern_name": "Conservation / Balance-Preserving Transformation",
+          "score": 0.0,
+          "decision": "repair_under_specified",
+          "route_strategy_tag": null,
+          "route_strategy_source": null,
+          "route_confidence": null,
+          "route_policy": null,
+          "route_cue_score": null,
+          "route_cue_terms": [],
+          "matched_terms": [],
+          "preserved_invariants": [],
+          "broken_or_uncertain_invariants": [
+            "balance_check_closes",
+            "conserved_quantity_preserved"
+          ],
+          "negative_control_hits": []
+        }
+      }
+    ],
+    "route_quality": {
+      "n": 3,
+      "exact_pattern_match_rate": 1.0,
+      "outcomes": {
+        "match": 3
+      },
+      "by_route_source": {
+        "natural_repaired_pattern": {
+          "n": 3,
+          "outcomes": {
+            "match": 3
+          },
+          "match_rate": 1.0,
+          "miss_rate": 0.0
+        }
+      },
+      "by_domain": {
+        "engineering": {
+          "n": 1,
+          "outcomes": {
+            "match": 1
+          },
+          "match_rate": 1.0,
+          "miss_rate": 0.0
+        },
+        "mathematics": {
+          "n": 1,
+          "outcomes": {
+            "match": 1
+          },
+          "match_rate": 1.0,
+          "miss_rate": 0.0
+        },
+        "science": {
+          "n": 1,
+          "outcomes": {
+            "match": 1
+          },
+          "match_rate": 1.0,
+          "miss_rate": 0.0
+        }
+      },
+      "by_strategy_tag": {
+        "S09": {
+          "n": 3,
+          "outcomes": {
+            "match": 3
+          },
+          "match_rate": 1.0,
+          "miss_rate": 0.0
+        }
+      },
+      "mismatches": []
+    }
+  },
+  "answer_count": 9,
+  "missing_answer_problem_ids": [],
+  "pair_summaries": {
+    "structural_vs_base": {
+      "n": 3,
+      "outcomes": {
+        "win": 3
+      },
+      "utility": 1.0,
+      "win_rate": 1.0,
+      "loss_rate": 0.0,
+      "tie_rate": 0.0,
+      "judged_problem_ids": [
+        "science_0154",
+        "engineering_0160",
+        "mathematics_0111"
+      ],
+      "by_pattern": {
+        "pat_signal_nuisance_separation": {
+          "n": 3,
+          "outcomes": {
+            "win": 3
+          },
+          "utility": 1.0
+        }
+      },
+      "by_route_source": {
+        "natural_repaired_pattern": {
+          "n": 3,
+          "outcomes": {
+            "win": 3
+          },
+          "utility": 1.0,
+          "win_rate": 1.0,
+          "loss_rate": 0.0
+        }
+      },
+      "by_domain": {
+        "engineering": {
+          "n": 1,
+          "outcomes": {
+            "win": 1
+          },
+          "utility": 1.0,
+          "win_rate": 1.0,
+          "loss_rate": 0.0
+        },
+        "mathematics": {
+          "n": 1,
+          "outcomes": {
+            "win": 1
+          },
+          "utility": 1.0,
+          "win_rate": 1.0,
+          "loss_rate": 0.0
+        },
+        "science": {
+          "n": 1,
+          "outcomes": {
+            "win": 1
+          },
+          "utility": 1.0,
+          "win_rate": 1.0,
+          "loss_rate": 0.0
+        }
+      }
+    },
+    "structural_vs_placebo": {
+      "n": 3,
+      "outcomes": {
+        "win": 2,
+        "tie": 1
+      },
+      "utility": 0.8333,
+      "win_rate": 0.6667,
+      "loss_rate": 0.0,
+      "tie_rate": 0.3333,
+      "judged_problem_ids": [
+        "science_0154",
+        "engineering_0160",
+        "mathematics_0111"
+      ],
+      "by_pattern": {
+        "pat_signal_nuisance_separation": {
+          "n": 3,
+          "outcomes": {
+            "win": 2,
+            "tie": 1
+          },
+          "utility": 0.8333
+        }
+      },
+      "by_route_source": {
+        "natural_repaired_pattern": {
+          "n": 3,
+          "outcomes": {
+            "win": 2,
+            "tie": 1
+          },
+          "utility": 0.8333,
+          "win_rate": 0.6667,
+          "loss_rate": 0.0
+        }
+      },
+      "by_domain": {
+        "engineering": {
+          "n": 1,
+          "outcomes": {
+            "tie": 1
+          },
+          "utility": 0.5,
+          "win_rate": 0.0,
+          "loss_rate": 0.0
+        },
+        "mathematics": {
+          "n": 1,
+          "outcomes": {
+            "win": 1
+          },
+          "utility": 1.0,
+          "win_rate": 1.0,
+          "loss_rate": 0.0
+        },
+        "science": {
+          "n": 1,
+          "outcomes": {
+            "win": 1
+          },
+          "utility": 1.0,
+          "win_rate": 1.0,
+          "loss_rate": 0.0
+        }
+      }
+    }
+  }
+}

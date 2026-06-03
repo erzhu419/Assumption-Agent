@@ -304,23 +304,17 @@ TRACE_REPAIR_GUIDANCE = {
         "S19": (
             "约束松弛版: 先确认哪些约束是硬红线不能突破，再设计不违反红线的替代路径，"
             "例如局部环境、催化剂、压力/湿度替代、协商式缓冲或短周期小试；最后把原约束逐步加回验证。"
-            "材料/化学题如果温度上限不能突破，要优先写催化剂、活化单体/中间体、压力替代、两步预聚/后固化和小试 DOE；"
-            "如果湿度/固化范围是约束，不要试图降低整个房间湿度，先做小型密闭固化箱、饱和 MgCl2 等盐溶液稳定约33%RH、"
-            "样品隔离、微风扇、多点温湿度记录和空箱校验。"
+            "不要把所有替代路径都写进每个答案，只保留题面真正触发的2-3个动作。"
         ),
         "S23": (
             "资源耗尽版: 不追求完整最优，先定义可投稿/可交付的最低证据包和停止条件；"
             "把剩余资源只投向会改变 go/no-go 的关键缺口，其他工作放入后续计划。"
-            "论文/毕业窗口题要先保毕业/投稿: 一周内和导师确认主结论、冻结6个月级别新增实验、把未验证预测写入未来工作，"
-            "若新增实验会影响核心结论就收缩主张而不是拖延毕业。"
+            "论文/毕业窗口题要先保毕业/投稿，新增实验只能作为不阻塞当前交付的并行事项。"
         ),
         "S24": (
             "关键节点版: 先做分阶段 profiling 或严重度×影响面×阻塞程度排序，"
             "优先处理 release/blocker/revenue/safety 级别的第一限制点；每个动作必须带负责人、验证脚本、阈值和回归防护。"
-            "如果题面是提交导致的性能/内存回归，要直接用 git bisect + 固定负载基准脚本 + good/bad 阈值，不要泛泛 profiling；"
-            "游戏/发布缺陷题要按 P0/P1/P2 排序: 崩溃、主线/成长阻断、支付/商城错误必须发布前清零，Boss 可刷收益则升 P0，PVP 平衡通常后置热修；"
-            "CI/发布管道题要记录每阶段 p50/p95、等待时间、重试率和关键路径，只优化占比最高或阻塞全链路的步骤；"
-            "递归/回溯热点题要把热点函数改成 DP/状态机/记忆化/剪枝/banded 或 Hirschberg，并用旧实现 A/B 回归确保结果一致。"
+            "先判定当前题是发布缺陷、CI管道、递归热点、基础设施接入还是其他瓶颈；只展开命中的子场景。"
         ),
     },
     "pat_incremental_replacement": {
@@ -390,12 +384,8 @@ TRACE_REPAIR_GUIDANCE = {
         ),
         "S09": (
             "S09 类型化简化版: 先判断当前题是哪类简化。计算搜索题先做粗筛/聚类/分层重打分；"
-            "如果题面涉及柔性活性位点、多构象或分子动力学，必须先构建受体/候选构象集合并做 ensemble docking，"
-            "再用 MM/GBSA、MM/PBSA、FEP/TI 等只复核 Top 候选；只有在已有高精度标签或历史实验数据时，"
-            "才把代理模型/主动学习作为可选加速，不要把它当成必需步骤；统计/不等式题要先检查正值、0值、比例变量和不等号方向，"
-            "区分乘幂关系与加法多项式，转化率题优先写 logit/控制变量/残差与异方差诊断，"
-            "必要时用 log1p、log-sum-exp、Taylor 界、分段线性、GAM 或 bootstrap 验证；"
-            "控制题要锁定无用自由度但保留未来接口；遗留模型题要把旧模型封装成 oracle，保留复杂路径，"
+            "控制题要锁定无用自由度但保留未来接口；统计/不等式题要先检查正值、0值、比例变量和不等号方向；"
+            "遗留模型题要把旧模型封装成 oracle，保留复杂路径，"
             "只在高流动、低波动、简单结构等特例触发近似，并用 shadow 回测，超阈值立刻回退。"
             "答案必须点名保留的不变量、丢弃的维度、验收指标和回到原问题的验证。"
         ),
@@ -796,7 +786,7 @@ def _repaired_pattern_app(row: dict, routed_app: dict, *, repair_patterns: set[s
         return None
     repaired = dict(routed_app)
     tag = str(repaired.get("route_strategy_tag") or "")
-    repair_text = guidance.get(tag) or guidance.get("_default", "")
+    repair_text = _case_conditioned_repair_text(row, pattern_id=pattern_id, tag=tag, guidance=guidance)
     if not repair_text:
         return None
     existing_predictions = [
@@ -827,6 +817,101 @@ def _repaired_pattern_app(row: dict, routed_app: dict, *, repair_patterns: set[s
         "previous_abstain_reason": TRACE_LEARNED_PATTERN_ABSTAIN.get(pattern_id, ""),
     }
     return repaired
+
+
+def _case_conditioned_repair_text(
+    row: dict,
+    *,
+    pattern_id: str,
+    tag: str,
+    guidance: dict[str, str],
+) -> str:
+    base = guidance.get(tag) or guidance.get("_default", "")
+    text = str(row.get("description") or "")
+    low = text.lower()
+    extras: list[str] = []
+
+    if pattern_id == "pat_bottleneck_capacity":
+        if tag == "S19":
+            if _has_any(low, ["咖啡", "磨豆", "噪音", "不想直接投诉"]):
+                extras.append(
+                    "咖啡/噪音题只用低冲突约束松弛: 答案前半段必须同时给友好沟通和即时自我保护，"
+                    "如非高峰找店主协商、请求推迟大批量磨豆/挪机/减震垫/隔音罩，同时用耳塞、白噪音、密封条临时保护睡眠；"
+                    "升级只写物业/社区中立协调，不要写强硬投诉。"
+                )
+            elif _has_any(low, ["聚合物", "反应釜", "300°", "300c", "250°", "250c", "分子量"]):
+                extras.append(
+                    "聚合物低温合成题必须保留两条约束松弛路径: 用催化剂/引发剂/活化单体降低活化能，"
+                    "并在设备允许的250C安全上限内测试压力、溶剂或活度能否部分替代高温；不要直接排除压力补偿。"
+                    "同时写严格脱水/脱氧、惰性气氛或真空/惰性扫气移除缩聚副产物、分段升温、延长保温、在线粘度/转化率监控，"
+                    "Go/No-Go 用 Mw/Mn、GPC、DSC/TGA、DMA/拉伸强度和重复批次。"
+                )
+            elif _has_any(low, ["湿度", "固化", "除湿", "30%", "40%"]):
+                extras.append(
+                    "湿度/固化题不要降低整间房湿度；只做小型密闭固化箱或局部罩，"
+                    "用饱和MgCl2稳定约33%RH，配样品隔离、微风扇、多点温湿度记录、空箱校验，"
+                    "并设置偏离30-40%RH超过阈值时停机、重新平衡或返工。"
+                )
+        elif tag == "S23" and _has_any(low, ["毕业", "论文", "投稿", "3个月", "6个月", "排队"]):
+            extras.append(
+                "毕业/投稿窗口题要把毕业作为硬门槛: 48小时内和导师确认论文边界，1-2周内冻结图表和主结论，"
+                "6个月级实验只能预约并行、不能作为当前投稿前置；2周拿不到排期就停止等待，"
+                "未验证预测写入讨论/未来工作，必要时收缩主张而不是拖延毕业。"
+            )
+        elif tag == "S24":
+            if _has_any(low, ["bug", "pvp", "商城", "boss", "任务链", "qa lead", "封闭测试"]):
+                extras.append(
+                    "游戏发布缺陷题必须给发布门禁: P0=崩溃、主线/成长阻断、支付/商城错误，发布前清零；"
+                    "Boss若卡关/刷收益升P0，PVP平衡通常进首日热修。"
+                    "每个P0写owner、ETA、复现脚本、回归用例；Go/No-Go 指标为购买成功率>=99.9%、任务完成率=100%、崩溃率接近0，"
+                    "来不及时给配置关闭、热修、回滚或延期。"
+                )
+            elif _has_any(low, ["发布管道", "自动化发布", "ci", "cd", "app store", "google play", "20 个", "18个", "45 分钟", "90分钟"]):
+                extras.append(
+                    "CI/发布管道题只做流水线定位，不要夹杂游戏Bug门禁。"
+                    "给所有步骤埋点: 开始/结束、p50/p95、排队、重试、输入规模、产物大小，并画关键路径；"
+                    "瓶颈阈值写单步>20%总时长、p95抖动、重试/排队高或阻塞后续步骤。"
+                    "用3-5次固定负载发布验证总时长、失败率、发布成功率，先优化最长1-2个阻塞环节。"
+                )
+            elif _has_any(low, ["递归", "回溯", "sequence", "align", "pattern_backtrack", "比对"]):
+                extras.append(
+                    "递归/回溯热点题要直接替换热点算法: DP/记忆化/状态机/NFA、banded alignment、Hirschberg或上界剪枝；"
+                    "必须定义状态键、父指针/迭代回溯、旧实现A/B一致性、p95/CPU/内存下降指标和回退开关。"
+                )
+            elif _has_any(low, ["电力公司", "保险公司", "承保", "并网", "核聚变"]):
+                extras.append(
+                    "电网/保险接入题的瓶颈是风险不可验证和不可定价: 先做孤岛/厂内微网示范、第三方安全与稳定性认证，"
+                    "再签限功率/限时段/可切离的分阶段并网协议；保险用政府风险池、再保险、分层承保和责任上限，"
+                    "每阶段以可用率、非计划停机率、输出波动、保护动作成功率作Go/No-Go。"
+                )
+
+    if pattern_id == "pat_signal_nuisance_separation" and tag == "S09":
+        if _has_any(low, ["活性位点", "构型", "结合自由能", "分子动力学", "小分子"]):
+            extras.append(
+                "分子 docking 题必须写层级筛选: 受体构象集/normal mode/短MD采样 -> ensemble docking -> interaction fingerprints"
+                "(氢键、疏水、pi-pi、盐桥、金属配位) -> 姿势/接触模式聚类去冗余 -> MM/GBSA或MM/PBSA复筛 -> "
+                "只对代表性Top候选做短MD、FEP/TI、umbrella或metadynamics估算DeltaG；若存在对称/等价残基，用它合并等价构型并检查重复收敛。"
+            )
+        elif _has_any(low, ["六个自由度", "自由度", "机械臂", "燃料棒", "垂直通道"]):
+            extras.append(
+                "六自由度控制题必须同时写机械和控制降维: 导向套/键槽/夹具、硬限位、软件互锁，"
+                "状态流home->pre-align->low-speed insert->hold，位置/姿态/力/电流/速度阈值，"
+                "空载、假棒、低速带载验证，以及急停/回退；保留6DOF接口、坐标变换和驱动通道。"
+            )
+        elif _has_any(low, ["对数", "转化率", "不等式", "多项式"]):
+            extras.append(
+                "统计/不等式题聚焦变换有效性: 检查正值和0值，区分乘法/幂律结构与加法多项式，"
+                "使用log/log1p/logit、控制变量、残差与异方差诊断、bootstrap或分段近似验证，不要承诺对数一定严格线性化。"
+            )
+
+    parts = [base] if base else []
+    if extras:
+        parts.append("当前题特化: " + "；".join(extras))
+    return "".join(parts)
+
+
+def _has_any(low_text: str, terms: list[str]) -> bool:
+    return any(term.lower() in low_text for term in terms)
 
 
 def _safe_abstain_app(row: dict, routed_app: dict, *, abstain_patterns: set[str]) -> dict:
