@@ -386,7 +386,7 @@ def _select_cases(
     min_score: float,
     selection_mode: str,
 ) -> list[dict]:
-    if selection_mode not in {"retrieval", "natural", "natural_gated", "coverage", "hybrid"}:
+    if selection_mode not in {"retrieval", "natural", "natural_gated", "natural_safe", "coverage", "hybrid"}:
         raise ValueError(f"unknown selection_mode={selection_mode}")
     patterns = load_structural_patterns(store)
     pattern_by_id = {p["pattern_id"]: p for p in patterns}
@@ -470,6 +470,19 @@ def _choose_top_application(
             }
             return natural_app, "natural_trace_policy"
         return None, "trace_policy_abstain"
+    if selection_mode == "natural_safe":
+        if natural_app:
+            if _passes_trace_learned_policy(natural_app):
+                natural_app = dict(natural_app)
+                natural_app["decision"] = "natural_trace_policy_route"
+                natural_app["route_policy"] = {
+                    "policy_id": "trace_learned_safe_abstain_20260603",
+                    "source_eval_id": "structural_live_natural100_v1_gpt54mini_gpt55_20260603",
+                    "decision": "accepted",
+                }
+                return natural_app, "natural_trace_policy"
+            return _safe_abstain_app(row, natural_app), "natural_safe_abstain"
+        return (retrieval_top, "retrieval") if retrieval_ok else (None, "none")
     if selection_mode == "coverage":
         return (coverage_app, "coverage_gold") if coverage_app else (None, "none")
     if coverage_app:
@@ -621,6 +634,44 @@ def _strategy_transfer_prediction(
 
 def _passes_trace_learned_policy(app: dict) -> bool:
     return app.get("pattern_id") not in TRACE_LEARNED_PATTERN_ABSTAIN
+
+
+def _safe_abstain_app(row: dict, routed_app: dict) -> dict:
+    abstained_pattern = routed_app.get("pattern_id", "unknown")
+    abstained_reason = TRACE_LEARNED_PATTERN_ABSTAIN.get(abstained_pattern, "trace evidence below gate")
+    tag = routed_app.get("route_strategy_tag")
+    prediction = (
+        "安全弃权: 当前问题的结构映射不够可靠。不要强行套用抽象结构；"
+        "请直接解决原问题，优先给出领域内具体步骤、判断指标和风险控制。"
+    )
+    matched_terms = ["safe_abstain", abstained_pattern]
+    if tag:
+        matched_terms.append(str(tag))
+    matched_terms.extend(routed_app.get("route_cue_terms", [])[:6])
+    return {
+        "pattern_id": "pat_structural_abstain",
+        "pattern_name": "Structural Morphism Abstention / Direct Solve",
+        "score": 0.0,
+        "decision": "natural_safe_abstain",
+        "matched_terms": matched_terms,
+        "preserved_invariants": [],
+        "broken_or_uncertain_invariants": ["trace_evidence_below_gate", abstained_pattern],
+        "negative_control_hits": [],
+        "transfer_predictions": [prediction],
+        "route_strategy_tag": tag,
+        "route_strategy_source": routed_app.get("route_strategy_source"),
+        "route_confidence": routed_app.get("route_confidence"),
+        "route_reason": routed_app.get("route_reason"),
+        "route_cue_score": routed_app.get("route_cue_score"),
+        "route_cue_terms": routed_app.get("route_cue_terms", []),
+        "route_policy": {
+            "policy_id": "trace_learned_safe_abstain_20260603",
+            "source_eval_id": "structural_live_natural100_v1_gpt54mini_gpt55_20260603",
+            "decision": "abstain",
+            "abstained_pattern_id": abstained_pattern,
+            "reason": abstained_reason,
+        },
+    }
 
 
 def _operator_context_enabled() -> bool:
@@ -1164,7 +1215,7 @@ def main() -> None:
     ap.add_argument("--eval-id", required=True)
     ap.add_argument("--max-cases", type=int, default=100)
     ap.add_argument("--min-score", type=float, default=0.22)
-    ap.add_argument("--selection-mode", choices=["retrieval", "natural", "natural_gated", "coverage", "hybrid"], default="hybrid")
+    ap.add_argument("--selection-mode", choices=["retrieval", "natural", "natural_gated", "natural_safe", "coverage", "hybrid"], default="hybrid")
     ap.add_argument("--solver-model", default="gpt_mini")
     ap.add_argument("--judge-model", default="gpt55")
     ap.add_argument("--judge-transport", choices=["requests", "router"], default="requests")

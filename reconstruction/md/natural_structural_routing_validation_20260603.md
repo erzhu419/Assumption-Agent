@@ -138,7 +138,58 @@ What is solved:
 
 What remains:
 
-- Full 100/100 natural routing is still slightly below gate.
+- Full 100/100 natural routing without abstention is still slightly below gate.
 - `residual_correction` became weak in the successful gated run and needs its own repair.
 - Operator text is not ready for default use; it should be validated pattern-by-pattern before promotion.
 - `natural_gated` is an abstaining policy, not a complete autonomous morphism search engine.
+
+## Full-Coverage Repair
+
+Eval id: `structural_live_natural_safe100_v1_gpt54mini_gpt55_20260603`
+
+`natural_safe` keeps all 100 cases in the live benchmark. It routes strong cases through normal natural structural context and routes trace-negative cases through an explicit structural-abstention context:
+
+- `natural_trace_policy`: `73`
+- `natural_safe_abstain`: `27`
+
+The abstention context does not force a weak morphism. It tells the solver that the structural mapping is unreliable and that it should solve the original problem directly with concrete domain steps, metrics, and risk controls.
+
+Command:
+
+```bash
+MODEL_ROUTER_TIMEOUT=25 python3 -m assumption_os.structural_live_ablation \
+  --eval-id structural_live_natural_safe100_v1_gpt54mini_gpt55_20260603 \
+  --selection-mode natural_safe \
+  --max-cases 100 \
+  --solver-model gpt_mini \
+  --judge-model gpt55 \
+  --judge-transport requests \
+  --solve-workers 4 \
+  --judge-workers 2
+```
+
+Result: `pass=true`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 100 | 54 | 35 | 11 | 0.5950 | 0.5400 | 0.3500 |
+| structural vs placebo | 100 | 54 | 38 | 8 | 0.5800 | 0.5400 | 0.3800 |
+
+Route split:
+
+| Route Source | n | vs base utility | vs placebo utility |
+|---|---:|---:|---:|
+| natural_trace_policy | 73 | 0.6164 | 0.6164 |
+| natural_safe_abstain | 27 | 0.5370 | 0.4815 |
+
+Interpretation:
+
+- The original `natural` 100-case failure is repaired by letting the structural layer abstain inside the 100-case run rather than dropping cases.
+- This is a stronger production policy than unconditional structural transfer: the system can use morphisms when validated and decline them when first-party trace says they are harmful.
+- The pass is still tight on placebo (`0.5800`), so the next repair target is not more gating. It is to make the abstained families useful again one by one: bottleneck/capacity, negative feedback/incentive, signal/noise, and incremental replacement.
+
+Operator status:
+
+- Default operator injection remains disabled.
+- The failed operator run showed that long, generic operator text made answers too structure-led and less problem-specific.
+- Operators should be promoted only after pattern-local validation, not as a global default.
