@@ -302,3 +302,82 @@ Remaining weak families:
 - `pat_incremental_replacement`: repair guidance exists but is not promoted until focused validation passes.
 - `pat_negative_feedback`: repair guidance exists but is not promoted until focused validation passes.
 - `pat_signal_nuisance_separation`: repair guidance exists but is not promoted until focused validation passes.
+
+## Weak-Pattern Repair Round 2
+
+Objective: repair `pat_signal_nuisance_separation` after residual repair, but still promote only after focused validation and a fresh full 100-case run.
+
+### Signal/Nuisance Failed Attempts
+
+The first S09 repair was too abstract and then too broad:
+
+| Eval id | n | vs base utility | vs placebo utility | Result | Diagnosis |
+|---|---:|---:|---:|---|---|
+| `structural_live_signal_repair_v1_gpt54mini_gpt55_20260603` | 4 | 0.1250 | 0.2500 | fail | Generic simplification guidance lost to concrete base/placebo answers. |
+| `structural_live_signal_repair_v2_gpt54mini_gpt55_20260603` | 4 | 0.3750 | 0.7500 | fail | Better vs placebo, but still lost to base on math and legacy-model cases. |
+| `structural_live_signal_repair_v3_gpt54mini_gpt55_20260603` | 3 | 0.6667 | 0.5000 | fail | S06 cue fix removed the legacy-model route error, but molecular search still lost to placebo. |
+| `structural_live_signal_repair_v4_gpt54mini_gpt55_20260603` | 3 | 0.8333 | 0.5000 | fail | Molecular answer over-required proxy/active learning; placebo gave the cleaner ensemble-docking path. |
+
+Repairs made before promotion:
+
+- Added S06 cue terms for high-liquidity/low-volatility linear-or-quadratic legacy-model cases, so those route as special-case/generalization rather than S09.
+- Rewrote S09 guidance as type-specific simplification:
+  - molecular/flexible-active-site search: receptor/conformer ensemble, ensemble docking, MM/GBSA or FEP/TI only for top candidates;
+  - proxy model/active learning only when historical high-precision labels exist, not as a mandatory step;
+  - statistics/inequality: positivity, zero handling, logit/log1p/log-sum-exp/Taylor bounds, controls, residual/heteroskedasticity diagnostics, bootstrap;
+  - control/robotics: lock unused degrees of freedom while preserving future interfaces;
+  - legacy models: keep old model as oracle, preserve complex path, shadow-test approximations, and rollback on threshold breach.
+
+### Passed: Signal/Nuisance Pattern Repair
+
+Eval id: `structural_live_signal_repair_v5_gpt54mini_gpt55_20260603`
+
+Result: `pass=true`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 3 | 2 | 1 | 0 | 0.6667 | 0.6667 | 0.3333 |
+| structural vs placebo | 3 | 2 | 0 | 1 | 0.8333 | 0.6667 | 0.0000 |
+
+Decision: promote `pat_signal_nuisance_separation` repair, but only together with the route-boundary S06 cue fix.
+
+### Fresh Full 100-Case Integration
+
+Eval id: `structural_live_natural_repaired_residual_signal100_v1_gpt54mini_gpt55_20260603`
+
+This run is a fresh full live run, not a compositional replay:
+
+- solver answers: `300/300`
+- judge pairs: `200/200`
+- route split: `natural_trace_policy=65`, `natural_safe_abstain=20`, `natural_repaired_pattern=15`
+- repaired patterns: `pat_residual_correction=12`, `pat_signal_nuisance_separation=3`
+
+Result: `pass=true`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 100 | 59 | 29 | 12 | 0.6500 | 0.5900 | 0.2900 |
+| structural vs placebo | 100 | 63 | 30 | 7 | 0.6650 | 0.6300 | 0.3000 |
+
+Improvement ladder:
+
+| Run | vs base utility | vs placebo utility | Validation type |
+|---|---:|---:|---|
+| `natural_safe100` | 0.5950 | 0.5800 | full live |
+| `natural_repaired_residual100` | 0.6000 | 0.6050 | compositional first-party replay |
+| `natural_repaired_residual_signal100` | 0.6500 | 0.6650 | fresh full live |
+
+Pattern split in the fresh full run:
+
+| Pattern | n | vs base utility | vs placebo utility |
+|---|---:|---:|---:|
+| `pat_residual_correction` | 12 | 0.7083 | 0.7500 |
+| `pat_signal_nuisance_separation` | 3 | 0.6667 | 0.6667 |
+| `pat_structural_abstain` | 20 | 0.5250 | 0.6000 |
+| `pat_monotone_progress` | 7 | 0.8571 | 0.8571 |
+
+Remaining weak families:
+
+- `pat_bottleneck_capacity`: direct repair failed; still needs subcase split before another promotion attempt.
+- `pat_incremental_replacement`: only two focused cases; still unpromoted.
+- `pat_negative_feedback`: route quality is poor; it should be fixed by cue/scoping before any repair prompt promotion.
