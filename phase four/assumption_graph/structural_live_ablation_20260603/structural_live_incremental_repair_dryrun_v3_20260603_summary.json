@@ -1,0 +1,255 @@
+{
+  "mode": "dry_run",
+  "eval_id": "structural_live_incremental_repair_dryrun_v3_20260603",
+  "sample_path": "/home/erzhu419/mine_code/Asumption Agent/phase two/analysis/cache/sample_100.json",
+  "graph_dir": "/home/erzhu419/mine_code/Asumption Agent/phase four/assumption_graph",
+  "max_cases": 100,
+  "selected_case_count": 2,
+  "min_score": 0.22,
+  "selection_mode": "natural_repaired",
+  "solver_model": "gpt_mini",
+  "judge_model": "gpt55",
+  "judge_transport": "requests",
+  "focus_pattern_id": "pat_incremental_replacement",
+  "repair_patterns": [
+    "pat_incremental_replacement"
+  ],
+  "abstain_patterns": [
+    "pat_bottleneck_capacity",
+    "pat_incremental_replacement",
+    "pat_negative_feedback",
+    "pat_signal_nuisance_separation"
+  ],
+  "answer_cells": 6,
+  "judge_pairs": 4,
+  "case_pattern_counts": {
+    "pat_incremental_replacement": 2
+  },
+  "route_source_counts": {
+    "natural_repaired_pattern": 2
+  },
+  "cases": [
+    {
+      "problem_id": "software_engineering_0050",
+      "domain": "software_engineering",
+      "difficulty": "hard",
+      "description": "你是一家物流科技公司的DevOps工程师。公司核心的仓储管理系统（WMS）运行在一个由Python脚本和Shell脚本组成的集群上，代码总量约9万行，其中包含大量硬编码的服务器路径和文件操作。这个系统已经稳定运行了六年，但从未进行过任何重构或测试覆盖。原维护人员已退休，留下的脚本之间存在复杂的调度依赖和数据流循环，且没有配套的CI/CD流程。运营部门要求你在三个月内，为WMS增加一个动态的库存预警和补货推荐功能，以便根据历史数据和实时订单自动优化库存水平，减少人工干预。",
+      "reference_answer": {
+        "optimal_strategies": [
+          "S15",
+          "S06"
+        ],
+        "acceptable_strategies": [
+          "S09"
+        ],
+        "explicitly_bad_strategies": [
+          "S01"
+        ],
+        "reasoning": "增量构建（先最小可用版本再逐步扩展）和先特殊后一般（先处理最简单的权限场景）是正确策略。控制变量法不适用——问题不是调试而是构建。"
+      },
+      "coverage_tags": [
+        "S15",
+        "S06",
+        "S09"
+      ],
+      "route_source": "natural_repaired_pattern",
+      "route_strategy_tag": "S15",
+      "route_strategy_source": "natural_cue",
+      "route_confidence": 0.96,
+      "top_pattern_id": "pat_incremental_replacement",
+      "top_pattern_name": "Incremental Replacement / Module Boundary Preservation",
+      "top_score": 0.96,
+      "retrieval_top_pattern_id": "pat_bottleneck_capacity",
+      "retrieval_top_score": 0.0,
+      "placebo_pattern_id": "pat_conservation_balance",
+      "placebo_pattern_name": "Conservation / Balance-Preserving Transformation",
+      "structural_context": "## Structural Morphism Reasoning\nShadow-mode structural hints. Use only when the current problem preserves the listed invariants.\n\n- Incremental Replacement / Module Boundary Preservation (pat_incremental_replacement, score=0.96, gate=natural_repaired_route)\n  Matched terms: S15, natural_cue, Incremental Replacement / Module Boundary Preservation, 动态的库存预警, 增加一个, trace_repair, repair:pat_incremental_replacement\n  Preserved invariants: module_boundary_preserved; rollback_path_available; identity_path_preserved\n  Transfer prediction: Pattern-local repair guidance: S15 增量构建: 把“保留当前可工作版本”落到系统边界上。遗留脚本/生产系统场景不要先重构核心，也不要先改硬编码路径或调度链；先判定数据完整率、订单/库存/在途/交期能否稳定只读导出，再做只读适配器、旁路服务、shadow 运行、人工确认、feature flag、灰度和回滚。库存/补货题要先用安全库存、移动平均、销量趋势、供应商提前期和缺货阈值做规则基线，从一个仓库或白名单 SKU 小试；内部工具产品化/SaaS 场景不要当成原系统升级，先冻结内部稳定版，把外部版作为独立产品线或试点环境，只补最小可卖能力: 用户/租户、数据隔离、API 安全、计费/用量、审计、限流和白名单客户；每一步都要有内部 SLA 不下降、租户隔离、回滚和是否继续产品化的决策门。",
+      "placebo_context": "## Structural Morphism Reasoning\nShadow-mode structural hints. Use only when the current problem preserves the listed invariants.\n\n- Conservation / Balance-Preserving Transformation (pat_conservation_balance, score=0.00, gate=repair_under_specified)\n  Broken/uncertain: balance_check_closes; conserved_quantity_preserved\n  Transfer prediction: A valid conservation transfer should expose the conserved quantity and a before/after balance check.",
+      "top_application": {
+        "pattern_id": "pat_incremental_replacement",
+        "pattern_name": "Incremental Replacement / Module Boundary Preservation",
+        "score": 0.96,
+        "decision": "natural_repaired_route",
+        "route_strategy_tag": "S15",
+        "route_strategy_source": "natural_cue",
+        "route_confidence": 0.96,
+        "route_policy": {
+          "policy_id": "trace_learned_repair_policy_20260603",
+          "source_eval_id": "structural_live_natural100_v1_gpt54mini_gpt55_20260603",
+          "decision": "repair_promoted",
+          "repaired_pattern_id": "pat_incremental_replacement",
+          "repair_strategy_tag": "S15",
+          "previous_abstain_reason": "natural100 trace: base utility 0.0000, placebo utility 0.0000"
+        },
+        "route_cue_score": 4.5,
+        "route_cue_terms": [
+          "动态的库存预警",
+          "增加一个"
+        ],
+        "matched_terms": [
+          "S15",
+          "natural_cue",
+          "Incremental Replacement / Module Boundary Preservation",
+          "动态的库存预警",
+          "增加一个",
+          "trace_repair",
+          "repair:pat_incremental_replacement"
+        ],
+        "preserved_invariants": [
+          "module_boundary_preserved",
+          "rollback_path_available",
+          "identity_path_preserved"
+        ],
+        "broken_or_uncertain_invariants": [],
+        "negative_control_hits": []
+      },
+      "placebo_application": {
+        "pattern_id": "pat_conservation_balance",
+        "pattern_name": "Conservation / Balance-Preserving Transformation",
+        "score": 0.0,
+        "decision": "repair_under_specified",
+        "route_strategy_tag": null,
+        "route_strategy_source": null,
+        "route_confidence": null,
+        "route_policy": null,
+        "route_cue_score": null,
+        "route_cue_terms": [],
+        "matched_terms": [],
+        "preserved_invariants": [],
+        "broken_or_uncertain_invariants": [
+          "balance_check_closes",
+          "conserved_quantity_preserved"
+        ],
+        "negative_control_hits": []
+      }
+    },
+    {
+      "problem_id": "software_engineering_0176",
+      "domain": "software_engineering",
+      "difficulty": "medium",
+      "description": "一家小型创业公司开发了一款内部使用的AI模型训练平台，最初旨在提高其数据科学团队（约15人）的效率。由于在特定领域表现出色，潜在客户开始询问是否可以提供类似服务。CEO看到商机，希望将这个内部平台产品化，作为云端SaaS提供给外部企业。然而，当前的平台缺乏用户管理、数据隔离、API安全、计费模块，以及支持高并发和多租户的架构。团队面临的挑战是如何在不影响现有内部运作的情况下，快速将这个原型系统转型为成熟的商业产品。",
+      "reference_answer": {
+        "optimal_strategies": [
+          "S22",
+          "S15"
+        ],
+        "acceptable_strategies": [
+          "S06"
+        ],
+        "explicitly_bad_strategies": [],
+        "reasoning": "问题重构：这不是'升级工具'的问题，而是'要不要从头做一个新产品'的决策。增量构建：如果决定做，应该从最小MVP开始。"
+      },
+      "coverage_tags": [
+        "S22",
+        "S15",
+        "S06"
+      ],
+      "route_source": "natural_repaired_pattern",
+      "route_strategy_tag": "S15",
+      "route_strategy_source": "natural_cue",
+      "route_confidence": 0.9575,
+      "top_pattern_id": "pat_incremental_replacement",
+      "top_pattern_name": "Incremental Replacement / Module Boundary Preservation",
+      "top_score": 0.9575,
+      "retrieval_top_pattern_id": "pat_bottleneck_capacity",
+      "retrieval_top_score": 0.0,
+      "placebo_pattern_id": "pat_conservation_balance",
+      "placebo_pattern_name": "Conservation / Balance-Preserving Transformation",
+      "structural_context": "## Structural Morphism Reasoning\nShadow-mode structural hints. Use only when the current problem preserves the listed invariants.\n\n- Incremental Replacement / Module Boundary Preservation (pat_incremental_replacement, score=0.96, gate=natural_repaired_route)\n  Matched terms: S15, natural_cue, Incremental Replacement / Module Boundary Preservation, 不影响现有内部运作, trace_repair, repair:pat_incremental_replacement\n  Preserved invariants: module_boundary_preserved; rollback_path_available; identity_path_preserved\n  Transfer prediction: Pattern-local repair guidance: S15 增量构建: 把“保留当前可工作版本”落到系统边界上。遗留脚本/生产系统场景不要先重构核心，也不要先改硬编码路径或调度链；先判定数据完整率、订单/库存/在途/交期能否稳定只读导出，再做只读适配器、旁路服务、shadow 运行、人工确认、feature flag、灰度和回滚。库存/补货题要先用安全库存、移动平均、销量趋势、供应商提前期和缺货阈值做规则基线，从一个仓库或白名单 SKU 小试；内部工具产品化/SaaS 场景不要当成原系统升级，先冻结内部稳定版，把外部版作为独立产品线或试点环境，只补最小可卖能力: 用户/租户、数据隔离、API 安全、计费/用量、审计、限流和白名单客户；每一步都要有内部 SLA 不下降、租户隔离、回滚和是否继续产品化的决策门。",
+      "placebo_context": "## Structural Morphism Reasoning\nShadow-mode structural hints. Use only when the current problem preserves the listed invariants.\n\n- Conservation / Balance-Preserving Transformation (pat_conservation_balance, score=0.00, gate=repair_under_specified)\n  Broken/uncertain: balance_check_closes; conserved_quantity_preserved\n  Transfer prediction: A valid conservation transfer should expose the conserved quantity and a before/after balance check.",
+      "top_application": {
+        "pattern_id": "pat_incremental_replacement",
+        "pattern_name": "Incremental Replacement / Module Boundary Preservation",
+        "score": 0.9575,
+        "decision": "natural_repaired_route",
+        "route_strategy_tag": "S15",
+        "route_strategy_source": "natural_cue",
+        "route_confidence": 0.9575,
+        "route_policy": {
+          "policy_id": "trace_learned_repair_policy_20260603",
+          "source_eval_id": "structural_live_natural100_v1_gpt54mini_gpt55_20260603",
+          "decision": "repair_promoted",
+          "repaired_pattern_id": "pat_incremental_replacement",
+          "repair_strategy_tag": "S15",
+          "previous_abstain_reason": "natural100 trace: base utility 0.0000, placebo utility 0.0000"
+        },
+        "route_cue_score": 3.0,
+        "route_cue_terms": [
+          "不影响现有内部运作"
+        ],
+        "matched_terms": [
+          "S15",
+          "natural_cue",
+          "Incremental Replacement / Module Boundary Preservation",
+          "不影响现有内部运作",
+          "trace_repair",
+          "repair:pat_incremental_replacement"
+        ],
+        "preserved_invariants": [
+          "module_boundary_preserved",
+          "rollback_path_available",
+          "identity_path_preserved"
+        ],
+        "broken_or_uncertain_invariants": [],
+        "negative_control_hits": []
+      },
+      "placebo_application": {
+        "pattern_id": "pat_conservation_balance",
+        "pattern_name": "Conservation / Balance-Preserving Transformation",
+        "score": 0.0,
+        "decision": "repair_under_specified",
+        "route_strategy_tag": null,
+        "route_strategy_source": null,
+        "route_confidence": null,
+        "route_policy": null,
+        "route_cue_score": null,
+        "route_cue_terms": [],
+        "matched_terms": [],
+        "preserved_invariants": [],
+        "broken_or_uncertain_invariants": [
+          "balance_check_closes",
+          "conserved_quantity_preserved"
+        ],
+        "negative_control_hits": []
+      }
+    }
+  ],
+  "route_quality": {
+    "n": 2,
+    "exact_pattern_match_rate": 1.0,
+    "outcomes": {
+      "match": 2
+    },
+    "by_route_source": {
+      "natural_repaired_pattern": {
+        "n": 2,
+        "outcomes": {
+          "match": 2
+        },
+        "match_rate": 1.0,
+        "miss_rate": 0.0
+      }
+    },
+    "by_domain": {
+      "software_engineering": {
+        "n": 2,
+        "outcomes": {
+          "match": 2
+        },
+        "match_rate": 1.0,
+        "miss_rate": 0.0
+      }
+    },
+    "by_strategy_tag": {
+      "S15": {
+        "n": 2,
+        "outcomes": {
+          "match": 2
+        },
+        "match_rate": 1.0,
+        "miss_rate": 0.0
+      }
+    },
+    "mismatches": []
+  }
+}

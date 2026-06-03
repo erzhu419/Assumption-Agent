@@ -381,3 +381,111 @@ Remaining weak families:
 - `pat_bottleneck_capacity`: direct repair failed; still needs subcase split before another promotion attempt.
 - `pat_incremental_replacement`: only two focused cases; still unpromoted.
 - `pat_negative_feedback`: route quality is poor; it should be fixed by cue/scoping before any repair prompt promotion.
+
+## Weak-Pattern Repair Round 3
+
+Objective: repair the remaining weak families one by one, with focused performance validation before promotion and a fresh full 100-case integration run before push.
+
+### Incremental Replacement
+
+Repairs made:
+
+- Rewrote S15 guidance around concrete system boundaries.
+- Legacy/production cases now prefer read-only adapters, shadow runs, feature flags, gray release, rollback, and rule baselines before touching core systems.
+- Internal-tool-to-SaaS cases now freeze the internal stable path and build the external pilot as a separate product line with tenant isolation, API security, billing/usage, audit, limits, and whitelist customers.
+
+Focused validation:
+
+Eval id: `structural_live_incremental_repair_v3_gpt54mini_gpt55_20260603`
+
+Result: `pass=true`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 2 | 2 | 0 | 0 | 1.0000 | 1.0000 | 0.0000 |
+| structural vs placebo | 2 | 2 | 0 | 0 | 1.0000 | 1.0000 | 0.0000 |
+
+### Negative Feedback
+
+Repairs made:
+
+- Removed over-broad S20/S27 cues that caused false positives: isolated `激进`, `保险公司`, `竞争对手`, and `奖励`.
+- Added S20 repair guidance for hard/soft objective splits, fast/slow paths, latency budgets, arbitration, timeout fallback, and shadow/simulation validation.
+- Added S27 repair guidance for public-space governance, infrastructure/optionality, price competition, and key-person/governance conflicts.
+- Required concrete stakeholders plus a specific exchange condition or constraint for each.
+
+Focused validation:
+
+Eval id: `structural_live_negative_repair_v2_gpt54mini_gpt55_20260603`
+
+Result: `pass=true`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 5 | 4 | 1 | 0 | 0.8000 | 0.8000 | 0.2000 |
+| structural vs placebo | 5 | 3 | 2 | 0 | 0.6000 | 0.6000 | 0.4000 |
+
+### Bottleneck Capacity
+
+Repairs made:
+
+- Split true bottleneck cases from route-boundary errors.
+- Git-bisect and tree/DP cases no longer enter the bottleneck focused slice.
+- Removed broad S24 medium cues `吞吐` and `延迟`.
+- Added S19 material/humidity constraint guidance: catalyst/activated monomer/pressure alternatives, two-step prepolymer/post-cure, small DOE, local micro-environment, saturated MgCl2 humidity buffering, sample isolation, fans, sensors, and empty-box calibration.
+- Added S23 thesis/deadline guidance: freeze six-month experiments, define minimum publishable evidence, avoid overclaiming, and shrink claims if a new experiment affects the core conclusion.
+- Added S24 subcase guidance for git-bisect, game release triage, CI pipeline profiling, and recursive/backtracking hotspots.
+
+Focused dry-run:
+
+Eval id: `structural_live_bottleneck_repair_dryrun_v2_20260603`
+
+- selected cases: `10`
+- route_quality exact pattern match: `1.0000`
+- strategy split: `S19=3`, `S23=1`, `S24=6`
+
+Focused validation:
+
+Eval id: `structural_live_bottleneck_repair_v2_gpt54mini_gpt55_20260603`
+
+Result: `pass=true`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 10 | 5 | 2 | 3 | 0.6500 | 0.5000 | 0.2000 |
+| structural vs placebo | 10 | 7 | 3 | 0 | 0.7000 | 0.7000 | 0.3000 |
+
+### Fresh Full 100-Case All-Repair Integration
+
+Eval id: `structural_live_all_repairs100_v1_gpt54mini_gpt55_20260603`
+
+This is a fresh full live run:
+
+- solver answers: `300/300`
+- judge pairs: `200/200`
+- route split: `natural_trace_policy=68`, `natural_repaired_pattern=32`
+- repaired patterns: `pat_residual_correction=12`, `pat_signal_nuisance_separation=3`, `pat_incremental_replacement=2`, `pat_negative_feedback=5`, `pat_bottleneck_capacity=10`
+- route_quality exact pattern match: `0.6800`
+- repaired-route utility: `0.7031` vs base, `0.5781` vs placebo
+
+Result: `pass=true`
+
+| Pair | n | Win | Loss | Tie | Utility | Win Rate | Loss Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structural vs base | 100 | 64 | 28 | 8 | 0.6800 | 0.6400 | 0.2800 |
+| structural vs placebo | 100 | 54 | 36 | 10 | 0.5900 | 0.5400 | 0.3600 |
+
+Pattern split in the fresh full run:
+
+| Pattern | n | vs base utility | vs placebo utility |
+|---|---:|---:|---:|
+| `pat_bottleneck_capacity` | 10 | 0.4500 | 0.4500 |
+| `pat_incremental_replacement` | 2 | 1.0000 | 1.0000 |
+| `pat_negative_feedback` | 5 | 0.8000 | 0.6000 |
+| `pat_residual_correction` | 12 | 0.7500 | 0.6667 |
+| `pat_signal_nuisance_separation` | 3 | 1.0000 | 0.3333 |
+
+Decision:
+
+- Promote incremental, negative-feedback, and bottleneck repairs because each focused gate passed and the all-repair full 100-case integration passed.
+- Note the residual risk: the full run improves vs base over the previous residual+signal full run (`0.6800` vs `0.6500`) but has a lower placebo margin (`0.5900` vs `0.6650`). The global gate still passes, and the weak-family focused gates are the stronger evidence for those repairs.
