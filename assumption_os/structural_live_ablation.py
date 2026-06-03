@@ -157,6 +157,144 @@ STRATEGY_TAG_TRANSFER_GUIDANCE = {
 }
 
 
+NATURAL_STRATEGY_CUES = {
+    "S01": {
+        "strong": ["控制变量", "对照组", "A/B", "AB测试", "单变量", "只改变一个", "固定其他", "同一优惠", "同一物料", "逐一测试", "故障排除", "精确诊断", "隔离故障", "定位是哪一次提交", "空调系统不制冷"],
+        "medium": ["渠道", "参数", "试验", "比较效果", "归因", "哪一个", "影响最大", "可能源于", "可能的问题包括", "可能是", "尝试了三种", "三条新的"],
+    },
+    "S02": {
+        "strong": ["分解", "子问题", "子任务", "拆分", "分而治之", "模块化", "接口"],
+        "medium": ["复杂问题", "组合", "合并", "多个部分", "整体目标"],
+    },
+    "S03": {
+        "strong": ["类比", "相似问题", "迁移", "映射", "已解决", "参考之前", "历史周期"],
+        "medium": ["结构相似", "模式", "借鉴", "源领域", "目标领域"],
+    },
+    "S04": {
+        "strong": ["反证", "归谬", "矛盾", "假设不成立", "最大的素数", "证明不存在", "活性属性", "所有可能", "对所有"],
+        "medium": ["推导出", "悖论", "命题", "协议"],
+    },
+    "S05": {
+        "strong": ["更简单", "最简", "复杂度", "奥卡姆", "同等解释力", "团队熟悉"],
+        "medium": ["可维护", "采用成本", "学习成本", "方案选择"],
+    },
+    "S06": {
+        "strong": ["特殊情况", "先特殊", "简单情形", "从1到n", "逐步推广", "推广到一般"],
+        "medium": ["公式", "归纳", "先解决", "一般性问题"],
+    },
+    "S07": {
+        "strong": ["反推", "倒推", "从目标", "前提条件", "逆向", "需要什么条件", "晋升机会", "职业发展规划", "未来十年"],
+        "medium": ["目标状态", "路径", "达到目标", "职业规划", "两个职位", "两个平行"],
+    },
+    "S08": {
+        "strong": ["试错", "猜测-检验", "快速试投", "小规模试", "先调", "试运行", "没有直接竞争对手", "已经尝试过", "尝试了三条", "尝试过三种"],
+        "medium": ["缺乏深入了解", "无法准确预测", "新产品", "反馈", "尝试不同", "资源有限", "几种模型", "模型可供选择", "通勤方案", "路线"],
+    },
+    "S09": {
+        "strong": ["降维", "简化", "六个自由度", "自由度", "核心变量", "去掉复杂因素", "活性位点", "构型", "最低结合自由能", "分子动力学模拟"],
+        "medium": ["高维", "先解决简化版", "聚焦关键", "搜索空间"],
+    },
+    "S10": {
+        "strong": ["对称", "不变量", "矩阵", "结构节点", "风载荷", "镜像", "旋转"],
+        "medium": ["变换", "相互作用力", "减少搜索空间"],
+    },
+    "S11": {
+        "strong": ["足够好", "满意", "不追求最优", "三种方案", "都非常接近", "当前最优", "两种获取DNA样本的方法"],
+        "medium": ["时间压力", "信息不完全", "接受", "阈值", "采购经理", "方法A", "方法B", "无需精确"],
+    },
+    "S12": {
+        "strong": ["贝叶斯", "先验", "新证据", "更新", "历史数据", "最新观测", "概率"],
+        "medium": ["持续修正", "二手市场", "回测", "间接", "清点所有", "估算出"],
+    },
+    "S13": {
+        "strong": ["证伪", "推翻", "上线后", "离线", "真实用户", "训练-服务偏差", "反例"],
+        "medium": ["失败案例", "验证环境", "A/B测试环境", "实际用户上线"],
+    },
+    "S14": {
+        "strong": ["边界条件", "极端", "最坏情况", "百年一遇", "红线", "全球各地", "安全性曾", "无法推迟", "不能委托", "修理费"],
+        "medium": ["异常", "阈值", "极限", "退出机制", "不可接受", "最坏"],
+    },
+    "S15": {
+        "strong": ["增量", "最小可工作", "MVP", "逐步添加", "先迁移", "回滚", "动态的库存预警", "不影响现有内部运作"],
+        "medium": ["逐步", "先保留", "增加一个"],
+    },
+    "S16": {
+        "strong": ["求同", "共同因素", "所有成功", "唯一共同", "多个成功案例"],
+        "medium": ["归纳", "反复出现", "相同点"],
+    },
+    "S17": {
+        "strong": ["求异", "显著差异", "免费用户", "付费用户", "成功和失败", "入住率", "关键差异"],
+        "medium": ["对比", "两组", "高活跃", "流失", "低表现"],
+    },
+    "S18": {
+        "strong": ["抽象", "泛化", "共同结构", "数学结构", "看似不相关", "推荐算法", "内容分发"],
+        "medium": ["提取", "一般规律", "复杂不等式", "多个系统"],
+    },
+    "S19": {
+        "strong": ["约束松弛", "放宽", "暂时放宽", "严格约束", "特定湿度", "标准大气压", "高压反应釜", "不想直接投诉", "噪音", "除湿设备"],
+        "medium": ["限制", "可用条件", "不直接投诉", "替代条件", "湿度范围", "固化室"],
+    },
+    "S20": {
+        "strong": ["对偶", "互补", "对立", "保守", "激进", "安全部门", "产品部门"],
+        "medium": ["重新审视", "反面", "两难", "平衡"],
+    },
+    "S21": {
+        "strong": ["沉没成本", "止损", "死胡同", "放弃", "已经花", "差一点", "继续投入", "课程不退费", "不适合你"],
+        "medium": ["无望", "不愿试点", "微弱提升", "没有显著提升", "市场接受度", "不退费"],
+    },
+    "S22": {
+        "strong": ["问题重构", "重新定义", "换个角度", "废弃物", "余热", "内部平台产品化", "不在当前框架"],
+        "medium": ["新的商业模式", "重新审视", "边界", "视为资源"],
+    },
+    "S23": {
+        "strong": ["资源即将耗尽", "尽快投稿", "近似接受", "当前结果", "毕业论文"],
+        "medium": ["时间不足", "预算耗尽", "停止条件", "够用", "不到3个月", "排队时间", "资金有限", "下潜时间有限"],
+    },
+    "S24": {
+        "strong": ["瓶颈", "关键节点", "关键路径", "发布管道", "异常缓慢", "处理时间", "性能下降", "优先级"],
+        "medium": ["吞吐", "资源限制", "最严重", "影响最多", "排序", "缓慢", "排长队", "延迟", "不愿接入", "不愿承保"],
+    },
+    "S25": {
+        "strong": ["涌现", "单个", "所有128个", "整体", "协同", "串扰", "宏观", "多尺度", "组合后", "三个独立的微服务", "单元测试和集成测试", "最终一致性"],
+        "medium": ["非线性", "相互作用", "不能线性外推", "集群", "网络", "高并发压力测试", "数据最终的一致性"],
+    },
+    "S26": {
+        "strong": ["路径依赖", "历史路径", "30年前", "锁定", "深度依赖", "行业内非常罕见", "濒临失传", "实体培训中心", "RESTful API", "GraphQL", "API文档不一致"],
+        "medium": ["迁移成本", "定制", "转换成本", "既有系统", "老旧的遗留系统", "重构工作量", "从未接触"],
+    },
+    "S27": {
+        "strong": ["激励", "利益", "理事会", "家属经营", "游牧民族", "关键成员", "董事会成员", "奖励", "电力公司", "保险公司", "竞争对手", "降价"],
+        "medium": ["多方", "目标对齐", "权力", "冲突", "合作意愿", "影响力", "价格敏感度", "保持现有定价"],
+    },
+}
+
+
+STRUCTURAL_PATTERN_OPERATORS = {
+    "pat_bottleneck_capacity": "操作化: 先列候选瓶颈和可观测指标，按影响范围/等待时间/收入或安全风险排序；只对排名第一的限制环节投入资源，设 owner、验收指标和回归检查。",
+    "pat_conservation_balance": "操作化: 明确守恒量或总预算，做 before/after 账目表；任何转移方案都必须说明新增收益来自哪里、牺牲了什么，以及余额是否闭合。",
+    "pat_controlled_intervention": "操作化: 固定环境、预算、时间窗和样本口径；一次只改一个因素，保留对照组，预先定义胜出阈值和停止/加码规则。",
+    "pat_counterexample_refinement": "操作化: 先写出会推翻当前方案的失败样例、边界条件或线上信号；若命中失败样例，就缩小主张、加 guardrail，或回退到上层决策。",
+    "pat_decomposition_composition": "操作化: 拆出子问题、接口和依赖顺序；每个子问题要有局部验收，最后必须做组合测试，确认局部最优没有破坏整体目标。",
+    "pat_incremental_replacement": "操作化: 保留当前可工作路径，新增能力走旁路、shadow、feature flag、灰度和回滚；每次只替换一个边界清晰的模块。",
+    "pat_monotone_progress": "操作化: 定义可排序的进度指标和不可回退条件；从最小可验证 case 开始，只有不降低旧指标时才扩大范围。",
+    "pat_negative_feedback": "操作化: 画出扰动、参与方响应和被保护约束；设计机制时要预测反作用力，并用激励、仲裁、限流或红线让响应回到系统目标。",
+    "pat_residual_correction": "操作化: 保留旧路径/先验作为 baseline，把新证据或新模块当作 delta；说明哪些证据足以改变判断，以及怎样防止局部修正破坏整体。",
+    "pat_signal_nuisance_separation": "操作化: 先区分稳定信号和随机/无关扰动；用筛选、变换、低维代理或重复测量降低噪声，再回到原问题验证结论没有因简化而失真。",
+}
+
+
+TRACE_LEARNED_PATTERN_ABSTAIN = {
+    # Learned from first-party structural_live_natural100_v1_gpt54mini_gpt55_20260603:
+    # these patterns had negative or below-gate utility under unconstrained
+    # natural routing.  natural_gated treats them as abstain until a later
+    # operator-specific validation promotes them back.
+    "pat_bottleneck_capacity": "natural100 trace: base utility 0.4583, placebo utility 0.3333",
+    "pat_incremental_replacement": "natural100 trace: base utility 0.0000, placebo utility 0.0000",
+    "pat_negative_feedback": "natural100 trace: base utility 0.2222, placebo utility 0.5000",
+    "pat_signal_nuisance_separation": "natural100 trace: base utility 0.3750, placebo utility 0.1250",
+}
+
+
 def build_structural_live_ablation_payload(
     *,
     sample_path: Path,
@@ -203,6 +341,8 @@ def build_structural_live_ablation_payload(
         "route_source_counts": dict(Counter(c["route_source"] for c in cases)),
         "cases": cases,
     }
+    route_quality = _route_quality(cases)
+    plan["route_quality"] = route_quality
     if dry_run:
         summary_path.write_text(json.dumps({"mode": "dry_run", **plan}, ensure_ascii=False, indent=2), encoding="utf-8")
         return {"mode": "dry_run", **plan}
@@ -246,7 +386,7 @@ def _select_cases(
     min_score: float,
     selection_mode: str,
 ) -> list[dict]:
-    if selection_mode not in {"retrieval", "coverage", "hybrid"}:
+    if selection_mode not in {"retrieval", "natural", "natural_gated", "coverage", "hybrid"}:
         raise ValueError(f"unknown selection_mode={selection_mode}")
     patterns = load_structural_patterns(store)
     pattern_by_id = {p["pattern_id"]: p for p in patterns}
@@ -264,10 +404,15 @@ def _select_cases(
         if not top:
             continue
         placebo = None
-        if route_source != "coverage_gold":
+        if route_source not in {"coverage_gold"}:
             placebo = next((app for app in retrieval_apps[1:] if app.get("pattern_id") != top.get("pattern_id")), None)
         if not placebo:
-            placebo = _deterministic_placebo_app(row, patterns=patterns, exclude_pattern_id=top.get("pattern_id"))
+            placebo = _deterministic_placebo_app(
+                row,
+                patterns=patterns,
+                exclude_pattern_id=top.get("pattern_id"),
+                exclude_reference_patterns=(route_source == "coverage_gold"),
+            )
         retrieval_top = retrieval_apps[0] if retrieval_apps else {}
         out.append({
             "problem_id": row.get("problem_id"),
@@ -305,17 +450,104 @@ def _choose_top_application(
 ) -> tuple[dict | None, str]:
     retrieval_top = retrieval_apps[0] if retrieval_apps else None
     retrieval_ok = bool(retrieval_top and float(retrieval_top.get("score", 0.0) or 0.0) >= min_score)
+    natural_app = _natural_routed_app(row, pattern_by_id=pattern_by_id)
     coverage_app = _coverage_routed_app(row, pattern_by_id=pattern_by_id)
 
     if selection_mode == "retrieval":
         return (retrieval_top, "retrieval") if retrieval_ok else (None, "none")
+    if selection_mode == "natural":
+        if natural_app:
+            return natural_app, "natural_cue"
+        return (retrieval_top, "retrieval") if retrieval_ok else (None, "none")
+    if selection_mode == "natural_gated":
+        if natural_app and _passes_trace_learned_policy(natural_app):
+            natural_app = dict(natural_app)
+            natural_app["decision"] = "natural_trace_policy_route"
+            natural_app["route_policy"] = {
+                "policy_id": "trace_learned_pattern_abstain_20260603",
+                "source_eval_id": "structural_live_natural100_v1_gpt54mini_gpt55_20260603",
+                "decision": "accepted",
+            }
+            return natural_app, "natural_trace_policy"
+        return None, "trace_policy_abstain"
     if selection_mode == "coverage":
         return (coverage_app, "coverage_gold") if coverage_app else (None, "none")
     if coverage_app:
         return coverage_app, "coverage_gold"
+    if natural_app:
+        return natural_app, "natural_cue"
     if retrieval_ok:
         return retrieval_top, "retrieval"
     return None, "none"
+
+
+def _natural_routed_app(row: dict, *, pattern_by_id: dict[str, dict]) -> dict | None:
+    scored = _score_natural_strategy_tags(row.get("description", ""))
+    candidates = []
+    for rank, tag_score in enumerate(scored):
+        tag = tag_score["tag"]
+        routed = STRATEGY_TAG_TO_STRUCTURAL_PATTERN.get(tag)
+        if not routed:
+            continue
+        pattern_id, base_confidence, reason = routed
+        pattern = pattern_by_id.get(pattern_id)
+        if not pattern:
+            continue
+        confidence = min(0.96, max(0.52, 0.48 + tag_score["score"] * 0.08 + base_confidence * 0.25))
+        candidates.append((tag_score["score"], confidence, -rank, tag_score, reason, pattern))
+    if not candidates:
+        return None
+    _, confidence, _, tag_score, reason, pattern = max(candidates)
+    tag = tag_score["tag"]
+    invariants = [inv.get("id", "") for inv in pattern.get("invariants", []) if inv.get("id")]
+    transfer_prediction = _strategy_transfer_prediction(row, selected_tag=tag, pattern=pattern, peer_tags=tag_score.get("peer_tags", []))
+    matched_terms = [tag, "natural_cue", pattern.get("name", pattern["pattern_id"])]
+    matched_terms.extend(tag_score.get("matched_terms", [])[:8])
+    return {
+        "pattern_id": pattern["pattern_id"],
+        "pattern_name": pattern.get("name", pattern["pattern_id"]),
+        "score": round(confidence, 4),
+        "decision": "natural_cue_route",
+        "matched_terms": matched_terms,
+        "preserved_invariants": invariants,
+        "broken_or_uncertain_invariants": [],
+        "negative_control_hits": [],
+        "transfer_predictions": [transfer_prediction, *pattern.get("transfer_predictions", [])],
+        "route_strategy_tag": tag,
+        "route_strategy_source": "natural_cue",
+        "route_confidence": confidence,
+        "route_reason": reason,
+        "route_cue_score": tag_score["score"],
+        "route_cue_terms": tag_score.get("matched_terms", []),
+    }
+
+
+def _score_natural_strategy_tags(text: str) -> list[dict]:
+    low = text.lower()
+    rows = []
+    for tag, cues in NATURAL_STRATEGY_CUES.items():
+        score = 0.0
+        matched_terms = []
+        for term in cues.get("strong", []):
+            if _contains_cue(low, term):
+                score += 3.0
+                matched_terms.append(term)
+        for term in cues.get("medium", []):
+            if _contains_cue(low, term):
+                score += 1.5
+                matched_terms.append(term)
+        if score <= 0:
+            continue
+        rows.append({"tag": tag, "score": round(score, 4), "matched_terms": matched_terms})
+    rows.sort(key=lambda row: (-row["score"], row["tag"]))
+    for row in rows:
+        row["peer_tags"] = [peer["tag"] for peer in rows if peer["tag"] != row["tag"]][:2]
+    return rows
+
+
+def _contains_cue(low_text: str, cue: str) -> bool:
+    cue_low = cue.lower()
+    return cue_low in low_text
 
 
 def _coverage_routed_app(row: dict, *, pattern_by_id: dict[str, dict]) -> dict | None:
@@ -356,11 +588,18 @@ def _coverage_routed_app(row: dict, *, pattern_by_id: dict[str, dict]) -> dict |
     }
 
 
-def _strategy_transfer_prediction(row: dict, *, selected_tag: str, pattern: dict) -> str:
+def _strategy_transfer_prediction(
+    row: dict,
+    *,
+    selected_tag: str,
+    pattern: dict,
+    peer_tags: list[str] | None = None,
+) -> str:
     selected = STRATEGY_TAG_TRANSFER_GUIDANCE.get(selected_tag, "")
     peer_guidance = []
-    for tag_row in _reference_tag_rows(row):
-        tag = tag_row["tag"]
+    if peer_tags is None:
+        peer_tags = [tag_row["tag"] for tag_row in _reference_tag_rows(row)]
+    for tag in peer_tags:
         if tag == selected_tag:
             continue
         guidance = STRATEGY_TAG_TRANSFER_GUIDANCE.get(tag)
@@ -371,10 +610,21 @@ def _strategy_transfer_prediction(row: dict, *, selected_tag: str, pattern: dict
     parts = [f"本题结构迁移({selected_tag}): {selected}"]
     if peer_guidance:
         parts.append("辅助结构: " + "；".join(peer_guidance))
+    operator = STRUCTURAL_PATTERN_OPERATORS.get(pattern.get("pattern_id", "")) if _operator_context_enabled() else ""
+    if operator:
+        parts.append(operator)
     generic = pattern.get("transfer_predictions", [])
     if generic:
         parts.append("通用不变量: " + str(generic[0]))
     return "；".join(part for part in parts if part)
+
+
+def _passes_trace_learned_policy(app: dict) -> bool:
+    return app.get("pattern_id") not in TRACE_LEARNED_PATTERN_ABSTAIN
+
+
+def _operator_context_enabled() -> bool:
+    return os.environ.get("STRUCTURAL_OPERATOR_CONTEXT", "").lower() in {"1", "true", "yes", "on"}
 
 
 def _reference_tag_rows(row: dict) -> list[dict]:
@@ -404,12 +654,19 @@ def _ordered_reference_tags(row: dict) -> list[str]:
     return [row["tag"] for row in _reference_tag_rows(row)]
 
 
-def _deterministic_placebo_app(row: dict, *, patterns: list[dict], exclude_pattern_id: str | None) -> dict:
+def _deterministic_placebo_app(
+    row: dict,
+    *,
+    patterns: list[dict],
+    exclude_pattern_id: str | None,
+    exclude_reference_patterns: bool,
+) -> dict:
     excluded = {exclude_pattern_id}
-    for tag in _ordered_reference_tags(row):
-        routed = STRATEGY_TAG_TO_STRUCTURAL_PATTERN.get(tag)
-        if routed:
-            excluded.add(routed[0])
+    if exclude_reference_patterns:
+        for tag in _ordered_reference_tags(row):
+            routed = STRATEGY_TAG_TO_STRUCTURAL_PATTERN.get(tag)
+            if routed:
+                excluded.add(routed[0])
     candidates = [p for p in patterns if p.get("pattern_id") not in excluded]
     if not candidates:
         return {}
@@ -437,6 +694,9 @@ def _compact_app(app: dict) -> dict:
         "route_strategy_tag": app.get("route_strategy_tag"),
         "route_strategy_source": app.get("route_strategy_source"),
         "route_confidence": app.get("route_confidence"),
+        "route_policy": app.get("route_policy"),
+        "route_cue_score": app.get("route_cue_score"),
+        "route_cue_terms": app.get("route_cue_terms", [])[:12],
         "matched_terms": app.get("matched_terms", [])[:12],
         "preserved_invariants": app.get("preserved_invariants", [])[:8],
         "broken_or_uncertain_invariants": app.get("broken_or_uncertain_invariants", [])[:8],
@@ -794,18 +1054,71 @@ def _summarize(*, eval_id: str, plan: dict, cases: list[dict], answers: dict, ju
     }
 
 
-def _counter_group_summary(group: dict[str, Counter]) -> dict:
+def _route_quality(cases: list[dict]) -> dict:
+    rows = []
+    by_source: dict[str, Counter] = defaultdict(Counter)
+    by_domain: dict[str, Counter] = defaultdict(Counter)
+    by_tag: dict[str, Counter] = defaultdict(Counter)
+    for case in cases:
+        gold = _gold_pattern_id(case)
+        if not gold:
+            continue
+        predicted = case.get("top_pattern_id")
+        outcome = "match" if predicted == gold else "miss"
+        rows.append({
+            "problem_id": case.get("problem_id"),
+            "domain": case.get("domain"),
+            "route_source": case.get("route_source"),
+            "route_strategy_tag": case.get("route_strategy_tag"),
+            "predicted_pattern_id": predicted,
+            "gold_pattern_id": gold,
+            "outcome": outcome,
+        })
+        by_source[case.get("route_source", "unknown")][outcome] += 1
+        by_domain[case.get("domain", "unknown")][outcome] += 1
+        by_tag[case.get("route_strategy_tag", "unknown")][outcome] += 1
+    counts = Counter(row["outcome"] for row in rows)
+    n = sum(counts.values())
     return {
-        key: {
-            "n": sum(counter.values()),
-            "outcomes": dict(counter),
-            "utility": round((counter["win"] + 0.5 * counter["tie"]) / sum(counter.values()), 4)
-            if sum(counter.values()) else 0.0,
-            "win_rate": round(counter["win"] / sum(counter.values()), 4) if sum(counter.values()) else 0.0,
-            "loss_rate": round(counter["loss"] / sum(counter.values()), 4) if sum(counter.values()) else 0.0,
-        }
-        for key, counter in sorted(group.items())
+        "n": n,
+        "exact_pattern_match_rate": round(counts["match"] / n, 4) if n else 0.0,
+        "outcomes": dict(counts),
+        "by_route_source": _counter_group_summary(by_source),
+        "by_domain": _counter_group_summary(by_domain),
+        "by_strategy_tag": _counter_group_summary(by_tag),
+        "mismatches": [row for row in rows if row["outcome"] == "miss"][:40],
     }
+
+
+def _gold_pattern_id(row: dict) -> str | None:
+    candidates = []
+    for tag_row in _reference_tag_rows(row):
+        routed = STRATEGY_TAG_TO_STRUCTURAL_PATTERN.get(tag_row["tag"])
+        if routed:
+            candidates.append((tag_row["priority"], routed[1], -tag_row["order"], routed[0]))
+    if not candidates:
+        return None
+    return max(candidates)[3]
+
+
+def _counter_group_summary(group: dict[str, Counter]) -> dict:
+    out = {}
+    for key, counter in sorted(group.items()):
+        n = sum(counter.values())
+        row = {"n": n, "outcomes": dict(counter)}
+        if {"win", "loss", "tie"} & set(counter):
+            row.update({
+                "utility": round((counter["win"] + 0.5 * counter["tie"]) / n, 4) if n else 0.0,
+                "win_rate": round(counter["win"] / n, 4) if n else 0.0,
+                "loss_rate": round(counter["loss"] / n, 4) if n else 0.0,
+            })
+        if {"match", "miss"} & set(counter):
+            row.update({
+                "match_rate": round(counter["match"] / n, 4) if n else 0.0,
+                "miss_rate": round(counter["miss"] / n, 4) if n else 0.0,
+            })
+        out[key] = row
+    return out
 
 
 def _load_json(path: Path) -> dict:
@@ -851,7 +1164,7 @@ def main() -> None:
     ap.add_argument("--eval-id", required=True)
     ap.add_argument("--max-cases", type=int, default=100)
     ap.add_argument("--min-score", type=float, default=0.22)
-    ap.add_argument("--selection-mode", choices=["retrieval", "coverage", "hybrid"], default="hybrid")
+    ap.add_argument("--selection-mode", choices=["retrieval", "natural", "natural_gated", "coverage", "hybrid"], default="hybrid")
     ap.add_argument("--solver-model", default="gpt_mini")
     ap.add_argument("--judge-model", default="gpt55")
     ap.add_argument("--judge-transport", choices=["requests", "router"], default="requests")
