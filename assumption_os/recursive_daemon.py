@@ -352,6 +352,7 @@ def _apply_if_requested(
         store,
         evolution_payload.get("proposals", {}),
         gated,
+        evolution_payload.get("novelty_integration"),
     )
     return {
         "enabled": True,

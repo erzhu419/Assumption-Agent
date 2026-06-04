@@ -106,22 +106,37 @@ def apply_accepted_candidates(
     store: JsonlGraphStore,
     proposal_payload: dict,
     acceptance_payload: dict,
+    novelty_integration_payload: dict | None = None,
 ) -> list[str]:
     """Apply only accepted candidate proposals to the graph store."""
 
     accepted = set(acceptance_payload.get("accepted_proposal_ids", []))
     applied: list[str] = []
+    dirty = False
     summary_by_id = {s["proposal_id"]: s for s in acceptance_payload.get("summaries", [])}
+    novelty_by_id = {
+        row.get("proposal_id"): row
+        for row in (novelty_integration_payload or {}).get("rows", [])
+    }
     for proposal in proposal_payload.get("proposals", []):
         if proposal.get("proposal_id") not in accepted:
             continue
+        novelty = novelty_by_id.get(proposal.get("proposal_id"), {})
+        classification = novelty.get("classification")
         if proposal.get("candidate_node"):
             node = AssumptionNode.from_dict(proposal["candidate_node"])
-            node.status = "active"
-            store.upsert_node(node)
-            applied.append(node.id)
-        for edge in proposal.get("edges", []):
+            if classification != "duplicate":
+                node.status = "active"
+                store.upsert_node(node)
+                applied.append(node.id)
+                dirty = True
+        if classification != "duplicate":
+            for edge in proposal.get("edges", []):
+                store.add_edge(AssumptionEdge.from_dict(edge))
+                dirty = True
+        for edge in novelty.get("integration_edges", []):
             store.add_edge(AssumptionEdge.from_dict(edge))
+            dirty = True
         if proposal.get("manifest"):
             manifest = TrialManifest.from_dict(proposal["manifest"])
             manifest.observe(
@@ -129,8 +144,17 @@ def apply_accepted_candidates(
                 status=TrialStatus.ACCEPTED,
             )
             manifest.metadata["acceptance_summary"] = summary_by_id.get(proposal["proposal_id"], {})
+            if novelty:
+                manifest.metadata["novelty_integration"] = {
+                    "classification": novelty.get("classification"),
+                    "recommended_action": novelty.get("recommended_action"),
+                    "existing_node_id": novelty.get("existing_node_id"),
+                    "match_basis": novelty.get("match_basis"),
+                    "match_score": novelty.get("match_score"),
+                }
             store.append_trial(manifest)
-    if applied:
+            dirty = True
+    if dirty:
         store.flush()
     return applied
 

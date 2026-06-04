@@ -49,6 +49,10 @@ from assumption_os.math_science_policy import route_math_science_problem
 from assumption_os.memory_surfaces import build_memory_surface_payload
 from assumption_os.morphism_benchmark import build_morphism_independent_benchmark_payload
 from assumption_os.candidate_eval import CandidateReadiness, build_candidate_eval_payload
+from assumption_os.novelty_integration import (
+    build_novelty_integration_payload,
+    build_novelty_integration_performance_payload,
+)
 from assumption_os.objective_bench import build_objective_benchmark_payload
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
 from assumption_os.proposals import ProposalType, build_candidate_proposals
@@ -3792,6 +3796,123 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertIn("strategy_S21", graph.store.nodes)
             self.assertNotIn(proposals[0].candidate_node["id"], graph.store.nodes)
 
+    def test_novelty_integration_gate_classifies_candidate_family(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="parent_control",
+                type=AssumptionType.METHOD,
+                kind=HypothesisKind.CLAIM,
+                claim="Use controlled variable reasoning by keeping a baseline and changing one factor.",
+                tags=["control", "experiment"],
+            ))
+            store.upsert_node(AssumptionNode(
+                id="existing_control_specific",
+                type=AssumptionType.METHOD,
+                kind=HypothesisKind.CLAIM,
+                claim="Use controlled-variable reasoning only when baseline, intervention, control, and measurement are explicit.",
+                tags=["control", "experiment"],
+            ))
+            store.upsert_node(AssumptionNode(
+                id="struct_pat_negative_feedback",
+                type=AssumptionType.ALIGNMENT,
+                kind=HypothesisKind.FORMAL_MAPPING,
+                claim="Negative feedback preserves an invariant through an opposing response.",
+                formal_form={
+                    "formal_kind": "structural_pattern",
+                    "pattern_id": "pat_negative_feedback",
+                    "objects": ["perturbation", "opposing_response", "invariant"],
+                    "morphisms": ["disturbs", "opposes", "restores"],
+                },
+                tags=["structural_pattern"],
+            ))
+            duplicate = AssumptionNode(
+                id="cand_duplicate",
+                type=AssumptionType.METHOD,
+                kind=HypothesisKind.CLAIM,
+                claim="Use controlled-variable reasoning only when baseline, intervention, control, and measurement are explicit.",
+                tags=["control", "candidate"],
+                status="candidate",
+            )
+            child = AssumptionNode(
+                id="cand_child",
+                type=AssumptionType.METHOD,
+                kind=HypothesisKind.CLAIM,
+                claim="Use controlled variable reasoning for debugging after naming baseline, one changed factor, and falsifying measurement.",
+                tags=["control", "candidate"],
+                status="candidate",
+            )
+            formal = AssumptionNode(
+                id="cand_formal",
+                type=AssumptionType.ALIGNMENT,
+                kind=HypothesisKind.FORMAL_MAPPING,
+                claim="Transfer negative feedback to a domain with compensating repair.",
+                formal_form={
+                    "formal_kind": "structural_morphism_candidate",
+                    "source_pattern_id": "pat_negative_feedback",
+                    "score": {"score": 0.86},
+                    "functor_check": {"pass": True},
+                    "kernel_check": {"pass": True},
+                },
+                status="candidate",
+                tags=["structural_morphism"],
+            )
+            new_family = AssumptionNode(
+                id="cand_new",
+                type=AssumptionType.WORLD_MODEL,
+                kind=HypothesisKind.CLAIM,
+                claim="Model cryogenic sensor drift as a temperature latency manifold.",
+                status="candidate",
+                tags=["cryogenic"],
+            )
+            proposals = {
+                "eval_id": "unit_novelty",
+                "proposals": [
+                    {
+                        "proposal_id": "prop_dup",
+                        "proposal_type": "assumption_revision",
+                        "parent_node_id": "existing_control_specific",
+                        "candidate_node": duplicate.to_dict(),
+                    },
+                    {
+                        "proposal_id": "prop_child",
+                        "proposal_type": "scope_narrowing",
+                        "parent_node_id": "parent_control",
+                        "candidate_node": child.to_dict(),
+                        "edges": [{"source": "cand_child", "target": "parent_control", "type": "specializes"}],
+                    },
+                    {
+                        "proposal_id": "prop_formal",
+                        "proposal_type": "structural_transfer_hypothesis",
+                        "parent_node_id": "struct_pat_negative_feedback",
+                        "candidate_node": formal.to_dict(),
+                    },
+                    {
+                        "proposal_id": "prop_new",
+                        "proposal_type": "failure_hypothesis",
+                        "parent_node_id": "",
+                        "candidate_node": new_family.to_dict(),
+                    },
+                ],
+            }
+            payload = build_novelty_integration_payload(store, proposals, eval_id="unit_novelty_gate")
+            self.assertTrue(payload["pass"])
+            rows = {row["proposal_id"]: row for row in payload["rows"]}
+            self.assertEqual(rows["prop_dup"]["classification"], "duplicate")
+            self.assertEqual(rows["prop_child"]["classification"], "specialization")
+            self.assertEqual(rows["prop_child"]["integration_edges"][0]["type"], "specializes")
+            self.assertEqual(rows["prop_formal"]["classification"], "formal_isomorphism")
+            self.assertEqual(rows["prop_formal"]["integration_edges"][0]["type"], "is_formal_isomorphism_of")
+            self.assertEqual(rows["prop_new"]["classification"], "genuinely_new_family")
+
+    def test_novelty_integration_performance_validation_passes(self):
+        payload = build_novelty_integration_performance_payload(eval_id="unit_novelty_perf")
+        self.assertTrue(payload["pass"], payload["gates"])
+        self.assertEqual(payload["gold_accuracy"], 1.0)
+        self.assertEqual(payload["classification_counts"]["duplicate"], 1)
+        self.assertEqual(payload["classification_counts"]["formal_isomorphism"], 1)
+        self.assertEqual(payload["classification_counts"]["analogy"], 1)
+
     def test_proposal_overlay_is_in_memory_only(self):
         with tempfile.TemporaryDirectory() as td:
             store = JsonlGraphStore(td)
@@ -3957,6 +4078,99 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(applied, [candidate_id])
             updated = JsonlGraphStore(root / "graph")
             self.assertEqual(updated.nodes[candidate_id].status, "active")
+
+    def test_apply_accepted_candidates_uses_novelty_integration_edges(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            store = JsonlGraphStore(root / "graph")
+            store.upsert_node(AssumptionNode(
+                id="existing_parent",
+                type=AssumptionType.METHOD,
+                claim="Keep a known baseline and change one factor.",
+                tags=["control"],
+            ))
+            store.upsert_node(AssumptionNode(
+                id="struct_pat_negative_feedback",
+                type=AssumptionType.ALIGNMENT,
+                kind=HypothesisKind.FORMAL_MAPPING,
+                claim="Negative feedback restores an invariant.",
+                formal_form={"formal_kind": "structural_pattern", "pattern_id": "pat_negative_feedback"},
+                tags=["structural_pattern"],
+            ))
+            store.flush()
+            duplicate = AssumptionNode(
+                id="cand_dup_apply",
+                type=AssumptionType.METHOD,
+                claim="Keep a known baseline and change one factor.",
+                status="candidate",
+                tags=["control"],
+            )
+            formal = AssumptionNode(
+                id="cand_formal_apply",
+                type=AssumptionType.ALIGNMENT,
+                kind=HypothesisKind.FORMAL_MAPPING,
+                claim="Apply negative feedback as a preserved structural morphism.",
+                formal_form={
+                    "formal_kind": "structural_morphism_candidate",
+                    "source_pattern_id": "pat_negative_feedback",
+                    "functor_check": {"pass": True},
+                    "kernel_check": {"pass": True},
+                    "score": {"score": 0.91},
+                },
+                status="candidate",
+                tags=["structural_morphism"],
+            )
+            proposal_payload = {
+                "eval_id": "unit_apply_novelty",
+                "proposals": [
+                    {
+                        "proposal_id": "prop_dup_apply",
+                        "proposal_type": "assumption_revision",
+                        "parent_node_id": "existing_parent",
+                        "candidate_node": duplicate.to_dict(),
+                    },
+                    {
+                        "proposal_id": "prop_formal_apply",
+                        "proposal_type": "structural_transfer_hypothesis",
+                        "parent_node_id": "struct_pat_negative_feedback",
+                        "candidate_node": formal.to_dict(),
+                    },
+                ],
+            }
+            novelty = build_novelty_integration_payload(
+                JsonlGraphStore(root / "graph"),
+                proposal_payload,
+                eval_id="unit_apply_novelty_gate",
+            )
+            acceptance = {
+                "eval_id": "unit_accept_novelty",
+                "accepted_proposal_ids": ["prop_dup_apply", "prop_formal_apply"],
+                "summaries": [
+                    {"proposal_id": "prop_dup_apply", "decision": "accept"},
+                    {"proposal_id": "prop_formal_apply", "decision": "accept"},
+                ],
+            }
+            applied = apply_accepted_candidates(
+                JsonlGraphStore(root / "graph"),
+                proposal_payload,
+                acceptance,
+                novelty,
+            )
+            updated = JsonlGraphStore(root / "graph")
+            self.assertEqual(applied, ["cand_formal_apply"])
+            self.assertNotIn("cand_dup_apply", updated.nodes)
+            self.assertIn("cand_formal_apply", updated.nodes)
+            self.assertIn(
+                ("cand_formal_apply", "struct_pat_negative_feedback", "is_formal_isomorphism_of"),
+                {
+                    (
+                        edge.source,
+                        edge.target,
+                        edge.type.value if hasattr(edge.type, "value") else edge.type,
+                    )
+                    for edge in updated.edges
+                },
+            )
 
     def test_structural_morphism_evals_and_verifier_gate(self):
         self.assertTrue(build_structural_extraction_audit_payload(eval_id="unit_struct_extract")["pass"])

@@ -27,6 +27,7 @@ from .falsification import build_falsification_payload
 from .formal_mapping import build_formal_mapping_gate_payload, build_formal_mapping_payload
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .lifecycle import build_lifecycle_payload
+from .novelty_integration import build_novelty_integration_payload
 from .proposal_overlay import parse_csv_set
 from .proposals import build_proposal_payload
 from .record_phase2_eval import record_phase2_eval
@@ -153,6 +154,11 @@ def build_evolution_cycle_payload(
         eval_id=f"{eval_id}_proposals",
         payloads=[lifecycle_proposal_payload, failure_hypothesis_payload],
     )
+    novelty_integration_payload = build_novelty_integration_payload(
+        graph.store,
+        proposal_payload,
+        eval_id=f"{eval_id}_novelty_integration",
+    )
     formal_mapping_gate_payload = build_formal_mapping_gate_payload(
         proposal_payload=proposal_payload,
         formal_mapping_payload=formal_mapping_payload,
@@ -193,6 +199,7 @@ def build_evolution_cycle_payload(
                 JsonlGraphStore(graph_dir),
                 proposal_payload,
                 gated_acceptance_payload,
+                novelty_integration_payload,
             )
 
     regression_predictions = predict_candidate_regressions(preflight_payload)
@@ -250,6 +257,7 @@ def build_evolution_cycle_payload(
         applied_candidate_node_ids=applied_candidate_node_ids,
         bayesian_policy_payload=bayesian_policy_payload,
         formal_mapping_gate_payload=formal_mapping_gate_payload,
+        novelty_integration_payload=novelty_integration_payload,
     )
 
     return {
@@ -284,6 +292,7 @@ def build_evolution_cycle_payload(
         "lifecycle": lifecycle_payload,
         "formal_mapping_audit": formal_mapping_payload,
         "formal_mapping_gate": formal_mapping_gate_payload,
+        "novelty_integration": novelty_integration_payload,
         "failure_hypotheses": failure_hypothesis_payload,
         "proposals": proposal_payload,
         "candidate_preflight": preflight_payload,
@@ -395,6 +404,7 @@ def build_policy_update_plan(
     applied_candidate_node_ids: list[str] | None = None,
     bayesian_policy_payload: dict | None = None,
     formal_mapping_gate_payload: dict | None = None,
+    novelty_integration_payload: dict | None = None,
 ) -> dict:
     accepted = set((acceptance_payload or {}).get("accepted_proposal_ids", []))
     summary_by_proposal = {s["proposal_id"]: s for s in preflight_payload.get("summaries", [])}
@@ -406,14 +416,22 @@ def build_policy_update_plan(
         g["proposal_id"]: g
         for g in (formal_mapping_gate_payload or {}).get("gates", [])
     }
+    novelty_by_proposal = {
+        row["proposal_id"]: row
+        for row in (novelty_integration_payload or {}).get("rows", [])
+    }
     actions = []
     for proposal in proposal_payload.get("proposals", []):
         pid = proposal.get("proposal_id")
         preflight = summary_by_proposal.get(pid, {})
         candidate = proposal.get("candidate_node") or {}
         formal_gate = formal_gate_by_proposal.get(pid, {})
+        novelty = novelty_by_proposal.get(pid, {})
         if pid in accepted:
-            action = "applied_to_graph" if apply_accepted else "ready_to_apply_with_apply_accepted"
+            if novelty.get("classification") == "duplicate":
+                action = "merge_with_existing_assumption"
+            else:
+                action = "applied_to_graph" if apply_accepted else "ready_to_apply_with_apply_accepted"
         elif preflight.get("readiness") == "ready_for_fresh_ablation":
             action = "run_fresh_ablation_before_promotion"
         elif preflight.get("readiness") == "needs_scope_fix":
@@ -432,6 +450,7 @@ def build_policy_update_plan(
             "candidate_node_id": candidate.get("id"),
             "preflight_readiness": preflight.get("readiness"),
             "formal_mapping_gate": formal_gate or {"decision": "not_applicable"},
+            "novelty_integration": novelty or {"classification": "not_available"},
             "bayesian_action": bayes_by_proposal.get(pid, {}).get("recommended_action"),
             "bayesian_priority": bayes_by_proposal.get(pid, {}).get("posterior_priority"),
             "bayesian_expected_value": bayes_by_proposal.get(pid, {}).get("expected_value"),
