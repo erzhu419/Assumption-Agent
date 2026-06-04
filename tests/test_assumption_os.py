@@ -4231,6 +4231,23 @@ class AssumptionOSTest(unittest.TestCase):
         )
         self.assertGreaterEqual(payload["nonlexical_success_rate"], 0.75)
 
+    def test_morphism_independent_benchmark_beats_neural_embedding_baseline(self):
+        try:
+            payload = build_morphism_independent_benchmark_payload(
+                eval_id="unit_morphism_independent_neural",
+                neural_embedding_backend="sentence_transformer",
+                neural_embedding_model="sentence-transformers/all-MiniLM-L6-v2",
+            )
+        except RuntimeError as exc:
+            raise unittest.SkipTest(str(exc)) from exc
+        self.assertTrue(payload["pass"], payload["gates"])
+        rates = payload["scorer_hit_rates"]
+        self.assertIn("neural_embedding", rates)
+        self.assertGreaterEqual(rates["morphism"], 0.80)
+        self.assertLessEqual(rates["neural_embedding"], 0.30)
+        self.assertGreaterEqual(payload["morphism_margin_over_best_baseline"], 0.20)
+        self.assertTrue(payload["neural_embedding_baseline"]["enabled"])
+
     def test_retrieval_injects_structural_morphism_shadow_context(self):
         with tempfile.TemporaryDirectory() as td:
             store = JsonlGraphStore(Path(td) / "graph")

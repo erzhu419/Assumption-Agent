@@ -36,6 +36,10 @@ Morphism benchmark passes only if:
 - morphism beats both KG-triple and lexical embedding-proxy baselines by at least 0.20 absolute hit rate;
 - non-lexical success rate is at least 0.75.
 
+When a neural embedding backend is available, the benchmark also records a
+real sentence-embedding retrieval baseline over the same surface text. The
+current local validation uses `sentence-transformers/all-MiniLM-L6-v2`.
+
 ## Why this is aligned with reconstruction.md
 
 This implements the missing paper evidence for recursive assumption evolution and category-inspired structural transfer without claiming a full category-theory theorem prover. The morphism layer is still deliberately bounded: objects, role transitions, composition hints, invariants, and negative controls are treated as finite diagrams for engineering validation.
@@ -65,7 +69,9 @@ Morphism independent benchmark:
 - morphism top-1 hit rate: 1.000
 - KG-triple top-1 hit rate: 0.100
 - embedding-proxy top-1 hit rate: 0.100
+- neural embedding top-1 hit rate: 0.000
 - morphism margin over best baseline: +0.900
+- morphism margin over neural embedding: +1.000
 - nonlexical structural success rate: 0.800
 
 Test command:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
 from collections import Counter
 from dataclasses import asdict, dataclass, field
@@ -90,16 +91,36 @@ class MorphismBenchmarkCase:
         }
 
 
-def build_morphism_independent_benchmark_payload(*, eval_id: str | None = None) -> dict:
+def build_morphism_independent_benchmark_payload(
+    *,
+    eval_id: str | None = None,
+    neural_embedding_backend: str | None = "none",
+    neural_embedding_model: str | None = None,
+) -> dict:
     cases = _default_cases()
-    rows = [_evaluate_case(case) for case in cases]
+    neural_baseline = _build_neural_embedding_baseline(
+        cases,
+        backend=neural_embedding_backend or "none",
+        model_name=neural_embedding_model,
+    )
+    rows = [
+        _evaluate_case(
+            case,
+            neural_scores=neural_baseline.get("scores", {}).get(case.case_id),
+        )
+        for case in cases
+    ]
+    scorers = ("morphism", "kg_triple", "embedding_proxy") + (
+        ("neural_embedding",) if neural_baseline.get("enabled") else ()
+    )
     scorer_hit_rates = {
         scorer: round(sum(1 for row in rows if row["top_ids"][scorer] == row["expected_candidate_id"]) / len(rows), 4)
-        for scorer in ("morphism", "kg_triple", "embedding_proxy")
+        for scorer in scorers
     }
     nonlexical_success_count = sum(1 for row in rows if row["nonlexical_structural_success"])
     nonlexical_success_rate = round(nonlexical_success_count / len(rows), 4) if rows else 0.0
-    best_baseline_rate = max(scorer_hit_rates["kg_triple"], scorer_hit_rates["embedding_proxy"])
+    baseline_scorers = [scorer for scorer in scorers if scorer != "morphism"]
+    best_baseline_rate = max(scorer_hit_rates[scorer] for scorer in baseline_scorers)
     morphism_margin = round(scorer_hit_rates["morphism"] - best_baseline_rate, 4)
     gates = [
         {
@@ -113,12 +134,13 @@ def build_morphism_independent_benchmark_payload(*, eval_id: str | None = None) 
             "observed": scorer_hit_rates["morphism"],
         },
         {
-            "gate": "beats_kg_and_embedding_proxy",
+            "gate": "beats_surface_baselines",
             "pass": morphism_margin >= 0.20,
             "observed": {
                 "morphism_rate": scorer_hit_rates["morphism"],
                 "kg_triple_rate": scorer_hit_rates["kg_triple"],
                 "embedding_proxy_rate": scorer_hit_rates["embedding_proxy"],
+                "neural_embedding_rate": scorer_hit_rates.get("neural_embedding"),
                 "margin": morphism_margin,
             },
         },
@@ -128,6 +150,34 @@ def build_morphism_independent_benchmark_payload(*, eval_id: str | None = None) 
             "observed": nonlexical_success_rate,
         },
     ]
+    if neural_baseline.get("requested"):
+        gates.extend([
+            {
+                "gate": "neural_embedding_baseline_available",
+                "pass": bool(neural_baseline.get("enabled")),
+                "observed": {
+                    "backend": neural_baseline.get("backend"),
+                    "model": neural_baseline.get("model"),
+                    "status": neural_baseline.get("status"),
+                    "error": neural_baseline.get("error"),
+                },
+            },
+            {
+                "gate": "beats_neural_embedding_baseline",
+                "pass": (
+                    bool(neural_baseline.get("enabled"))
+                    and scorer_hit_rates["morphism"] - scorer_hit_rates.get("neural_embedding", 1.0) >= 0.20
+                ),
+                "observed": {
+                    "morphism_rate": scorer_hit_rates["morphism"],
+                    "neural_embedding_rate": scorer_hit_rates.get("neural_embedding"),
+                    "margin": round(
+                        scorer_hit_rates["morphism"] - scorer_hit_rates.get("neural_embedding", 0.0),
+                        4,
+                    ) if neural_baseline.get("enabled") else None,
+                },
+            },
+        ])
     return {
         "eval_id": eval_id or "morphism_independent_benchmark_20260604",
         "eval_kind": "morphism_independent_cross_domain_benchmark",
@@ -135,46 +185,58 @@ def build_morphism_independent_benchmark_payload(*, eval_id: str | None = None) 
         "scorer_hit_rates": scorer_hit_rates,
         "morphism_margin_over_best_baseline": morphism_margin,
         "nonlexical_success_rate": nonlexical_success_rate,
+        "neural_embedding_baseline": {
+            key: value
+            for key, value in neural_baseline.items()
+            if key != "scores"
+        },
         "gates": gates,
         "pass": all(gate["pass"] for gate in gates),
         "baseline_note": (
-            "embedding_proxy is deterministic lexical cosine over task text; it is a local stand-in "
-            "for a surface-driven embedding retrieval control, not a neural embedding model."
+            "embedding_proxy is deterministic lexical cosine over task text.  "
+            "neural_embedding, when enabled, is a real sentence-embedding retrieval baseline over "
+            "the same surface text."
         ),
         "rows": rows,
     }
 
 
-def _evaluate_case(case: MorphismBenchmarkCase) -> dict:
+def _evaluate_case(case: MorphismBenchmarkCase, *, neural_scores: dict[str, float] | None = None) -> dict:
     candidate_rows = []
     for candidate in case.candidates:
         morphism = _morphism_score(case.query, candidate)
         kg = _kg_triple_score(case.query, candidate)
         embedding = _embedding_proxy_score(case.query, candidate)
+        scores = {
+            "morphism": morphism,
+            "kg_triple": kg,
+            "embedding_proxy": embedding,
+        }
+        if neural_scores is not None:
+            scores["neural_embedding"] = round(float(neural_scores.get(candidate.signature_id, 0.0)), 4)
         candidate_rows.append({
             "candidate_id": candidate.signature_id,
             "label": candidate.label,
             "domain": candidate.domain,
-            "scores": {
-                "morphism": morphism,
-                "kg_triple": kg,
-                "embedding_proxy": embedding,
-            },
+            "scores": scores,
             "morphism_evidence": _morphism_evidence(case.query, candidate),
         })
+    scorers = tuple(candidate_rows[0]["scores"]) if candidate_rows else ()
     ranks = {
         scorer: sorted(candidate_rows, key=lambda row: (-row["scores"][scorer], row["candidate_id"]))
-        for scorer in ("morphism", "kg_triple", "embedding_proxy")
+        for scorer in scorers
     }
     top_ids = {scorer: ranked[0]["candidate_id"] for scorer, ranked in ranks.items()}
     expected = next(row for row in candidate_rows if row["candidate_id"] == case.expected_candidate_id)
     false_rows = [row for row in candidate_rows if row["candidate_id"] != case.expected_candidate_id]
-    best_false_kg = max(row["scores"]["kg_triple"] for row in false_rows)
-    best_false_embedding = max(row["scores"]["embedding_proxy"] for row in false_rows)
+    baseline_scorers = [scorer for scorer in scorers if scorer != "morphism"]
+    best_false_by_baseline = {
+        scorer: max(row["scores"][scorer] for row in false_rows)
+        for scorer in baseline_scorers
+    }
     nonlexical_structural_success = (
         top_ids["morphism"] == case.expected_candidate_id
-        and expected["scores"]["kg_triple"] < best_false_kg
-        and expected["scores"]["embedding_proxy"] < best_false_embedding
+        and all(expected["scores"][scorer] < best_false_by_baseline[scorer] for scorer in baseline_scorers)
     )
     return {
         "case_id": case.case_id,
@@ -184,7 +246,7 @@ def _evaluate_case(case: MorphismBenchmarkCase) -> dict:
         "top_ids": top_ids,
         "passed_by": {
             scorer: top_ids[scorer] == case.expected_candidate_id
-            for scorer in ("morphism", "kg_triple", "embedding_proxy")
+            for scorer in scorers
         },
         "nonlexical_structural_success": nonlexical_structural_success,
         "candidate_scores": candidate_rows,
@@ -196,6 +258,141 @@ def _evaluate_case(case: MorphismBenchmarkCase) -> dict:
             for scorer, ranked in ranks.items()
         },
     }
+
+
+def _build_neural_embedding_baseline(
+    cases: list[MorphismBenchmarkCase],
+    *,
+    backend: str,
+    model_name: str | None,
+) -> dict:
+    backend = (backend or "none").strip().lower()
+    if backend in {"none", "off", "false", "0"}:
+        return {
+            "requested": False,
+            "enabled": False,
+            "backend": "none",
+            "model": None,
+            "status": "disabled",
+        }
+    if backend == "auto":
+        try:
+            return _sentence_transformer_baseline(cases, model_name=model_name)
+        except Exception as exc:
+            try:
+                return _openai_embedding_baseline(cases, model_name=model_name)
+            except Exception as openai_exc:
+                return {
+                    "requested": True,
+                    "enabled": False,
+                    "backend": "auto",
+                    "model": model_name,
+                    "status": "unavailable",
+                    "error": f"sentence_transformer={exc}; openai={openai_exc}",
+                }
+    if backend in {"sentence_transformer", "sentence-transformer", "sbert", "minilm"}:
+        return _sentence_transformer_baseline(cases, model_name=model_name)
+    if backend in {"openai", "newapi", "api"}:
+        return _openai_embedding_baseline(cases, model_name=model_name)
+    raise ValueError(f"Unknown neural embedding backend: {backend}")
+
+
+def _sentence_transformer_baseline(cases: list[MorphismBenchmarkCase], *, model_name: str | None) -> dict:
+    model_name = model_name or "sentence-transformers/all-MiniLM-L6-v2"
+    try:
+        from sentence_transformers import SentenceTransformer
+    except Exception as exc:
+        raise RuntimeError("sentence_transformers is not installed") from exc
+
+    texts = _embedding_texts(cases)
+    try:
+        model = SentenceTransformer(model_name)
+        embeddings = model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
+    except Exception as exc:
+        raise RuntimeError(f"sentence_transformer model unavailable: {model_name}") from exc
+    scores = _embedding_scores_from_vectors(cases, texts, embeddings)
+    return {
+        "requested": True,
+        "enabled": True,
+        "backend": "sentence_transformer",
+        "model": model_name,
+        "status": "ok",
+        "text_field": "surface_text",
+        "scores": scores,
+    }
+
+
+def _openai_embedding_baseline(cases: list[MorphismBenchmarkCase], *, model_name: str | None) -> dict:
+    try:
+        from openai import OpenAI
+    except Exception as exc:
+        raise RuntimeError("openai SDK is not installed") from exc
+
+    api_key = os.environ.get("ASSUMPTION_OS_EMBEDDING_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("ASSUMPTION_OS_EMBEDDING_API_KEY or OPENAI_API_KEY is not set")
+    base_url = os.environ.get("ASSUMPTION_OS_EMBEDDING_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
+    model_name = model_name or os.environ.get("ASSUMPTION_OS_EMBEDDING_MODEL") or "text-embedding-3-small"
+    client_kwargs = {"api_key": api_key}
+    if base_url:
+        client_kwargs["base_url"] = base_url
+    client = OpenAI(**client_kwargs)
+    texts = _embedding_texts(cases)
+    response = client.embeddings.create(model=model_name, input=texts)
+    embeddings = [row.embedding for row in response.data]
+    scores = _embedding_scores_from_vectors(cases, texts, embeddings)
+    return {
+        "requested": True,
+        "enabled": True,
+        "backend": "openai_compatible",
+        "model": model_name,
+        "base_url_configured": bool(base_url),
+        "status": "ok",
+        "text_field": "surface_text",
+        "scores": scores,
+    }
+
+
+def _embedding_texts(cases: list[MorphismBenchmarkCase]) -> list[str]:
+    texts = []
+    seen = set()
+    for case in cases:
+        for signature in [case.query, *case.candidates]:
+            if signature.surface_text not in seen:
+                seen.add(signature.surface_text)
+                texts.append(signature.surface_text)
+    return texts
+
+
+def _embedding_scores_from_vectors(
+    cases: list[MorphismBenchmarkCase],
+    texts: list[str],
+    embeddings,
+) -> dict[str, dict[str, float]]:
+    vector_by_text = {text: embeddings[idx] for idx, text in enumerate(texts)}
+    scores: dict[str, dict[str, float]] = {}
+    for case in cases:
+        query_vector = vector_by_text[case.query.surface_text]
+        scores[case.case_id] = {
+            candidate.signature_id: round(_vector_cosine(query_vector, vector_by_text[candidate.surface_text]), 4)
+            for candidate in case.candidates
+        }
+    return scores
+
+
+def _vector_cosine(left, right) -> float:
+    dot = 0.0
+    left_norm = 0.0
+    right_norm = 0.0
+    for a, b in zip(left, right):
+        fa = float(a)
+        fb = float(b)
+        dot += fa * fb
+        left_norm += fa * fa
+        right_norm += fb * fb
+    if not left_norm or not right_norm:
+        return 0.0
+    return dot / math.sqrt(left_norm * right_norm)
 
 
 def _morphism_score(query: MorphismSignature, candidate: MorphismSignature) -> float:
@@ -946,9 +1143,19 @@ def _default_cases() -> list[MorphismBenchmarkCase]:
 def _main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--eval-id", default="morphism_independent_benchmark_20260604")
+    parser.add_argument(
+        "--neural-embedding-backend",
+        default="none",
+        choices=["none", "auto", "sentence_transformer", "openai"],
+    )
+    parser.add_argument("--neural-embedding-model", default=None)
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
-    payload = build_morphism_independent_benchmark_payload(eval_id=args.eval_id)
+    payload = build_morphism_independent_benchmark_payload(
+        eval_id=args.eval_id,
+        neural_embedding_backend=args.neural_embedding_backend,
+        neural_embedding_model=args.neural_embedding_model,
+    )
     text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
     if args.out:
         out = Path(args.out)
