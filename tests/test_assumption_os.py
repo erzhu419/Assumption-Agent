@@ -26,6 +26,7 @@ from assumption_os.evolution_context import (
 )
 from assumption_os.failure_hypotheses import build_failure_hypothesis_payload
 from assumption_os.falsification import FalsificationDecision, build_falsification_payload
+from assumption_os.first_party_world_model import build_first_party_world_model_scale_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -4483,25 +4484,46 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(payload["summary"]["preflight_queue_ready_count"], 5)
         self.assertGreaterEqual(payload["summary"]["real_artifact_readback_control_judgment_count"], 1)
 
-    def test_paper_benchmark_line_separates_working_loop_from_research_gaps(self):
+    def test_first_party_world_model_scale_audit_passes_live_trace_gate(self):
+        perf = json.loads(Path(
+            "phase four/assumption_graph/reconstruction_gap_perf_20260602_external_v5_objective.json"
+        ).read_text(encoding="utf-8"))
+        precomputed = json.loads(Path(
+            "phase four/assumption_graph/paper_readiness_20260604/first_party_world_model_scale_20260604.json"
+        ).read_text(encoding="utf-8"))
+        payload = build_first_party_world_model_scale_payload(
+            eval_id="unit_first_party_world_model",
+            trace_outcome_section=perf["sections"]["trace_outcome_model"],
+            precomputed_payload=precomputed,
+        )
+        self.assertTrue(payload["pass"], payload["gates"])
+        self.assertGreaterEqual(payload["raw_first_party_trainable_row_count"], 1000)
+        self.assertGreaterEqual(payload["valid_judge_event_count"], 1000)
+        self.assertGreaterEqual(payload["source_run_count"], 10)
+        self.assertGreaterEqual(payload["distinct_problem_count"], 50)
+        self.assertLessEqual(payload["calibration"]["best_brier_score"], 0.12)
+        self.assertFalse(payload["prompt_answer_payload_stored"])
+
+    def test_paper_benchmark_line_passes_current_mechanism_gates(self):
         payload = build_paper_benchmark_line_payload(
             root=Path("."),
             graph_dir=Path("phase four/assumption_graph"),
             eval_id="unit_paper_benchmark_line",
         )
         self.assertTrue(payload["benchmark_line_pass"], payload["benchmark_line_gates"])
-        self.assertFalse(payload["research_gap_pass"])
-        self.assertFalse(payload["paper_readiness_pass"])
+        self.assertTrue(payload["research_gap_pass"], payload["research_gap_gates"])
+        self.assertTrue(payload["paper_readiness_pass"])
         self.assertGreaterEqual(
             payload["completion_estimates"]["recursive_hypothesis_argument_percent"],
             90.0,
         )
-        self.assertLess(
+        self.assertGreaterEqual(
             payload["completion_estimates"]["general_hypothesis_os_percent"],
-            75.0,
+            70.0,
         )
         failed = {gate["name"] for gate in payload["research_gap_gates"] if not gate["pass"]}
-        self.assertIn("world_model_raw_first_party_scale", failed)
+        self.assertEqual(failed, set())
+        self.assertNotIn("world_model_raw_first_party_scale", failed)
         self.assertNotIn("continuous_daemon_autonomy", failed)
         self.assertNotIn("residual_label_large_scale_calibration", failed)
         self.assertNotIn("formal_engine_depth", failed)

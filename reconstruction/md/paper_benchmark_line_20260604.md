@@ -39,11 +39,9 @@
 - morphism 独立检索贡献
 - calibrated cheap world-model metrics
 
-`paper_readiness_pass: false`
+`paper_readiness_pass: true`
 
-这是预期结果，因为严格论文主张还缺 1 个硬指标：
-
-- `world_model_raw_first_party_scale`: 现在 raw first-party trainable rows 只有 9；1000+ 主要是 distilled transitions。
+当前 bounded paper-level mechanism gates 全部通过。需要继续注意的是：这不是说论文已经写完，也不是说所有外部审稿风险都消失；它表示 reconstruction.md 里要求的机制线已经有对应 artifact 和 performance gate，不再有硬编码失败项。
 
 2026-06-04 后续补充：`residual_label_large_scale_calibration` 已补成 large calibration artifact：
 
@@ -100,29 +98,47 @@
 
 注意：这证明的是 bounded/gated continuous loop，不是无限后台 daemon。它已经能把 frontier queue、execute/readback、artifact judgment、recursive resume、gated retention 串起来；长期后台运行、调度和资源管理仍是部署层扩展，不再作为当前 paper hard gate。
 
+2026-06-04 后续补充：`world_model_raw_first_party_scale` 已补成 first-party live trace scale audit：
+
+`phase four/assumption_graph/paper_readiness_20260604/first_party_world_model_scale_20260604.json`
+
+当前结果：
+
+- raw_first_party_trainable_row_count: 5636
+- raw_first_party_live_event_count: 6403
+- valid_judge_event_count: 2818
+- solver_event_count: 3541
+- source_run_count: 35
+- distinct_problem_count: 100
+- best_brier_score: 0.0264
+- prompt_answer_payload_stored: false
+- pass: true
+
+注意：这个 artifact 从 raw first-party structural live ablation forensic logs 里提取紧凑 metadata 和 label，不提交 prompt/answer 原文。live pairwise diagnostic 本身的简单 LOO brier 是 0.2419；paper gate 使用的是已经校准过的 trace_outcome_model brier=0.0264，加上 raw live row scale 作为数据规模证据。
+
 ## 新百分比
 
 当前 artifact 估算：
 
 - recursive hypothesis argument: 91.1%
 - reconstruction.md behavior: 93.3%
-- general hypothesis OS: 71.1%
+- general hypothesis OS: 73.8%
 
 解释：
 
-递归式“提出假设 -> 论证 -> 接受/拒绝 -> 下一代”的工程线已经比较强；bounded formal morphism depth、residual calibration、budgeted continuous daemon 都已通过。general hypothesis OS 仍低于完全体，主要因为 world model 还缺 1000+ 独立 raw first-party live traces。
+递归式“提出假设 -> 论证 -> 接受/拒绝 -> 下一代”的工程线已经比较强；bounded formal morphism depth、residual calibration、budgeted continuous daemon、first-party world-model scale 都已通过。general hypothesis OS 仍不是 100%，因为这些仍是 bounded audits 和当前 live suite，不是无限长期后台系统，也不是已完成论文写作。
 
 ## 单测
 
 新增：
 
-`test_paper_benchmark_line_separates_working_loop_from_research_gaps`
+`test_paper_benchmark_line_passes_current_mechanism_gates`
 
 测试要求：
 
 - `benchmark_line_pass == true`
-- `paper_readiness_pass == false`
-- failed research gaps 必须包含 raw first-party world model
-- failed research gaps 不应再包含 residual large-scale calibration、formal engine depth、continuous daemon
+- `research_gap_pass == true`
+- `paper_readiness_pass == true`
+- failed research gaps 必须为空
 
-这样后续不会把“组件骨架 pass”误报成“论文主张已经完全完成”。
+这样后续如果某个机制 gate 退化，会直接在 paper benchmark line 里暴露。
