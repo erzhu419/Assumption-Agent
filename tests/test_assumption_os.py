@@ -51,6 +51,7 @@ from assumption_os.manifest_logger import build_component_manifest_payload, even
 from assumption_os.math_science_policy import route_math_science_problem
 from assumption_os.memory_surfaces import build_memory_surface_payload
 from assumption_os.morphism_benchmark import build_morphism_independent_benchmark_payload
+from assumption_os.morphism_claims import build_morphism_claim_bundle_payload
 from assumption_os.candidate_eval import CandidateReadiness, build_candidate_eval_payload
 from assumption_os.novelty_integration import (
     build_novelty_integration_payload,
@@ -58,6 +59,7 @@ from assumption_os.novelty_integration import (
 )
 from assumption_os.objective_bench import build_objective_benchmark_payload
 from assumption_os.paper_benchmark_line import build_paper_benchmark_line_payload
+from assumption_os.paper_main_experiment import build_paper_main_experiment_payload
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
 from assumption_os.proposals import ProposalType, build_candidate_proposals
 from assumption_os.queue_artifact_eval import build_queue_artifact_eval_payload, judgment_sets_from_artifact_eval
@@ -4528,6 +4530,40 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertNotIn("residual_label_large_scale_calibration", failed)
         self.assertNotIn("formal_engine_depth", failed)
 
+    def test_paper_main_experiment_freezes_problem_level_stats_and_baselines(self):
+        payload = build_paper_main_experiment_payload(
+            root=Path("."),
+            eval_id="unit_paper_main_experiment",
+            final_forensic_path=Path(
+                "phase four/assumption_graph/structural_live_ablation_20260603/missing_forensic_for_unit.jsonl"
+            ),
+        )
+        self.assertTrue(payload["pass"], payload["gates"])
+        self.assertEqual(payload["judge_source_mode"], "tracked_summary_pair_counts_fallback")
+        base = payload["main_results"]["structural_vs_base"]
+        placebo = payload["main_results"]["structural_vs_placebo"]
+        self.assertEqual(base["problem_level_n"], 100)
+        self.assertEqual(placebo["problem_level_n"], 100)
+        self.assertGreaterEqual(base["utility"], 0.60)
+        self.assertGreaterEqual(placebo["utility"], 0.60)
+        self.assertGreater(base["bootstrap_ci_95"]["lower"], 0.50)
+        self.assertGreater(placebo["bootstrap_ci_95"]["lower"], 0.50)
+        self.assertLess(base["sign_test"]["p_value"], 0.05)
+        self.assertLess(placebo["sign_test"]["p_value"], 0.05)
+        baselines = {row["baseline"] for row in payload["baseline_table"]}
+        for required in {
+            "raw_llm_baseline",
+            "ordinary_kg_triple_retrieval",
+            "embedding_retrieval",
+            "no_morphism_structural_placebo",
+            "no_novelty_gate_proxy",
+            "no_world_model_trace_policy",
+            "no_recursive_runner_one_shot",
+        }:
+            self.assertIn(required, baselines)
+        self.assertTrue(payload["no_prompt_or_answer_payload_stored"])
+        self.assertGreaterEqual(payload["run_seed_variance_diagnostic"]["run_count"], 5)
+
     def test_morphism_independent_benchmark_beats_surface_baselines(self):
         payload = build_morphism_independent_benchmark_payload(eval_id="unit_morphism_independent")
         self.assertTrue(payload["pass"], payload["gates"])
@@ -4555,6 +4591,27 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertLessEqual(rates["neural_embedding"], 0.30)
         self.assertGreaterEqual(payload["morphism_margin_over_best_baseline"], 0.20)
         self.assertTrue(payload["neural_embedding_baseline"]["enabled"])
+
+    def test_morphism_claim_bundle_tightens_manuscript_scope(self):
+        payload = build_morphism_claim_bundle_payload(
+            root=Path("."),
+            graph_dir=Path("phase four/assumption_graph"),
+            eval_id="unit_morphism_claim_bundle",
+        )
+        self.assertTrue(payload["pass"], payload["gates"])
+        self.assertEqual(
+            payload["recommended_short_claim"],
+            "category-inspired bounded structural morphism layer",
+        )
+        self.assertIn("complete category-theory theorem prover", payload["forbidden_claims"])
+        self.assertFalse(payload["evidence"]["scope_flags"]["strict_category_theory_theorem_prover"])
+        retrieval = payload["evidence"]["cross_domain_retrieval"]
+        self.assertGreaterEqual(retrieval["scorer_hit_rates"]["morphism"], 0.80)
+        self.assertGreaterEqual(retrieval["morphism_margin_over_best_baseline"], 0.20)
+        self.assertGreaterEqual(retrieval["kg_embedding_miss_count"], 7)
+        downstream = payload["evidence"]["downstream_effect"]
+        self.assertGreaterEqual(downstream["downstream_transfer_auc"], 0.90)
+        self.assertGreaterEqual(downstream["answer_quality_mean_delta"], 0.35)
 
     def test_retrieval_injects_structural_morphism_shadow_context(self):
         with tempfile.TemporaryDirectory() as td:

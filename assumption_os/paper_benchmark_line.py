@@ -275,12 +275,22 @@ def _benchmark_line_gates(*, sections: dict[str, dict], recursive: dict, morphis
             score=_mean([
                 float(bool(morphism.get("pass"))),
                 _cap((morphism.get("morphism_margin_over_best_baseline") or 0.0) / 0.20),
-                _cap((morphism.get("nonlexical_structural_success_rate") or 0.0) / 0.75),
+                _cap(
+                    (
+                        morphism.get("nonlexical_success_rate")
+                        or morphism.get("nonlexical_structural_success_rate")
+                        or 0.0
+                    )
+                    / 0.75
+                ),
             ]),
             evidence={
                 "scorer_hit_rates": morphism.get("scorer_hit_rates"),
                 "morphism_margin_over_best_baseline": morphism.get("morphism_margin_over_best_baseline"),
-                "nonlexical_structural_success_rate": morphism.get("nonlexical_structural_success_rate"),
+                "nonlexical_success_rate": (
+                    morphism.get("nonlexical_success_rate")
+                    or morphism.get("nonlexical_structural_success_rate")
+                ),
             },
             remaining_gap="Show downstream performance gain from morphism retrieval on live tasks, beyond retrieval hit rate.",
         ),
@@ -489,7 +499,10 @@ def _morphism_summary(payload: dict) -> dict:
         "case_count": payload.get("case_count"),
         "scorer_hit_rates": payload.get("scorer_hit_rates"),
         "morphism_margin_over_best_baseline": payload.get("morphism_margin_over_best_baseline"),
-        "nonlexical_structural_success_rate": payload.get("nonlexical_structural_success_rate"),
+        "nonlexical_success_rate": (
+            payload.get("nonlexical_success_rate")
+            or payload.get("nonlexical_structural_success_rate")
+        ),
     }
 
 
