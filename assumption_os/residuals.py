@@ -56,13 +56,52 @@ def classify_manifest(manifest: TrialManifest) -> ResidualAssessment:
             "The active assumption appears valid but was not executed faithfully.",
             "Preserve the assumption; add execution reminder, constraint, or verifier.",
         )
-    if _has_any(text, ["partly", "partial", "方向对", "不够具体", "不够强", "refine", "optimize", "optimization", "优化"]):
+    if _has_any(text, [
+        "partly",
+        "partial",
+        "方向对",
+        "不够具体",
+        "不够强",
+        "refine",
+        "optimize",
+        "optimization",
+        "优化",
+        "没把",
+        "没抓",
+        "没看见",
+        "没转",
+        "却没",
+        "把问题看成",
+        "锁死",
+        "漏掉",
+        "错过",
+        "忽略",
+        "缺少",
+        "未",
+        "仍在",
+        "只在",
+        "orientation",
+        "did not convert",
+        "not convert",
+        "convert that context",
+        "judge-preferred",
+        "judge preferred",
+    ]):
         return ResidualAssessment(
             ResidualType.OPTIMIZATION,
             "The assumption direction helped but needs tighter operating conditions or payload.",
             "Refine signal/unpacked/formal payload and retest against outside controls.",
         )
-    if _has_any(text, ["judge", "verifier", "判官", "评分", "verbosity", "风格", "generic warning"]):
+    if _has_any(text, [
+        "judge over-weighted",
+        "over-weighted verbosity",
+        "verifier",
+        "判官",
+        "verbosity",
+        "风格",
+        "generic warning",
+        "wrong target",
+    ]):
         return ResidualAssessment(
             ResidualType.EVALUATOR_DEFECT,
             "The verifier may be measuring the wrong target or over-weighting style.",

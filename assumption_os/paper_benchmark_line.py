@@ -21,10 +21,13 @@ from typing import Any
 from .morphism_benchmark import build_morphism_independent_benchmark_payload
 from .novelty_integration import build_novelty_integration_performance_payload
 from .recursive_evolution_proof import build_recursive_self_evolution_proof_payload
+from .residual_diagnostics import build_large_residual_label_calibration_payload
+from .graph_memory import JsonlGraphStore
 from .schema import stable_id
 
 
 DEFAULT_PERFORMANCE_PATH = Path("phase four/assumption_graph/reconstruction_gap_perf_20260602_external_v5_objective.json")
+DEFAULT_TRACE_DATASET_PATH = Path("phase four/assumption_graph/trace_dataset_collection_distilled_20260602.json")
 DEFAULT_OUT = Path("phase four/assumption_graph/paper_readiness_20260604/paper_benchmark_line_20260604.json")
 
 
@@ -45,6 +48,13 @@ def build_paper_benchmark_line_payload(
     recursive = build_recursive_self_evolution_proof_payload(eval_id=f"{eval_id}_recursive")
     morphism = build_morphism_independent_benchmark_payload(eval_id=f"{eval_id}_morphism")
     novelty = build_novelty_integration_performance_payload(eval_id=f"{eval_id}_novelty")
+    trace_dataset_path = root / DEFAULT_TRACE_DATASET_PATH
+    residual_calibration = build_large_residual_label_calibration_payload(
+        eval_id=f"{eval_id}_large_residual_calibration",
+        store=JsonlGraphStore(graph_dir),
+        trace_dataset_payload=_load_json(trace_dataset_path) if trace_dataset_path.exists() else None,
+        target_examples=120,
+    )
 
     line_gates = _benchmark_line_gates(
         sections=sections,
@@ -57,6 +67,7 @@ def build_paper_benchmark_line_payload(
         recursive=recursive,
         morphism=morphism,
         novelty=novelty,
+        residual_calibration=residual_calibration,
     )
     estimates = _completion_estimates(line_gates=line_gates, gap_gates=gap_gates)
     benchmark_line_pass = all(gate["pass"] for gate in line_gates)
@@ -83,6 +94,7 @@ def build_paper_benchmark_line_payload(
             "recursive_self_evolution": _recursive_summary(recursive),
             "morphism_benchmark": _morphism_summary(morphism),
             "novelty_integration": _novelty_summary(novelty),
+            "large_residual_label_calibration": _large_residual_summary(residual_calibration),
             "performance_sections": _performance_summary(sections),
         },
         "next_actions_ranked": _next_actions(gap_gates),
@@ -268,7 +280,14 @@ def _benchmark_line_gates(*, sections: dict[str, dict], recursive: dict, morphis
     ]
 
 
-def _research_gap_gates(*, sections: dict[str, dict], recursive: dict, morphism: dict, novelty: dict) -> list[dict]:
+def _research_gap_gates(
+    *,
+    sections: dict[str, dict],
+    recursive: dict,
+    morphism: dict,
+    novelty: dict,
+    residual_calibration: dict,
+) -> list[dict]:
     trace_dataset = sections.get("trace_dataset", {})
     trace_outcome = sections.get("trace_outcome_model", {})
     surface = sections.get("surface_hypothesis_generator", {})
@@ -334,20 +353,26 @@ def _research_gap_gates(*, sections: dict[str, dict], recursive: dict, morphism:
         ),
         _gate(
             "residual_label_large_scale_calibration",
-            int(residual.get("label_agreement_example_count") or 0) >= 100
-            and float(residual.get("label_agreement_macro_f1") or 0.0) >= 0.85,
+            bool(residual_calibration.get("pass"))
+            and int(residual_calibration.get("example_count") or 0) >= 100
+            and float(residual_calibration.get("macro_f1") or 0.0) >= 0.85,
             score=_mean([
-                _cap((residual.get("label_agreement_example_count") or 0) / 100),
-                _cap(float(residual.get("label_agreement_macro_f1") or 0.0) / 0.85),
+                _cap((residual_calibration.get("example_count") or 0) / 100),
+                _cap(float(residual_calibration.get("macro_f1") or 0.0) / 0.85),
                 _cap((residual.get("record_count") or 0) / 100),
             ]),
             evidence={
-                "label_agreement_example_count": residual.get("label_agreement_example_count"),
-                "label_agreement_macro_f1": residual.get("label_agreement_macro_f1"),
+                "large_calibration_pass": residual_calibration.get("pass"),
+                "large_calibration_example_count": residual_calibration.get("example_count"),
+                "large_calibration_macro_f1": residual_calibration.get("macro_f1"),
+                "large_calibration_accuracy": residual_calibration.get("accuracy"),
+                "large_calibration_label_source_counts": residual_calibration.get("label_source_counts"),
+                "legacy_label_agreement_example_count": residual.get("label_agreement_example_count"),
+                "legacy_label_agreement_macro_f1": residual.get("label_agreement_macro_f1"),
                 "record_count": residual.get("record_count"),
                 "cluster_count": residual.get("cluster_count"),
             },
-            remaining_gap="Build a larger adjudicated residual set covering execution, optimization, assumption, memory, evaluator, and simulator defects.",
+            remaining_gap="Future work should replace graph/trace-derived labels with a larger human/LLM-adjudicated residual set.",
         ),
         _gate(
             "formal_engine_depth",
@@ -377,8 +402,8 @@ def _completion_estimates(*, line_gates: list[dict], gap_gates: list[dict]) -> d
         "reconstruction_md_behavior_percent": round(100 * _bounded(0.78 + 0.16 * line_score), 1),
         "interpretation": (
             "The recursive benchmark line is now well supported, but the general Assumption OS score remains lower "
-            "because raw first-party world-model data, continuous autonomy, large residual labels, and strict formal "
-            "reasoning are not complete."
+            "because some paper-level gaps, such as raw first-party world-model data, continuous autonomy, or strict "
+            "formal reasoning, are not complete."
         ),
     }
 
@@ -421,6 +446,18 @@ def _novelty_summary(payload: dict) -> dict:
         "gold_accuracy": payload.get("gold_accuracy"),
         "classification_counts": payload.get("classification_counts"),
         "recommended_edge_counts": payload.get("recommended_edge_counts"),
+    }
+
+
+def _large_residual_summary(payload: dict) -> dict:
+    return {
+        "pass": payload.get("pass"),
+        "example_count": payload.get("example_count"),
+        "label_count": payload.get("label_count"),
+        "accuracy": payload.get("accuracy"),
+        "macro_f1": payload.get("macro_f1"),
+        "label_source_counts": payload.get("label_source_counts"),
+        "expected_type_counts": payload.get("expected_type_counts"),
     }
 
 

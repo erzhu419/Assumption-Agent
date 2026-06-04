@@ -13,8 +13,11 @@ from __future__ import annotations
 import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Iterable
 
+from .graph_memory import JsonlGraphStore
+from .residual_clusterer import collect_residual_records
 from .residuals import classify_manifest
 from .schema import ResidualType, TrialManifest, TrialStatus, stable_id
 
@@ -164,6 +167,85 @@ def build_residual_label_agreement_payload(
     }
 
 
+def build_large_residual_label_calibration_payload(
+    *,
+    eval_id: str,
+    store: JsonlGraphStore | None = None,
+    trace_dataset_payload: dict[str, Any] | None = None,
+    target_examples: int = 120,
+) -> dict[str, Any]:
+    """Build a larger residual calibration set from first-party graph/trace labels.
+
+    This is not a substitute for human adjudication.  It records label sources
+    explicitly so paper-readiness gates can distinguish curated gold, graph
+    writeback labels, and trace-derived labels.
+    """
+
+    examples: list[LabeledResidualExample] = list(DEFAULT_LABELED_RESIDUAL_EXAMPLES)
+    source_counts = Counter(example.label_source for example in examples)
+    if store is not None:
+        graph_examples = _examples_from_graph_residual_records(store)
+        examples.extend(graph_examples)
+        source_counts.update(example.label_source for example in graph_examples)
+    if trace_dataset_payload is not None and len(examples) < target_examples:
+        trace_examples = _examples_from_trace_dataset(
+            trace_dataset_payload,
+            max_examples=max(0, target_examples - len(examples)),
+        )
+        examples.extend(trace_examples)
+        source_counts.update(example.label_source for example in trace_examples)
+
+    examples = _dedupe_examples(examples)[:target_examples]
+    agreement = build_residual_label_agreement_payload(
+        eval_id=f"{eval_id}_agreement",
+        examples=examples,
+    )
+    expected_counts = agreement.get("expected_type_counts", {})
+    coverage = {
+        "example_count": agreement["example_count"],
+        "target_examples": target_examples,
+        "label_count": agreement["label_count"],
+        "label_source_counts": agreement["label_source_counts"],
+        "expected_type_counts": expected_counts,
+        "has_curated_gold": expected_counts.get(ResidualType.EXECUTION_LAPSE.value, 0) >= 1
+        and expected_counts.get(ResidualType.SIMULATOR_DEFECT.value, 0) >= 1,
+        "has_graph_residuals": any(
+            str(source).startswith("first_party_graph")
+            for source in agreement.get("label_source_counts", {})
+        ),
+        "has_trace_residuals": any(
+            str(source).startswith("first_party_trace") or str(source).startswith("trace_dataset")
+            for source in agreement.get("label_source_counts", {})
+        ),
+    }
+    pass_condition = (
+        agreement["example_count"] >= 100
+        and agreement["accuracy"] >= 0.85
+        and agreement["macro_f1"] >= 0.80
+        and coverage["label_count"] >= 5
+        and coverage["has_curated_gold"]
+        and coverage["has_graph_residuals"]
+    )
+    return {
+        "eval_id": eval_id,
+        "target_examples": target_examples,
+        "calibration_kind": "large_residual_label_calibration",
+        "agreement": agreement,
+        "coverage": coverage,
+        "example_count": agreement["example_count"],
+        "label_count": agreement["label_count"],
+        "accuracy": agreement["accuracy"],
+        "macro_f1": agreement["macro_f1"],
+        "label_source_counts": agreement["label_source_counts"],
+        "expected_type_counts": expected_counts,
+        "pass": pass_condition,
+        "notes": [
+            "Large calibration uses curated gold plus first-party graph/trace labels.",
+            "It improves scale coverage but still does not replace future human adjudication.",
+        ],
+    }
+
+
 def build_trace_residual_coverage_payload(
     *,
     trace_dataset_payload: dict[str, Any],
@@ -231,6 +313,109 @@ def build_trace_residual_coverage_payload(
         "bypass_not_trainable_problem_ids": _problem_ids(bypass_not_trainable),
         "pass": pass_condition,
     }
+
+
+def _examples_from_graph_residual_records(store: JsonlGraphStore) -> list[LabeledResidualExample]:
+    examples = []
+    for record in collect_residual_records(store):
+        expected = _expected_type_from_record(record.residual_type, residual=record.residual)
+        examples.append(LabeledResidualExample(
+            example_id=f"graph_{record.record_id}",
+            expected_type=expected,
+            residual=record.residual,
+            observed_effect=f"action={record.action_type}; first_party_graph_residual=true",
+            expected_effect="Graph residual labels should remain stable under the residual taxonomy.",
+            why_selected=f"first-party graph residual record for {record.problem_id}",
+            label_source=f"first_party_graph_residual::{record.residual_type}",
+            metadata={
+                "record_id": record.record_id,
+                "problem_id": record.problem_id,
+                "component": record.component,
+                "action_type": record.action_type,
+                "source_residual_type": record.residual_type,
+            },
+        ))
+    return examples
+
+
+def _examples_from_trace_dataset(trace_dataset_payload: dict[str, Any], *, max_examples: int) -> list[LabeledResidualExample]:
+    if max_examples <= 0:
+        return []
+    rows = [
+        row for row in trace_dataset_payload.get("rows", [])
+        if isinstance(row, dict) and row.get("trainable")
+    ]
+    buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        rtype = str(row.get("residual_type") or "")
+        if rtype:
+            buckets[rtype].append(row)
+    examples = []
+    per_bucket = max(1, max_examples // max(1, len(buckets)))
+    for rtype in sorted(buckets):
+        for row in buckets[rtype][:per_bucket]:
+            expected = _expected_type_from_record(rtype, residual=row.get("residual"))
+            residual = row.get("residual")
+            if expected == ResidualType.NO_RESIDUAL.value:
+                residual = None
+            examples.append(LabeledResidualExample(
+                example_id=f"trace_{row.get('row_id') or stable_id('trace_row', row.get('problem_id'), rtype)}",
+                expected_type=expected,
+                residual=residual,
+                observed_effect=f"outcome={row.get('outcome')}; winner={row.get('winner')}; trace_source={row.get('trace_source')}",
+                expected_effect="Trace-derived residual labels should classify consistently with judged outcomes.",
+                why_selected=f"trace dataset row for {row.get('problem_id')}",
+                label_source=f"trace_dataset_residual::{rtype}",
+                metadata={
+                    "row_id": row.get("row_id"),
+                    "problem_id": row.get("problem_id"),
+                    "trace_source": row.get("trace_source"),
+                    "source_residual_type": rtype,
+                },
+            ))
+            if len(examples) >= max_examples:
+                return examples
+    return examples
+
+
+def _expected_type_from_record(residual_type: str, *, residual: str | None = None) -> str:
+    if residual_type == "unknown":
+        text = str(residual or "").lower()
+        if any(token in text for token in ["retrieval", "memory", "检索", "记忆", "wrong memory", "irrelevant"]):
+            return ResidualType.MEMORY_DEFECT.value
+        if any(token in text for token in [
+            "没",
+            "漏",
+            "错过",
+            "缺少",
+            "不够",
+            "仍",
+            "只",
+            "miss",
+            "missed",
+            "not convert",
+            "did not convert",
+            "optimize",
+            "优化",
+        ]):
+            return ResidualType.OPTIMIZATION.value
+        return ResidualType.DISCOVERY.value
+    try:
+        return ResidualType(residual_type).value
+    except ValueError:
+        return ResidualType.DISCOVERY.value
+
+
+def _dedupe_examples(examples: list[LabeledResidualExample]) -> list[LabeledResidualExample]:
+    seen = set()
+    out = []
+    for example in examples:
+        key = (example.example_id, _value(example.expected_type), example.residual)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(example)
+    return out
 
 
 def _coerce_example(example: LabeledResidualExample | dict[str, Any]) -> LabeledResidualExample:
@@ -315,8 +500,38 @@ def _value(value: ResidualType | str) -> str:
 
 
 def main() -> None:
-    payload = build_residual_label_agreement_payload(eval_id="residual_label_agreement_cli")
-    print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+    import argparse
+
+    ap = argparse.ArgumentParser(description="Residual label diagnostics.")
+    ap.add_argument("--eval-id", default="residual_label_agreement_cli")
+    ap.add_argument("--large", action="store_true")
+    ap.add_argument("--graph-dir", default=None)
+    ap.add_argument("--trace-dataset", default=None)
+    ap.add_argument("--target-examples", type=int, default=120)
+    ap.add_argument("--out", default=None)
+    args = ap.parse_args()
+
+    if args.large:
+        store = JsonlGraphStore(args.graph_dir) if args.graph_dir else None
+        trace_dataset = _load_json(Path(args.trace_dataset)) if args.trace_dataset else None
+        payload = build_large_residual_label_calibration_payload(
+            eval_id=args.eval_id,
+            store=store,
+            trace_dataset_payload=trace_dataset,
+            target_examples=args.target_examples,
+        )
+    else:
+        payload = build_residual_label_agreement_payload(eval_id=args.eval_id)
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    else:
+        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

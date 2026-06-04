@@ -72,6 +72,7 @@ from assumption_os.recursive_executor import JudgmentSet, build_recursive_execut
 from assumption_os.reconstruction_progress import build_reconstruction_progress_payload
 from assumption_os.residual_clusterer import ResidualRecord, build_residual_cluster_payload, cluster_residual_records
 from assumption_os.residual_diagnostics import (
+    build_large_residual_label_calibration_payload,
     build_residual_label_agreement_payload,
     build_trace_residual_coverage_payload,
 )
@@ -318,6 +319,21 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(payload["macro_f1"], 1.0)
         self.assertIn("memory_defect", payload["expected_type_counts"])
         self.assertEqual(payload["confusion"]["optimization"]["optimization"], 2)
+
+    def test_large_residual_label_calibration_uses_graph_and_trace_labels(self):
+        trace_path = Path("phase four/assumption_graph/trace_dataset_collection_distilled_20260602.json")
+        trace_payload = json.loads(trace_path.read_text(encoding="utf-8"))
+        payload = build_large_residual_label_calibration_payload(
+            eval_id="unit_large_residual_calibration",
+            store=JsonlGraphStore("phase four/assumption_graph"),
+            trace_dataset_payload=trace_payload,
+            target_examples=120,
+        )
+        self.assertTrue(payload["pass"], payload["coverage"])
+        self.assertGreaterEqual(payload["example_count"], 100)
+        self.assertGreaterEqual(payload["macro_f1"], 0.85)
+        self.assertGreaterEqual(payload["accuracy"], 0.85)
+        self.assertIn("first_party_graph_residual::unknown", payload["label_source_counts"])
 
     def test_wisdom_and_exp82_adapters(self):
         with tempfile.TemporaryDirectory() as td:
@@ -4455,8 +4471,8 @@ class AssumptionOSTest(unittest.TestCase):
         failed = {gate["name"] for gate in payload["research_gap_gates"] if not gate["pass"]}
         self.assertIn("world_model_raw_first_party_scale", failed)
         self.assertIn("continuous_daemon_autonomy", failed)
-        self.assertIn("residual_label_large_scale_calibration", failed)
         self.assertIn("formal_engine_depth", failed)
+        self.assertNotIn("residual_label_large_scale_calibration", failed)
 
     def test_morphism_independent_benchmark_beats_surface_baselines(self):
         payload = build_morphism_independent_benchmark_payload(eval_id="unit_morphism_independent")

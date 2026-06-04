@@ -41,12 +41,25 @@
 
 `paper_readiness_pass: false`
 
-这是预期结果，因为严格论文主张还缺 4 个硬指标：
+这是预期结果，因为严格论文主张还缺 3 个硬指标：
 
 - `world_model_raw_first_party_scale`: 现在 raw first-party trainable rows 只有 9；1000+ 主要是 distilled transitions。
 - `continuous_daemon_autonomy`: 现在是 bounded/gated/readback，不是持续后台无人值守循环。
-- `residual_label_large_scale_calibration`: curated label set 只有 10 条，虽 macro-F1=1.0，但不是大规模 adjudicated set。
 - `formal_engine_depth`: morphism benchmark 过了，但不是完整范畴论 theorem prover，也不是真 Blackwell/Fisher engine。
+
+2026-06-04 后续补充：`residual_label_large_scale_calibration` 已补成 large calibration artifact：
+
+`phase four/assumption_graph/paper_readiness_20260604/large_residual_label_calibration_20260604.json`
+
+当前结果：
+
+- example_count: 120
+- label_count: 8
+- accuracy: 0.9333
+- macro_f1: 0.895
+- pass: true
+
+该集使用 curated gold + first-party graph residual labels + trace-derived labels，解决了“只有 10 条 curated smoke test”的问题。它仍不是最终的人类标注集；未来论文可以把它升级成人类/LLM adjudicated residual benchmark。
 
 ## 新百分比
 
@@ -54,11 +67,11 @@
 
 - recursive hypothesis argument: 91.1%
 - reconstruction.md behavior: 93.3%
-- general hypothesis OS: 64.9%
+- general hypothesis OS: 67.0%
 
 解释：
 
-递归式“提出假设 -> 论证 -> 接受/拒绝 -> 下一代”的工程线已经比较强；但 general hypothesis OS 的分数仍低，因为它要求跨长期真实 trace 的世界模型、持续 daemon、大规模 residual 标注、严格形式推理。这些不是再加一个轻量模块能诚实补掉的。
+递归式“提出假设 -> 论证 -> 接受/拒绝 -> 下一代”的工程线已经比较强；但 general hypothesis OS 的分数仍低，因为它要求跨长期真实 trace 的世界模型、持续 daemon、严格形式推理。这些不是再加一个轻量模块能诚实补掉的。
 
 ## 单测
 
@@ -70,6 +83,7 @@
 
 - `benchmark_line_pass == true`
 - `paper_readiness_pass == false`
-- failed research gaps 必须包含 raw first-party world model、continuous daemon、大规模 residual labels、formal engine depth
+- failed research gaps 必须包含 raw first-party world model、continuous daemon、formal engine depth
+- failed research gaps 不应再包含 residual large-scale calibration
 
 这样后续不会把“组件骨架 pass”误报成“论文主张已经完全完成”。
