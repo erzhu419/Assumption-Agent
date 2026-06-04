@@ -54,6 +54,7 @@ from assumption_os.novelty_integration import (
     build_novelty_integration_performance_payload,
 )
 from assumption_os.objective_bench import build_objective_benchmark_payload
+from assumption_os.paper_benchmark_line import build_paper_benchmark_line_payload
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
 from assumption_os.proposals import ProposalType, build_candidate_proposals
 from assumption_os.queue_artifact_eval import build_queue_artifact_eval_payload, judgment_sets_from_artifact_eval
@@ -4433,6 +4434,29 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(payload["metrics"]["best_base_delta"], 0.10)
         self.assertGreaterEqual(payload["metrics"]["final_placebo_delta"], 0.10)
         self.assertGreaterEqual(payload["metrics"]["bottleneck_branch_placebo_delta"], 0.20)
+
+    def test_paper_benchmark_line_separates_working_loop_from_research_gaps(self):
+        payload = build_paper_benchmark_line_payload(
+            root=Path("."),
+            graph_dir=Path("phase four/assumption_graph"),
+            eval_id="unit_paper_benchmark_line",
+        )
+        self.assertTrue(payload["benchmark_line_pass"], payload["benchmark_line_gates"])
+        self.assertFalse(payload["research_gap_pass"])
+        self.assertFalse(payload["paper_readiness_pass"])
+        self.assertGreaterEqual(
+            payload["completion_estimates"]["recursive_hypothesis_argument_percent"],
+            90.0,
+        )
+        self.assertLess(
+            payload["completion_estimates"]["general_hypothesis_os_percent"],
+            70.0,
+        )
+        failed = {gate["name"] for gate in payload["research_gap_gates"] if not gate["pass"]}
+        self.assertIn("world_model_raw_first_party_scale", failed)
+        self.assertIn("continuous_daemon_autonomy", failed)
+        self.assertIn("residual_label_large_scale_calibration", failed)
+        self.assertIn("formal_engine_depth", failed)
 
     def test_morphism_independent_benchmark_beats_surface_baselines(self):
         payload = build_morphism_independent_benchmark_payload(eval_id="unit_morphism_independent")

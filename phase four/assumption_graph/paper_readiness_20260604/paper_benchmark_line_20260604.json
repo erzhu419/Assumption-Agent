@@ -1,0 +1,371 @@
+{
+  "eval_id": "paper_benchmark_line_20260604",
+  "source": {
+    "root": ".",
+    "graph_dir": "phase four/assumption_graph",
+    "performance_path": "phase four/assumption_graph/reconstruction_gap_perf_20260602_external_v5_objective.json",
+    "performance_eval_id": "reconstruction_gap_perf_20260602_external_v5_objective"
+  },
+  "thesis_line": "real_task_set -> multi_hypothesis_generation -> novelty_integration -> fresh_ablation_with_controls -> recursive_resume -> gated_retention -> next_generation",
+  "benchmark_line_pass": true,
+  "research_gap_pass": false,
+  "paper_readiness_pass": false,
+  "benchmark_line_gates": [
+    {
+      "name": "real_task_multigeneration_trace",
+      "pass": true,
+      "score": 1.0,
+      "evidence": {
+        "generation_count": 5,
+        "branch_test_count": 3,
+        "max_mainline_case_count": 100,
+        "best_base_delta": 0.135,
+        "final_placebo_delta": 0.155
+      },
+      "remaining_gap": "Run the same chain on a fresh unseen task suite, not only the current structural live sequence."
+    },
+    {
+      "name": "multi_hypothesis_generation",
+      "pass": true,
+      "score": 1.0,
+      "evidence": {
+        "surface_proposal_count": 7,
+        "trace_policy_proposal_count": 5,
+        "trace_policy_ready_count": 5,
+        "multi_path_rate": 0.8,
+        "top_path_label_hit_rate": 1.0
+      },
+      "remaining_gap": "Add more non-template hypothesis families synthesized from evaluator/world-model residuals."
+    },
+    {
+      "name": "novelty_and_integration_classification",
+      "pass": true,
+      "score": 1.0,
+      "evidence": {
+        "gold_accuracy": 1.0,
+        "classification_counts": {
+          "duplicate": 1,
+          "specialization": 1,
+          "formal_isomorphism": 1,
+          "analogy": 1,
+          "genuinely_new_family": 1
+        },
+        "recommended_edge_counts": {
+          "specializes": 1,
+          "is_formal_isomorphism_of": 1,
+          "is_analogy_of": 1
+        }
+      },
+      "remaining_gap": "Validate classification on real proposal batches, not only the deterministic gold fixture."
+    },
+    {
+      "name": "fresh_ablation_controls_and_v5",
+      "pass": true,
+      "score": 1.0,
+      "evidence": {
+        "proposal_count": 33,
+        "accepted_count": 2,
+        "rejected_count": 14,
+        "falsification_experiment_count": 135,
+        "external_objective_gate_ok": true
+      },
+      "remaining_gap": "Replace deterministic external-V5 controls with live heldout objective tasks."
+    },
+    {
+      "name": "recursive_readback_and_gated_retention",
+      "pass": true,
+      "score": 1.0,
+      "evidence": {
+        "accepted_apply_count": 2,
+        "real_artifact_readback_accept_count": 1,
+        "real_artifact_readback_trigger_judgment_count": 4,
+        "real_artifact_readback_control_judgment_count": 5,
+        "real_artifact_readback_control_loss_count": 0
+      },
+      "remaining_gap": "Scale daemon readback to repeated unattended batches under explicit budget policies."
+    },
+    {
+      "name": "next_generation_productivity",
+      "pass": true,
+      "score": 1.0,
+      "evidence": {
+        "accepted_mainline_count": 5,
+        "rejected_branch_count": 1,
+        "mainline_best_trace": [
+          {
+            "generation_id": "g1_safe_abstain",
+            "best_base_utility_so_far": 0.595,
+            "best_placebo_utility_so_far": 0.58
+          },
+          {
+            "generation_id": "g2_residual_repair",
+            "best_base_utility_so_far": 0.6,
+            "best_placebo_utility_so_far": 0.605
+          },
+          {
+            "generation_id": "g3_residual_signal_repair",
+            "best_base_utility_so_far": 0.65,
+            "best_placebo_utility_so_far": 0.665
+          },
+          {
+            "generation_id": "g4_all_repairs_v1",
+            "best_base_utility_so_far": 0.68,
+            "best_placebo_utility_so_far": 0.665
+          },
+          {
+            "generation_id": "g5_margin_conditioned_repairs",
+            "best_base_utility_so_far": 0.68,
+            "best_placebo_utility_so_far": 0.705
+          }
+        ]
+      },
+      "remaining_gap": "Demonstrate this over multiple independent clades, not just the structural repair sequence."
+    },
+    {
+      "name": "morphism_independent_contribution",
+      "pass": true,
+      "score": 0.6667,
+      "evidence": {
+        "scorer_hit_rates": {
+          "morphism": 1.0,
+          "kg_triple": 0.1,
+          "embedding_proxy": 0.1
+        },
+        "morphism_margin_over_best_baseline": 0.9,
+        "nonlexical_structural_success_rate": null
+      },
+      "remaining_gap": "Show downstream performance gain from morphism retrieval on live tasks, beyond retrieval hit rate."
+    },
+    {
+      "name": "cheap_world_model_calibration",
+      "pass": true,
+      "score": 1.0,
+      "evidence": {
+        "world_model_labeled_count": 16,
+        "world_model_auc": 1.0,
+        "world_model_brier": 0.0081,
+        "trace_outcome_best_brier": 0.0264,
+        "trace_policy_update_count": 5
+      },
+      "remaining_gap": "The calibrated rows still depend heavily on distilled transitions; raw first-party coverage is scored separately."
+    }
+  ],
+  "research_gap_gates": [
+    {
+      "name": "world_model_raw_first_party_scale",
+      "pass": false,
+      "score": 0.4447,
+      "evidence": {
+        "raw_first_party_trainable_row_count": 9,
+        "first_party_distilled_trainable_row_count": 1000,
+        "artifact_replay_trainable_row_count": 132,
+        "weighted_trainable_row_count": 325.0,
+        "best_brier_score": 0.0264
+      },
+      "remaining_gap": "Collect about 1000 independent raw first-party recursive/daemon traces; current 1000+ rows are mostly distilled."
+    },
+    {
+      "name": "creative_hypothesis_generator_loop",
+      "pass": true,
+      "score": 1.0,
+      "evidence": {
+        "synthesis_family_count": 4,
+        "proposal_count": 7,
+        "new_family_fixture_count": 1,
+        "top_path_label_hit_rate": 1.0
+      },
+      "remaining_gap": "Use evaluator/world-model residual clusters to create novel method families across multiple real generations."
+    },
+    {
+      "name": "continuous_daemon_autonomy",
+      "pass": false,
+      "score": 0.75,
+      "evidence": {
+        "preflight_queue_consumed": true,
+        "preflight_queue_ready_count": 5,
+        "bounded_execute_resumed": true,
+        "continuous_background_mode": false
+      },
+      "remaining_gap": "Implement a budgeted continuous daemon that repeatedly executes ready proposals, ingests judgments, clusters residuals, and queues next proposals."
+    },
+    {
+      "name": "residual_label_large_scale_calibration",
+      "pass": false,
+      "score": 0.7,
+      "evidence": {
+        "label_agreement_example_count": 10,
+        "label_agreement_macro_f1": 1.0,
+        "record_count": 109,
+        "cluster_count": 7
+      },
+      "remaining_gap": "Build a larger adjudicated residual set covering execution, optimization, assumption, memory, evaluator, and simulator defects."
+    },
+    {
+      "name": "formal_engine_depth",
+      "pass": false,
+      "score": 0.6667,
+      "evidence": {
+        "bounded_morphism_benchmark_pass": true,
+        "morphism_margin_over_best_baseline": 0.9,
+        "full_category_theory_solver": false,
+        "true_blackwell_or_fisher_engine": false
+      },
+      "remaining_gap": "Upgrade bounded structural diagrams into an optional strict formal engine: real functor proofs, true Blackwell comparison or information-geometric distances."
+    }
+  ],
+  "completion_estimates": {
+    "recursive_hypothesis_argument_percent": 91.1,
+    "general_hypothesis_os_percent": 64.9,
+    "reconstruction_md_behavior_percent": 93.3,
+    "interpretation": "The recursive benchmark line is now well supported, but the general Assumption OS score remains lower because raw first-party world-model data, continuous autonomy, large residual labels, and strict formal reasoning are not complete."
+  },
+  "evidence_summaries": {
+    "recursive_self_evolution": {
+      "pass": true,
+      "generation_count": 5,
+      "branch_test_count": 3,
+      "accepted_mainline_count": 5,
+      "rejected_branch_count": 1,
+      "metrics": {
+        "root_base_utility": 0.545,
+        "root_placebo_utility": 0.55,
+        "final_base_utility": 0.625,
+        "final_placebo_utility": 0.705,
+        "best_base_utility": 0.68,
+        "best_placebo_utility": 0.705,
+        "final_base_delta": 0.08,
+        "final_placebo_delta": 0.155,
+        "best_base_delta": 0.135,
+        "best_placebo_delta": 0.155,
+        "bottleneck_branch_placebo_delta": 0.5,
+        "signal_branch_placebo_delta_from_trace": 0.7083,
+        "mainline_best_trace": [
+          {
+            "generation_id": "g1_safe_abstain",
+            "best_base_utility_so_far": 0.595,
+            "best_placebo_utility_so_far": 0.58
+          },
+          {
+            "generation_id": "g2_residual_repair",
+            "best_base_utility_so_far": 0.6,
+            "best_placebo_utility_so_far": 0.605
+          },
+          {
+            "generation_id": "g3_residual_signal_repair",
+            "best_base_utility_so_far": 0.65,
+            "best_placebo_utility_so_far": 0.665
+          },
+          {
+            "generation_id": "g4_all_repairs_v1",
+            "best_base_utility_so_far": 0.68,
+            "best_placebo_utility_so_far": 0.665
+          },
+          {
+            "generation_id": "g5_margin_conditioned_repairs",
+            "best_base_utility_so_far": 0.68,
+            "best_placebo_utility_so_far": 0.705
+          }
+        ]
+      }
+    },
+    "morphism_benchmark": {
+      "pass": true,
+      "case_count": 10,
+      "scorer_hit_rates": {
+        "morphism": 1.0,
+        "kg_triple": 0.1,
+        "embedding_proxy": 0.1
+      },
+      "morphism_margin_over_best_baseline": 0.9,
+      "nonlexical_structural_success_rate": null
+    },
+    "novelty_integration": {
+      "pass": true,
+      "proposal_count": 5,
+      "gold_accuracy": 1.0,
+      "classification_counts": {
+        "duplicate": 1,
+        "specialization": 1,
+        "formal_isomorphism": 1,
+        "analogy": 1,
+        "genuinely_new_family": 1
+      },
+      "recommended_edge_counts": {
+        "specializes": 1,
+        "is_formal_isomorphism_of": 1,
+        "is_analogy_of": 1
+      }
+    },
+    "performance_sections": {
+      "world_model": {
+        "pass": true
+      },
+      "trace_dataset": {
+        "first_party_distilled_trainable_row_count": 1000,
+        "pass": true,
+        "raw_first_party_trainable_row_count": 9,
+        "weighted_trainable_row_count": 325.0
+      },
+      "trace_outcome_model": {
+        "best_brier_score": 0.0264,
+        "pass": true,
+        "weighted_trainable_row_count": 325.0
+      },
+      "surface_hypothesis_generator": {
+        "pass": true,
+        "proposal_count": 7
+      },
+      "trace_policy_proposals": {
+        "pass": true,
+        "proposal_count": 5
+      },
+      "trace_policy_preflight": {
+        "pass": true,
+        "proposal_count": 5,
+        "ready_count": 5
+      },
+      "recursive_daemon": {
+        "accepted_apply_count": 2,
+        "pass": true
+      },
+      "residual_clusterer": {
+        "label_agreement_example_count": 10,
+        "label_agreement_macro_f1": 1.0,
+        "pass": true,
+        "proposal_count": 2
+      },
+      "verifier_stack": {
+        "accepted_count": 2,
+        "pass": true,
+        "proposal_count": 33,
+        "rejected_count": 14
+      },
+      "assumption_bench": {
+        "overall_score": 0.9968,
+        "pass": true
+      }
+    }
+  },
+  "next_actions_ranked": [
+    {
+      "gap": "world_model_raw_first_party_scale",
+      "score": 0.4447,
+      "next_action": "Collect about 1000 independent raw first-party recursive/daemon traces; current 1000+ rows are mostly distilled."
+    },
+    {
+      "gap": "formal_engine_depth",
+      "score": 0.6667,
+      "next_action": "Upgrade bounded structural diagrams into an optional strict formal engine: real functor proofs, true Blackwell comparison or information-geometric distances."
+    },
+    {
+      "gap": "residual_label_large_scale_calibration",
+      "score": 0.7,
+      "next_action": "Build a larger adjudicated residual set covering execution, optimization, assumption, memory, evaluator, and simulator defects."
+    },
+    {
+      "gap": "continuous_daemon_autonomy",
+      "score": 0.75,
+      "next_action": "Implement a budgeted continuous daemon that repeatedly executes ready proposals, ingests judgments, clusters residuals, and queues next proposals."
+    }
+  ]
+}
