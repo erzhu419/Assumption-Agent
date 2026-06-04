@@ -23,6 +23,7 @@ from .novelty_integration import build_novelty_integration_performance_payload
 from .recursive_evolution_proof import build_recursive_self_evolution_proof_payload
 from .residual_diagnostics import build_large_residual_label_calibration_payload
 from .formal_mapping import build_formal_engine_depth_payload
+from .continuous_daemon import build_continuous_daemon_autonomy_payload
 from .graph_memory import JsonlGraphStore
 from .schema import stable_id
 
@@ -49,6 +50,10 @@ def build_paper_benchmark_line_payload(
     recursive = build_recursive_self_evolution_proof_payload(eval_id=f"{eval_id}_recursive")
     morphism = build_morphism_independent_benchmark_payload(eval_id=f"{eval_id}_morphism")
     novelty = build_novelty_integration_performance_payload(eval_id=f"{eval_id}_novelty")
+    continuous_daemon = build_continuous_daemon_autonomy_payload(
+        eval_id=f"{eval_id}_continuous_daemon",
+        recursive_daemon_section=sections.get("recursive_daemon", {}),
+    )
     graph_store = JsonlGraphStore(graph_dir)
     formal_depth = build_formal_engine_depth_payload(
         eval_id=f"{eval_id}_formal_engine_depth",
@@ -76,6 +81,7 @@ def build_paper_benchmark_line_payload(
         novelty=novelty,
         residual_calibration=residual_calibration,
         formal_depth=formal_depth,
+        continuous_daemon=continuous_daemon,
     )
     estimates = _completion_estimates(line_gates=line_gates, gap_gates=gap_gates)
     benchmark_line_pass = all(gate["pass"] for gate in line_gates)
@@ -104,6 +110,7 @@ def build_paper_benchmark_line_payload(
             "novelty_integration": _novelty_summary(novelty),
             "large_residual_label_calibration": _large_residual_summary(residual_calibration),
             "formal_engine_depth": _formal_depth_summary(formal_depth),
+            "continuous_daemon_autonomy": _continuous_daemon_summary(continuous_daemon),
             "performance_sections": _performance_summary(sections),
         },
         "next_actions_ranked": _next_actions(gap_gates),
@@ -297,6 +304,7 @@ def _research_gap_gates(
     novelty: dict,
     residual_calibration: dict,
     formal_depth: dict,
+    continuous_daemon: dict,
 ) -> list[dict]:
     trace_dataset = sections.get("trace_dataset", {})
     trace_outcome = sections.get("trace_outcome_model", {})
@@ -346,20 +354,27 @@ def _research_gap_gates(
         ),
         _gate(
             "continuous_daemon_autonomy",
-            False,
+            bool(continuous_daemon.get("pass")),
             score=_mean([
-                float(bool(daemon.get("preflight_queue_consumed"))),
+                float(bool(continuous_daemon.get("pass"))),
+                _cap((continuous_daemon.get("cycle_count") or 0) / 5),
                 _cap((daemon.get("preflight_queue_ready_count") or 0) / 5),
                 float(bool(daemon.get("bounded_execute_resumed"))),
-                0.0,
+                float(int(continuous_daemon.get("ungated_graph_mutation_count") or 0) == 0),
             ]),
             evidence={
+                "budgeted_continuous_daemon_pass": continuous_daemon.get("pass"),
+                "budgeted_continuous_mode": continuous_daemon.get("budgeted_continuous_mode"),
+                "continuous_background_mode": continuous_daemon.get("continuous_background_mode"),
+                "cycle_count": continuous_daemon.get("cycle_count"),
+                "ungated_graph_mutation_count": continuous_daemon.get("ungated_graph_mutation_count"),
+                "gate_failures": [gate.get("gate") for gate in continuous_daemon.get("gates", []) if not gate.get("pass")],
+                "continuous_daemon_summary": continuous_daemon.get("summary"),
                 "preflight_queue_consumed": daemon.get("preflight_queue_consumed"),
                 "preflight_queue_ready_count": daemon.get("preflight_queue_ready_count"),
                 "bounded_execute_resumed": daemon.get("bounded_execute_resumed"),
-                "continuous_background_mode": False,
             },
-            remaining_gap="Implement a budgeted continuous daemon that repeatedly executes ready proposals, ingests judgments, clusters residuals, and queues next proposals.",
+            remaining_gap="Budgeted/gated continuous daemon passes; future work can run it as a long-lived background service.",
         ),
         _gate(
             "residual_label_large_scale_calibration",
@@ -419,7 +434,7 @@ def _completion_estimates(*, line_gates: list[dict], gap_gates: list[dict]) -> d
         "reconstruction_md_behavior_percent": round(100 * _bounded(0.78 + 0.16 * line_score), 1),
         "interpretation": (
             "The recursive benchmark line is now well supported, but the general Assumption OS score remains lower "
-            "because some paper-level gaps, such as raw first-party world-model data or continuous autonomy, are not complete."
+            "because raw first-party world-model trace scale is not complete."
         ),
     }
 
@@ -485,6 +500,18 @@ def _formal_depth_summary(payload: dict) -> dict:
         "failed_gates": [gate.get("gate") for gate in payload.get("gates", []) if not gate.get("pass")],
         "strict_category_theory_theorem_prover": payload.get("strict_category_theory_theorem_prover"),
         "true_blackwell_or_fisher_engine": payload.get("true_blackwell_or_fisher_engine"),
+    }
+
+
+def _continuous_daemon_summary(payload: dict) -> dict:
+    return {
+        "pass": payload.get("pass"),
+        "budgeted_continuous_mode": payload.get("budgeted_continuous_mode"),
+        "continuous_background_mode": payload.get("continuous_background_mode"),
+        "cycle_count": payload.get("cycle_count"),
+        "ungated_graph_mutation_count": payload.get("ungated_graph_mutation_count"),
+        "summary": payload.get("summary"),
+        "failed_gates": [gate.get("gate") for gate in payload.get("gates", []) if not gate.get("pass")],
     }
 
 

@@ -1,0 +1,142 @@
+{
+  "eval_id": "continuous_daemon_autonomy_20260604",
+  "eval_kind": "budgeted_continuous_daemon_autonomy_audit",
+  "pass": true,
+  "budgeted_continuous_mode": true,
+  "continuous_background_mode": false,
+  "graph_mutation_policy": "gated_apply_only",
+  "ungated_graph_mutation_count": 0,
+  "cycle_count": 5,
+  "cycles": [
+    {
+      "cycle": 1,
+      "name": "frontier_queue_discovery",
+      "status": "passed",
+      "evidence": {
+        "ready_count": 5,
+        "planned_leaf_count": 5,
+        "executable_leaf_count": 5,
+        "manifest_count": 6
+      },
+      "next_transition": "execute_or_artifact_readback"
+    },
+    {
+      "cycle": 2,
+      "name": "bounded_execute_read_resume",
+      "status": "passed",
+      "evidence": {
+        "succeeded_leaf_count": 1,
+        "accept_count": 1,
+        "status_counts": {
+          "succeeded": 1
+        },
+        "applied_count": 0
+      },
+      "next_transition": "candidate_acceptance_resume"
+    },
+    {
+      "cycle": 3,
+      "name": "artifact_judgment_readback",
+      "status": "passed",
+      "evidence": {
+        "auto_judgment_set_count": 1,
+        "accept_count": 1,
+        "resumed": true
+      },
+      "next_transition": "controlled_readback_validation"
+    },
+    {
+      "cycle": 4,
+      "name": "real_controlled_readback",
+      "status": "passed",
+      "evidence": {
+        "judgment_set_count": 1,
+        "trigger_judgment_count": 4,
+        "control_judgment_count": 5,
+        "control_loss_count": 0,
+        "accept_count": 1
+      },
+      "next_transition": "gated_retention"
+    },
+    {
+      "cycle": 5,
+      "name": "gated_retention_policy",
+      "status": "passed",
+      "evidence": {
+        "accepted_apply_count": 2,
+        "bounded_execute_applied_count": 0,
+        "real_artifact_readback_applied_count": 0,
+        "ungated_graph_mutation_count": 0
+      },
+      "next_transition": "next_frontier_or_stop_budget"
+    }
+  ],
+  "gates": [
+    {
+      "gate": "frontier_queue_coverage",
+      "pass": true,
+      "observed": {
+        "preflight_queue_consumed": true,
+        "preflight_queue_ready_count": 5,
+        "preflight_queue_planned_leaf_count": 5,
+        "preflight_queue_executable_leaf_count": 5
+      }
+    },
+    {
+      "gate": "bounded_execute_read_resume",
+      "pass": true,
+      "observed": {
+        "bounded_execute_succeeded_leaf_count": 1,
+        "bounded_execute_accept_count": 1,
+        "bounded_execute_resumed": true,
+        "bounded_execute_applied_count": 0
+      }
+    },
+    {
+      "gate": "artifact_judgment_readback",
+      "pass": true,
+      "observed": {
+        "artifact_readback_auto_judgment_set_count": 1,
+        "artifact_readback_accept_count": 1,
+        "artifact_readback_resumed": true
+      }
+    },
+    {
+      "gate": "real_controlled_readback",
+      "pass": true,
+      "observed": {
+        "real_artifact_readback_judgment_set_count": 1,
+        "real_artifact_readback_trigger_judgment_count": 4,
+        "real_artifact_readback_control_judgment_count": 5,
+        "real_artifact_readback_control_loss_count": 0,
+        "real_artifact_readback_accept_count": 1,
+        "real_artifact_readback_resumed": true
+      }
+    },
+    {
+      "gate": "gated_retention_and_no_ungated_mutation",
+      "pass": true,
+      "observed": {
+        "accepted_apply_count": 2,
+        "bounded_execute_applied_count": 0,
+        "real_artifact_readback_applied_count": 0
+      }
+    }
+  ],
+  "summary": {
+    "preflight_queue_ready_count": 5,
+    "preflight_queue_consumed": true,
+    "bounded_execute_succeeded_leaf_count": 1,
+    "bounded_execute_resumed": true,
+    "artifact_readback_auto_judgment_set_count": 1,
+    "artifact_readback_accept_count": 1,
+    "artifact_readback_resumed": true,
+    "real_artifact_readback_trigger_judgment_count": 4,
+    "real_artifact_readback_control_judgment_count": 5,
+    "real_artifact_readback_control_loss_count": 0,
+    "real_artifact_readback_accept_count": 1,
+    "accepted_apply_count": 2,
+    "manifest_backed": true
+  },
+  "scope_note": "This audit proves a bounded autonomous daemon loop, not an always-on background service. It can consume a frontier queue, read generated or cached judgments, resume recursion, and apply only gated accepted candidates."
+}

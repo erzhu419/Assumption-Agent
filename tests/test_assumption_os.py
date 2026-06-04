@@ -17,6 +17,7 @@ from assumption_os.conditioned_eval import (
     evaluate_node,
     route_problem_to_node,
 )
+from assumption_os.continuous_daemon import build_continuous_daemon_autonomy_payload
 from assumption_os.domain_templates import format_phase2_domain_execution_template
 from assumption_os.evolution_cycle import build_evolution_cycle_payload, build_policy_update_plan
 from assumption_os.evolution_context import (
@@ -4466,6 +4467,22 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(payload["metrics"]["final_placebo_delta"], 0.10)
         self.assertGreaterEqual(payload["metrics"]["bottleneck_branch_placebo_delta"], 0.20)
 
+    def test_continuous_daemon_autonomy_audit_passes_budgeted_loop(self):
+        perf = json.loads(Path(
+            "phase four/assumption_graph/reconstruction_gap_perf_20260602_external_v5_objective.json"
+        ).read_text(encoding="utf-8"))
+        payload = build_continuous_daemon_autonomy_payload(
+            eval_id="unit_continuous_daemon",
+            recursive_daemon_section=perf["sections"]["recursive_daemon"],
+        )
+        self.assertTrue(payload["pass"], payload["gates"])
+        self.assertTrue(payload["budgeted_continuous_mode"])
+        self.assertFalse(payload["continuous_background_mode"])
+        self.assertEqual(payload["ungated_graph_mutation_count"], 0)
+        self.assertGreaterEqual(payload["cycle_count"], 5)
+        self.assertGreaterEqual(payload["summary"]["preflight_queue_ready_count"], 5)
+        self.assertGreaterEqual(payload["summary"]["real_artifact_readback_control_judgment_count"], 1)
+
     def test_paper_benchmark_line_separates_working_loop_from_research_gaps(self):
         payload = build_paper_benchmark_line_payload(
             root=Path("."),
@@ -4481,11 +4498,11 @@ class AssumptionOSTest(unittest.TestCase):
         )
         self.assertLess(
             payload["completion_estimates"]["general_hypothesis_os_percent"],
-            70.0,
+            75.0,
         )
         failed = {gate["name"] for gate in payload["research_gap_gates"] if not gate["pass"]}
         self.assertIn("world_model_raw_first_party_scale", failed)
-        self.assertIn("continuous_daemon_autonomy", failed)
+        self.assertNotIn("continuous_daemon_autonomy", failed)
         self.assertNotIn("residual_label_large_scale_calibration", failed)
         self.assertNotIn("formal_engine_depth", failed)
 

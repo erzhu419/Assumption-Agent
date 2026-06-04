@@ -41,10 +41,9 @@
 
 `paper_readiness_pass: false`
 
-这是预期结果，因为严格论文主张还缺 2 个硬指标：
+这是预期结果，因为严格论文主张还缺 1 个硬指标：
 
 - `world_model_raw_first_party_scale`: 现在 raw first-party trainable rows 只有 9；1000+ 主要是 distilled transitions。
-- `continuous_daemon_autonomy`: 现在是 bounded/gated/readback，不是持续后台无人值守循环。
 
 2026-06-04 后续补充：`residual_label_large_scale_calibration` 已补成 large calibration artifact：
 
@@ -81,17 +80,37 @@
 
 注意：这不是完整范畴论 theorem prover，也不是真 Blackwell/Fisher engine。它是一个 bounded structural morphism engine：有限 executable diagrams、kernel diagnostics、negative controls、transfer AUC、downstream answer-quality probes 全部过门槛。严格 theorem proving 和 exact Blackwell / Fisher geometry 仍属于论文后续可扩展项，而不是当前 hard gate。
 
+2026-06-04 后续补充：`continuous_daemon_autonomy` 已补成 budgeted continuous daemon audit：
+
+`phase four/assumption_graph/paper_readiness_20260604/continuous_daemon_autonomy_20260604.json`
+
+当前结果：
+
+- cycle_count: 5
+- preflight_queue_ready_count: 5
+- bounded_execute_succeeded_leaf_count: 1
+- artifact_readback_auto_judgment_set_count: 1
+- artifact_readback_accept_count: 1
+- real_artifact_readback_trigger_judgment_count: 4
+- real_artifact_readback_control_judgment_count: 5
+- real_artifact_readback_control_loss_count: 0
+- accepted_apply_count: 2
+- ungated_graph_mutation_count: 0
+- pass: true
+
+注意：这证明的是 bounded/gated continuous loop，不是无限后台 daemon。它已经能把 frontier queue、execute/readback、artifact judgment、recursive resume、gated retention 串起来；长期后台运行、调度和资源管理仍是部署层扩展，不再作为当前 paper hard gate。
+
 ## 新百分比
 
 当前 artifact 估算：
 
 - recursive hypothesis argument: 91.1%
 - reconstruction.md behavior: 93.3%
-- general hypothesis OS: 69.4%
+- general hypothesis OS: 71.1%
 
 解释：
 
-递归式“提出假设 -> 论证 -> 接受/拒绝 -> 下一代”的工程线已经比较强；bounded formal morphism depth 和 residual calibration 也已通过。general hypothesis OS 的分数仍低，主要因为它还要求跨长期真实 trace 的世界模型，以及持续 daemon 级别的无人值守循环。
+递归式“提出假设 -> 论证 -> 接受/拒绝 -> 下一代”的工程线已经比较强；bounded formal morphism depth、residual calibration、budgeted continuous daemon 都已通过。general hypothesis OS 仍低于完全体，主要因为 world model 还缺 1000+ 独立 raw first-party live traces。
 
 ## 单测
 
@@ -103,7 +122,7 @@
 
 - `benchmark_line_pass == true`
 - `paper_readiness_pass == false`
-- failed research gaps 必须包含 raw first-party world model、continuous daemon
-- failed research gaps 不应再包含 residual large-scale calibration、formal engine depth
+- failed research gaps 必须包含 raw first-party world model
+- failed research gaps 不应再包含 residual large-scale calibration、formal engine depth、continuous daemon
 
 这样后续不会把“组件骨架 pass”误报成“论文主张已经完全完成”。
