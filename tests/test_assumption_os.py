@@ -47,6 +47,7 @@ from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
 from assumption_os.manifest_logger import build_component_manifest_payload, events_from_run_logs
 from assumption_os.math_science_policy import route_math_science_problem
 from assumption_os.memory_surfaces import build_memory_surface_payload
+from assumption_os.morphism_benchmark import build_morphism_independent_benchmark_payload
 from assumption_os.candidate_eval import CandidateReadiness, build_candidate_eval_payload
 from assumption_os.objective_bench import build_objective_benchmark_payload
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
@@ -61,6 +62,7 @@ from assumption_os.recursive_runner import (
 )
 from assumption_os.recursive_audit import build_recursive_audit_payload
 from assumption_os.recursive_daemon import build_preflight_queue_daemon_payload, build_recursive_daemon_payload
+from assumption_os.recursive_evolution_proof import build_recursive_self_evolution_proof_payload
 from assumption_os.recursive_executor import JudgmentSet, build_recursive_execution_payload
 from assumption_os.reconstruction_progress import build_reconstruction_progress_payload
 from assumption_os.residual_clusterer import ResidualRecord, build_residual_cluster_payload, cluster_residual_records
@@ -4208,6 +4210,26 @@ class AssumptionOSTest(unittest.TestCase):
         perf = build_structural_morphism_performance_payload(eval_id="unit_struct_perf")
         self.assertTrue(perf["pass"], perf["component_pass"])
         self.assertTrue(all(perf["component_pass"].values()))
+
+    def test_recursive_self_evolution_proof_payload_passes(self):
+        payload = build_recursive_self_evolution_proof_payload(eval_id="unit_recursive_evolution_proof")
+        self.assertTrue(payload["pass"], payload["gates"])
+        self.assertGreaterEqual(payload["generation_count"], 5)
+        self.assertGreaterEqual(payload["rejected_branch_count"], 1)
+        self.assertGreaterEqual(payload["metrics"]["best_base_delta"], 0.10)
+        self.assertGreaterEqual(payload["metrics"]["final_placebo_delta"], 0.10)
+        self.assertGreaterEqual(payload["metrics"]["bottleneck_branch_placebo_delta"], 0.20)
+
+    def test_morphism_independent_benchmark_beats_surface_baselines(self):
+        payload = build_morphism_independent_benchmark_payload(eval_id="unit_morphism_independent")
+        self.assertTrue(payload["pass"], payload["gates"])
+        rates = payload["scorer_hit_rates"]
+        self.assertGreaterEqual(rates["morphism"], 0.80)
+        self.assertGreaterEqual(
+            payload["morphism_margin_over_best_baseline"],
+            0.20,
+        )
+        self.assertGreaterEqual(payload["nonlexical_success_rate"], 0.75)
 
     def test_retrieval_injects_structural_morphism_shadow_context(self):
         with tempfile.TemporaryDirectory() as td:

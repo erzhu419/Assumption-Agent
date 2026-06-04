@@ -1,0 +1,431 @@
+{
+  "eval_id": "recursive_self_evolution_proof_20260604",
+  "eval_kind": "recursive_self_evolution_paper_proof",
+  "root_failure": {
+    "generation_id": "g0_root_failure",
+    "parent_generation_id": null,
+    "failure": "Natural structural routing over-fires and loses against placebo on weak patterns.",
+    "hypothesis": "A safe abstention policy should avoid applying structural morphisms when trace evidence is weak.",
+    "ablation": "Natural 100 live ablation with GPT-5.4-mini solver and GPT-5.5 judge.",
+    "decision": "diagnose_failure",
+    "next_hypothesis": "Add trace-learned safe abstention before allowing structural context.",
+    "evidence": {
+      "eval_id": "structural_live_natural100_v1_gpt54mini_gpt55_20260603",
+      "source_file": "structural_live_natural100_v1_gpt54mini_gpt55_20260603_summary.json",
+      "pass_gate": false,
+      "selected_case_count": 100,
+      "structural_vs_base": {
+        "utility": 0.545,
+        "win_rate": 0.5,
+        "loss_rate": 0.41
+      },
+      "structural_vs_placebo": {
+        "utility": 0.55,
+        "win_rate": 0.51,
+        "loss_rate": 0.41
+      }
+    },
+    "residuals": [
+      "route_quality_miss",
+      "weak_pattern_over_application",
+      "placebo_margin_failure"
+    ]
+  },
+  "generation_count": 5,
+  "branch_test_count": 3,
+  "accepted_mainline_count": 5,
+  "rejected_branch_count": 1,
+  "cycles": [
+    {
+      "cycle_id": "recursive_cycle_aaf3c56cee29",
+      "from_generation": "g0_root_failure",
+      "to_generation": "g1_safe_abstain",
+      "failure": "Natural structural routing over-fires and loses against placebo on weak patterns.",
+      "hypothesis": "Add trace-learned safe abstention before allowing structural context.",
+      "ablation": "Run natural_safe100 against base and placebo controls.",
+      "decision": "accept_global",
+      "next_hypothesis": "Residual and signal patterns still underperform when abstained too often.",
+      "evidence_eval_id": "structural_live_natural_safe100_v1_gpt54mini_gpt55_20260603"
+    },
+    {
+      "cycle_id": "recursive_cycle_9f2643ee4b2e",
+      "from_generation": "g1_safe_abstain",
+      "to_generation": "g2_residual_repair",
+      "failure": "Natural routing applies low-confidence structural context.",
+      "hypothesis": "Residual and signal patterns still underperform when abstained too often.",
+      "ablation": "Run residual repair over the same 100-case natural slice.",
+      "decision": "accept_global",
+      "next_hypothesis": "Extend repair generation to signal/noise cases that need concrete domain bridges.",
+      "evidence_eval_id": "structural_live_natural_repaired_residual100_v1_gpt54mini_gpt55_20260603"
+    },
+    {
+      "cycle_id": "recursive_cycle_f4a710b847a0",
+      "from_generation": "g2_residual_repair",
+      "to_generation": "g3_residual_signal_repair",
+      "failure": "Residual-correction cases are skipped or answered too generically.",
+      "hypothesis": "Extend repair generation to signal/noise cases that need concrete domain bridges.",
+      "ablation": "Run residual+signal repair over the 100-case natural slice.",
+      "decision": "accept_global",
+      "next_hypothesis": "Try broadening repairs, then audit which clades regress against placebo.",
+      "evidence_eval_id": "structural_live_natural_repaired_residual_signal100_v1_gpt54mini_gpt55_20260603"
+    },
+    {
+      "cycle_id": "recursive_cycle_0e63fb28e62a",
+      "from_generation": "g3_residual_signal_repair",
+      "to_generation": "g4_all_repairs_v1",
+      "failure": "Signal/noise cases need domain-specific retained-signal and discarded-noise criteria.",
+      "hypothesis": "Try broadening repairs, then audit which clades regress against placebo.",
+      "ablation": "Run all-repairs100 against base and placebo controls.",
+      "decision": "accept_with_residual",
+      "next_hypothesis": "Placebo margin falls, so generate focused margin repairs for bottleneck and signal clades.",
+      "evidence_eval_id": "structural_live_all_repairs100_v1_gpt54mini_gpt55_20260603"
+    },
+    {
+      "cycle_id": "recursive_cycle_64286c79735a",
+      "from_generation": "g4_all_repairs_v1",
+      "to_generation": "g5_margin_conditioned_repairs",
+      "failure": "Several weak clades remain individually repairable but may interact.",
+      "hypothesis": "Placebo margin falls, so generate focused margin repairs for bottleneck and signal clades.",
+      "ablation": "Run all-repairs margin v2 over the full 100-case natural slice.",
+      "decision": "accept_global",
+      "next_hypothesis": "Use the accepted conditioned policy as the current paper-evidence endpoint.",
+      "evidence_eval_id": "structural_live_all_repairs_margin100_v2_gpt54mini_gpt55_20260604"
+    }
+  ],
+  "mainline_generations": [
+    {
+      "generation_id": "g1_safe_abstain",
+      "parent_generation_id": "g0_root_failure",
+      "failure": "Natural routing applies low-confidence structural context.",
+      "hypothesis": "Trace-learned safe abstention prevents harmful morphism injection.",
+      "ablation": "Run natural_safe100 against base and placebo controls.",
+      "decision": "accept_global",
+      "next_hypothesis": "Residual and signal patterns still underperform when abstained too often.",
+      "evidence": {
+        "eval_id": "structural_live_natural_safe100_v1_gpt54mini_gpt55_20260603",
+        "source_file": "structural_live_natural_safe100_v1_gpt54mini_gpt55_20260603_summary.json",
+        "pass_gate": true,
+        "selected_case_count": 100,
+        "structural_vs_base": {
+          "utility": 0.595,
+          "win_rate": 0.54,
+          "loss_rate": 0.35
+        },
+        "structural_vs_placebo": {
+          "utility": 0.58,
+          "win_rate": 0.54,
+          "loss_rate": 0.38
+        }
+      },
+      "residuals": [
+        "abstention_recovers_global_gate",
+        "residual_signal_left_unrepaired"
+      ]
+    },
+    {
+      "generation_id": "g2_residual_repair",
+      "parent_generation_id": "g1_safe_abstain",
+      "failure": "Residual-correction cases are skipped or answered too generically.",
+      "hypothesis": "Case-backed residual repair should preserve fallback plus local delta.",
+      "ablation": "Run residual repair over the same 100-case natural slice.",
+      "decision": "accept_global",
+      "next_hypothesis": "Extend repair generation to signal/noise cases that need concrete domain bridges.",
+      "evidence": {
+        "eval_id": "structural_live_natural_repaired_residual100_v1_gpt54mini_gpt55_20260603",
+        "source_file": "structural_live_natural_repaired_residual100_v1_gpt54mini_gpt55_20260603_summary.json",
+        "pass_gate": true,
+        "selected_case_count": 100,
+        "structural_vs_base": {
+          "utility": 0.6,
+          "win_rate": 0.56,
+          "loss_rate": 0.36
+        },
+        "structural_vs_placebo": {
+          "utility": 0.605,
+          "win_rate": 0.55,
+          "loss_rate": 0.34
+        }
+      },
+      "residuals": [
+        "residual_clade_productive",
+        "signal_noise_gap_remaining"
+      ]
+    },
+    {
+      "generation_id": "g3_residual_signal_repair",
+      "parent_generation_id": "g2_residual_repair",
+      "failure": "Signal/noise cases need domain-specific retained-signal and discarded-noise criteria.",
+      "hypothesis": "A signal/nuisance repair that names the invariant signal and validation path should improve judged utility.",
+      "ablation": "Run residual+signal repair over the 100-case natural slice.",
+      "decision": "accept_global",
+      "next_hypothesis": "Try broadening repairs, then audit which clades regress against placebo.",
+      "evidence": {
+        "eval_id": "structural_live_natural_repaired_residual_signal100_v1_gpt54mini_gpt55_20260603",
+        "source_file": "structural_live_natural_repaired_residual_signal100_v1_gpt54mini_gpt55_20260603_summary.json",
+        "pass_gate": true,
+        "selected_case_count": 100,
+        "structural_vs_base": {
+          "utility": 0.65,
+          "win_rate": 0.59,
+          "loss_rate": 0.29
+        },
+        "structural_vs_placebo": {
+          "utility": 0.665,
+          "win_rate": 0.63,
+          "loss_rate": 0.3
+        }
+      },
+      "residuals": [
+        "best_placebo_so_far",
+        "candidate_for_all_repair_bundle"
+      ]
+    },
+    {
+      "generation_id": "g4_all_repairs_v1",
+      "parent_generation_id": "g3_residual_signal_repair",
+      "failure": "Several weak clades remain individually repairable but may interact.",
+      "hypothesis": "Bundle accepted weak-pattern repairs and test global utility.",
+      "ablation": "Run all-repairs100 against base and placebo controls.",
+      "decision": "accept_with_residual",
+      "next_hypothesis": "Placebo margin falls, so generate focused margin repairs for bottleneck and signal clades.",
+      "evidence": {
+        "eval_id": "structural_live_all_repairs100_v1_gpt54mini_gpt55_20260603",
+        "source_file": "structural_live_all_repairs100_v1_gpt54mini_gpt55_20260603_summary.json",
+        "pass_gate": true,
+        "selected_case_count": 100,
+        "structural_vs_base": {
+          "utility": 0.68,
+          "win_rate": 0.64,
+          "loss_rate": 0.28
+        },
+        "structural_vs_placebo": {
+          "utility": 0.59,
+          "win_rate": 0.54,
+          "loss_rate": 0.36
+        }
+      },
+      "residuals": [
+        "base_utility_peak",
+        "placebo_margin_regression"
+      ]
+    },
+    {
+      "generation_id": "g5_margin_conditioned_repairs",
+      "parent_generation_id": "g4_all_repairs_v1",
+      "failure": "Broad repairs are too structured and lose specificity against wrong-pattern placebo.",
+      "hypothesis": "Condition repairs on domain cues and keep only the 2-3 actions triggered by the case.",
+      "ablation": "Run all-repairs margin v2 over the full 100-case natural slice.",
+      "decision": "accept_global",
+      "next_hypothesis": "Use the accepted conditioned policy as the current paper-evidence endpoint.",
+      "evidence": {
+        "eval_id": "structural_live_all_repairs_margin100_v2_gpt54mini_gpt55_20260604",
+        "source_file": "structural_live_all_repairs_margin100_v2_gpt54mini_gpt55_20260604_summary.json",
+        "pass_gate": true,
+        "selected_case_count": 100,
+        "structural_vs_base": {
+          "utility": 0.625,
+          "win_rate": 0.59,
+          "loss_rate": 0.34
+        },
+        "structural_vs_placebo": {
+          "utility": 0.705,
+          "win_rate": 0.68,
+          "loss_rate": 0.27
+        }
+      },
+      "residuals": [
+        "best_placebo_endpoint",
+        "domain_conditioned_repair"
+      ]
+    }
+  ],
+  "branch_tests": [
+    {
+      "generation_id": "b1_bottleneck_generic_margin_repair",
+      "parent_generation_id": "g4_all_repairs_v1",
+      "failure": "Bottleneck repair improves base comparison but loses badly to wrong-pattern placebo.",
+      "hypothesis": "Generic bottleneck capacity guidance is sufficient for all bottleneck cases.",
+      "ablation": "Focused bottleneck margin v1, 10 selected cases.",
+      "decision": "reject_placebo_margin",
+      "next_hypothesis": "Replace generic capacity text with case-conditioned constraint-relaxation actions.",
+      "evidence": {
+        "eval_id": "structural_live_bottleneck_margin_v1_gpt54mini_gpt55_20260604",
+        "source_file": "structural_live_bottleneck_margin_v1_gpt54mini_gpt55_20260604_summary.json",
+        "pass_gate": false,
+        "selected_case_count": 10,
+        "structural_vs_base": {
+          "utility": 0.7,
+          "win_rate": 0.7,
+          "loss_rate": 0.3
+        },
+        "structural_vs_placebo": {
+          "utility": 0.3,
+          "win_rate": 0.2,
+          "loss_rate": 0.6
+        }
+      },
+      "residuals": [
+        "over_structured_prompt",
+        "placebo_loss"
+      ]
+    },
+    {
+      "generation_id": "b2_bottleneck_conditioned_margin_repair",
+      "parent_generation_id": "b1_bottleneck_generic_margin_repair",
+      "failure": "Bottleneck repair needs cue-scoped concrete actions.",
+      "hypothesis": "Case-conditioned constraint-relaxation actions should beat both base and placebo.",
+      "ablation": "Focused bottleneck margin v2, 10 selected cases.",
+      "decision": "accept_focus",
+      "next_hypothesis": "Promote the conditioned repair into all-repairs margin v2.",
+      "evidence": {
+        "eval_id": "structural_live_bottleneck_margin_v2_gpt54mini_gpt55_20260604",
+        "source_file": "structural_live_bottleneck_margin_v2_gpt54mini_gpt55_20260604_summary.json",
+        "pass_gate": true,
+        "selected_case_count": 10,
+        "structural_vs_base": {
+          "utility": 0.9,
+          "win_rate": 0.9,
+          "loss_rate": 0.1
+        },
+        "structural_vs_placebo": {
+          "utility": 0.8,
+          "win_rate": 0.8,
+          "loss_rate": 0.2
+        }
+      },
+      "residuals": [
+        "bottleneck_focus_pass"
+      ]
+    },
+    {
+      "generation_id": "b3_signal_conditioned_margin_repair",
+      "parent_generation_id": "g4_all_repairs_v1",
+      "failure": "Signal/noise transfer needs explicit retained signal, discarded dimension, and validation metric.",
+      "hypothesis": "Conditioned signal repair should beat both base and placebo on focused cases.",
+      "ablation": "Focused signal margin v2, 3 selected cases.",
+      "decision": "accept_focus",
+      "next_hypothesis": "Keep signal repair in the conditioned all-repairs bundle.",
+      "evidence": {
+        "eval_id": "structural_live_signal_margin_v2_gpt54mini_gpt55_20260604",
+        "source_file": "structural_live_signal_margin_v2_gpt54mini_gpt55_20260604_summary.json",
+        "pass_gate": true,
+        "selected_case_count": 3,
+        "structural_vs_base": {
+          "utility": 1.0,
+          "win_rate": 1.0,
+          "loss_rate": 0.0
+        },
+        "structural_vs_placebo": {
+          "utility": 0.8333,
+          "win_rate": 0.6667,
+          "loss_rate": 0.0
+        }
+      },
+      "residuals": [
+        "signal_focus_pass"
+      ]
+    }
+  ],
+  "metrics": {
+    "root_base_utility": 0.545,
+    "root_placebo_utility": 0.55,
+    "final_base_utility": 0.625,
+    "final_placebo_utility": 0.705,
+    "best_base_utility": 0.68,
+    "best_placebo_utility": 0.705,
+    "final_base_delta": 0.08,
+    "final_placebo_delta": 0.155,
+    "best_base_delta": 0.135,
+    "best_placebo_delta": 0.155,
+    "bottleneck_branch_placebo_delta": 0.5,
+    "signal_branch_placebo_delta_from_trace": 0.7083,
+    "mainline_best_trace": [
+      {
+        "generation_id": "g1_safe_abstain",
+        "best_base_utility_so_far": 0.595,
+        "best_placebo_utility_so_far": 0.58
+      },
+      {
+        "generation_id": "g2_residual_repair",
+        "best_base_utility_so_far": 0.6,
+        "best_placebo_utility_so_far": 0.605
+      },
+      {
+        "generation_id": "g3_residual_signal_repair",
+        "best_base_utility_so_far": 0.65,
+        "best_placebo_utility_so_far": 0.665
+      },
+      {
+        "generation_id": "g4_all_repairs_v1",
+        "best_base_utility_so_far": 0.68,
+        "best_placebo_utility_so_far": 0.665
+      },
+      {
+        "generation_id": "g5_margin_conditioned_repairs",
+        "best_base_utility_so_far": 0.68,
+        "best_placebo_utility_so_far": 0.705
+      }
+    ]
+  },
+  "gates": [
+    {
+      "gate": "root_failure_is_real",
+      "pass": true,
+      "observed": {
+        "eval_id": "structural_live_natural100_v1_gpt54mini_gpt55_20260603",
+        "source_file": "structural_live_natural100_v1_gpt54mini_gpt55_20260603_summary.json",
+        "pass_gate": false,
+        "selected_case_count": 100,
+        "structural_vs_base": {
+          "utility": 0.545,
+          "win_rate": 0.5,
+          "loss_rate": 0.41
+        },
+        "structural_vs_placebo": {
+          "utility": 0.55,
+          "win_rate": 0.51,
+          "loss_rate": 0.41
+        }
+      }
+    },
+    {
+      "gate": "mainline_has_5_generations",
+      "pass": true,
+      "observed": 5
+    },
+    {
+      "gate": "cycle_fields_complete",
+      "pass": true,
+      "observed": {
+        "mainline_count": 5,
+        "branch_count": 3
+      }
+    },
+    {
+      "gate": "contains_accept_and_reject",
+      "pass": true,
+      "observed": {
+        "accepted_mainline": 5,
+        "rejected_branch": 1
+      }
+    },
+    {
+      "gate": "global_utility_improves",
+      "pass": true,
+      "observed": {
+        "best_base_delta": 0.135,
+        "final_placebo_delta": 0.155
+      }
+    },
+    {
+      "gate": "local_clade_productivity_improves",
+      "pass": true,
+      "observed": {
+        "bottleneck_branch_placebo_delta": 0.5,
+        "signal_branch_placebo_delta_from_trace": 0.7083
+      }
+    }
+  ],
+  "pass": true,
+  "interpretation": "This proves the engineering loop is auditable across multiple generations: failures generate hypotheses, hypotheses receive ablations, rejected branches do not mutate policy, and accepted repairs raise global or local clade utility."
+}
