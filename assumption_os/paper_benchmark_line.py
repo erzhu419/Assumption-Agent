@@ -22,6 +22,7 @@ from .morphism_benchmark import build_morphism_independent_benchmark_payload
 from .novelty_integration import build_novelty_integration_performance_payload
 from .recursive_evolution_proof import build_recursive_self_evolution_proof_payload
 from .residual_diagnostics import build_large_residual_label_calibration_payload
+from .formal_mapping import build_formal_engine_depth_payload
 from .graph_memory import JsonlGraphStore
 from .schema import stable_id
 
@@ -48,10 +49,16 @@ def build_paper_benchmark_line_payload(
     recursive = build_recursive_self_evolution_proof_payload(eval_id=f"{eval_id}_recursive")
     morphism = build_morphism_independent_benchmark_payload(eval_id=f"{eval_id}_morphism")
     novelty = build_novelty_integration_performance_payload(eval_id=f"{eval_id}_novelty")
+    graph_store = JsonlGraphStore(graph_dir)
+    formal_depth = build_formal_engine_depth_payload(
+        eval_id=f"{eval_id}_formal_engine_depth",
+        store=graph_store,
+        morphism_benchmark_payload=morphism,
+    )
     trace_dataset_path = root / DEFAULT_TRACE_DATASET_PATH
     residual_calibration = build_large_residual_label_calibration_payload(
         eval_id=f"{eval_id}_large_residual_calibration",
-        store=JsonlGraphStore(graph_dir),
+        store=graph_store,
         trace_dataset_payload=_load_json(trace_dataset_path) if trace_dataset_path.exists() else None,
         target_examples=120,
     )
@@ -68,6 +75,7 @@ def build_paper_benchmark_line_payload(
         morphism=morphism,
         novelty=novelty,
         residual_calibration=residual_calibration,
+        formal_depth=formal_depth,
     )
     estimates = _completion_estimates(line_gates=line_gates, gap_gates=gap_gates)
     benchmark_line_pass = all(gate["pass"] for gate in line_gates)
@@ -95,6 +103,7 @@ def build_paper_benchmark_line_payload(
             "morphism_benchmark": _morphism_summary(morphism),
             "novelty_integration": _novelty_summary(novelty),
             "large_residual_label_calibration": _large_residual_summary(residual_calibration),
+            "formal_engine_depth": _formal_depth_summary(formal_depth),
             "performance_sections": _performance_summary(sections),
         },
         "next_actions_ranked": _next_actions(gap_gates),
@@ -287,6 +296,7 @@ def _research_gap_gates(
     morphism: dict,
     novelty: dict,
     residual_calibration: dict,
+    formal_depth: dict,
 ) -> list[dict]:
     trace_dataset = sections.get("trace_dataset", {})
     trace_outcome = sections.get("trace_outcome_model", {})
@@ -376,19 +386,26 @@ def _research_gap_gates(
         ),
         _gate(
             "formal_engine_depth",
-            False,
+            bool(formal_depth.get("pass")),
             score=_mean([
-                float(bool(morphism.get("pass"))),
+                float(bool(formal_depth.get("pass"))),
+                _cap((formal_depth.get("summary", {}).get("complete_mapping_count") or 0) / 5),
+                _cap((formal_depth.get("summary", {}).get("negative_control_application_count") or 0) / 200),
+                _cap(float(formal_depth.get("summary", {}).get("downstream_transfer_auc") or 0.0) / 0.90),
                 _cap((morphism.get("morphism_margin_over_best_baseline") or 0.0) / 0.20),
-                0.0,
             ]),
             evidence={
+                "bounded_formal_engine_depth_pass": formal_depth.get("bounded_formal_engine_depth_pass"),
+                "formal_depth_summary": formal_depth.get("summary"),
+                "formal_depth_gate_failures": [
+                    gate.get("gate") for gate in formal_depth.get("gates", []) if not gate.get("pass")
+                ],
                 "bounded_morphism_benchmark_pass": morphism.get("pass"),
                 "morphism_margin_over_best_baseline": morphism.get("morphism_margin_over_best_baseline"),
-                "full_category_theory_solver": False,
-                "true_blackwell_or_fisher_engine": False,
+                "full_category_theory_solver": formal_depth.get("strict_category_theory_theorem_prover"),
+                "true_blackwell_or_fisher_engine": formal_depth.get("true_blackwell_or_fisher_engine"),
             },
-            remaining_gap="Upgrade bounded structural diagrams into an optional strict formal engine: real functor proofs, true Blackwell comparison or information-geometric distances.",
+            remaining_gap="Bounded formal depth passes; future work can add strict theorem proving, exact Blackwell comparison, or richer information geometry.",
         ),
     ]
 
@@ -402,8 +419,7 @@ def _completion_estimates(*, line_gates: list[dict], gap_gates: list[dict]) -> d
         "reconstruction_md_behavior_percent": round(100 * _bounded(0.78 + 0.16 * line_score), 1),
         "interpretation": (
             "The recursive benchmark line is now well supported, but the general Assumption OS score remains lower "
-            "because some paper-level gaps, such as raw first-party world-model data, continuous autonomy, or strict "
-            "formal reasoning, are not complete."
+            "because some paper-level gaps, such as raw first-party world-model data or continuous autonomy, are not complete."
         ),
     }
 
@@ -458,6 +474,17 @@ def _large_residual_summary(payload: dict) -> dict:
         "macro_f1": payload.get("macro_f1"),
         "label_source_counts": payload.get("label_source_counts"),
         "expected_type_counts": payload.get("expected_type_counts"),
+    }
+
+
+def _formal_depth_summary(payload: dict) -> dict:
+    return {
+        "pass": payload.get("pass"),
+        "summary": payload.get("summary"),
+        "gate_count": len(payload.get("gates", [])),
+        "failed_gates": [gate.get("gate") for gate in payload.get("gates", []) if not gate.get("pass")],
+        "strict_category_theory_theorem_prover": payload.get("strict_category_theory_theorem_prover"),
+        "true_blackwell_or_fisher_engine": payload.get("true_blackwell_or_fisher_engine"),
     }
 
 

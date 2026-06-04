@@ -620,6 +620,271 @@ def build_formal_transfer_eval_payload(
     }
 
 
+def build_formal_engine_depth_payload(
+    *,
+    eval_id: str | None = None,
+    store: JsonlGraphStore | None = None,
+    formal_mapping_payload: dict | None = None,
+    morphism_benchmark_payload: dict | None = None,
+) -> dict:
+    """Aggregate the bounded formal engine depth checks.
+
+    This is intentionally stricter than a five-query smoke audit, but it still
+    does not claim to be a general category-theory theorem prover.  The gate
+    requires complete executable diagrams, finite kernel metrics, negative
+    controls, transfer AUC, downstream task probes, and answer-quality lift.
+    """
+
+    if formal_mapping_payload is None:
+        if store is None:
+            raise ValueError("store is required when formal_mapping_payload is not provided")
+        formal_mapping_payload = build_formal_mapping_payload(store)
+    if morphism_benchmark_payload is None:
+        from .morphism_benchmark import build_morphism_independent_benchmark_payload
+
+        morphism_benchmark_payload = build_morphism_independent_benchmark_payload(
+            eval_id=f"{eval_id or 'formal_engine_depth'}_morphism",
+            neural_embedding_backend="none",
+        )
+
+    metric_payload = build_categorical_info_geometry_payload(formal_mapping_payload)
+    independent_search = build_independent_formal_search_eval_payload(formal_mapping_payload)
+    downstream_tasks = build_formal_downstream_task_eval_payload(formal_mapping_payload)
+    answer_quality = build_formal_answer_quality_probe_payload(formal_mapping_payload)
+    independent_transfer = build_formal_transfer_eval_payload(
+        formal_mapping_payload=formal_mapping_payload,
+        metric_payload=metric_payload,
+        search_eval_payload=independent_search,
+    )
+    downstream_transfer = build_formal_transfer_eval_payload(
+        formal_mapping_payload=formal_mapping_payload,
+        metric_payload=metric_payload,
+        search_eval_payload=downstream_tasks,
+    )
+    status_counts = formal_mapping_payload.get("status_counts", {})
+    complete_mapping_count = int(status_counts.get(FormalMappingStatus.COMPLETE.value) or 0)
+    role_counts = formal_mapping_payload.get("role_counts", {})
+    metric_summary = metric_payload.get("metric_summary", {})
+    independent_negative_count = int(independent_search.get("negative_application_count") or 0)
+    downstream_negative_count = int(downstream_tasks.get("negative_application_count") or 0)
+    expected_independent_negatives = complete_mapping_count * max(0, complete_mapping_count - 1)
+    expected_downstream_negatives = int(downstream_tasks.get("query_count") or 0) * max(0, complete_mapping_count - 1)
+
+    gates = [
+        {
+            "gate": "complete_executable_diagram_scale",
+            "pass": (
+                complete_mapping_count >= 5
+                and complete_mapping_count == int(formal_mapping_payload.get("mapping_count") or 0)
+                and all(int(role_counts.get(role.value) or 0) >= complete_mapping_count for role in _engine_required_roles())
+            ),
+            "observed": {
+                "mapping_count": formal_mapping_payload.get("mapping_count"),
+                "complete_mapping_count": complete_mapping_count,
+                "role_counts": role_counts,
+            },
+        },
+        {
+            "gate": "finite_category_kernel_metrics",
+            "pass": (
+                int(metric_payload.get("object_count") or 0) >= 5
+                and float(metric_summary.get("mean_frobenius_distance") or 999.0) <= 0.75
+                and float(metric_summary.get("mean_total_variation") or 999.0) <= 0.30
+                and float(metric_summary.get("mean_blackwell_dominance_proxy") or 0.0) >= 0.80
+            ),
+            "observed": {
+                "object_count": metric_payload.get("object_count"),
+                "metric_summary": metric_summary,
+                "blackwell_note": "entropy-based Blackwell-style proxy, not a true Blackwell order computation",
+            },
+        },
+        {
+            "gate": "independent_search_with_negative_controls",
+            "pass": (
+                int(independent_search.get("query_count") or 0) >= 5
+                and float(independent_search.get("top1_hit_rate") or 0.0) >= 0.90
+                and independent_negative_count >= expected_independent_negatives
+            ),
+            "observed": {
+                "query_count": independent_search.get("query_count"),
+                "top1_hit_rate": independent_search.get("top1_hit_rate"),
+                "negative_application_count": independent_negative_count,
+                "expected_negative_application_count": expected_independent_negatives,
+            },
+        },
+        {
+            "gate": "downstream_task_transfer_suite",
+            "pass": (
+                bool(downstream_tasks.get("pass"))
+                and int(downstream_tasks.get("task_family_count") or 0) >= 3
+                and downstream_negative_count >= expected_downstream_negatives
+            ),
+            "observed": {
+                "query_count": downstream_tasks.get("query_count"),
+                "task_family_count": downstream_tasks.get("task_family_count"),
+                "top1_hit_rate": downstream_tasks.get("top1_hit_rate"),
+                "negative_application_count": downstream_negative_count,
+                "expected_negative_application_count": expected_downstream_negatives,
+            },
+        },
+        {
+            "gate": "formal_transfer_auc",
+            "pass": (
+                bool(independent_transfer.get("pass"))
+                and bool(downstream_transfer.get("pass"))
+                and float(independent_transfer.get("pairwise_auc") or 0.0) >= 0.90
+                and float(downstream_transfer.get("pairwise_auc") or 0.0) >= 0.90
+            ),
+            "observed": {
+                "independent_pairwise_auc": independent_transfer.get("pairwise_auc"),
+                "downstream_pairwise_auc": downstream_transfer.get("pairwise_auc"),
+                "independent_positive_mean": independent_transfer.get("positive_mean_transfer_score"),
+                "independent_negative_mean": independent_transfer.get("negative_mean_transfer_score"),
+                "downstream_positive_mean": downstream_transfer.get("positive_mean_transfer_score"),
+                "downstream_negative_mean": downstream_transfer.get("negative_mean_transfer_score"),
+            },
+        },
+        {
+            "gate": "answer_quality_lift",
+            "pass": (
+                bool(answer_quality.get("pass"))
+                and int(answer_quality.get("probe_count") or 0) >= complete_mapping_count
+                and float(answer_quality.get("guided_win_rate") or 0.0) >= 0.80
+                and float(answer_quality.get("mean_delta") or 0.0) >= 0.35
+            ),
+            "observed": {
+                "probe_count": answer_quality.get("probe_count"),
+                "top1_hit_rate": answer_quality.get("top1_hit_rate"),
+                "guided_win_rate": answer_quality.get("guided_win_rate"),
+                "mean_delta": answer_quality.get("mean_delta"),
+                "guided_mean_score": answer_quality.get("guided_mean_score"),
+            },
+        },
+        {
+            "gate": "cross_domain_morphism_baseline",
+            "pass": (
+                bool(morphism_benchmark_payload.get("pass"))
+                and float(morphism_benchmark_payload.get("morphism_margin_over_best_baseline") or 0.0) >= 0.20
+                and float(morphism_benchmark_payload.get("nonlexical_success_rate") or 0.0) >= 0.75
+            ),
+            "observed": {
+                "case_count": morphism_benchmark_payload.get("case_count"),
+                "scorer_hit_rates": morphism_benchmark_payload.get("scorer_hit_rates"),
+                "morphism_margin_over_best_baseline": morphism_benchmark_payload.get("morphism_margin_over_best_baseline"),
+                "nonlexical_success_rate": morphism_benchmark_payload.get("nonlexical_success_rate"),
+            },
+        },
+    ]
+    pass_condition = all(gate["pass"] for gate in gates)
+    return {
+        "eval_id": eval_id or "formal_engine_depth",
+        "eval_kind": "bounded_formal_engine_depth_audit",
+        "pass": pass_condition,
+        "bounded_formal_engine_depth_pass": pass_condition,
+        "strict_category_theory_theorem_prover": False,
+        "true_blackwell_or_fisher_engine": False,
+        "scope_note": (
+            "This is a bounded structural morphism engine: finite executable diagrams, "
+            "kernel diagnostics, negative controls, transfer AUC, and downstream answer-quality probes. "
+            "It is not a general theorem prover or exact Blackwell/Fisher engine."
+        ),
+        "summary": {
+            "mapping_count": formal_mapping_payload.get("mapping_count"),
+            "complete_mapping_count": complete_mapping_count,
+            "object_count": metric_payload.get("object_count"),
+            "independent_query_count": independent_search.get("query_count"),
+            "downstream_query_count": downstream_tasks.get("query_count"),
+            "answer_probe_count": answer_quality.get("probe_count"),
+            "negative_control_application_count": independent_negative_count + downstream_negative_count,
+            "independent_transfer_auc": independent_transfer.get("pairwise_auc"),
+            "downstream_transfer_auc": downstream_transfer.get("pairwise_auc"),
+            "answer_quality_mean_delta": answer_quality.get("mean_delta"),
+            "morphism_margin_over_best_baseline": morphism_benchmark_payload.get("morphism_margin_over_best_baseline"),
+        },
+        "gates": gates,
+        "formal_mapping": {
+            "nodes_considered": formal_mapping_payload.get("nodes_considered"),
+            "mapping_count": formal_mapping_payload.get("mapping_count"),
+            "status_counts": formal_mapping_payload.get("status_counts"),
+            "role_counts": formal_mapping_payload.get("role_counts"),
+        },
+        "categorical_info_geometry": {
+            "object_count": metric_payload.get("object_count"),
+            "objects": metric_payload.get("objects"),
+            "metric_summary": metric_payload.get("metric_summary"),
+        },
+        "independent_search": {
+            "query_count": independent_search.get("query_count"),
+            "top1_hit_rate": independent_search.get("top1_hit_rate"),
+            "negative_application_count": independent_search.get("negative_application_count"),
+        },
+        "downstream_tasks": {
+            "query_count": downstream_tasks.get("query_count"),
+            "top1_hit_rate": downstream_tasks.get("top1_hit_rate"),
+            "task_family_counts": downstream_tasks.get("task_family_counts"),
+            "negative_application_count": downstream_tasks.get("negative_application_count"),
+            "pass": downstream_tasks.get("pass"),
+        },
+        "independent_transfer": {
+            key: independent_transfer.get(key)
+            for key in (
+                "query_count",
+                "application_count",
+                "positive_count",
+                "negative_count",
+                "top1_hit_rate",
+                "pairwise_auc",
+                "positive_mean_transfer_score",
+                "negative_mean_transfer_score",
+                "pass",
+            )
+        },
+        "downstream_transfer": {
+            key: downstream_transfer.get(key)
+            for key in (
+                "query_count",
+                "application_count",
+                "positive_count",
+                "negative_count",
+                "top1_hit_rate",
+                "pairwise_auc",
+                "positive_mean_transfer_score",
+                "negative_mean_transfer_score",
+                "pass",
+            )
+        },
+        "answer_quality": {
+            key: answer_quality.get(key)
+            for key in (
+                "probe_count",
+                "baseline_mean_score",
+                "guided_mean_score",
+                "mean_delta",
+                "guided_win_rate",
+                "top1_hit_rate",
+                "pass",
+            )
+        },
+        "morphism_benchmark": {
+            "pass": morphism_benchmark_payload.get("pass"),
+            "case_count": morphism_benchmark_payload.get("case_count"),
+            "scorer_hit_rates": morphism_benchmark_payload.get("scorer_hit_rates"),
+            "morphism_margin_over_best_baseline": morphism_benchmark_payload.get("morphism_margin_over_best_baseline"),
+            "nonlexical_success_rate": morphism_benchmark_payload.get("nonlexical_success_rate"),
+        },
+    }
+
+
+def _engine_required_roles() -> tuple[FormalRole, ...]:
+    return (
+        FormalRole.FEATURE,
+        FormalRole.CONSTRAINT,
+        FormalRole.DECOMPOSITION,
+        FormalRole.VERIFICATION,
+        FormalRole.HP_CHANGE,
+    )
+
+
 def _normalize_kernel(kernel: list[list[float]]) -> list[list[float]]:
     normalized = []
     width = max((len(row) for row in kernel), default=0)
@@ -1463,6 +1728,8 @@ def main() -> None:
     ap.add_argument("--independent-formal-transfer-eval-out", default=None)
     ap.add_argument("--formal-downstream-transfer-eval", default=None)
     ap.add_argument("--formal-downstream-transfer-eval-out", default=None)
+    ap.add_argument("--formal-engine-depth", action="store_true")
+    ap.add_argument("--formal-engine-depth-out", default=None)
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
@@ -1539,6 +1806,18 @@ def main() -> None:
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(
                 json.dumps(payload["formal_downstream_transfer_eval"], ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+    if args.formal_engine_depth or args.formal_engine_depth_out:
+        payload["formal_engine_depth"] = build_formal_engine_depth_payload(
+            eval_id="formal_engine_depth",
+            formal_mapping_payload=payload,
+        )
+        if args.formal_engine_depth_out:
+            out = _resolve(root, args.formal_engine_depth_out)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(
+                json.dumps(payload["formal_engine_depth"], ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
     text = json.dumps(payload, ensure_ascii=False, indent=2)

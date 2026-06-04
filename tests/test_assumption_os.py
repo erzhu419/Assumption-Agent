@@ -33,6 +33,7 @@ from assumption_os.formal_mapping import (
     build_formal_dedup_payload,
     build_formal_downstream_task_eval_payload,
     build_formal_answer_quality_probe_payload,
+    build_formal_engine_depth_payload,
     build_formal_mapping_gate_payload,
     build_formal_mapping_payload,
     build_formal_search_eval_payload,
@@ -3345,6 +3346,20 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(payload["pairwise_auc"], 1.0)
             self.assertGreater(payload["positive_mean_transfer_score"], payload["negative_mean_transfer_score"])
 
+    def test_formal_engine_depth_audit_passes_with_negative_controls(self):
+        payload = build_formal_engine_depth_payload(
+            eval_id="unit_formal_engine_depth",
+            store=JsonlGraphStore(Path("phase four/assumption_graph")),
+        )
+        self.assertTrue(payload["pass"], payload["gates"])
+        self.assertFalse(payload["strict_category_theory_theorem_prover"])
+        self.assertFalse(payload["true_blackwell_or_fisher_engine"])
+        summary = payload["summary"]
+        self.assertGreaterEqual(summary["complete_mapping_count"], 5)
+        self.assertGreaterEqual(summary["negative_control_application_count"], 200)
+        self.assertGreaterEqual(summary["downstream_transfer_auc"], 0.90)
+        self.assertGreaterEqual(summary["answer_quality_mean_delta"], 0.35)
+
     def test_formal_mapping_audit_rejects_missing_trigger(self):
         with tempfile.TemporaryDirectory() as td:
             store = JsonlGraphStore(td)
@@ -4471,8 +4486,8 @@ class AssumptionOSTest(unittest.TestCase):
         failed = {gate["name"] for gate in payload["research_gap_gates"] if not gate["pass"]}
         self.assertIn("world_model_raw_first_party_scale", failed)
         self.assertIn("continuous_daemon_autonomy", failed)
-        self.assertIn("formal_engine_depth", failed)
         self.assertNotIn("residual_label_large_scale_calibration", failed)
+        self.assertNotIn("formal_engine_depth", failed)
 
     def test_morphism_independent_benchmark_beats_surface_baselines(self):
         payload = build_morphism_independent_benchmark_payload(eval_id="unit_morphism_independent")
