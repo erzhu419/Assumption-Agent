@@ -49,10 +49,13 @@ Problem-level main table:
 - `long_prompt_placebo_no_morphism`: frozen 100 题 no-morphism placebo control。
 - `ordinary_kg_triple_retrieval`: morphism benchmark 中的 KG triple retrieval。
 - `embedding_retrieval`: morphism benchmark 中的 lexical embedding-style retrieval。
+- `ordinary_rag_bm25_full_text`: full-text BM25 RAG-style retrieval。
+- `full_text_tfidf_vector_retrieval`: full-text TF-IDF vector retrieval。
+- `sentence_transformer_embedding`: sentence-transformer embedding retrieval。
 - `no_morphism_structural_placebo`: frozen run 内的无 morphism 对照。
-- `no_world_model_trace_policy`: natural one-shot cueing 的历史 ablation proxy。
-- `no_recursive_runner_one_shot`: 没有 recursive repair/readback 的 one-shot proxy。
-- `no_novelty_gate_proxy`: incremental addition without final novelty/integration gating 的历史 ablation proxy。
+- `no_world_model_trace_policy`: same 100 problem_ids 的 matched toggle-off summary。
+- `no_recursive_runner_one_shot`: same 100 problem_ids 的 matched toggle-off summary。
+- `no_novelty_gate_incremental_addition`: same 100 problem_ids 下 final novelty/integration gate 前的 incremental addition toggle。
 
 这能支持论文里最关键的 claim：不是简单“更长 prompt”或者普通 RAG/KG/embedding retrieval 带来的收益。
 

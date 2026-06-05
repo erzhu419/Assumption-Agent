@@ -58,8 +58,12 @@ from assumption_os.novelty_integration import (
     build_novelty_integration_performance_payload,
 )
 from assumption_os.objective_bench import build_objective_benchmark_payload
+from assumption_os.paper_baseline_hardening import build_paper_baseline_hardening_payload
 from assumption_os.paper_benchmark_line import build_paper_benchmark_line_payload
 from assumption_os.paper_main_experiment import build_paper_main_experiment_payload
+from assumption_os.paper_negative_results import build_paper_negative_results_payload
+from assumption_os.paper_repro_pack import build_paper_repro_pack_payload
+from assumption_os.paper_retrieval_baselines import build_paper_retrieval_baselines_payload
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
 from assumption_os.proposals import ProposalType, build_candidate_proposals
 from assumption_os.queue_artifact_eval import build_queue_artifact_eval_payload, judgment_sets_from_artifact_eval
@@ -4555,14 +4559,74 @@ class AssumptionOSTest(unittest.TestCase):
             "raw_llm_baseline",
             "ordinary_kg_triple_retrieval",
             "embedding_retrieval",
+            "ordinary_rag_bm25_full_text",
+            "full_text_tfidf_vector_retrieval",
             "no_morphism_structural_placebo",
-            "no_novelty_gate_proxy",
+            "no_novelty_gate_incremental_addition",
             "no_world_model_trace_policy",
             "no_recursive_runner_one_shot",
         }:
             self.assertIn(required, baselines)
         self.assertTrue(payload["no_prompt_or_answer_payload_stored"])
         self.assertGreaterEqual(payload["run_seed_variance_diagnostic"]["run_count"], 5)
+
+    def test_paper_baseline_hardening_uses_matched_frozen_toggle_offs(self):
+        payload = build_paper_baseline_hardening_payload(
+            root=Path("."),
+            eval_id="unit_paper_baseline_hardening",
+        )
+        self.assertTrue(payload["pass"], payload["gates"])
+        rows = {row["baseline"]: row for row in payload["baseline_rows"]}
+        for name in [
+            "no_world_model_trace_policy",
+            "no_recursive_runner_one_shot",
+            "no_novelty_gate_incremental_addition",
+        ]:
+            self.assertIn(name, rows)
+            self.assertTrue(rows[name]["same_problem_id_set"])
+            self.assertEqual(rows[name]["problem_count"], 100)
+            self.assertEqual(rows[name]["source_kind"], "matched_frozen_toggle_off_summary")
+            self.assertGreater(
+                rows[name]["pairs"]["structural_vs_base"]["final_minus_toggle_utility"],
+                0.0,
+            )
+
+    def test_paper_retrieval_baselines_include_real_full_text_rag(self):
+        payload = build_paper_retrieval_baselines_payload(eval_id="unit_paper_retrieval_baselines")
+        self.assertTrue(payload["pass"], payload["gates"])
+        rates = payload["hit_rates"]
+        self.assertIn("ordinary_rag_bm25_full_text", rates)
+        self.assertIn("full_text_tfidf_vector_retrieval", rates)
+        self.assertGreaterEqual(rates["structural_morphism"], 0.80)
+        self.assertGreaterEqual(payload["morphism_margin_over_best_retrieval"], 0.20)
+        self.assertLessEqual(rates["ordinary_rag_bm25_full_text"], 0.40)
+
+    def test_paper_negative_results_records_boundaries_and_failures(self):
+        payload = build_paper_negative_results_payload(
+            root=Path("."),
+            eval_id="unit_paper_negative_results",
+        )
+        self.assertTrue(payload["pass"], payload["gates"])
+        domains = {row["domain"]: row for row in payload["domain_boundaries"]}
+        self.assertIn("science", domains)
+        self.assertIn("weak_vs_raw", domains["science"]["boundary_tags"])
+        failures = {row["failure_id"] for row in payload["historical_repair_failures"]}
+        self.assertIn("bottleneck_first_margin_failure", failures)
+        self.assertIn("signal_first_repair_failure", failures)
+        self.assertFalse(payload["formal_layer_boundaries"]["strict_category_theory_theorem_prover"])
+        self.assertGreaterEqual(len(payload["abstain_or_gate_policy"]), 4)
+
+    def test_paper_repro_pack_records_commands_hashes_and_env_names_only(self):
+        payload = build_paper_repro_pack_payload(
+            root=Path("."),
+            eval_id="unit_paper_repro_pack",
+        )
+        self.assertTrue(payload["pass"], payload["gates"])
+        self.assertGreaterEqual(len(payload["exact_commands"]), 6)
+        self.assertGreaterEqual(len(payload["artifact_source_manifest"]), 10)
+        self.assertTrue(all(row.get("sha256") for row in payload["artifact_source_manifest"]))
+        self.assertTrue(all("value" not in row for row in payload["api_env_vars"]))
+        self.assertIn("raw model answers", payload["data_card"]["excluded_from_repro_pack"])
 
     def test_morphism_independent_benchmark_beats_surface_baselines(self):
         payload = build_morphism_independent_benchmark_payload(eval_id="unit_morphism_independent")

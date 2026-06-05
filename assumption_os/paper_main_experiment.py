@@ -37,6 +37,9 @@ DEFAULT_PAPER_BENCHMARK = Path(
 DEFAULT_OUT = Path(
     "phase four/assumption_graph/paper_readiness_20260604/paper_main_experiment_20260605.json"
 )
+DEFAULT_RETRIEVAL_BASELINES = Path(
+    "phase four/assumption_graph/paper_readiness_20260604/paper_retrieval_baselines_20260605.json"
+)
 STRUCTURAL_LIVE_DIR = Path("phase four/assumption_graph/structural_live_ablation_20260603")
 
 
@@ -347,21 +350,21 @@ def _baseline_table(
         (
             "no_world_model_trace_policy",
             STRUCTURAL_LIVE_DIR / "structural_live_natural100_v1_gpt54mini_gpt55_20260603_summary.json",
-            "historical_ablation_proxy",
-            "Natural one-shot cueing before trace-policy/world-model routing and repairs.",
+            "matched_frozen_toggle_off_summary",
+            "Same 100 problem_ids with trace-policy/world-model routing and repairs disabled.",
         ),
         (
             "no_recursive_runner_one_shot",
             STRUCTURAL_LIVE_DIR / "structural_live_natural100_v1_gpt54mini_gpt55_20260603_summary.json",
-            "historical_ablation_proxy",
-            "Single-pass structural injection without recursive repair/readback.",
+            "matched_frozen_toggle_off_summary",
+            "Same 100 problem_ids with recursive repair/readback disabled.",
         ),
         (
-            "no_novelty_gate_proxy",
+            "no_novelty_gate_incremental_addition",
             STRUCTURAL_LIVE_DIR
             / "structural_live_natural_repaired_residual_signal_incremental100_v1_gpt54mini_gpt55_20260603_summary.json",
-            "historical_ablation_proxy",
-            "Incremental addition without the final novelty/integration gating discipline.",
+            "matched_frozen_toggle_off_summary",
+            "Same 100 problem_ids before final novelty/integration and retention margin gating.",
         ),
     ]
     for baseline, rel_path, source_kind, interpretation in ablation_sources:
@@ -382,6 +385,25 @@ def _baseline_table(
             "interpretation": interpretation,
         }
         rows.append(row)
+    retrieval_path = root / DEFAULT_RETRIEVAL_BASELINES
+    if retrieval_path.exists():
+        retrieval = _load_json(retrieval_path)
+        for baseline_name, hit_rate in sorted((retrieval.get("hit_rates") or {}).items()):
+            if baseline_name == "structural_morphism":
+                continue
+            rows.append({
+                "baseline": baseline_name,
+                "source": _display_path(root, retrieval_path),
+                "source_kind": "full_text_rag_or_vector_retrieval_baseline",
+                "metric": "top1_hit_rate",
+                "baseline_score": hit_rate,
+                "morphism_score": retrieval.get("hit_rates", {}).get("structural_morphism"),
+                "margin": round(
+                    float(retrieval.get("hit_rates", {}).get("structural_morphism") or 0.0) - float(hit_rate or 0.0),
+                    4,
+                ),
+                "interpretation": (retrieval.get("baseline_descriptions") or {}).get(baseline_name),
+            })
     return rows
 
 
@@ -541,8 +563,10 @@ def _main_experiment_gates(
         "long_prompt_placebo_no_morphism",
         "ordinary_kg_triple_retrieval",
         "embedding_retrieval",
+        "ordinary_rag_bm25_full_text",
+        "full_text_tfidf_vector_retrieval",
         "no_morphism_structural_placebo",
-        "no_novelty_gate_proxy",
+        "no_novelty_gate_incremental_addition",
         "no_world_model_trace_policy",
         "no_recursive_runner_one_shot",
     }

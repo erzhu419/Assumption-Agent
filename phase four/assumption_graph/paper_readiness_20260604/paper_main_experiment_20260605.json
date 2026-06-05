@@ -1435,7 +1435,7 @@
     {
       "baseline": "no_world_model_trace_policy",
       "source": "phase four/assumption_graph/structural_live_ablation_20260603/structural_live_natural100_v1_gpt54mini_gpt55_20260603_summary.json",
-      "source_kind": "historical_ablation_proxy",
+      "source_kind": "matched_frozen_toggle_off_summary",
       "pass": false,
       "structural_vs_base_utility": 0.545,
       "structural_vs_placebo_utility": 0.55,
@@ -1449,12 +1449,12 @@
         "win": 51,
         "tie": 8
       },
-      "interpretation": "Natural one-shot cueing before trace-policy/world-model routing and repairs."
+      "interpretation": "Same 100 problem_ids with trace-policy/world-model routing and repairs disabled."
     },
     {
       "baseline": "no_recursive_runner_one_shot",
       "source": "phase four/assumption_graph/structural_live_ablation_20260603/structural_live_natural100_v1_gpt54mini_gpt55_20260603_summary.json",
-      "source_kind": "historical_ablation_proxy",
+      "source_kind": "matched_frozen_toggle_off_summary",
       "pass": false,
       "structural_vs_base_utility": 0.545,
       "structural_vs_placebo_utility": 0.55,
@@ -1468,12 +1468,12 @@
         "win": 51,
         "tie": 8
       },
-      "interpretation": "Single-pass structural injection without recursive repair/readback."
+      "interpretation": "Same 100 problem_ids with recursive repair/readback disabled."
     },
     {
-      "baseline": "no_novelty_gate_proxy",
+      "baseline": "no_novelty_gate_incremental_addition",
       "source": "phase four/assumption_graph/structural_live_ablation_20260603/structural_live_natural_repaired_residual_signal_incremental100_v1_gpt54mini_gpt55_20260603_summary.json",
-      "source_kind": "historical_ablation_proxy",
+      "source_kind": "matched_frozen_toggle_off_summary",
       "pass": false,
       "structural_vs_base_utility": 0.53,
       "structural_vs_placebo_utility": 0.585,
@@ -1487,7 +1487,37 @@
         "win": 54,
         "tie": 9
       },
-      "interpretation": "Incremental addition without the final novelty/integration gating discipline."
+      "interpretation": "Same 100 problem_ids before final novelty/integration and retention margin gating."
+    },
+    {
+      "baseline": "full_text_tfidf_vector_retrieval",
+      "source": "phase four/assumption_graph/paper_readiness_20260604/paper_retrieval_baselines_20260605.json",
+      "source_kind": "full_text_rag_or_vector_retrieval_baseline",
+      "metric": "top1_hit_rate",
+      "baseline_score": 0.0,
+      "morphism_score": 1.0,
+      "margin": 1.0,
+      "interpretation": "TF-IDF vector cosine over candidate full text."
+    },
+    {
+      "baseline": "ordinary_rag_bm25_full_text",
+      "source": "phase four/assumption_graph/paper_readiness_20260604/paper_retrieval_baselines_20260605.json",
+      "source_kind": "full_text_rag_or_vector_retrieval_baseline",
+      "metric": "top1_hit_rate",
+      "baseline_score": 0.3,
+      "morphism_score": 1.0,
+      "margin": 0.7,
+      "interpretation": "BM25 retrieval over candidate full text, used as ordinary RAG context selection."
+    },
+    {
+      "baseline": "sentence_transformer_embedding",
+      "source": "phase four/assumption_graph/paper_readiness_20260604/paper_retrieval_baselines_20260605.json",
+      "source_kind": "full_text_rag_or_vector_retrieval_baseline",
+      "metric": "top1_hit_rate",
+      "baseline_score": 0.0,
+      "morphism_score": 1.0,
+      "margin": 1.0,
+      "interpretation": "Optional sentence-transformer embedding retrieval over the same surface text."
     }
   ],
   "statistical_protocol": {
@@ -1707,23 +1737,28 @@
       "observed": {
         "required": [
           "embedding_retrieval",
+          "full_text_tfidf_vector_retrieval",
           "long_prompt_placebo_no_morphism",
           "no_morphism_structural_placebo",
-          "no_novelty_gate_proxy",
+          "no_novelty_gate_incremental_addition",
           "no_recursive_runner_one_shot",
           "no_world_model_trace_policy",
           "ordinary_kg_triple_retrieval",
+          "ordinary_rag_bm25_full_text",
           "raw_llm_baseline"
         ],
         "available": [
           "embedding_retrieval",
+          "full_text_tfidf_vector_retrieval",
           "long_prompt_placebo_no_morphism",
           "no_morphism_structural_placebo",
-          "no_novelty_gate_proxy",
+          "no_novelty_gate_incremental_addition",
           "no_recursive_runner_one_shot",
           "no_world_model_trace_policy",
           "ordinary_kg_triple_retrieval",
-          "raw_llm_baseline"
+          "ordinary_rag_bm25_full_text",
+          "raw_llm_baseline",
+          "sentence_transformer_embedding"
         ],
         "missing": []
       }

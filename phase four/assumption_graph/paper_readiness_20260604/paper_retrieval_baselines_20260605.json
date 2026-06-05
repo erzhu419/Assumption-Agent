@@ -1,0 +1,1115 @@
+{
+  "eval_id": "paper_retrieval_baselines_20260605",
+  "eval_kind": "paper_full_text_rag_and_vector_baselines",
+  "case_count": 10,
+  "pass": true,
+  "hit_rates": {
+    "ordinary_rag_bm25_full_text": 0.3,
+    "full_text_tfidf_vector_retrieval": 0.0,
+    "structural_morphism": 1.0,
+    "sentence_transformer_embedding": 0.0
+  },
+  "best_full_text_baseline_hit_rate": 0.3,
+  "morphism_margin_over_best_retrieval": 0.7,
+  "baseline_descriptions": {
+    "ordinary_rag_bm25_full_text": "BM25 retrieval over candidate full text, used as ordinary RAG context selection.",
+    "full_text_tfidf_vector_retrieval": "TF-IDF vector cosine over candidate full text.",
+    "sentence_transformer_embedding": "Optional sentence-transformer embedding retrieval over the same surface text.",
+    "structural_morphism": "Bounded structural morphism score over objects, morphisms, composition laws, and invariants."
+  },
+  "neural_embedding_baseline": {
+    "eval_id": "paper_retrieval_baselines_20260605_neural",
+    "eval_kind": "morphism_independent_cross_domain_benchmark",
+    "case_count": 10,
+    "scorer_hit_rates": {
+      "morphism": 1.0,
+      "kg_triple": 0.1,
+      "embedding_proxy": 0.1,
+      "neural_embedding": 0.0
+    },
+    "morphism_margin_over_best_baseline": 0.9,
+    "nonlexical_success_rate": 0.8,
+    "neural_embedding_baseline": {
+      "requested": true,
+      "enabled": true,
+      "backend": "sentence_transformer",
+      "model": "sentence-transformers/all-MiniLM-L6-v2",
+      "status": "ok",
+      "text_field": "surface_text"
+    },
+    "gates": [
+      {
+        "gate": "case_count",
+        "pass": true,
+        "observed": 10
+      },
+      {
+        "gate": "morphism_top1_rate",
+        "pass": true,
+        "observed": 1.0
+      },
+      {
+        "gate": "beats_surface_baselines",
+        "pass": true,
+        "observed": {
+          "morphism_rate": 1.0,
+          "kg_triple_rate": 0.1,
+          "embedding_proxy_rate": 0.1,
+          "neural_embedding_rate": 0.0,
+          "margin": 0.9
+        }
+      },
+      {
+        "gate": "nonlexical_success_rate",
+        "pass": true,
+        "observed": 0.8
+      },
+      {
+        "gate": "neural_embedding_baseline_available",
+        "pass": true,
+        "observed": {
+          "backend": "sentence_transformer",
+          "model": "sentence-transformers/all-MiniLM-L6-v2",
+          "status": "ok",
+          "error": null
+        }
+      },
+      {
+        "gate": "beats_neural_embedding_baseline",
+        "pass": true,
+        "observed": {
+          "morphism_rate": 1.0,
+          "neural_embedding_rate": 0.0,
+          "margin": 1.0
+        }
+      }
+    ],
+    "pass": true,
+    "baseline_note": "embedding_proxy is deterministic lexical cosine over task text.  neural_embedding, when enabled, is a real sentence-embedding retrieval baseline over the same surface text."
+  },
+  "rows_by_scorer": {
+    "ordinary_rag_bm25_full_text": [
+      {
+        "case_id": "morph_le_chatelier_lenz",
+        "query_domain": "chemistry",
+        "expected_candidate_id": "c_lenz_law",
+        "retrieved_candidate_id": "c_temperature_rate_rule",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_chemical_catalyst",
+            "score": 2.83893,
+            "domain": "chemistry"
+          },
+          {
+            "candidate_id": "c_lenz_law",
+            "score": 0.0,
+            "domain": "electromagnetism"
+          },
+          {
+            "candidate_id": "c_temperature_rate_rule",
+            "score": 4.383649,
+            "domain": "chemistry"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_resnet_kalman",
+        "query_domain": "deep_learning",
+        "expected_candidate_id": "c_kalman_innovation",
+        "retrieved_candidate_id": "c_kalman_innovation",
+        "hit": true,
+        "scores": [
+          {
+            "candidate_id": "c_deep_layer_scaling",
+            "score": 1.907863,
+            "domain": "deep_learning"
+          },
+          {
+            "candidate_id": "c_kalman_innovation",
+            "score": 2.603341,
+            "domain": "control_estimation"
+          },
+          {
+            "candidate_id": "c_skip_regularization",
+            "score": 2.170983,
+            "domain": "deep_learning"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_jepa_seismic",
+        "query_domain": "world_model",
+        "expected_candidate_id": "c_seismic_autocorrelation",
+        "retrieved_candidate_id": "c_latent_diffusion_prompt",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_autoencoder_pixels",
+            "score": 2.362441,
+            "domain": "world_model"
+          },
+          {
+            "candidate_id": "c_seismic_autocorrelation",
+            "score": 0.647422,
+            "domain": "geophysics"
+          },
+          {
+            "candidate_id": "c_latent_diffusion_prompt",
+            "score": 4.647341,
+            "domain": "world_model"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_thermostat_stabilizer",
+        "query_domain": "control",
+        "expected_candidate_id": "c_automatic_stabilizer",
+        "retrieved_candidate_id": "c_smart_thermostat_schedule",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_smart_thermostat_schedule",
+            "score": 4.737811,
+            "domain": "control"
+          },
+          {
+            "candidate_id": "c_automatic_stabilizer",
+            "score": 0.912399,
+            "domain": "macro_economics"
+          },
+          {
+            "candidate_id": "c_heater_power_upgrade",
+            "score": 1.217551,
+            "domain": "control"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_ci_enzyme_bottleneck",
+        "query_domain": "software_engineering",
+        "expected_candidate_id": "c_enzyme_saturation",
+        "retrieved_candidate_id": "c_enzyme_saturation",
+        "hit": true,
+        "scores": [
+          {
+            "candidate_id": "c_more_ci_parallelism",
+            "score": 3.27534,
+            "domain": "software_engineering"
+          },
+          {
+            "candidate_id": "c_enzyme_saturation",
+            "score": 5.373875,
+            "domain": "biochemistry"
+          },
+          {
+            "candidate_id": "c_ci_dashboard",
+            "score": 4.77894,
+            "domain": "software_engineering"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_strangler_bridge",
+        "query_domain": "software_engineering",
+        "expected_candidate_id": "c_bridge_retrofit",
+        "retrieved_candidate_id": "c_big_bang_rewrite",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_big_bang_rewrite",
+            "score": 5.261934,
+            "domain": "software_engineering"
+          },
+          {
+            "candidate_id": "c_bridge_retrofit",
+            "score": 0.446804,
+            "domain": "civil_engineering"
+          },
+          {
+            "candidate_id": "c_legacy_inventory",
+            "score": 3.742288,
+            "domain": "software_engineering"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_abtest_clinical_trial",
+        "query_domain": "product_experiment",
+        "expected_candidate_id": "c_randomized_clinical_trial",
+        "retrieved_candidate_id": "c_checkout_segmentation",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_checkout_segmentation",
+            "score": 5.312421,
+            "domain": "product_experiment"
+          },
+          {
+            "candidate_id": "c_randomized_clinical_trial",
+            "score": 3.245966,
+            "domain": "medicine"
+          },
+          {
+            "candidate_id": "c_checkout_copy_refresh",
+            "score": 4.031176,
+            "domain": "product_experiment"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_counterexample_flight_envelope",
+        "query_domain": "mathematics",
+        "expected_candidate_id": "c_flight_envelope_protection",
+        "retrieved_candidate_id": "c_elegant_theorem_proof",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_elegant_theorem_proof",
+            "score": 6.616801,
+            "domain": "mathematics"
+          },
+          {
+            "candidate_id": "c_flight_envelope_protection",
+            "score": 1.562438,
+            "domain": "aerospace_control"
+          },
+          {
+            "candidate_id": "c_boundary_value_problem",
+            "score": 1.899148,
+            "domain": "mathematics"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_budget_mass_balance",
+        "query_domain": "finance",
+        "expected_candidate_id": "c_reactor_mass_balance",
+        "retrieved_candidate_id": "c_reactor_mass_balance",
+        "hit": true,
+        "scores": [
+          {
+            "candidate_id": "c_budget_dashboard",
+            "score": 3.423987,
+            "domain": "finance"
+          },
+          {
+            "candidate_id": "c_reactor_mass_balance",
+            "score": 5.880912,
+            "domain": "chemical_engineering"
+          },
+          {
+            "candidate_id": "c_budget_growth_plan",
+            "score": 4.733502,
+            "domain": "finance"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_compiler_assembly",
+        "query_domain": "software_engineering",
+        "expected_candidate_id": "c_manufacturing_subassembly",
+        "retrieved_candidate_id": "c_compiler_optimizer",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_compiler_optimizer",
+            "score": 5.90724,
+            "domain": "software_engineering"
+          },
+          {
+            "candidate_id": "c_manufacturing_subassembly",
+            "score": 2.33284,
+            "domain": "manufacturing"
+          },
+          {
+            "candidate_id": "c_module_inventory",
+            "score": 4.068419,
+            "domain": "software_engineering"
+          }
+        ]
+      }
+    ],
+    "full_text_tfidf_vector_retrieval": [
+      {
+        "case_id": "morph_le_chatelier_lenz",
+        "query_domain": "chemistry",
+        "expected_candidate_id": "c_lenz_law",
+        "retrieved_candidate_id": "c_temperature_rate_rule",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_chemical_catalyst",
+            "score": 0.256582,
+            "domain": "chemistry"
+          },
+          {
+            "candidate_id": "c_lenz_law",
+            "score": 0.0,
+            "domain": "electromagnetism"
+          },
+          {
+            "candidate_id": "c_temperature_rate_rule",
+            "score": 0.316031,
+            "domain": "chemistry"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_resnet_kalman",
+        "query_domain": "deep_learning",
+        "expected_candidate_id": "c_kalman_innovation",
+        "retrieved_candidate_id": "c_deep_layer_scaling",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_deep_layer_scaling",
+            "score": 0.188788,
+            "domain": "deep_learning"
+          },
+          {
+            "candidate_id": "c_kalman_innovation",
+            "score": 0.150512,
+            "domain": "control_estimation"
+          },
+          {
+            "candidate_id": "c_skip_regularization",
+            "score": 0.093553,
+            "domain": "deep_learning"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_jepa_seismic",
+        "query_domain": "world_model",
+        "expected_candidate_id": "c_seismic_autocorrelation",
+        "retrieved_candidate_id": "c_latent_diffusion_prompt",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_autoencoder_pixels",
+            "score": 0.126074,
+            "domain": "world_model"
+          },
+          {
+            "candidate_id": "c_seismic_autocorrelation",
+            "score": 0.03638,
+            "domain": "geophysics"
+          },
+          {
+            "candidate_id": "c_latent_diffusion_prompt",
+            "score": 0.296312,
+            "domain": "world_model"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_thermostat_stabilizer",
+        "query_domain": "control",
+        "expected_candidate_id": "c_automatic_stabilizer",
+        "retrieved_candidate_id": "c_smart_thermostat_schedule",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_smart_thermostat_schedule",
+            "score": 0.219571,
+            "domain": "control"
+          },
+          {
+            "candidate_id": "c_automatic_stabilizer",
+            "score": 0.017058,
+            "domain": "macro_economics"
+          },
+          {
+            "candidate_id": "c_heater_power_upgrade",
+            "score": 0.055982,
+            "domain": "control"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_ci_enzyme_bottleneck",
+        "query_domain": "software_engineering",
+        "expected_candidate_id": "c_enzyme_saturation",
+        "retrieved_candidate_id": "c_ci_dashboard",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_more_ci_parallelism",
+            "score": 0.200272,
+            "domain": "software_engineering"
+          },
+          {
+            "candidate_id": "c_enzyme_saturation",
+            "score": 0.202564,
+            "domain": "biochemistry"
+          },
+          {
+            "candidate_id": "c_ci_dashboard",
+            "score": 0.268208,
+            "domain": "software_engineering"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_strangler_bridge",
+        "query_domain": "software_engineering",
+        "expected_candidate_id": "c_bridge_retrofit",
+        "retrieved_candidate_id": "c_big_bang_rewrite",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_big_bang_rewrite",
+            "score": 0.262845,
+            "domain": "software_engineering"
+          },
+          {
+            "candidate_id": "c_bridge_retrofit",
+            "score": 0.020379,
+            "domain": "civil_engineering"
+          },
+          {
+            "candidate_id": "c_legacy_inventory",
+            "score": 0.250523,
+            "domain": "software_engineering"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_abtest_clinical_trial",
+        "query_domain": "product_experiment",
+        "expected_candidate_id": "c_randomized_clinical_trial",
+        "retrieved_candidate_id": "c_checkout_segmentation",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_checkout_segmentation",
+            "score": 0.315057,
+            "domain": "product_experiment"
+          },
+          {
+            "candidate_id": "c_randomized_clinical_trial",
+            "score": 0.082398,
+            "domain": "medicine"
+          },
+          {
+            "candidate_id": "c_checkout_copy_refresh",
+            "score": 0.246779,
+            "domain": "product_experiment"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_counterexample_flight_envelope",
+        "query_domain": "mathematics",
+        "expected_candidate_id": "c_flight_envelope_protection",
+        "retrieved_candidate_id": "c_elegant_theorem_proof",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_elegant_theorem_proof",
+            "score": 0.428354,
+            "domain": "mathematics"
+          },
+          {
+            "candidate_id": "c_flight_envelope_protection",
+            "score": 0.055422,
+            "domain": "aerospace_control"
+          },
+          {
+            "candidate_id": "c_boundary_value_problem",
+            "score": 0.186201,
+            "domain": "mathematics"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_budget_mass_balance",
+        "query_domain": "finance",
+        "expected_candidate_id": "c_reactor_mass_balance",
+        "retrieved_candidate_id": "c_budget_dashboard",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_budget_dashboard",
+            "score": 0.248862,
+            "domain": "finance"
+          },
+          {
+            "candidate_id": "c_reactor_mass_balance",
+            "score": 0.165616,
+            "domain": "chemical_engineering"
+          },
+          {
+            "candidate_id": "c_budget_growth_plan",
+            "score": 0.240934,
+            "domain": "finance"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_compiler_assembly",
+        "query_domain": "software_engineering",
+        "expected_candidate_id": "c_manufacturing_subassembly",
+        "retrieved_candidate_id": "c_compiler_optimizer",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_compiler_optimizer",
+            "score": 0.32449,
+            "domain": "software_engineering"
+          },
+          {
+            "candidate_id": "c_manufacturing_subassembly",
+            "score": 0.111827,
+            "domain": "manufacturing"
+          },
+          {
+            "candidate_id": "c_module_inventory",
+            "score": 0.169765,
+            "domain": "software_engineering"
+          }
+        ]
+      }
+    ],
+    "structural_morphism": [
+      {
+        "case_id": "morph_le_chatelier_lenz",
+        "query_domain": "chemistry",
+        "expected_candidate_id": "c_lenz_law",
+        "retrieved_candidate_id": "c_lenz_law",
+        "hit": true,
+        "scores": [
+          {
+            "candidate_id": "c_chemical_catalyst",
+            "score": 0.0,
+            "domain": "chemistry"
+          },
+          {
+            "candidate_id": "c_lenz_law",
+            "score": 1.0,
+            "domain": "electromagnetism"
+          },
+          {
+            "candidate_id": "c_temperature_rate_rule",
+            "score": 0.0,
+            "domain": "chemistry"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_resnet_kalman",
+        "query_domain": "deep_learning",
+        "expected_candidate_id": "c_kalman_innovation",
+        "retrieved_candidate_id": "c_kalman_innovation",
+        "hit": true,
+        "scores": [
+          {
+            "candidate_id": "c_deep_layer_scaling",
+            "score": 0.0,
+            "domain": "deep_learning"
+          },
+          {
+            "candidate_id": "c_kalman_innovation",
+            "score": 1.0,
+            "domain": "control_estimation"
+          },
+          {
+            "candidate_id": "c_skip_regularization",
+            "score": 0.0,
+            "domain": "deep_learning"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_jepa_seismic",
+        "query_domain": "world_model",
+        "expected_candidate_id": "c_seismic_autocorrelation",
+        "retrieved_candidate_id": "c_seismic_autocorrelation",
+        "hit": true,
+        "scores": [
+          {
+            "candidate_id": "c_autoencoder_pixels",
+            "score": 0.0,
+            "domain": "world_model"
+          },
+          {
+            "candidate_id": "c_seismic_autocorrelation",
+            "score": 1.0,
+            "domain": "geophysics"
+          },
+          {
+            "candidate_id": "c_latent_diffusion_prompt",
+            "score": 0.0,
+            "domain": "world_model"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_thermostat_stabilizer",
+        "query_domain": "control",
+        "expected_candidate_id": "c_automatic_stabilizer",
+        "retrieved_candidate_id": "c_automatic_stabilizer",
+        "hit": true,
+        "scores": [
+          {
+            "candidate_id": "c_smart_thermostat_schedule",
+            "score": 0.0,
+            "domain": "control"
+          },
+          {
+            "candidate_id": "c_automatic_stabilizer",
+            "score": 1.0,
+            "domain": "macro_economics"
+          },
+          {
+            "candidate_id": "c_heater_power_upgrade",
+            "score": 0.0,
+            "domain": "control"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_ci_enzyme_bottleneck",
+        "query_domain": "software_engineering",
+        "expected_candidate_id": "c_enzyme_saturation",
+        "retrieved_candidate_id": "c_enzyme_saturation",
+        "hit": true,
+        "scores": [
+          {
+            "candidate_id": "c_more_ci_parallelism",
+            "score": 0.0,
+            "domain": "software_engineering"
+          },
+          {
+            "candidate_id": "c_enzyme_saturation",
+            "score": 1.0,
+            "domain": "biochemistry"
+          },
+          {
+            "candidate_id": "c_ci_dashboard",
+            "score": 0.0,
+            "domain": "software_engineering"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_strangler_bridge",
+        "query_domain": "software_engineering",
+        "expected_candidate_id": "c_bridge_retrofit",
+        "retrieved_candidate_id": "c_bridge_retrofit",
+        "hit": true,
+        "scores": [
+          {
+            "candidate_id": "c_big_bang_rewrite",
+            "score": 0.0,
+            "domain": "software_engineering"
+          },
+          {
+            "candidate_id": "c_bridge_retrofit",
+            "score": 1.0,
+            "domain": "civil_engineering"
+          },
+          {
+            "candidate_id": "c_legacy_inventory",
+            "score": 0.0,
+            "domain": "software_engineering"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_abtest_clinical_trial",
+        "query_domain": "product_experiment",
+        "expected_candidate_id": "c_randomized_clinical_trial",
+        "retrieved_candidate_id": "c_randomized_clinical_trial",
+        "hit": true,
+        "scores": [
+          {
+            "candidate_id": "c_checkout_segmentation",
+            "score": 0.0,
+            "domain": "product_experiment"
+          },
+          {
+            "candidate_id": "c_randomized_clinical_trial",
+            "score": 1.0,
+            "domain": "medicine"
+          },
+          {
+            "candidate_id": "c_checkout_copy_refresh",
+            "score": 0.0,
+            "domain": "product_experiment"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_counterexample_flight_envelope",
+        "query_domain": "mathematics",
+        "expected_candidate_id": "c_flight_envelope_protection",
+        "retrieved_candidate_id": "c_flight_envelope_protection",
+        "hit": true,
+        "scores": [
+          {
+            "candidate_id": "c_elegant_theorem_proof",
+            "score": 0.0,
+            "domain": "mathematics"
+          },
+          {
+            "candidate_id": "c_flight_envelope_protection",
+            "score": 1.0,
+            "domain": "aerospace_control"
+          },
+          {
+            "candidate_id": "c_boundary_value_problem",
+            "score": 0.0,
+            "domain": "mathematics"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_budget_mass_balance",
+        "query_domain": "finance",
+        "expected_candidate_id": "c_reactor_mass_balance",
+        "retrieved_candidate_id": "c_reactor_mass_balance",
+        "hit": true,
+        "scores": [
+          {
+            "candidate_id": "c_budget_dashboard",
+            "score": 0.0,
+            "domain": "finance"
+          },
+          {
+            "candidate_id": "c_reactor_mass_balance",
+            "score": 1.0,
+            "domain": "chemical_engineering"
+          },
+          {
+            "candidate_id": "c_budget_growth_plan",
+            "score": 0.0,
+            "domain": "finance"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_compiler_assembly",
+        "query_domain": "software_engineering",
+        "expected_candidate_id": "c_manufacturing_subassembly",
+        "retrieved_candidate_id": "c_manufacturing_subassembly",
+        "hit": true,
+        "scores": [
+          {
+            "candidate_id": "c_compiler_optimizer",
+            "score": 0.0,
+            "domain": "software_engineering"
+          },
+          {
+            "candidate_id": "c_manufacturing_subassembly",
+            "score": 1.0,
+            "domain": "manufacturing"
+          },
+          {
+            "candidate_id": "c_module_inventory",
+            "score": 0.0,
+            "domain": "software_engineering"
+          }
+        ]
+      }
+    ],
+    "sentence_transformer_embedding": [
+      {
+        "case_id": "morph_le_chatelier_lenz",
+        "query_domain": "chemistry",
+        "expected_candidate_id": "c_lenz_law",
+        "retrieved_candidate_id": "c_temperature_rate_rule",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_chemical_catalyst",
+            "score": 0.5611,
+            "domain": "chemistry"
+          },
+          {
+            "candidate_id": "c_lenz_law",
+            "score": 0.2729,
+            "domain": "electromagnetism"
+          },
+          {
+            "candidate_id": "c_temperature_rate_rule",
+            "score": 0.6844,
+            "domain": "chemistry"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_resnet_kalman",
+        "query_domain": "deep_learning",
+        "expected_candidate_id": "c_kalman_innovation",
+        "retrieved_candidate_id": "c_deep_layer_scaling",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_deep_layer_scaling",
+            "score": 0.6053,
+            "domain": "deep_learning"
+          },
+          {
+            "candidate_id": "c_kalman_innovation",
+            "score": 0.4102,
+            "domain": "control_estimation"
+          },
+          {
+            "candidate_id": "c_skip_regularization",
+            "score": 0.3866,
+            "domain": "deep_learning"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_jepa_seismic",
+        "query_domain": "world_model",
+        "expected_candidate_id": "c_seismic_autocorrelation",
+        "retrieved_candidate_id": "c_latent_diffusion_prompt",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_autoencoder_pixels",
+            "score": 0.4334,
+            "domain": "world_model"
+          },
+          {
+            "candidate_id": "c_seismic_autocorrelation",
+            "score": 0.1357,
+            "domain": "geophysics"
+          },
+          {
+            "candidate_id": "c_latent_diffusion_prompt",
+            "score": 0.5599,
+            "domain": "world_model"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_thermostat_stabilizer",
+        "query_domain": "control",
+        "expected_candidate_id": "c_automatic_stabilizer",
+        "retrieved_candidate_id": "c_smart_thermostat_schedule",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_smart_thermostat_schedule",
+            "score": 0.659,
+            "domain": "control"
+          },
+          {
+            "candidate_id": "c_automatic_stabilizer",
+            "score": 0.1409,
+            "domain": "macro_economics"
+          },
+          {
+            "candidate_id": "c_heater_power_upgrade",
+            "score": 0.4556,
+            "domain": "control"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_ci_enzyme_bottleneck",
+        "query_domain": "software_engineering",
+        "expected_candidate_id": "c_enzyme_saturation",
+        "retrieved_candidate_id": "c_more_ci_parallelism",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_more_ci_parallelism",
+            "score": 0.6932,
+            "domain": "software_engineering"
+          },
+          {
+            "candidate_id": "c_enzyme_saturation",
+            "score": 0.2528,
+            "domain": "biochemistry"
+          },
+          {
+            "candidate_id": "c_ci_dashboard",
+            "score": 0.5206,
+            "domain": "software_engineering"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_strangler_bridge",
+        "query_domain": "software_engineering",
+        "expected_candidate_id": "c_bridge_retrofit",
+        "retrieved_candidate_id": "c_big_bang_rewrite",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_big_bang_rewrite",
+            "score": 0.6316,
+            "domain": "software_engineering"
+          },
+          {
+            "candidate_id": "c_bridge_retrofit",
+            "score": 0.3311,
+            "domain": "civil_engineering"
+          },
+          {
+            "candidate_id": "c_legacy_inventory",
+            "score": 0.6149,
+            "domain": "software_engineering"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_abtest_clinical_trial",
+        "query_domain": "product_experiment",
+        "expected_candidate_id": "c_randomized_clinical_trial",
+        "retrieved_candidate_id": "c_checkout_segmentation",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_checkout_segmentation",
+            "score": 0.5302,
+            "domain": "product_experiment"
+          },
+          {
+            "candidate_id": "c_randomized_clinical_trial",
+            "score": 0.3443,
+            "domain": "medicine"
+          },
+          {
+            "candidate_id": "c_checkout_copy_refresh",
+            "score": 0.3652,
+            "domain": "product_experiment"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_counterexample_flight_envelope",
+        "query_domain": "mathematics",
+        "expected_candidate_id": "c_flight_envelope_protection",
+        "retrieved_candidate_id": "c_elegant_theorem_proof",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_elegant_theorem_proof",
+            "score": 0.815,
+            "domain": "mathematics"
+          },
+          {
+            "candidate_id": "c_flight_envelope_protection",
+            "score": 0.3345,
+            "domain": "aerospace_control"
+          },
+          {
+            "candidate_id": "c_boundary_value_problem",
+            "score": 0.3633,
+            "domain": "mathematics"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_budget_mass_balance",
+        "query_domain": "finance",
+        "expected_candidate_id": "c_reactor_mass_balance",
+        "retrieved_candidate_id": "c_budget_growth_plan",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_budget_dashboard",
+            "score": 0.4288,
+            "domain": "finance"
+          },
+          {
+            "candidate_id": "c_reactor_mass_balance",
+            "score": 0.3098,
+            "domain": "chemical_engineering"
+          },
+          {
+            "candidate_id": "c_budget_growth_plan",
+            "score": 0.5167,
+            "domain": "finance"
+          }
+        ]
+      },
+      {
+        "case_id": "morph_compiler_assembly",
+        "query_domain": "software_engineering",
+        "expected_candidate_id": "c_manufacturing_subassembly",
+        "retrieved_candidate_id": "c_compiler_optimizer",
+        "hit": false,
+        "scores": [
+          {
+            "candidate_id": "c_compiler_optimizer",
+            "score": 0.6394,
+            "domain": "software_engineering"
+          },
+          {
+            "candidate_id": "c_manufacturing_subassembly",
+            "score": 0.3368,
+            "domain": "manufacturing"
+          },
+          {
+            "candidate_id": "c_module_inventory",
+            "score": 0.5536,
+            "domain": "software_engineering"
+          }
+        ]
+      }
+    ]
+  },
+  "gates": [
+    {
+      "gate": "full_text_rag_baselines_present",
+      "pass": true,
+      "observed": [
+        "full_text_tfidf_vector_retrieval",
+        "ordinary_rag_bm25_full_text",
+        "sentence_transformer_embedding",
+        "structural_morphism"
+      ]
+    },
+    {
+      "gate": "morphism_beats_full_text_retrieval",
+      "pass": true,
+      "observed": {
+        "hit_rates": {
+          "ordinary_rag_bm25_full_text": 0.3,
+          "full_text_tfidf_vector_retrieval": 0.0,
+          "structural_morphism": 1.0,
+          "sentence_transformer_embedding": 0.0
+        },
+        "best_full_text_baseline": 0.3,
+        "margin": 0.7
+      }
+    },
+    {
+      "gate": "ordinary_rag_is_real_retrieval_not_prompt_length",
+      "pass": true,
+      "observed": {
+        "bm25_row_count": 10,
+        "tfidf_row_count": 10,
+        "retrieval_unit": "candidate full text, not answer prompt length"
+      }
+    },
+    {
+      "gate": "neural_embedding_baseline_recorded",
+      "pass": true,
+      "observed": {
+        "enabled": true,
+        "model": null,
+        "status": "ok",
+        "hit_rate": 0.0
+      }
+    },
+    {
+      "gate": "morphism_beats_neural_embedding",
+      "pass": true,
+      "observed": {
+        "morphism": 1.0,
+        "sentence_transformer_embedding": 0.0,
+        "margin": 1.0
+      }
+    }
+  ],
+  "failed_gates": []
+}
