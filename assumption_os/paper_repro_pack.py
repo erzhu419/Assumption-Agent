@@ -21,6 +21,7 @@ DEFAULT_ARTIFACTS = [
     PAPER_DIR / "paper_baseline_hardening_20260605.json",
     PAPER_DIR / "paper_retrieval_baselines_20260605.json",
     PAPER_DIR / "rag_to_memory_baseline_20260606.json",
+    PAPER_DIR / "hipporag_qa_probe_20260606.json",
     PAPER_DIR / "morphism_claim_bundle_20260605.json",
     PAPER_DIR / "paper_negative_results_20260605.json",
     PAPER_DIR / "paper_benchmark_line_20260604.json",
@@ -42,6 +43,7 @@ DEFAULT_CODE_FILES = [
     Path("assumption_os/paper_baseline_hardening.py"),
     Path("assumption_os/paper_retrieval_baselines.py"),
     Path("assumption_os/rag_to_memory_baseline.py"),
+    Path("assumption_os/hipporag_qa_probe.py"),
     Path("assumption_os/morphism_claims.py"),
     Path("assumption_os/paper_negative_results.py"),
     Path("assumption_os/paper_repro_pack.py"),
@@ -155,6 +157,14 @@ def _exact_commands() -> list[dict[str, str]]:
         {
             "name": "rag_to_memory_graph_memory_baseline",
             "command": "python3 -m assumption_os.rag_to_memory_baseline --out 'phase four/assumption_graph/paper_readiness_20260604/rag_to_memory_baseline_20260606.json'",
+        },
+        {
+            "name": "hipporag_qa_probe_no_reader",
+            "command": "python3 -m assumption_os.hipporag_qa_probe --root . --out 'phase four/assumption_graph/paper_readiness_20260604/hipporag_qa_probe_20260606.json'",
+        },
+        {
+            "name": "hipporag_qa_probe_live_reader_optional",
+            "command": "RUOLI_GPT_KEY=<set-in-env> RUOLI_BASE_URL=<set-in-env> GPT55_MODEL=gpt-5.5 python3 -m assumption_os.hipporag_qa_probe --root . --run-reader --reader-samples-per-dataset 2 --out 'phase four/assumption_graph/paper_readiness_20260604/hipporag_qa_probe_20260606.json'",
         },
         {
             "name": "morphism_claim_bundle",

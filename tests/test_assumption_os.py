@@ -46,6 +46,7 @@ from assumption_os.formal_mapping import (
 )
 from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from assumption_os.harness_observer import build_harness_observer_payload, events_from_harness_artifacts
+from assumption_os.hipporag_qa_probe import build_hipporag_qa_probe_payload
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
 from assumption_os.manifest_logger import build_component_manifest_payload, events_from_run_logs
 from assumption_os.math_science_policy import route_math_science_problem
@@ -4615,6 +4616,19 @@ class AssumptionOSTest(unittest.TestCase):
             row["baseline_inputs_used"] == ["label", "domain", "surface_text", "kg_triples"]
             for row in payload["rows"]
         ))
+
+    def test_hipporag_qa_probe_records_transfer_risk_on_real_qa_files(self):
+        payload = build_hipporag_qa_probe_payload(
+            root=Path("."),
+            eval_id="unit_hipporag_qa_probe",
+            samples_per_dataset=2,
+            run_reader=False,
+        )
+        self.assertTrue(payload["pass"], payload["gates"])
+        self.assertEqual(payload["aggregate"]["overall"]["structural_morphism_direct"]["applicable_rate"], 0.0)
+        self.assertIn(payload["qa_transfer_risk"]["risk_level"], {"medium", "high"})
+        self.assertGreater(payload["aggregate"]["overall"]["ordinary_bm25"]["any_gold_recall_at_k"], 0.0)
+        self.assertFalse(payload["reader_qa_summary"]["raw_answers_stored"])
 
     def test_paper_negative_results_records_boundaries_and_failures(self):
         payload = build_paper_negative_results_payload(
