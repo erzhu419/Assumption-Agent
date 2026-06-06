@@ -20,6 +20,7 @@ DEFAULT_ARTIFACTS = [
     PAPER_DIR / "paper_main_experiment_20260605.json",
     PAPER_DIR / "paper_baseline_hardening_20260605.json",
     PAPER_DIR / "paper_retrieval_baselines_20260605.json",
+    PAPER_DIR / "rag_to_memory_baseline_20260606.json",
     PAPER_DIR / "morphism_claim_bundle_20260605.json",
     PAPER_DIR / "paper_negative_results_20260605.json",
     PAPER_DIR / "paper_benchmark_line_20260604.json",
@@ -40,6 +41,7 @@ DEFAULT_CODE_FILES = [
     Path("assumption_os/paper_main_experiment.py"),
     Path("assumption_os/paper_baseline_hardening.py"),
     Path("assumption_os/paper_retrieval_baselines.py"),
+    Path("assumption_os/rag_to_memory_baseline.py"),
     Path("assumption_os/morphism_claims.py"),
     Path("assumption_os/paper_negative_results.py"),
     Path("assumption_os/paper_repro_pack.py"),
@@ -149,6 +151,10 @@ def _exact_commands() -> list[dict[str, str]]:
         {
             "name": "full_text_rag_retrieval_baselines",
             "command": "python3 -m assumption_os.paper_retrieval_baselines --include-neural --out 'phase four/assumption_graph/paper_readiness_20260604/paper_retrieval_baselines_20260605.json'",
+        },
+        {
+            "name": "rag_to_memory_graph_memory_baseline",
+            "command": "python3 -m assumption_os.rag_to_memory_baseline --out 'phase four/assumption_graph/paper_readiness_20260604/rag_to_memory_baseline_20260606.json'",
         },
         {
             "name": "morphism_claim_bundle",

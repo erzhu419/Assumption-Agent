@@ -1,0 +1,1429 @@
+{
+  "eval_id": "rag_to_memory_baseline_20260606",
+  "eval_kind": "rag_to_memory_style_graph_memory_baseline_on_morphism_benchmark",
+  "source_alignment": {
+    "paper_pdf": "reconstruction/reference/From RAG to Memory Non-Parametric Continual Learning for Large Language Models.pdf",
+    "local_repo": "reference/repos/HippoRAG",
+    "implemented_baseline_scope": "Paper-method retrieval substrate on the local morphism benchmark, not a full HippoRAG 2 multi-dataset QA reproduction."
+  },
+  "case_count": 10,
+  "hit_rates": {
+    "rag_to_memory_ppr": 0.3,
+    "structural_morphism": 1.0
+  },
+  "top2_recall": {
+    "rag_to_memory_ppr": 0.4,
+    "structural_morphism": 1.0
+  },
+  "absolute_hit_rate_margin": 0.7,
+  "absolute_top2_recall_margin": 0.6,
+  "relative_top1_multiplier": 3.3333,
+  "comparison_summary": "Structural morphism is +0.700 absolute top-1 hit-rate points over the RAG-to-Memory-style graph-memory/PPR baseline on the same 10 cases.",
+  "baseline_config": {
+    "query_to_triple_top_k": 5,
+    "recognition_min_triple_score": 0.08,
+    "ppr_restart_probability": 0.15,
+    "ppr_iterations": 60,
+    "passage_seed_weight": 0.05,
+    "synonym_edge_threshold": 0.5
+  },
+  "baseline_descriptions": {
+    "rag_to_memory_ppr": "HippoRAG 2-inspired graph memory baseline: OpenIE-style candidate triples become relation/phrase/context edges, passage nodes receive weak embedding-style reset mass, query-to-triple recognition selects seed phrases, and PPR ranks passage nodes.",
+    "structural_morphism": "Current bounded category-inspired structural morphism scorer over objects, morphisms, composition laws, and invariants."
+  },
+  "gates": [
+    {
+      "gate": "same_morphism_cases",
+      "pass": true,
+      "observed": {
+        "case_count": 10,
+        "candidate_count_per_case": [
+          3
+        ]
+      }
+    },
+    {
+      "gate": "paper_method_components_present",
+      "pass": true,
+      "observed": [
+        "openie_style_triples",
+        "phrase_nodes",
+        "passage_nodes",
+        "relation_edges",
+        "context_edges",
+        "synonym_edges",
+        "query_to_triple_recognition_filter",
+        "personalized_pagerank_passage_ranking"
+      ]
+    },
+    {
+      "gate": "no_structural_morphism_fields_used_by_baseline",
+      "pass": true,
+      "observed": {
+        "allowed_fields": [
+          "label",
+          "domain",
+          "surface_text",
+          "kg_triples"
+        ],
+        "excluded_fields": [
+          "objects",
+          "morphisms",
+          "composition_laws",
+          "invariants",
+          "negative_invariants"
+        ]
+      }
+    },
+    {
+      "gate": "graph_memory_nonempty",
+      "pass": true,
+      "observed": {
+        "avg_nodes": 75.3,
+        "avg_edges": 150.0,
+        "avg_phrase_nodes": 66.3,
+        "avg_triple_nodes": 6.0,
+        "avg_synonym_edges": 46.8,
+        "avg_filtered_triples": 4.4,
+        "fallback_case_count": 0
+      }
+    },
+    {
+      "gate": "structural_morphism_beats_rag_to_memory_baseline",
+      "pass": true,
+      "observed": {
+        "structural_morphism_hit_rate": 1.0,
+        "rag_to_memory_ppr_hit_rate": 0.3,
+        "absolute_margin": 0.7,
+        "structural_morphism_top2_recall": 1.0,
+        "rag_to_memory_ppr_top2_recall": 0.4,
+        "top2_margin": 0.6,
+        "relative_multiplier": 3.3333
+      }
+    }
+  ],
+  "failed_gates": [],
+  "pass": true,
+  "rows": [
+    {
+      "case_id": "morph_le_chatelier_lenz",
+      "query_label": "Le Chatelier response",
+      "query_domain": "chemistry",
+      "expected_candidate_id": "c_lenz_law",
+      "candidate_ids": [
+        "c_chemical_catalyst",
+        "c_lenz_law",
+        "c_temperature_rate_rule"
+      ],
+      "top_ids": {
+        "rag_to_memory_ppr": "c_chemical_catalyst",
+        "structural_morphism": "c_lenz_law"
+      },
+      "passed_by": {
+        "rag_to_memory_ppr": false,
+        "structural_morphism": true
+      },
+      "rankings": {
+        "rag_to_memory_ppr": [
+          {
+            "candidate_id": "c_chemical_catalyst",
+            "score": 0.06786435
+          },
+          {
+            "candidate_id": "c_temperature_rate_rule",
+            "score": 0.06519586
+          },
+          {
+            "candidate_id": "c_lenz_law",
+            "score": 0.04002137
+          }
+        ],
+        "structural_morphism": [
+          {
+            "candidate_id": "c_lenz_law",
+            "score": 1.0
+          },
+          {
+            "candidate_id": "c_chemical_catalyst",
+            "score": 0.0
+          },
+          {
+            "candidate_id": "c_temperature_rate_rule",
+            "score": 0.0
+          }
+        ]
+      },
+      "graph_memory": {
+        "node_count": 63,
+        "edge_count": 130,
+        "phrase_node_count": 54,
+        "passage_node_count": 3,
+        "triple_node_count": 6,
+        "synonym_edge_count": 38,
+        "filtered_triples": [
+          {
+            "triple_node": "triple::c_temperature_rate_rule::1",
+            "candidate_id": "c_temperature_rate_rule",
+            "triple": [
+              "equilibrium constant",
+              "changes with",
+              "temperature"
+            ],
+            "phrases": [
+              "phrase::equilibrium_constant",
+              "phrase::changes_chang",
+              "phrase::temperature"
+            ],
+            "score": 0.264737
+          },
+          {
+            "triple_node": "triple::c_chemical_catalyst::0",
+            "candidate_id": "c_chemical_catalyst",
+            "triple": [
+              "chemical catalyst",
+              "speeds",
+              "chemical reaction"
+            ],
+            "phrases": [
+              "phrase::chemical_catalyst",
+              "phrase::speeds_speed",
+              "phrase::chemical_reaction"
+            ],
+            "score": 0.238649
+          },
+          {
+            "triple_node": "triple::c_lenz_law::1",
+            "candidate_id": "c_lenz_law",
+            "triple": [
+              "current field",
+              "acts against",
+              "flux change"
+            ],
+            "phrases": [
+              "phrase::current_field",
+              "phrase::acts_against_syn:against",
+              "phrase::flux_change_syn:flux_syn:change"
+            ],
+            "score": 0.224252
+          },
+          {
+            "triple_node": "triple::c_temperature_rate_rule::0",
+            "candidate_id": "c_temperature_rate_rule",
+            "triple": [
+              "temperature",
+              "increases",
+              "chemical reaction rate"
+            ],
+            "phrases": [
+              "phrase::temperature",
+              "phrase::increases_increas",
+              "phrase::chemical_reaction_rate"
+            ],
+            "score": 0.18495
+          },
+          {
+            "triple_node": "triple::c_chemical_catalyst::1",
+            "candidate_id": "c_chemical_catalyst",
+            "triple": [
+              "reaction",
+              "has",
+              "equilibrium rate"
+            ],
+            "phrases": [
+              "phrase::reaction",
+              "phrase::has",
+              "phrase::equilibrium_rate"
+            ],
+            "score": 0.175
+          }
+        ],
+        "fallback_used": false
+      },
+      "baseline_inputs_used": [
+        "label",
+        "domain",
+        "surface_text",
+        "kg_triples"
+      ]
+    },
+    {
+      "case_id": "morph_resnet_kalman",
+      "query_label": "Residual block",
+      "query_domain": "deep_learning",
+      "expected_candidate_id": "c_kalman_innovation",
+      "candidate_ids": [
+        "c_deep_layer_scaling",
+        "c_kalman_innovation",
+        "c_skip_regularization"
+      ],
+      "top_ids": {
+        "rag_to_memory_ppr": "c_kalman_innovation",
+        "structural_morphism": "c_kalman_innovation"
+      },
+      "passed_by": {
+        "rag_to_memory_ppr": true,
+        "structural_morphism": true
+      },
+      "rankings": {
+        "rag_to_memory_ppr": [
+          {
+            "candidate_id": "c_kalman_innovation",
+            "score": 0.07676342
+          },
+          {
+            "candidate_id": "c_deep_layer_scaling",
+            "score": 0.06034583
+          },
+          {
+            "candidate_id": "c_skip_regularization",
+            "score": 0.03576178
+          }
+        ],
+        "structural_morphism": [
+          {
+            "candidate_id": "c_kalman_innovation",
+            "score": 1.0
+          },
+          {
+            "candidate_id": "c_deep_layer_scaling",
+            "score": 0.0
+          },
+          {
+            "candidate_id": "c_skip_regularization",
+            "score": 0.0
+          }
+        ]
+      },
+      "graph_memory": {
+        "node_count": 79,
+        "edge_count": 167,
+        "phrase_node_count": 70,
+        "passage_node_count": 3,
+        "triple_node_count": 6,
+        "synonym_edge_count": 60,
+        "filtered_triples": [
+          {
+            "triple_node": "triple::c_deep_layer_scaling::0",
+            "candidate_id": "c_deep_layer_scaling",
+            "triple": [
+              "deep network",
+              "adds",
+              "more residual layers"
+            ],
+            "phrases": [
+              "phrase::deep_network",
+              "phrase::adds",
+              "phrase::more_residual_layers_syn:correction_layer"
+            ],
+            "score": 0.346907
+          },
+          {
+            "triple_node": "triple::c_kalman_innovation::1",
+            "candidate_id": "c_kalman_innovation",
+            "triple": [
+              "measurement residual",
+              "updates",
+              "posterior state"
+            ],
+            "phrases": [
+              "phrase::measurement_residual_syn:correction",
+              "phrase::updates_updat",
+              "phrase::posterior_state"
+            ],
+            "score": 0.215141
+          },
+          {
+            "triple_node": "triple::c_skip_regularization::1",
+            "candidate_id": "c_skip_regularization",
+            "triple": [
+              "dropout",
+              "regularizes",
+              "activation"
+            ],
+            "phrases": [
+              "phrase::dropout",
+              "phrase::regularizes_regulariz",
+              "phrase::activation"
+            ],
+            "score": 0.149367
+          },
+          {
+            "triple_node": "triple::c_kalman_innovation::0",
+            "candidate_id": "c_kalman_innovation",
+            "triple": [
+              "state estimator",
+              "predicts",
+              "prior state"
+            ],
+            "phrases": [
+              "phrase::state_estimator",
+              "phrase::predicts_predict",
+              "phrase::prior_state_syn:baseline"
+            ],
+            "score": 0.095711
+          }
+        ],
+        "fallback_used": false
+      },
+      "baseline_inputs_used": [
+        "label",
+        "domain",
+        "surface_text",
+        "kg_triples"
+      ]
+    },
+    {
+      "case_id": "morph_jepa_seismic",
+      "query_label": "JEPA latent nuisance separation",
+      "query_domain": "world_model",
+      "expected_candidate_id": "c_seismic_autocorrelation",
+      "candidate_ids": [
+        "c_autoencoder_pixels",
+        "c_seismic_autocorrelation",
+        "c_latent_diffusion_prompt"
+      ],
+      "top_ids": {
+        "rag_to_memory_ppr": "c_autoencoder_pixels",
+        "structural_morphism": "c_seismic_autocorrelation"
+      },
+      "passed_by": {
+        "rag_to_memory_ppr": false,
+        "structural_morphism": true
+      },
+      "rankings": {
+        "rag_to_memory_ppr": [
+          {
+            "candidate_id": "c_autoencoder_pixels",
+            "score": 0.06805028
+          },
+          {
+            "candidate_id": "c_latent_diffusion_prompt",
+            "score": 0.05409376
+          },
+          {
+            "candidate_id": "c_seismic_autocorrelation",
+            "score": 0.04989321
+          }
+        ],
+        "structural_morphism": [
+          {
+            "candidate_id": "c_seismic_autocorrelation",
+            "score": 1.0
+          },
+          {
+            "candidate_id": "c_autoencoder_pixels",
+            "score": 0.0
+          },
+          {
+            "candidate_id": "c_latent_diffusion_prompt",
+            "score": 0.0
+          }
+        ]
+      },
+      "graph_memory": {
+        "node_count": 74,
+        "edge_count": 153,
+        "phrase_node_count": 65,
+        "passage_node_count": 3,
+        "triple_node_count": 6,
+        "synonym_edge_count": 49,
+        "filtered_triples": [
+          {
+            "triple_node": "triple::c_autoencoder_pixels::1",
+            "candidate_id": "c_autoencoder_pixels",
+            "triple": [
+              "pixel noise",
+              "appears in",
+              "reconstruction"
+            ],
+            "phrases": [
+              "phrase::pixel_noise_syn:noise",
+              "phrase::appears_appear",
+              "phrase::reconstruction"
+            ],
+            "score": 0.352746
+          },
+          {
+            "triple_node": "triple::c_seismic_autocorrelation::1",
+            "candidate_id": "c_seismic_autocorrelation",
+            "triple": [
+              "random noise",
+              "cancels during",
+              "autocorrelation stack"
+            ],
+            "phrases": [
+              "phrase::random_noise_syn:noise",
+              "phrase::cancels_during_cancel",
+              "phrase::autocorrelation_stack"
+            ],
+            "score": 0.258162
+          },
+          {
+            "triple_node": "triple::c_latent_diffusion_prompt::0",
+            "candidate_id": "c_latent_diffusion_prompt",
+            "triple": [
+              "latent model",
+              "generates",
+              "pixel texture"
+            ],
+            "phrases": [
+              "phrase::latent_model",
+              "phrase::generates_generat",
+              "phrase::pixel_texture"
+            ],
+            "score": 0.2375
+          },
+          {
+            "triple_node": "triple::c_autoencoder_pixels::0",
+            "candidate_id": "c_autoencoder_pixels",
+            "triple": [
+              "image autoencoder",
+              "reconstructs",
+              "pixel detail"
+            ],
+            "phrases": [
+              "phrase::image_autoencoder",
+              "phrase::reconstructs_reconstruct",
+              "phrase::pixel_detail"
+            ],
+            "score": 0.092582
+          }
+        ],
+        "fallback_used": false
+      },
+      "baseline_inputs_used": [
+        "label",
+        "domain",
+        "surface_text",
+        "kg_triples"
+      ]
+    },
+    {
+      "case_id": "morph_thermostat_stabilizer",
+      "query_label": "Thermostat negative feedback",
+      "query_domain": "control",
+      "expected_candidate_id": "c_automatic_stabilizer",
+      "candidate_ids": [
+        "c_smart_thermostat_schedule",
+        "c_automatic_stabilizer",
+        "c_heater_power_upgrade"
+      ],
+      "top_ids": {
+        "rag_to_memory_ppr": "c_smart_thermostat_schedule",
+        "structural_morphism": "c_automatic_stabilizer"
+      },
+      "passed_by": {
+        "rag_to_memory_ppr": false,
+        "structural_morphism": true
+      },
+      "rankings": {
+        "rag_to_memory_ppr": [
+          {
+            "candidate_id": "c_smart_thermostat_schedule",
+            "score": 0.11686949
+          },
+          {
+            "candidate_id": "c_heater_power_upgrade",
+            "score": 0.06672832
+          },
+          {
+            "candidate_id": "c_automatic_stabilizer",
+            "score": 0.00061085
+          }
+        ],
+        "structural_morphism": [
+          {
+            "candidate_id": "c_automatic_stabilizer",
+            "score": 1.0
+          },
+          {
+            "candidate_id": "c_heater_power_upgrade",
+            "score": 0.0
+          },
+          {
+            "candidate_id": "c_smart_thermostat_schedule",
+            "score": 0.0
+          }
+        ]
+      },
+      "graph_memory": {
+        "node_count": 83,
+        "edge_count": 147,
+        "phrase_node_count": 74,
+        "passage_node_count": 3,
+        "triple_node_count": 6,
+        "synonym_edge_count": 39,
+        "filtered_triples": [
+          {
+            "triple_node": "triple::c_smart_thermostat_schedule::0",
+            "candidate_id": "c_smart_thermostat_schedule",
+            "triple": [
+              "smart thermostat",
+              "learns",
+              "temperature schedule"
+            ],
+            "phrases": [
+              "phrase::smart_thermostat",
+              "phrase::learns_learn",
+              "phrase::temperature_schedule"
+            ],
+            "score": 0.283652
+          },
+          {
+            "triple_node": "triple::c_heater_power_upgrade::0",
+            "candidate_id": "c_heater_power_upgrade",
+            "triple": [
+              "heater",
+              "increases",
+              "temperature"
+            ],
+            "phrases": [
+              "phrase::heater",
+              "phrase::increases_increas",
+              "phrase::temperature"
+            ],
+            "score": 0.165776
+          }
+        ],
+        "fallback_used": false
+      },
+      "baseline_inputs_used": [
+        "label",
+        "domain",
+        "surface_text",
+        "kg_triples"
+      ]
+    },
+    {
+      "case_id": "morph_ci_enzyme_bottleneck",
+      "query_label": "CI pipeline bottleneck",
+      "query_domain": "software_engineering",
+      "expected_candidate_id": "c_enzyme_saturation",
+      "candidate_ids": [
+        "c_more_ci_parallelism",
+        "c_enzyme_saturation",
+        "c_ci_dashboard"
+      ],
+      "top_ids": {
+        "rag_to_memory_ppr": "c_enzyme_saturation",
+        "structural_morphism": "c_enzyme_saturation"
+      },
+      "passed_by": {
+        "rag_to_memory_ppr": true,
+        "structural_morphism": true
+      },
+      "rankings": {
+        "rag_to_memory_ppr": [
+          {
+            "candidate_id": "c_enzyme_saturation",
+            "score": 0.07890627
+          },
+          {
+            "candidate_id": "c_ci_dashboard",
+            "score": 0.05355079
+          },
+          {
+            "candidate_id": "c_more_ci_parallelism",
+            "score": 0.03971544
+          }
+        ],
+        "structural_morphism": [
+          {
+            "candidate_id": "c_enzyme_saturation",
+            "score": 1.0
+          },
+          {
+            "candidate_id": "c_ci_dashboard",
+            "score": 0.0
+          },
+          {
+            "candidate_id": "c_more_ci_parallelism",
+            "score": 0.0
+          }
+        ]
+      },
+      "graph_memory": {
+        "node_count": 81,
+        "edge_count": 174,
+        "phrase_node_count": 72,
+        "passage_node_count": 3,
+        "triple_node_count": 6,
+        "synonym_edge_count": 62,
+        "filtered_triples": [
+          {
+            "triple_node": "triple::c_enzyme_saturation::1",
+            "candidate_id": "c_enzyme_saturation",
+            "triple": [
+              "substrate",
+              "does not raise",
+              "saturated reaction output"
+            ],
+            "phrases": [
+              "phrase::substrate",
+              "phrase::does_not_raise",
+              "phrase::saturated_reaction_output_syn:bottleneck_saturat_syn:flux"
+            ],
+            "score": 0.52066
+          },
+          {
+            "triple_node": "triple::c_more_ci_parallelism::0",
+            "candidate_id": "c_more_ci_parallelism",
+            "triple": [
+              "release pipeline",
+              "adds",
+              "parallel packaging"
+            ],
+            "phrases": [
+              "phrase::release_pipeline",
+              "phrase::adds",
+              "phrase::parallel_packaging_packag"
+            ],
+            "score": 0.260164
+          },
+          {
+            "triple_node": "triple::c_ci_dashboard::0",
+            "candidate_id": "c_ci_dashboard",
+            "triple": [
+              "CI dashboard",
+              "displays",
+              "release pipeline"
+            ],
+            "phrases": [
+              "phrase::ci_dashboard",
+              "phrase::displays_display",
+              "phrase::release_pipeline"
+            ],
+            "score": 0.185164
+          },
+          {
+            "triple_node": "triple::c_ci_dashboard::1",
+            "candidate_id": "c_ci_dashboard",
+            "triple": [
+              "signing status",
+              "appears in",
+              "packaging logs"
+            ],
+            "phrases": [
+              "phrase::signing_status_sign_statu",
+              "phrase::appears_appear",
+              "phrase::packaging_logs_packag"
+            ],
+            "score": 0.151186
+          },
+          {
+            "triple_node": "triple::c_enzyme_saturation::0",
+            "candidate_id": "c_enzyme_saturation",
+            "triple": [
+              "active site",
+              "limits",
+              "product flux"
+            ],
+            "phrases": [
+              "phrase::active_site",
+              "phrase::limits_syn:bottleneck_limit",
+              "phrase::product_flux_syn:flux"
+            ],
+            "score": 0.095711
+          }
+        ],
+        "fallback_used": false
+      },
+      "baseline_inputs_used": [
+        "label",
+        "domain",
+        "surface_text",
+        "kg_triples"
+      ]
+    },
+    {
+      "case_id": "morph_strangler_bridge",
+      "query_label": "Strangler migration",
+      "query_domain": "software_engineering",
+      "expected_candidate_id": "c_bridge_retrofit",
+      "candidate_ids": [
+        "c_big_bang_rewrite",
+        "c_bridge_retrofit",
+        "c_legacy_inventory"
+      ],
+      "top_ids": {
+        "rag_to_memory_ppr": "c_legacy_inventory",
+        "structural_morphism": "c_bridge_retrofit"
+      },
+      "passed_by": {
+        "rag_to_memory_ppr": false,
+        "structural_morphism": true
+      },
+      "rankings": {
+        "rag_to_memory_ppr": [
+          {
+            "candidate_id": "c_legacy_inventory",
+            "score": 0.06928652
+          },
+          {
+            "candidate_id": "c_big_bang_rewrite",
+            "score": 0.0565508
+          },
+          {
+            "candidate_id": "c_bridge_retrofit",
+            "score": 0.05495754
+          }
+        ],
+        "structural_morphism": [
+          {
+            "candidate_id": "c_bridge_retrofit",
+            "score": 1.0
+          },
+          {
+            "candidate_id": "c_big_bang_rewrite",
+            "score": 0.0
+          },
+          {
+            "candidate_id": "c_legacy_inventory",
+            "score": 0.0
+          }
+        ]
+      },
+      "graph_memory": {
+        "node_count": 74,
+        "edge_count": 151,
+        "phrase_node_count": 65,
+        "passage_node_count": 3,
+        "triple_node_count": 6,
+        "synonym_edge_count": 44,
+        "filtered_triples": [
+          {
+            "triple_node": "triple::c_big_bang_rewrite::0",
+            "candidate_id": "c_big_bang_rewrite",
+            "triple": [
+              "legacy service",
+              "is replaced by",
+              "new module"
+            ],
+            "phrases": [
+              "phrase::legacy_service",
+              "phrase::replaced_replac",
+              "phrase::new_module"
+            ],
+            "score": 0.275
+          },
+          {
+            "triple_node": "triple::c_legacy_inventory::0",
+            "candidate_id": "c_legacy_inventory",
+            "triple": [
+              "legacy service",
+              "has",
+              "module inventory"
+            ],
+            "phrases": [
+              "phrase::legacy_service",
+              "phrase::has",
+              "phrase::module_inventory"
+            ],
+            "score": 0.236808
+          },
+          {
+            "triple_node": "triple::c_legacy_inventory::1",
+            "candidate_id": "c_legacy_inventory",
+            "triple": [
+              "endpoint",
+              "has",
+              "traffic owner"
+            ],
+            "phrases": [
+              "phrase::endpoint",
+              "phrase::has",
+              "phrase::traffic_owner"
+            ],
+            "score": 0.122474
+          },
+          {
+            "triple_node": "triple::c_bridge_retrofit::0",
+            "candidate_id": "c_bridge_retrofit",
+            "triple": [
+              "temporary support",
+              "carries",
+              "bridge load"
+            ],
+            "phrases": [
+              "phrase::temporary_support_syn:incremental",
+              "phrase::carries_carri",
+              "phrase::bridge_load"
+            ],
+            "score": 0.117582
+          },
+          {
+            "triple_node": "triple::c_bridge_retrofit::1",
+            "candidate_id": "c_bridge_retrofit",
+            "triple": [
+              "bridge segment",
+              "is replaced after",
+              "inspection"
+            ],
+            "phrases": [
+              "phrase::bridge_segment_syn:incremental",
+              "phrase::replaced_after_replac",
+              "phrase::inspection"
+            ],
+            "score": 0.117582
+          }
+        ],
+        "fallback_used": false
+      },
+      "baseline_inputs_used": [
+        "label",
+        "domain",
+        "surface_text",
+        "kg_triples"
+      ]
+    },
+    {
+      "case_id": "morph_abtest_clinical_trial",
+      "query_label": "Checkout A/B intervention",
+      "query_domain": "product_experiment",
+      "expected_candidate_id": "c_randomized_clinical_trial",
+      "candidate_ids": [
+        "c_checkout_segmentation",
+        "c_randomized_clinical_trial",
+        "c_checkout_copy_refresh"
+      ],
+      "top_ids": {
+        "rag_to_memory_ppr": "c_checkout_copy_refresh",
+        "structural_morphism": "c_randomized_clinical_trial"
+      },
+      "passed_by": {
+        "rag_to_memory_ppr": false,
+        "structural_morphism": true
+      },
+      "rankings": {
+        "rag_to_memory_ppr": [
+          {
+            "candidate_id": "c_checkout_copy_refresh",
+            "score": 0.09424123
+          },
+          {
+            "candidate_id": "c_checkout_segmentation",
+            "score": 0.03828352
+          },
+          {
+            "candidate_id": "c_randomized_clinical_trial",
+            "score": 0.03618788
+          }
+        ],
+        "structural_morphism": [
+          {
+            "candidate_id": "c_randomized_clinical_trial",
+            "score": 1.0
+          },
+          {
+            "candidate_id": "c_checkout_copy_refresh",
+            "score": 0.0
+          },
+          {
+            "candidate_id": "c_checkout_segmentation",
+            "score": 0.0
+          }
+        ]
+      },
+      "graph_memory": {
+        "node_count": 73,
+        "edge_count": 151,
+        "phrase_node_count": 64,
+        "passage_node_count": 3,
+        "triple_node_count": 6,
+        "synonym_edge_count": 53,
+        "filtered_triples": [
+          {
+            "triple_node": "triple::c_checkout_copy_refresh::0",
+            "candidate_id": "c_checkout_copy_refresh",
+            "triple": [
+              "checkout copy",
+              "changes",
+              "offer wording"
+            ],
+            "phrases": [
+              "phrase::checkout_copy",
+              "phrase::changes_chang",
+              "phrase::offer_wording_word"
+            ],
+            "score": 0.527746
+          },
+          {
+            "triple_node": "triple::c_checkout_copy_refresh::1",
+            "candidate_id": "c_checkout_copy_refresh",
+            "triple": [
+              "audience targeting",
+              "changes with",
+              "launch timing"
+            ],
+            "phrases": [
+              "phrase::audience_targeting_target",
+              "phrase::changes_chang",
+              "phrase::launch_timing"
+            ],
+            "score": 0.435164
+          },
+          {
+            "triple_node": "triple::c_checkout_segmentation::1",
+            "candidate_id": "c_checkout_segmentation",
+            "triple": [
+              "product variables",
+              "vary by",
+              "audience and time"
+            ],
+            "phrases": [
+              "phrase::product_variables_variabl",
+              "phrase::vary",
+              "phrase::audience_time"
+            ],
+            "score": 0.248205
+          },
+          {
+            "triple_node": "triple::c_randomized_clinical_trial::1",
+            "candidate_id": "c_randomized_clinical_trial",
+            "triple": [
+              "control arm",
+              "receives",
+              "standard care"
+            ],
+            "phrases": [
+              "phrase::control_arm_syn:control",
+              "phrase::receives_receiv",
+              "phrase::standard_care"
+            ],
+            "score": 0.210357
+          },
+          {
+            "triple_node": "triple::c_randomized_clinical_trial::0",
+            "candidate_id": "c_randomized_clinical_trial",
+            "triple": [
+              "randomized trial",
+              "assigns",
+              "treatment arm"
+            ],
+            "phrases": [
+              "phrase::randomized_trial_syn:control_randomiz",
+              "phrase::assigns_assign",
+              "phrase::treatment_arm"
+            ],
+            "score": 0.160653
+          }
+        ],
+        "fallback_used": false
+      },
+      "baseline_inputs_used": [
+        "label",
+        "domain",
+        "surface_text",
+        "kg_triples"
+      ]
+    },
+    {
+      "case_id": "morph_counterexample_flight_envelope",
+      "query_label": "Boundary counterexample refinement",
+      "query_domain": "mathematics",
+      "expected_candidate_id": "c_flight_envelope_protection",
+      "candidate_ids": [
+        "c_elegant_theorem_proof",
+        "c_flight_envelope_protection",
+        "c_boundary_value_problem"
+      ],
+      "top_ids": {
+        "rag_to_memory_ppr": "c_elegant_theorem_proof",
+        "structural_morphism": "c_flight_envelope_protection"
+      },
+      "passed_by": {
+        "rag_to_memory_ppr": false,
+        "structural_morphism": true
+      },
+      "rankings": {
+        "rag_to_memory_ppr": [
+          {
+            "candidate_id": "c_elegant_theorem_proof",
+            "score": 0.11039235
+          },
+          {
+            "candidate_id": "c_boundary_value_problem",
+            "score": 0.04598695
+          },
+          {
+            "candidate_id": "c_flight_envelope_protection",
+            "score": 0.01976789
+          }
+        ],
+        "structural_morphism": [
+          {
+            "candidate_id": "c_flight_envelope_protection",
+            "score": 1.0
+          },
+          {
+            "candidate_id": "c_boundary_value_problem",
+            "score": 0.0
+          },
+          {
+            "candidate_id": "c_elegant_theorem_proof",
+            "score": 0.0
+          }
+        ]
+      },
+      "graph_memory": {
+        "node_count": 69,
+        "edge_count": 138,
+        "phrase_node_count": 60,
+        "passage_node_count": 3,
+        "triple_node_count": 6,
+        "synonym_edge_count": 43,
+        "filtered_triples": [
+          {
+            "triple_node": "triple::c_elegant_theorem_proof::0",
+            "candidate_id": "c_elegant_theorem_proof",
+            "triple": [
+              "theorem proof",
+              "explains",
+              "boundary case"
+            ],
+            "phrases": [
+              "phrase::theorem_proof_syn:check",
+              "phrase::explains_explain",
+              "phrase::boundary_case"
+            ],
+            "score": 0.383365
+          },
+          {
+            "triple_node": "triple::c_elegant_theorem_proof::1",
+            "candidate_id": "c_elegant_theorem_proof",
+            "triple": [
+              "guard condition",
+              "appears in",
+              "mathematical claim"
+            ],
+            "phrases": [
+              "phrase::guard_condition",
+              "phrase::appears_appear",
+              "phrase::mathematical_claim"
+            ],
+            "score": 0.328634
+          },
+          {
+            "triple_node": "triple::c_boundary_value_problem::1",
+            "candidate_id": "c_boundary_value_problem",
+            "triple": [
+              "boundary condition",
+              "sets",
+              "solution value"
+            ],
+            "phrases": [
+              "phrase::boundary_condition",
+              "phrase::sets",
+              "phrase::solution_value"
+            ],
+            "score": 0.12
+          },
+          {
+            "triple_node": "triple::c_boundary_value_problem::0",
+            "candidate_id": "c_boundary_value_problem",
+            "triple": [
+              "boundary value problem",
+              "solves",
+              "differential equation"
+            ],
+            "phrases": [
+              "phrase::boundary_value_problem",
+              "phrase::solves_solv",
+              "phrase::differential_equation"
+            ],
+            "score": 0.092582
+          },
+          {
+            "triple_node": "triple::c_flight_envelope_protection::0",
+            "candidate_id": "c_flight_envelope_protection",
+            "triple": [
+              "stall edge case",
+              "breaks",
+              "control law"
+            ],
+            "phrases": [
+              "phrase::stall_edge_case",
+              "phrase::breaks_break",
+              "phrase::control_law_syn:control"
+            ],
+            "score": 0.086603
+          }
+        ],
+        "fallback_used": false
+      },
+      "baseline_inputs_used": [
+        "label",
+        "domain",
+        "surface_text",
+        "kg_triples"
+      ]
+    },
+    {
+      "case_id": "morph_budget_mass_balance",
+      "query_label": "Budget balance transfer",
+      "query_domain": "finance",
+      "expected_candidate_id": "c_reactor_mass_balance",
+      "candidate_ids": [
+        "c_budget_dashboard",
+        "c_reactor_mass_balance",
+        "c_budget_growth_plan"
+      ],
+      "top_ids": {
+        "rag_to_memory_ppr": "c_reactor_mass_balance",
+        "structural_morphism": "c_reactor_mass_balance"
+      },
+      "passed_by": {
+        "rag_to_memory_ppr": true,
+        "structural_morphism": true
+      },
+      "rankings": {
+        "rag_to_memory_ppr": [
+          {
+            "candidate_id": "c_reactor_mass_balance",
+            "score": 0.07544393
+          },
+          {
+            "candidate_id": "c_budget_dashboard",
+            "score": 0.06187831
+          },
+          {
+            "candidate_id": "c_budget_growth_plan",
+            "score": 0.04538915
+          }
+        ],
+        "structural_morphism": [
+          {
+            "candidate_id": "c_reactor_mass_balance",
+            "score": 1.0
+          },
+          {
+            "candidate_id": "c_budget_dashboard",
+            "score": 0.0
+          },
+          {
+            "candidate_id": "c_budget_growth_plan",
+            "score": 0.0
+          }
+        ]
+      },
+      "graph_memory": {
+        "node_count": 77,
+        "edge_count": 145,
+        "phrase_node_count": 68,
+        "passage_node_count": 3,
+        "triple_node_count": 6,
+        "synonym_edge_count": 41,
+        "filtered_triples": [
+          {
+            "triple_node": "triple::c_reactor_mass_balance::1",
+            "candidate_id": "c_reactor_mass_balance",
+            "triple": [
+              "accumulation term",
+              "closes",
+              "mass ledger"
+            ],
+            "phrases": [
+              "phrase::accumulation_term",
+              "phrase::closes_clos",
+              "phrase::mass_ledger"
+            ],
+            "score": 0.540426
+          },
+          {
+            "triple_node": "triple::c_budget_dashboard::0",
+            "candidate_id": "c_budget_dashboard",
+            "triple": [
+              "budget app",
+              "shows",
+              "money categories"
+            ],
+            "phrases": [
+              "phrase::budget_app",
+              "phrase::shows_show",
+              "phrase::money_categories_categori"
+            ],
+            "score": 0.283638
+          },
+          {
+            "triple_node": "triple::c_budget_dashboard::1",
+            "candidate_id": "c_budget_dashboard",
+            "triple": [
+              "accounting chart",
+              "displays",
+              "monthly lines"
+            ],
+            "phrases": [
+              "phrase::accounting_chart_account",
+              "phrase::displays_display",
+              "phrase::monthly_lines_line"
+            ],
+            "score": 0.2
+          },
+          {
+            "triple_node": "triple::c_budget_growth_plan::1",
+            "candidate_id": "c_budget_growth_plan",
+            "triple": [
+              "revenue growth",
+              "changes",
+              "accounting assumption"
+            ],
+            "phrases": [
+              "phrase::revenue_growth",
+              "phrase::changes_chang",
+              "phrase::accounting_assumption_account"
+            ],
+            "score": 0.160357
+          },
+          {
+            "triple_node": "triple::c_budget_growth_plan::0",
+            "candidate_id": "c_budget_growth_plan",
+            "triple": [
+              "budget plan",
+              "increases",
+              "spending line"
+            ],
+            "phrases": [
+              "phrase::budget_plan",
+              "phrase::increases_increas",
+              "phrase::spending_line_spend"
+            ],
+            "score": 0.138919
+          }
+        ],
+        "fallback_used": false
+      },
+      "baseline_inputs_used": [
+        "label",
+        "domain",
+        "surface_text",
+        "kg_triples"
+      ]
+    },
+    {
+      "case_id": "morph_compiler_assembly",
+      "query_label": "Compiler module composition",
+      "query_domain": "software_engineering",
+      "expected_candidate_id": "c_manufacturing_subassembly",
+      "candidate_ids": [
+        "c_compiler_optimizer",
+        "c_manufacturing_subassembly",
+        "c_module_inventory"
+      ],
+      "top_ids": {
+        "rag_to_memory_ppr": "c_compiler_optimizer",
+        "structural_morphism": "c_manufacturing_subassembly"
+      },
+      "passed_by": {
+        "rag_to_memory_ppr": false,
+        "structural_morphism": true
+      },
+      "rankings": {
+        "rag_to_memory_ppr": [
+          {
+            "candidate_id": "c_compiler_optimizer",
+            "score": 0.083665
+          },
+          {
+            "candidate_id": "c_manufacturing_subassembly",
+            "score": 0.07972609
+          },
+          {
+            "candidate_id": "c_module_inventory",
+            "score": 0.02279599
+          }
+        ],
+        "structural_morphism": [
+          {
+            "candidate_id": "c_manufacturing_subassembly",
+            "score": 1.0
+          },
+          {
+            "candidate_id": "c_compiler_optimizer",
+            "score": 0.0
+          },
+          {
+            "candidate_id": "c_module_inventory",
+            "score": 0.0
+          }
+        ]
+      },
+      "graph_memory": {
+        "node_count": 80,
+        "edge_count": 144,
+        "phrase_node_count": 71,
+        "passage_node_count": 3,
+        "triple_node_count": 6,
+        "synonym_edge_count": 39,
+        "filtered_triples": [
+          {
+            "triple_node": "triple::c_manufacturing_subassembly::1",
+            "candidate_id": "c_manufacturing_subassembly",
+            "triple": [
+              "final assembly",
+              "verifies",
+              "whole product"
+            ],
+            "phrases": [
+              "phrase::final_assembly",
+              "phrase::verifies_verifi",
+              "phrase::whole_product"
+            ],
+            "score": 0.616134
+          },
+          {
+            "triple_node": "triple::c_compiler_optimizer::0",
+            "candidate_id": "c_compiler_optimizer",
+            "triple": [
+              "compiler optimizer",
+              "rewrites",
+              "program modules"
+            ],
+            "phrases": [
+              "phrase::compiler_optimizer",
+              "phrase::rewrites_rewrit",
+              "phrase::program_modules_modul"
+            ],
+            "score": 0.498361
+          },
+          {
+            "triple_node": "triple::c_compiler_optimizer::1",
+            "candidate_id": "c_compiler_optimizer",
+            "triple": [
+              "linker",
+              "uses",
+              "intermediate code"
+            ],
+            "phrases": [
+              "phrase::linker",
+              "phrase::uses",
+              "phrase::intermediate_code"
+            ],
+            "score": 0.209164
+          },
+          {
+            "triple_node": "triple::c_module_inventory::1",
+            "candidate_id": "c_module_inventory",
+            "triple": [
+              "link order",
+              "belongs to",
+              "executable owner"
+            ],
+            "phrases": [
+              "phrase::link_order",
+              "phrase::belongs_belong",
+              "phrase::executable_owner"
+            ],
+            "score": 0.147045
+          }
+        ],
+        "fallback_used": false
+      },
+      "baseline_inputs_used": [
+        "label",
+        "domain",
+        "surface_text",
+        "kg_triples"
+      ]
+    }
+  ]
+}

@@ -67,6 +67,7 @@ from assumption_os.paper_retrieval_baselines import build_paper_retrieval_baseli
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
 from assumption_os.proposals import ProposalType, build_candidate_proposals
 from assumption_os.queue_artifact_eval import build_queue_artifact_eval_payload, judgment_sets_from_artifact_eval
+from assumption_os.rag_to_memory_baseline import build_rag_to_memory_baseline_payload
 from assumption_os.record_phase2_eval import record_phase2_eval
 from assumption_os.retrieval_policy import format_policy_context, retrieve_phase2_assumptions
 from assumption_os.recursive_runner import (
@@ -4600,6 +4601,20 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(rates["structural_morphism"], 0.80)
         self.assertGreaterEqual(payload["morphism_margin_over_best_retrieval"], 0.20)
         self.assertLessEqual(rates["ordinary_rag_bm25_full_text"], 0.40)
+
+    def test_rag_to_memory_baseline_quantifies_morphism_margin(self):
+        payload = build_rag_to_memory_baseline_payload(eval_id="unit_rag_to_memory_baseline")
+        self.assertTrue(payload["pass"], payload["gates"])
+        self.assertEqual(payload["case_count"], 10)
+        rates = payload["hit_rates"]
+        self.assertGreaterEqual(rates["structural_morphism"], 0.80)
+        self.assertLessEqual(rates["rag_to_memory_ppr"], 0.50)
+        self.assertGreaterEqual(payload["absolute_hit_rate_margin"], 0.20)
+        self.assertGreaterEqual(payload["absolute_top2_recall_margin"], 0.20)
+        self.assertTrue(all(
+            row["baseline_inputs_used"] == ["label", "domain", "surface_text", "kg_triples"]
+            for row in payload["rows"]
+        ))
 
     def test_paper_negative_results_records_boundaries_and_failures(self):
         payload = build_paper_negative_results_payload(
