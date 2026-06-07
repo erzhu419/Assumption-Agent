@@ -51,6 +51,7 @@ from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
 from assumption_os.manifest_logger import build_component_manifest_payload, events_from_run_logs
 from assumption_os.math_science_policy import route_math_science_problem
 from assumption_os.memory_surfaces import build_memory_surface_payload
+from assumption_os.meta_qa_evolution import build_meta_qa_evolution_payload
 from assumption_os.morphism_benchmark import build_morphism_independent_benchmark_payload
 from assumption_os.morphism_claims import build_morphism_claim_bundle_payload
 from assumption_os.candidate_eval import CandidateReadiness, build_candidate_eval_payload
@@ -4629,6 +4630,22 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertIn(payload["qa_transfer_risk"]["risk_level"], {"medium", "high"})
         self.assertGreater(payload["aggregate"]["overall"]["ordinary_bm25"]["any_gold_recall_at_k"], 0.0)
         self.assertFalse(payload["reader_qa_summary"]["raw_answers_stored"])
+
+    def test_meta_qa_evolution_retains_only_beneficial_retrieval_hypotheses(self):
+        payload = build_meta_qa_evolution_payload(
+            root=Path("."),
+            eval_id="unit_meta_qa_evolution",
+            samples_per_dataset=5,
+        )
+        self.assertTrue(payload["pass"], payload["gates"])
+        decisions = {row["hypothesis_id"]: row["decision"] for row in payload["evaluation"]}
+        self.assertEqual(decisions["qa_hyp_comparison_dual_anchor"], "accept_retain")
+        self.assertTrue(decisions["qa_hyp_named_anchor_bridge"].startswith("reject"))
+        self.assertTrue(decisions["qa_hyp_generic_prf"].startswith("reject"))
+        self.assertGreaterEqual(payload["deltas_vs_bm25"]["all_gold_recall_at_k_delta"], 0.05)
+        self.assertGreaterEqual(payload["deltas_vs_bm25"]["mean_gold_fraction_at_k_delta"], 0.02)
+        self.assertGreaterEqual(payload["deltas_vs_bm25"]["answer_coverage_at_k_delta"], 0.0)
+        self.assertFalse(payload["config"]["stored_raw_model_answers"])
 
     def test_paper_negative_results_records_boundaries_and_failures(self):
         payload = build_paper_negative_results_payload(

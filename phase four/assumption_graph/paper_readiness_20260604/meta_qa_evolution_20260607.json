@@ -1,0 +1,2676 @@
+{
+  "eval_id": "meta_qa_evolution_20260607",
+  "eval_kind": "solve_time_meta_qa_evolution_probe",
+  "source_alignment": {
+    "local_repo": "reference/repos/HippoRAG",
+    "datasets": [
+      "hotpotqa",
+      "musique",
+      "2wikimultihopqa"
+    ],
+    "purpose": "Test whether QA residuals can drive variation/evaluation/selective retention of retrieval policies. This is not a full HippoRAG reproduction and does not use live reader answers."
+  },
+  "config": {
+    "samples_per_dataset": 5,
+    "seed": 20260606,
+    "top_k": 5,
+    "ppr_candidate_pool": 40,
+    "max_doc_phrase_tokens": 24,
+    "stored_raw_model_answers": false
+  },
+  "variation": [
+    {
+      "hypothesis_id": "qa_hyp_comparison_dual_anchor",
+      "claim": "Yes/no comparison questions with two named entities fail when retrieval covers one side only; force dual entity anchors and PPR evidence before reading.",
+      "trigger": "question starts with a binary auxiliary, contains 'and', and exposes at least two capitalized anchors",
+      "ranker_name": "comparison_dual_anchor",
+      "expected_effect": "Increase all-support recall on comparison questions without changing unrelated rows.",
+      "risk": "Overfitting to surface capitalization; gate requires no support or answer-coverage regression."
+    },
+    {
+      "hypothesis_id": "qa_hyp_named_anchor_bridge",
+      "claim": "Wh-questions with a named anchor can miss the anchor page; explicitly bridge through exact title anchors.",
+      "trigger": "question is a wh-question and contains at least one capitalized anchor",
+      "ranker_name": "named_anchor_bridge",
+      "expected_effect": "Recover missing bridge pages when BM25 locks onto answer-like text.",
+      "risk": "Can push already-complete BM25 evidence out of top-k; should be rejected if harms occur."
+    },
+    {
+      "hypothesis_id": "qa_hyp_generic_prf",
+      "claim": "Pseudo-relevance feedback from the first BM25 passages can expand implicit bridge terms for multi-hop QA.",
+      "trigger": "all rows",
+      "ranker_name": "generic_prf",
+      "expected_effect": "Improve supporting-fact fraction on residual rows with incomplete evidence chains.",
+      "risk": "Top passage terms can amplify a wrong first hop; should be rejected if support-chain regressions appear."
+    }
+  ],
+  "evaluation": [
+    {
+      "hypothesis_id": "qa_hyp_comparison_dual_anchor",
+      "claim": "Yes/no comparison questions with two named entities fail when retrieval covers one side only; force dual entity anchors and PPR evidence before reading.",
+      "trigger": "question starts with a binary auxiliary, contains 'and', and exposes at least two capitalized anchors",
+      "ranker_name": "comparison_dual_anchor",
+      "expected_effect": "Increase all-support recall on comparison questions without changing unrelated rows.",
+      "risk": "Overfitting to surface capitalization; gate requires no support or answer-coverage regression.",
+      "activated_row_count": 1,
+      "decision": "accept_retain",
+      "utility_deltas_sum": {
+        "all_gold_recall_at_k_delta": 1.0,
+        "gold_fraction_at_k_delta": 0.5,
+        "answer_coverage_at_k_delta": 0.0
+      },
+      "harm_count": 0,
+      "supporting_rows": [
+        {
+          "dataset": "hotpotqa",
+          "sample_index": 128,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 1.0,
+            "gold_fraction_at_k_delta": 0.5,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "hypothesis_id": "qa_hyp_named_anchor_bridge",
+      "claim": "Wh-questions with a named anchor can miss the anchor page; explicitly bridge through exact title anchors.",
+      "trigger": "question is a wh-question and contains at least one capitalized anchor",
+      "ranker_name": "named_anchor_bridge",
+      "expected_effect": "Recover missing bridge pages when BM25 locks onto answer-like text.",
+      "risk": "Can push already-complete BM25 evidence out of top-k; should be rejected if harms occur.",
+      "activated_row_count": 13,
+      "decision": "reject_regression",
+      "utility_deltas_sum": {
+        "all_gold_recall_at_k_delta": -1.0,
+        "gold_fraction_at_k_delta": -0.5,
+        "answer_coverage_at_k_delta": 0.0
+      },
+      "harm_count": 1,
+      "supporting_rows": [
+        {
+          "dataset": "hotpotqa",
+          "sample_index": 594,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "hotpotqa",
+          "sample_index": 639,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "hotpotqa",
+          "sample_index": 827,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "hotpotqa",
+          "sample_index": 852,
+          "residual_type": "covered",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "musique",
+          "sample_index": 286,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "musique",
+          "sample_index": 551,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "musique",
+          "sample_index": 711,
+          "residual_type": "no_supporting_evidence",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "musique",
+          "sample_index": 870,
+          "residual_type": "covered",
+          "delta": {
+            "all_gold_recall_at_k_delta": -1.0,
+            "gold_fraction_at_k_delta": -0.5,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "2wikimultihopqa",
+          "sample_index": 238,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "2wikimultihopqa",
+          "sample_index": 428,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "2wikimultihopqa",
+          "sample_index": 644,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "2wikimultihopqa",
+          "sample_index": 648,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "2wikimultihopqa",
+          "sample_index": 780,
+          "residual_type": "no_supporting_evidence",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "hypothesis_id": "qa_hyp_generic_prf",
+      "claim": "Pseudo-relevance feedback from the first BM25 passages can expand implicit bridge terms for multi-hop QA.",
+      "trigger": "all rows",
+      "ranker_name": "generic_prf",
+      "expected_effect": "Improve supporting-fact fraction on residual rows with incomplete evidence chains.",
+      "risk": "Top passage terms can amplify a wrong first hop; should be rejected if support-chain regressions appear.",
+      "activated_row_count": 15,
+      "decision": "reject_regression",
+      "utility_deltas_sum": {
+        "all_gold_recall_at_k_delta": 1.0,
+        "gold_fraction_at_k_delta": 0.1666,
+        "answer_coverage_at_k_delta": 0.0
+      },
+      "harm_count": 1,
+      "supporting_rows": [
+        {
+          "dataset": "hotpotqa",
+          "sample_index": 128,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "hotpotqa",
+          "sample_index": 594,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "hotpotqa",
+          "sample_index": 639,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "hotpotqa",
+          "sample_index": 827,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "hotpotqa",
+          "sample_index": 852,
+          "residual_type": "covered",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "musique",
+          "sample_index": 286,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "musique",
+          "sample_index": 551,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "musique",
+          "sample_index": 703,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": -0.3334,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "musique",
+          "sample_index": 711,
+          "residual_type": "no_supporting_evidence",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "musique",
+          "sample_index": 870,
+          "residual_type": "covered",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "2wikimultihopqa",
+          "sample_index": 238,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "2wikimultihopqa",
+          "sample_index": 428,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 1.0,
+            "gold_fraction_at_k_delta": 0.5,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "2wikimultihopqa",
+          "sample_index": 644,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "2wikimultihopqa",
+          "sample_index": 648,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "2wikimultihopqa",
+          "sample_index": 780,
+          "residual_type": "no_supporting_evidence",
+          "delta": {
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        }
+      ]
+    }
+  ],
+  "selective_retention": {
+    "accepted_hypothesis_ids": [
+      "qa_hyp_comparison_dual_anchor"
+    ],
+    "policy": "Apply accepted narrow hypotheses by deterministic trigger; otherwise keep ordinary BM25."
+  },
+  "aggregate": {
+    "top_k": 5,
+    "overall": {
+      "ordinary_bm25": {
+        "n": 15,
+        "applicable_rate": 1.0,
+        "any_gold_recall_at_k": 0.8667,
+        "all_gold_recall_at_k": 0.1333,
+        "mean_gold_fraction_at_k": 0.5111,
+        "answer_coverage_at_k": 0.2667
+      },
+      "rag_to_memory_style_ppr": {
+        "n": 15,
+        "applicable_rate": 1.0,
+        "any_gold_recall_at_k": 0.8667,
+        "all_gold_recall_at_k": 0.1333,
+        "mean_gold_fraction_at_k": 0.4889,
+        "answer_coverage_at_k": 0.2
+      },
+      "comparison_dual_anchor": {
+        "n": 15,
+        "applicable_rate": 1.0,
+        "any_gold_recall_at_k": 0.8667,
+        "all_gold_recall_at_k": 0.2,
+        "mean_gold_fraction_at_k": 0.5222,
+        "answer_coverage_at_k": 0.2667
+      },
+      "named_anchor_bridge": {
+        "n": 15,
+        "applicable_rate": 1.0,
+        "any_gold_recall_at_k": 0.8667,
+        "all_gold_recall_at_k": 0.1333,
+        "mean_gold_fraction_at_k": 0.4889,
+        "answer_coverage_at_k": 0.2667
+      },
+      "generic_prf": {
+        "n": 15,
+        "applicable_rate": 1.0,
+        "any_gold_recall_at_k": 0.8667,
+        "all_gold_recall_at_k": 0.2,
+        "mean_gold_fraction_at_k": 0.5222,
+        "answer_coverage_at_k": 0.2667
+      },
+      "meta_qa_controller": {
+        "n": 15,
+        "applicable_rate": 1.0,
+        "any_gold_recall_at_k": 0.8667,
+        "all_gold_recall_at_k": 0.2,
+        "mean_gold_fraction_at_k": 0.5444,
+        "answer_coverage_at_k": 0.2667
+      }
+    },
+    "by_dataset": {
+      "2wikimultihopqa": {
+        "ordinary_bm25": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 0.8,
+          "all_gold_recall_at_k": 0.0,
+          "mean_gold_fraction_at_k": 0.4,
+          "answer_coverage_at_k": 0.2
+        },
+        "rag_to_memory_style_ppr": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 0.8,
+          "all_gold_recall_at_k": 0.0,
+          "mean_gold_fraction_at_k": 0.4,
+          "answer_coverage_at_k": 0.0
+        },
+        "comparison_dual_anchor": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 0.8,
+          "all_gold_recall_at_k": 0.0,
+          "mean_gold_fraction_at_k": 0.4,
+          "answer_coverage_at_k": 0.2
+        },
+        "named_anchor_bridge": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 0.8,
+          "all_gold_recall_at_k": 0.0,
+          "mean_gold_fraction_at_k": 0.4,
+          "answer_coverage_at_k": 0.2
+        },
+        "generic_prf": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 0.8,
+          "all_gold_recall_at_k": 0.2,
+          "mean_gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": 0.2
+        },
+        "meta_qa_controller": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 0.8,
+          "all_gold_recall_at_k": 0.0,
+          "mean_gold_fraction_at_k": 0.4,
+          "answer_coverage_at_k": 0.2
+        }
+      },
+      "hotpotqa": {
+        "ordinary_bm25": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 1.0,
+          "all_gold_recall_at_k": 0.2,
+          "mean_gold_fraction_at_k": 0.6,
+          "answer_coverage_at_k": 0.4
+        },
+        "rag_to_memory_style_ppr": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 1.0,
+          "all_gold_recall_at_k": 0.4,
+          "mean_gold_fraction_at_k": 0.7,
+          "answer_coverage_at_k": 0.4
+        },
+        "comparison_dual_anchor": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 1.0,
+          "all_gold_recall_at_k": 0.6,
+          "mean_gold_fraction_at_k": 0.8,
+          "answer_coverage_at_k": 0.4
+        },
+        "named_anchor_bridge": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 1.0,
+          "all_gold_recall_at_k": 0.4,
+          "mean_gold_fraction_at_k": 0.7,
+          "answer_coverage_at_k": 0.4
+        },
+        "generic_prf": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 1.0,
+          "all_gold_recall_at_k": 0.2,
+          "mean_gold_fraction_at_k": 0.6,
+          "answer_coverage_at_k": 0.4
+        },
+        "meta_qa_controller": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 1.0,
+          "all_gold_recall_at_k": 0.4,
+          "mean_gold_fraction_at_k": 0.7,
+          "answer_coverage_at_k": 0.4
+        }
+      },
+      "musique": {
+        "ordinary_bm25": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 0.8,
+          "all_gold_recall_at_k": 0.2,
+          "mean_gold_fraction_at_k": 0.5333,
+          "answer_coverage_at_k": 0.2
+        },
+        "rag_to_memory_style_ppr": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 0.8,
+          "all_gold_recall_at_k": 0.0,
+          "mean_gold_fraction_at_k": 0.3667,
+          "answer_coverage_at_k": 0.2
+        },
+        "comparison_dual_anchor": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 0.8,
+          "all_gold_recall_at_k": 0.0,
+          "mean_gold_fraction_at_k": 0.3667,
+          "answer_coverage_at_k": 0.2
+        },
+        "named_anchor_bridge": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 0.8,
+          "all_gold_recall_at_k": 0.0,
+          "mean_gold_fraction_at_k": 0.3667,
+          "answer_coverage_at_k": 0.2
+        },
+        "generic_prf": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 0.8,
+          "all_gold_recall_at_k": 0.2,
+          "mean_gold_fraction_at_k": 0.4667,
+          "answer_coverage_at_k": 0.2
+        },
+        "meta_qa_controller": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 0.8,
+          "all_gold_recall_at_k": 0.2,
+          "mean_gold_fraction_at_k": 0.5333,
+          "answer_coverage_at_k": 0.2
+        }
+      }
+    }
+  },
+  "deltas_vs_bm25": {
+    "any_gold_recall_at_k_delta": 0.0,
+    "all_gold_recall_at_k_delta": 0.0667,
+    "mean_gold_fraction_at_k_delta": 0.0333,
+    "answer_coverage_at_k_delta": 0.0
+  },
+  "deltas_vs_ppr": {
+    "any_gold_recall_at_k_delta": 0.0,
+    "all_gold_recall_at_k_delta": 0.0667,
+    "mean_gold_fraction_at_k_delta": 0.0555,
+    "answer_coverage_at_k_delta": 0.0667
+  },
+  "recursive_trace": [
+    {
+      "step": 1,
+      "frame": "failure",
+      "observation": "HippoRAG QA probe showed structural morphism abstains on factual QA, so QA uses BM25 fallback."
+    },
+    {
+      "step": 2,
+      "frame": "variation",
+      "observation": "Generated 3 retrieval hypotheses from incomplete-support residuals."
+    },
+    {
+      "step": 3,
+      "frame": "evaluation",
+      "observation": [
+        {
+          "hypothesis_id": "qa_hyp_comparison_dual_anchor",
+          "decision": "accept_retain",
+          "activated_row_count": 1,
+          "utility_deltas_sum": {
+            "all_gold_recall_at_k_delta": 1.0,
+            "gold_fraction_at_k_delta": 0.5,
+            "answer_coverage_at_k_delta": 0.0
+          },
+          "harm_count": 0
+        },
+        {
+          "hypothesis_id": "qa_hyp_named_anchor_bridge",
+          "decision": "reject_regression",
+          "activated_row_count": 13,
+          "utility_deltas_sum": {
+            "all_gold_recall_at_k_delta": -1.0,
+            "gold_fraction_at_k_delta": -0.5,
+            "answer_coverage_at_k_delta": 0.0
+          },
+          "harm_count": 1
+        },
+        {
+          "hypothesis_id": "qa_hyp_generic_prf",
+          "decision": "reject_regression",
+          "activated_row_count": 15,
+          "utility_deltas_sum": {
+            "all_gold_recall_at_k_delta": 1.0,
+            "gold_fraction_at_k_delta": 0.1666,
+            "answer_coverage_at_k_delta": 0.0
+          },
+          "harm_count": 1
+        }
+      ]
+    },
+    {
+      "step": 4,
+      "frame": "selective_retention",
+      "observation": "Retained accepted narrow policies and left all other rows on BM25 fallback."
+    },
+    {
+      "step": 5,
+      "frame": "performance_validation",
+      "observation": {
+        "any_gold_recall_at_k_delta": 0.0,
+        "all_gold_recall_at_k_delta": 0.0667,
+        "mean_gold_fraction_at_k_delta": 0.0333,
+        "answer_coverage_at_k_delta": 0.0
+      }
+    }
+  ],
+  "gates": [
+    {
+      "gate": "uses_real_hipporag_qa_files",
+      "pass": true,
+      "observed": {
+        "data_dir": "reference/repos/HippoRAG/reproduce/dataset",
+        "datasets": [
+          "hotpotqa",
+          "musique",
+          "2wikimultihopqa"
+        ]
+      }
+    },
+    {
+      "gate": "variation_count",
+      "pass": true,
+      "observed": 3
+    },
+    {
+      "gate": "selective_retention_contains_accept_and_reject",
+      "pass": true,
+      "observed": {
+        "accepted": [
+          "qa_hyp_comparison_dual_anchor"
+        ],
+        "rejected": [
+          "qa_hyp_named_anchor_bridge",
+          "qa_hyp_generic_prf"
+        ]
+      }
+    },
+    {
+      "gate": "meta_controller_beats_bm25_support_chain",
+      "pass": true,
+      "observed": {
+        "any_gold_recall_at_k_delta": 0.0,
+        "all_gold_recall_at_k_delta": 0.0667,
+        "mean_gold_fraction_at_k_delta": 0.0333,
+        "answer_coverage_at_k_delta": 0.0
+      }
+    },
+    {
+      "gate": "no_answer_coverage_regression",
+      "pass": true,
+      "observed": {
+        "any_gold_recall_at_k_delta": 0.0,
+        "all_gold_recall_at_k_delta": 0.0667,
+        "mean_gold_fraction_at_k_delta": 0.0333,
+        "answer_coverage_at_k_delta": 0.0
+      }
+    },
+    {
+      "gate": "meta_controller_beats_ppr_support_chain",
+      "pass": true,
+      "observed": {
+        "any_gold_recall_at_k_delta": 0.0,
+        "all_gold_recall_at_k_delta": 0.0667,
+        "mean_gold_fraction_at_k_delta": 0.0555,
+        "answer_coverage_at_k_delta": 0.0667
+      }
+    },
+    {
+      "gate": "no_gold_leakage_to_ranking",
+      "pass": true,
+      "observed": {
+        "ranking_inputs_used": [
+          "question",
+          "corpus_titles",
+          "corpus_text",
+          "retrieval_residual_type"
+        ],
+        "ranking_inputs_exclude": [
+          "gold_answers",
+          "gold_titles",
+          "supporting_facts"
+        ]
+      }
+    }
+  ],
+  "failed_gates": [],
+  "pass": true,
+  "rows": [
+    {
+      "dataset": "hotpotqa",
+      "sample_index": 128,
+      "sample_id": "5ac1a4ed5542994d76dcce90",
+      "question": "Are William James and Bret Easton Ellis both screenwriters?",
+      "residual_type": "incomplete_support_chain",
+      "capitalized_anchors": [
+        "Are William James",
+        "Bret Easton Ellis"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": true,
+        "qa_hyp_named_anchor_bridge": false,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Bret Easton Ellis"
+          ]
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Bret Easton Ellis",
+            "William James"
+          ]
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Bret Easton Ellis",
+            "William James"
+          ]
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Bret Easton Ellis",
+            "William James"
+          ]
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Bret Easton Ellis"
+          ]
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Bret Easton Ellis",
+            "William James"
+          ]
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "Bret Easton Ellis",
+          "Lunar Park",
+          "Patrick Bateman",
+          "Junk Mail (book)",
+          "The Informers"
+        ],
+        "rag_to_memory_style_ppr": [
+          "Bret Easton Ellis",
+          "Muhammad Ali vs. Jimmy Ellis",
+          "Ellis Jones (actor)",
+          "James Francis Edward Stuart",
+          "William James"
+        ],
+        "comparison_dual_anchor": [
+          "Bret Easton Ellis",
+          "William James",
+          "Sarah Kate Ellis",
+          "William York Tindall",
+          "Bret Michaels"
+        ],
+        "named_anchor_bridge": [
+          "Bret Easton Ellis",
+          "Bret Michaels",
+          "Sarah Kate Ellis",
+          "William James",
+          "Bret Michaels: Life as I Know It"
+        ],
+        "generic_prf": [
+          "Lunar Park",
+          "Patrick Bateman",
+          "Bret Easton Ellis",
+          "The Informers",
+          "The Informers (2008 film)"
+        ],
+        "meta_qa_controller": [
+          "Bret Easton Ellis",
+          "William James",
+          "Sarah Kate Ellis",
+          "William York Tindall",
+          "Bret Michaels"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "comparison_dual_anchor"
+    },
+    {
+      "dataset": "hotpotqa",
+      "sample_index": 594,
+      "sample_id": "5a7624b85542992db947372c",
+      "question": "When was the plaintiff in the 1892 Barbed Wire Patent Case born?",
+      "residual_type": "incomplete_support_chain",
+      "capitalized_anchors": [
+        "Barbed Wire Patent Case"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": false,
+        "qa_hyp_named_anchor_bridge": true,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "The Barbed Wire Patent"
+          ]
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "The Barbed Wire Patent"
+          ]
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "The Barbed Wire Patent"
+          ]
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "The Barbed Wire Patent"
+          ]
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "The Barbed Wire Patent"
+          ]
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "The Barbed Wire Patent"
+          ]
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "The Barbed Wire Patent",
+          "Joseph F. Glidden House",
+          "Kansas Barbed Wire Museum",
+          "Devils Rope Barbed Wire Museum",
+          "Concertina wire"
+        ],
+        "rag_to_memory_style_ppr": [
+          "The Barbed Wire Patent",
+          "Devils Rope Barbed Wire Museum",
+          "Hanging on the Old Barbed Wire",
+          "Kansas Barbed Wire Museum",
+          "Parker–Hulme murder case"
+        ],
+        "comparison_dual_anchor": [
+          "The Barbed Wire Patent",
+          "Kansas Barbed Wire Museum",
+          "Devils Rope Barbed Wire Museum",
+          "Hanging on the Old Barbed Wire",
+          "Concertina wire"
+        ],
+        "named_anchor_bridge": [
+          "The Barbed Wire Patent",
+          "Kansas Barbed Wire Museum",
+          "Devils Rope Barbed Wire Museum",
+          "Concertina wire",
+          "Hanging on the Old Barbed Wire"
+        ],
+        "generic_prf": [
+          "Kansas Barbed Wire Museum",
+          "The Barbed Wire Patent",
+          "Joseph F. Glidden House",
+          "Devils Rope Barbed Wire Museum",
+          "Concertina wire"
+        ],
+        "meta_qa_controller": [
+          "The Barbed Wire Patent",
+          "Joseph F. Glidden House",
+          "Kansas Barbed Wire Museum",
+          "Devils Rope Barbed Wire Museum",
+          "Concertina wire"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "ordinary_bm25"
+    },
+    {
+      "dataset": "hotpotqa",
+      "sample_index": 639,
+      "sample_id": "5a7b22f8554299042af8f6ff",
+      "question": "Who was the opponent of the Republican of Indenosia when Nugroho Notosusanto served as a member of the Student Army",
+      "residual_type": "incomplete_support_chain",
+      "capitalized_anchors": [
+        "Republican",
+        "Indenosia",
+        "Nugroho Notosusanto",
+        "Student Army"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": false,
+        "qa_hyp_named_anchor_bridge": true,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Nugroho Notosusanto"
+          ]
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Nugroho Notosusanto"
+          ]
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Nugroho Notosusanto"
+          ]
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Nugroho Notosusanto"
+          ]
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Nugroho Notosusanto"
+          ]
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Nugroho Notosusanto"
+          ]
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "Nugroho Notosusanto",
+          "Donald Trahan",
+          "Jeb Hensarling",
+          "Jonathan Paton",
+          "Charles Djou"
+        ],
+        "rag_to_memory_style_ppr": [
+          "Billy Reid (Irish republican)",
+          "Walter Reed Army Medical Center",
+          "Nugroho Notosusanto",
+          "Richard Allen (Texas politician)",
+          "Charles Djou"
+        ],
+        "comparison_dual_anchor": [
+          "Nugroho Notosusanto",
+          "Billy Reid (Irish republican)",
+          "Walter Reed Army Medical Center",
+          "Donald Trahan",
+          "Charles Djou"
+        ],
+        "named_anchor_bridge": [
+          "Nugroho Notosusanto",
+          "Billy Reid (Irish republican)",
+          "Donald Trahan",
+          "Jeb Hensarling",
+          "Jonathan Paton"
+        ],
+        "generic_prf": [
+          "Donald Trahan",
+          "Jeb Hensarling",
+          "Nugroho Notosusanto",
+          "Nicholas Micozzie",
+          "Mazie Hirono"
+        ],
+        "meta_qa_controller": [
+          "Nugroho Notosusanto",
+          "Donald Trahan",
+          "Jeb Hensarling",
+          "Jonathan Paton",
+          "Charles Djou"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "ordinary_bm25"
+    },
+    {
+      "dataset": "hotpotqa",
+      "sample_index": 827,
+      "sample_id": "5adfd22255429906c02daa4f",
+      "question": "which actress was a notable practitioner at the white bear theatre and is also known for playing the role of melanie owen in the BBC one soap opera \"eatenders\"?",
+      "residual_type": "incomplete_support_chain",
+      "capitalized_anchors": [
+        "BBC"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": false,
+        "qa_hyp_named_anchor_bridge": true,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Tamzin Outhwaite"
+          ]
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "White Bear Theatre"
+          ]
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Tamzin Outhwaite",
+            "White Bear Theatre"
+          ]
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Tamzin Outhwaite"
+          ]
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Tamzin Outhwaite"
+          ]
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Tamzin Outhwaite"
+          ]
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "Tamzin Outhwaite",
+          "Pearl Mackie",
+          "Sid Owen",
+          "Barbara Windsor",
+          "Benedict Wall"
+        ],
+        "rag_to_memory_style_ppr": [
+          "White Bear Theatre",
+          "First National Bank of White Bear",
+          "Sid Owen",
+          "Riccardo Massi",
+          "Jami Reid-Quarrell"
+        ],
+        "comparison_dual_anchor": [
+          "Sid Owen",
+          "Pearl Mackie",
+          "Tamzin Outhwaite",
+          "White Bear Theatre",
+          "Barbara Windsor"
+        ],
+        "named_anchor_bridge": [
+          "Tamzin Outhwaite",
+          "Pearl Mackie",
+          "Sid Owen",
+          "Barbara Windsor",
+          "Benedict Wall"
+        ],
+        "generic_prf": [
+          "Tamzin Outhwaite",
+          "Sid Owen",
+          "Pearl Mackie",
+          "Tom Oliver",
+          "Benedict Wall"
+        ],
+        "meta_qa_controller": [
+          "Tamzin Outhwaite",
+          "Pearl Mackie",
+          "Sid Owen",
+          "Barbara Windsor",
+          "Benedict Wall"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "ordinary_bm25"
+    },
+    {
+      "dataset": "hotpotqa",
+      "sample_index": 852,
+      "sample_id": "5a7c76275542990527d554b4",
+      "question": "Which film was released first out of The Hunchback of Notre Dame and Miracle of the White Stallions?",
+      "residual_type": "covered",
+      "capitalized_anchors": [
+        "The Hunchback",
+        "Notre Dame",
+        "Miracle",
+        "White Stallions"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": false,
+        "qa_hyp_named_anchor_bridge": true,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Miracle of the White Stallions",
+            "The Hunchback of Notre Dame (1996 film)"
+          ]
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Miracle of the White Stallions",
+            "The Hunchback of Notre Dame (1996 film)"
+          ]
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Miracle of the White Stallions",
+            "The Hunchback of Notre Dame (1996 film)"
+          ]
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Miracle of the White Stallions",
+            "The Hunchback of Notre Dame (1996 film)"
+          ]
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Miracle of the White Stallions",
+            "The Hunchback of Notre Dame (1996 film)"
+          ]
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Miracle of the White Stallions",
+            "The Hunchback of Notre Dame (1996 film)"
+          ]
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "The Hunchback of Notre Dame II",
+          "Miracle of the White Stallions",
+          "The Hunchback of Notre Dame (1996 film)",
+          "Notre Dame of Midsayap College",
+          "1981 Notre Dame Fighting Irish football team"
+        ],
+        "rag_to_memory_style_ppr": [
+          "The Hunchback of Notre Dame (1996 film)",
+          "1943 Notre Dame Fighting Irish football team",
+          "2009 Notre Dame Fighting Irish football team",
+          "2007 Notre Dame Fighting Irish football team",
+          "Miracle of the White Stallions"
+        ],
+        "comparison_dual_anchor": [
+          "The Hunchback of Notre Dame (1996 film)",
+          "Miracle of the White Stallions",
+          "The Hunchback of Notre Dame II",
+          "2007 Notre Dame Fighting Irish football team",
+          "1981 Notre Dame Fighting Irish football team"
+        ],
+        "named_anchor_bridge": [
+          "The Hunchback of Notre Dame II",
+          "Miracle of the White Stallions",
+          "The Hunchback of Notre Dame (1996 film)",
+          "Notre Dame of Midsayap College",
+          "1981 Notre Dame Fighting Irish football team"
+        ],
+        "generic_prf": [
+          "The Hunchback of Notre Dame II",
+          "The Hunchback of Notre Dame (1996 film)",
+          "Miracle of the White Stallions",
+          "Notre Dame of Midsayap College",
+          "1981 Notre Dame Fighting Irish football team"
+        ],
+        "meta_qa_controller": [
+          "The Hunchback of Notre Dame II",
+          "Miracle of the White Stallions",
+          "The Hunchback of Notre Dame (1996 film)",
+          "Notre Dame of Midsayap College",
+          "1981 Notre Dame Fighting Irish football team"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "ordinary_bm25"
+    },
+    {
+      "dataset": "musique",
+      "sample_index": 286,
+      "sample_id": "2hop__551235_310309",
+      "question": "Who is the child of the creator of A Distinguished Member of the Humane Society?",
+      "residual_type": "incomplete_support_chain",
+      "capitalized_anchors": [
+        "A Distinguished Member",
+        "Humane Society"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": false,
+        "qa_hyp_named_anchor_bridge": true,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "A Distinguished Member of the Humane Society"
+          ]
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "A Distinguished Member of the Humane Society"
+          ]
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "A Distinguished Member of the Humane Society"
+          ]
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "A Distinguished Member of the Humane Society"
+          ]
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "A Distinguished Member of the Humane Society"
+          ]
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "A Distinguished Member of the Humane Society"
+          ]
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "A Distinguished Member of the Humane Society",
+          "Charles Wilkins",
+          "William Luxton",
+          "Linda Greenhouse",
+          "King Olav V's Prize for Cancer Research"
+        ],
+        "rag_to_memory_style_ppr": [
+          "A Distinguished Member of the Humane Society",
+          "United States Society for Education through Art",
+          "Electrochemical Society",
+          "Child labour in India",
+          "Christmas Child"
+        ],
+        "comparison_dual_anchor": [
+          "A Distinguished Member of the Humane Society",
+          "Electrochemical Society",
+          "United States Society for Education through Art",
+          "Charles Wilkins",
+          "Linda Greenhouse"
+        ],
+        "named_anchor_bridge": [
+          "A Distinguished Member of the Humane Society",
+          "Charles Wilkins",
+          "William Luxton",
+          "Electrochemical Society",
+          "Linda Greenhouse"
+        ],
+        "generic_prf": [
+          "A Distinguished Member of the Humane Society",
+          "Charles Wilkins",
+          "William Luxton",
+          "Electrochemical Society",
+          "Jakob Rem"
+        ],
+        "meta_qa_controller": [
+          "A Distinguished Member of the Humane Society",
+          "Charles Wilkins",
+          "William Luxton",
+          "Linda Greenhouse",
+          "King Olav V's Prize for Cancer Research"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "ordinary_bm25"
+    },
+    {
+      "dataset": "musique",
+      "sample_index": 551,
+      "sample_id": "2hop__170914_152093",
+      "question": "What label is responsible for the performer of \"Friend Like That\"?",
+      "residual_type": "incomplete_support_chain",
+      "capitalized_anchors": [
+        "Friend Like That"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": false,
+        "qa_hyp_named_anchor_bridge": true,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Friend Like That"
+          ]
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Friend Like That"
+          ]
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Friend Like That"
+          ]
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Friend Like That"
+          ]
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Friend Like That"
+          ]
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Friend Like That"
+          ]
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "Friend Like That",
+          "Friend Like Me",
+          "Like a Love?",
+          "I Can Only Imagine (MercyMe song)",
+          "I Can Only Imagine (MercyMe song)"
+        ],
+        "rag_to_memory_style_ppr": [
+          "Friend Like Me",
+          "Marcia Griffiths & Friends",
+          "Look What I Almost Stepped In...",
+          "Friend Like That",
+          "What Katy Did"
+        ],
+        "comparison_dual_anchor": [
+          "Friend Like Me",
+          "Friend Like That",
+          "Like a Love?",
+          "I Can Only Imagine (MercyMe song)",
+          "Whatever U Like"
+        ],
+        "named_anchor_bridge": [
+          "Friend Like That",
+          "Friend Like Me",
+          "Like a Love?",
+          "I Can Only Imagine (MercyMe song)",
+          "I Can Only Imagine (MercyMe song)"
+        ],
+        "generic_prf": [
+          "Friend Like That",
+          "Friend Like Me",
+          "Like a Love?",
+          "Yvonne Keuls",
+          "Whatever U Like"
+        ],
+        "meta_qa_controller": [
+          "Friend Like That",
+          "Friend Like Me",
+          "Like a Love?",
+          "I Can Only Imagine (MercyMe song)",
+          "I Can Only Imagine (MercyMe song)"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "ordinary_bm25"
+    },
+    {
+      "dataset": "musique",
+      "sample_index": 703,
+      "sample_id": "4hop3__862_846_326964_7713",
+      "question": "How long was the city where the Yongle emperor greeted the person the Ming court thought the representatives were sent by the capitol of Yaxing Coach's headquarters location?",
+      "residual_type": "incomplete_support_chain",
+      "capitalized_anchors": [
+        "Yongle",
+        "Ming",
+        "Yaxing Coach's"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": false,
+        "qa_hyp_named_anchor_bridge": false,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.6667,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Nanjing",
+            "Sino-Tibetan relations during the Ming dynasty"
+          ]
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.3333,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Sino-Tibetan relations during the Ming dynasty"
+          ]
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.3333,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Sino-Tibetan relations during the Ming dynasty"
+          ]
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.3333,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Sino-Tibetan relations during the Ming dynasty"
+          ]
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.3333,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Sino-Tibetan relations during the Ming dynasty"
+          ]
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.6667,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Nanjing",
+            "Sino-Tibetan relations during the Ming dynasty"
+          ]
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Nanjing"
+        ],
+        "rag_to_memory_style_ppr": [
+          "Headquarters of the United Nations",
+          "Supreme Court of California",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty"
+        ],
+        "comparison_dual_anchor": [
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty"
+        ],
+        "named_anchor_bridge": [
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty"
+        ],
+        "generic_prf": [
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty"
+        ],
+        "meta_qa_controller": [
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Nanjing"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "ordinary_bm25"
+    },
+    {
+      "dataset": "musique",
+      "sample_index": 711,
+      "sample_id": "2hop__124807_135019",
+      "question": "Who is the mother of Nephalion's father?",
+      "residual_type": "no_supporting_evidence",
+      "capitalized_anchors": [
+        "Nephalion's"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": false,
+        "qa_hyp_named_anchor_bridge": true,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": false,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": []
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": false,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": []
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": false,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": []
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": false,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": []
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": false,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": []
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": false,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": []
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "Jean-Michel Oughourlian",
+          "Spencer family (The Bold and the Beautiful)",
+          "Honour thy father and thy mother",
+          "Damian Wayne",
+          "Lady Li (Wang Jipeng)"
+        ],
+        "rag_to_memory_style_ppr": [
+          "Honour thy father and thy mother",
+          "Spencer family (The Bold and the Beautiful)",
+          "Big Mouth (TV series)",
+          "Lady Li (Wang Jipeng)",
+          "Damian Wayne"
+        ],
+        "comparison_dual_anchor": [
+          "Spencer family (The Bold and the Beautiful)",
+          "Honour thy father and thy mother",
+          "Damian Wayne",
+          "Lady Li (Wang Jipeng)",
+          "Jean-Michel Oughourlian"
+        ],
+        "named_anchor_bridge": [
+          "Jean-Michel Oughourlian",
+          "Spencer family (The Bold and the Beautiful)",
+          "Honour thy father and thy mother",
+          "Damian Wayne",
+          "Andy Barclay"
+        ],
+        "generic_prf": [
+          "Honour thy father and thy mother",
+          "Spencer family (The Bold and the Beautiful)",
+          "Jean-Michel Oughourlian",
+          "The Mother (How I Met Your Mother)",
+          "The Mother (How I Met Your Mother)"
+        ],
+        "meta_qa_controller": [
+          "Jean-Michel Oughourlian",
+          "Spencer family (The Bold and the Beautiful)",
+          "Honour thy father and thy mother",
+          "Damian Wayne",
+          "Lady Li (Wang Jipeng)"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "ordinary_bm25"
+    },
+    {
+      "dataset": "musique",
+      "sample_index": 870,
+      "sample_id": "2hop__50936_90973",
+      "question": "Who did the original voice of the character that Mila Kunis plays in Family Guy?",
+      "residual_type": "covered",
+      "capitalized_anchors": [
+        "Mila Kunis",
+        "Family Guy"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": false,
+        "qa_hyp_named_anchor_bridge": true,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "List of Family Guy cast members",
+            "Meg Griffin"
+          ]
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "List of Family Guy cast members"
+          ]
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "List of Family Guy cast members"
+          ]
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "List of Family Guy cast members"
+          ]
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "List of Family Guy cast members",
+            "Meg Griffin"
+          ]
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "List of Family Guy cast members",
+            "Meg Griffin"
+          ]
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "Meg Griffin",
+          "List of Family Guy cast members",
+          "Meg Griffin",
+          "List of Family Guy cast members",
+          "Family Guy (season 7)"
+        ],
+        "rag_to_memory_style_ppr": [
+          "List of Family Guy cast members",
+          "List of Family Guy cast members",
+          "List of Family Guy cast members",
+          "The Spy Who Dumped Me",
+          "The Spy Who Dumped Me"
+        ],
+        "comparison_dual_anchor": [
+          "List of Family Guy cast members",
+          "List of Family Guy cast members",
+          "Family Guy (season 7)",
+          "List of Family Guy cast members",
+          "Guy Williams (actor)"
+        ],
+        "named_anchor_bridge": [
+          "List of Family Guy cast members",
+          "List of Family Guy cast members",
+          "Family Guy (season 7)",
+          "List of Family Guy cast members",
+          "Guy Williams (actor)"
+        ],
+        "generic_prf": [
+          "Meg Griffin",
+          "Meg Griffin",
+          "List of Family Guy cast members",
+          "Family Guy (season 7)",
+          "List of Family Guy cast members"
+        ],
+        "meta_qa_controller": [
+          "Meg Griffin",
+          "List of Family Guy cast members",
+          "Meg Griffin",
+          "List of Family Guy cast members",
+          "Family Guy (season 7)"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "ordinary_bm25"
+    },
+    {
+      "dataset": "2wikimultihopqa",
+      "sample_index": 238,
+      "sample_id": "31df8b0a0bde11eba7f7acde48001122",
+      "question": "What is the place of birth of Anne Elizabeth Rector's husband?",
+      "residual_type": "incomplete_support_chain",
+      "capitalized_anchors": [
+        "Anne Elizabeth Rector's"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": false,
+        "qa_hyp_named_anchor_bridge": true,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Anne Elizabeth Rector"
+          ]
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Anne Elizabeth Rector"
+          ]
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Anne Elizabeth Rector"
+          ]
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Anne Elizabeth Rector"
+          ]
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Anne Elizabeth Rector"
+          ]
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Anne Elizabeth Rector"
+          ]
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "Anne Elizabeth Rector",
+          "Place of birth",
+          "Elizabeth Boleyn, Countess of Wiltshire",
+          "Motherland (disambiguation)",
+          "Anne Evans"
+        ],
+        "rag_to_memory_style_ppr": [
+          "Anne Elizabeth Rector",
+          "Place of birth",
+          "Elizabeth Capell, Countess of Essex (1704-1784)",
+          "Elizabeth Boleyn, Countess of Wiltshire",
+          "Elizabeth Howard, Countess of Effingham"
+        ],
+        "comparison_dual_anchor": [
+          "Anne Elizabeth Rector",
+          "Elizabeth Boleyn, Countess of Wiltshire",
+          "Anne Evans",
+          "Elizabeth Capell, Countess of Essex (1704-1784)",
+          "Elizabeth Fitzalan, Duchess of Norfolk"
+        ],
+        "named_anchor_bridge": [
+          "Anne Elizabeth Rector",
+          "Elizabeth Boleyn, Countess of Wiltshire",
+          "Anne Evans",
+          "Elizabeth Capell, Countess of Essex (1704-1784)",
+          "Anne Woodville"
+        ],
+        "generic_prf": [
+          "Elizabeth Boleyn, Countess of Wiltshire",
+          "Place of birth",
+          "Anne Elizabeth Rector",
+          "Elizabeth Capell, Countess of Essex (1704-1784)",
+          "Elizabeth FitzAlan"
+        ],
+        "meta_qa_controller": [
+          "Anne Elizabeth Rector",
+          "Place of birth",
+          "Elizabeth Boleyn, Countess of Wiltshire",
+          "Motherland (disambiguation)",
+          "Anne Evans"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "ordinary_bm25"
+    },
+    {
+      "dataset": "2wikimultihopqa",
+      "sample_index": 428,
+      "sample_id": "ef9dd4360bdd11eba7f7acde48001122",
+      "question": "What nationality is Heather Jansch's husband?",
+      "residual_type": "incomplete_support_chain",
+      "capitalized_anchors": [
+        "Heather Jansch's"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": false,
+        "qa_hyp_named_anchor_bridge": true,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Heather Jansch"
+          ]
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Heather Jansch"
+          ]
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Heather Jansch"
+          ]
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Heather Jansch"
+          ]
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Bert Jansch",
+            "Heather Jansch"
+          ]
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Heather Jansch"
+          ]
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "Iraqi nationality law",
+          "Heather D. Gibson",
+          "Heather Jansch",
+          "Etan Boritzer",
+          "Rosemary Lane (album)"
+        ],
+        "rag_to_memory_style_ppr": [
+          "Iraqi nationality law",
+          "What Are You Doing the Rest of Your Life?",
+          "You've Got What Gets Me",
+          "Heather Jansch",
+          "Life Is What You Make It (film)"
+        ],
+        "comparison_dual_anchor": [
+          "Iraqi nationality law",
+          "Heather D. Gibson",
+          "Heather Jansch",
+          "You've Got What Gets Me",
+          "Life Is What You Make It (film)"
+        ],
+        "named_anchor_bridge": [
+          "Heather D. Gibson",
+          "Iraqi nationality law",
+          "Heather Jansch",
+          "Rosemary Lane (album)",
+          "Etan Boritzer"
+        ],
+        "generic_prf": [
+          "Heather D. Gibson",
+          "Iraqi nationality law",
+          "Heather Jansch",
+          "Rosemary Lane (album)",
+          "Bert Jansch"
+        ],
+        "meta_qa_controller": [
+          "Iraqi nationality law",
+          "Heather D. Gibson",
+          "Heather Jansch",
+          "Etan Boritzer",
+          "Rosemary Lane (album)"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "ordinary_bm25"
+    },
+    {
+      "dataset": "2wikimultihopqa",
+      "sample_index": 644,
+      "sample_id": "16e1006809ab11ebbdb0ac1f6bf848b6",
+      "question": "Which song came out earlier, Can'T Remember To Forget You or Distant Lover?",
+      "residual_type": "incomplete_support_chain",
+      "capitalized_anchors": [
+        "Can'T Remember To Forget You",
+        "Distant Lover"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": false,
+        "qa_hyp_named_anchor_bridge": true,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Can't Remember to Forget You"
+          ]
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Can't Remember to Forget You"
+          ]
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Can't Remember to Forget You"
+          ]
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Can't Remember to Forget You"
+          ]
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Can't Remember to Forget You"
+          ]
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Can't Remember to Forget You"
+          ]
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "Can't Forget You",
+          "Can't Remember to Forget You",
+          "Can't Forget You (Gloria Estefan song)",
+          "Can't Forget You (Sonia song)",
+          "I Forgot to Remember to Forget"
+        ],
+        "rag_to_memory_style_ppr": [
+          "Can't Forget You (Gloria Estefan song)",
+          "I Won't Forget You (Jim Reeves song)",
+          "Came Out of the Grave",
+          "Can't Forget You (Sonia song)",
+          "Can't Remember to Forget You"
+        ],
+        "comparison_dual_anchor": [
+          "Can't Remember to Forget You",
+          "Can't Forget You (Gloria Estefan song)",
+          "Can't Forget You (Sonia song)",
+          "Can't Forget You",
+          "I Won't Forget You (Jim Reeves song)"
+        ],
+        "named_anchor_bridge": [
+          "Can't Remember to Forget You",
+          "Can't Forget You",
+          "Can't Forget You (Gloria Estefan song)",
+          "Can't Forget You (Sonia song)",
+          "I Forgot to Remember to Forget"
+        ],
+        "generic_prf": [
+          "Can't Forget You",
+          "Can't Forget You (Gloria Estefan song)",
+          "Can't Remember to Forget You",
+          "Can't Forget You (Sonia song)",
+          "Never Forget You"
+        ],
+        "meta_qa_controller": [
+          "Can't Forget You",
+          "Can't Remember to Forget You",
+          "Can't Forget You (Gloria Estefan song)",
+          "Can't Forget You (Sonia song)",
+          "I Forgot to Remember to Forget"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "ordinary_bm25"
+    },
+    {
+      "dataset": "2wikimultihopqa",
+      "sample_index": 648,
+      "sample_id": "af16832e0bdb11eba7f7acde48001122",
+      "question": "When was the director of film Uncle Silas (Film) born?",
+      "residual_type": "incomplete_support_chain",
+      "capitalized_anchors": [
+        "Uncle Silas",
+        "Film"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": false,
+        "qa_hyp_named_anchor_bridge": true,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Uncle Silas (film)"
+          ]
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Uncle Silas (film)"
+          ]
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Uncle Silas (film)"
+          ]
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Uncle Silas (film)"
+          ]
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Uncle Silas (film)"
+          ]
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Uncle Silas (film)"
+          ]
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "Uncle Silas (film)",
+          "H. E. Bates",
+          "François Leterrier",
+          "Philip Ford (film director)",
+          "Sherry Hormann"
+        ],
+        "rag_to_memory_style_ppr": [
+          "Uncle Silas (film)",
+          "Philip Ford (film director)",
+          "Benny Chan (film director)",
+          "The Dream (1987 film)",
+          "Édouard Niermans (director)"
+        ],
+        "comparison_dual_anchor": [
+          "Uncle Silas (film)",
+          "Philip Ford (film director)",
+          "Benny Chan (film director)",
+          "The Dream (1987 film)",
+          "Roy Rowland (film director)"
+        ],
+        "named_anchor_bridge": [
+          "Uncle Silas (film)",
+          "Benny Chan (film director)",
+          "Philip Ford (film director)",
+          "The Dream (1987 film)",
+          "Roy Rowland (film director)"
+        ],
+        "generic_prf": [
+          "Uncle Silas (film)",
+          "François Leterrier",
+          "H. E. Bates",
+          "Adurthi Subba Rao",
+          "Nagesh Kukunoor"
+        ],
+        "meta_qa_controller": [
+          "Uncle Silas (film)",
+          "H. E. Bates",
+          "François Leterrier",
+          "Philip Ford (film director)",
+          "Sherry Hormann"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "ordinary_bm25"
+    },
+    {
+      "dataset": "2wikimultihopqa",
+      "sample_index": 780,
+      "sample_id": "7d638c340bd911eba7f7acde48001122",
+      "question": "What is the place of birth of Richard Socarides's father?",
+      "residual_type": "no_supporting_evidence",
+      "capitalized_anchors": [
+        "Richard Socarides's"
+      ],
+      "candidate_triggers": {
+        "qa_hyp_comparison_dual_anchor": false,
+        "qa_hyp_named_anchor_bridge": true,
+        "qa_hyp_generic_prf": true
+      },
+      "metrics": {
+        "ordinary_bm25": {
+          "applicable": true,
+          "any_gold_recall_at_k": false,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": []
+        },
+        "rag_to_memory_style_ppr": {
+          "applicable": true,
+          "any_gold_recall_at_k": false,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": []
+        },
+        "comparison_dual_anchor": {
+          "applicable": true,
+          "any_gold_recall_at_k": false,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": []
+        },
+        "named_anchor_bridge": {
+          "applicable": true,
+          "any_gold_recall_at_k": false,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": []
+        },
+        "generic_prf": {
+          "applicable": true,
+          "any_gold_recall_at_k": false,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": []
+        },
+        "meta_qa_controller": {
+          "applicable": true,
+          "any_gold_recall_at_k": false,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": []
+        }
+      },
+      "top_titles": {
+        "ordinary_bm25": [
+          "Place of birth",
+          "Motherland (disambiguation)",
+          "Place of origin",
+          "Etan Boritzer",
+          "Blanche of Navarre, Countess of Champagne"
+        ],
+        "rag_to_memory_style_ppr": [
+          "Place of birth",
+          "The Pistol: The Birth of a Legend",
+          "The Birth of Venus (disambiguation)",
+          "My Old Man's Place",
+          "The Time, the Place and the Girl (1946 film)"
+        ],
+        "comparison_dual_anchor": [
+          "Richard (III), bishop of Bayeux",
+          "Richard Boleslawski",
+          "Richard Johnson (war artist)",
+          "Place of birth",
+          "Richard Marcus"
+        ],
+        "named_anchor_bridge": [
+          "Place of birth",
+          "Motherland (disambiguation)",
+          "Place of origin",
+          "Alexandros Margaritis",
+          "Richard Johnson (war artist)"
+        ],
+        "generic_prf": [
+          "Place of birth",
+          "Motherland (disambiguation)",
+          "Place of origin",
+          "The Hiding Place",
+          "Hiding Place"
+        ],
+        "meta_qa_controller": [
+          "Place of birth",
+          "Motherland (disambiguation)",
+          "Place of origin",
+          "Etan Boritzer",
+          "Blanche of Navarre, Countess of Champagne"
+        ]
+      },
+      "ranking_inputs_exclude": [
+        "gold_answers",
+        "gold_titles",
+        "supporting_facts"
+      ],
+      "retained_policy": "ordinary_bm25"
+    }
+  ]
+}
