@@ -134,6 +134,7 @@ from assumption_os.structural_patterns import (
     search_structural_patterns,
     seed_structural_patterns,
 )
+from assumption_os.structural_context_edges import build_structural_context_edge_payload
 from assumption_os.verifier_stack import build_verifier_stack_payload
 from assumption_os.world_model import build_world_model_payload, train_world_model_calibration
 
@@ -4646,6 +4647,22 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(payload["deltas_vs_bm25"]["mean_gold_fraction_at_k_delta"], 0.02)
         self.assertGreaterEqual(payload["deltas_vs_bm25"]["answer_coverage_at_k_delta"], 0.0)
         self.assertFalse(payload["config"]["stored_raw_model_answers"])
+
+    def test_structural_context_edges_generalize_hipporag_context(self):
+        payload = build_structural_context_edge_payload(eval_id="unit_structural_context_edges")
+        self.assertTrue(payload["pass"], payload["gates"])
+        metrics = payload["metrics"]
+        self.assertEqual(metrics["structural_context_positive_recall"], 1.0)
+        self.assertGreater(
+            metrics["structural_context_positive_recall"],
+            metrics["word_context_baseline_positive_recall"],
+        )
+        self.assertEqual(metrics["negative_control_block_or_abstain_rate"], 1.0)
+        self.assertEqual(metrics["classic_reference_expansion_rate"], 1.0)
+        market = next(row for row in payload["rows"] if row["case_id"] == "feedback_market_chinese")
+        self.assertEqual(market["structural_context"]["top_pattern_id"], "pat_negative_feedback")
+        self.assertIn("real_lenz_negative_feedback", market["structural_context"]["expanded_realization_ids"])
+        self.assertIn("real_le_chatelier_shift", market["structural_context"]["expanded_realization_ids"])
 
     def test_paper_negative_results_records_boundaries_and_failures(self):
         payload = build_paper_negative_results_payload(

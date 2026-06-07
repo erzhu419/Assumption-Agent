@@ -32,11 +32,12 @@ Config:
 
 ## Variation
 
-The controller generated three retrieval hypotheses:
+The controller generated four retrieval hypotheses:
 
 | hypothesis | decision | activated rows | reason |
 |---|---:|---:|---|
 | `qa_hyp_comparison_dual_anchor` | accept | 1 | fixed a binary comparison row by forcing both named entities into evidence retrieval |
+| `qa_hyp_anchor_preserve_insert` | reject | 15 | aggregate evidence improved, but one row regressed, so it is not retained without a narrower gate |
 | `qa_hyp_named_anchor_bridge` | reject | 13 | caused support-chain regression on at least one row |
 | `qa_hyp_generic_prf` | reject | 15 | had aggregate upside but also a support-chain regression |
 

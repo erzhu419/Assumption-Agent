@@ -118,6 +118,17 @@ HYPOTHESES = [
         risk="Overfitting to surface capitalization; gate requires no support or answer-coverage regression.",
     ),
     QARetrievalHypothesis(
+        hypothesis_id="qa_hyp_anchor_preserve_insert",
+        claim=(
+            "Entity-anchor questions can miss an obvious title page; preserve the strongest BM25 evidence and "
+            "insert at most one exact title-anchor candidate into the tail of top-k."
+        ),
+        trigger="question exposes at least one capitalized anchor",
+        ranker_name="anchor_preserve_insert",
+        expected_effect="Improve supporting-title coverage while preserving BM25's highest-confidence passages.",
+        risk="Can still displace a useful fifth passage; gate requires heldout no-regression.",
+    ),
+    QARetrievalHypothesis(
         hypothesis_id="qa_hyp_named_anchor_bridge",
         claim=(
             "Wh-questions with a named anchor can miss the anchor page; explicitly bridge through exact title anchors."
@@ -307,11 +318,13 @@ def _evaluate_meta_qa_row(
     )
     comparison = _rank_comparison_dual_anchor(question, corpus, bm25, ppr)
     anchor_bridge = _rank_named_anchor_bridge(question, corpus, bm25)
+    anchor_preserve = _rank_anchor_preserve_insert(question, corpus, bm25)
     generic_prf = _rank_generic_prf(question, corpus, bm25)
     rankings = {
         "ordinary_bm25": bm25,
         "rag_to_memory_style_ppr": ppr,
         "comparison_dual_anchor": comparison,
+        "anchor_preserve_insert": anchor_preserve,
         "named_anchor_bridge": anchor_bridge,
         "generic_prf": generic_prf,
     }
@@ -426,6 +439,31 @@ def _rank_named_anchor_bridge(
     ])
 
 
+def _rank_anchor_preserve_insert(
+    question: str,
+    corpus: CorpusIndex,
+    bm25: list[tuple[str, float]],
+    *,
+    keep_bm25: int = 4,
+) -> list[tuple[str, float]]:
+    anchor = _rank_anchor_title_match(question, corpus, bm25)
+    output: list[tuple[str, float]] = []
+    seen: set[str] = set()
+    for doc_id, score in bm25[:keep_bm25]:
+        output.append((doc_id, score + 10.0))
+        seen.add(doc_id)
+    for doc_id, score in anchor:
+        if doc_id not in seen:
+            output.append((doc_id, score))
+            seen.add(doc_id)
+            break
+    for doc_id, score in bm25:
+        if doc_id not in seen:
+            output.append((doc_id, score))
+            seen.add(doc_id)
+    return output
+
+
 def _rank_anchor_title_match(
     question: str,
     corpus: CorpusIndex,
@@ -496,6 +534,8 @@ def _hypothesis_triggers(hypothesis_id: str, question: str) -> bool:
     anchors = _capitalized_phrases(question)
     if hypothesis_id == "qa_hyp_comparison_dual_anchor":
         return first in {"are", "is", "was", "were", "did", "do", "does"} and " and " in q and len(anchors) >= 2
+    if hypothesis_id == "qa_hyp_anchor_preserve_insert":
+        return bool(anchors)
     if hypothesis_id == "qa_hyp_named_anchor_bridge":
         return first in {"what", "which", "who", "where", "when"} and bool(anchors)
     if hypothesis_id == "qa_hyp_generic_prf":
@@ -551,6 +591,7 @@ def _aggregate_meta_rows(rows: list[dict[str, Any]], *, top_k: int) -> dict[str,
         "ordinary_bm25",
         "rag_to_memory_style_ppr",
         "comparison_dual_anchor",
+        "anchor_preserve_insert",
         "named_anchor_bridge",
         "generic_prf",
         "meta_qa_controller",
