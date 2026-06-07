@@ -4669,6 +4669,8 @@ class AssumptionOSTest(unittest.TestCase):
         heldout_accepted = [row for row in heldout["evaluation"] if row["decision"] == "accept_retain"]
         self.assertTrue(all(row["harm_count"] == 0 for row in heldout_accepted))
         self.assertFalse(payload["config"]["stored_raw_model_answers"])
+        self.assertEqual(payload["extractive_reader"]["status"], "not_run")
+        self.assertFalse(payload["extractive_reader"]["raw_answers_stored"])
 
     def test_structural_context_edges_generalize_hipporag_context(self):
         payload = build_structural_context_edge_payload(eval_id="unit_structural_context_edges")

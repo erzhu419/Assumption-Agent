@@ -11,9 +11,11 @@ calls?
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
+import time
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +35,9 @@ from .hipporag_qa_probe import (
     _resolve,
     _retrieval_metrics,
     _sample_indices,
+    _top_docs,
+    _contains_any_answer,
+    _normalize_text,
     _tokens,
     _write_json,
 )
@@ -216,6 +221,15 @@ def build_meta_qa_evolution_payload(
     top_k: int = 5,
     ppr_candidate_pool: int = 40,
     max_doc_phrase_tokens: int = 24,
+    run_extractive_reader: bool = False,
+    reader_model: str = "distilbert-base-cased-distilled-squad",
+    reader_retrievers: tuple[str, ...] = (
+        "ordinary_bm25",
+        "rag_to_memory_style_ppr",
+        "meta_qa_controller",
+    ),
+    reader_samples_per_dataset: int = 0,
+    reader_max_length: int = 384,
 ) -> dict[str, Any]:
     """Build a QA-level variation/evaluation/selective-retention payload."""
 
@@ -254,10 +268,21 @@ def build_meta_qa_evolution_payload(
         row["retained_policy"] = _retained_policy_for_row(row, accepted, accepted_priority)
         row["metrics"]["meta_qa_controller"] = row["metrics"][row["retained_policy"]]
         row["top_titles"]["meta_qa_controller"] = row["top_titles"][row["retained_policy"]]
+        row["top_doc_ids"]["meta_qa_controller"] = row["top_doc_ids"][row["retained_policy"]]
 
     aggregate = _aggregate_meta_rows(rows, top_k=top_k)
     deltas = _aggregate_deltas(aggregate, "meta_qa_controller", "ordinary_bm25")
     ppr_deltas = _aggregate_deltas(aggregate, "meta_qa_controller", "rag_to_memory_style_ppr")
+    extractive_reader = _run_extractive_reader_for_payload(
+        rows,
+        data_dir=data_dir,
+        top_k=top_k,
+        run=run_extractive_reader,
+        model_name=reader_model,
+        retriever_names=reader_retrievers,
+        samples_per_dataset=reader_samples_per_dataset,
+        max_length=reader_max_length,
+    )
     gates = [
         {
             "gate": "uses_real_hipporag_qa_files",
@@ -316,6 +341,8 @@ def build_meta_qa_evolution_payload(
             },
         },
     ]
+    if run_extractive_reader:
+        gates.extend(_extractive_reader_gates(extractive_reader))
     return {
         "eval_id": eval_id or "meta_qa_evolution_20260607",
         "eval_kind": "solve_time_meta_qa_evolution_probe",
@@ -335,6 +362,11 @@ def build_meta_qa_evolution_payload(
             "ppr_candidate_pool": ppr_candidate_pool,
             "max_doc_phrase_tokens": max_doc_phrase_tokens,
             "stored_raw_model_answers": False,
+            "run_extractive_reader": run_extractive_reader,
+            "extractive_reader_model": reader_model if run_extractive_reader else None,
+            "extractive_reader_retrievers": list(reader_retrievers) if run_extractive_reader else [],
+            "extractive_reader_samples_per_dataset": reader_samples_per_dataset if run_extractive_reader else 0,
+            "extractive_reader_max_length": reader_max_length if run_extractive_reader else 0,
         },
         "variation": [hypothesis.to_dict() for hypothesis in HYPOTHESES],
         "evaluation": hypothesis_summaries,
@@ -346,6 +378,7 @@ def build_meta_qa_evolution_payload(
         "aggregate": aggregate,
         "deltas_vs_bm25": deltas,
         "deltas_vs_ppr": ppr_deltas,
+        "extractive_reader": extractive_reader,
         "recursive_trace": _recursive_trace(hypothesis_summaries, deltas),
         "gates": gates,
         "failed_gates": [gate["gate"] for gate in gates if not gate["pass"]],
@@ -413,6 +446,10 @@ def _evaluate_meta_qa_row(
         "metrics": metrics,
         "top_titles": {
             name: _top_titles(ranking, corpus, top_k=top_k)
+            for name, ranking in rankings.items()
+        },
+        "top_doc_ids": {
+            name: [doc.doc_id for doc, _ in _top_docs(ranking, corpus, top_k)]
             for name, ranking in rankings.items()
         },
         "ranking_inputs_exclude": ["gold_answers", "gold_titles", "supporting_facts"],
@@ -1020,6 +1057,297 @@ def _aggregate_deltas(aggregate: dict[str, Any], candidate: str, baseline: str) 
     }
 
 
+def _run_extractive_reader_for_payload(
+    rows: list[dict[str, Any]],
+    *,
+    data_dir: Path,
+    top_k: int,
+    run: bool,
+    model_name: str,
+    retriever_names: tuple[str, ...],
+    samples_per_dataset: int,
+    max_length: int,
+) -> dict[str, Any]:
+    if not run:
+        return {
+            "status": "not_run",
+            "reader_rows": 0,
+            "attempted_calls": 0,
+            "failed_calls": 0,
+            "model": None,
+            "by_retriever": {},
+            "deltas_vs_bm25": {},
+            "deltas_vs_ppr": {},
+            "raw_answers_stored": False,
+        }
+
+    selected_rows = _select_reader_rows(rows, samples_per_dataset=samples_per_dataset)
+    if not selected_rows:
+        return {
+            "status": "no_rows",
+            "reader_rows": 0,
+            "attempted_calls": 0,
+            "failed_calls": 0,
+            "model": model_name,
+            "by_retriever": {},
+            "deltas_vs_bm25": {},
+            "deltas_vs_ppr": {},
+            "raw_answers_stored": False,
+        }
+
+    try:
+        reader = _LocalExtractiveReader(model_name=model_name, max_length=max_length)
+        load_error = None
+    except Exception as exc:
+        reader = None
+        load_error = str(exc)
+
+    corpora = {
+        dataset: _load_corpus_index(data_dir / f"{dataset}_corpus.json")
+        for dataset in sorted({row["dataset"] for row in selected_rows})
+    }
+    samples = {
+        dataset: _load_json(data_dir / f"{dataset}.json")
+        for dataset in sorted({row["dataset"] for row in selected_rows})
+    }
+
+    attempted = 0
+    failed = 0
+    for row in selected_rows:
+        corpus = corpora[row["dataset"]]
+        sample = samples[row["dataset"]][row["sample_index"]]
+        gold_answers = _gold_answers(sample)
+        row_results = {}
+        for retriever in retriever_names:
+            attempted += 1
+            docs = _docs_by_id(corpus, row.get("top_doc_ids", {}).get(retriever, [])[:top_k])
+            started = time.time()
+            if reader is None:
+                prediction = ""
+                score = 0.0
+                error = load_error or "reader_unavailable"
+            else:
+                try:
+                    prediction, score = reader.answer(row["question"], docs)
+                    error = None
+                except Exception as exc:
+                    prediction = ""
+                    score = 0.0
+                    error = str(exc)
+            elapsed = round(time.time() - started, 3)
+            failed += 1 if error else 0
+            exact_match, f1 = _answer_scores(prediction, gold_answers)
+            row_results[retriever] = {
+                "model": model_name,
+                "top_k": len(docs),
+                "answer_sha256": hashlib.sha256(prediction.encode("utf-8")).hexdigest() if prediction else None,
+                "answer_char_count": len(prediction),
+                "prediction_score": round(score, 4),
+                "exact_match": exact_match,
+                "f1": f1,
+                "contains_gold_answer": _contains_any_answer(prediction, gold_answers),
+                "latency_seconds": elapsed,
+                "error": error,
+            }
+        row["extractive_reader"] = {
+            "question_sha256": hashlib.sha256(row["question"].encode("utf-8")).hexdigest(),
+            "retrievers": row_results,
+            "raw_answer_stored": False,
+            "gold_answers_stored": False,
+        }
+
+    by_retriever = _aggregate_extractive_reader(selected_rows, retriever_names)
+    return {
+        "status": "run",
+        "reader_rows": len(selected_rows),
+        "attempted_calls": attempted,
+        "failed_calls": failed,
+        "model": model_name,
+        "retrievers": list(retriever_names),
+        "by_retriever": by_retriever,
+        "deltas_vs_bm25": _reader_deltas(by_retriever, "meta_qa_controller", "ordinary_bm25"),
+        "deltas_vs_ppr": _reader_deltas(by_retriever, "meta_qa_controller", "rag_to_memory_style_ppr"),
+        "raw_answers_stored": False,
+        "gold_answers_stored": False,
+    }
+
+
+def _select_reader_rows(rows: list[dict[str, Any]], *, samples_per_dataset: int) -> list[dict[str, Any]]:
+    if samples_per_dataset <= 0:
+        return rows
+    selected = []
+    counts: Counter[str] = Counter()
+    for row in rows:
+        dataset = row["dataset"]
+        if counts[dataset] >= samples_per_dataset:
+            continue
+        selected.append(row)
+        counts[dataset] += 1
+    return selected
+
+
+def _docs_by_id(corpus: CorpusIndex, doc_ids: list[str]) -> list[Any]:
+    doc_by_id = {doc.doc_id: doc for doc in corpus.docs}
+    return [doc_by_id[doc_id] for doc_id in doc_ids if doc_id in doc_by_id]
+
+
+class _LocalExtractiveReader:
+    def __init__(self, *, model_name: str, max_length: int) -> None:
+        from transformers import AutoModelForQuestionAnswering, AutoTokenizer
+        import torch
+
+        self.model_name = model_name
+        self.max_length = max_length
+        self.torch = torch
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForQuestionAnswering.from_pretrained(model_name)
+        self.model.eval()
+
+    def answer(self, question: str, docs: list[Any]) -> tuple[str, float]:
+        best_answer = ""
+        best_score = -1e12
+        with self.torch.no_grad():
+            for doc in docs:
+                context = f"{doc.title}. {doc.text}"
+                encoded = self.tokenizer(
+                    question,
+                    context,
+                    return_tensors="pt",
+                    truncation="only_second",
+                    max_length=self.max_length,
+                )
+                output = self.model(**encoded)
+                sequence_ids = encoded.sequence_ids(0)
+                context_positions = [
+                    idx
+                    for idx, sequence_id in enumerate(sequence_ids)
+                    if sequence_id == 1
+                ]
+                if not context_positions:
+                    continue
+                start_logits = output.start_logits[0]
+                end_logits = output.end_logits[0]
+                top_n = min(8, len(context_positions))
+                top_starts = self.torch.topk(start_logits, k=min(top_n, start_logits.numel())).indices.tolist()
+                top_ends = self.torch.topk(end_logits, k=min(top_n, end_logits.numel())).indices.tolist()
+                context_set = set(context_positions)
+                for start in top_starts:
+                    if start not in context_set:
+                        continue
+                    for end in top_ends:
+                        if end not in context_set or end < start or end - start > 30:
+                            continue
+                        score = float(start_logits[start] + end_logits[end])
+                        token_ids = encoded["input_ids"][0][start : end + 1]
+                        answer = self.tokenizer.decode(token_ids, skip_special_tokens=True).strip()
+                        if answer and score > best_score:
+                            best_score = score
+                            best_answer = answer
+        return best_answer, best_score if best_answer else 0.0
+
+
+def _answer_scores(prediction: str, gold_answers: list[str]) -> tuple[float, float]:
+    if not gold_answers:
+        return 0.0, 0.0
+    exact = 1.0 if any(_normalize_text(prediction) == _normalize_text(answer) for answer in gold_answers) else 0.0
+    f1 = max((_answer_f1(prediction, answer) for answer in gold_answers), default=0.0)
+    return exact, round(f1, 4)
+
+
+def _answer_f1(prediction: str, gold: str) -> float:
+    pred_tokens = _normalize_text(prediction).split()
+    gold_tokens = _normalize_text(gold).split()
+    if not pred_tokens or not gold_tokens:
+        return 1.0 if pred_tokens == gold_tokens else 0.0
+    overlap = Counter(pred_tokens) & Counter(gold_tokens)
+    overlap_count = sum(overlap.values())
+    if not overlap_count:
+        return 0.0
+    precision = overlap_count / len(pred_tokens)
+    recall = overlap_count / len(gold_tokens)
+    return (2 * precision * recall) / (precision + recall)
+
+
+def _aggregate_extractive_reader(rows: list[dict[str, Any]], retriever_names: tuple[str, ...]) -> dict[str, Any]:
+    summary = {}
+    for retriever in retriever_names:
+        results = [
+            row["extractive_reader"]["retrievers"][retriever]
+            for row in rows
+            if "extractive_reader" in row and retriever in row["extractive_reader"].get("retrievers", {})
+        ]
+        n = len(results)
+        if not n:
+            summary[retriever] = {
+                "n": 0,
+                "exact_match": 0.0,
+                "mean_f1": 0.0,
+                "contains_gold_answer_rate": 0.0,
+                "failed_calls": 0,
+                "mean_latency_seconds": 0.0,
+            }
+            continue
+        summary[retriever] = {
+            "n": n,
+            "exact_match": round(sum(float(row["exact_match"]) for row in results) / n, 4),
+            "mean_f1": round(sum(float(row["f1"]) for row in results) / n, 4),
+            "contains_gold_answer_rate": _rate(results, "contains_gold_answer"),
+            "failed_calls": sum(1 for row in results if row.get("error")),
+            "mean_latency_seconds": round(sum(float(row["latency_seconds"]) for row in results) / n, 3),
+        }
+    return summary
+
+
+def _reader_deltas(summary: dict[str, Any], candidate: str, baseline: str) -> dict[str, float]:
+    if candidate not in summary or baseline not in summary:
+        return {}
+    cand = summary[candidate]
+    base = summary[baseline]
+    return {
+        "exact_match_delta": round(float(cand["exact_match"]) - float(base["exact_match"]), 4),
+        "mean_f1_delta": round(float(cand["mean_f1"]) - float(base["mean_f1"]), 4),
+        "contains_gold_answer_rate_delta": round(
+            float(cand["contains_gold_answer_rate"]) - float(base["contains_gold_answer_rate"]),
+            4,
+        ),
+    }
+
+
+def _extractive_reader_gates(reader: dict[str, Any]) -> list[dict[str, Any]]:
+    bm25_delta = reader.get("deltas_vs_bm25", {})
+    ppr_delta = reader.get("deltas_vs_ppr", {})
+    return [
+        {
+            "gate": "extractive_reader_completed",
+            "pass": reader.get("attempted_calls", 0) > 0 and reader.get("failed_calls", 0) == 0,
+            "observed": {
+                "reader_rows": reader.get("reader_rows"),
+                "attempted_calls": reader.get("attempted_calls"),
+                "failed_calls": reader.get("failed_calls"),
+                "model": reader.get("model"),
+            },
+        },
+        {
+            "gate": "extractive_reader_raw_answers_not_stored",
+            "pass": reader.get("raw_answers_stored") is False and reader.get("gold_answers_stored") is False,
+            "observed": {
+                "raw_answers_stored": reader.get("raw_answers_stored"),
+                "gold_answers_stored": reader.get("gold_answers_stored"),
+            },
+        },
+        {
+            "gate": "extractive_reader_meta_beats_bm25_f1",
+            "pass": float(bm25_delta.get("mean_f1_delta", 0.0)) >= 0.0,
+            "observed": bm25_delta,
+        },
+        {
+            "gate": "extractive_reader_meta_beats_ppr_f1",
+            "pass": float(ppr_delta.get("mean_f1_delta", 0.0)) >= 0.0,
+            "observed": ppr_delta,
+        },
+    ]
+
+
 def _recursive_trace(hypothesis_summaries: list[dict[str, Any]], deltas: dict[str, float]) -> list[dict[str, Any]]:
     return [
         {
@@ -1081,6 +1409,10 @@ def main() -> None:
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--ppr-candidate-pool", type=int, default=40)
     parser.add_argument("--max-doc-phrase-tokens", type=int, default=24)
+    parser.add_argument("--run-extractive-reader", action="store_true")
+    parser.add_argument("--reader-model", default="distilbert-base-cased-distilled-squad")
+    parser.add_argument("--reader-samples-per-dataset", type=int, default=0)
+    parser.add_argument("--reader-max-length", type=int, default=384)
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     args = parser.parse_args()
     payload = build_meta_qa_evolution_payload(
@@ -1091,6 +1423,10 @@ def main() -> None:
         top_k=args.top_k,
         ppr_candidate_pool=args.ppr_candidate_pool,
         max_doc_phrase_tokens=args.max_doc_phrase_tokens,
+        run_extractive_reader=args.run_extractive_reader,
+        reader_model=args.reader_model,
+        reader_samples_per_dataset=args.reader_samples_per_dataset,
+        reader_max_length=args.reader_max_length,
     )
     out = Path(args.out)
     _write_json(out, payload)
@@ -1100,6 +1436,12 @@ def main() -> None:
         "aggregate": payload["aggregate"]["overall"],
         "deltas_vs_bm25": payload["deltas_vs_bm25"],
         "deltas_vs_ppr": payload["deltas_vs_ppr"],
+        "extractive_reader": {
+            "status": payload["extractive_reader"]["status"],
+            "by_retriever": payload["extractive_reader"]["by_retriever"],
+            "deltas_vs_bm25": payload["extractive_reader"]["deltas_vs_bm25"],
+            "deltas_vs_ppr": payload["extractive_reader"]["deltas_vs_ppr"],
+        },
         "evaluation": [
             {
                 "hypothesis_id": row["hypothesis_id"],
