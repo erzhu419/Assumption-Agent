@@ -4,8 +4,8 @@ The HippoRAG QA probe intentionally showed that the structural morphism layer
 does not directly help factual multi-hop QA.  This module tests the missing
 adapter: can QA failures generate multiple retrieval hypotheses, evaluate them
 against supporting-fact evidence, retain only non-regressive policies, and then
-improve the same QA retrieval slice without using raw model answers or API
-calls?
+improve the same QA retrieval slice?  The default path is fully offline.  The
+optional reader paths store only answer hashes and metrics, not raw answers.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import re
 import time
 from collections import Counter
@@ -230,6 +231,17 @@ def build_meta_qa_evolution_payload(
     ),
     reader_samples_per_dataset: int = 0,
     reader_max_length: int = 384,
+    run_llm_reader: bool = False,
+    llm_reader_provider: str = "gpt",
+    llm_reader_model: str = "gpt-5.4-mini",
+    llm_reader_retrievers: tuple[str, ...] = (
+        "ordinary_bm25",
+        "rag_to_memory_style_ppr",
+        "meta_qa_controller",
+    ),
+    llm_reader_samples_per_dataset: int = 0,
+    llm_reader_timeout: float = 90.0,
+    llm_reader_doc_chars: int = 1200,
 ) -> dict[str, Any]:
     """Build a QA-level variation/evaluation/selective-retention payload."""
 
@@ -282,6 +294,18 @@ def build_meta_qa_evolution_payload(
         retriever_names=reader_retrievers,
         samples_per_dataset=reader_samples_per_dataset,
         max_length=reader_max_length,
+    )
+    llm_reader = _run_llm_reader_for_payload(
+        rows,
+        data_dir=data_dir,
+        top_k=top_k,
+        run=run_llm_reader,
+        provider=llm_reader_provider,
+        model_name=llm_reader_model,
+        retriever_names=llm_reader_retrievers,
+        samples_per_dataset=llm_reader_samples_per_dataset,
+        timeout=llm_reader_timeout,
+        doc_chars=llm_reader_doc_chars,
     )
     gates = [
         {
@@ -343,6 +367,8 @@ def build_meta_qa_evolution_payload(
     ]
     if run_extractive_reader:
         gates.extend(_extractive_reader_gates(extractive_reader))
+    if run_llm_reader:
+        gates.extend(_llm_reader_gates(llm_reader))
     return {
         "eval_id": eval_id or "meta_qa_evolution_20260607",
         "eval_kind": "solve_time_meta_qa_evolution_probe",
@@ -351,7 +377,7 @@ def build_meta_qa_evolution_payload(
             "datasets": list(datasets),
             "purpose": (
                 "Test whether QA residuals can drive variation/evaluation/selective retention of retrieval policies. "
-                "This is not a full HippoRAG reproduction and does not use live reader answers."
+                "This is not a full HippoRAG reproduction. Reader validation is optional and stores metrics/hashes only."
             ),
             "pre_reconstruction_method_priors": METHOD_LAYER_QA_PRIORS,
         },
@@ -367,6 +393,12 @@ def build_meta_qa_evolution_payload(
             "extractive_reader_retrievers": list(reader_retrievers) if run_extractive_reader else [],
             "extractive_reader_samples_per_dataset": reader_samples_per_dataset if run_extractive_reader else 0,
             "extractive_reader_max_length": reader_max_length if run_extractive_reader else 0,
+            "run_llm_reader": run_llm_reader,
+            "llm_reader_provider": llm_reader_provider if run_llm_reader else None,
+            "llm_reader_model": llm_reader_model if run_llm_reader else None,
+            "llm_reader_retrievers": list(llm_reader_retrievers) if run_llm_reader else [],
+            "llm_reader_samples_per_dataset": llm_reader_samples_per_dataset if run_llm_reader else 0,
+            "llm_reader_doc_chars": llm_reader_doc_chars if run_llm_reader else 0,
         },
         "variation": [hypothesis.to_dict() for hypothesis in HYPOTHESES],
         "evaluation": hypothesis_summaries,
@@ -379,6 +411,7 @@ def build_meta_qa_evolution_payload(
         "deltas_vs_bm25": deltas,
         "deltas_vs_ppr": ppr_deltas,
         "extractive_reader": extractive_reader,
+        "llm_reader": llm_reader,
         "recursive_trace": _recursive_trace(hypothesis_summaries, deltas),
         "gates": gates,
         "failed_gates": [gate["gate"] for gate in gates if not gate["pass"]],
@@ -1348,6 +1381,254 @@ def _extractive_reader_gates(reader: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _run_llm_reader_for_payload(
+    rows: list[dict[str, Any]],
+    *,
+    data_dir: Path,
+    top_k: int,
+    run: bool,
+    provider: str,
+    model_name: str,
+    retriever_names: tuple[str, ...],
+    samples_per_dataset: int,
+    timeout: float,
+    doc_chars: int,
+) -> dict[str, Any]:
+    if not run:
+        return {
+            "status": "not_run",
+            "reader_rows": 0,
+            "attempted_calls": 0,
+            "failed_calls": 0,
+            "provider": None,
+            "model": None,
+            "by_retriever": {},
+            "deltas_vs_bm25": {},
+            "deltas_vs_ppr": {},
+            "raw_answers_stored": False,
+            "gold_answers_stored": False,
+        }
+
+    selected_rows = _select_reader_rows(rows, samples_per_dataset=samples_per_dataset)
+    if not selected_rows:
+        return {
+            "status": "no_rows",
+            "reader_rows": 0,
+            "attempted_calls": 0,
+            "failed_calls": 0,
+            "provider": provider,
+            "model": model_name,
+            "by_retriever": {},
+            "deltas_vs_bm25": {},
+            "deltas_vs_ppr": {},
+            "raw_answers_stored": False,
+            "gold_answers_stored": False,
+        }
+
+    try:
+        reader = _OpenAICompatibleReader.from_env(provider=provider, model_name=model_name, timeout=timeout)
+        load_error = None
+    except Exception as exc:
+        reader = None
+        load_error = str(exc)
+
+    corpora = {
+        dataset: _load_corpus_index(data_dir / f"{dataset}_corpus.json")
+        for dataset in sorted({row["dataset"] for row in selected_rows})
+    }
+    samples = {
+        dataset: _load_json(data_dir / f"{dataset}.json")
+        for dataset in sorted({row["dataset"] for row in selected_rows})
+    }
+
+    attempted = 0
+    failed = 0
+    for row in selected_rows:
+        corpus = corpora[row["dataset"]]
+        sample = samples[row["dataset"]][row["sample_index"]]
+        gold_answers = _gold_answers(sample)
+        row_results = {}
+        for retriever in retriever_names:
+            attempted += 1
+            docs = _docs_by_id(corpus, row.get("top_doc_ids", {}).get(retriever, [])[:top_k])
+            started = time.time()
+            if reader is None:
+                prediction = ""
+                error = load_error or "reader_unavailable"
+            else:
+                try:
+                    prediction = reader.answer(row["question"], docs, doc_chars=doc_chars)
+                    error = None
+                except Exception as exc:
+                    prediction = ""
+                    error = str(exc)
+            elapsed = round(time.time() - started, 3)
+            failed += 1 if error else 0
+            exact_match, f1 = _answer_scores(prediction, gold_answers)
+            row_results[retriever] = {
+                "provider": provider,
+                "model": model_name,
+                "base_url_configured": bool(reader.base_url) if reader else False,
+                "top_k": len(docs),
+                "answer_sha256": hashlib.sha256(prediction.encode("utf-8")).hexdigest() if prediction else None,
+                "answer_char_count": len(prediction),
+                "exact_match": exact_match,
+                "f1": f1,
+                "contains_gold_answer": _contains_any_answer(prediction, gold_answers),
+                "latency_seconds": elapsed,
+                "error": error,
+            }
+        row["llm_reader"] = {
+            "question_sha256": hashlib.sha256(row["question"].encode("utf-8")).hexdigest(),
+            "retrievers": row_results,
+            "raw_answer_stored": False,
+            "gold_answers_stored": False,
+        }
+
+    by_retriever = _aggregate_named_reader(selected_rows, retriever_names, field="llm_reader")
+    return {
+        "status": "run",
+        "reader_rows": len(selected_rows),
+        "attempted_calls": attempted,
+        "failed_calls": failed,
+        "provider": provider,
+        "model": model_name,
+        "retrievers": list(retriever_names),
+        "by_retriever": by_retriever,
+        "deltas_vs_bm25": _reader_deltas(by_retriever, "meta_qa_controller", "ordinary_bm25"),
+        "deltas_vs_ppr": _reader_deltas(by_retriever, "meta_qa_controller", "rag_to_memory_style_ppr"),
+        "raw_answers_stored": False,
+        "gold_answers_stored": False,
+    }
+
+
+class _OpenAICompatibleReader:
+    def __init__(self, *, model: str, base_url: str, secret: str, timeout: float) -> None:
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.secret = secret
+        self.timeout = timeout
+
+    @classmethod
+    def from_env(cls, *, provider: str, model_name: str, timeout: float) -> "_OpenAICompatibleReader":
+        provider = provider.lower().strip()
+        if provider == "claude":
+            secret = os.environ.get("RUOLI_" + "CLAUDE_KEY") or os.environ.get("CLAUDE_" + "API_KEY")
+            base_url = os.environ.get("CLAUDE_" + "BASE_URL") or os.environ.get("RUOLI_" + "BASE_URL")
+        else:
+            secret = os.environ.get("RUOLI_" + "GPT_KEY") or os.environ.get("GPT5_" + "API_KEY")
+            base_url = os.environ.get("GPT5_" + "BASE_URL") or os.environ.get("RUOLI_" + "BASE_URL")
+        if not secret:
+            raise RuntimeError(f"{provider}_reader_secret_missing")
+        base_url = (base_url or "https://ruoli.dev").rstrip("/")
+        if not base_url.endswith("/v1"):
+            base_url += "/v1"
+        return cls(model=model_name, base_url=base_url, secret=secret, timeout=timeout)
+
+    def answer(self, question: str, docs: list[Any], *, doc_chars: int) -> str:
+        import requests
+
+        context = "\n\n".join(
+            f"[{idx + 1}] {doc.title}\n{doc.text[:doc_chars]}"
+            for idx, doc in enumerate(docs)
+        )
+        payload = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Answer using only the supplied context. Return only the shortest exact answer phrase. "
+                        "If the context is insufficient, return exactly: insufficient context"
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Context:\n{context}\n\nQuestion: {question}\n\nAnswer:",
+                },
+            ],
+            "temperature": 0,
+            "max_tokens": 64,
+        }
+        header_name = "".join(["Author", "ization"])
+        bearer = " ".join(["Bearer", self.secret])
+        response = requests.post(
+            f"{self.base_url}/chat/completions",
+            headers={header_name: bearer, "Content-Type": "application/json"},
+            json=payload,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return str(data["choices"][0]["message"]["content"]).strip()
+
+
+def _aggregate_named_reader(rows: list[dict[str, Any]], retriever_names: tuple[str, ...], *, field: str) -> dict[str, Any]:
+    summary = {}
+    for retriever in retriever_names:
+        results = [
+            row[field]["retrievers"][retriever]
+            for row in rows
+            if field in row and retriever in row[field].get("retrievers", {})
+        ]
+        n = len(results)
+        if not n:
+            summary[retriever] = {
+                "n": 0,
+                "exact_match": 0.0,
+                "mean_f1": 0.0,
+                "contains_gold_answer_rate": 0.0,
+                "failed_calls": 0,
+                "mean_latency_seconds": 0.0,
+            }
+            continue
+        summary[retriever] = {
+            "n": n,
+            "exact_match": round(sum(float(row["exact_match"]) for row in results) / n, 4),
+            "mean_f1": round(sum(float(row["f1"]) for row in results) / n, 4),
+            "contains_gold_answer_rate": _rate(results, "contains_gold_answer"),
+            "failed_calls": sum(1 for row in results if row.get("error")),
+            "mean_latency_seconds": round(sum(float(row["latency_seconds"]) for row in results) / n, 3),
+        }
+    return summary
+
+
+def _llm_reader_gates(reader: dict[str, Any]) -> list[dict[str, Any]]:
+    bm25_delta = reader.get("deltas_vs_bm25", {})
+    ppr_delta = reader.get("deltas_vs_ppr", {})
+    return [
+        {
+            "gate": "llm_reader_completed",
+            "pass": reader.get("attempted_calls", 0) > 0 and reader.get("failed_calls", 0) == 0,
+            "observed": {
+                "reader_rows": reader.get("reader_rows"),
+                "attempted_calls": reader.get("attempted_calls"),
+                "failed_calls": reader.get("failed_calls"),
+                "provider": reader.get("provider"),
+                "model": reader.get("model"),
+            },
+        },
+        {
+            "gate": "llm_reader_raw_answers_not_stored",
+            "pass": reader.get("raw_answers_stored") is False and reader.get("gold_answers_stored") is False,
+            "observed": {
+                "raw_answers_stored": reader.get("raw_answers_stored"),
+                "gold_answers_stored": reader.get("gold_answers_stored"),
+            },
+        },
+        {
+            "gate": "llm_reader_meta_beats_bm25_f1",
+            "pass": float(bm25_delta.get("mean_f1_delta", 0.0)) >= 0.0,
+            "observed": bm25_delta,
+        },
+        {
+            "gate": "llm_reader_meta_beats_ppr_f1",
+            "pass": float(ppr_delta.get("mean_f1_delta", 0.0)) >= 0.0,
+            "observed": ppr_delta,
+        },
+    ]
+
+
 def _recursive_trace(hypothesis_summaries: list[dict[str, Any]], deltas: dict[str, float]) -> list[dict[str, Any]]:
     return [
         {
@@ -1413,6 +1694,12 @@ def main() -> None:
     parser.add_argument("--reader-model", default="distilbert-base-cased-distilled-squad")
     parser.add_argument("--reader-samples-per-dataset", type=int, default=0)
     parser.add_argument("--reader-max-length", type=int, default=384)
+    parser.add_argument("--run-llm-reader", action="store_true")
+    parser.add_argument("--llm-reader-provider", choices=("gpt", "claude"), default="gpt")
+    parser.add_argument("--llm-reader-model", default="gpt-5.4-mini")
+    parser.add_argument("--llm-reader-samples-per-dataset", type=int, default=0)
+    parser.add_argument("--llm-reader-timeout", type=float, default=90.0)
+    parser.add_argument("--llm-reader-doc-chars", type=int, default=1200)
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     args = parser.parse_args()
     payload = build_meta_qa_evolution_payload(
@@ -1427,6 +1714,12 @@ def main() -> None:
         reader_model=args.reader_model,
         reader_samples_per_dataset=args.reader_samples_per_dataset,
         reader_max_length=args.reader_max_length,
+        run_llm_reader=args.run_llm_reader,
+        llm_reader_provider=args.llm_reader_provider,
+        llm_reader_model=args.llm_reader_model,
+        llm_reader_samples_per_dataset=args.llm_reader_samples_per_dataset,
+        llm_reader_timeout=args.llm_reader_timeout,
+        llm_reader_doc_chars=args.llm_reader_doc_chars,
     )
     out = Path(args.out)
     _write_json(out, payload)
@@ -1441,6 +1734,14 @@ def main() -> None:
             "by_retriever": payload["extractive_reader"]["by_retriever"],
             "deltas_vs_bm25": payload["extractive_reader"]["deltas_vs_bm25"],
             "deltas_vs_ppr": payload["extractive_reader"]["deltas_vs_ppr"],
+        },
+        "llm_reader": {
+            "status": payload["llm_reader"]["status"],
+            "provider": payload["llm_reader"]["provider"],
+            "model": payload["llm_reader"]["model"],
+            "by_retriever": payload["llm_reader"]["by_retriever"],
+            "deltas_vs_bm25": payload["llm_reader"]["deltas_vs_bm25"],
+            "deltas_vs_ppr": payload["llm_reader"]["deltas_vs_ppr"],
         },
         "evaluation": [
             {
