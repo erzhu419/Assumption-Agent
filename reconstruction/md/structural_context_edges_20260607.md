@@ -75,6 +75,8 @@ For paper language, the safe claim is:
 
 > We generalize HippoRAG-style synonym/context spreading from lexical neighborhoods to bounded assumption-context neighborhoods. This lets structural roles activate reusable priors such as negative-feedback equilibrium restoration, while negative controls prevent treating all growth processes as convergent.
 
+Follow-up `assumption_family_discovery_20260607` generalizes this from one hand-built context to open-set assumption-family induction over multiple scientific, mathematical, engineering, and philosophical theory cards.
+
 ## Reproduction
 
 ```bash

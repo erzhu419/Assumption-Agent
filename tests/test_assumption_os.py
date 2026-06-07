@@ -6,6 +6,10 @@ from pathlib import Path
 
 from assumption_os.adapters import ingest_artifacts, load_exp82_hypotheses, load_wisdom_nodes
 from assumption_os.activation import build_activation_profile
+from assumption_os.assumption_family_discovery import (
+    build_assumption_family_discovery_payload,
+    classify_new_theory_card,
+)
 from assumption_os.assumption_bench import build_assumption_bench_payload
 from assumption_os.bayesian_policy import BayesianPolicyAction, build_bayesian_policy_payload, parent_belief
 from assumption_os.candidate_acceptance import AcceptanceDecision, apply_accepted_candidates, build_acceptance_payload
@@ -4663,6 +4667,40 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(market["structural_context"]["top_pattern_id"], "pat_negative_feedback")
         self.assertIn("real_lenz_negative_feedback", market["structural_context"]["expanded_realization_ids"])
         self.assertIn("real_le_chatelier_shift", market["structural_context"]["expanded_realization_ids"])
+
+    def test_assumption_family_discovery_clusters_open_set_theory_kernels(self):
+        payload = build_assumption_family_discovery_payload(eval_id="unit_assumption_family_discovery")
+        self.assertTrue(payload["pass"], payload["gates"])
+        metrics = payload["metrics"]
+        self.assertEqual(metrics["discovered_family_count"], 10)
+        self.assertEqual(metrics["cluster_purity"], 1.0)
+        self.assertEqual(metrics["same_family_pair_recall"], 1.0)
+        self.assertEqual(metrics["cross_family_block_rate"], 1.0)
+        self.assertGreater(
+            metrics["same_family_pair_recall"],
+            metrics["word_context_pair_recall"],
+        )
+        self.assertGreaterEqual(metrics["new_open_set_family_count"], 1)
+        families = {row["kernel_motif"]: row for row in payload["families"]}
+        self.assertIn("kernel_representation_transform", families)
+        self.assertEqual(families["kernel_representation_transform"]["open_set_status"], "new_open_set_family")
+        feedback_members = {
+            member["theory_id"]
+            for member in families["kernel_negative_feedback"]["members"]
+        }
+        self.assertEqual({"homeostasis", "le_chatelier", "lenz"}, feedback_members)
+        new_card = {
+            "theory_id": "thermostat",
+            "title": "Thermostat feedback control",
+            "domain": "control",
+            "text": (
+                "A temperature deviation from setpoint triggers an actuator response that opposes the disturbance "
+                "and restores a stable range."
+            ),
+        }
+        decision = classify_new_theory_card(new_card, payload)
+        self.assertEqual(decision["decision"], "attach_to_existing_family")
+        self.assertEqual(decision["ranking"][0]["kernel_motif"], "kernel_negative_feedback")
 
     def test_paper_negative_results_records_boundaries_and_failures(self):
         payload = build_paper_negative_results_payload(
