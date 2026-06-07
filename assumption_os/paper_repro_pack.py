@@ -24,6 +24,9 @@ DEFAULT_ARTIFACTS = [
     PAPER_DIR / "hipporag_qa_probe_20260606.json",
     PAPER_DIR / "meta_qa_evolution_20260607.json",
     PAPER_DIR / "meta_qa_evolution_heldout60_20260607.json",
+    PAPER_DIR / "meta_qa_evolution_heldout300_20260607.json",
+    PAPER_DIR / "meta_qa_evolution_heldout600_20260607.json",
+    PAPER_DIR / "meta_qa_evolution_full3000_20260607.json",
     PAPER_DIR / "meta_qa_evolution_reader15_20260607.json",
     PAPER_DIR / "meta_qa_evolution_reader60_20260607.json",
     PAPER_DIR / "meta_qa_evolution_llm_reader15_gpt54mini_20260607.json",
@@ -183,7 +186,19 @@ def _exact_commands() -> list[dict[str, str]]:
         },
         {
             "name": "meta_qa_evolution_heldout60_no_reader",
-            "command": "python3 -m assumption_os.meta_qa_evolution --root . --samples-per-dataset 20 --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_heldout60_20260607.json'",
+            "command": "python3 -m assumption_os.meta_qa_evolution --root . --samples-per-dataset 20 --workers 3 --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_heldout60_20260607.json'",
+        },
+        {
+            "name": "meta_qa_evolution_heldout300_no_reader",
+            "command": "python3 -m assumption_os.meta_qa_evolution --root . --samples-per-dataset 100 --workers 6 --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_heldout300_20260607.json'",
+        },
+        {
+            "name": "meta_qa_evolution_heldout600_no_reader",
+            "command": "python3 -m assumption_os.meta_qa_evolution --root . --samples-per-dataset 200 --workers 6 --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_heldout600_20260607.json'",
+        },
+        {
+            "name": "meta_qa_evolution_full3000_no_reader",
+            "command": "python3 -m assumption_os.meta_qa_evolution --root . --samples-per-dataset 1000 --workers 6 --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_full3000_20260607.json'",
         },
         {
             "name": "meta_qa_evolution_extract_reader15",

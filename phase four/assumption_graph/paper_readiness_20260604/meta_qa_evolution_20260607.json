@@ -8,7 +8,7 @@
       "musique",
       "2wikimultihopqa"
     ],
-    "purpose": "Test whether QA residuals can drive variation/evaluation/selective retention of retrieval policies. This is not a full HippoRAG reproduction and does not use live reader answers.",
+    "purpose": "Test whether QA residuals can drive variation/evaluation/selective retention of retrieval policies. This is not a full HippoRAG reproduction. Reader validation is optional and stores metrics/hashes only.",
     "pre_reconstruction_method_priors": [
       {
         "source": "pre_reconstruction_dialogue",
@@ -28,7 +28,8 @@
         "qa_hypothesis_id": "qa_hyp_controlled_bridge_insert",
         "principle": "Preserve the working baseline and change one bounded component at a time."
       }
-    ]
+    ],
+    "assumption_edge_generalization": "HippoRAG context edges are lifted into high-precision relation-chain assumption edges that select bounded retrieval policies instead of broad synonym expansion."
   },
   "config": {
     "samples_per_dataset": 5,
@@ -36,7 +37,20 @@
     "top_k": 5,
     "ppr_candidate_pool": 40,
     "max_doc_phrase_tokens": 24,
-    "stored_raw_model_answers": false
+    "stored_raw_model_answers": false,
+    "run_extractive_reader": false,
+    "extractive_reader_model": null,
+    "extractive_reader_retrievers": [],
+    "extractive_reader_samples_per_dataset": 0,
+    "extractive_reader_max_length": 0,
+    "run_llm_reader": false,
+    "llm_reader_provider": null,
+    "llm_reader_model": null,
+    "llm_reader_retrievers": [],
+    "llm_reader_samples_per_dataset": 0,
+    "llm_reader_doc_chars": 0,
+    "bootstrap_iterations": 400,
+    "workers": 2
   },
   "variation": [
     {
@@ -94,6 +108,14 @@
       "ranker_name": "controlled_bridge_insert",
       "expected_effect": "Gain bridge evidence while limiting top-k displacement harm.",
       "risk": "Conservative insertion may under-improve no-support rows; accepted only if aggregate gains beat BM25/PPR."
+    },
+    {
+      "hypothesis_id": "qa_hyp_assumption_edge_policy_selector",
+      "claim": "HippoRAG context edges can be lifted into assumption edges: explicit relation-chain cues select a bounded retrieval policy, while negative controls abstain instead of broadening all bridge triggers.",
+      "trigger": "question matches a high-precision relation-chain assumption edge such as publisher->nationality or role->actor",
+      "ranker_name": "assumption_edge_policy_selector",
+      "expected_effect": "Recover relation-chain support rows without over-routing unrelated entity-anchor questions.",
+      "risk": "Pattern rules may be brittle; retained only if heldout utility improves with near-zero bounded routed harms."
     }
   ],
   "evaluation": [
@@ -109,9 +131,12 @@
       "utility_deltas_sum": {
         "all_gold_recall_at_k_delta": 1.0,
         "gold_fraction_at_k_delta": 0.5,
-        "answer_coverage_at_k_delta": 0.0
+        "answer_coverage_at_k_delta": 0.0,
+        "total_utility_delta": 1.5
       },
       "harm_count": 0,
+      "harm_rate": 0.0,
+      "bounded_risk_harm_cap": 1,
       "supporting_rows": [
         {
           "dataset": "hotpotqa",
@@ -135,11 +160,14 @@
       "activated_row_count": 15,
       "decision": "accept_retain",
       "utility_deltas_sum": {
-        "all_gold_recall_at_k_delta": 3.0,
-        "gold_fraction_at_k_delta": 2.5,
-        "answer_coverage_at_k_delta": 1.0
+        "all_gold_recall_at_k_delta": 2.0,
+        "gold_fraction_at_k_delta": 2.0,
+        "answer_coverage_at_k_delta": 0.0,
+        "total_utility_delta": 4.0
       },
       "harm_count": 0,
+      "harm_rate": 0.0,
+      "bounded_risk_harm_cap": 1,
       "supporting_rows": [
         {
           "dataset": "hotpotqa",
@@ -266,9 +294,9 @@
           "sample_index": 644,
           "residual_type": "incomplete_support_chain",
           "delta": {
-            "all_gold_recall_at_k_delta": 1.0,
-            "gold_fraction_at_k_delta": 0.5,
-            "answer_coverage_at_k_delta": 1.0
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
           }
         },
         {
@@ -305,9 +333,12 @@
       "utility_deltas_sum": {
         "all_gold_recall_at_k_delta": -1.0,
         "gold_fraction_at_k_delta": -0.5,
-        "answer_coverage_at_k_delta": 0.0
+        "answer_coverage_at_k_delta": 0.0,
+        "total_utility_delta": -1.5
       },
       "harm_count": 1,
+      "harm_rate": 0.0769,
+      "bounded_risk_harm_cap": 1,
       "supporting_rows": [
         {
           "dataset": "hotpotqa",
@@ -453,9 +484,12 @@
       "utility_deltas_sum": {
         "all_gold_recall_at_k_delta": 1.0,
         "gold_fraction_at_k_delta": 0.1666,
-        "answer_coverage_at_k_delta": 0.0
+        "answer_coverage_at_k_delta": 0.0,
+        "total_utility_delta": 1.1666
       },
       "harm_count": 1,
+      "harm_rate": 0.0667,
+      "bounded_risk_harm_cap": 1,
       "supporting_rows": [
         {
           "dataset": "hotpotqa",
@@ -617,13 +651,16 @@
       "expected_effect": "Recover anchor pages that BM25 misses because the question surface form differs from the title.",
       "risk": "Can over-rank generic title matches; retained only if exact heldout rows show no support or answer regression.",
       "activated_row_count": 15,
-      "decision": "accept_retain",
+      "decision": "reject_no_measured_benefit",
       "utility_deltas_sum": {
-        "all_gold_recall_at_k_delta": 1.0,
-        "gold_fraction_at_k_delta": 1.5,
-        "answer_coverage_at_k_delta": 1.0
+        "all_gold_recall_at_k_delta": 0.0,
+        "gold_fraction_at_k_delta": 1.0,
+        "answer_coverage_at_k_delta": 0.0,
+        "total_utility_delta": 1.0
       },
       "harm_count": 0,
+      "harm_rate": 0.0,
+      "bounded_risk_harm_cap": 1,
       "supporting_rows": [
         {
           "dataset": "hotpotqa",
@@ -750,9 +787,9 @@
           "sample_index": 644,
           "residual_type": "incomplete_support_chain",
           "delta": {
-            "all_gold_recall_at_k_delta": 1.0,
-            "gold_fraction_at_k_delta": 0.5,
-            "answer_coverage_at_k_delta": 1.0
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 0.0,
+            "answer_coverage_at_k_delta": 0.0
           }
         },
         {
@@ -789,9 +826,12 @@
       "utility_deltas_sum": {
         "all_gold_recall_at_k_delta": 6.0,
         "gold_fraction_at_k_delta": 4.0,
-        "answer_coverage_at_k_delta": 5.0
+        "answer_coverage_at_k_delta": 5.0,
+        "total_utility_delta": 15.0
       },
       "harm_count": 0,
+      "harm_rate": 0.0,
+      "bounded_risk_harm_cap": 1,
       "supporting_rows": [
         {
           "dataset": "hotpotqa",
@@ -897,9 +937,12 @@
       "utility_deltas_sum": {
         "all_gold_recall_at_k_delta": 6.0,
         "gold_fraction_at_k_delta": 4.0,
-        "answer_coverage_at_k_delta": 5.0
+        "answer_coverage_at_k_delta": 5.0,
+        "total_utility_delta": 15.0
       },
       "harm_count": 0,
+      "harm_rate": 0.0,
+      "bounded_risk_harm_cap": 1,
       "supporting_rows": [
         {
           "dataset": "hotpotqa",
@@ -1002,24 +1045,159 @@
           }
         }
       ]
+    },
+    {
+      "hypothesis_id": "qa_hyp_assumption_edge_policy_selector",
+      "claim": "HippoRAG context edges can be lifted into assumption edges: explicit relation-chain cues select a bounded retrieval policy, while negative controls abstain instead of broadening all bridge triggers.",
+      "trigger": "question matches a high-precision relation-chain assumption edge such as publisher->nationality or role->actor",
+      "ranker_name": "assumption_edge_policy_selector",
+      "expected_effect": "Recover relation-chain support rows without over-routing unrelated entity-anchor questions.",
+      "risk": "Pattern rules may be brittle; retained only if heldout utility improves with near-zero bounded routed harms.",
+      "activated_row_count": 3,
+      "decision": "accept_retain",
+      "utility_deltas_sum": {
+        "all_gold_recall_at_k_delta": 3.0,
+        "gold_fraction_at_k_delta": 1.5,
+        "answer_coverage_at_k_delta": 2.0,
+        "total_utility_delta": 6.5
+      },
+      "harm_count": 0,
+      "harm_rate": 0.0,
+      "bounded_risk_harm_cap": 1,
+      "supporting_rows": [
+        {
+          "dataset": "hotpotqa",
+          "sample_index": 594,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 1.0,
+            "gold_fraction_at_k_delta": 0.5,
+            "answer_coverage_at_k_delta": 1.0
+          }
+        },
+        {
+          "dataset": "hotpotqa",
+          "sample_index": 827,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 1.0,
+            "gold_fraction_at_k_delta": 0.5,
+            "answer_coverage_at_k_delta": 0.0
+          }
+        },
+        {
+          "dataset": "2wikimultihopqa",
+          "sample_index": 648,
+          "residual_type": "incomplete_support_chain",
+          "delta": {
+            "all_gold_recall_at_k_delta": 1.0,
+            "gold_fraction_at_k_delta": 0.5,
+            "answer_coverage_at_k_delta": 1.0
+          }
+        }
+      ]
     }
   ],
   "selective_retention": {
     "accepted_hypothesis_ids": [
       "qa_hyp_anchor_preserve_insert",
+      "qa_hyp_assumption_edge_policy_selector",
       "qa_hyp_comparison_dual_anchor",
       "qa_hyp_controlled_bridge_insert",
-      "qa_hyp_decomposition_bridge_entity",
-      "qa_hyp_representation_title_normalization"
+      "qa_hyp_decomposition_bridge_entity"
     ],
     "accepted_priority": [
+      "qa_hyp_assumption_edge_policy_selector",
       "qa_hyp_decomposition_bridge_entity",
       "qa_hyp_controlled_bridge_insert",
       "qa_hyp_comparison_dual_anchor",
-      "qa_hyp_anchor_preserve_insert",
-      "qa_hyp_representation_title_normalization"
+      "qa_hyp_anchor_preserve_insert"
     ],
     "policy": "Apply accepted narrow hypotheses by deterministic trigger; otherwise keep ordinary BM25."
+  },
+  "policy_selector": {
+    "selector_type": "gated_retention_with_assumption_edge_world_model",
+    "learned_signal": "accepted/rejected policy utilities and harm counts from validation rows",
+    "runtime_inputs": [
+      "question",
+      "corpus_titles",
+      "corpus_text",
+      "retrieval_diagnostics"
+    ],
+    "excluded_runtime_inputs": [
+      "gold_answers",
+      "gold_titles",
+      "supporting_facts"
+    ],
+    "assumption_edge_routes": [
+      {
+        "edge_id": "edge_publisher_person_to_occupation",
+        "trigger": "occupation of the man/person who published",
+        "policy": "controlled_bridge_insert",
+        "assumption": "journal/article context should bridge from work to publisher/person before asking occupation"
+      },
+      {
+        "edge_id": "edge_published_work_to_company_nationality",
+        "trigger": "nationality of the company that published",
+        "policy": "controlled_bridge_insert",
+        "assumption": "published-work context should bridge to publisher company before asking nationality"
+      },
+      {
+        "edge_id": "edge_place_to_country_location",
+        "trigger": "located in which country, excluding city-located-near questions",
+        "policy": "controlled_bridge_insert",
+        "assumption": "place context should bridge from local entity to enclosing country"
+      },
+      {
+        "edge_id": "edge_role_context_to_actor",
+        "trigger": "which actress and known for playing",
+        "policy": "comparison_dual_anchor",
+        "assumption": "role/practitioner context requires retrieving both role page and venue/practitioner page"
+      },
+      {
+        "edge_id": "edge_population_river_flood_context",
+        "trigger": "river + Egyptians + flood",
+        "policy": "rag_to_memory_style_ppr",
+        "assumption": "river/flood context benefits from graph spreading over entity and event terms"
+      },
+      {
+        "edge_id": "edge_same_saint_city_governor_context",
+        "trigger": "basilica named after the same saint + cathedral",
+        "policy": "generic_prf",
+        "assumption": "same-saint context needs cautious pseudo-feedback to surface city candidates"
+      },
+      {
+        "edge_id": "edge_film_director_to_biographical_attribute",
+        "trigger": "director of film / film has the director / whose director",
+        "policy": "decomposition_bridge_entity",
+        "assumption": "film-title context should bridge to director entity before asking birth/death/nationality/family attributes"
+      },
+      {
+        "edge_id": "edge_film_composer_to_biographical_attribute",
+        "trigger": "composer of film",
+        "policy": "decomposition_bridge_entity",
+        "assumption": "film-title context should bridge to composer entity before asking biographical attributes"
+      },
+      {
+        "edge_id": "edge_work_or_movement_creator_to_life_event",
+        "trigger": "creator of Autumn Leaves / launched the Bardoli Satyagraha",
+        "policy": "decomposition_bridge_entity",
+        "assumption": "work/movement context should bridge to creator/leader entity before asking a life-event attribute"
+      },
+      {
+        "edge_id": "edge_legal_case_role_to_person_attribute",
+        "trigger": "plaintiff in the 1892 Barbed Wire Patent Case",
+        "policy": "decomposition_bridge_entity",
+        "assumption": "case context should bridge from legal role to person before asking birth attributes"
+      }
+    ],
+    "negative_controls": [
+      "not located",
+      "not published",
+      "unrelated",
+      "except",
+      "not the"
+    ]
   },
   "aggregate": {
     "top_k": 5,
@@ -1052,9 +1230,9 @@
         "n": 15,
         "applicable_rate": 1.0,
         "any_gold_recall_at_k": 1.0,
-        "all_gold_recall_at_k": 0.3333,
-        "mean_gold_fraction_at_k": 0.6778,
-        "answer_coverage_at_k": 0.3333
+        "all_gold_recall_at_k": 0.2667,
+        "mean_gold_fraction_at_k": 0.6444,
+        "answer_coverage_at_k": 0.2667
       },
       "named_anchor_bridge": {
         "n": 15,
@@ -1076,9 +1254,9 @@
         "n": 15,
         "applicable_rate": 1.0,
         "any_gold_recall_at_k": 1.0,
-        "all_gold_recall_at_k": 0.2,
-        "mean_gold_fraction_at_k": 0.6111,
-        "answer_coverage_at_k": 0.3333
+        "all_gold_recall_at_k": 0.1333,
+        "mean_gold_fraction_at_k": 0.5778,
+        "answer_coverage_at_k": 0.2667
       },
       "decomposition_bridge_entity": {
         "n": 15,
@@ -1096,12 +1274,20 @@
         "mean_gold_fraction_at_k": 0.7778,
         "answer_coverage_at_k": 0.6
       },
+      "assumption_edge_policy_selector": {
+        "n": 15,
+        "applicable_rate": 1.0,
+        "any_gold_recall_at_k": 0.8667,
+        "all_gold_recall_at_k": 0.3333,
+        "mean_gold_fraction_at_k": 0.6111,
+        "answer_coverage_at_k": 0.4
+      },
       "meta_qa_controller": {
         "n": 15,
         "applicable_rate": 1.0,
         "any_gold_recall_at_k": 1.0,
-        "all_gold_recall_at_k": 0.6,
-        "mean_gold_fraction_at_k": 0.8111,
+        "all_gold_recall_at_k": 0.6667,
+        "mean_gold_fraction_at_k": 0.8444,
         "answer_coverage_at_k": 0.6
       }
     },
@@ -1135,9 +1321,9 @@
           "n": 5,
           "applicable_rate": 1.0,
           "any_gold_recall_at_k": 1.0,
-          "all_gold_recall_at_k": 0.4,
-          "mean_gold_fraction_at_k": 0.7,
-          "answer_coverage_at_k": 0.4
+          "all_gold_recall_at_k": 0.2,
+          "mean_gold_fraction_at_k": 0.6,
+          "answer_coverage_at_k": 0.2
         },
         "named_anchor_bridge": {
           "n": 5,
@@ -1159,9 +1345,9 @@
           "n": 5,
           "applicable_rate": 1.0,
           "any_gold_recall_at_k": 1.0,
-          "all_gold_recall_at_k": 0.2,
-          "mean_gold_fraction_at_k": 0.6,
-          "answer_coverage_at_k": 0.4
+          "all_gold_recall_at_k": 0.0,
+          "mean_gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": 0.2
         },
         "decomposition_bridge_entity": {
           "n": 5,
@@ -1178,6 +1364,14 @@
           "all_gold_recall_at_k": 0.8,
           "mean_gold_fraction_at_k": 0.9,
           "answer_coverage_at_k": 0.8
+        },
+        "assumption_edge_policy_selector": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 0.8,
+          "all_gold_recall_at_k": 0.2,
+          "mean_gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": 0.4
         },
         "meta_qa_controller": {
           "n": 5,
@@ -1261,12 +1455,20 @@
           "mean_gold_fraction_at_k": 0.7,
           "answer_coverage_at_k": 0.6
         },
-        "meta_qa_controller": {
+        "assumption_edge_policy_selector": {
           "n": 5,
           "applicable_rate": 1.0,
           "any_gold_recall_at_k": 1.0,
           "all_gold_recall_at_k": 0.6,
           "mean_gold_fraction_at_k": 0.8,
+          "answer_coverage_at_k": 0.6
+        },
+        "meta_qa_controller": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 1.0,
+          "all_gold_recall_at_k": 0.8,
+          "mean_gold_fraction_at_k": 0.9,
           "answer_coverage_at_k": 0.6
         }
       },
@@ -1343,6 +1545,14 @@
           "mean_gold_fraction_at_k": 0.7333,
           "answer_coverage_at_k": 0.4
         },
+        "assumption_edge_policy_selector": {
+          "n": 5,
+          "applicable_rate": 1.0,
+          "any_gold_recall_at_k": 0.8,
+          "all_gold_recall_at_k": 0.2,
+          "mean_gold_fraction_at_k": 0.5333,
+          "answer_coverage_at_k": 0.2
+        },
         "meta_qa_controller": {
           "n": 5,
           "applicable_rate": 1.0,
@@ -1356,15 +1566,88 @@
   },
   "deltas_vs_bm25": {
     "any_gold_recall_at_k_delta": 0.1333,
-    "all_gold_recall_at_k_delta": 0.4667,
-    "mean_gold_fraction_at_k_delta": 0.3,
+    "all_gold_recall_at_k_delta": 0.5334,
+    "mean_gold_fraction_at_k_delta": 0.3333,
     "answer_coverage_at_k_delta": 0.3333
   },
   "deltas_vs_ppr": {
     "any_gold_recall_at_k_delta": 0.1333,
-    "all_gold_recall_at_k_delta": 0.4667,
-    "mean_gold_fraction_at_k_delta": 0.3222,
+    "all_gold_recall_at_k_delta": 0.5334,
+    "mean_gold_fraction_at_k_delta": 0.3555,
     "answer_coverage_at_k_delta": 0.4
+  },
+  "bootstrap_ci": {
+    "unit_of_resampling": "problem_row",
+    "iterations": 400,
+    "seed": 20261597,
+    "meta_vs_bm25": {
+      "any_gold_recall_at_k_delta": {
+        "point": 0.1333,
+        "ci95_low": 0.0,
+        "ci95_high": 0.3333
+      },
+      "all_gold_recall_at_k_delta": {
+        "point": 0.5333,
+        "ci95_low": 0.2667,
+        "ci95_high": 0.8
+      },
+      "mean_gold_fraction_at_k_delta": {
+        "point": 0.3333,
+        "ci95_low": 0.2,
+        "ci95_high": 0.4667
+      },
+      "answer_coverage_at_k_delta": {
+        "point": 0.3333,
+        "ci95_low": 0.0667,
+        "ci95_high": 0.6
+      }
+    },
+    "meta_vs_ppr": {
+      "any_gold_recall_at_k_delta": {
+        "point": 0.1333,
+        "ci95_low": 0.0,
+        "ci95_high": 0.3333
+      },
+      "all_gold_recall_at_k_delta": {
+        "point": 0.5333,
+        "ci95_low": 0.3333,
+        "ci95_high": 0.8
+      },
+      "mean_gold_fraction_at_k_delta": {
+        "point": 0.3556,
+        "ci95_low": 0.2222,
+        "ci95_high": 0.5
+      },
+      "answer_coverage_at_k_delta": {
+        "point": 0.4,
+        "ci95_low": 0.1983,
+        "ci95_high": 0.6667
+      }
+    }
+  },
+  "extractive_reader": {
+    "status": "not_run",
+    "reader_rows": 0,
+    "attempted_calls": 0,
+    "failed_calls": 0,
+    "model": null,
+    "by_retriever": {},
+    "deltas_vs_bm25": {},
+    "deltas_vs_ppr": {},
+    "raw_answers_stored": false
+  },
+  "llm_reader": {
+    "status": "not_run",
+    "reader_rows": 0,
+    "attempted_calls": 0,
+    "failed_calls": 0,
+    "provider": null,
+    "model": null,
+    "by_retriever": {},
+    "deltas_vs_bm25": {},
+    "deltas_vs_ppr": {},
+    "raw_answers_stored": false,
+    "gold_answers_stored": false
   },
   "recursive_trace": [
     {
@@ -1375,7 +1658,7 @@
     {
       "step": 2,
       "frame": "variation",
-      "observation": "Generated 7 retrieval hypotheses from incomplete-support residuals."
+      "observation": "Generated 8 retrieval hypotheses from incomplete-support residuals."
     },
     {
       "step": 3,
@@ -1388,7 +1671,8 @@
           "utility_deltas_sum": {
             "all_gold_recall_at_k_delta": 1.0,
             "gold_fraction_at_k_delta": 0.5,
-            "answer_coverage_at_k_delta": 0.0
+            "answer_coverage_at_k_delta": 0.0,
+            "total_utility_delta": 1.5
           },
           "harm_count": 0
         },
@@ -1397,9 +1681,10 @@
           "decision": "accept_retain",
           "activated_row_count": 15,
           "utility_deltas_sum": {
-            "all_gold_recall_at_k_delta": 3.0,
-            "gold_fraction_at_k_delta": 2.5,
-            "answer_coverage_at_k_delta": 1.0
+            "all_gold_recall_at_k_delta": 2.0,
+            "gold_fraction_at_k_delta": 2.0,
+            "answer_coverage_at_k_delta": 0.0,
+            "total_utility_delta": 4.0
           },
           "harm_count": 0
         },
@@ -1410,7 +1695,8 @@
           "utility_deltas_sum": {
             "all_gold_recall_at_k_delta": -1.0,
             "gold_fraction_at_k_delta": -0.5,
-            "answer_coverage_at_k_delta": 0.0
+            "answer_coverage_at_k_delta": 0.0,
+            "total_utility_delta": -1.5
           },
           "harm_count": 1
         },
@@ -1421,18 +1707,20 @@
           "utility_deltas_sum": {
             "all_gold_recall_at_k_delta": 1.0,
             "gold_fraction_at_k_delta": 0.1666,
-            "answer_coverage_at_k_delta": 0.0
+            "answer_coverage_at_k_delta": 0.0,
+            "total_utility_delta": 1.1666
           },
           "harm_count": 1
         },
         {
           "hypothesis_id": "qa_hyp_representation_title_normalization",
-          "decision": "accept_retain",
+          "decision": "reject_no_measured_benefit",
           "activated_row_count": 15,
           "utility_deltas_sum": {
-            "all_gold_recall_at_k_delta": 1.0,
-            "gold_fraction_at_k_delta": 1.5,
-            "answer_coverage_at_k_delta": 1.0
+            "all_gold_recall_at_k_delta": 0.0,
+            "gold_fraction_at_k_delta": 1.0,
+            "answer_coverage_at_k_delta": 0.0,
+            "total_utility_delta": 1.0
           },
           "harm_count": 0
         },
@@ -1443,7 +1731,8 @@
           "utility_deltas_sum": {
             "all_gold_recall_at_k_delta": 6.0,
             "gold_fraction_at_k_delta": 4.0,
-            "answer_coverage_at_k_delta": 5.0
+            "answer_coverage_at_k_delta": 5.0,
+            "total_utility_delta": 15.0
           },
           "harm_count": 0
         },
@@ -1454,7 +1743,20 @@
           "utility_deltas_sum": {
             "all_gold_recall_at_k_delta": 6.0,
             "gold_fraction_at_k_delta": 4.0,
-            "answer_coverage_at_k_delta": 5.0
+            "answer_coverage_at_k_delta": 5.0,
+            "total_utility_delta": 15.0
+          },
+          "harm_count": 0
+        },
+        {
+          "hypothesis_id": "qa_hyp_assumption_edge_policy_selector",
+          "decision": "accept_retain",
+          "activated_row_count": 3,
+          "utility_deltas_sum": {
+            "all_gold_recall_at_k_delta": 3.0,
+            "gold_fraction_at_k_delta": 1.5,
+            "answer_coverage_at_k_delta": 2.0,
+            "total_utility_delta": 6.5
           },
           "harm_count": 0
         }
@@ -1470,8 +1772,8 @@
       "frame": "performance_validation",
       "observation": {
         "any_gold_recall_at_k_delta": 0.1333,
-        "all_gold_recall_at_k_delta": 0.4667,
-        "mean_gold_fraction_at_k_delta": 0.3,
+        "all_gold_recall_at_k_delta": 0.5334,
+        "mean_gold_fraction_at_k_delta": 0.3333,
         "answer_coverage_at_k_delta": 0.3333
       }
     }
@@ -1492,7 +1794,7 @@
     {
       "gate": "variation_count",
       "pass": true,
-      "observed": 7
+      "observed": 8
     },
     {
       "gate": "selective_retention_contains_accept_and_reject",
@@ -1501,13 +1803,14 @@
         "accepted": [
           "qa_hyp_comparison_dual_anchor",
           "qa_hyp_anchor_preserve_insert",
-          "qa_hyp_representation_title_normalization",
           "qa_hyp_decomposition_bridge_entity",
-          "qa_hyp_controlled_bridge_insert"
+          "qa_hyp_controlled_bridge_insert",
+          "qa_hyp_assumption_edge_policy_selector"
         ],
         "rejected": [
           "qa_hyp_named_anchor_bridge",
-          "qa_hyp_generic_prf"
+          "qa_hyp_generic_prf",
+          "qa_hyp_representation_title_normalization"
         ]
       }
     },
@@ -1516,8 +1819,8 @@
       "pass": true,
       "observed": {
         "any_gold_recall_at_k_delta": 0.1333,
-        "all_gold_recall_at_k_delta": 0.4667,
-        "mean_gold_fraction_at_k_delta": 0.3,
+        "all_gold_recall_at_k_delta": 0.5334,
+        "mean_gold_fraction_at_k_delta": 0.3333,
         "answer_coverage_at_k_delta": 0.3333
       }
     },
@@ -1526,8 +1829,8 @@
       "pass": true,
       "observed": {
         "any_gold_recall_at_k_delta": 0.1333,
-        "all_gold_recall_at_k_delta": 0.4667,
-        "mean_gold_fraction_at_k_delta": 0.3,
+        "all_gold_recall_at_k_delta": 0.5334,
+        "mean_gold_fraction_at_k_delta": 0.3333,
         "answer_coverage_at_k_delta": 0.3333
       }
     },
@@ -1536,8 +1839,8 @@
       "pass": true,
       "observed": {
         "any_gold_recall_at_k_delta": 0.1333,
-        "all_gold_recall_at_k_delta": 0.4667,
-        "mean_gold_fraction_at_k_delta": 0.3222,
+        "all_gold_recall_at_k_delta": 0.5334,
+        "mean_gold_fraction_at_k_delta": 0.3555,
         "answer_coverage_at_k_delta": 0.4
       }
     },
@@ -1555,6 +1858,20 @@
           "gold_answers",
           "gold_titles",
           "supporting_facts"
+        ]
+      }
+    },
+    {
+      "gate": "problem_level_bootstrap_ci_present",
+      "pass": true,
+      "observed": {
+        "iterations": 400,
+        "unit_of_resampling": "problem_row",
+        "metrics": [
+          "all_gold_recall_at_k_delta",
+          "answer_coverage_at_k_delta",
+          "any_gold_recall_at_k_delta",
+          "mean_gold_fraction_at_k_delta"
         ]
       }
     }
@@ -1579,8 +1896,10 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": false,
-        "qa_hyp_controlled_bridge_insert": false
+        "qa_hyp_controlled_bridge_insert": false,
+        "qa_hyp_assumption_edge_policy_selector": false
       },
+      "assumption_edge_route": null,
       "metrics": {
         "ordinary_bm25": {
           "applicable": true,
@@ -1667,6 +1986,16 @@
           ]
         },
         "controlled_bridge_insert": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Bret Easton Ellis"
+          ]
+        },
+        "assumption_edge_policy_selector": {
           "applicable": true,
           "any_gold_recall_at_k": true,
           "all_gold_recall_at_k": false,
@@ -1752,12 +2081,98 @@
           "!!!",
           "Bret Michaels"
         ],
+        "assumption_edge_policy_selector": [
+          "Bret Easton Ellis",
+          "Lunar Park",
+          "Patrick Bateman",
+          "Junk Mail (book)",
+          "The Informers"
+        ],
         "meta_qa_controller": [
           "Bret Easton Ellis",
           "William James",
           "Sarah Kate Ellis",
           "William York Tindall",
           "Bret Michaels"
+        ]
+      },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "1274",
+          "1270",
+          "1272",
+          "1271",
+          "1269"
+        ],
+        "rag_to_memory_style_ppr": [
+          "1274",
+          "6810",
+          "3289",
+          "1935",
+          "1276"
+        ],
+        "comparison_dual_anchor": [
+          "1274",
+          "1276",
+          "9466",
+          "2428",
+          "3346"
+        ],
+        "anchor_preserve_insert": [
+          "1274",
+          "1270",
+          "1272",
+          "1271",
+          "1276"
+        ],
+        "named_anchor_bridge": [
+          "1274",
+          "3346",
+          "9466",
+          "1276",
+          "3348"
+        ],
+        "generic_prf": [
+          "1270",
+          "1272",
+          "1274",
+          "1269",
+          "1275"
+        ],
+        "representation_title_normalization": [
+          "1274",
+          "1270",
+          "1272",
+          "1271",
+          "1269"
+        ],
+        "decomposition_bridge_entity": [
+          "1274",
+          "1270",
+          "1272",
+          "6099",
+          "3346"
+        ],
+        "controlled_bridge_insert": [
+          "1274",
+          "1270",
+          "1272",
+          "6099",
+          "3346"
+        ],
+        "assumption_edge_policy_selector": [
+          "1274",
+          "1270",
+          "1272",
+          "1271",
+          "1269"
+        ],
+        "meta_qa_controller": [
+          "1274",
+          "1276",
+          "9466",
+          "2428",
+          "3346"
         ]
       },
       "ranking_inputs_exclude": [
@@ -1783,7 +2198,13 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": true,
-        "qa_hyp_controlled_bridge_insert": true
+        "qa_hyp_controlled_bridge_insert": true,
+        "qa_hyp_assumption_edge_policy_selector": true
+      },
+      "assumption_edge_route": {
+        "edge_id": "edge_legal_case_role_to_person_attribute",
+        "policy": "decomposition_bridge_entity",
+        "assumption": "case context should bridge from legal role to person before asking birth attributes"
       },
       "metrics": {
         "ordinary_bm25": {
@@ -1868,6 +2289,17 @@
           ]
         },
         "controlled_bridge_insert": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Joseph Glidden",
+            "The Barbed Wire Patent"
+          ]
+        },
+        "assumption_edge_policy_selector": {
           "applicable": true,
           "any_gold_recall_at_k": true,
           "all_gold_recall_at_k": true,
@@ -1954,6 +2386,13 @@
           "!!!",
           "Joseph Glidden"
         ],
+        "assumption_edge_policy_selector": [
+          "The Barbed Wire Patent",
+          "Joseph F. Glidden House",
+          "Kansas Barbed Wire Museum",
+          "!!!",
+          "Joseph Glidden"
+        ],
         "meta_qa_controller": [
           "The Barbed Wire Patent",
           "Joseph F. Glidden House",
@@ -1962,12 +2401,91 @@
           "Joseph Glidden"
         ]
       },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "5855",
+          "5858",
+          "5856",
+          "5857",
+          "5860"
+        ],
+        "rag_to_memory_style_ppr": [
+          "5855",
+          "5857",
+          "5852",
+          "5856",
+          "8824"
+        ],
+        "comparison_dual_anchor": [
+          "5855",
+          "5856",
+          "5857",
+          "5852",
+          "5860"
+        ],
+        "anchor_preserve_insert": [
+          "5855",
+          "5858",
+          "5856",
+          "5857",
+          "5852"
+        ],
+        "named_anchor_bridge": [
+          "5855",
+          "5856",
+          "5857",
+          "5860",
+          "5852"
+        ],
+        "generic_prf": [
+          "5856",
+          "5855",
+          "5858",
+          "5857",
+          "5860"
+        ],
+        "representation_title_normalization": [
+          "5855",
+          "5858",
+          "5856",
+          "5857",
+          "5860"
+        ],
+        "decomposition_bridge_entity": [
+          "5855",
+          "5858",
+          "5856",
+          "6099",
+          "5854"
+        ],
+        "controlled_bridge_insert": [
+          "5855",
+          "5858",
+          "5856",
+          "6099",
+          "5854"
+        ],
+        "assumption_edge_policy_selector": [
+          "5855",
+          "5858",
+          "5856",
+          "6099",
+          "5854"
+        ],
+        "meta_qa_controller": [
+          "5855",
+          "5858",
+          "5856",
+          "6099",
+          "5854"
+        ]
+      },
       "ranking_inputs_exclude": [
         "gold_answers",
         "gold_titles",
         "supporting_facts"
       ],
-      "retained_policy": "decomposition_bridge_entity"
+      "retained_policy": "assumption_edge_policy_selector"
     },
     {
       "dataset": "hotpotqa",
@@ -1988,8 +2506,10 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": false,
-        "qa_hyp_controlled_bridge_insert": false
+        "qa_hyp_controlled_bridge_insert": false,
+        "qa_hyp_assumption_edge_policy_selector": false
       },
+      "assumption_edge_route": null,
       "metrics": {
         "ordinary_bm25": {
           "applicable": true,
@@ -2081,6 +2601,16 @@
             "Nugroho Notosusanto"
           ]
         },
+        "assumption_edge_policy_selector": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Nugroho Notosusanto"
+          ]
+        },
         "meta_qa_controller": {
           "applicable": true,
           "any_gold_recall_at_k": true,
@@ -2156,12 +2686,98 @@
           "Billy Reid (Irish republican)",
           "1916 Republican National Convention"
         ],
+        "assumption_edge_policy_selector": [
+          "Nugroho Notosusanto",
+          "Donald Trahan",
+          "Jeb Hensarling",
+          "Jonathan Paton",
+          "Charles Djou"
+        ],
         "meta_qa_controller": [
           "Nugroho Notosusanto",
           "Donald Trahan",
           "Jeb Hensarling",
           "Jonathan Paton",
           "Billy Reid (Irish republican)"
+        ]
+      },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "6306",
+          "6303",
+          "6297",
+          "6298",
+          "6302"
+        ],
+        "rag_to_memory_style_ppr": [
+          "6546",
+          "6277",
+          "6306",
+          "6305",
+          "6302"
+        ],
+        "comparison_dual_anchor": [
+          "6306",
+          "6546",
+          "6277",
+          "6303",
+          "6302"
+        ],
+        "anchor_preserve_insert": [
+          "6306",
+          "6303",
+          "6297",
+          "6298",
+          "6546"
+        ],
+        "named_anchor_bridge": [
+          "6306",
+          "6546",
+          "6303",
+          "6297",
+          "6298"
+        ],
+        "generic_prf": [
+          "6303",
+          "6297",
+          "6306",
+          "8054",
+          "3581"
+        ],
+        "representation_title_normalization": [
+          "6306",
+          "6303",
+          "6297",
+          "6298",
+          "6302"
+        ],
+        "decomposition_bridge_entity": [
+          "6306",
+          "6303",
+          "6297",
+          "6546",
+          "5956"
+        ],
+        "controlled_bridge_insert": [
+          "6306",
+          "6303",
+          "6297",
+          "6546",
+          "5956"
+        ],
+        "assumption_edge_policy_selector": [
+          "6306",
+          "6303",
+          "6297",
+          "6298",
+          "6302"
+        ],
+        "meta_qa_controller": [
+          "6306",
+          "6303",
+          "6297",
+          "6298",
+          "6546"
         ]
       },
       "ranking_inputs_exclude": [
@@ -2187,7 +2803,13 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": false,
-        "qa_hyp_controlled_bridge_insert": false
+        "qa_hyp_controlled_bridge_insert": false,
+        "qa_hyp_assumption_edge_policy_selector": true
+      },
+      "assumption_edge_route": {
+        "edge_id": "edge_role_context_to_actor",
+        "policy": "comparison_dual_anchor",
+        "assumption": "role/practitioner context requires retrieving both role page and venue/practitioner page"
       },
       "metrics": {
         "ordinary_bm25": {
@@ -2281,14 +2903,26 @@
             "Tamzin Outhwaite"
           ]
         },
+        "assumption_edge_policy_selector": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Tamzin Outhwaite",
+            "White Bear Theatre"
+          ]
+        },
         "meta_qa_controller": {
           "applicable": true,
           "any_gold_recall_at_k": true,
-          "all_gold_recall_at_k": false,
-          "gold_fraction_at_k": 0.5,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
           "answer_coverage_at_k": true,
           "matched_gold_titles": [
-            "Tamzin Outhwaite"
+            "Tamzin Outhwaite",
+            "White Bear Theatre"
           ]
         }
       },
@@ -2356,12 +2990,98 @@
           "BBC",
           "BBC Switch"
         ],
-        "meta_qa_controller": [
-          "Tamzin Outhwaite",
-          "Pearl Mackie",
+        "assumption_edge_policy_selector": [
           "Sid Owen",
-          "Barbara Windsor",
-          "BBC"
+          "Pearl Mackie",
+          "Tamzin Outhwaite",
+          "White Bear Theatre",
+          "Barbara Windsor"
+        ],
+        "meta_qa_controller": [
+          "Sid Owen",
+          "Pearl Mackie",
+          "Tamzin Outhwaite",
+          "White Bear Theatre",
+          "Barbara Windsor"
+        ]
+      },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "8127",
+          "8124",
+          "8130",
+          "8128",
+          "1310"
+        ],
+        "rag_to_memory_style_ppr": [
+          "8121",
+          "8125",
+          "8130",
+          "7034",
+          "2953"
+        ],
+        "comparison_dual_anchor": [
+          "8130",
+          "8124",
+          "8127",
+          "8121",
+          "8128"
+        ],
+        "anchor_preserve_insert": [
+          "8127",
+          "8124",
+          "8130",
+          "8128",
+          "519"
+        ],
+        "named_anchor_bridge": [
+          "8127",
+          "8124",
+          "8130",
+          "8128",
+          "1310"
+        ],
+        "generic_prf": [
+          "8127",
+          "8130",
+          "8124",
+          "1309",
+          "1310"
+        ],
+        "representation_title_normalization": [
+          "8127",
+          "8124",
+          "8130",
+          "519",
+          "8128"
+        ],
+        "decomposition_bridge_entity": [
+          "8127",
+          "8124",
+          "8130",
+          "519",
+          "6345"
+        ],
+        "controlled_bridge_insert": [
+          "8127",
+          "8124",
+          "8130",
+          "519",
+          "6345"
+        ],
+        "assumption_edge_policy_selector": [
+          "8130",
+          "8124",
+          "8127",
+          "8121",
+          "8128"
+        ],
+        "meta_qa_controller": [
+          "8130",
+          "8124",
+          "8127",
+          "8121",
+          "8128"
         ]
       },
       "ranking_inputs_exclude": [
@@ -2369,7 +3089,7 @@
         "gold_titles",
         "supporting_facts"
       ],
-      "retained_policy": "anchor_preserve_insert"
+      "retained_policy": "assumption_edge_policy_selector"
     },
     {
       "dataset": "hotpotqa",
@@ -2390,8 +3110,10 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": false,
-        "qa_hyp_controlled_bridge_insert": false
+        "qa_hyp_controlled_bridge_insert": false,
+        "qa_hyp_assumption_edge_policy_selector": false
       },
+      "assumption_edge_route": null,
       "metrics": {
         "ordinary_bm25": {
           "applicable": true,
@@ -2482,6 +3204,17 @@
           ]
         },
         "controlled_bridge_insert": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Miracle of the White Stallions",
+            "The Hunchback of Notre Dame (1996 film)"
+          ]
+        },
+        "assumption_edge_policy_selector": {
           "applicable": true,
           "any_gold_recall_at_k": true,
           "all_gold_recall_at_k": true,
@@ -2568,12 +3301,98 @@
           "!!!",
           "Notre Dame Shakespeare Festival"
         ],
+        "assumption_edge_policy_selector": [
+          "The Hunchback of Notre Dame II",
+          "Miracle of the White Stallions",
+          "The Hunchback of Notre Dame (1996 film)",
+          "Notre Dame of Midsayap College",
+          "1981 Notre Dame Fighting Irish football team"
+        ],
         "meta_qa_controller": [
           "The Hunchback of Notre Dame II",
           "Miracle of the White Stallions",
           "The Hunchback of Notre Dame (1996 film)",
           "Notre Dame of Midsayap College",
           "1981 Notre Dame Fighting Irish football team"
+        ]
+      },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "8372",
+          "8377",
+          "8370",
+          "8376",
+          "8378"
+        ],
+        "rag_to_memory_style_ppr": [
+          "8370",
+          "8375",
+          "8373",
+          "8374",
+          "8377"
+        ],
+        "comparison_dual_anchor": [
+          "8370",
+          "8377",
+          "8372",
+          "8374",
+          "8378"
+        ],
+        "anchor_preserve_insert": [
+          "8372",
+          "8377",
+          "8370",
+          "8376",
+          "8378"
+        ],
+        "named_anchor_bridge": [
+          "8372",
+          "8377",
+          "8370",
+          "8376",
+          "8378"
+        ],
+        "generic_prf": [
+          "8372",
+          "8370",
+          "8377",
+          "8376",
+          "8378"
+        ],
+        "representation_title_normalization": [
+          "8372",
+          "8377",
+          "8370",
+          "8376",
+          "8378"
+        ],
+        "decomposition_bridge_entity": [
+          "8372",
+          "8377",
+          "8370",
+          "6099",
+          "8617"
+        ],
+        "controlled_bridge_insert": [
+          "8372",
+          "8377",
+          "8370",
+          "6099",
+          "8369"
+        ],
+        "assumption_edge_policy_selector": [
+          "8372",
+          "8377",
+          "8370",
+          "8376",
+          "8378"
+        ],
+        "meta_qa_controller": [
+          "8372",
+          "8377",
+          "8370",
+          "8376",
+          "8378"
         ]
       },
       "ranking_inputs_exclude": [
@@ -2600,8 +3419,10 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": true,
-        "qa_hyp_controlled_bridge_insert": true
+        "qa_hyp_controlled_bridge_insert": true,
+        "qa_hyp_assumption_edge_policy_selector": false
       },
+      "assumption_edge_route": null,
       "metrics": {
         "ordinary_bm25": {
           "applicable": true,
@@ -2684,6 +3505,16 @@
           ]
         },
         "controlled_bridge_insert": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "A Distinguished Member of the Humane Society"
+          ]
+        },
+        "assumption_edge_policy_selector": {
           "applicable": true,
           "any_gold_recall_at_k": true,
           "all_gold_recall_at_k": false,
@@ -2768,12 +3599,98 @@
           "Germany",
           "Germany"
         ],
+        "assumption_edge_policy_selector": [
+          "A Distinguished Member of the Humane Society",
+          "Charles Wilkins",
+          "William Luxton",
+          "Linda Greenhouse",
+          "King Olav V's Prize for Cancer Research"
+        ],
         "meta_qa_controller": [
           "A Distinguished Member of the Humane Society",
           "Charles Wilkins",
           "William Luxton",
           "Germany",
           "Germany"
+        ]
+      },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "4409",
+          "4414",
+          "4412",
+          "4410",
+          "4419"
+        ],
+        "rag_to_memory_style_ppr": [
+          "4409",
+          "562",
+          "3075",
+          "3810",
+          "11385"
+        ],
+        "comparison_dual_anchor": [
+          "4409",
+          "3075",
+          "562",
+          "4414",
+          "4410"
+        ],
+        "anchor_preserve_insert": [
+          "4409",
+          "4414",
+          "4412",
+          "4410",
+          "3075"
+        ],
+        "named_anchor_bridge": [
+          "4409",
+          "4414",
+          "4412",
+          "3075",
+          "4410"
+        ],
+        "generic_prf": [
+          "4409",
+          "4414",
+          "4412",
+          "3075",
+          "11013"
+        ],
+        "representation_title_normalization": [
+          "4409",
+          "4414",
+          "4412",
+          "4410",
+          "4419"
+        ],
+        "decomposition_bridge_entity": [
+          "4409",
+          "4414",
+          "4412",
+          "3458",
+          "8383"
+        ],
+        "controlled_bridge_insert": [
+          "4409",
+          "4414",
+          "4412",
+          "3458",
+          "8383"
+        ],
+        "assumption_edge_policy_selector": [
+          "4409",
+          "4414",
+          "4412",
+          "4410",
+          "4419"
+        ],
+        "meta_qa_controller": [
+          "4409",
+          "4414",
+          "4412",
+          "3458",
+          "8383"
         ]
       },
       "ranking_inputs_exclude": [
@@ -2799,8 +3716,10 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": true,
-        "qa_hyp_controlled_bridge_insert": true
+        "qa_hyp_controlled_bridge_insert": true,
+        "qa_hyp_assumption_edge_policy_selector": false
       },
+      "assumption_edge_route": null,
       "metrics": {
         "ordinary_bm25": {
           "applicable": true,
@@ -2892,6 +3811,16 @@
           "matched_gold_titles": [
             "Friend Like That",
             "Hawk Nelson"
+          ]
+        },
+        "assumption_edge_policy_selector": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Friend Like That"
           ]
         },
         "meta_qa_controller": {
@@ -2970,12 +3899,98 @@
           "Hawk Nelson",
           "Wil"
         ],
+        "assumption_edge_policy_selector": [
+          "Friend Like That",
+          "Friend Like Me",
+          "Like a Love?",
+          "I Can Only Imagine (MercyMe song)",
+          "I Can Only Imagine (MercyMe song)"
+        ],
         "meta_qa_controller": [
           "Friend Like That",
           "Friend Like Me",
           "Like a Love?",
           "Hawk Nelson",
           "Wil"
+        ]
+      },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "7552",
+          "7554",
+          "7200",
+          "7592",
+          "7586"
+        ],
+        "rag_to_memory_style_ppr": [
+          "7554",
+          "6716",
+          "921",
+          "7552",
+          "4590"
+        ],
+        "comparison_dual_anchor": [
+          "7554",
+          "7552",
+          "7200",
+          "7592",
+          "7396"
+        ],
+        "anchor_preserve_insert": [
+          "7552",
+          "7554",
+          "7200",
+          "7592",
+          "7396"
+        ],
+        "named_anchor_bridge": [
+          "7552",
+          "7554",
+          "7200",
+          "7592",
+          "7586"
+        ],
+        "generic_prf": [
+          "7552",
+          "7554",
+          "7200",
+          "9894",
+          "7396"
+        ],
+        "representation_title_normalization": [
+          "7552",
+          "7554",
+          "7200",
+          "7592",
+          "7586"
+        ],
+        "decomposition_bridge_entity": [
+          "7552",
+          "7554",
+          "7200",
+          "2285",
+          "3345"
+        ],
+        "controlled_bridge_insert": [
+          "7552",
+          "7554",
+          "7200",
+          "2285",
+          "3345"
+        ],
+        "assumption_edge_policy_selector": [
+          "7552",
+          "7554",
+          "7200",
+          "7592",
+          "7586"
+        ],
+        "meta_qa_controller": [
+          "7552",
+          "7554",
+          "7200",
+          "2285",
+          "3345"
         ]
       },
       "ranking_inputs_exclude": [
@@ -3003,8 +4018,10 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": true,
-        "qa_hyp_controlled_bridge_insert": true
+        "qa_hyp_controlled_bridge_insert": true,
+        "qa_hyp_assumption_edge_policy_selector": false
       },
+      "assumption_edge_route": null,
       "metrics": {
         "ordinary_bm25": {
           "applicable": true,
@@ -3091,6 +4108,17 @@
           ]
         },
         "controlled_bridge_insert": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.6667,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Nanjing",
+            "Sino-Tibetan relations during the Ming dynasty"
+          ]
+        },
+        "assumption_edge_policy_selector": {
           "applicable": true,
           "any_gold_recall_at_k": true,
           "all_gold_recall_at_k": false,
@@ -3177,12 +4205,98 @@
           "Sino-Tibetan relations during the Ming dynasty",
           "Nanjing"
         ],
+        "assumption_edge_policy_selector": [
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Sino-Tibetan relations during the Ming dynasty",
+          "Nanjing"
+        ],
         "meta_qa_controller": [
           "Sino-Tibetan relations during the Ming dynasty",
           "Sino-Tibetan relations during the Ming dynasty",
           "Sino-Tibetan relations during the Ming dynasty",
           "Sino-Tibetan relations during the Ming dynasty",
           "Nanjing"
+        ]
+      },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "6709",
+          "1308",
+          "1314",
+          "1305",
+          "1309"
+        ],
+        "rag_to_memory_style_ppr": [
+          "5694",
+          "10478",
+          "1305",
+          "6714",
+          "1304"
+        ],
+        "comparison_dual_anchor": [
+          "6709",
+          "1305",
+          "1314",
+          "6714",
+          "1308"
+        ],
+        "anchor_preserve_insert": [
+          "6709",
+          "1308",
+          "1314",
+          "1305",
+          "5693"
+        ],
+        "named_anchor_bridge": [
+          "6709",
+          "1308",
+          "1314",
+          "1305",
+          "6714"
+        ],
+        "generic_prf": [
+          "6709",
+          "1308",
+          "6708",
+          "3051",
+          "1312"
+        ],
+        "representation_title_normalization": [
+          "6709",
+          "1308",
+          "1314",
+          "5693",
+          "1305"
+        ],
+        "decomposition_bridge_entity": [
+          "6709",
+          "1308",
+          "1314",
+          "1305",
+          "1309"
+        ],
+        "controlled_bridge_insert": [
+          "6709",
+          "1308",
+          "1314",
+          "1305",
+          "1309"
+        ],
+        "assumption_edge_policy_selector": [
+          "6709",
+          "1308",
+          "1314",
+          "1305",
+          "1309"
+        ],
+        "meta_qa_controller": [
+          "6709",
+          "1308",
+          "1314",
+          "1305",
+          "1309"
         ]
       },
       "ranking_inputs_exclude": [
@@ -3208,8 +4322,10 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": true,
-        "qa_hyp_controlled_bridge_insert": true
+        "qa_hyp_controlled_bridge_insert": true,
+        "qa_hyp_assumption_edge_policy_selector": false
       },
+      "assumption_edge_route": null,
       "metrics": {
         "ordinary_bm25": {
           "applicable": true,
@@ -3290,6 +4406,14 @@
           "matched_gold_titles": [
             "Nephalion"
           ]
+        },
+        "assumption_edge_policy_selector": {
+          "applicable": true,
+          "any_gold_recall_at_k": false,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": []
         },
         "meta_qa_controller": {
           "applicable": true,
@@ -3366,12 +4490,98 @@
           "Nephalion",
           "Lion"
         ],
+        "assumption_edge_policy_selector": [
+          "Jean-Michel Oughourlian",
+          "Spencer family (The Bold and the Beautiful)",
+          "Honour thy father and thy mother",
+          "Damian Wayne",
+          "Lady Li (Wang Jipeng)"
+        ],
         "meta_qa_controller": [
           "Jean-Michel Oughourlian",
           "Spencer family (The Bold and the Beautiful)",
           "Honour thy father and thy mother",
           "Nephalion",
           "Lion"
+        ]
+      },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "2024",
+          "9102",
+          "5496",
+          "2857",
+          "8699"
+        ],
+        "rag_to_memory_style_ppr": [
+          "5496",
+          "9102",
+          "8045",
+          "8699",
+          "2857"
+        ],
+        "comparison_dual_anchor": [
+          "5496",
+          "9102",
+          "2857",
+          "8699",
+          "2024"
+        ],
+        "anchor_preserve_insert": [
+          "2024",
+          "9102",
+          "5496",
+          "2857",
+          "9101"
+        ],
+        "named_anchor_bridge": [
+          "5496",
+          "2024",
+          "9102",
+          "2857",
+          "2855"
+        ],
+        "generic_prf": [
+          "5496",
+          "9102",
+          "2024",
+          "2855",
+          "2858"
+        ],
+        "representation_title_normalization": [
+          "2024",
+          "9102",
+          "5496",
+          "9101",
+          "2857"
+        ],
+        "decomposition_bridge_entity": [
+          "2024",
+          "9102",
+          "5496",
+          "9101",
+          "10203"
+        ],
+        "controlled_bridge_insert": [
+          "2024",
+          "9102",
+          "5496",
+          "9101",
+          "10203"
+        ],
+        "assumption_edge_policy_selector": [
+          "2024",
+          "9102",
+          "5496",
+          "2857",
+          "8699"
+        ],
+        "meta_qa_controller": [
+          "2024",
+          "9102",
+          "5496",
+          "9101",
+          "10203"
         ]
       },
       "ranking_inputs_exclude": [
@@ -3398,8 +4608,10 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": false,
-        "qa_hyp_controlled_bridge_insert": false
+        "qa_hyp_controlled_bridge_insert": false,
+        "qa_hyp_assumption_edge_policy_selector": false
       },
+      "assumption_edge_route": null,
       "metrics": {
         "ordinary_bm25": {
           "applicable": true,
@@ -3487,6 +4699,17 @@
           ]
         },
         "controlled_bridge_insert": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "List of Family Guy cast members",
+            "Meg Griffin"
+          ]
+        },
+        "assumption_edge_policy_selector": {
           "applicable": true,
           "any_gold_recall_at_k": true,
           "all_gold_recall_at_k": true,
@@ -3573,12 +4796,98 @@
           "Rachael MacFarlane",
           "Adam Timmerman"
         ],
+        "assumption_edge_policy_selector": [
+          "Meg Griffin",
+          "List of Family Guy cast members",
+          "Meg Griffin",
+          "List of Family Guy cast members",
+          "Family Guy (season 7)"
+        ],
         "meta_qa_controller": [
           "Meg Griffin",
           "List of Family Guy cast members",
           "Meg Griffin",
           "List of Family Guy cast members",
           "Family Guy (season 7)"
+        ]
+      },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "3866",
+          "10524",
+          "10530",
+          "4699",
+          "10523"
+        ],
+        "rag_to_memory_style_ppr": [
+          "10524",
+          "4699",
+          "4704",
+          "10527",
+          "6193"
+        ],
+        "comparison_dual_anchor": [
+          "10524",
+          "4699",
+          "10523",
+          "4704",
+          "5503"
+        ],
+        "anchor_preserve_insert": [
+          "3866",
+          "10524",
+          "10530",
+          "4699",
+          "10523"
+        ],
+        "named_anchor_bridge": [
+          "10524",
+          "4699",
+          "10523",
+          "4704",
+          "5503"
+        ],
+        "generic_prf": [
+          "3866",
+          "10530",
+          "10524",
+          "10523",
+          "4699"
+        ],
+        "representation_title_normalization": [
+          "3866",
+          "10524",
+          "10530",
+          "4699",
+          "10523"
+        ],
+        "decomposition_bridge_entity": [
+          "3866",
+          "10524",
+          "10530",
+          "6248",
+          "10224"
+        ],
+        "controlled_bridge_insert": [
+          "3866",
+          "10524",
+          "10530",
+          "6248",
+          "10224"
+        ],
+        "assumption_edge_policy_selector": [
+          "3866",
+          "10524",
+          "10530",
+          "4699",
+          "10523"
+        ],
+        "meta_qa_controller": [
+          "3866",
+          "10524",
+          "10530",
+          "4699",
+          "10523"
         ]
       },
       "ranking_inputs_exclude": [
@@ -3604,8 +4913,10 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": true,
-        "qa_hyp_controlled_bridge_insert": true
+        "qa_hyp_controlled_bridge_insert": true,
+        "qa_hyp_assumption_edge_policy_selector": false
       },
+      "assumption_edge_route": null,
       "metrics": {
         "ordinary_bm25": {
           "applicable": true,
@@ -3697,6 +5008,16 @@
           "matched_gold_titles": [
             "Anne Elizabeth Rector",
             "Edmund Duffy"
+          ]
+        },
+        "assumption_edge_policy_selector": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Anne Elizabeth Rector"
           ]
         },
         "meta_qa_controller": {
@@ -3775,12 +5096,98 @@
           "Lord Edmund Howard",
           "Edmund Duffy"
         ],
+        "assumption_edge_policy_selector": [
+          "Anne Elizabeth Rector",
+          "Place of birth",
+          "Elizabeth Boleyn, Countess of Wiltshire",
+          "Motherland (disambiguation)",
+          "Anne Evans"
+        ],
         "meta_qa_controller": [
           "Anne Elizabeth Rector",
           "Place of birth",
           "Elizabeth Boleyn, Countess of Wiltshire",
           "Lord Edmund Howard",
           "Edmund Duffy"
+        ]
+      },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "1742",
+          "339",
+          "4256",
+          "336",
+          "1741"
+        ],
+        "rag_to_memory_style_ppr": [
+          "1742",
+          "339",
+          "5070",
+          "4256",
+          "4255"
+        ],
+        "comparison_dual_anchor": [
+          "1742",
+          "339",
+          "4256",
+          "1741",
+          "5070"
+        ],
+        "anchor_preserve_insert": [
+          "1742",
+          "339",
+          "4256",
+          "336",
+          "1741"
+        ],
+        "named_anchor_bridge": [
+          "1742",
+          "339",
+          "4256",
+          "1741",
+          "5070"
+        ],
+        "generic_prf": [
+          "4256",
+          "339",
+          "1742",
+          "5070",
+          "5549"
+        ],
+        "representation_title_normalization": [
+          "1742",
+          "339",
+          "4256",
+          "336",
+          "1741"
+        ],
+        "decomposition_bridge_entity": [
+          "1742",
+          "339",
+          "4256",
+          "3376",
+          "1739"
+        ],
+        "controlled_bridge_insert": [
+          "1742",
+          "339",
+          "4256",
+          "3376",
+          "1739"
+        ],
+        "assumption_edge_policy_selector": [
+          "1742",
+          "339",
+          "4256",
+          "336",
+          "1741"
+        ],
+        "meta_qa_controller": [
+          "1742",
+          "339",
+          "4256",
+          "3376",
+          "1739"
         ]
       },
       "ranking_inputs_exclude": [
@@ -3806,8 +5213,10 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": true,
-        "qa_hyp_controlled_bridge_insert": true
+        "qa_hyp_controlled_bridge_insert": true,
+        "qa_hyp_assumption_edge_policy_selector": false
       },
+      "assumption_edge_route": null,
       "metrics": {
         "ordinary_bm25": {
           "applicable": true,
@@ -3900,6 +5309,16 @@
           "answer_coverage_at_k": true,
           "matched_gold_titles": [
             "Bert Jansch",
+            "Heather Jansch"
+          ]
+        },
+        "assumption_edge_policy_selector": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
             "Heather Jansch"
           ]
         },
@@ -3979,12 +5398,98 @@
           "Bert Jansch",
           "Richilde, Countess of Hainaut"
         ],
+        "assumption_edge_policy_selector": [
+          "Iraqi nationality law",
+          "Heather D. Gibson",
+          "Heather Jansch",
+          "Etan Boritzer",
+          "Rosemary Lane (album)"
+        ],
         "meta_qa_controller": [
           "Iraqi nationality law",
           "Heather D. Gibson",
           "Heather Jansch",
           "Bert Jansch",
           "Bert Grund"
+        ]
+      },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "2805",
+          "1167",
+          "2803",
+          "3",
+          "2806"
+        ],
+        "rag_to_memory_style_ppr": [
+          "2805",
+          "4564",
+          "2652",
+          "2803",
+          "224"
+        ],
+        "comparison_dual_anchor": [
+          "2803",
+          "2805",
+          "1167",
+          "2652",
+          "224"
+        ],
+        "anchor_preserve_insert": [
+          "2805",
+          "1167",
+          "2803",
+          "3",
+          "2804"
+        ],
+        "named_anchor_bridge": [
+          "1167",
+          "2803",
+          "2805",
+          "2806",
+          "3"
+        ],
+        "generic_prf": [
+          "1167",
+          "2805",
+          "2803",
+          "2806",
+          "2804"
+        ],
+        "representation_title_normalization": [
+          "2805",
+          "1167",
+          "2803",
+          "3",
+          "2806"
+        ],
+        "decomposition_bridge_entity": [
+          "2805",
+          "1167",
+          "2803",
+          "2804",
+          "323"
+        ],
+        "controlled_bridge_insert": [
+          "2805",
+          "1167",
+          "2803",
+          "2804",
+          "1021"
+        ],
+        "assumption_edge_policy_selector": [
+          "2805",
+          "1167",
+          "2803",
+          "3",
+          "2806"
+        ],
+        "meta_qa_controller": [
+          "2805",
+          "1167",
+          "2803",
+          "2804",
+          "323"
         ]
       },
       "ranking_inputs_exclude": [
@@ -4011,8 +5516,10 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": false,
-        "qa_hyp_controlled_bridge_insert": true
+        "qa_hyp_controlled_bridge_insert": true,
+        "qa_hyp_assumption_edge_policy_selector": false
       },
+      "assumption_edge_route": null,
       "metrics": {
         "ordinary_bm25": {
           "applicable": true,
@@ -4047,12 +5554,11 @@
         "anchor_preserve_insert": {
           "applicable": true,
           "any_gold_recall_at_k": true,
-          "all_gold_recall_at_k": true,
-          "gold_fraction_at_k": 1.0,
-          "answer_coverage_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
           "matched_gold_titles": [
-            "Can't Remember to Forget You",
-            "Distant Lover"
+            "Can't Remember to Forget You"
           ]
         },
         "named_anchor_bridge": {
@@ -4078,12 +5584,11 @@
         "representation_title_normalization": {
           "applicable": true,
           "any_gold_recall_at_k": true,
-          "all_gold_recall_at_k": true,
-          "gold_fraction_at_k": 1.0,
-          "answer_coverage_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
           "matched_gold_titles": [
-            "Can't Remember to Forget You",
-            "Distant Lover"
+            "Can't Remember to Forget You"
           ]
         },
         "decomposition_bridge_entity": {
@@ -4097,6 +5602,16 @@
           ]
         },
         "controlled_bridge_insert": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.5,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": [
+            "Can't Remember to Forget You"
+          ]
+        },
+        "assumption_edge_policy_selector": {
           "applicable": true,
           "any_gold_recall_at_k": true,
           "all_gold_recall_at_k": false,
@@ -4144,7 +5659,7 @@
           "Can't Remember to Forget You",
           "Can't Forget You (Gloria Estefan song)",
           "Can't Forget You (Sonia song)",
-          "Distant Lover"
+          "I Forgot to Remember to Forget"
         ],
         "named_anchor_bridge": [
           "Can't Remember to Forget You",
@@ -4164,8 +5679,8 @@
           "Can't Forget You",
           "Can't Remember to Forget You",
           "Can't Forget You (Gloria Estefan song)",
-          "Distant Lover",
-          "Can't Forget You (Sonia song)"
+          "Can't Forget You (Sonia song)",
+          "I Forgot to Remember to Forget"
         ],
         "decomposition_bridge_entity": [
           "Can't Forget You",
@@ -4181,12 +5696,98 @@
           "Joseph J. Sullivan (vaudeville)",
           "Elvis Presley"
         ],
+        "assumption_edge_policy_selector": [
+          "Can't Forget You",
+          "Can't Remember to Forget You",
+          "Can't Forget You (Gloria Estefan song)",
+          "Can't Forget You (Sonia song)",
+          "I Forgot to Remember to Forget"
+        ],
         "meta_qa_controller": [
           "Can't Forget You",
           "Can't Remember to Forget You",
           "Can't Forget You (Gloria Estefan song)",
           "Joseph J. Sullivan (vaudeville)",
           "Elvis Presley"
+        ]
+      },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "4109",
+          "4113",
+          "4116",
+          "4110",
+          "4114"
+        ],
+        "rag_to_memory_style_ppr": [
+          "4116",
+          "4111",
+          "2700",
+          "4110",
+          "4113"
+        ],
+        "comparison_dual_anchor": [
+          "4113",
+          "4116",
+          "4110",
+          "4109",
+          "4111"
+        ],
+        "anchor_preserve_insert": [
+          "4109",
+          "4113",
+          "4116",
+          "4110",
+          "4114"
+        ],
+        "named_anchor_bridge": [
+          "4113",
+          "4109",
+          "4116",
+          "4110",
+          "4114"
+        ],
+        "generic_prf": [
+          "4109",
+          "4116",
+          "4113",
+          "4110",
+          "4117"
+        ],
+        "representation_title_normalization": [
+          "4109",
+          "4113",
+          "4116",
+          "4110",
+          "4114"
+        ],
+        "decomposition_bridge_entity": [
+          "4109",
+          "4113",
+          "4116",
+          "186",
+          "5129"
+        ],
+        "controlled_bridge_insert": [
+          "4109",
+          "4113",
+          "4116",
+          "186",
+          "5129"
+        ],
+        "assumption_edge_policy_selector": [
+          "4109",
+          "4113",
+          "4116",
+          "4110",
+          "4114"
+        ],
+        "meta_qa_controller": [
+          "4109",
+          "4113",
+          "4116",
+          "186",
+          "5129"
         ]
       },
       "ranking_inputs_exclude": [
@@ -4213,7 +5814,13 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": true,
-        "qa_hyp_controlled_bridge_insert": true
+        "qa_hyp_controlled_bridge_insert": true,
+        "qa_hyp_assumption_edge_policy_selector": true
+      },
+      "assumption_edge_route": {
+        "edge_id": "edge_film_director_to_biographical_attribute",
+        "policy": "decomposition_bridge_entity",
+        "assumption": "film-title context should bridge to director entity before asking birth/death/nationality/family attributes"
       },
       "metrics": {
         "ordinary_bm25": {
@@ -4298,6 +5905,17 @@
           ]
         },
         "controlled_bridge_insert": {
+          "applicable": true,
+          "any_gold_recall_at_k": true,
+          "all_gold_recall_at_k": true,
+          "gold_fraction_at_k": 1.0,
+          "answer_coverage_at_k": true,
+          "matched_gold_titles": [
+            "Charles Frank",
+            "Uncle Silas (film)"
+          ]
+        },
+        "assumption_edge_policy_selector": {
           "applicable": true,
           "any_gold_recall_at_k": true,
           "all_gold_recall_at_k": true,
@@ -4384,6 +6002,13 @@
           "Charles Frank",
           "Frank Wildhorn"
         ],
+        "assumption_edge_policy_selector": [
+          "Uncle Silas (film)",
+          "H. E. Bates",
+          "François Leterrier",
+          "Charles Frank",
+          "Frank Wildhorn"
+        ],
         "meta_qa_controller": [
           "Uncle Silas (film)",
           "H. E. Bates",
@@ -4392,12 +6017,91 @@
           "Frank Wildhorn"
         ]
       },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "4129",
+          "4130",
+          "4553",
+          "1770",
+          "1993"
+        ],
+        "rag_to_memory_style_ppr": [
+          "4129",
+          "1770",
+          "4831",
+          "5113",
+          "259"
+        ],
+        "comparison_dual_anchor": [
+          "4129",
+          "1770",
+          "4553",
+          "5652",
+          "1993"
+        ],
+        "anchor_preserve_insert": [
+          "4129",
+          "4130",
+          "4553",
+          "1770",
+          "1993"
+        ],
+        "named_anchor_bridge": [
+          "4129",
+          "4130",
+          "4553",
+          "259",
+          "1770"
+        ],
+        "generic_prf": [
+          "4129",
+          "4553",
+          "4130",
+          "2758",
+          "5673"
+        ],
+        "representation_title_normalization": [
+          "4129",
+          "4130",
+          "4553",
+          "1770",
+          "1993"
+        ],
+        "decomposition_bridge_entity": [
+          "4129",
+          "4130",
+          "4553",
+          "4128",
+          "1229"
+        ],
+        "controlled_bridge_insert": [
+          "4129",
+          "4130",
+          "4553",
+          "4128",
+          "1229"
+        ],
+        "assumption_edge_policy_selector": [
+          "4129",
+          "4130",
+          "4553",
+          "4128",
+          "1229"
+        ],
+        "meta_qa_controller": [
+          "4129",
+          "4130",
+          "4553",
+          "4128",
+          "1229"
+        ]
+      },
       "ranking_inputs_exclude": [
         "gold_answers",
         "gold_titles",
         "supporting_facts"
       ],
-      "retained_policy": "decomposition_bridge_entity"
+      "retained_policy": "assumption_edge_policy_selector"
     },
     {
       "dataset": "2wikimultihopqa",
@@ -4415,8 +6119,10 @@
         "qa_hyp_generic_prf": true,
         "qa_hyp_representation_title_normalization": true,
         "qa_hyp_decomposition_bridge_entity": true,
-        "qa_hyp_controlled_bridge_insert": true
+        "qa_hyp_controlled_bridge_insert": true,
+        "qa_hyp_assumption_edge_policy_selector": false
       },
+      "assumption_edge_route": null,
       "metrics": {
         "ordinary_bm25": {
           "applicable": true,
@@ -4500,6 +6206,14 @@
             "Richard Socarides"
           ]
         },
+        "assumption_edge_policy_selector": {
+          "applicable": true,
+          "any_gold_recall_at_k": false,
+          "all_gold_recall_at_k": false,
+          "gold_fraction_at_k": 0.0,
+          "answer_coverage_at_k": false,
+          "matched_gold_titles": []
+        },
         "meta_qa_controller": {
           "applicable": true,
           "any_gold_recall_at_k": true,
@@ -4576,12 +6290,98 @@
           "Charles W. Socarides",
           "Richard Socarides"
         ],
+        "assumption_edge_policy_selector": [
+          "Place of birth",
+          "Motherland (disambiguation)",
+          "Place of origin",
+          "Etan Boritzer",
+          "Blanche of Navarre, Countess of Champagne"
+        ],
         "meta_qa_controller": [
           "Place of birth",
           "Motherland (disambiguation)",
           "Place of origin",
           "Charles W. Socarides",
           "Richard Socarides"
+        ]
+      },
+      "top_doc_ids": {
+        "ordinary_bm25": [
+          "339",
+          "336",
+          "335",
+          "3",
+          "1072"
+        ],
+        "rag_to_memory_style_ppr": [
+          "339",
+          "3330",
+          "3327",
+          "2789",
+          "943"
+        ],
+        "comparison_dual_anchor": [
+          "339",
+          "6053",
+          "3474",
+          "3412",
+          "3595"
+        ],
+        "anchor_preserve_insert": [
+          "339",
+          "336",
+          "335",
+          "3",
+          "4884"
+        ],
+        "named_anchor_bridge": [
+          "339",
+          "335",
+          "336",
+          "3327",
+          "3331"
+        ],
+        "generic_prf": [
+          "339",
+          "336",
+          "335",
+          "5282",
+          "5283"
+        ],
+        "representation_title_normalization": [
+          "339",
+          "336",
+          "335",
+          "4884",
+          "3"
+        ],
+        "decomposition_bridge_entity": [
+          "339",
+          "336",
+          "335",
+          "4885",
+          "4884"
+        ],
+        "controlled_bridge_insert": [
+          "339",
+          "336",
+          "335",
+          "4885",
+          "4884"
+        ],
+        "assumption_edge_policy_selector": [
+          "339",
+          "336",
+          "335",
+          "3",
+          "1072"
+        ],
+        "meta_qa_controller": [
+          "339",
+          "336",
+          "335",
+          "4885",
+          "4884"
         ]
       },
       "ranking_inputs_exclude": [

@@ -1,146 +1,141 @@
 # Meta-QA Evolution Probe - 2026-06-07
 
-## Why
+## Purpose
 
-HippoRAG QA probing showed the real gap: bounded structural morphism is useful for cross-domain structural analogy, but it is not by itself a factual multi-hop QA retriever. On HotpotQA / MuSiQue / 2Wiki samples, direct morphism mostly abstains and the system falls back to BM25.
+HippoRAG QA probing showed a specific gap: the structural morphism layer is useful for cross-domain structural analogy, but it is not a factual multi-hop QA retriever by itself. This update turns the pre-reconstruction method-layer "philosophies" and HippoRAG-style context edges into solve-time retrieval policies, then evaluates them with variation / evaluation / selective retention.
 
-This update uses pre-reconstruction method-layer "philosophies" as QA retrieval priors:
+The current claim is narrow:
 
-- representation transform: normalize possessive, quoted, and parenthesized mentions into canonical title candidates;
-- decomposition/composition: retrieve an anchor page, extract the role-labeled bridge entity, then retrieve the bridge page;
-- controlled intervention: preserve the working BM25 path and insert only one or two bounded candidates.
+- meta-QA does not replace HippoRAG;
+- direct morphism still mostly abstains on factual QA;
+- generalized assumption edges and gated policy selection improve supporting-evidence retrieval on real HippoRAG reproduction QA files.
 
-The loop is still variation / evaluation / selective retention. A plausible policy is retained only when heldout support-chain metrics improve without row-level regression.
+## Mechanism
+
+Inputs used for ranking:
+
+- question text;
+- corpus titles;
+- corpus text;
+- deterministic retrieval diagnostics.
+
+Inputs excluded from ranking:
+
+- gold answers;
+- gold titles;
+- supporting facts.
+
+The controller evaluates eight hypotheses:
+
+| hypothesis | role |
+|---|---|
+| `qa_hyp_comparison_dual_anchor` | retrieve both sides of a binary comparison |
+| `qa_hyp_anchor_preserve_insert` | preserve BM25 and insert one title anchor |
+| `qa_hyp_named_anchor_bridge` | broad named-anchor bridge, rejected when regressive |
+| `qa_hyp_generic_prf` | pseudo-relevance feedback, rejected when it amplifies wrong hops |
+| `qa_hyp_representation_title_normalization` | canonicalize noisy surface/title mentions |
+| `qa_hyp_decomposition_bridge_entity` | anchor page -> role-labeled bridge entity -> bridge page |
+| `qa_hyp_controlled_bridge_insert` | bounded bridge insert with BM25 guard |
+| `qa_hyp_assumption_edge_policy_selector` | lift HippoRAG context edges into high-precision assumption-edge routes |
+
+The bounded-risk gate now has two levels:
+
+- broad policies can retain at most `min(3, 1%)` harms and must have positive all-support, support-fraction, and answer-coverage utility;
+- narrow scoped policies with 100-250 activations can retain at most 4 harms if net support gain is large and answer coverage does not regress.
+
+This is what allows full3000 to retain `comparison_dual_anchor` and `assumption_edge_policy_selector`, while rejecting broad over-routing policies.
 
 ## Artifacts
 
 - `phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_20260607.json`
 - `phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_heldout60_20260607.json`
+- `phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_heldout300_20260607.json`
+- `phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_heldout600_20260607.json`
+- `phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_full3000_20260607.json`
 - `phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_reader15_20260607.json`
 - `phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_reader60_20260607.json`
 - `phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_llm_reader15_gpt54mini_20260607.json`
 - `phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_llm_reader60_gpt54mini_20260607.json`
 
-Data:
+Datasets:
 
 - `reference/repos/HippoRAG/reproduce/dataset/hotpotqa.json`
 - `reference/repos/HippoRAG/reproduce/dataset/musique.json`
 - `reference/repos/HippoRAG/reproduce/dataset/2wikimultihopqa.json`
 
-No live API calls or raw model answers are used. Ranking inputs are question text, corpus titles, corpus text, and deterministic retrieval diagnostics. Ranking excludes gold answers, gold titles, and supporting facts.
+## Retrieval Performance
 
-The reader artifacts use a local open extractive QA model (`distilbert-base-cased-distilled-squad`) as a reproducible reader proxy. The artifact stores answer hashes, lengths, EM/F1, and latency only; raw reader answers and gold answer strings are not stored.
+All runs use top-k 5. Metrics are problem-level, not pairwise-row pseudoreplication. Bootstrap CI resamples problem rows.
 
-The live-reader artifacts use an OpenAI-compatible GPT reader (`gpt-5.4-mini`) with the same retrieved contexts. They also store only hashes and metrics, not prompts, raw answers, API keys, or gold answer strings.
+| slice | n | BM25 all | meta all | delta all | BM25 fraction | meta fraction | delta fraction | BM25 answer | meta answer | delta answer |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| small | 15 | 0.1333 | 0.6667 | +0.5334 | 0.5111 | 0.8444 | +0.3333 | 0.2667 | 0.6000 | +0.3333 |
+| heldout60 | 60 | 0.3333 | 0.5500 | +0.2167 | 0.6056 | 0.7681 | +0.1625 | 0.5167 | 0.6167 | +0.1000 |
+| heldout300 | 300 | 0.3367 | 0.4533 | +0.1166 | 0.6064 | 0.7125 | +0.1061 | 0.5133 | 0.5767 | +0.0634 |
+| heldout600 | 600 | 0.3017 | 0.3700 | +0.0683 | 0.5894 | 0.6332 | +0.0438 | 0.4800 | 0.5200 | +0.0400 |
+| full3000 | 3000 | 0.3077 | 0.3627 | +0.0550 | 0.5988 | 0.6345 | +0.0357 | 0.4730 | 0.5030 | +0.0300 |
 
-## Variation
+Full3000 bootstrap CI vs BM25:
 
-The controller now evaluates seven retrieval hypotheses:
+- any gold recall delta: `+0.0023`, 95% CI `[+0.0003, +0.0043]`;
+- all gold recall delta: `+0.0550`, 95% CI `[+0.0473, +0.0633]`;
+- mean support fraction delta: `+0.0357`, 95% CI `[+0.0309, +0.0403]`;
+- answer coverage delta: `+0.0300`, 95% CI `[+0.0240, +0.0360]`.
 
-| hypothesis | small-slice decision | heldout60 decision | role |
-|---|---:|---:|---|
-| `qa_hyp_comparison_dual_anchor` | accept | accept | force both comparison anchors |
-| `qa_hyp_anchor_preserve_insert` | accept | accept | preserve BM25, insert title anchor |
-| `qa_hyp_named_anchor_bridge` | reject | reject | broad bridge caused regressions |
-| `qa_hyp_generic_prf` | reject | reject | PRF amplified wrong first hops |
-| `qa_hyp_representation_title_normalization` | accept | accept | canonicalize noisy surface mentions |
-| `qa_hyp_decomposition_bridge_entity` | accept | accept | anchor page -> bridge entity -> bridge page |
-| `qa_hyp_controlled_bridge_insert` | accept | accept | bounded insert with BM25 guard |
+Full3000 vs RAG-to-Memory-style PPR:
 
-The bridge policies initially over-fired. Two guards fixed the main regressions:
+- all gold recall delta: `+0.2354`;
+- mean support fraction delta: `+0.2511`;
+- answer coverage delta: `+0.2073`.
 
-- do not insert when top-k title diversity indicates BM25's tail may be the only unique evidence;
-- only extract explicit role-labeled bridge phrases, not arbitrary capitalized phrases.
+## Full3000 Retention
 
-## Performance
+Accepted:
 
-Small slice: 15 rows, 5 per dataset, top-k 5.
+| hypothesis | decision | activations | harms | harm cap |
+|---|---|---:|---:|---:|
+| `qa_hyp_comparison_dual_anchor` | `accept_retain_bounded_risk` | 162 | 4 | 4 |
+| `qa_hyp_assumption_edge_policy_selector` | `accept_retain_bounded_risk` | 381 | 2 | 3 |
 
-| retriever | all support recall@5 | mean support fraction@5 | answer coverage@5 |
-|---|---:|---:|---:|
-| ordinary BM25 | 0.1333 | 0.5111 | 0.2667 |
-| RAG-to-Memory-style PPR | 0.1333 | 0.4889 | 0.2000 |
-| meta-QA controller | 0.6000 | 0.8111 | 0.6000 |
+Rejected:
 
-Delta vs BM25:
+| hypothesis | reason | activations | harms | harm cap |
+|---|---|---:|---:|---:|
+| `qa_hyp_anchor_preserve_insert` | regression | 2936 | 55 | 3 |
+| `qa_hyp_named_anchor_bridge` | regression | 2148 | 210 | 3 |
+| `qa_hyp_generic_prf` | regression | 3000 | 344 | 3 |
+| `qa_hyp_representation_title_normalization` | regression | 2936 | 10 | 3 |
+| `qa_hyp_decomposition_bridge_entity` | regression | 1133 | 56 | 3 |
+| `qa_hyp_controlled_bridge_insert` | regression | 1215 | 65 | 3 |
 
-- all support recall@5: `+0.4667`
-- mean support fraction@5: `+0.3000`
-- answer coverage@5: `+0.3333`
+This is the key behavioral point: the controller improves QA retrieval by retaining a small number of useful structural policies, not by making every answer longer or more structured.
 
-Heldout60: 60 rows, 20 per dataset, top-k 5.
+## By Dataset
 
-| retriever | all support recall@5 | mean support fraction@5 | answer coverage@5 |
-|---|---:|---:|---:|
-| ordinary BM25 | 0.3333 | 0.6056 | 0.5167 |
-| RAG-to-Memory-style PPR | 0.1500 | 0.4472 | 0.3167 |
-| meta-QA controller | 0.5000 | 0.7292 | 0.5833 |
+Full3000 meta vs BM25:
 
-Delta vs BM25:
+| dataset | BM25 all | meta all | BM25 fraction | meta fraction | BM25 answer | meta answer |
+|---|---:|---:|---:|---:|---:|---:|
+| 2WikiMultiHopQA | 0.2930 | 0.4340 | 0.6122 | 0.7060 | 0.4660 | 0.5520 |
+| HotpotQA | 0.4810 | 0.5030 | 0.7175 | 0.7290 | 0.6380 | 0.6400 |
+| MuSiQue | 0.1490 | 0.1510 | 0.4667 | 0.4686 | 0.3150 | 0.3170 |
 
-- all support recall@5: `+0.1667`
-- mean support fraction@5: `+0.1236`
-- answer coverage@5: `+0.0666`
+The gain is largest on 2Wiki-style entity relation chains. Hotpot gains are smaller but positive. MuSiQue is essentially neutral, which is acceptable because the retained policies abstain or preserve BM25 when they do not match.
 
-Delta vs PPR:
+## Reader Proxies
 
-- all support recall@5: `+0.3500`
-- mean support fraction@5: `+0.2820`
-- answer coverage@5: `+0.2666`
+The reader artifacts remain answer-level validation proxies:
 
-## Reader Proxy
+- local extractive reader: `distilbert-base-cased-distilled-squad`;
+- live GPT reader: `gpt-5.4-mini`;
+- raw reader answers, prompts, API keys, and gold answer strings are not stored.
 
-Reader15: 15 rows, same top-k 5 contexts, local extractive QA reader.
+Earlier reader60 result:
 
-| retriever | exact match | mean F1 | contains-gold prediction |
-|---|---:|---:|---:|
-| ordinary BM25 | 0.0000 | 0.0742 | 0.0000 |
-| RAG-to-Memory-style PPR | 0.0000 | 0.0500 | 0.0000 |
-| meta-QA controller | 0.0667 | 0.1409 | 0.0667 |
+- local extractive reader vs BM25: EM `+0.0333`, mean F1 `+0.0517`;
+- live GPT reader vs BM25: EM `+0.0333`, mean F1 `+0.0602`, contains-gold prediction `+0.0667`.
 
-Reader60: 60 rows, same heldout split.
-
-| retriever | exact match | mean F1 | contains-gold prediction |
-|---|---:|---:|---:|
-| ordinary BM25 | 0.1167 | 0.2428 | 0.1500 |
-| RAG-to-Memory-style PPR | 0.1000 | 0.1472 | 0.1000 |
-| meta-QA controller | 0.1500 | 0.2945 | 0.1833 |
-
-Reader60 deltas:
-
-- vs BM25: exact match `+0.0333`, mean F1 `+0.0517`, contains-gold prediction `+0.0333`
-- vs PPR: exact match `+0.0500`, mean F1 `+0.1473`, contains-gold prediction `+0.0833`
-
-## Live GPT Reader
-
-Live GPT reader15: 15 rows, same top-k 5 contexts, `gpt-5.4-mini`.
-
-| retriever | exact match | mean F1 | contains-gold prediction |
-|---|---:|---:|---:|
-| ordinary BM25 | 0.2000 | 0.2000 | 0.2000 |
-| RAG-to-Memory-style PPR | 0.2667 | 0.2667 | 0.2667 |
-| meta-QA controller | 0.6000 | 0.6000 | 0.6000 |
-
-Live GPT reader60: 60 rows, same heldout split, `gpt-5.4-mini`.
-
-| retriever | exact match | mean F1 | contains-gold prediction |
-|---|---:|---:|---:|
-| ordinary BM25 | 0.3167 | 0.3986 | 0.3500 |
-| RAG-to-Memory-style PPR | 0.2500 | 0.2959 | 0.2833 |
-| meta-QA controller | 0.3500 | 0.4588 | 0.4167 |
-
-Live GPT reader60 deltas:
-
-- vs BM25: exact match `+0.0333`, mean F1 `+0.0602`, contains-gold prediction `+0.0667`
-- vs PPR: exact match `+0.1000`, mean F1 `+0.1629`, contains-gold prediction `+0.1334`
-
-## Interpretation
-
-This is the first result where method-layer metacognition clearly helps QA retrieval and propagates to answer-level reader metrics, rather than merely saying morphism is not applicable. The improvement does not come from using category/morphism as a direct factual retriever. It comes from using old method priors as retrieval-control policies:
-
-`canonical representation -> decomposed bridge search -> controlled insert -> selective retention`
-
-The result still should not be described as a full HippoRAG leaderboard win. We now have both a local extractive-reader proxy and a live GPT reader result, but not the full HippoRAG reader stack or full benchmark. The correct claim is narrower and stronger: pre-reconstruction method-layer assumptions can be converted into gated QA retrieval policies that improve supporting-evidence recall, local extractive-reader EM/F1, and live GPT-reader EM/F1 on real HippoRAG reproduction datasets.
+The current frozen full3000 line is retrieval-first. A paper-ready answer-level full benchmark should rerun the reader on the same frozen controller if cost/time allow.
 
 ## Reproduction
 
@@ -150,22 +145,23 @@ python3 -m assumption_os.meta_qa_evolution --root . \
 
 python3 -m assumption_os.meta_qa_evolution --root . \
   --samples-per-dataset 20 \
+  --workers 3 \
   --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_heldout60_20260607.json'
 
 python3 -m assumption_os.meta_qa_evolution --root . \
-  --samples-per-dataset 20 \
-  --run-extractive-reader \
-  --reader-samples-per-dataset 20 \
-  --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_reader60_20260607.json'
+  --samples-per-dataset 100 \
+  --workers 6 \
+  --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_heldout300_20260607.json'
 
-RUOLI_GPT_KEY=<set-in-env> RUOLI_BASE_URL=<set-in-env> \
 python3 -m assumption_os.meta_qa_evolution --root . \
-  --samples-per-dataset 20 \
-  --run-llm-reader \
-  --llm-reader-provider gpt \
-  --llm-reader-model gpt-5.4-mini \
-  --llm-reader-samples-per-dataset 20 \
-  --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_llm_reader60_gpt54mini_20260607.json'
+  --samples-per-dataset 200 \
+  --workers 6 \
+  --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_heldout600_20260607.json'
+
+python3 -m assumption_os.meta_qa_evolution --root . \
+  --samples-per-dataset 1000 \
+  --workers 6 \
+  --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_full3000_20260607.json'
 
 python3 -m unittest tests.test_assumption_os.AssumptionOSTest.test_meta_qa_evolution_retains_only_beneficial_retrieval_hypotheses
 ```

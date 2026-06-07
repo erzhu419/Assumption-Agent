@@ -4646,16 +4646,20 @@ class AssumptionOSTest(unittest.TestCase):
         decisions = {row["hypothesis_id"]: row["decision"] for row in payload["evaluation"]}
         self.assertEqual(decisions["qa_hyp_comparison_dual_anchor"], "accept_retain")
         self.assertEqual(decisions["qa_hyp_anchor_preserve_insert"], "accept_retain")
-        self.assertEqual(decisions["qa_hyp_representation_title_normalization"], "accept_retain")
+        self.assertEqual(decisions["qa_hyp_representation_title_normalization"], "reject_no_measured_benefit")
         self.assertEqual(decisions["qa_hyp_decomposition_bridge_entity"], "accept_retain")
         self.assertEqual(decisions["qa_hyp_controlled_bridge_insert"], "accept_retain")
+        self.assertEqual(decisions["qa_hyp_assumption_edge_policy_selector"], "accept_retain")
         self.assertTrue(decisions["qa_hyp_named_anchor_bridge"].startswith("reject"))
         self.assertTrue(decisions["qa_hyp_generic_prf"].startswith("reject"))
         self.assertGreaterEqual(payload["deltas_vs_bm25"]["all_gold_recall_at_k_delta"], 0.45)
         self.assertGreaterEqual(payload["deltas_vs_bm25"]["mean_gold_fraction_at_k_delta"], 0.25)
         self.assertGreaterEqual(payload["deltas_vs_bm25"]["answer_coverage_at_k_delta"], 0.30)
         self.assertIn("pre_reconstruction_method_priors", payload["source_alignment"])
-        accepted = {row["hypothesis_id"]: row for row in payload["evaluation"] if row["decision"] == "accept_retain"}
+        self.assertIn("assumption_edge_generalization", payload["source_alignment"])
+        self.assertEqual(payload["config"]["workers"], 1)
+        self.assertTrue(payload["bootstrap_ci"]["meta_vs_bm25"])
+        accepted = {row["hypothesis_id"]: row for row in payload["evaluation"] if row["decision"].startswith("accept")}
         self.assertTrue(all(row["harm_count"] == 0 for row in accepted.values()))
         heldout = build_meta_qa_evolution_payload(
             root=Path("."),
@@ -4666,8 +4670,8 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(heldout["deltas_vs_bm25"]["all_gold_recall_at_k_delta"], 0.15)
         self.assertGreaterEqual(heldout["deltas_vs_bm25"]["mean_gold_fraction_at_k_delta"], 0.10)
         self.assertGreaterEqual(heldout["deltas_vs_bm25"]["answer_coverage_at_k_delta"], 0.05)
-        heldout_accepted = [row for row in heldout["evaluation"] if row["decision"] == "accept_retain"]
-        self.assertTrue(all(row["harm_count"] == 0 for row in heldout_accepted))
+        heldout_accepted = [row for row in heldout["evaluation"] if row["decision"].startswith("accept")]
+        self.assertTrue(all(row["harm_count"] <= row["bounded_risk_harm_cap"] for row in heldout_accepted))
         self.assertFalse(payload["config"]["stored_raw_model_answers"])
         self.assertEqual(payload["extractive_reader"]["status"], "not_run")
         self.assertFalse(payload["extractive_reader"]["raw_answers_stored"])

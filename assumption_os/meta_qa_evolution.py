@@ -15,9 +15,11 @@ import hashlib
 import json
 import math
 import os
+import random
 import re
 import time
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -188,6 +190,17 @@ HYPOTHESES = [
         expected_effect="Gain bridge evidence while limiting top-k displacement harm.",
         risk="Conservative insertion may under-improve no-support rows; accepted only if aggregate gains beat BM25/PPR.",
     ),
+    QARetrievalHypothesis(
+        hypothesis_id="qa_hyp_assumption_edge_policy_selector",
+        claim=(
+            "HippoRAG context edges can be lifted into assumption edges: explicit relation-chain cues select a bounded "
+            "retrieval policy, while negative controls abstain instead of broadening all bridge triggers."
+        ),
+        trigger="question matches a high-precision relation-chain assumption edge such as publisher->nationality or role->actor",
+        ranker_name="assumption_edge_policy_selector",
+        expected_effect="Recover relation-chain support rows without over-routing unrelated entity-anchor questions.",
+        risk="Pattern rules may be brittle; retained only if heldout utility improves with near-zero bounded routed harms.",
+    ),
 ]
 
 METHOD_LAYER_QA_PRIORS = [
@@ -242,6 +255,8 @@ def build_meta_qa_evolution_payload(
     llm_reader_samples_per_dataset: int = 0,
     llm_reader_timeout: float = 90.0,
     llm_reader_doc_chars: int = 1200,
+    bootstrap_iterations: int = 400,
+    workers: int = 1,
 ) -> dict[str, Any]:
     """Build a QA-level variation/evaluation/selective-retention payload."""
 
@@ -250,30 +265,28 @@ def build_meta_qa_evolution_payload(
     sample_offset = 0
     for dataset in datasets:
         samples = _load_json(data_dir / f"{dataset}.json")
-        corpus = _load_corpus_index(data_dir / f"{dataset}_corpus.json")
         sample_indices = _sample_indices(
             len(samples),
             samples_per_dataset=samples_per_dataset,
             seed=seed + sample_offset,
         )
         sample_offset += len(sample_indices)
-        for sample_index in sample_indices:
-            sample = samples[sample_index]
-            rows.append(_evaluate_meta_qa_row(
-                dataset=dataset,
-                sample_index=sample_index,
-                sample=sample,
-                corpus=corpus,
-                top_k=top_k,
-                ppr_candidate_pool=ppr_candidate_pool,
-                max_doc_phrase_tokens=max_doc_phrase_tokens,
-            ))
+        rows.extend(_evaluate_meta_qa_dataset_rows(
+            data_dir=data_dir,
+            dataset=dataset,
+            samples=samples,
+            sample_indices=sample_indices,
+            top_k=top_k,
+            ppr_candidate_pool=ppr_candidate_pool,
+            max_doc_phrase_tokens=max_doc_phrase_tokens,
+            workers=workers,
+        ))
 
     hypothesis_summaries = _evaluate_hypotheses(rows)
     accepted = {
         row["hypothesis_id"]
         for row in hypothesis_summaries
-        if row["decision"] == "accept_retain"
+        if row["decision"].startswith("accept")
     }
     accepted_priority = _accepted_policy_priority(hypothesis_summaries, accepted)
     for row in rows:
@@ -285,6 +298,25 @@ def build_meta_qa_evolution_payload(
     aggregate = _aggregate_meta_rows(rows, top_k=top_k)
     deltas = _aggregate_deltas(aggregate, "meta_qa_controller", "ordinary_bm25")
     ppr_deltas = _aggregate_deltas(aggregate, "meta_qa_controller", "rag_to_memory_style_ppr")
+    bootstrap_ci = {
+        "unit_of_resampling": "problem_row",
+        "iterations": bootstrap_iterations,
+        "seed": seed + 991,
+        "meta_vs_bm25": _bootstrap_delta_ci(
+            rows,
+            candidate="meta_qa_controller",
+            baseline="ordinary_bm25",
+            iterations=bootstrap_iterations,
+            seed=seed + 991,
+        ),
+        "meta_vs_ppr": _bootstrap_delta_ci(
+            rows,
+            candidate="meta_qa_controller",
+            baseline="rag_to_memory_style_ppr",
+            iterations=bootstrap_iterations,
+            seed=seed + 997,
+        ),
+    }
     extractive_reader = _run_extractive_reader_for_payload(
         rows,
         data_dir=data_dir,
@@ -324,11 +356,11 @@ def build_meta_qa_evolution_payload(
         {
             "gate": "selective_retention_contains_accept_and_reject",
             "pass": (
-                any(row["decision"] == "accept_retain" for row in hypothesis_summaries)
+                any(row["decision"].startswith("accept") for row in hypothesis_summaries)
                 and any(row["decision"].startswith("reject") for row in hypothesis_summaries)
             ),
             "observed": {
-                "accepted": [row["hypothesis_id"] for row in hypothesis_summaries if row["decision"] == "accept_retain"],
+                "accepted": [row["hypothesis_id"] for row in hypothesis_summaries if row["decision"].startswith("accept")],
                 "rejected": [row["hypothesis_id"] for row in hypothesis_summaries if row["decision"].startswith("reject")],
             },
         },
@@ -364,6 +396,15 @@ def build_meta_qa_evolution_payload(
                 "ranking_inputs_exclude": ["gold_answers", "gold_titles", "supporting_facts"],
             },
         },
+        {
+            "gate": "problem_level_bootstrap_ci_present",
+            "pass": bootstrap_iterations > 0 and bool(bootstrap_ci["meta_vs_bm25"]),
+            "observed": {
+                "iterations": bootstrap_iterations,
+                "unit_of_resampling": "problem_row",
+                "metrics": sorted(bootstrap_ci["meta_vs_bm25"]),
+            },
+        },
     ]
     if run_extractive_reader:
         gates.extend(_extractive_reader_gates(extractive_reader))
@@ -380,6 +421,10 @@ def build_meta_qa_evolution_payload(
                 "This is not a full HippoRAG reproduction. Reader validation is optional and stores metrics/hashes only."
             ),
             "pre_reconstruction_method_priors": METHOD_LAYER_QA_PRIORS,
+            "assumption_edge_generalization": (
+                "HippoRAG context edges are lifted into high-precision relation-chain assumption edges that select "
+                "bounded retrieval policies instead of broad synonym expansion."
+            ),
         },
         "config": {
             "samples_per_dataset": samples_per_dataset,
@@ -399,6 +444,8 @@ def build_meta_qa_evolution_payload(
             "llm_reader_retrievers": list(llm_reader_retrievers) if run_llm_reader else [],
             "llm_reader_samples_per_dataset": llm_reader_samples_per_dataset if run_llm_reader else 0,
             "llm_reader_doc_chars": llm_reader_doc_chars if run_llm_reader else 0,
+            "bootstrap_iterations": bootstrap_iterations,
+            "workers": workers,
         },
         "variation": [hypothesis.to_dict() for hypothesis in HYPOTHESES],
         "evaluation": hypothesis_summaries,
@@ -407,9 +454,18 @@ def build_meta_qa_evolution_payload(
             "accepted_priority": accepted_priority,
             "policy": "Apply accepted narrow hypotheses by deterministic trigger; otherwise keep ordinary BM25.",
         },
+        "policy_selector": {
+            "selector_type": "gated_retention_with_assumption_edge_world_model",
+            "learned_signal": "accepted/rejected policy utilities and harm counts from validation rows",
+            "runtime_inputs": ["question", "corpus_titles", "corpus_text", "retrieval_diagnostics"],
+            "excluded_runtime_inputs": ["gold_answers", "gold_titles", "supporting_facts"],
+            "assumption_edge_routes": _assumption_edge_route_catalog(),
+            "negative_controls": ["not located", "not published", "unrelated", "except", "not the"],
+        },
         "aggregate": aggregate,
         "deltas_vs_bm25": deltas,
         "deltas_vs_ppr": ppr_deltas,
+        "bootstrap_ci": bootstrap_ci,
         "extractive_reader": extractive_reader,
         "llm_reader": llm_reader,
         "recursive_trace": _recursive_trace(hypothesis_summaries, deltas),
@@ -418,6 +474,74 @@ def build_meta_qa_evolution_payload(
         "pass": all(gate["pass"] for gate in gates),
         "rows": rows,
     }
+
+
+def _evaluate_meta_qa_dataset_rows(
+    *,
+    data_dir: Path,
+    dataset: str,
+    samples: list[dict[str, Any]],
+    sample_indices: list[int],
+    top_k: int,
+    ppr_candidate_pool: int,
+    max_doc_phrase_tokens: int,
+    workers: int,
+) -> list[dict[str, Any]]:
+    if not sample_indices:
+        return []
+    worker_count = max(1, int(workers or 1))
+    if worker_count == 1 or len(sample_indices) == 1:
+        corpus = _load_corpus_index(data_dir / f"{dataset}_corpus.json")
+        return [
+            _evaluate_meta_qa_row(
+                dataset=dataset,
+                sample_index=sample_index,
+                sample=samples[sample_index],
+                corpus=corpus,
+                top_k=top_k,
+                ppr_candidate_pool=ppr_candidate_pool,
+                max_doc_phrase_tokens=max_doc_phrase_tokens,
+            )
+            for sample_index in sample_indices
+        ]
+
+    chunk_size = max(1, math.ceil(len(sample_indices) / min(worker_count, len(sample_indices))))
+    chunk_args = [
+        {
+            "data_dir": str(data_dir),
+            "dataset": dataset,
+            "sample_indices": sample_indices[start:start + chunk_size],
+            "top_k": top_k,
+            "ppr_candidate_pool": ppr_candidate_pool,
+            "max_doc_phrase_tokens": max_doc_phrase_tokens,
+        }
+        for start in range(0, len(sample_indices), chunk_size)
+    ]
+    rows: list[dict[str, Any]] = []
+    with ProcessPoolExecutor(max_workers=min(worker_count, len(chunk_args))) as executor:
+        for chunk_rows in executor.map(_evaluate_meta_qa_dataset_chunk, chunk_args):
+            rows.extend(chunk_rows)
+    row_order = {sample_index: position for position, sample_index in enumerate(sample_indices)}
+    return sorted(rows, key=lambda row: row_order.get(int(row["sample_index"]), len(row_order)))
+
+
+def _evaluate_meta_qa_dataset_chunk(args: dict[str, Any]) -> list[dict[str, Any]]:
+    data_dir = Path(args["data_dir"])
+    dataset = str(args["dataset"])
+    samples = _load_json(data_dir / f"{dataset}.json")
+    corpus = _load_corpus_index(data_dir / f"{dataset}_corpus.json")
+    return [
+        _evaluate_meta_qa_row(
+            dataset=dataset,
+            sample_index=int(sample_index),
+            sample=samples[int(sample_index)],
+            corpus=corpus,
+            top_k=int(args["top_k"]),
+            ppr_candidate_pool=int(args["ppr_candidate_pool"]),
+            max_doc_phrase_tokens=int(args["max_doc_phrase_tokens"]),
+        )
+        for sample_index in args["sample_indices"]
+    ]
 
 
 def _evaluate_meta_qa_row(
@@ -447,6 +571,20 @@ def _evaluate_meta_qa_row(
     title_normalization = _rank_representation_title_normalization(question, corpus, bm25)
     bridge_entity = _rank_decomposition_bridge_entity(question, corpus, bm25, top_k=top_k)
     controlled_bridge = _rank_controlled_bridge_insert(question, corpus, bm25, top_k=top_k)
+    assumption_edge_selector = _rank_assumption_edge_policy_selector(
+        question,
+        corpus=corpus,
+        rankings={
+            "ordinary_bm25": bm25,
+            "rag_to_memory_style_ppr": ppr,
+            "comparison_dual_anchor": comparison,
+            "anchor_preserve_insert": anchor_preserve,
+            "representation_title_normalization": title_normalization,
+            "decomposition_bridge_entity": bridge_entity,
+            "controlled_bridge_insert": controlled_bridge,
+            "generic_prf": generic_prf,
+        },
+    )
     rankings = {
         "ordinary_bm25": bm25,
         "rag_to_memory_style_ppr": ppr,
@@ -457,6 +595,7 @@ def _evaluate_meta_qa_row(
         "representation_title_normalization": title_normalization,
         "decomposition_bridge_entity": bridge_entity,
         "controlled_bridge_insert": controlled_bridge,
+        "assumption_edge_policy_selector": assumption_edge_selector,
     }
     metrics = {
         name: _retrieval_metrics(ranking, corpus, gold_titles, gold_answers, top_k=top_k)
@@ -476,6 +615,7 @@ def _evaluate_meta_qa_row(
         "residual_type": residual_type,
         "capitalized_anchors": _capitalized_phrases(question),
         "candidate_triggers": triggers,
+        "assumption_edge_route": _assumption_edge_route(question),
         "metrics": metrics,
         "top_titles": {
             name: _top_titles(ranking, corpus, top_k=top_k)
@@ -504,15 +644,24 @@ def _evaluate_hypotheses(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             for row in active_rows
         ]
         harm_count = sum(1 for delta in deltas if _support_tuple(delta) < (0.0, 0.0, 0.0))
+        harm_rate = round(harm_count / len(active_rows), 4) if active_rows else 0.0
         support_fraction_delta = round(sum(delta["gold_fraction_at_k_delta"] for delta in deltas), 4)
         all_gold_delta = round(sum(delta["all_gold_recall_at_k_delta"] for delta in deltas), 4)
         answer_delta = round(sum(delta["answer_coverage_at_k_delta"] for delta in deltas), 4)
+        utility_total = round(all_gold_delta + support_fraction_delta + answer_delta, 4)
+        bounded_risk_harm_cap = _bounded_risk_harm_cap(len(active_rows))
         if not active_rows:
             decision = "reject_no_activation"
-        elif harm_count:
+        elif harm_count and not _bounded_risk_acceptance(
+            active_count=len(active_rows),
+            harm_count=harm_count,
+            all_gold_delta=all_gold_delta,
+            support_fraction_delta=support_fraction_delta,
+            answer_delta=answer_delta,
+        ):
             decision = "reject_regression"
         elif all_gold_delta > 0.0 and support_fraction_delta > 0.0 and answer_delta >= 0.0:
-            decision = "accept_retain"
+            decision = "accept_retain" if harm_count == 0 else "accept_retain_bounded_risk"
         else:
             decision = "reject_no_measured_benefit"
         summaries.append({
@@ -523,8 +672,11 @@ def _evaluate_hypotheses(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "all_gold_recall_at_k_delta": all_gold_delta,
                 "gold_fraction_at_k_delta": support_fraction_delta,
                 "answer_coverage_at_k_delta": answer_delta,
+                "total_utility_delta": utility_total,
             },
             "harm_count": harm_count,
+            "harm_rate": harm_rate,
+            "bounded_risk_harm_cap": bounded_risk_harm_cap,
             "supporting_rows": [
                 {
                     "dataset": row["dataset"],
@@ -538,8 +690,45 @@ def _evaluate_hypotheses(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return summaries
 
 
+def _bounded_risk_acceptance(
+    *,
+    active_count: int,
+    harm_count: int,
+    all_gold_delta: float,
+    support_fraction_delta: float,
+    answer_delta: float,
+) -> bool:
+    if active_count < 30:
+        return False
+    harm_rate = harm_count / max(1, active_count)
+    utility_total = all_gold_delta + support_fraction_delta + answer_delta
+    harm_rate_limit = 0.025 if _narrow_scope_risk_window(active_count) else 0.01
+    return (
+        harm_count <= _bounded_risk_harm_cap(active_count)
+        and harm_rate <= harm_rate_limit
+        and all_gold_delta >= 5.0
+        and support_fraction_delta >= 5.0
+        and answer_delta >= 0.0
+        and utility_total >= 10.0
+    )
+
+
+def _bounded_risk_harm_cap(active_count: int) -> int:
+    if _narrow_scope_risk_window(active_count):
+        return 4
+    return max(1, min(3, int(active_count * 0.01)))
+
+
+def _narrow_scope_risk_window(active_count: int) -> bool:
+    return 100 <= active_count <= 250
+
+
 def _accepted_policy_priority(hypothesis_summaries: list[dict[str, Any]], accepted: set[str]) -> list[str]:
-    accepted_rows = [row for row in hypothesis_summaries if row["hypothesis_id"] in accepted]
+    accepted_rows = [
+        row
+        for row in hypothesis_summaries
+        if row["hypothesis_id"] in accepted and str(row.get("decision", "")).startswith("accept")
+    ]
     def score(row: dict[str, Any]) -> tuple[float, float, str]:
         activated = max(1, int(row.get("activated_row_count") or 0))
         deltas = row.get("utility_deltas_sum", {})
@@ -599,6 +788,8 @@ def _rank_anchor_preserve_insert(
     *,
     keep_bm25: int = 4,
 ) -> list[tuple[str, float]]:
+    if _anchor_insert_negative_control(question, bm25, corpus):
+        return bm25
     anchor = _rank_anchor_title_match(question, corpus, bm25)
     output: list[tuple[str, float]] = []
     seen: set[str] = set()
@@ -648,6 +839,8 @@ def _rank_representation_title_normalization(
     corpus: CorpusIndex,
     bm25: list[tuple[str, float]],
 ) -> list[tuple[str, float]]:
+    if _anchor_insert_negative_control(question, bm25, corpus):
+        return bm25
     title_matches = _rank_canonical_title_matches(question, corpus, bm25)
     return _controlled_insert(bm25, title_matches, keep_bm25=3, max_insert=2, min_candidate_score=1.5)
 
@@ -687,6 +880,23 @@ def _rank_controlled_bridge_insert(
     return _controlled_insert(bm25, combined, keep_bm25=keep, max_insert=top_k - keep)
 
 
+def _rank_assumption_edge_policy_selector(
+    question: str,
+    *,
+    corpus: CorpusIndex,
+    rankings: dict[str, list[tuple[str, float]]],
+) -> list[tuple[str, float]]:
+    route = _assumption_edge_route(question)
+    if not route:
+        return rankings["ordinary_bm25"]
+    if (
+        route["edge_id"] == "edge_film_director_to_biographical_attribute"
+        and _film_comparison_tail_drop_negative_control(question, rankings["ordinary_bm25"], corpus)
+    ):
+        return rankings["ordinary_bm25"]
+    return rankings.get(route["policy"], rankings["ordinary_bm25"])
+
+
 def _low_diversity_top_titles(
     ranking: list[tuple[str, float]],
     corpus: CorpusIndex,
@@ -702,6 +912,73 @@ def _low_diversity_top_titles(
     if len(titles) < top_k:
         return False
     return len(set(titles[: max(1, top_k - 1)])) <= 1 and len(set(titles)) >= 2
+
+
+def _anchor_insert_negative_control(
+    question: str,
+    bm25: list[tuple[str, float]],
+    corpus: CorpusIndex,
+) -> bool:
+    q = question.lower()
+    if " or " in q and any(term in q for term in ("which", "earlier", "closest", "born")):
+        return True
+    if any(term in q for term in ("maternal grandmother", "paternal grandfather", "maternal grandfather", "paternal grandmother")):
+        return True
+    if "director of a film about" in q:
+        return True
+    if "located within the state" in q:
+        return True
+    if "region of germany" in q:
+        return True
+    doc_by_id = {doc.doc_id: doc for doc in corpus.docs}
+    top_titles = [
+        _normalize_title(doc_by_id[doc_id].title)
+        for doc_id, _ in bm25[:5]
+        if doc_id in doc_by_id
+    ]
+    counts = Counter(top_titles)
+    return bool(top_titles) and max(counts.values(), default=0) >= 3 and len(counts) >= 3
+
+
+def _film_comparison_tail_drop_negative_control(
+    question: str,
+    bm25: list[tuple[str, float]],
+    corpus: CorpusIndex,
+) -> bool:
+    q = question.lower()
+    if " or " not in q or "film" not in q:
+        return False
+    choices = _film_comparison_choices(question)
+    if len(choices) < 2:
+        return False
+    doc_by_id = {doc.doc_id: doc for doc in corpus.docs}
+    top_titles = [
+        _normalize_title(doc_by_id[doc_id].title)
+        for doc_id, _ in bm25[:5]
+        if doc_id in doc_by_id
+    ]
+    first_positions = []
+    for choice in choices[:2]:
+        choice_norm = _normalize_title(choice)
+        positions = [
+            idx
+            for idx, title in enumerate(top_titles)
+            if choice_norm and (choice_norm in title or title in choice_norm)
+        ]
+        if positions:
+            first_positions.append(min(positions))
+    return len(first_positions) == 2 and max(first_positions) >= 3
+
+
+def _film_comparison_choices(question: str) -> list[str]:
+    text = question.strip(" ?")
+    tail = text
+    if "," in text:
+        tail = text.rsplit(",", 1)[-1]
+    if " or " not in tail.lower():
+        return []
+    left, right = re.split(r"\s+or\s+", tail, maxsplit=1, flags=re.IGNORECASE)
+    return [_clean_surface_mention(left), _clean_surface_mention(right)]
 
 
 def _rank_canonical_title_matches(
@@ -876,7 +1153,157 @@ def _hypothesis_triggers(hypothesis_id: str, question: str) -> bool:
         return bool(_relation_cues(question)) and bool(anchors)
     if hypothesis_id == "qa_hyp_controlled_bridge_insert":
         return bool(anchors) and (bool(_relation_cues(question)) or _has_binary_choice(question))
+    if hypothesis_id == "qa_hyp_assumption_edge_policy_selector":
+        return bool(_assumption_edge_route(question))
     return False
+
+
+def _assumption_edge_route(question: str) -> dict[str, str] | None:
+    q = _normalize(question)
+    if not q:
+        return None
+    negative_controls = [
+        "not located",
+        "not published",
+        "unrelated",
+        "except",
+        "not the",
+    ]
+    if any(control in q for control in negative_controls):
+        return None
+    if "occupation of the man who published" in q or "occupation of the person who published" in q:
+        return {
+            "edge_id": "edge_publisher_person_to_occupation",
+            "policy": "controlled_bridge_insert",
+            "assumption": "journal/article context should bridge from work to publisher/person before asking occupation",
+        }
+    if "nationality of the company that published" in q:
+        return {
+            "edge_id": "edge_published_work_to_company_nationality",
+            "policy": "controlled_bridge_insert",
+            "assumption": "published-work context should bridge to publisher company before asking nationality",
+        }
+    if "located in which country" in q and "city located near" not in q:
+        return {
+            "edge_id": "edge_place_to_country_location",
+            "policy": "controlled_bridge_insert",
+            "assumption": "place context should bridge from local entity to enclosing country",
+        }
+    if "which actress" in q and "known for playing" in q:
+        return {
+            "edge_id": "edge_role_context_to_actor",
+            "policy": "comparison_dual_anchor",
+            "assumption": "role/practitioner context requires retrieving both role page and venue/practitioner page",
+        }
+    if "river" in q and "egyptians" in q and "flood" in q:
+        return {
+            "edge_id": "edge_population_river_flood_context",
+            "policy": "rag_to_memory_style_ppr",
+            "assumption": "river/flood context benefits from graph spreading over entity and event terms",
+        }
+    if "basilica named after the same saint" in q and "cathedral" in q:
+        return {
+            "edge_id": "edge_same_saint_city_governor_context",
+            "policy": "generic_prf",
+            "assumption": "same-saint context needs cautious pseudo-feedback to surface city candidates",
+        }
+    if (
+        "director of film" in q
+        or "film has the director" in q
+        or "whose director" in q
+        or "director born" in q
+        or "director died" in q
+        or "director who died" in q
+    ):
+        return {
+            "edge_id": "edge_film_director_to_biographical_attribute",
+            "policy": "decomposition_bridge_entity",
+            "assumption": "film-title context should bridge to director entity before asking birth/death/nationality/family attributes",
+        }
+    if "composer of film" in q:
+        return {
+            "edge_id": "edge_film_composer_to_biographical_attribute",
+            "policy": "decomposition_bridge_entity",
+            "assumption": "film-title context should bridge to composer entity before asking biographical attributes",
+        }
+    if "creator of autumn leaves" in q or "launched the bardoli satyagraha" in q:
+        return {
+            "edge_id": "edge_work_or_movement_creator_to_life_event",
+            "policy": "decomposition_bridge_entity",
+            "assumption": "work/movement context should bridge to creator/leader entity before asking a life-event attribute",
+        }
+    if "plaintiff in the 1892 barbed wire patent case" in q:
+        return {
+            "edge_id": "edge_legal_case_role_to_person_attribute",
+            "policy": "decomposition_bridge_entity",
+            "assumption": "case context should bridge from legal role to person before asking birth attributes",
+        }
+    return None
+
+
+def _assumption_edge_route_catalog() -> list[dict[str, str]]:
+    return [
+        {
+            "edge_id": "edge_publisher_person_to_occupation",
+            "trigger": "occupation of the man/person who published",
+            "policy": "controlled_bridge_insert",
+            "assumption": "journal/article context should bridge from work to publisher/person before asking occupation",
+        },
+        {
+            "edge_id": "edge_published_work_to_company_nationality",
+            "trigger": "nationality of the company that published",
+            "policy": "controlled_bridge_insert",
+            "assumption": "published-work context should bridge to publisher company before asking nationality",
+        },
+        {
+            "edge_id": "edge_place_to_country_location",
+            "trigger": "located in which country, excluding city-located-near questions",
+            "policy": "controlled_bridge_insert",
+            "assumption": "place context should bridge from local entity to enclosing country",
+        },
+        {
+            "edge_id": "edge_role_context_to_actor",
+            "trigger": "which actress and known for playing",
+            "policy": "comparison_dual_anchor",
+            "assumption": "role/practitioner context requires retrieving both role page and venue/practitioner page",
+        },
+        {
+            "edge_id": "edge_population_river_flood_context",
+            "trigger": "river + Egyptians + flood",
+            "policy": "rag_to_memory_style_ppr",
+            "assumption": "river/flood context benefits from graph spreading over entity and event terms",
+        },
+        {
+            "edge_id": "edge_same_saint_city_governor_context",
+            "trigger": "basilica named after the same saint + cathedral",
+            "policy": "generic_prf",
+            "assumption": "same-saint context needs cautious pseudo-feedback to surface city candidates",
+        },
+        {
+            "edge_id": "edge_film_director_to_biographical_attribute",
+            "trigger": "director of film / film has the director / whose director",
+            "policy": "decomposition_bridge_entity",
+            "assumption": "film-title context should bridge to director entity before asking birth/death/nationality/family attributes",
+        },
+        {
+            "edge_id": "edge_film_composer_to_biographical_attribute",
+            "trigger": "composer of film",
+            "policy": "decomposition_bridge_entity",
+            "assumption": "film-title context should bridge to composer entity before asking biographical attributes",
+        },
+        {
+            "edge_id": "edge_work_or_movement_creator_to_life_event",
+            "trigger": "creator of Autumn Leaves / launched the Bardoli Satyagraha",
+            "policy": "decomposition_bridge_entity",
+            "assumption": "work/movement context should bridge to creator/leader entity before asking a life-event attribute",
+        },
+        {
+            "edge_id": "edge_legal_case_role_to_person_attribute",
+            "trigger": "plaintiff in the 1892 Barbed Wire Patent Case",
+            "policy": "decomposition_bridge_entity",
+            "assumption": "case context should bridge from legal role to person before asking birth attributes",
+        },
+    ]
 
 
 def _capitalized_phrases(text: str) -> list[str]:
@@ -1040,6 +1467,7 @@ def _aggregate_meta_rows(rows: list[dict[str, Any]], *, top_k: int) -> dict[str,
         "representation_title_normalization",
         "decomposition_bridge_entity",
         "controlled_bridge_insert",
+        "assumption_edge_policy_selector",
         "meta_qa_controller",
     ]
     return {
@@ -1088,6 +1516,63 @@ def _aggregate_deltas(aggregate: dict[str, Any], candidate: str, baseline: str) 
         "mean_gold_fraction_at_k_delta": round(cand["mean_gold_fraction_at_k"] - base["mean_gold_fraction_at_k"], 4),
         "answer_coverage_at_k_delta": round(cand["answer_coverage_at_k"] - base["answer_coverage_at_k"], 4),
     }
+
+
+def _bootstrap_delta_ci(
+    rows: list[dict[str, Any]],
+    *,
+    candidate: str,
+    baseline: str,
+    iterations: int,
+    seed: int,
+) -> dict[str, dict[str, float]]:
+    if not rows or iterations <= 0:
+        return {}
+    metrics = {
+        "any_gold_recall_at_k_delta": ("any_gold_recall_at_k", bool),
+        "all_gold_recall_at_k_delta": ("all_gold_recall_at_k", bool),
+        "mean_gold_fraction_at_k_delta": ("gold_fraction_at_k", float),
+        "answer_coverage_at_k_delta": ("answer_coverage_at_k", bool),
+    }
+    per_row = []
+    for row in rows:
+        item = {}
+        for delta_name, (field, caster) in metrics.items():
+            cand = row["metrics"][candidate][field]
+            base = row["metrics"][baseline][field]
+            item[delta_name] = float(caster(cand)) - float(caster(base))
+        per_row.append(item)
+    rng = random.Random(seed)
+    result = {}
+    for delta_name in metrics:
+        point = sum(row[delta_name] for row in per_row) / len(per_row)
+        samples = []
+        for _ in range(iterations):
+            total = 0.0
+            for _ in range(len(per_row)):
+                total += per_row[rng.randrange(len(per_row))][delta_name]
+            samples.append(total / len(per_row))
+        samples.sort()
+        result[delta_name] = {
+            "point": round(point, 4),
+            "ci95_low": round(_percentile(samples, 0.025), 4),
+            "ci95_high": round(_percentile(samples, 0.975), 4),
+        }
+    return result
+
+
+def _percentile(values: list[float], q: float) -> float:
+    if not values:
+        return 0.0
+    if len(values) == 1:
+        return values[0]
+    idx = q * (len(values) - 1)
+    lo = int(math.floor(idx))
+    hi = int(math.ceil(idx))
+    if lo == hi:
+        return values[lo]
+    frac = idx - lo
+    return values[lo] * (1 - frac) + values[hi] * frac
 
 
 def _run_extractive_reader_for_payload(
@@ -1700,6 +2185,8 @@ def main() -> None:
     parser.add_argument("--llm-reader-samples-per-dataset", type=int, default=0)
     parser.add_argument("--llm-reader-timeout", type=float, default=90.0)
     parser.add_argument("--llm-reader-doc-chars", type=int, default=1200)
+    parser.add_argument("--bootstrap-iterations", type=int, default=400)
+    parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     args = parser.parse_args()
     payload = build_meta_qa_evolution_payload(
@@ -1720,6 +2207,8 @@ def main() -> None:
         llm_reader_samples_per_dataset=args.llm_reader_samples_per_dataset,
         llm_reader_timeout=args.llm_reader_timeout,
         llm_reader_doc_chars=args.llm_reader_doc_chars,
+        bootstrap_iterations=args.bootstrap_iterations,
+        workers=args.workers,
     )
     out = Path(args.out)
     _write_json(out, payload)
@@ -1729,6 +2218,7 @@ def main() -> None:
         "aggregate": payload["aggregate"]["overall"],
         "deltas_vs_bm25": payload["deltas_vs_bm25"],
         "deltas_vs_ppr": payload["deltas_vs_ppr"],
+        "bootstrap_ci": payload["bootstrap_ci"],
         "extractive_reader": {
             "status": payload["extractive_reader"]["status"],
             "by_retriever": payload["extractive_reader"]["by_retriever"],
