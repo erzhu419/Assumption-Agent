@@ -23,6 +23,7 @@ DEFAULT_ARTIFACTS = [
     PAPER_DIR / "rag_to_memory_baseline_20260606.json",
     PAPER_DIR / "hipporag_qa_probe_20260606.json",
     PAPER_DIR / "meta_qa_evolution_20260607.json",
+    PAPER_DIR / "meta_qa_evolution_heldout60_20260607.json",
     PAPER_DIR / "structural_context_edges_20260607.json",
     PAPER_DIR / "assumption_family_discovery_20260607.json",
     PAPER_DIR / "morphism_claim_bundle_20260605.json",
@@ -175,6 +176,10 @@ def _exact_commands() -> list[dict[str, str]]:
         {
             "name": "meta_qa_evolution_no_reader",
             "command": "python3 -m assumption_os.meta_qa_evolution --root . --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_20260607.json'",
+        },
+        {
+            "name": "meta_qa_evolution_heldout60_no_reader",
+            "command": "python3 -m assumption_os.meta_qa_evolution --root . --samples-per-dataset 20 --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_heldout60_20260607.json'",
         },
         {
             "name": "structural_context_edges",

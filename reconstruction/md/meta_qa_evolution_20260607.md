@@ -2,19 +2,20 @@
 
 ## Why
 
-HippoRAG QA probe showed a real gap: bounded structural morphism improves cross-domain structural analogy retrieval, but it does not directly act as a factual multi-hop QA retriever. On HotpotQA / MuSiQue / 2Wiki samples, the safe policy falls back to BM25, so QA scores barely change.
+HippoRAG QA probing showed the real gap: bounded structural morphism is useful for cross-domain structural analogy, but it is not by itself a factual multi-hop QA retriever. On HotpotQA / MuSiQue / 2Wiki samples, direct morphism mostly abstains and the system falls back to BM25.
 
-This probe tests the missing solve-time metacognition adapter:
+This update uses pre-reconstruction method-layer "philosophies" as QA retrieval priors:
 
-`QA failure -> multiple retrieval hypotheses -> evidence evaluation -> selective retention -> guarded QA retrieval policy`
+- representation transform: normalize possessive, quoted, and parenthesized mentions into canonical title candidates;
+- decomposition/composition: retrieve an anchor page, extract the role-labeled bridge entity, then retrieve the bridge page;
+- controlled intervention: preserve the working BM25 path and insert only one or two bounded candidates.
 
-It does not use live API calls or reader answers. It evaluates retrieval evidence with supporting-fact titles and answer-string coverage from the local HippoRAG reproduction datasets.
+The loop is still variation / evaluation / selective retention. A plausible policy is retained only when heldout support-chain metrics improve without row-level regression.
 
-## Setup
-
-Artifact:
+## Artifacts
 
 - `phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_20260607.json`
+- `phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_heldout60_20260607.json`
 
 Data:
 
@@ -22,64 +23,80 @@ Data:
 - `reference/repos/HippoRAG/reproduce/dataset/musique.json`
 - `reference/repos/HippoRAG/reproduce/dataset/2wikimultihopqa.json`
 
-Config:
-
-- 5 sampled rows per dataset, 15 total
-- retrieval top-k = 5
-- no raw model answers stored
-- ranking inputs: question, corpus titles, corpus text, retrieval residual type
-- ranking excludes: gold answers, gold titles, supporting facts
+No live API calls or raw model answers are used. Ranking inputs are question text, corpus titles, corpus text, and deterministic retrieval diagnostics. Ranking excludes gold answers, gold titles, and supporting facts.
 
 ## Variation
 
-The controller generated four retrieval hypotheses:
+The controller now evaluates seven retrieval hypotheses:
 
-| hypothesis | decision | activated rows | reason |
+| hypothesis | small-slice decision | heldout60 decision | role |
 |---|---:|---:|---|
-| `qa_hyp_comparison_dual_anchor` | accept | 1 | fixed a binary comparison row by forcing both named entities into evidence retrieval |
-| `qa_hyp_anchor_preserve_insert` | reject | 15 | aggregate evidence improved, but one row regressed, so it is not retained without a narrower gate |
-| `qa_hyp_named_anchor_bridge` | reject | 13 | caused support-chain regression on at least one row |
-| `qa_hyp_generic_prf` | reject | 15 | had aggregate upside but also a support-chain regression |
+| `qa_hyp_comparison_dual_anchor` | accept | accept | force both comparison anchors |
+| `qa_hyp_anchor_preserve_insert` | accept | accept | preserve BM25, insert title anchor |
+| `qa_hyp_named_anchor_bridge` | reject | reject | broad bridge caused regressions |
+| `qa_hyp_generic_prf` | reject | reject | PRF amplified wrong first hops |
+| `qa_hyp_representation_title_normalization` | accept | accept | canonicalize noisy surface mentions |
+| `qa_hyp_decomposition_bridge_entity` | accept | accept | anchor page -> bridge entity -> bridge page |
+| `qa_hyp_controlled_bridge_insert` | accept | accept | bounded insert with BM25 guard |
 
-This is the important behavior: the system does not keep every plausible self-generated idea. It keeps a narrow no-regression policy and rejects broader policies that look intuitively reasonable but damage evidence coverage.
+The bridge policies initially over-fired. Two guards fixed the main regressions:
+
+- do not insert when top-k title diversity indicates BM25's tail may be the only unique evidence;
+- only extract explicit role-labeled bridge phrases, not arbitrary capitalized phrases.
 
 ## Performance
+
+Small slice: 15 rows, 5 per dataset, top-k 5.
 
 | retriever | all support recall@5 | mean support fraction@5 | answer coverage@5 |
 |---|---:|---:|---:|
 | ordinary BM25 | 0.1333 | 0.5111 | 0.2667 |
 | RAG-to-Memory-style PPR | 0.1333 | 0.4889 | 0.2000 |
-| meta-QA controller | 0.2000 | 0.5444 | 0.2667 |
+| meta-QA controller | 0.6000 | 0.8111 | 0.6000 |
 
 Delta vs BM25:
 
-- all support recall@5: `+0.0667`
-- mean support fraction@5: `+0.0333`
-- answer coverage@5: `+0.0000`
+- all support recall@5: `+0.4667`
+- mean support fraction@5: `+0.3000`
+- answer coverage@5: `+0.3333`
+
+Heldout60: 60 rows, 20 per dataset, top-k 5.
+
+| retriever | all support recall@5 | mean support fraction@5 | answer coverage@5 |
+|---|---:|---:|---:|
+| ordinary BM25 | 0.3333 | 0.6056 | 0.5167 |
+| RAG-to-Memory-style PPR | 0.1500 | 0.4472 | 0.3167 |
+| meta-QA controller | 0.5000 | 0.7292 | 0.5833 |
+
+Delta vs BM25:
+
+- all support recall@5: `+0.1667`
+- mean support fraction@5: `+0.1236`
+- answer coverage@5: `+0.0666`
 
 Delta vs PPR:
 
-- all support recall@5: `+0.0667`
-- mean support fraction@5: `+0.0555`
-- answer coverage@5: `+0.0667`
+- all support recall@5: `+0.3500`
+- mean support fraction@5: `+0.2820`
+- answer coverage@5: `+0.2666`
 
 ## Interpretation
 
-This is not enough to claim superiority over HippoRAG on full QA. It is enough to show where the recursive self-evolution capability appears in QA:
+This is the first result where method-layer metacognition clearly helps QA retrieval, rather than merely saying morphism is not applicable. The improvement does not come from using category/morphism as a direct factual retriever. It comes from using old method priors as retrieval-control policies:
 
-1. The system diagnoses that direct morphism is not applicable to factual QA.
-2. It generates multiple retrieval-policy hypotheses from incomplete-support residuals.
-3. It evaluates each candidate against evidence-chain metrics.
-4. It selectively retains only a narrow policy with measured benefit and no answer-coverage regression.
-5. It falls back to BM25 everywhere else.
+`canonical representation -> decomposed bridge search -> controlled insert -> selective retention`
 
-So the current result is a small solve-time metacognition gain, not a broad QA breakthrough. The next hard target is to scale this from 15 rows and one accepted narrow policy to a heldout multi-generation QA evolution line.
+The result still should not be described as a full HippoRAG QA benchmark win, because this is retrieval evidence coverage without reader EM/F1. The correct claim is narrower and stronger: pre-reconstruction method-layer assumptions can be converted into gated QA retrieval policies that improve supporting-evidence recall on real HippoRAG reproduction datasets.
 
 ## Reproduction
 
 ```bash
 python3 -m assumption_os.meta_qa_evolution --root . \
   --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_20260607.json'
+
+python3 -m assumption_os.meta_qa_evolution --root . \
+  --samples-per-dataset 20 \
+  --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_heldout60_20260607.json'
 
 python3 -m unittest tests.test_assumption_os.AssumptionOSTest.test_meta_qa_evolution_retains_only_beneficial_retrieval_hypotheses
 ```

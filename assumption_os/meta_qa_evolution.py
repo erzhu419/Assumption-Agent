@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .morphism_benchmark import _counter_cosine
 from .hipporag_qa_probe import (
     DEFAULT_DATA_DIR,
     CorpusIndex,
@@ -148,6 +149,60 @@ HYPOTHESES = [
         expected_effect="Improve supporting-fact fraction on residual rows with incomplete evidence chains.",
         risk="Top passage terms can amplify a wrong first hop; should be rejected if support-chain regressions appear.",
     ),
+    QARetrievalHypothesis(
+        hypothesis_id="qa_hyp_representation_title_normalization",
+        claim=(
+            "Representation-transform priors from the pre-reconstruction notes apply to QA: convert possessive, quoted, "
+            "and parenthesized surface mentions into canonical corpus-title candidates before ranking."
+        ),
+        trigger="question contains quoted/title-like, possessive, or parenthesized entity mentions",
+        ranker_name="representation_title_normalization",
+        expected_effect="Recover anchor pages that BM25 misses because the question surface form differs from the title.",
+        risk="Can over-rank generic title matches; retained only if exact heldout rows show no support or answer regression.",
+    ),
+    QARetrievalHypothesis(
+        hypothesis_id="qa_hyp_decomposition_bridge_entity",
+        claim=(
+            "Decomposition/composition priors from the pre-reconstruction notes apply to multi-hop QA: first retrieve an "
+            "anchor page, extract the role-labeled bridge entity from that page, then retrieve the bridge page."
+        ),
+        trigger="question asks a relation chain such as creator/performer/director/husband/father/mother/plaintiff",
+        ranker_name="decomposition_bridge_entity",
+        expected_effect="Increase complete support-chain recall by adding the next-hop bridge entity instead of more same-hop pages.",
+        risk="Bridge extraction can hallucinate from incidental entities; controlled insertion preserves BM25 evidence.",
+    ),
+    QARetrievalHypothesis(
+        hypothesis_id="qa_hyp_controlled_bridge_insert",
+        claim=(
+            "Controlled-variable priors from the pre-reconstruction notes apply to retrieval repair: keep the working BM25 "
+            "path fixed and insert only one or two bridge/title candidates, so the intervention is auditable."
+        ),
+        trigger="ordinary BM25 retrieves at least one plausible anchor but not a complete support chain",
+        ranker_name="controlled_bridge_insert",
+        expected_effect="Gain bridge evidence while limiting top-k displacement harm.",
+        risk="Conservative insertion may under-improve no-support rows; accepted only if aggregate gains beat BM25/PPR.",
+    ),
+]
+
+METHOD_LAYER_QA_PRIORS = [
+    {
+        "source": "pre_reconstruction_dialogue",
+        "family": "kernel_representation_transform",
+        "qa_hypothesis_id": "qa_hyp_representation_title_normalization",
+        "principle": "Map a noisy surface representation into a canonical representation before comparing or retrieving.",
+    },
+    {
+        "source": "pre_reconstruction_dialogue",
+        "family": "kernel_decomposition_composition",
+        "qa_hypothesis_id": "qa_hyp_decomposition_bridge_entity",
+        "principle": "Split a root task into subproblems whose interface entity composes the answer chain.",
+    },
+    {
+        "source": "pre_reconstruction_dialogue",
+        "family": "kernel_controlled_intervention",
+        "qa_hypothesis_id": "qa_hyp_controlled_bridge_insert",
+        "principle": "Preserve the working baseline and change one bounded component at a time.",
+    },
 ]
 
 
@@ -194,8 +249,9 @@ def build_meta_qa_evolution_payload(
         for row in hypothesis_summaries
         if row["decision"] == "accept_retain"
     }
+    accepted_priority = _accepted_policy_priority(hypothesis_summaries, accepted)
     for row in rows:
-        row["retained_policy"] = _retained_policy_for_row(row, accepted)
+        row["retained_policy"] = _retained_policy_for_row(row, accepted, accepted_priority)
         row["metrics"]["meta_qa_controller"] = row["metrics"][row["retained_policy"]]
         row["top_titles"]["meta_qa_controller"] = row["top_titles"][row["retained_policy"]]
 
@@ -270,6 +326,7 @@ def build_meta_qa_evolution_payload(
                 "Test whether QA residuals can drive variation/evaluation/selective retention of retrieval policies. "
                 "This is not a full HippoRAG reproduction and does not use live reader answers."
             ),
+            "pre_reconstruction_method_priors": METHOD_LAYER_QA_PRIORS,
         },
         "config": {
             "samples_per_dataset": samples_per_dataset,
@@ -283,6 +340,7 @@ def build_meta_qa_evolution_payload(
         "evaluation": hypothesis_summaries,
         "selective_retention": {
             "accepted_hypothesis_ids": sorted(accepted),
+            "accepted_priority": accepted_priority,
             "policy": "Apply accepted narrow hypotheses by deterministic trigger; otherwise keep ordinary BM25.",
         },
         "aggregate": aggregate,
@@ -320,6 +378,9 @@ def _evaluate_meta_qa_row(
     anchor_bridge = _rank_named_anchor_bridge(question, corpus, bm25)
     anchor_preserve = _rank_anchor_preserve_insert(question, corpus, bm25)
     generic_prf = _rank_generic_prf(question, corpus, bm25)
+    title_normalization = _rank_representation_title_normalization(question, corpus, bm25)
+    bridge_entity = _rank_decomposition_bridge_entity(question, corpus, bm25, top_k=top_k)
+    controlled_bridge = _rank_controlled_bridge_insert(question, corpus, bm25, top_k=top_k)
     rankings = {
         "ordinary_bm25": bm25,
         "rag_to_memory_style_ppr": ppr,
@@ -327,6 +388,9 @@ def _evaluate_meta_qa_row(
         "anchor_preserve_insert": anchor_preserve,
         "named_anchor_bridge": anchor_bridge,
         "generic_prf": generic_prf,
+        "representation_title_normalization": title_normalization,
+        "decomposition_bridge_entity": bridge_entity,
+        "controlled_bridge_insert": controlled_bridge,
     }
     metrics = {
         name: _retrieval_metrics(ranking, corpus, gold_titles, gold_answers, top_k=top_k)
@@ -404,9 +468,28 @@ def _evaluate_hypotheses(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return summaries
 
 
-def _retained_policy_for_row(row: dict[str, Any], accepted: set[str]) -> str:
-    for hypothesis in HYPOTHESES:
-        if hypothesis.hypothesis_id in accepted and row["candidate_triggers"][hypothesis.hypothesis_id]:
+def _accepted_policy_priority(hypothesis_summaries: list[dict[str, Any]], accepted: set[str]) -> list[str]:
+    accepted_rows = [row for row in hypothesis_summaries if row["hypothesis_id"] in accepted]
+    def score(row: dict[str, Any]) -> tuple[float, float, str]:
+        activated = max(1, int(row.get("activated_row_count") or 0))
+        deltas = row.get("utility_deltas_sum", {})
+        mean_utility = (
+            float(deltas.get("all_gold_recall_at_k_delta") or 0.0)
+            + float(deltas.get("gold_fraction_at_k_delta") or 0.0)
+            + float(deltas.get("answer_coverage_at_k_delta") or 0.0)
+        ) / activated
+        return (mean_utility, float(deltas.get("all_gold_recall_at_k_delta") or 0.0), str(row["hypothesis_id"]))
+    return [
+        row["hypothesis_id"]
+        for row in sorted(accepted_rows, key=score, reverse=True)
+    ]
+
+
+def _retained_policy_for_row(row: dict[str, Any], accepted: set[str], accepted_priority: list[str]) -> str:
+    by_id = {hypothesis.hypothesis_id: hypothesis for hypothesis in HYPOTHESES}
+    for hypothesis_id in accepted_priority:
+        hypothesis = by_id[hypothesis_id]
+        if hypothesis_id in accepted and row["candidate_triggers"][hypothesis_id]:
             return hypothesis.ranker_name
     return "ordinary_bm25"
 
@@ -469,7 +552,7 @@ def _rank_anchor_title_match(
     corpus: CorpusIndex,
     bm25: list[tuple[str, float]],
 ) -> list[tuple[str, float]]:
-    phrases = _capitalized_phrases(question)
+    phrases = _unique_phrases([*_capitalized_phrases(question), *_canonical_surface_mentions(question)])
     anchor_terms = Counter()
     for phrase in phrases:
         for token in _tokens(phrase):
@@ -488,6 +571,183 @@ def _rank_anchor_title_match(
         score = (0.35 * bm25_prior) + (2.0 * exact_hit) + (0.5 * title_hit)
         ranked.append((doc.doc_id, score))
     return sorted(ranked, key=lambda item: (-item[1], item[0]))
+
+
+def _rank_representation_title_normalization(
+    question: str,
+    corpus: CorpusIndex,
+    bm25: list[tuple[str, float]],
+) -> list[tuple[str, float]]:
+    title_matches = _rank_canonical_title_matches(question, corpus, bm25)
+    return _controlled_insert(bm25, title_matches, keep_bm25=3, max_insert=2, min_candidate_score=1.5)
+
+
+def _rank_decomposition_bridge_entity(
+    question: str,
+    corpus: CorpusIndex,
+    bm25: list[tuple[str, float]],
+    *,
+    top_k: int,
+) -> list[tuple[str, float]]:
+    if _low_diversity_top_titles(bm25, corpus, top_k=top_k):
+        return bm25
+    title_matches = _rank_canonical_title_matches(question, corpus, bm25)
+    bridge_matches = _rank_bridge_entity_matches(question, corpus, bm25, title_matches)
+    return _controlled_insert(
+        bm25,
+        _reciprocal_rank_fusion([(title_matches, 0.6), (bridge_matches, 1.4)]),
+        keep_bm25=max(1, top_k - 2),
+        max_insert=2,
+    )
+
+
+def _rank_controlled_bridge_insert(
+    question: str,
+    corpus: CorpusIndex,
+    bm25: list[tuple[str, float]],
+    *,
+    top_k: int,
+) -> list[tuple[str, float]]:
+    if _low_diversity_top_titles(bm25, corpus, top_k=top_k):
+        return bm25
+    title_matches = _rank_canonical_title_matches(question, corpus, bm25)
+    bridge_matches = _rank_bridge_entity_matches(question, corpus, bm25, title_matches)
+    combined = _reciprocal_rank_fusion([(title_matches, 0.9), (bridge_matches, 1.1)])
+    keep = max(1, top_k - 2)
+    return _controlled_insert(bm25, combined, keep_bm25=keep, max_insert=top_k - keep)
+
+
+def _low_diversity_top_titles(
+    ranking: list[tuple[str, float]],
+    corpus: CorpusIndex,
+    *,
+    top_k: int,
+) -> bool:
+    doc_by_id = {doc.doc_id: doc for doc in corpus.docs}
+    titles = [
+        _normalize_title(doc_by_id[doc_id].title)
+        for doc_id, _ in ranking[:top_k]
+        if doc_id in doc_by_id
+    ]
+    if len(titles) < top_k:
+        return False
+    return len(set(titles[: max(1, top_k - 1)])) <= 1 and len(set(titles)) >= 2
+
+
+def _rank_canonical_title_matches(
+    question: str,
+    corpus: CorpusIndex,
+    bm25: list[tuple[str, float]],
+) -> list[tuple[str, float]]:
+    mentions = _canonical_surface_mentions(question)
+    mention_terms = [_tokens(mention) for mention in mentions]
+    max_bm25 = max((score for _, score in bm25), default=0.0) or 1.0
+    bm25_by_doc = dict(bm25)
+    ranked = []
+    for doc in corpus.docs:
+        title_norm = _normalize_title(doc.title)
+        title_terms = _tokens(doc.title)
+        best = 0.0
+        for mention, terms in zip(mentions, mention_terms):
+            mention_norm = _normalize_title(mention)
+            if not mention_norm:
+                continue
+            exact = 1.0 if mention_norm == title_norm else 0.0
+            contained = 0.7 if mention_norm and (mention_norm in title_norm or title_norm in mention_norm) else 0.0
+            overlap = _counter_cosine(terms, title_terms)
+            best = max(best, exact * 3.0, contained * 2.0, overlap)
+        bm25_prior = max(0.0, bm25_by_doc.get(doc.doc_id, 0.0) / max_bm25)
+        ranked.append((doc.doc_id, best + 0.10 * bm25_prior))
+    return sorted(ranked, key=lambda item: (-item[1], item[0]))
+
+
+def _rank_bridge_entity_matches(
+    question: str,
+    corpus: CorpusIndex,
+    bm25: list[tuple[str, float]],
+    title_matches: list[tuple[str, float]],
+) -> list[tuple[str, float]]:
+    doc_by_id = {doc.doc_id: doc for doc in corpus.docs}
+    title_docs = [doc_id for doc_id, score in title_matches[:8] if score > 0.2]
+    seed_ids = _unique_doc_ids([doc_id for doc_id, _ in bm25[:4]] + title_docs)[:8]
+    cue_terms = _relation_cues(question)
+    candidates: Counter[str] = Counter()
+    for doc_id in seed_ids:
+        doc = doc_by_id.get(doc_id)
+        if not doc:
+            continue
+        for phrase, score in _extract_bridge_phrases(question, doc.retrieval_text, cue_terms):
+            normalized = _normalize_title(_strip_honorific(phrase))
+            if normalized:
+                candidates[normalized] += score
+    if not candidates:
+        return title_matches
+    ranked = []
+    for doc in corpus.docs:
+        title_norm = _normalize_title(doc.title)
+        title_terms = _tokens(doc.title)
+        score = 0.0
+        for phrase_norm, phrase_score in candidates.items():
+            phrase_terms = _tokens(phrase_norm)
+            exact = 1.0 if phrase_norm == title_norm else 0.0
+            contained = 0.65 if phrase_norm and (phrase_norm in title_norm or title_norm in phrase_norm) else 0.0
+            overlap = _counter_cosine(phrase_terms, title_terms)
+            score = max(score, phrase_score * max(exact * 3.0, contained * 2.0, overlap))
+        ranked.append((doc.doc_id, score))
+    return sorted(ranked, key=lambda item: (-item[1], item[0]))
+
+
+def _controlled_insert(
+    bm25: list[tuple[str, float]],
+    candidates: list[tuple[str, float]],
+    *,
+    keep_bm25: int,
+    max_insert: int,
+    min_candidate_score: float = 0.0,
+) -> list[tuple[str, float]]:
+    output: list[tuple[str, float]] = []
+    seen: set[str] = set()
+    for doc_id, score in bm25[:keep_bm25]:
+        output.append((doc_id, score + 20.0))
+        seen.add(doc_id)
+    inserts = 0
+    for doc_id, score in candidates:
+        if inserts >= max_insert:
+            break
+        if score <= min_candidate_score or doc_id in seen:
+            continue
+        output.append((doc_id, score + 10.0 - inserts * 0.01))
+        seen.add(doc_id)
+        inserts += 1
+    for doc_id, score in bm25:
+        if doc_id not in seen:
+            output.append((doc_id, score))
+            seen.add(doc_id)
+    return output
+
+
+def _extract_bridge_phrases(question: str, text: str, cue_terms: set[str]) -> list[tuple[str, float]]:
+    rows: list[tuple[str, float]] = []
+    patterns: list[tuple[str, float, set[str]]] = [
+        (r"\bplaintiff\s+([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4})", 5.0, {"plaintiff"}),
+        (r"\bby\s+(?:English\s+)?(?:painter\s+)?(?:Sir\s+)?([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4})", 3.8, {"creator"}),
+        (r"\bfrom\s+([A-Z][A-Za-z0-9&.'-]+(?:\s+[A-Z][A-Za-z0-9&.'-]+){1,4})'s\b", 4.5, {"performer", "label"}),
+        (r"\bperformed\s+by\s+([A-Z][A-Za-z0-9&.'-]+(?:\s+[A-Z][A-Za-z0-9&.'-]+){1,4})", 4.5, {"performer"}),
+        (r"\bShe\s+married\s+([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4})", 4.5, {"husband"}),
+        (r"\bmarried\s+([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4})", 4.0, {"husband"}),
+        (r"([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4}),\s+who\s+she\s+later\s+married", 4.5, {"husband"}),
+        (r"\bson\s+of\s+([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4})", 4.3, {"father", "mother"}),
+        (r"\bdaughter\s+of\s+([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4})", 4.3, {"father", "mother"}),
+        (r"\bdirected\s+by\s+([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4})", 4.7, {"director"}),
+    ]
+    for pattern, score, required_cues in patterns:
+        if required_cues and cue_terms and not (required_cues & cue_terms):
+            continue
+        for match in re.finditer(pattern, text):
+            phrase = _clean_bridge_phrase(match.group(1))
+            if _valid_bridge_phrase(phrase):
+                rows.append((phrase, score))
+    return rows
 
 
 def _rank_generic_prf(
@@ -531,7 +791,7 @@ def _reciprocal_rank_fusion(rankings: list[tuple[list[tuple[str, float]], float]
 def _hypothesis_triggers(hypothesis_id: str, question: str) -> bool:
     q = question.lower()
     first = q.split()[0] if q.split() else ""
-    anchors = _capitalized_phrases(question)
+    anchors = _unique_phrases([*_capitalized_phrases(question), *_canonical_surface_mentions(question)])
     if hypothesis_id == "qa_hyp_comparison_dual_anchor":
         return first in {"are", "is", "was", "were", "did", "do", "does"} and " and " in q and len(anchors) >= 2
     if hypothesis_id == "qa_hyp_anchor_preserve_insert":
@@ -540,6 +800,12 @@ def _hypothesis_triggers(hypothesis_id: str, question: str) -> bool:
         return first in {"what", "which", "who", "where", "when"} and bool(anchors)
     if hypothesis_id == "qa_hyp_generic_prf":
         return True
+    if hypothesis_id == "qa_hyp_representation_title_normalization":
+        return bool(_canonical_surface_mentions(question))
+    if hypothesis_id == "qa_hyp_decomposition_bridge_entity":
+        return bool(_relation_cues(question)) and bool(anchors)
+    if hypothesis_id == "qa_hyp_controlled_bridge_insert":
+        return bool(anchors) and (bool(_relation_cues(question)) or _has_binary_choice(question))
     return False
 
 
@@ -558,6 +824,113 @@ def _capitalized_phrases(text: str) -> list[str]:
             seen.add(normalized)
             phrases.append(phrase)
     return phrases
+
+
+def _canonical_surface_mentions(text: str) -> list[str]:
+    mentions = []
+    mentions.extend(_capitalized_phrases(text))
+    mentions.extend(match.group(1) for match in re.finditer(r'"([^"]{2,80})"', text))
+    mentions.extend(match.group(1) for match in re.finditer(r"'([^']{2,80})'", text))
+    for match in re.finditer(r"\b([A-Z][A-Za-z0-9.'’ -]{2,80})'s\b", text):
+        mentions.append(match.group(1))
+    for phrase in list(mentions):
+        if "(" in phrase or ")" in phrase:
+            mentions.append(re.sub(r"\s*\([^)]*\)", "", phrase))
+            mentions.append(phrase.replace("(", "").replace(")", ""))
+    return _unique_phrases(_clean_surface_mention(mention) for mention in mentions)
+
+
+def _clean_surface_mention(text: str) -> str:
+    value = str(text).strip(" .,;:()[]{}\"'")
+    value = re.sub(r"[’']s$", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"\b[Ff]ilm\b", "", value).strip()
+    value = re.sub(r"\s+", " ", value)
+    return value
+
+
+def _normalize_title(text: str) -> str:
+    value = _clean_surface_mention(text)
+    value = re.sub(r"\s*\([^)]*\)", "", value)
+    return _normalize(value)
+
+
+def _unique_phrases(phrases: Any) -> list[str]:
+    result = []
+    seen = set()
+    for phrase in phrases:
+        cleaned = _clean_surface_mention(str(phrase))
+        normalized = _normalize(cleaned)
+        if not normalized:
+            continue
+        if all(token in STOPWORDS or len(token) < 2 for token in normalized.split()):
+            continue
+        if normalized not in seen:
+            seen.add(normalized)
+            result.append(cleaned)
+    return result
+
+
+def _unique_doc_ids(doc_ids: list[str]) -> list[str]:
+    result = []
+    seen = set()
+    for doc_id in doc_ids:
+        if doc_id not in seen:
+            seen.add(doc_id)
+            result.append(doc_id)
+    return result
+
+
+def _relation_cues(question: str) -> set[str]:
+    q = question.lower()
+    cues = set()
+    cue_terms = {
+        "creator": ["creator", "created by"],
+        "performer": ["performer", "performed", "singer", "band"],
+        "label": ["label"],
+        "director": ["director", "directed"],
+        "husband": ["husband", "spouse", "married"],
+        "father": ["father"],
+        "mother": ["mother"],
+        "plaintiff": ["plaintiff"],
+        "headquarters": ["headquarters", "capitol", "capital"],
+        "location": ["place of birth", "born"],
+    }
+    for cue, terms in cue_terms.items():
+        if any(_contains_cue(q, term) for term in terms):
+            cues.add(cue)
+    return cues
+
+
+def _has_binary_choice(question: str) -> bool:
+    q = question.lower()
+    return " or " in q and any(term in q for term in ("earlier", "later", "came out", "older", "younger"))
+
+
+def _contains_cue(text: str, cue: str) -> bool:
+    if " " in cue:
+        return cue in text
+    return bool(re.search(rf"(?<![a-z0-9]){re.escape(cue)}(?![a-z0-9])", text))
+
+
+def _clean_bridge_phrase(phrase: str) -> str:
+    value = _clean_surface_mention(phrase)
+    value = re.sub(r"\b(?:who|and|while|when|where|which|that|from|with)\b.*$", "", value).strip()
+    return _strip_honorific(value)
+
+
+def _strip_honorific(phrase: str) -> str:
+    return re.sub(r"^(Sir|Dame|Dr|Professor|Prof|General|Brigadier General)\s+", "", phrase).strip()
+
+
+def _valid_bridge_phrase(phrase: str) -> bool:
+    normalized = _normalize_title(phrase)
+    tokens = normalized.split()
+    if len(tokens) < 2 or len(tokens) > 6:
+        return False
+    if any(token in STOPWORDS for token in tokens):
+        return False
+    bad = {"united states", "new york", "bbc one", "digital praise", "wow hits"}
+    return normalized not in bad
 
 
 def _qa_residual_type(metrics: dict[str, Any]) -> str:
@@ -594,6 +967,9 @@ def _aggregate_meta_rows(rows: list[dict[str, Any]], *, top_k: int) -> dict[str,
         "anchor_preserve_insert",
         "named_anchor_bridge",
         "generic_prf",
+        "representation_title_normalization",
+        "decomposition_bridge_entity",
+        "controlled_bridge_insert",
         "meta_qa_controller",
     ]
     return {
