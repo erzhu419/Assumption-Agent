@@ -27,8 +27,12 @@ DEFAULT_ARTIFACTS = [
     PAPER_DIR / "meta_qa_evolution_heldout300_20260607.json",
     PAPER_DIR / "meta_qa_evolution_heldout600_20260607.json",
     PAPER_DIR / "meta_qa_evolution_full3000_20260607.json",
+    PAPER_DIR / "meta_qa_evolution_learned_heldout300_20260608.json",
+    PAPER_DIR / "meta_qa_evolution_learned_full3000_20260608.json",
     PAPER_DIR / "meta_qa_evolution_reader15_20260607.json",
     PAPER_DIR / "meta_qa_evolution_reader60_20260607.json",
+    PAPER_DIR / "meta_qa_evolution_reader60_learned_20260608.json",
+    PAPER_DIR / "meta_qa_evolution_reader300_learned_20260608.json",
     PAPER_DIR / "meta_qa_evolution_llm_reader15_gpt54mini_20260607.json",
     PAPER_DIR / "meta_qa_evolution_llm_reader60_gpt54mini_20260607.json",
     PAPER_DIR / "structural_context_edges_20260607.json",
@@ -201,12 +205,28 @@ def _exact_commands() -> list[dict[str, str]]:
             "command": "python3 -m assumption_os.meta_qa_evolution --root . --samples-per-dataset 1000 --workers 6 --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_full3000_20260607.json'",
         },
         {
+            "name": "meta_qa_evolution_learned_heldout300_no_reader",
+            "command": "python3 -m assumption_os.meta_qa_evolution --root . --eval-id meta_qa_evolution_learned_heldout300_20260608 --samples-per-dataset 100 --workers 6 --bootstrap-iterations 400 --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_learned_heldout300_20260608.json'",
+        },
+        {
+            "name": "meta_qa_evolution_learned_full3000_no_reader",
+            "command": "python3 -m assumption_os.meta_qa_evolution --root . --eval-id meta_qa_evolution_learned_full3000_20260608 --samples-per-dataset 1000 --workers 6 --bootstrap-iterations 400 --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_learned_full3000_20260608.json'",
+        },
+        {
             "name": "meta_qa_evolution_extract_reader15",
             "command": "python3 -m assumption_os.meta_qa_evolution --root . --run-extractive-reader --reader-samples-per-dataset 5 --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_reader15_20260607.json'",
         },
         {
             "name": "meta_qa_evolution_extract_reader60",
             "command": "python3 -m assumption_os.meta_qa_evolution --root . --samples-per-dataset 20 --run-extractive-reader --reader-samples-per-dataset 20 --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_reader60_20260607.json'",
+        },
+        {
+            "name": "meta_qa_evolution_extract_reader60_learned",
+            "command": "python3 -m assumption_os.meta_qa_evolution --root . --eval-id meta_qa_evolution_reader60_learned_20260608 --samples-per-dataset 20 --workers 3 --bootstrap-iterations 200 --run-extractive-reader --reader-samples-per-dataset 20 --reader-slice dataset_balanced --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_reader60_learned_20260608.json'",
+        },
+        {
+            "name": "meta_qa_evolution_extract_reader300_learned",
+            "command": "python3 -m assumption_os.meta_qa_evolution --root . --eval-id meta_qa_evolution_reader300_learned_20260608 --samples-per-dataset 100 --workers 6 --bootstrap-iterations 200 --run-extractive-reader --reader-samples-per-dataset 100 --reader-slice dataset_balanced --out 'phase four/assumption_graph/paper_readiness_20260604/meta_qa_evolution_reader300_learned_20260608.json'",
         },
         {
             "name": "meta_qa_evolution_live_gpt_reader15",

@@ -4659,6 +4659,21 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertIn("assumption_edge_generalization", payload["source_alignment"])
         self.assertEqual(payload["config"]["workers"], 1)
         self.assertTrue(payload["bootstrap_ci"]["meta_vs_bm25"])
+        self.assertTrue(payload["bootstrap_ci"]["learned_vs_bm25"])
+        self.assertTrue(payload["bootstrap_ci"]["learned_vs_meta_controller"])
+        self.assertIn("learned_meta_qa_controller", payload["aggregate"]["overall"])
+        learned = payload["learned_policy_selector"]
+        self.assertEqual(learned["status"], "run")
+        self.assertEqual(learned["excluded_runtime_inputs"], ["gold_answers", "gold_titles", "supporting_facts"])
+        self.assertFalse(
+            set(learned["runtime_inputs"]) & {"gold_answers", "gold_titles", "supporting_facts"}
+        )
+        self.assertGreaterEqual(payload["learned_deltas_vs_bm25"]["all_gold_recall_at_k_delta"], 0.45)
+        self.assertGreaterEqual(payload["learned_deltas_vs_bm25"]["mean_gold_fraction_at_k_delta"], 0.25)
+        self.assertGreaterEqual(payload["learned_deltas_vs_bm25"]["answer_coverage_at_k_delta"], 0.30)
+        self.assertGreaterEqual(payload["learned_deltas_vs_meta_controller"]["all_gold_recall_at_k_delta"], 0.0)
+        self.assertGreaterEqual(payload["learned_deltas_vs_meta_controller"]["mean_gold_fraction_at_k_delta"], 0.0)
+        self.assertGreaterEqual(payload["learned_deltas_vs_meta_controller"]["answer_coverage_at_k_delta"], 0.0)
         accepted = {row["hypothesis_id"]: row for row in payload["evaluation"] if row["decision"].startswith("accept")}
         self.assertTrue(all(row["harm_count"] == 0 for row in accepted.values()))
         heldout = build_meta_qa_evolution_payload(
@@ -4670,6 +4685,13 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(heldout["deltas_vs_bm25"]["all_gold_recall_at_k_delta"], 0.15)
         self.assertGreaterEqual(heldout["deltas_vs_bm25"]["mean_gold_fraction_at_k_delta"], 0.10)
         self.assertGreaterEqual(heldout["deltas_vs_bm25"]["answer_coverage_at_k_delta"], 0.05)
+        self.assertGreaterEqual(heldout["learned_deltas_vs_bm25"]["all_gold_recall_at_k_delta"], 0.15)
+        self.assertGreaterEqual(heldout["learned_deltas_vs_bm25"]["mean_gold_fraction_at_k_delta"], 0.10)
+        self.assertGreaterEqual(heldout["learned_deltas_vs_bm25"]["answer_coverage_at_k_delta"], 0.05)
+        self.assertGreaterEqual(heldout["learned_deltas_vs_meta_controller"]["all_gold_recall_at_k_delta"], 0.0)
+        self.assertGreaterEqual(heldout["learned_deltas_vs_meta_controller"]["mean_gold_fraction_at_k_delta"], 0.0)
+        self.assertGreaterEqual(heldout["learned_deltas_vs_meta_controller"]["answer_coverage_at_k_delta"], 0.0)
+        self.assertEqual(heldout["learned_policy_selector"]["actual_harm_count"], 0)
         heldout_accepted = [row for row in heldout["evaluation"] if row["decision"].startswith("accept")]
         self.assertTrue(all(row["harm_count"] <= row["bounded_risk_harm_cap"] for row in heldout_accepted))
         self.assertFalse(payload["config"]["stored_raw_model_answers"])

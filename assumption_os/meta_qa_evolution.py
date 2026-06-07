@@ -241,8 +241,10 @@ def build_meta_qa_evolution_payload(
         "ordinary_bm25",
         "rag_to_memory_style_ppr",
         "meta_qa_controller",
+        "learned_meta_qa_controller",
     ),
     reader_samples_per_dataset: int = 0,
+    reader_slice: str = "dataset_balanced",
     reader_max_length: int = 384,
     run_llm_reader: bool = False,
     llm_reader_provider: str = "gpt",
@@ -251,12 +253,15 @@ def build_meta_qa_evolution_payload(
         "ordinary_bm25",
         "rag_to_memory_style_ppr",
         "meta_qa_controller",
+        "learned_meta_qa_controller",
     ),
     llm_reader_samples_per_dataset: int = 0,
+    llm_reader_slice: str = "dataset_balanced",
     llm_reader_timeout: float = 90.0,
     llm_reader_doc_chars: int = 1200,
     bootstrap_iterations: int = 400,
     workers: int = 1,
+    learned_selector_folds: int = 5,
 ) -> dict[str, Any]:
     """Build a QA-level variation/evaluation/selective-retention payload."""
 
@@ -295,9 +300,17 @@ def build_meta_qa_evolution_payload(
         row["top_titles"]["meta_qa_controller"] = row["top_titles"][row["retained_policy"]]
         row["top_doc_ids"]["meta_qa_controller"] = row["top_doc_ids"][row["retained_policy"]]
 
+    learned_selector = _apply_crossfit_learned_policy_selector(
+        rows,
+        seed=seed + 4242,
+        folds=learned_selector_folds,
+    )
+
     aggregate = _aggregate_meta_rows(rows, top_k=top_k)
     deltas = _aggregate_deltas(aggregate, "meta_qa_controller", "ordinary_bm25")
     ppr_deltas = _aggregate_deltas(aggregate, "meta_qa_controller", "rag_to_memory_style_ppr")
+    learned_deltas = _aggregate_deltas(aggregate, "learned_meta_qa_controller", "ordinary_bm25")
+    learned_vs_meta_deltas = _aggregate_deltas(aggregate, "learned_meta_qa_controller", "meta_qa_controller")
     bootstrap_ci = {
         "unit_of_resampling": "problem_row",
         "iterations": bootstrap_iterations,
@@ -316,6 +329,20 @@ def build_meta_qa_evolution_payload(
             iterations=bootstrap_iterations,
             seed=seed + 997,
         ),
+        "learned_vs_bm25": _bootstrap_delta_ci(
+            rows,
+            candidate="learned_meta_qa_controller",
+            baseline="ordinary_bm25",
+            iterations=bootstrap_iterations,
+            seed=seed + 1009,
+        ),
+        "learned_vs_meta_controller": _bootstrap_delta_ci(
+            rows,
+            candidate="learned_meta_qa_controller",
+            baseline="meta_qa_controller",
+            iterations=bootstrap_iterations,
+            seed=seed + 1013,
+        ),
     }
     extractive_reader = _run_extractive_reader_for_payload(
         rows,
@@ -325,6 +352,7 @@ def build_meta_qa_evolution_payload(
         model_name=reader_model,
         retriever_names=reader_retrievers,
         samples_per_dataset=reader_samples_per_dataset,
+        slice_mode=reader_slice,
         max_length=reader_max_length,
     )
     llm_reader = _run_llm_reader_for_payload(
@@ -336,6 +364,7 @@ def build_meta_qa_evolution_payload(
         model_name=llm_reader_model,
         retriever_names=llm_reader_retrievers,
         samples_per_dataset=llm_reader_samples_per_dataset,
+        slice_mode=llm_reader_slice,
         timeout=llm_reader_timeout,
         doc_chars=llm_reader_doc_chars,
     )
@@ -405,6 +434,31 @@ def build_meta_qa_evolution_payload(
                 "metrics": sorted(bootstrap_ci["meta_vs_bm25"]),
             },
         },
+        {
+            "gate": "learned_selector_uses_no_gold_runtime_inputs",
+            "pass": (
+                learned_selector.get("status") == "run"
+                and learned_selector.get("excluded_runtime_inputs") == ["gold_answers", "gold_titles", "supporting_facts"]
+                and not any(
+                    item in learned_selector.get("runtime_inputs", [])
+                    for item in ("gold_answers", "gold_titles", "supporting_facts")
+                )
+            ),
+            "observed": {
+                "status": learned_selector.get("status"),
+                "runtime_inputs": learned_selector.get("runtime_inputs", []),
+                "excluded_runtime_inputs": learned_selector.get("excluded_runtime_inputs", []),
+            },
+        },
+        {
+            "gate": "learned_controller_not_worse_than_gated_meta",
+            "pass": (
+                learned_vs_meta_deltas["all_gold_recall_at_k_delta"] >= 0.0
+                and learned_vs_meta_deltas["mean_gold_fraction_at_k_delta"] >= 0.0
+                and learned_vs_meta_deltas["answer_coverage_at_k_delta"] >= 0.0
+            ),
+            "observed": learned_vs_meta_deltas,
+        },
     ]
     if run_extractive_reader:
         gates.extend(_extractive_reader_gates(extractive_reader))
@@ -437,15 +491,18 @@ def build_meta_qa_evolution_payload(
             "extractive_reader_model": reader_model if run_extractive_reader else None,
             "extractive_reader_retrievers": list(reader_retrievers) if run_extractive_reader else [],
             "extractive_reader_samples_per_dataset": reader_samples_per_dataset if run_extractive_reader else 0,
+            "extractive_reader_slice": reader_slice if run_extractive_reader else None,
             "extractive_reader_max_length": reader_max_length if run_extractive_reader else 0,
             "run_llm_reader": run_llm_reader,
             "llm_reader_provider": llm_reader_provider if run_llm_reader else None,
             "llm_reader_model": llm_reader_model if run_llm_reader else None,
             "llm_reader_retrievers": list(llm_reader_retrievers) if run_llm_reader else [],
             "llm_reader_samples_per_dataset": llm_reader_samples_per_dataset if run_llm_reader else 0,
+            "llm_reader_slice": llm_reader_slice if run_llm_reader else None,
             "llm_reader_doc_chars": llm_reader_doc_chars if run_llm_reader else 0,
             "bootstrap_iterations": bootstrap_iterations,
             "workers": workers,
+            "learned_selector_folds": learned_selector_folds,
         },
         "variation": [hypothesis.to_dict() for hypothesis in HYPOTHESES],
         "evaluation": hypothesis_summaries,
@@ -462,9 +519,12 @@ def build_meta_qa_evolution_payload(
             "assumption_edge_routes": _assumption_edge_route_catalog(),
             "negative_controls": ["not located", "not published", "unrelated", "except", "not the"],
         },
+        "learned_policy_selector": learned_selector,
         "aggregate": aggregate,
         "deltas_vs_bm25": deltas,
         "deltas_vs_ppr": ppr_deltas,
+        "learned_deltas_vs_bm25": learned_deltas,
+        "learned_deltas_vs_meta_controller": learned_vs_meta_deltas,
         "bootstrap_ci": bootstrap_ci,
         "extractive_reader": extractive_reader,
         "llm_reader": llm_reader,
@@ -751,6 +811,305 @@ def _retained_policy_for_row(row: dict[str, Any], accepted: set[str], accepted_p
         if hypothesis_id in accepted and row["candidate_triggers"][hypothesis_id]:
             return hypothesis.ranker_name
     return "ordinary_bm25"
+
+
+LEARNED_SELECTOR_POLICIES = [
+    "comparison_dual_anchor",
+    "anchor_preserve_insert",
+    "representation_title_normalization",
+    "decomposition_bridge_entity",
+    "controlled_bridge_insert",
+    "assumption_edge_policy_selector",
+    "rag_to_memory_style_ppr",
+]
+LEARNED_POLICY_TO_HYPOTHESIS = {
+    "comparison_dual_anchor": "qa_hyp_comparison_dual_anchor",
+    "anchor_preserve_insert": "qa_hyp_anchor_preserve_insert",
+    "representation_title_normalization": "qa_hyp_representation_title_normalization",
+    "decomposition_bridge_entity": "qa_hyp_decomposition_bridge_entity",
+    "controlled_bridge_insert": "qa_hyp_controlled_bridge_insert",
+    "assumption_edge_policy_selector": "qa_hyp_assumption_edge_policy_selector",
+    "rag_to_memory_style_ppr": "qa_hyp_generic_prf",
+}
+
+
+def _apply_crossfit_learned_policy_selector(
+    rows: list[dict[str, Any]],
+    *,
+    seed: int,
+    folds: int,
+    min_bucket_n: int = 40,
+    min_predicted_utility: float = 0.20,
+    max_predicted_harm_rate: float = 0.02,
+    override_margin: float = 0.08,
+) -> dict[str, Any]:
+    if not rows:
+        return {
+            "selector_type": "crossfit_bucketed_policy_world_model",
+            "status": "no_rows",
+            "selected_policy_counts": {},
+            "actual_harm_count": 0,
+        }
+    fold_count = max(2, min(int(folds or 2), len(rows)))
+    rng = random.Random(seed)
+    shuffled = list(range(len(rows)))
+    rng.shuffle(shuffled)
+    fold_sets = [set(shuffled[start::fold_count]) for start in range(fold_count)]
+    selected: dict[int, str] = {}
+    selected_reasons: dict[int, dict[str, Any]] = {}
+    for fold_set in fold_sets:
+        train_ids = [idx for idx in range(len(rows)) if idx not in fold_set]
+        stats = _train_bucketed_policy_world_model(rows, train_ids)
+        for idx in sorted(fold_set):
+            policy, reason = _select_learned_policy_for_row(
+                rows[idx],
+                stats,
+                min_bucket_n=min_bucket_n,
+                min_predicted_utility=min_predicted_utility,
+                max_predicted_harm_rate=max_predicted_harm_rate,
+                override_margin=override_margin,
+            )
+            selected[idx] = policy
+            selected_reasons[idx] = reason
+
+    for idx, row in enumerate(rows):
+        policy = selected.get(idx, "ordinary_bm25")
+        row["learned_retained_policy"] = policy
+        row["learned_policy_reason"] = selected_reasons.get(idx, {"decision": "fallback_bm25"})
+        row["metrics"]["learned_meta_qa_controller"] = row["metrics"][policy]
+        row["top_titles"]["learned_meta_qa_controller"] = row["top_titles"][policy]
+        row["top_doc_ids"]["learned_meta_qa_controller"] = row["top_doc_ids"][policy]
+
+    selected_counts = Counter(row["learned_retained_policy"] for row in rows)
+    selected_rows = [
+        row
+        for row in rows
+        if row["learned_retained_policy"] != "ordinary_bm25"
+    ]
+    actual_harms = [
+        {
+            "dataset": row["dataset"],
+            "sample_index": row["sample_index"],
+            "policy": row["learned_retained_policy"],
+            "delta": _row_delta(row["metrics"][row["learned_retained_policy"]], row["metrics"]["ordinary_bm25"]),
+        }
+        for row in selected_rows
+        if _support_tuple(_row_delta(row["metrics"][row["learned_retained_policy"]], row["metrics"]["ordinary_bm25"])) < (0.0, 0.0, 0.0)
+    ]
+    return {
+        "selector_type": "crossfit_bucketed_policy_world_model",
+        "status": "run",
+        "folds": fold_count,
+        "seed": seed,
+        "training_label_source": "heldout-fold-excluded retrieval utility and harm labels",
+        "runtime_inputs": [
+            "question",
+            "dataset_name",
+            "bm25_top_title_diversity",
+            "candidate_trigger_flags",
+            "assumption_edge_route",
+        ],
+        "excluded_runtime_inputs": ["gold_answers", "gold_titles", "supporting_facts"],
+        "parameters": {
+            "min_bucket_n": min_bucket_n,
+            "min_predicted_utility": min_predicted_utility,
+            "max_predicted_harm_rate": max_predicted_harm_rate,
+            "override_margin": override_margin,
+        },
+        "selected_policy_counts": dict(sorted(selected_counts.items())),
+        "changed_row_count": len(selected_rows),
+        "actual_harm_count": len(actual_harms),
+        "actual_harm_rate_among_changed": round(len(actual_harms) / max(1, len(selected_rows)), 4),
+        "actual_harm_examples": actual_harms[:20],
+    }
+
+
+def _train_bucketed_policy_world_model(rows: list[dict[str, Any]], train_ids: list[int]) -> dict[tuple[Any, ...], list[float]]:
+    stats: dict[tuple[Any, ...], list[float]] = {}
+    for idx in train_ids:
+        row = rows[idx]
+        for policy in LEARNED_SELECTOR_POLICIES:
+            if not _learned_policy_triggered(row, policy):
+                continue
+            delta = _row_delta(row["metrics"][policy], row["metrics"]["ordinary_bm25"])
+            utility = (
+                delta["all_gold_recall_at_k_delta"]
+                + delta["gold_fraction_at_k_delta"]
+                + delta["answer_coverage_at_k_delta"]
+            )
+            is_harm = _support_tuple(delta) < (0.0, 0.0, 0.0)
+            features = _learned_policy_bucket_features(row, policy)
+            for key in _learned_policy_bucket_keys(features):
+                bucket = stats.setdefault(key, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+                bucket[0] += 1.0
+                bucket[1] += utility
+                bucket[2] += 1.0 if is_harm else 0.0
+                bucket[3] += delta["all_gold_recall_at_k_delta"]
+                bucket[4] += delta["gold_fraction_at_k_delta"]
+                bucket[5] += delta["answer_coverage_at_k_delta"]
+    return stats
+
+
+def _select_learned_policy_for_row(
+    row: dict[str, Any],
+    stats: dict[tuple[Any, ...], list[float]],
+    *,
+    min_bucket_n: int,
+    min_predicted_utility: float,
+    max_predicted_harm_rate: float,
+    override_margin: float,
+) -> tuple[str, dict[str, Any]]:
+    base_policy = str(row.get("retained_policy") or "ordinary_bm25")
+    base_prediction = _predict_bucketed_policy(stats, row, base_policy, min_bucket_n=min_bucket_n)
+    best_policy = base_policy
+    best_reason: dict[str, Any] = {
+        "decision": "keep_gated_policy",
+        "policy": base_policy,
+        **base_prediction,
+    }
+    for policy in LEARNED_SELECTOR_POLICIES:
+        if not _learned_policy_triggered(row, policy):
+            continue
+        prediction = _predict_bucketed_policy(stats, row, policy, min_bucket_n=min_bucket_n)
+        if (
+            prediction["predicted_utility"] >= min_predicted_utility
+            and prediction["predicted_harm_rate"] <= max_predicted_harm_rate
+            and prediction["predicted_all_delta"] >= 0.0
+            and prediction["predicted_answer_delta"] >= 0.0
+            and prediction["predicted_utility"] >= float(base_prediction["predicted_utility"]) + override_margin
+            and prediction["predicted_utility"] > float(best_reason["predicted_utility"])
+        ):
+            best_policy = policy
+            best_reason = {
+                "decision": "override_gated_policy",
+                "policy": policy,
+                "base_policy": base_policy,
+                "base_predicted_utility": base_prediction["predicted_utility"],
+                **prediction,
+            }
+    return best_policy, best_reason
+
+
+def _predict_bucketed_policy(
+    stats: dict[tuple[Any, ...], list[float]],
+    row: dict[str, Any],
+    policy: str,
+    *,
+    min_bucket_n: int,
+) -> dict[str, Any]:
+    if policy == "ordinary_bm25":
+        return {
+            "bucket": "bm25_fallback",
+            "bucket_n": 0,
+            "predicted_utility": 0.0,
+            "predicted_harm_rate": 0.0,
+            "predicted_all_delta": 0.0,
+            "predicted_fraction_delta": 0.0,
+            "predicted_answer_delta": 0.0,
+        }
+    features = _learned_policy_bucket_features(row, policy)
+    for key in _learned_policy_bucket_keys(features):
+        bucket = stats.get(key)
+        if not bucket:
+            continue
+        n = int(bucket[0])
+        if n >= min_bucket_n or key[0] == "policy":
+            denom = max(1.0, bucket[0])
+            return {
+                "bucket": key[0],
+                "bucket_n": n,
+                "predicted_utility": round(bucket[1] / denom, 4),
+                "predicted_harm_rate": round(bucket[2] / denom, 4),
+                "predicted_all_delta": round(bucket[3] / denom, 4),
+                "predicted_fraction_delta": round(bucket[4] / denom, 4),
+                "predicted_answer_delta": round(bucket[5] / denom, 4),
+            }
+    return {
+        "bucket": "none",
+        "bucket_n": 0,
+        "predicted_utility": 0.0,
+        "predicted_harm_rate": 1.0,
+        "predicted_all_delta": 0.0,
+        "predicted_fraction_delta": 0.0,
+        "predicted_answer_delta": 0.0,
+    }
+
+
+def _learned_policy_triggered(row: dict[str, Any], policy: str) -> bool:
+    if policy == "rag_to_memory_style_ppr":
+        return True
+    hypothesis_id = LEARNED_POLICY_TO_HYPOTHESIS.get(policy)
+    return bool(hypothesis_id and row["candidate_triggers"].get(hypothesis_id))
+
+
+def _learned_policy_bucket_features(row: dict[str, Any], policy: str) -> dict[str, Any]:
+    question = str(row["question"]).lower()
+    route = row.get("assumption_edge_route") or {}
+    top_titles = [
+        _normalize_title(title)
+        for title in row.get("top_titles", {}).get("ordinary_bm25", [])[:5]
+    ]
+    title_counts = Counter(top_titles)
+    duplicate_max = max(title_counts.values(), default=0)
+    anchors = row.get("capitalized_anchors") or []
+    return {
+        "dataset": row["dataset"],
+        "policy": policy,
+        "route_edge": route.get("edge_id", "none"),
+        "route_policy": route.get("policy", "none"),
+        "has_relation": int(bool(_relation_cues(question))),
+        "has_or": int(" or " in question),
+        "has_film": int("film" in question),
+        "duplicate_bin": "dup" if duplicate_max >= 3 else "diverse",
+        "anchor_bin": "many" if len(anchors) >= 2 else "one_or_zero",
+    }
+
+
+def _learned_policy_bucket_keys(features: dict[str, Any]) -> list[tuple[Any, ...]]:
+    return [
+        (
+            "dataset_route",
+            features["dataset"],
+            features["policy"],
+            features["route_edge"],
+            features["has_relation"],
+            features["has_or"],
+            features["has_film"],
+            features["duplicate_bin"],
+        ),
+        (
+            "dataset_policy",
+            features["dataset"],
+            features["policy"],
+            features["route_policy"],
+            features["has_relation"],
+            features["has_or"],
+            features["duplicate_bin"],
+        ),
+        (
+            "dataset_anchor",
+            features["dataset"],
+            features["policy"],
+            features["route_policy"],
+            features["anchor_bin"],
+        ),
+        (
+            "policy_route",
+            features["policy"],
+            features["route_edge"],
+            features["has_relation"],
+            features["has_or"],
+        ),
+        (
+            "policy_route_family",
+            features["policy"],
+            features["route_policy"],
+        ),
+        (
+            "policy",
+            features["policy"],
+        ),
+    ]
 
 
 def _rank_comparison_dual_anchor(
@@ -1469,6 +1828,7 @@ def _aggregate_meta_rows(rows: list[dict[str, Any]], *, top_k: int) -> dict[str,
         "controlled_bridge_insert",
         "assumption_edge_policy_selector",
         "meta_qa_controller",
+        "learned_meta_qa_controller",
     ]
     return {
         "top_k": top_k,
@@ -1584,6 +1944,7 @@ def _run_extractive_reader_for_payload(
     model_name: str,
     retriever_names: tuple[str, ...],
     samples_per_dataset: int,
+    slice_mode: str,
     max_length: int,
 ) -> dict[str, Any]:
     if not run:
@@ -1599,7 +1960,7 @@ def _run_extractive_reader_for_payload(
             "raw_answers_stored": False,
         }
 
-    selected_rows = _select_reader_rows(rows, samples_per_dataset=samples_per_dataset)
+    selected_rows = _select_reader_rows(rows, samples_per_dataset=samples_per_dataset, slice_mode=slice_mode)
     if not selected_rows:
         return {
             "status": "no_rows",
@@ -1681,6 +2042,7 @@ def _run_extractive_reader_for_payload(
         "attempted_calls": attempted,
         "failed_calls": failed,
         "model": model_name,
+        "slice_mode": slice_mode,
         "retrievers": list(retriever_names),
         "by_retriever": by_retriever,
         "deltas_vs_bm25": _reader_deltas(by_retriever, "meta_qa_controller", "ordinary_bm25"),
@@ -1690,12 +2052,31 @@ def _run_extractive_reader_for_payload(
     }
 
 
-def _select_reader_rows(rows: list[dict[str, Any]], *, samples_per_dataset: int) -> list[dict[str, Any]]:
+def _select_reader_rows(
+    rows: list[dict[str, Any]],
+    *,
+    samples_per_dataset: int,
+    slice_mode: str,
+) -> list[dict[str, Any]]:
     if samples_per_dataset <= 0:
         return rows
+    ordered_rows = rows
+    if slice_mode == "retained_policy":
+        changed = [
+            row
+            for row in rows
+            if row.get("retained_policy") != "ordinary_bm25"
+            or row.get("learned_retained_policy") != "ordinary_bm25"
+        ]
+        changed_ids = {(row["dataset"], row["sample_index"]) for row in changed}
+        ordered_rows = changed + [
+            row
+            for row in rows
+            if (row["dataset"], row["sample_index"]) not in changed_ids
+        ]
     selected = []
     counts: Counter[str] = Counter()
-    for row in rows:
+    for row in ordered_rows:
         dataset = row["dataset"]
         if counts[dataset] >= samples_per_dataset:
             continue
@@ -1876,6 +2257,7 @@ def _run_llm_reader_for_payload(
     model_name: str,
     retriever_names: tuple[str, ...],
     samples_per_dataset: int,
+    slice_mode: str,
     timeout: float,
     doc_chars: int,
 ) -> dict[str, Any]:
@@ -1894,7 +2276,7 @@ def _run_llm_reader_for_payload(
             "gold_answers_stored": False,
         }
 
-    selected_rows = _select_reader_rows(rows, samples_per_dataset=samples_per_dataset)
+    selected_rows = _select_reader_rows(rows, samples_per_dataset=samples_per_dataset, slice_mode=slice_mode)
     if not selected_rows:
         return {
             "status": "no_rows",
@@ -1978,6 +2360,7 @@ def _run_llm_reader_for_payload(
         "failed_calls": failed,
         "provider": provider,
         "model": model_name,
+        "slice_mode": slice_mode,
         "retrievers": list(retriever_names),
         "by_retriever": by_retriever,
         "deltas_vs_bm25": _reader_deltas(by_retriever, "meta_qa_controller", "ordinary_bm25"),
@@ -2178,15 +2561,18 @@ def main() -> None:
     parser.add_argument("--run-extractive-reader", action="store_true")
     parser.add_argument("--reader-model", default="distilbert-base-cased-distilled-squad")
     parser.add_argument("--reader-samples-per-dataset", type=int, default=0)
+    parser.add_argument("--reader-slice", choices=("dataset_balanced", "retained_policy"), default="dataset_balanced")
     parser.add_argument("--reader-max-length", type=int, default=384)
     parser.add_argument("--run-llm-reader", action="store_true")
     parser.add_argument("--llm-reader-provider", choices=("gpt", "claude"), default="gpt")
     parser.add_argument("--llm-reader-model", default="gpt-5.4-mini")
     parser.add_argument("--llm-reader-samples-per-dataset", type=int, default=0)
+    parser.add_argument("--llm-reader-slice", choices=("dataset_balanced", "retained_policy"), default="dataset_balanced")
     parser.add_argument("--llm-reader-timeout", type=float, default=90.0)
     parser.add_argument("--llm-reader-doc-chars", type=int, default=1200)
     parser.add_argument("--bootstrap-iterations", type=int, default=400)
     parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--learned-selector-folds", type=int, default=5)
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     args = parser.parse_args()
     payload = build_meta_qa_evolution_payload(
@@ -2200,15 +2586,18 @@ def main() -> None:
         run_extractive_reader=args.run_extractive_reader,
         reader_model=args.reader_model,
         reader_samples_per_dataset=args.reader_samples_per_dataset,
+        reader_slice=args.reader_slice,
         reader_max_length=args.reader_max_length,
         run_llm_reader=args.run_llm_reader,
         llm_reader_provider=args.llm_reader_provider,
         llm_reader_model=args.llm_reader_model,
         llm_reader_samples_per_dataset=args.llm_reader_samples_per_dataset,
+        llm_reader_slice=args.llm_reader_slice,
         llm_reader_timeout=args.llm_reader_timeout,
         llm_reader_doc_chars=args.llm_reader_doc_chars,
         bootstrap_iterations=args.bootstrap_iterations,
         workers=args.workers,
+        learned_selector_folds=args.learned_selector_folds,
     )
     out = Path(args.out)
     _write_json(out, payload)
@@ -2218,7 +2607,15 @@ def main() -> None:
         "aggregate": payload["aggregate"]["overall"],
         "deltas_vs_bm25": payload["deltas_vs_bm25"],
         "deltas_vs_ppr": payload["deltas_vs_ppr"],
+        "learned_deltas_vs_bm25": payload["learned_deltas_vs_bm25"],
+        "learned_deltas_vs_meta_controller": payload["learned_deltas_vs_meta_controller"],
         "bootstrap_ci": payload["bootstrap_ci"],
+        "learned_policy_selector": {
+            "status": payload["learned_policy_selector"]["status"],
+            "selected_policy_counts": payload["learned_policy_selector"]["selected_policy_counts"],
+            "actual_harm_count": payload["learned_policy_selector"]["actual_harm_count"],
+            "actual_harm_rate_among_changed": payload["learned_policy_selector"]["actual_harm_rate_among_changed"],
+        },
         "extractive_reader": {
             "status": payload["extractive_reader"]["status"],
             "by_retriever": payload["extractive_reader"]["by_retriever"],
