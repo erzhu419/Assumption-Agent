@@ -181,3 +181,34 @@ The empirical boundary remains unchanged: this validates multi-cluster
 mechanism readiness, not a live downstream answer-quality win.  The emitted
 commands are ready for fresh ablation once API credentials are supplied through
 environment variables.
+
+Seventh follow-up artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_queue_20260608.json`
+
+This moves the positive arm from meta-diagnostic axes to an answer-execution
+axis.  The candidate is an execution-contract harness: on practical action
+problems, require a smallest reversible pilot, baseline, success metric, stop
+threshold, owner, and rollback path.  It is orthogonal to `strategy_S01`
+because it does not choose the controlled-variable method; it makes whichever
+method is chosen falsifiable and deployable.
+
+Deterministic validation passes with 8 trigger rows, 8 controls, novelty ON/OFF
+separation, daemon readback, and gated temp apply.
+
+Eighth follow-up artifacts:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_live_same_model_20260608.json`
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_scope_repair_live_same_model_20260608.json`
+
+The broad execution-contract proposal was tested against a same-model Claude
+Opus baseline and correctly rejected by the benefit gate: 4 trigger wins, 3
+ties, 1 loss.  The recursive repair narrowed scope to practical
+operations/transition rows, then passed same-model live acceptance: 3 trigger
+wins, 2 ties, 0 losses, 8 route-scoped no-op control ties, and no graph mutation
+without apply.
+
+Detailed log:
+
+`reconstruction/md/orthogonal_execution_live_20260608.md`

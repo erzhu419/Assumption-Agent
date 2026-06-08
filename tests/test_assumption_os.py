@@ -66,6 +66,7 @@ from assumption_os.novelty_integration import (
 from assumption_os.objective_bench import build_objective_benchmark_payload
 from assumption_os.orthogonal_ablation import build_orthogonal_ablation_payload
 from assumption_os.orthogonal_downstream_ablation import build_orthogonal_downstream_ablation_payload
+from assumption_os.orthogonal_execution_queue import build_orthogonal_execution_queue_payload
 from assumption_os.orthogonal_multi_cluster import build_orthogonal_multi_cluster_payload
 from assumption_os.orthogonal_positive_queue import build_orthogonal_positive_queue_payload
 from assumption_os.orthogonal_positive_readback import build_orthogonal_positive_readback_payload
@@ -3778,6 +3779,44 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(route_problem_to_node(wisdom, relevant), RouteLabel.SHOULD_FIRE)
         self.assertEqual(route_problem_to_node(wisdom, unrelated), RouteLabel.NEUTRAL)
 
+    def test_generic_candidate_can_disable_lexical_fallback(self):
+        node = AssumptionNode(
+            id="cand_execution_contract",
+            type=AssumptionType.HARNESS,
+            claim="给出可逆试点、成功指标、停止阈值、责任人和回滚路径。",
+            tags=["candidate", "execution_contract"],
+            payload={
+                "activation": {
+                    "problem_ids": ["p_trigger"],
+                    "allow_lexical_fallback": False,
+                },
+            },
+        )
+        profile = build_activation_profile(node)
+        self.assertFalse(profile.allow_lexical_fallback)
+
+        lexical_match = ConditionedEvalRow(
+            problem_id="p_other",
+            domain="business",
+            difficulty="medium",
+            description="需要一个可逆试点、成功指标、停止阈值和回滚路径。",
+            coverage_tags=[],
+            outcome="win",
+            active_assumption_ids=[],
+        )
+        explicit = ConditionedEvalRow(
+            problem_id="p_trigger",
+            domain="business",
+            difficulty="medium",
+            description="无关表述也应该因显式 problem id 触发。",
+            coverage_tags=[],
+            outcome="win",
+            active_assumption_ids=[],
+        )
+
+        self.assertEqual(route_problem_to_node(node, lexical_match), RouteLabel.NEUTRAL)
+        self.assertEqual(route_problem_to_node(node, explicit), RouteLabel.SHOULD_FIRE)
+
     def test_lifecycle_planner_maps_conditioned_gate_to_auditable_actions(self):
         summaries = [
             {
@@ -4243,6 +4282,43 @@ class AssumptionOSTest(unittest.TestCase):
         disabled_rows = payload["novelty_rows"]["disabled"]
         self.assertTrue(all(row["classification"] == "orthogonal_new_family" for row in enabled_rows))
         self.assertTrue(all(row["classification"] != "orthogonal_new_family" for row in disabled_rows))
+        commands_text = json.dumps(payload["next_commands"], ensure_ascii=False)
+        self.assertIn("<set-in-env>", commands_text)
+        self.assertNotIn("sk-", commands_text)
+        self.assertNotIn("newapi_channel_conn", commands_text)
+
+    def test_orthogonal_execution_queue_validates_expanded_trigger_contract(self):
+        payload = build_orthogonal_execution_queue_payload(
+            root=Path("."),
+            eval_id="unit_orthogonal_execution_queue",
+        )
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertIn(
+            payload["status"],
+            {"execution_queue_live_ready", "execution_queue_live_ready_env_missing"},
+        )
+        metrics = payload["metrics"]
+        self.assertEqual(metrics["proposal_count"], 1)
+        self.assertEqual(metrics["enabled_orthogonal_count"], 1)
+        self.assertEqual(metrics["disabled_orthogonal_count"], 0)
+        self.assertEqual(metrics["enabled_orthogonal_edge_count"], 1)
+        self.assertEqual(metrics["disabled_orthogonal_edge_count"], 0)
+        self.assertEqual(metrics["preflight_ready_count"], 1)
+        self.assertGreaterEqual(metrics["trigger_count"], 8)
+        self.assertGreaterEqual(metrics["active_trigger_count"], 8)
+        self.assertGreaterEqual(metrics["control_count"], 8)
+        self.assertEqual(metrics["outside_active_count"], 0)
+        self.assertEqual(metrics["readback_accept_count"], 1)
+        self.assertEqual(metrics["readback_applied_count"], 0)
+        self.assertFalse(metrics["node_mutation_without_apply"])
+        self.assertEqual(metrics["apply_accept_count"], 1)
+        self.assertEqual(metrics["apply_applied_count"], 1)
+        self.assertTrue(metrics["candidate_node_present_after_apply"])
+        self.assertGreaterEqual(metrics["temp_orthogonal_edge_count"], 1)
+        enabled_row = payload["novelty_rows"]["enabled"][0]
+        disabled_row = payload["novelty_rows"]["disabled"][0]
+        self.assertEqual(enabled_row["classification"], "orthogonal_new_family")
+        self.assertNotEqual(disabled_row["classification"], "orthogonal_new_family")
         commands_text = json.dumps(payload["next_commands"], ensure_ascii=False)
         self.assertIn("<set-in-env>", commands_text)
         self.assertNotIn("sk-", commands_text)

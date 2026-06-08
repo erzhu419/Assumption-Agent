@@ -48,6 +48,14 @@ DEFAULT_ARTIFACTS = [
     PAPER_DIR / "orthogonal_multi_cluster_20260608.json",
     PAPER_DIR / "orthogonal_multi_cluster_proposals_20260608.json",
     PAPER_DIR / "orthogonal_multi_cluster_preflight_20260608.json",
+    PAPER_DIR / "orthogonal_execution_queue_20260608.json",
+    PAPER_DIR / "orthogonal_execution_queue_proposals_20260608.json",
+    PAPER_DIR / "orthogonal_execution_queue_preflight_20260608.json",
+    PAPER_DIR / "orthogonal_execution_live_same_model_20260608.json",
+    PAPER_DIR / "orthogonal_execution_scope_repair_20260608.json",
+    PAPER_DIR / "orthogonal_execution_scope_repair_proposals_20260608.json",
+    PAPER_DIR / "orthogonal_execution_scope_repair_preflight_20260608.json",
+    PAPER_DIR / "orthogonal_execution_scope_repair_live_same_model_20260608.json",
     PAPER_DIR / "morphism_claim_bundle_20260605.json",
     PAPER_DIR / "paper_negative_results_20260605.json",
     PAPER_DIR / "paper_benchmark_line_20260604.json",
@@ -79,6 +87,8 @@ DEFAULT_CODE_FILES = [
     Path("assumption_os/orthogonal_positive_queue.py"),
     Path("assumption_os/orthogonal_positive_readback.py"),
     Path("assumption_os/orthogonal_multi_cluster.py"),
+    Path("assumption_os/orthogonal_execution_queue.py"),
+    Path("assumption_os/orthogonal_live_ablation.py"),
     Path("assumption_os/morphism_claims.py"),
     Path("assumption_os/paper_negative_results.py"),
     Path("assumption_os/paper_repro_pack.py"),
@@ -288,6 +298,22 @@ def _exact_commands() -> list[dict[str, str]]:
         {
             "name": "orthogonal_multi_cluster",
             "command": "python3 -m assumption_os.orthogonal_multi_cluster --root . --eval-id orthogonal_multi_cluster_20260608 --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_multi_cluster_20260608.json' --proposals-out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_multi_cluster_proposals_20260608.json' --preflight-out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_multi_cluster_preflight_20260608.json'",
+        },
+        {
+            "name": "orthogonal_execution_queue",
+            "command": "python3 -m assumption_os.orthogonal_execution_queue --root . --eval-id orthogonal_execution_queue_20260608 --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_queue_20260608.json' --proposals-out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_queue_proposals_20260608.json' --preflight-out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_queue_preflight_20260608.json'",
+        },
+        {
+            "name": "orthogonal_execution_same_model_live_optional",
+            "command": "LLM_PROVIDER=gpt GPT5_API_KEY=<set-in-env> GPT5_BASE_URL=<set-in-env> GPT5_MODEL=claude-opus-4-8 RUOLI_CLAUDE_KEY=<set-in-env> CLAUDE_BASE_URL=<set-in-env> CLAUDE_OPUS_MODEL=claude-opus-4-8 python3 -m assumption_os.orthogonal_live_ablation --root . --queue 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_queue_20260608.json' --eval-id orthogonal_execution_live_same_model_20260608 --execute-answers --run-judge --judge-model claude_opus --baseline-variant phase2_v20_claude_opus_execution_baseline --route-scoped-noop-controls --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_live_same_model_20260608.json'",
+        },
+        {
+            "name": "orthogonal_execution_scope_repair",
+            "command": "python3 -m assumption_os.orthogonal_execution_queue --root . --eval-id orthogonal_execution_scope_repair_20260608 --trigger-problem-ids 'business_0097,business_0192,business_0218,daily_life_0173,software_engineering_0142' --scope-note 'same_model_live_repair: broad execution-contract proposal was useful on practical operations/transition rows but over-broad on deep technical rows; narrow to practical execution rows before retention' --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_scope_repair_20260608.json' --proposals-out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_scope_repair_proposals_20260608.json' --preflight-out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_scope_repair_preflight_20260608.json'",
+        },
+        {
+            "name": "orthogonal_execution_scope_repair_same_model_live_optional",
+            "command": "LLM_PROVIDER=gpt GPT5_API_KEY=<set-in-env> GPT5_BASE_URL=<set-in-env> GPT5_MODEL=claude-opus-4-8 RUOLI_CLAUDE_KEY=<set-in-env> CLAUDE_BASE_URL=<set-in-env> CLAUDE_OPUS_MODEL=claude-opus-4-8 python3 -m assumption_os.orthogonal_live_ablation --root . --queue 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_scope_repair_20260608.json' --eval-id orthogonal_execution_scope_repair_live_same_model_20260608 --execute-answers --run-judge --judge-model claude_opus --baseline-variant phase2_v20_claude_opus_execution_baseline --route-scoped-noop-controls --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_scope_repair_live_same_model_20260608.json'",
         },
         {
             "name": "morphism_claim_bundle",

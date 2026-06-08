@@ -1109,6 +1109,14 @@ def _requests_client_for_alias(alias: str) -> RequestsChatClient:
         model = os.environ.get("GEMINI_PRO_MODEL", "gemini-3.1-pro")
         base_url = os.environ.get("GEMINI_PROXY_BASE_URL", ruoli_base)
         key = os.environ.get("RUOLI_GEMINI_KEY") or os.environ.get("GEMINI_PROXY_API_KEY", "")
+    elif alias in {"claude_opus", "claude"}:
+        model = os.environ.get("CLAUDE_OPUS_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-opus-4-8"
+        base_url = os.environ.get("CLAUDE_BASE_URL", ruoli_base)
+        key = os.environ.get("RUOLI_CLAUDE_KEY") or os.environ.get("ANTHROPIC_API_KEY", "")
+    elif alias == "claude_haiku":
+        model = os.environ.get("CLAUDE_HAIKU_MODEL") or "claude-haiku-4-5-20251001"
+        base_url = os.environ.get("CLAUDE_BASE_URL", ruoli_base)
+        key = os.environ.get("RUOLI_CLAUDE_KEY") or os.environ.get("ANTHROPIC_API_KEY", "")
     else:
         raise ValueError(f"requests transport does not know judge model alias {alias}")
     if not key:

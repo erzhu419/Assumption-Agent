@@ -95,7 +95,7 @@ def build_activation_profile(node: AssumptionNode) -> ActivationProfile:
         coverage_tags=coverage_tags,
         keywords=explicit_keywords,
         min_keyword_hits=int(activation.get("min_keyword_hits", 2)),
-        allow_lexical_fallback=True,
+        allow_lexical_fallback=bool(activation.get("allow_lexical_fallback", True)),
     )
 
 

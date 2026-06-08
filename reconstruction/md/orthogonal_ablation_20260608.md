@@ -184,3 +184,29 @@ important improvement is breadth: the gate now preserves several orthogonal
 new explanatory axes and the recursive daemon can consume, read back, and
 gated-apply them.  A real ON/OFF downstream utility claim still requires
 running the emitted fresh-ablation and pairwise-judge commands.
+
+## Execution-Contract Live Positive Arm
+
+Follow-up artifacts:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_queue_20260608.json`
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_live_same_model_20260608.json`
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_scope_repair_20260608.json`
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_execution_scope_repair_live_same_model_20260608.json`
+
+The first same-model live positive arm is now present, with an important
+negative boundary:
+
+- Broad execution-contract hypothesis: same-model live run passed execution
+  integrity but was rejected by benefit gate, with 4 wins, 3 ties, and 1 loss
+  on 8 triggers.
+- Recursive scope repair: narrowed to practical operations/transition rows,
+  then passed same-model live acceptance with 3 wins, 2 ties, 0 losses on 5
+  triggers and 8 route-scoped no-op control ties.
+
+This shows the intended recursive behavior: do not promote an over-broad
+orthogonal hypothesis; read the residual, repair the activation scope, rerun
+fresh ablation, and only retain the scoped hypothesis after acceptance.
