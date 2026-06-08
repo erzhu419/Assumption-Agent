@@ -79,3 +79,24 @@ The novelty gate now canonicalizes such family aliases before testing
 orthogonality. On the real surface proposal batch, the expected behavior is zero
 `orthogonal_to` edges: these are same-family repairs/scopes, not new orthogonal
 families. The fixture ablation still validates true orthogonal retention.
+
+## Judged Downstream Negative Control
+
+Follow-up artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_downstream_ablation_20260608.json`
+
+The existing cached acceptance artifacts contain real judged outcomes for six
+non-orthogonal candidate proposals. Toggling the orthogonal gate on these rows
+must not change novelty classification or downstream accept/reject decisions.
+
+Result:
+
+- judged_proposal_count: 6
+- judged_classification_change_count: 0
+- judged_false_orthogonal_count: 0
+- enabled_orthogonal_edge_count_all_proposals: 0
+
+This is a downstream safety check, not a positive live orthogonal-benefit check.
+No cached answer/judgment artifact currently exists for a proposal that is
+actually classified as `orthogonal_new_family`; that remains the next live run.

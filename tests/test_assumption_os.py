@@ -65,6 +65,7 @@ from assumption_os.novelty_integration import (
 )
 from assumption_os.objective_bench import build_objective_benchmark_payload
 from assumption_os.orthogonal_ablation import build_orthogonal_ablation_payload
+from assumption_os.orthogonal_downstream_ablation import build_orthogonal_downstream_ablation_payload
 from assumption_os.orthogonal_surface_ablation import build_orthogonal_surface_ablation_payload
 from assumption_os.paper_baseline_hardening import build_paper_baseline_hardening_payload
 from assumption_os.paper_benchmark_line import build_paper_benchmark_line_payload
@@ -4068,6 +4069,20 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["same_family_false_orthogonal_enabled_count"], 0)
         self.assertEqual(metrics["orthogonal_edge_enabled_count"], 0)
         self.assertEqual(metrics["classification_change_count"], 0)
+
+    def test_orthogonal_downstream_ablation_preserves_judged_negative_control(self):
+        payload = build_orthogonal_downstream_ablation_payload(
+            root=Path("."),
+            eval_id="unit_orthogonal_downstream_ablation",
+        )
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        metrics = payload["metrics"]
+        self.assertGreaterEqual(metrics["judged_proposal_count"], 6)
+        self.assertEqual(metrics["judged_classification_change_count"], 0)
+        self.assertEqual(metrics["judged_false_orthogonal_count"], 0)
+        self.assertEqual(metrics["enabled_orthogonal_edge_count_all_proposals"], 0)
+        self.assertFalse(payload["positive_live_gap"]["available"])
+        self.assertEqual(payload["status"], "negative_control_pass_positive_live_pending")
 
     def test_proposal_overlay_is_in_memory_only(self):
         with tempfile.TemporaryDirectory() as td:

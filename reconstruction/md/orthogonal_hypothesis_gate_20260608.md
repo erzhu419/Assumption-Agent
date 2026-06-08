@@ -97,3 +97,14 @@ new families. On that batch, zero `orthogonal_to` edges is the correct behavior.
 
 The next stronger experiment is to run orthogonal ON/OFF on live generated
 residual clusters with answer-quality or judge-based downstream outcomes.
+
+Third follow-up artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_downstream_ablation_20260608.json`
+
+This uses existing real judged candidate-acceptance artifacts as a downstream
+negative control. Six non-orthogonal judged proposals keep the same novelty
+classification and downstream accept/reject decision under orthogonal ON/OFF.
+So the gate is downstream-safe on the current judged non-orthogonal proposal
+line. The positive live orthogonal-benefit test still requires fresh judgments
+for an actual `orthogonal_new_family` proposal.
