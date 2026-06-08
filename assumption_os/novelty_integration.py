@@ -76,6 +76,7 @@ def build_novelty_integration_payload(
     specialization_threshold: float = 0.62,
     analogy_threshold: float = 0.50,
     orthogonal_similarity_ceiling: float = 0.28,
+    enable_orthogonal: bool = True,
 ) -> dict:
     """Classify every candidate proposal and recommend graph integration edges."""
 
@@ -87,6 +88,7 @@ def build_novelty_integration_payload(
             specialization_threshold=specialization_threshold,
             analogy_threshold=analogy_threshold,
             orthogonal_similarity_ceiling=orthogonal_similarity_ceiling,
+            enable_orthogonal=enable_orthogonal,
         )
         for proposal in proposal_payload.get("proposals", [])
     ]
@@ -104,6 +106,7 @@ def build_novelty_integration_payload(
         "classified_count": classified_count,
         "classification_counts": counts,
         "recommended_edge_counts": edge_counts,
+        "orthogonal_gate_enabled": enable_orthogonal,
         "pass": classified_count == len(rows),
         "rows": rows,
     }
@@ -186,6 +189,7 @@ def _classify_proposal(
     specialization_threshold: float,
     analogy_threshold: float,
     orthogonal_similarity_ceiling: float,
+    enable_orthogonal: bool,
 ) -> dict:
     candidate = _candidate_node(proposal)
     if candidate is None:
@@ -293,28 +297,29 @@ def _classify_proposal(
             edge_type=EdgeType.IS_ANALOGY_OF,
             rationale="Candidate is not the same family, but shares enough relation structure to retain an analogy edge.",
         )
-    orthogonal = _orthogonal_match(
-        candidate,
-        store,
-        proposal,
-        lexical,
-        parent_id=parent_id,
-        similarity_ceiling=orthogonal_similarity_ceiling,
-    )
-    if orthogonal:
-        return _row(
-            proposal,
+    if enable_orthogonal:
+        orthogonal = _orthogonal_match(
             candidate,
-            NoveltyClass.ORTHOGONAL_NEW_FAMILY,
-            IntegrationAction.CREATE_ORTHOGONAL_FAMILY,
-            existing_node_id=orthogonal.node_id,
-            match=orthogonal,
-            edge_type=EdgeType.ORTHOGONAL_TO,
-            rationale=(
-                "Candidate is grounded in the same residual/parent but remains low-overlap with existing "
-                "families, so retain it as an orthogonal new-family alternative."
-            ),
+            store,
+            proposal,
+            lexical,
+            parent_id=parent_id,
+            similarity_ceiling=orthogonal_similarity_ceiling,
         )
+        if orthogonal:
+            return _row(
+                proposal,
+                candidate,
+                NoveltyClass.ORTHOGONAL_NEW_FAMILY,
+                IntegrationAction.CREATE_ORTHOGONAL_FAMILY,
+                existing_node_id=orthogonal.node_id,
+                match=orthogonal,
+                edge_type=EdgeType.ORTHOGONAL_TO,
+                rationale=(
+                    "Candidate is grounded in the same residual/parent but remains low-overlap with existing "
+                    "families, so retain it as an orthogonal new-family alternative."
+                ),
+            )
     if structural_transfer_like and parent_id in store.nodes:
         return _row(
             proposal,
@@ -886,6 +891,7 @@ def main() -> None:
     ap.add_argument("--eval-id", default=None)
     ap.add_argument("--out", default=None)
     ap.add_argument("--performance-validation", action="store_true")
+    ap.add_argument("--disable-orthogonal", action="store_true")
     args = ap.parse_args()
 
     if args.performance_validation:
@@ -897,6 +903,7 @@ def main() -> None:
             JsonlGraphStore(args.graph_dir),
             _load_json(Path(args.proposals)),
             eval_id=args.eval_id,
+            enable_orthogonal=not args.disable_orthogonal,
         )
     if args.out:
         _write_json(Path(args.out), payload)

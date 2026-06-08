@@ -71,10 +71,19 @@ The fixture now covers:
 
 Unit tests also include a negative control: a candidate that declares itself orthogonal but shares the parent family tag is classified as `specialization`, not `orthogonal_new_family`.
 
-## Next Validation
+## Orthogonal Ablation Update
 
-This is functionally validated, but not yet proven as a downstream performance gain. The next experiment should toggle the orthogonal gate inside a real recursive benchmark line:
+Follow-up artifact:
 
-`failure cluster -> candidate set -> novelty/orthogonality gate -> ablation + controls -> retention -> next generation`
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_ablation_20260608.json`
 
-The relevant metric is whether orthogonal candidates have higher long-run clade metaproductivity than near-duplicate or incremental candidates after controlling for immediate utility and cost.
+The gate is now toggled ON/OFF on the same proposal batch.  With the gate ON,
+the evaluator-drift candidate is retained as `orthogonal_new_family` with an
+`orthogonal_to` edge.  With the gate OFF, the same candidate collapses into the
+old controlled-variable family as a `specialization`.
+
+This validates the mechanism as a recursive-retention proxy: the ON condition
+preserves the new explanation axis and avoids family-axis contamination.  It is
+still not a live downstream QA or LLM-judge ablation; the next stronger
+experiment is to run orthogonal ON/OFF on generated residual clusters in a live
+recursive benchmark line.

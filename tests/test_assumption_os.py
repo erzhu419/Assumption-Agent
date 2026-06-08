@@ -64,6 +64,7 @@ from assumption_os.novelty_integration import (
     build_novelty_integration_performance_payload,
 )
 from assumption_os.objective_bench import build_objective_benchmark_payload
+from assumption_os.orthogonal_ablation import build_orthogonal_ablation_payload
 from assumption_os.paper_baseline_hardening import build_paper_baseline_hardening_payload
 from assumption_os.paper_benchmark_line import build_paper_benchmark_line_payload
 from assumption_os.paper_main_experiment import build_paper_main_experiment_payload
@@ -4007,6 +4008,22 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(payload["classification_counts"]["analogy"], 1)
         self.assertEqual(payload["classification_counts"]["orthogonal_new_family"], 1)
         self.assertGreaterEqual(payload["recommended_edge_counts"]["orthogonal_to"], 1)
+
+    def test_orthogonal_ablation_validates_new_axis_retention(self):
+        payload = build_orthogonal_ablation_payload(eval_id="unit_orthogonal_ablation")
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        metrics = payload["metrics"]
+        self.assertEqual(metrics["classification_accuracy_enabled"], 1.0)
+        self.assertLess(metrics["classification_accuracy_disabled"], 1.0)
+        self.assertEqual(metrics["orthogonal_recall_enabled"], 1.0)
+        self.assertEqual(metrics["orthogonal_recall_disabled"], 0.0)
+        self.assertEqual(metrics["orthogonal_edge_count_enabled"], 1)
+        self.assertEqual(metrics["orthogonal_edge_count_disabled"], 0)
+        self.assertEqual(metrics["non_orthogonal_stability"], 1.0)
+        self.assertGreater(metrics["axis_retention_delta"], 0.0)
+        self.assertGreater(metrics["metaproductivity_proxy_delta"], 0.0)
+        self.assertTrue(payload["retention"]["enabled"]["orthogonal_new_axis_retained"])
+        self.assertFalse(payload["retention"]["disabled"]["orthogonal_new_axis_retained"])
 
     def test_proposal_overlay_is_in_memory_only(self):
         with tempfile.TemporaryDirectory() as td:

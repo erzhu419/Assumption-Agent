@@ -38,6 +38,7 @@ DEFAULT_ARTIFACTS = [
     PAPER_DIR / "structural_context_edges_20260607.json",
     PAPER_DIR / "assumption_family_discovery_20260607.json",
     PAPER_DIR / "novelty_integration_gate_20260604.json",
+    PAPER_DIR / "orthogonal_ablation_20260608.json",
     PAPER_DIR / "morphism_claim_bundle_20260605.json",
     PAPER_DIR / "paper_negative_results_20260605.json",
     PAPER_DIR / "paper_benchmark_line_20260604.json",
@@ -63,6 +64,7 @@ DEFAULT_CODE_FILES = [
     Path("assumption_os/meta_qa_evolution.py"),
     Path("assumption_os/structural_context_edges.py"),
     Path("assumption_os/assumption_family_discovery.py"),
+    Path("assumption_os/orthogonal_ablation.py"),
     Path("assumption_os/morphism_claims.py"),
     Path("assumption_os/paper_negative_results.py"),
     Path("assumption_os/paper_repro_pack.py"),
@@ -248,6 +250,10 @@ def _exact_commands() -> list[dict[str, str]]:
         {
             "name": "novelty_integration_gate",
             "command": "python3 -m assumption_os.novelty_integration --performance-validation --eval-id novelty_integration_gate_20260604 --out 'phase four/assumption_graph/paper_readiness_20260604/novelty_integration_gate_20260604.json'",
+        },
+        {
+            "name": "orthogonal_ablation",
+            "command": "python3 -m assumption_os.orthogonal_ablation --eval-id orthogonal_ablation_20260608 --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_ablation_20260608.json'",
         },
         {
             "name": "morphism_claim_bundle",

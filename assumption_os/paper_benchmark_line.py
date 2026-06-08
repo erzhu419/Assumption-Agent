@@ -193,6 +193,7 @@ def _benchmark_line_gates(*, sections: dict[str, dict], recursive: dict, morphis
                 "specialization",
                 "formal_isomorphism",
                 "analogy",
+                "orthogonal_new_family",
                 "genuinely_new_family",
             ]),
             score=float(novelty.get("gold_accuracy") or 0.0),
