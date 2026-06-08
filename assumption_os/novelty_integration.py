@@ -501,6 +501,8 @@ def _orthogonal_match(
     if not residual_grounded:
         return None
     parent = store.nodes[parent_id]
+    if _substantive_shared_tags(candidate, parent) or _formal_family_overlap(candidate, parent):
+        return None
     cand_tokens = tokenize(_node_text(candidate))
     parent_similarity = cosine_counter(cand_tokens, tokenize(_node_text(parent)))
     max_similarity = max(float(lexical.score), float(parent_similarity))
@@ -515,6 +517,51 @@ def _orthogonal_match(
         orthogonality_score,
         "orthogonality_low_overlap_with_residual_parent",
     )
+
+
+GENERIC_FAMILY_TAGS = {
+    "",
+    "candidate",
+    "orthogonal",
+    "structural_morphism",
+    "structural_transfer",
+    "failure_hypothesis",
+    "proposal",
+}
+
+
+def _substantive_shared_tags(candidate: AssumptionNode, node: AssumptionNode) -> set[str]:
+    candidate_tags = {
+        str(tag).strip().lower()
+        for tag in candidate.tags
+        if str(tag).strip().lower() not in GENERIC_FAMILY_TAGS
+    }
+    node_tags = {
+        str(tag).strip().lower()
+        for tag in node.tags
+        if str(tag).strip().lower() not in GENERIC_FAMILY_TAGS
+    }
+    return candidate_tags & node_tags
+
+
+def _formal_family_overlap(candidate: AssumptionNode, node: AssumptionNode) -> bool:
+    candidate_formal = candidate.formal_form or {}
+    node_formal = node.formal_form or {}
+    if not isinstance(candidate_formal, dict) or not isinstance(node_formal, dict):
+        return False
+    candidate_keys = {
+        candidate_formal.get("pattern_id"),
+        candidate_formal.get("source_pattern_id"),
+        candidate_formal.get("family"),
+        candidate_formal.get("kernel_motif"),
+    } - {None, ""}
+    node_keys = {
+        node_formal.get("pattern_id"),
+        node_formal.get("source_pattern_id"),
+        node_formal.get("family"),
+        node_formal.get("kernel_motif"),
+    } - {None, ""}
+    return bool(candidate_keys & node_keys)
 
 
 def _formal_match(candidate: AssumptionNode, store: JsonlGraphStore) -> SimilarityMatch | None:

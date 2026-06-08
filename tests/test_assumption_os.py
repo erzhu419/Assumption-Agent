@@ -3925,6 +3925,15 @@ class AssumptionOSTest(unittest.TestCase):
                 tags=["evaluator", "feedback", "orthogonal"],
                 payload={"orthogonal_to_existing": True},
             )
+            same_family_not_orthogonal = AssumptionNode(
+                id="cand_same_family_not_orthogonal",
+                type=AssumptionType.METHOD,
+                kind=HypothesisKind.CLAIM,
+                claim="Diagnose assay batches by varying only incubation temperature against a fixed reference batch.",
+                status="candidate",
+                tags=["control", "orthogonal"],
+                payload={"orthogonal_to_existing": True},
+            )
             proposals = {
                 "eval_id": "unit_novelty",
                 "proposals": [
@@ -3960,6 +3969,17 @@ class AssumptionOSTest(unittest.TestCase):
                         "candidate_node": orthogonal.to_dict(),
                         "edges": [{"source": "cand_orthogonal", "target": "parent_control", "type": "generated_from_residual"}],
                     },
+                    {
+                        "proposal_id": "prop_same_family_not_orthogonal",
+                        "proposal_type": "orthogonal_failure_hypothesis",
+                        "parent_node_id": "parent_control",
+                        "candidate_node": same_family_not_orthogonal.to_dict(),
+                        "edges": [{
+                            "source": "cand_same_family_not_orthogonal",
+                            "target": "parent_control",
+                            "type": "generated_from_residual",
+                        }],
+                    },
                 ],
             }
             payload = build_novelty_integration_payload(store, proposals, eval_id="unit_novelty_gate")
@@ -3975,6 +3995,8 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertTrue(rows["prop_orthogonal"]["is_new_family"])
             self.assertEqual(rows["prop_orthogonal"]["integration_edges"][0]["type"], "orthogonal_to")
             self.assertGreaterEqual(rows["prop_orthogonal"]["match_score"], 0.58)
+            self.assertNotEqual(rows["prop_same_family_not_orthogonal"]["classification"], "orthogonal_new_family")
+            self.assertEqual(rows["prop_same_family_not_orthogonal"]["classification"], "specialization")
 
     def test_novelty_integration_performance_validation_passes(self):
         payload = build_novelty_integration_performance_payload(eval_id="unit_novelty_perf")

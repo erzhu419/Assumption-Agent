@@ -33,11 +33,14 @@ The rule is intentionally narrow:
 
 - the candidate must be grounded in the same residual, parent, or `generated_from_residual` edge;
 - it must remain low-overlap with the best existing node and with the parent node;
+- it must not share a substantive family tag or formal family key with the parent;
 - it must not already qualify as duplicate, specialization, formal isomorphism, or ordinary analogy;
 - accepted candidates are integrated with an `orthogonal_to` edge and a new-family action;
 - `orthogonal_to` is counted as a productive edge for clade/metaproductivity tracing.
 
 This turns "orthogonal novelty" into a measurable integration policy rather than a prompt slogan.
+
+This also clarifies the Le Chatelier / Lenz-law case: those are not orthogonal. They are two realizations of the same negative-feedback family and should be represented with `is_formal_isomorphism_of`, `is_analogy_of`, or family membership. Orthogonality applies when a new candidate explains the same residual through a different mechanism axis, such as switching from a strategy-defect hypothesis to an evaluator-drift hypothesis.
 
 ## Performance Validation
 
@@ -65,6 +68,8 @@ The fixture now covers:
 - analogy
 - genuinely_new_family
 - orthogonal_new_family
+
+Unit tests also include a negative control: a candidate that declares itself orthogonal but shares the parent family tag is classified as `specialization`, not `orthogonal_new_family`.
 
 ## Next Validation
 

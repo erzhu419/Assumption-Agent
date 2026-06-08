@@ -41,10 +41,13 @@
 
 - 有 residual/parent grounding：来自同一个失败簇、父假设或显式 `generated_from_residual`；
 - 与旧图低重叠：候选和全图最佳 lexical/formal 近邻、以及父节点之间的相似度都低于阈值；
+- 不能与父假设共享 substantive family tag 或 formal family key；
 - 不是已证明的 formal isomorphism，也不是普通 analogy；
 - 被接受后仍需要 benefit/harm gate，novelty gate 只决定整合方式。
 
 这把 MC-WM 里的经验结论转成工程规则：当已有假设族无法解释 residual 时，系统优先保留“同源但正交”的新方向，而不是只在旧 family 内做微调。
+
+注意：同一个范畴/假设族的两个实例不是正交关系。勒夏特列原理和楞次定律应归入同一个 negative-feedback family，或者通过 `is_formal_isomorphism_of` / `is_analogy_of` 连接；`orthogonal_to` 用于新候选假设相对旧假设族切换到了另一条解释机制轴。
 
 ## Performance Validation
 
