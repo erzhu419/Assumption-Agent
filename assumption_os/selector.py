@@ -469,6 +469,7 @@ def _parent_for_child(graph: SimpleAssumptionGraph, child_id: str) -> str | None
         EdgeType.GENERATED_FROM_RESIDUAL,
         EdgeType.DERIVED_FROM,
         EdgeType.REPLACES,
+        EdgeType.ORTHOGONAL_TO,
     }
     for edge in graph.store.edges:
         if edge.target == child_id and edge.type in productive_edges:

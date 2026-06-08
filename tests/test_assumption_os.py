@@ -3913,6 +3913,18 @@ class AssumptionOSTest(unittest.TestCase):
                 status="candidate",
                 tags=["cryogenic"],
             )
+            orthogonal = AssumptionNode(
+                id="cand_orthogonal",
+                type=AssumptionType.EVALUATOR,
+                kind=HypothesisKind.EVALUATOR_POLICY,
+                claim=(
+                    "Before changing the task strategy, test whether stale judge feedback caused the failure by "
+                    "tracking evaluator disagreement drift."
+                ),
+                status="candidate",
+                tags=["evaluator", "feedback", "orthogonal"],
+                payload={"orthogonal_to_existing": True},
+            )
             proposals = {
                 "eval_id": "unit_novelty",
                 "proposals": [
@@ -3941,6 +3953,13 @@ class AssumptionOSTest(unittest.TestCase):
                         "parent_node_id": "",
                         "candidate_node": new_family.to_dict(),
                     },
+                    {
+                        "proposal_id": "prop_orthogonal",
+                        "proposal_type": "orthogonal_failure_hypothesis",
+                        "parent_node_id": "parent_control",
+                        "candidate_node": orthogonal.to_dict(),
+                        "edges": [{"source": "cand_orthogonal", "target": "parent_control", "type": "generated_from_residual"}],
+                    },
                 ],
             }
             payload = build_novelty_integration_payload(store, proposals, eval_id="unit_novelty_gate")
@@ -3952,6 +3971,10 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(rows["prop_formal"]["classification"], "formal_isomorphism")
             self.assertEqual(rows["prop_formal"]["integration_edges"][0]["type"], "is_formal_isomorphism_of")
             self.assertEqual(rows["prop_new"]["classification"], "genuinely_new_family")
+            self.assertEqual(rows["prop_orthogonal"]["classification"], "orthogonal_new_family")
+            self.assertTrue(rows["prop_orthogonal"]["is_new_family"])
+            self.assertEqual(rows["prop_orthogonal"]["integration_edges"][0]["type"], "orthogonal_to")
+            self.assertGreaterEqual(rows["prop_orthogonal"]["match_score"], 0.58)
 
     def test_novelty_integration_performance_validation_passes(self):
         payload = build_novelty_integration_performance_payload(eval_id="unit_novelty_perf")
@@ -3960,6 +3983,8 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(payload["classification_counts"]["duplicate"], 1)
         self.assertEqual(payload["classification_counts"]["formal_isomorphism"], 1)
         self.assertEqual(payload["classification_counts"]["analogy"], 1)
+        self.assertEqual(payload["classification_counts"]["orthogonal_new_family"], 1)
+        self.assertGreaterEqual(payload["recommended_edge_counts"]["orthogonal_to"], 1)
 
     def test_proposal_overlay_is_in_memory_only(self):
         with tempfile.TemporaryDirectory() as td:
@@ -4168,6 +4193,18 @@ class AssumptionOSTest(unittest.TestCase):
                 status="candidate",
                 tags=["structural_morphism"],
             )
+            orthogonal = AssumptionNode(
+                id="cand_orthogonal_apply",
+                type=AssumptionType.EVALUATOR,
+                kind=HypothesisKind.EVALUATOR_POLICY,
+                claim=(
+                    "Before changing the task strategy, check whether stale evaluator feedback explains the "
+                    "same failure cluster."
+                ),
+                status="candidate",
+                tags=["evaluator", "feedback", "orthogonal"],
+                payload={"orthogonal_to_existing": True},
+            )
             proposal_payload = {
                 "eval_id": "unit_apply_novelty",
                 "proposals": [
@@ -4183,6 +4220,17 @@ class AssumptionOSTest(unittest.TestCase):
                         "parent_node_id": "struct_pat_negative_feedback",
                         "candidate_node": formal.to_dict(),
                     },
+                    {
+                        "proposal_id": "prop_orthogonal_apply",
+                        "proposal_type": "orthogonal_failure_hypothesis",
+                        "parent_node_id": "existing_parent",
+                        "candidate_node": orthogonal.to_dict(),
+                        "edges": [{
+                            "source": "cand_orthogonal_apply",
+                            "target": "existing_parent",
+                            "type": EdgeType.GENERATED_FROM_RESIDUAL.value,
+                        }],
+                    },
                 ],
             }
             novelty = build_novelty_integration_payload(
@@ -4192,10 +4240,11 @@ class AssumptionOSTest(unittest.TestCase):
             )
             acceptance = {
                 "eval_id": "unit_accept_novelty",
-                "accepted_proposal_ids": ["prop_dup_apply", "prop_formal_apply"],
+                "accepted_proposal_ids": ["prop_dup_apply", "prop_formal_apply", "prop_orthogonal_apply"],
                 "summaries": [
                     {"proposal_id": "prop_dup_apply", "decision": "accept"},
                     {"proposal_id": "prop_formal_apply", "decision": "accept"},
+                    {"proposal_id": "prop_orthogonal_apply", "decision": "accept"},
                 ],
             }
             applied = apply_accepted_candidates(
@@ -4205,20 +4254,23 @@ class AssumptionOSTest(unittest.TestCase):
                 novelty,
             )
             updated = JsonlGraphStore(root / "graph")
-            self.assertEqual(applied, ["cand_formal_apply"])
+            self.assertEqual(applied, ["cand_formal_apply", "cand_orthogonal_apply"])
             self.assertNotIn("cand_dup_apply", updated.nodes)
             self.assertIn("cand_formal_apply", updated.nodes)
+            self.assertIn("cand_orthogonal_apply", updated.nodes)
+            edge_keys = {
+                (
+                    edge.source,
+                    edge.target,
+                    edge.type.value if hasattr(edge.type, "value") else edge.type,
+                )
+                for edge in updated.edges
+            }
             self.assertIn(
                 ("cand_formal_apply", "struct_pat_negative_feedback", "is_formal_isomorphism_of"),
-                {
-                    (
-                        edge.source,
-                        edge.target,
-                        edge.type.value if hasattr(edge.type, "value") else edge.type,
-                    )
-                    for edge in updated.edges
-                },
+                edge_keys,
             )
+            self.assertIn(("cand_orthogonal_apply", "existing_parent", "orthogonal_to"), edge_keys)
 
     def test_structural_morphism_evals_and_verifier_gate(self):
         self.assertTrue(build_structural_extraction_audit_payload(eval_id="unit_struct_extract")["pass"])

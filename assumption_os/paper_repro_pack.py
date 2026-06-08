@@ -37,6 +37,7 @@ DEFAULT_ARTIFACTS = [
     PAPER_DIR / "meta_qa_evolution_llm_reader60_gpt54mini_20260607.json",
     PAPER_DIR / "structural_context_edges_20260607.json",
     PAPER_DIR / "assumption_family_discovery_20260607.json",
+    PAPER_DIR / "novelty_integration_gate_20260604.json",
     PAPER_DIR / "morphism_claim_bundle_20260605.json",
     PAPER_DIR / "paper_negative_results_20260605.json",
     PAPER_DIR / "paper_benchmark_line_20260604.json",
@@ -243,6 +244,10 @@ def _exact_commands() -> list[dict[str, str]]:
         {
             "name": "assumption_family_discovery",
             "command": "python3 -m assumption_os.assumption_family_discovery --out 'phase four/assumption_graph/paper_readiness_20260604/assumption_family_discovery_20260607.json'",
+        },
+        {
+            "name": "novelty_integration_gate",
+            "command": "python3 -m assumption_os.novelty_integration --performance-validation --eval-id novelty_integration_gate_20260604 --out 'phase four/assumption_graph/paper_readiness_20260604/novelty_integration_gate_20260604.json'",
         },
         {
             "name": "morphism_claim_bundle",

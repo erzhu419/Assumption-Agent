@@ -301,6 +301,7 @@ class SimpleAssumptionGraph:
             EdgeType.GENERATED_FROM_RESIDUAL,
             EdgeType.DERIVED_FROM,
             EdgeType.REPLACES,
+            EdgeType.ORTHOGONAL_TO,
         }
         for edge in self.store.edges:
             if edge.type in productive_edges:

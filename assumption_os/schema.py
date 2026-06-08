@@ -62,6 +62,7 @@ class EdgeType(str, Enum):
     GENERALIZES = "generalizes"
     IS_ANALOGY_OF = "is_analogy_of"
     IS_FORMAL_ISOMORPHISM_OF = "is_formal_isomorphism_of"
+    ORTHOGONAL_TO = "orthogonal_to"
     USES_EVALUATOR = "uses_evaluator"
     GENERATED_FROM_RESIDUAL = "generated_from_residual"
     FAILED_BECAUSE = "failed_because"

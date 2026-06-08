@@ -38,6 +38,7 @@ class NoveltyClass(str, Enum):
     SPECIALIZATION = "specialization"
     FORMAL_ISOMORPHISM = "formal_isomorphism"
     ANALOGY = "analogy"
+    ORTHOGONAL_NEW_FAMILY = "orthogonal_new_family"
     GENUINELY_NEW_FAMILY = "genuinely_new_family"
     MANIFEST_ONLY = "manifest_only"
 
@@ -47,6 +48,7 @@ class IntegrationAction(str, Enum):
     ATTACH_SPECIALIZES_EDGE = "attach_specializes_edge"
     ATTACH_FORMAL_ISOMORPHISM_EDGE = "attach_formal_isomorphism_edge"
     ATTACH_ANALOGY_EDGE = "attach_analogy_edge"
+    CREATE_ORTHOGONAL_FAMILY = "create_orthogonal_family"
     CREATE_NEW_FAMILY = "create_new_family"
     MANIFEST_ONLY = "manifest_only"
 
@@ -73,6 +75,7 @@ def build_novelty_integration_payload(
     duplicate_threshold: float = 0.92,
     specialization_threshold: float = 0.62,
     analogy_threshold: float = 0.50,
+    orthogonal_similarity_ceiling: float = 0.28,
 ) -> dict:
     """Classify every candidate proposal and recommend graph integration edges."""
 
@@ -83,6 +86,7 @@ def build_novelty_integration_payload(
             duplicate_threshold=duplicate_threshold,
             specialization_threshold=specialization_threshold,
             analogy_threshold=analogy_threshold,
+            orthogonal_similarity_ceiling=orthogonal_similarity_ceiling,
         )
         for proposal in proposal_payload.get("proposals", [])
     ]
@@ -137,6 +141,7 @@ def build_novelty_integration_performance_payload(*, eval_id: str | None = None)
         NoveltyClass.SPECIALIZATION.value,
         NoveltyClass.FORMAL_ISOMORPHISM.value,
         NoveltyClass.ANALOGY.value,
+        NoveltyClass.ORTHOGONAL_NEW_FAMILY.value,
         NoveltyClass.GENUINELY_NEW_FAMILY.value,
     }
     observed_classes = {row["classification"] for row in payload["rows"]}
@@ -152,6 +157,15 @@ def build_novelty_integration_performance_payload(*, eval_id: str | None = None)
             EdgeType.IS_ANALOGY_OF.value,
             0,
         ) >= 1,
+        "orthogonal_edges_recommended": payload["recommended_edge_counts"].get(
+            EdgeType.ORTHOGONAL_TO.value,
+            0,
+        ) >= 1,
+        "orthogonal_rows_are_new_families": all(
+            row["is_new_family"] and row["integration_edges"]
+            for row in payload["rows"]
+            if row["classification"] == NoveltyClass.ORTHOGONAL_NEW_FAMILY.value
+        ),
     }
     payload.update({
         "performance_validation": True,
@@ -171,6 +185,7 @@ def _classify_proposal(
     duplicate_threshold: float,
     specialization_threshold: float,
     analogy_threshold: float,
+    orthogonal_similarity_ceiling: float,
 ) -> dict:
     candidate = _candidate_node(proposal)
     if candidate is None:
@@ -278,6 +293,28 @@ def _classify_proposal(
             edge_type=EdgeType.IS_ANALOGY_OF,
             rationale="Candidate is not the same family, but shares enough relation structure to retain an analogy edge.",
         )
+    orthogonal = _orthogonal_match(
+        candidate,
+        store,
+        proposal,
+        lexical,
+        parent_id=parent_id,
+        similarity_ceiling=orthogonal_similarity_ceiling,
+    )
+    if orthogonal:
+        return _row(
+            proposal,
+            candidate,
+            NoveltyClass.ORTHOGONAL_NEW_FAMILY,
+            IntegrationAction.CREATE_ORTHOGONAL_FAMILY,
+            existing_node_id=orthogonal.node_id,
+            match=orthogonal,
+            edge_type=EdgeType.ORTHOGONAL_TO,
+            rationale=(
+                "Candidate is grounded in the same residual/parent but remains low-overlap with existing "
+                "families, so retain it as an orthogonal new-family alternative."
+            ),
+        )
     if structural_transfer_like and parent_id in store.nodes:
         return _row(
             proposal,
@@ -329,6 +366,7 @@ def _row(
             NoveltyClass.FORMAL_ISOMORPHISM: 0.92,
             NoveltyClass.SPECIALIZATION: 0.78,
             NoveltyClass.ANALOGY: 0.70,
+            NoveltyClass.ORTHOGONAL_NEW_FAMILY: 0.42,
             NoveltyClass.GENUINELY_NEW_FAMILY: 0.35,
         }.get(classification, 0.5)
         integration_edges.append(AssumptionEdge(
@@ -350,7 +388,10 @@ def _row(
         "candidate_node_id": candidate.id if candidate else None,
         "classification": classification.value,
         "recommended_action": action.value,
-        "is_new_family": classification == NoveltyClass.GENUINELY_NEW_FAMILY,
+        "is_new_family": classification in {
+            NoveltyClass.GENUINELY_NEW_FAMILY,
+            NoveltyClass.ORTHOGONAL_NEW_FAMILY,
+        },
         "existing_node_id": existing_node_id,
         "match_score": round(match.score, 6),
         "match_basis": match.basis,
@@ -430,6 +471,50 @@ def _best_lexical_match(candidate: AssumptionNode, store: JsonlGraphStore) -> Si
         if score > best.score:
             best = SimilarityMatch(node.id, score, "lexical_cosine")
     return best
+
+
+def _orthogonal_match(
+    candidate: AssumptionNode,
+    store: JsonlGraphStore,
+    proposal: dict,
+    lexical: SimilarityMatch,
+    *,
+    parent_id: str,
+    similarity_ceiling: float,
+) -> SimilarityMatch | None:
+    if not parent_id or parent_id not in store.nodes:
+        return None
+    proposal_type = str(proposal.get("proposal_type") or "").lower()
+    edge_types = _proposal_edge_types(proposal)
+    residual_grounded = (
+        EdgeType.GENERATED_FROM_RESIDUAL.value in edge_types
+        or "failure_hypothesis" in proposal_type
+        or "discovery" in proposal_type
+        or "orthogonal" in proposal_type
+        or bool(candidate.residual_ids)
+    )
+    declared_orthogonal = (
+        "orthogonal" in proposal_type
+        or bool((candidate.payload or {}).get("orthogonal_to_existing"))
+        or "orthogonal" in {tag.lower() for tag in candidate.tags}
+    )
+    if not residual_grounded:
+        return None
+    parent = store.nodes[parent_id]
+    cand_tokens = tokenize(_node_text(candidate))
+    parent_similarity = cosine_counter(cand_tokens, tokenize(_node_text(parent)))
+    max_similarity = max(float(lexical.score), float(parent_similarity))
+    ceiling = 0.42 if declared_orthogonal else similarity_ceiling
+    if max_similarity > ceiling:
+        return None
+    orthogonality_score = max(0.0, 1.0 - max_similarity)
+    if orthogonality_score < 0.58:
+        return None
+    return SimilarityMatch(
+        parent_id,
+        orthogonality_score,
+        "orthogonality_low_overlap_with_residual_parent",
+    )
 
 
 def _formal_match(candidate: AssumptionNode, store: JsonlGraphStore) -> SimilarityMatch | None:
@@ -664,6 +749,18 @@ def _build_fixture_proposals() -> tuple[dict, dict[str, str]]:
         tags=["cryogenic", "sensor", "maintenance", "candidate"],
         status="candidate",
     )
+    orthogonal = AssumptionNode(
+        id="cand_orthogonal_family",
+        type=AssumptionType.EVALUATOR,
+        kind=HypothesisKind.EVALUATOR_POLICY,
+        claim=(
+            "Before changing the task strategy, estimate whether stale judge feedback is the hidden cause by "
+            "tracking evaluator disagreement drift across recent failed trials."
+        ),
+        tags=["evaluator", "feedback", "orthogonal", "candidate"],
+        status="candidate",
+        payload={"orthogonal_to_existing": True},
+    )
     payload = {
         "eval_id": "novelty_fixture_source",
         "proposals": [
@@ -702,6 +799,17 @@ def _build_fixture_proposals() -> tuple[dict, dict[str, str]]:
                 "parent_node_id": "",
                 "candidate_node": new_family.to_dict(),
             },
+            {
+                "proposal_id": "prop_orthogonal_family",
+                "proposal_type": "orthogonal_failure_hypothesis",
+                "parent_node_id": "strategy_controlled_parent",
+                "candidate_node": orthogonal.to_dict(),
+                "edges": [{
+                    "source": "cand_orthogonal_family",
+                    "target": "strategy_controlled_parent",
+                    "type": EdgeType.GENERATED_FROM_RESIDUAL.value,
+                }],
+            },
         ],
     }
     labels = {
@@ -710,6 +818,7 @@ def _build_fixture_proposals() -> tuple[dict, dict[str, str]]:
         "prop_formal_iso": NoveltyClass.FORMAL_ISOMORPHISM.value,
         "prop_analogy": NoveltyClass.ANALOGY.value,
         "prop_new_family": NoveltyClass.GENUINELY_NEW_FAMILY.value,
+        "prop_orthogonal_family": NoveltyClass.ORTHOGONAL_NEW_FAMILY.value,
     }
     return payload, labels
 

@@ -1,19 +1,21 @@
 {
   "eval_id": "novelty_integration_gate_20260604",
   "source_eval_id": "novelty_fixture_source",
-  "proposal_count": 5,
-  "classified_count": 5,
+  "proposal_count": 6,
+  "classified_count": 6,
   "classification_counts": {
     "duplicate": 1,
     "specialization": 1,
     "formal_isomorphism": 1,
     "analogy": 1,
-    "genuinely_new_family": 1
+    "genuinely_new_family": 1,
+    "orthogonal_new_family": 1
   },
   "recommended_edge_counts": {
     "specializes": 1,
     "is_formal_isomorphism_of": 1,
-    "is_analogy_of": 1
+    "is_analogy_of": 1,
+    "orthogonal_to": 1
   },
   "pass": true,
   "rows": [
@@ -65,7 +67,7 @@
             "match_basis": "proposal_parent_edge",
             "match_score": 0.409378
           },
-          "created_at": "2026-06-04T02:43:24Z"
+          "created_at": "2026-06-08T00:19:28Z"
         }
       ],
       "rationale": "Proposal explicitly points to a parent assumption and should remain under that family."
@@ -99,7 +101,7 @@
             "match_basis": "structural_morphism_functor_gate",
             "match_score": 0.87
           },
-          "created_at": "2026-06-04T02:43:24Z"
+          "created_at": "2026-06-08T00:19:28Z"
         }
       ],
       "rationale": "Structural candidate preserved the finite diagram/functor checks of an existing pattern."
@@ -133,7 +135,7 @@
             "match_basis": "explicit_structural_transfer_parent",
             "match_score": 0.240008
           },
-          "created_at": "2026-06-04T02:43:24Z"
+          "created_at": "2026-06-08T00:19:28Z"
         }
       ],
       "rationale": "Proposal explicitly declares a structural transfer; retain it as an analogy unless formal preservation proves isomorphism."
@@ -156,6 +158,40 @@
       },
       "integration_edges": [],
       "rationale": "No duplicate, specialization, or structural analogy cleared the thresholds; keep as a new family."
+    },
+    {
+      "proposal_id": "prop_orthogonal_family",
+      "proposal_type": "orthogonal_failure_hypothesis",
+      "parent_node_id": "strategy_controlled_parent",
+      "candidate_node_id": "cand_orthogonal_family",
+      "classification": "orthogonal_new_family",
+      "recommended_action": "create_orthogonal_family",
+      "is_new_family": true,
+      "existing_node_id": "strategy_controlled_parent",
+      "match_score": 0.921311,
+      "match_basis": "orthogonality_low_overlap_with_residual_parent",
+      "match": {
+        "node_id": "strategy_controlled_parent",
+        "score": 0.921311,
+        "basis": "orthogonality_low_overlap_with_residual_parent"
+      },
+      "integration_edges": [
+        {
+          "source": "cand_orthogonal_family",
+          "target": "strategy_controlled_parent",
+          "type": "orthogonal_to",
+          "weight": 0.42,
+          "evidence": null,
+          "payload": {
+            "source": "novelty_integration_gate",
+            "classification": "orthogonal_new_family",
+            "match_basis": "orthogonality_low_overlap_with_residual_parent",
+            "match_score": 0.921311
+          },
+          "created_at": "2026-06-08T00:19:28Z"
+        }
+      ],
+      "rationale": "Candidate is grounded in the same residual/parent but remains low-overlap with existing families, so retain it as an orthogonal new-family alternative."
     }
   ],
   "performance_validation": true,
@@ -164,7 +200,8 @@
     "prop_specialization": "specialization",
     "prop_formal_iso": "formal_isomorphism",
     "prop_analogy": "analogy",
-    "prop_new_family": "genuinely_new_family"
+    "prop_new_family": "genuinely_new_family",
+    "prop_orthogonal_family": "orthogonal_new_family"
   },
   "gold_accuracy": 1.0,
   "judgments": [
@@ -207,6 +244,14 @@
       "passed": true,
       "match_basis": "lexical_cosine",
       "recommended_action": "create_new_family"
+    },
+    {
+      "proposal_id": "prop_orthogonal_family",
+      "expected": "orthogonal_new_family",
+      "observed": "orthogonal_new_family",
+      "passed": true,
+      "match_basis": "orthogonality_low_overlap_with_residual_parent",
+      "recommended_action": "create_orthogonal_family"
     }
   ],
   "gates": {
@@ -214,6 +259,8 @@
     "gold_accuracy": 1.0,
     "required_classes_present": true,
     "formal_edges_recommended": true,
-    "analogy_edges_recommended": true
+    "analogy_edges_recommended": true,
+    "orthogonal_edges_recommended": true,
+    "orthogonal_rows_are_new_families": true
   }
 }
