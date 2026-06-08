@@ -85,3 +85,24 @@ acceptance gate.
 
 The accepted improvement is not "more checklist"; it is a stricter assumption:
 preserve the problem's hard constraints before adding execution commitments.
+
+## Live Readback
+
+The accepted v2 judgment was also fed back through the bounded daemon without
+rerunning the model:
+
+- input judgment: `proposal_d7abf65010d2` vs
+  `phase2_v20_claude_opus_execution_baseline`
+- recomputed acceptance: accept
+- daemon readback accept count: 1
+- readback apply count: 0
+- node mutation without apply: false
+- gated temp apply count: 1
+- applied candidate status: active
+- applied edge type: specializes
+- retained graph snapshot mutated: false
+
+This closes the operational loop for this descendant:
+
+real live judgment -> acceptance gate -> recursive daemon readback -> gated temp
+apply.

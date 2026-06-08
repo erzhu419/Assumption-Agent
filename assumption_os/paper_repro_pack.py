@@ -64,6 +64,7 @@ DEFAULT_ARTIFACTS = [
     PAPER_DIR / "orthogonal_descendant_live_same_model_20260608.json",
     PAPER_DIR / "orthogonal_descendant_live_acceptance_20260608.json",
     PAPER_DIR / "orthogonal_descendant_live_repair_summary_20260608.json",
+    PAPER_DIR / "orthogonal_descendant_live_readback_20260608.json",
     PAPER_DIR / "orthogonal_descendant_live_graph_20260608/nodes.jsonl",
     PAPER_DIR / "orthogonal_descendant_live_graph_20260608/edges.jsonl",
     PAPER_DIR / "orthogonal_descendant_live_graph_20260608/evidence.jsonl",
@@ -105,6 +106,7 @@ DEFAULT_CODE_FILES = [
     Path("assumption_os/orthogonal_recursive_ablation.py"),
     Path("assumption_os/orthogonal_descendant_productivity.py"),
     Path("assumption_os/orthogonal_descendant_live_queue.py"),
+    Path("assumption_os/orthogonal_descendant_live_readback.py"),
     Path("assumption_os/morphism_claims.py"),
     Path("assumption_os/paper_negative_results.py"),
     Path("assumption_os/paper_repro_pack.py"),
@@ -346,6 +348,10 @@ def _exact_commands() -> list[dict[str, str]]:
         {
             "name": "orthogonal_descendant_same_model_live_optional",
             "command": "LLM_PROVIDER=gpt GPT5_API_KEY=<set-in-env> GPT5_BASE_URL=<set-in-env> GPT5_MODEL=claude-opus-4-8 RUOLI_CLAUDE_KEY=<set-in-env> CLAUDE_BASE_URL=<set-in-env> CLAUDE_OPUS_MODEL=claude-opus-4-8 python3 -m assumption_os.orthogonal_live_ablation --root . --queue 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_descendant_live_queue_20260608.json' --eval-id orthogonal_descendant_live_same_model_20260608 --execute-answers --run-judge --judge-model claude_opus --baseline-variant phase2_v20_claude_opus_execution_baseline --route-scoped-noop-controls --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_descendant_live_same_model_20260608.json'",
+        },
+        {
+            "name": "orthogonal_descendant_live_readback",
+            "command": "python3 -m assumption_os.orthogonal_descendant_live_readback --root . --eval-id orthogonal_descendant_live_readback_20260608 --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_descendant_live_readback_20260608.json'",
         },
         {
             "name": "morphism_claim_bundle",

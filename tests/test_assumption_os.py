@@ -66,6 +66,7 @@ from assumption_os.novelty_integration import (
 from assumption_os.objective_bench import build_objective_benchmark_payload
 from assumption_os.orthogonal_ablation import build_orthogonal_ablation_payload
 from assumption_os.orthogonal_descendant_live_queue import build_orthogonal_descendant_live_queue_payload
+from assumption_os.orthogonal_descendant_live_readback import build_orthogonal_descendant_live_readback_payload
 from assumption_os.orthogonal_descendant_productivity import build_orthogonal_descendant_productivity_payload
 from assumption_os.orthogonal_downstream_ablation import build_orthogonal_downstream_ablation_payload
 from assumption_os.orthogonal_execution_queue import build_orthogonal_execution_queue_payload
@@ -4406,6 +4407,25 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertIn("<set-in-env>", commands_text)
         self.assertNotIn("sk-", commands_text)
         self.assertNotIn("newapi_channel_conn", commands_text)
+
+    def test_orthogonal_descendant_live_readback_applies_real_accepted_judgment(self):
+        payload = build_orthogonal_descendant_live_readback_payload(
+            root=Path("."),
+            eval_id="unit_orthogonal_descendant_live_readback",
+        )
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        metrics = payload["metrics"]
+        self.assertEqual(metrics["live_status"], "live_positive_acceptance")
+        self.assertEqual(metrics["acceptance_decision_counts"], {"accept": 1})
+        self.assertEqual(metrics["readback_accept_count"], 1)
+        self.assertEqual(metrics["readback_applied_count"], 0)
+        self.assertEqual(metrics["apply_accept_count"], 1)
+        self.assertEqual(metrics["apply_applied_count"], 1)
+        self.assertFalse(metrics["node_mutation_without_apply"])
+        self.assertTrue(metrics["candidate_node_present_after_apply"])
+        self.assertEqual(metrics["candidate_status_after_apply"], "active")
+        self.assertGreaterEqual(metrics["candidate_edge_counts_after_apply"].get("specializes", 0), 1)
+        self.assertFalse(metrics["original_retained_graph_has_candidate"])
 
     def test_proposal_overlay_is_in_memory_only(self):
         with tempfile.TemporaryDirectory() as td:
