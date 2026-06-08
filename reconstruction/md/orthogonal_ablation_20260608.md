@@ -210,3 +210,32 @@ negative boundary:
 This shows the intended recursive behavior: do not promote an over-broad
 orthogonal hypothesis; read the residual, repair the activation scope, rerun
 fresh ablation, and only retain the scoped hypothesis after acceptance.
+
+## Recursive ON/OFF Retention Ablation
+
+Follow-up artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_recursive_ablation_20260608.json`
+
+The scoped live-positive execution-contract hypothesis was then replayed through
+the recursive runner with orthogonal novelty toggled ON/OFF.  The downstream
+judgment evidence was held constant, so this is not an answer-quality retest; it
+is a recursive retention test.
+
+Result:
+
+- live acceptance reused: 3 wins, 2 ties, 0 losses on trigger rows; 8 no-op
+  control ties;
+- orthogonal ON: classified as `orthogonal_new_family`, temp apply wrote
+  `orthogonal_to`;
+- orthogonal OFF: classified as `specialization`, temp apply wrote
+  `specializes` and no `orthogonal_to`;
+- downstream utility delta: 0.0;
+- recursive retention delta: +2.25;
+- main graph mutation delta: 0;
+- pass: true.
+
+This answers the narrower ON/OFF question: the gate's immediate benefit is not
+that it improves the same accepted answer again, but that it keeps the accepted
+hypothesis as a separate execution-harness family for future descendants rather
+than folding it into the old parent strategy.

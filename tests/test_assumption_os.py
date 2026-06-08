@@ -70,6 +70,7 @@ from assumption_os.orthogonal_execution_queue import build_orthogonal_execution_
 from assumption_os.orthogonal_multi_cluster import build_orthogonal_multi_cluster_payload
 from assumption_os.orthogonal_positive_queue import build_orthogonal_positive_queue_payload
 from assumption_os.orthogonal_positive_readback import build_orthogonal_positive_readback_payload
+from assumption_os.orthogonal_recursive_ablation import build_orthogonal_recursive_ablation_payload
 from assumption_os.orthogonal_surface_ablation import build_orthogonal_surface_ablation_payload
 from assumption_os.paper_baseline_hardening import build_paper_baseline_hardening_payload
 from assumption_os.paper_benchmark_line import build_paper_benchmark_line_payload
@@ -4323,6 +4324,27 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertIn("<set-in-env>", commands_text)
         self.assertNotIn("sk-", commands_text)
         self.assertNotIn("newapi_channel_conn", commands_text)
+
+    def test_orthogonal_recursive_ablation_keeps_live_positive_axis_separate(self):
+        payload = build_orthogonal_recursive_ablation_payload(
+            root=Path("."),
+            eval_id="unit_orthogonal_recursive_ablation",
+        )
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(payload["live_acceptance"]["decision_counts"], {"accept": 1})
+        self.assertEqual(payload["live_outcome_metrics"]["trigger_outcomes"], {"win": 3, "tie": 2})
+        self.assertEqual(payload["live_outcome_metrics"]["control_outcomes"], {"tie": 8})
+        on = payload["conditions"]["orthogonal_on"]
+        off = payload["conditions"]["orthogonal_off"]
+        self.assertEqual(on["novelty_classification"], "orthogonal_new_family")
+        self.assertNotEqual(off["novelty_classification"], "orthogonal_new_family")
+        self.assertGreaterEqual(on["applied_graph"]["orthogonal_to_edge_count"], 1)
+        self.assertEqual(off["applied_graph"]["orthogonal_to_edge_count"], 0)
+        self.assertEqual(off["applied_graph"]["specializes_edge_count"], 1)
+        self.assertGreater(payload["comparison"]["recursive_retention_delta"], 0.0)
+        self.assertEqual(payload["comparison"]["downstream_utility_delta"], 0.0)
+        self.assertTrue(on["daemon"]["resumed"])
+        self.assertTrue(off["daemon"]["resumed"])
 
     def test_proposal_overlay_is_in_memory_only(self):
         with tempfile.TemporaryDirectory() as td:
