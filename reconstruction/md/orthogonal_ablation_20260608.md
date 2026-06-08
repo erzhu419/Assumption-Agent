@@ -126,3 +126,24 @@ candidate and route it into fresh ablation.  It still does not claim a live
 downstream answer-quality win; that requires running the emitted answer and
 pairwise-judgment commands with API credentials supplied through environment
 variables.
+
+## Daemon Readback Bridge
+
+Follow-up artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_positive_readback_20260608.json`
+
+The positive queue now connects to the bounded recursive daemon path:
+
+- daemon dry-run consumes one ready leaf;
+- dry-run records planned execution without node mutation;
+- fixture judgments in the same `candidate_acceptance` format produce one
+  accepted proposal and resume the recursive parent;
+- gated apply on a temporary graph writes the candidate node and its
+  `orthogonal_to` edge;
+- main graph remains untouched unless a later real acceptance payload is applied
+  through the existing gate.
+
+This removes the engineering gap after live judgments are produced. The only
+remaining empirical gap for this positive arm is the live answer-quality
+judgment itself.

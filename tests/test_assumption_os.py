@@ -67,6 +67,7 @@ from assumption_os.objective_bench import build_objective_benchmark_payload
 from assumption_os.orthogonal_ablation import build_orthogonal_ablation_payload
 from assumption_os.orthogonal_downstream_ablation import build_orthogonal_downstream_ablation_payload
 from assumption_os.orthogonal_positive_queue import build_orthogonal_positive_queue_payload
+from assumption_os.orthogonal_positive_readback import build_orthogonal_positive_readback_payload
 from assumption_os.orthogonal_surface_ablation import build_orthogonal_surface_ablation_payload
 from assumption_os.paper_baseline_hardening import build_paper_baseline_hardening_payload
 from assumption_os.paper_benchmark_line import build_paper_benchmark_line_payload
@@ -4111,6 +4112,28 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertIn("<set-in-env>", commands_text)
         self.assertNotIn("sk-", commands_text)
         self.assertNotIn("newapi_channel_conn", commands_text)
+
+    def test_orthogonal_positive_readback_bridges_queue_to_daemon_apply(self):
+        payload = build_orthogonal_positive_readback_payload(
+            root=Path("."),
+            eval_id="unit_orthogonal_positive_readback",
+        )
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(payload["status"], "readback_bridge_pass_live_judgment_pending")
+        metrics = payload["metrics"]
+        self.assertEqual(metrics["ready_queue_count"], 1)
+        self.assertEqual(metrics["dry_planned_leaf_count"], 1)
+        self.assertEqual(metrics["dry_executable_leaf_count"], 1)
+        self.assertEqual(metrics["dry_status_counts"], {"planned": 1})
+        self.assertEqual(metrics["readback_accept_count"], 1)
+        self.assertTrue(metrics["readback_resumed"])
+        self.assertEqual(metrics["readback_applied_count"], 0)
+        self.assertFalse(metrics["node_mutation_without_apply"])
+        self.assertEqual(metrics["apply_accept_count"], 1)
+        self.assertTrue(metrics["apply_resumed"])
+        self.assertEqual(metrics["apply_applied_count"], 1)
+        self.assertTrue(metrics["candidate_node_present_after_apply"])
+        self.assertGreaterEqual(metrics["orthogonal_edge_count_after_apply"], 1)
 
     def test_proposal_overlay_is_in_memory_only(self):
         with tempfile.TemporaryDirectory() as td:

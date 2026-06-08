@@ -132,3 +132,16 @@ Validation:
 The remaining step is live answer-quality judging.  The code does not mutate the
 graph from this queue unless later judgments pass the existing gated acceptance
 path.
+
+Fifth follow-up artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_positive_readback_20260608.json`
+
+The queued positive candidate now also passes the daemon/readback bridge.  A
+bounded daemon dry-run consumes the leaf, fixture judgments in the same format
+as real pairwise judge output resume the parent frame, and a gated apply on a
+temporary graph writes both the candidate node and `orthogonal_to` edge.
+
+This closes the operational path around the positive candidate.  The honest
+remaining claim boundary is empirical: run the queued live answer and judge
+commands, then let the same readback path accept/reject from real judgments.
