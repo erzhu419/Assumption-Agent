@@ -58,6 +58,16 @@ DEFAULT_ARTIFACTS = [
     PAPER_DIR / "orthogonal_execution_scope_repair_live_same_model_20260608.json",
     PAPER_DIR / "orthogonal_recursive_ablation_20260608.json",
     PAPER_DIR / "orthogonal_descendant_productivity_20260608.json",
+    PAPER_DIR / "orthogonal_descendant_live_queue_20260608.json",
+    PAPER_DIR / "orthogonal_descendant_live_queue_proposals_20260608.json",
+    PAPER_DIR / "orthogonal_descendant_live_queue_preflight_20260608.json",
+    PAPER_DIR / "orthogonal_descendant_live_same_model_20260608.json",
+    PAPER_DIR / "orthogonal_descendant_live_acceptance_20260608.json",
+    PAPER_DIR / "orthogonal_descendant_live_repair_summary_20260608.json",
+    PAPER_DIR / "orthogonal_descendant_live_graph_20260608/nodes.jsonl",
+    PAPER_DIR / "orthogonal_descendant_live_graph_20260608/edges.jsonl",
+    PAPER_DIR / "orthogonal_descendant_live_graph_20260608/evidence.jsonl",
+    PAPER_DIR / "orthogonal_descendant_live_graph_20260608/trials.jsonl",
     PAPER_DIR / "morphism_claim_bundle_20260605.json",
     PAPER_DIR / "paper_negative_results_20260605.json",
     PAPER_DIR / "paper_benchmark_line_20260604.json",
@@ -72,6 +82,7 @@ DEFAULT_ARTIFACTS = [
         "phase four/assumption_graph/structural_live_ablation_20260603/"
         "structural_live_natural_repaired_residual_signal_incremental100_v1_gpt54mini_gpt55_20260603_summary.json"
     ),
+    Path("reconstruction/md/orthogonal_descendant_live_repair_20260608.md"),
 ]
 
 DEFAULT_CODE_FILES = [
@@ -93,6 +104,7 @@ DEFAULT_CODE_FILES = [
     Path("assumption_os/orthogonal_live_ablation.py"),
     Path("assumption_os/orthogonal_recursive_ablation.py"),
     Path("assumption_os/orthogonal_descendant_productivity.py"),
+    Path("assumption_os/orthogonal_descendant_live_queue.py"),
     Path("assumption_os/morphism_claims.py"),
     Path("assumption_os/paper_negative_results.py"),
     Path("assumption_os/paper_repro_pack.py"),
@@ -326,6 +338,14 @@ def _exact_commands() -> list[dict[str, str]]:
         {
             "name": "orthogonal_descendant_productivity",
             "command": "python3 -m assumption_os.orthogonal_descendant_productivity --root . --eval-id orthogonal_descendant_productivity_20260608 --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_descendant_productivity_20260608.json'",
+        },
+        {
+            "name": "orthogonal_descendant_live_queue",
+            "command": "python3 -m assumption_os.orthogonal_descendant_live_queue --root . --eval-id orthogonal_descendant_live_queue_20260608 --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_descendant_live_queue_20260608.json' --proposals-out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_descendant_live_queue_proposals_20260608.json' --preflight-out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_descendant_live_queue_preflight_20260608.json' --retained-graph-dir 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_descendant_live_graph_20260608'",
+        },
+        {
+            "name": "orthogonal_descendant_same_model_live_optional",
+            "command": "LLM_PROVIDER=gpt GPT5_API_KEY=<set-in-env> GPT5_BASE_URL=<set-in-env> GPT5_MODEL=claude-opus-4-8 RUOLI_CLAUDE_KEY=<set-in-env> CLAUDE_BASE_URL=<set-in-env> CLAUDE_OPUS_MODEL=claude-opus-4-8 python3 -m assumption_os.orthogonal_live_ablation --root . --queue 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_descendant_live_queue_20260608.json' --eval-id orthogonal_descendant_live_same_model_20260608 --execute-answers --run-judge --judge-model claude_opus --baseline-variant phase2_v20_claude_opus_execution_baseline --route-scoped-noop-controls --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_descendant_live_same_model_20260608.json'",
         },
         {
             "name": "morphism_claim_bundle",

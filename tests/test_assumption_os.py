@@ -65,6 +65,7 @@ from assumption_os.novelty_integration import (
 )
 from assumption_os.objective_bench import build_objective_benchmark_payload
 from assumption_os.orthogonal_ablation import build_orthogonal_ablation_payload
+from assumption_os.orthogonal_descendant_live_queue import build_orthogonal_descendant_live_queue_payload
 from assumption_os.orthogonal_descendant_productivity import build_orthogonal_descendant_productivity_payload
 from assumption_os.orthogonal_downstream_ablation import build_orthogonal_downstream_ablation_payload
 from assumption_os.orthogonal_execution_queue import build_orthogonal_execution_queue_payload
@@ -4370,6 +4371,41 @@ class AssumptionOSTest(unittest.TestCase):
             off["metrics"]["old_parent_descendant_labels"],
             on["metrics"]["old_parent_descendant_labels"],
         )
+
+    def test_orthogonal_descendant_live_queue_exports_retained_graph_specialization(self):
+        with tempfile.TemporaryDirectory() as td:
+            work = Path(td)
+            payload = build_orthogonal_descendant_live_queue_payload(
+                root=Path("."),
+                eval_id="unit_orthogonal_descendant_live_queue",
+                retained_graph_dir=work / "retained_graph",
+                proposals_out=work / "descendant_proposals.json",
+                preflight_out=work / "descendant_preflight.json",
+            )
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertIn(payload["status"], {"live_ready", "live_ready_env_missing"})
+        retained = payload["source"]["retained_graph_snapshot"]
+        self.assertFalse(retained["main_graph_mutated"])
+        self.assertEqual(retained["seed_candidate_node_id"], "cand_39de0aeae8a3")
+        self.assertGreaterEqual(retained["seed_edge_counts"].get("orthogonal_to", 0), 1)
+        self.assertEqual(payload["novelty_summary"]["classification_counts"], {"specialization": 1})
+        self.assertEqual(payload["novelty_summary"]["recommended_edge_counts"], {"specializes": 1})
+        metrics = payload["metrics"]
+        self.assertEqual(metrics["proposal_count"], 1)
+        self.assertEqual(metrics["preflight_ready_count"], 1)
+        self.assertEqual(metrics["trigger_count"], 5)
+        self.assertEqual(metrics["active_trigger_count"], 5)
+        self.assertGreaterEqual(metrics["control_count"], 8)
+        self.assertEqual(metrics["outside_active_count"], 0)
+        self.assertEqual(metrics["readback_accept_count"], 1)
+        self.assertEqual(metrics["readback_applied_count"], 0)
+        self.assertEqual(metrics["apply_accept_count"], 1)
+        self.assertEqual(metrics["apply_applied_count"], 1)
+        self.assertTrue(metrics["candidate_node_present_after_apply"])
+        commands_text = json.dumps(payload["next_commands"], ensure_ascii=False)
+        self.assertIn("<set-in-env>", commands_text)
+        self.assertNotIn("sk-", commands_text)
+        self.assertNotIn("newapi_channel_conn", commands_text)
 
     def test_proposal_overlay_is_in_memory_only(self):
         with tempfile.TemporaryDirectory() as td:

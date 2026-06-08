@@ -588,8 +588,12 @@ def _framework_env() -> dict[str, str]:
     env.setdefault("LLM_PROVIDER", "gpt")
     if not env.get("GPT5_API_KEY") and env.get("RUOLI_GPT_KEY"):
         env["GPT5_API_KEY"] = env["RUOLI_GPT_KEY"]
+    if not env.get("GPT5_API_KEY") and env.get("RUOLI_CLAUDE_KEY"):
+        env["GPT5_API_KEY"] = env["RUOLI_CLAUDE_KEY"]
     if not env.get("GPT5_BASE_URL") and env.get("RUOLI_BASE_URL"):
-        env["GPT5_BASE_URL"] = env["RUOLI_BASE_URL"].rstrip("/") + "/v1"
+        env["GPT5_BASE_URL"] = _base_url_with_v1(env["RUOLI_BASE_URL"])
+    if not env.get("GPT5_BASE_URL") and env.get("CLAUDE_BASE_URL"):
+        env["GPT5_BASE_URL"] = _base_url_with_v1(env["CLAUDE_BASE_URL"])
     env.setdefault("GPT5_MODEL", env.get("GPT_MINI_MODEL", "gpt-5.4-mini"))
     env.setdefault("GPT55_MODEL", "gpt-5.5")
     env.setdefault("OPENAI_TIMEOUT", "180")
@@ -598,8 +602,8 @@ def _framework_env() -> dict[str, str]:
 
 def _env_status() -> dict[str, Any]:
     env = _framework_env()
-    gpt_key_ready = bool(env.get("GPT5_API_KEY") or env.get("RUOLI_GPT_KEY"))
-    gpt_base_ready = bool(env.get("GPT5_BASE_URL") or env.get("RUOLI_BASE_URL"))
+    gpt_key_ready = bool(env.get("GPT5_API_KEY") or env.get("RUOLI_GPT_KEY") or env.get("RUOLI_CLAUDE_KEY"))
+    gpt_base_ready = bool(env.get("GPT5_BASE_URL") or env.get("RUOLI_BASE_URL") or env.get("CLAUDE_BASE_URL"))
     return {
         "gpt_solver_ready": gpt_key_ready and gpt_base_ready,
         "gpt_judge_ready": gpt_key_ready and gpt_base_ready,
@@ -610,14 +614,25 @@ def _env_status() -> dict[str, Any]:
                 "GPT5_BASE_URL",
                 "RUOLI_GPT_KEY",
                 "RUOLI_BASE_URL",
+                "RUOLI_CLAUDE_KEY",
+                "CLAUDE_BASE_URL",
+                "CLAUDE_OPUS_MODEL",
                 "GPT5_MODEL",
                 "GPT_MINI_MODEL",
                 "GPT55_MODEL",
             ]
             if bool(env.get(name))
         ],
-        "required_names": ["GPT5_API_KEY or RUOLI_GPT_KEY", "GPT5_BASE_URL or RUOLI_BASE_URL"],
+        "required_names": [
+            "GPT5_API_KEY or RUOLI_GPT_KEY or RUOLI_CLAUDE_KEY",
+            "GPT5_BASE_URL or RUOLI_BASE_URL or CLAUDE_BASE_URL",
+        ],
     }
+
+
+def _base_url_with_v1(raw: str) -> str:
+    base = raw.rstrip("/")
+    return base if base.endswith("/v1") else f"{base}/v1"
 
 
 def _compact_judgment_results(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
