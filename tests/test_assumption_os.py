@@ -66,6 +66,7 @@ from assumption_os.novelty_integration import (
 from assumption_os.objective_bench import build_objective_benchmark_payload
 from assumption_os.orthogonal_ablation import build_orthogonal_ablation_payload
 from assumption_os.orthogonal_downstream_ablation import build_orthogonal_downstream_ablation_payload
+from assumption_os.orthogonal_positive_queue import build_orthogonal_positive_queue_payload
 from assumption_os.orthogonal_surface_ablation import build_orthogonal_surface_ablation_payload
 from assumption_os.paper_baseline_hardening import build_paper_baseline_hardening_payload
 from assumption_os.paper_benchmark_line import build_paper_benchmark_line_payload
@@ -4083,6 +4084,33 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["enabled_orthogonal_edge_count_all_proposals"], 0)
         self.assertFalse(payload["positive_live_gap"]["available"])
         self.assertEqual(payload["status"], "negative_control_pass_positive_live_pending")
+
+    def test_orthogonal_positive_queue_is_live_ready_without_secret_values(self):
+        payload = build_orthogonal_positive_queue_payload(
+            root=Path("."),
+            eval_id="unit_orthogonal_positive_queue",
+        )
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertIn(payload["status"], {"live_ready", "live_ready_env_missing"})
+        metrics = payload["metrics"]
+        self.assertEqual(metrics["proposal_count"], 1)
+        self.assertEqual(metrics["enabled_orthogonal_count"], 1)
+        self.assertEqual(metrics["disabled_orthogonal_count"], 0)
+        self.assertEqual(metrics["enabled_orthogonal_edge_count"], 1)
+        self.assertEqual(metrics["disabled_orthogonal_edge_count"], 0)
+        self.assertEqual(metrics["preflight_ready_count"], 1)
+        self.assertGreaterEqual(metrics["trigger_count"], 3)
+        self.assertGreaterEqual(metrics["active_trigger_count"], 3)
+        self.assertGreaterEqual(metrics["control_count"], 3)
+        self.assertEqual(metrics["outside_active_count"], 0)
+        self.assertEqual(
+            payload["preflight_summary"]["readiness"],
+            "ready_for_fresh_ablation",
+        )
+        commands_text = json.dumps(payload["next_commands"], ensure_ascii=False)
+        self.assertIn("<set-in-env>", commands_text)
+        self.assertNotIn("sk-", commands_text)
+        self.assertNotIn("newapi_channel_conn", commands_text)
 
     def test_proposal_overlay_is_in_memory_only(self):
         with tempfile.TemporaryDirectory() as td:

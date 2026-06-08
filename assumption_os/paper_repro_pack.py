@@ -41,6 +41,9 @@ DEFAULT_ARTIFACTS = [
     PAPER_DIR / "orthogonal_ablation_20260608.json",
     PAPER_DIR / "orthogonal_surface_ablation_20260608.json",
     PAPER_DIR / "orthogonal_downstream_ablation_20260608.json",
+    PAPER_DIR / "orthogonal_positive_queue_20260608.json",
+    PAPER_DIR / "orthogonal_positive_queue_proposals_20260608.json",
+    PAPER_DIR / "orthogonal_positive_queue_preflight_20260608.json",
     PAPER_DIR / "morphism_claim_bundle_20260605.json",
     PAPER_DIR / "paper_negative_results_20260605.json",
     PAPER_DIR / "paper_benchmark_line_20260604.json",
@@ -69,6 +72,7 @@ DEFAULT_CODE_FILES = [
     Path("assumption_os/orthogonal_ablation.py"),
     Path("assumption_os/orthogonal_surface_ablation.py"),
     Path("assumption_os/orthogonal_downstream_ablation.py"),
+    Path("assumption_os/orthogonal_positive_queue.py"),
     Path("assumption_os/morphism_claims.py"),
     Path("assumption_os/paper_negative_results.py"),
     Path("assumption_os/paper_repro_pack.py"),
@@ -266,6 +270,10 @@ def _exact_commands() -> list[dict[str, str]]:
         {
             "name": "orthogonal_downstream_ablation",
             "command": "python3 -m assumption_os.orthogonal_downstream_ablation --root . --eval-id orthogonal_downstream_ablation_20260608 --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_downstream_ablation_20260608.json'",
+        },
+        {
+            "name": "orthogonal_positive_queue",
+            "command": "python3 -m assumption_os.orthogonal_positive_queue --root . --eval-id orthogonal_positive_queue_20260608 --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_positive_queue_20260608.json' --proposals-out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_positive_queue_proposals_20260608.json' --preflight-out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_positive_queue_preflight_20260608.json'",
         },
         {
             "name": "morphism_claim_bundle",

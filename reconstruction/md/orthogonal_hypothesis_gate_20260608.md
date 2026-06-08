@@ -108,3 +108,27 @@ classification and downstream accept/reject decision under orthogonal ON/OFF.
 So the gate is downstream-safe on the current judged non-orthogonal proposal
 line. The positive live orthogonal-benefit test still requires fresh judgments
 for an actual `orthogonal_new_family` proposal.
+
+Fourth follow-up artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_positive_queue_20260608.json`
+
+The system now builds a positive orthogonal candidate that is ready for live
+fresh ablation.  It uses the real graph parent `strategy_S01`, but proposes a
+different explanatory axis: before editing controlled-variable reasoning, test
+whether the residual is caused by evaluator/rubric drift.  This is exactly the
+intended meaning of orthogonality here: same failure context, different
+mechanism family.
+
+Validation:
+
+- orthogonal ON classification: `orthogonal_new_family`;
+- orthogonal OFF classification: non-new-family specialization;
+- `orthogonal_to` edge count: 1 when enabled, 0 when disabled;
+- preflight readiness: `ready_for_fresh_ablation`;
+- trigger/control split: 4 trigger rows and 8 control rows;
+- secret handling: commands contain only `<set-in-env>` placeholders.
+
+The remaining step is live answer-quality judging.  The code does not mutate the
+graph from this queue unless later judgments pass the existing gated acceptance
+path.

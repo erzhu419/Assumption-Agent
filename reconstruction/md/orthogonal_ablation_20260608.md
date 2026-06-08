@@ -100,3 +100,29 @@ Result:
 This is a downstream safety check, not a positive live orthogonal-benefit check.
 No cached answer/judgment artifact currently exists for a proposal that is
 actually classified as `orthogonal_new_family`; that remains the next live run.
+
+## Positive Live-Ready Queue
+
+Follow-up artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_positive_queue_20260608.json`
+
+The missing positive arm is now queued rather than only described.  The artifact
+constructs a real candidate under `strategy_S01`:
+
+- candidate axis: evaluator/rubric drift rather than controlled-variable method
+  repair;
+- grounding: same residual/parent via `generated_from_residual`;
+- novelty ON: `orthogonal_new_family`, with one `orthogonal_to` edge;
+- novelty OFF: collapses to a non-new-family specialization;
+- preflight: `ready_for_fresh_ablation`;
+- trigger rows: 4;
+- control rows: 8;
+- no no-fire exposure;
+- command hints use environment variable placeholders only.
+
+This validates that the system can produce a positive orthogonal new-family
+candidate and route it into fresh ablation.  It still does not claim a live
+downstream answer-quality win; that requires running the emitted answer and
+pairwise-judgment commands with API credentials supplied through environment
+variables.

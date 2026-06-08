@@ -1,0 +1,105 @@
+{
+  "eval_id": "orthogonal_positive_queue_20260608",
+  "source_eval_id": "orthogonal_positive_queue_builder",
+  "proposal_counts": {
+    "orthogonal_failure_hypothesis": 1
+  },
+  "proposals": [
+    {
+      "proposal_id": "prop_014314830f02",
+      "proposal_type": "orthogonal_failure_hypothesis",
+      "parent_node_id": "strategy_S01",
+      "candidate_node": {
+        "id": "cand_7a605a5fdc68",
+        "type": "evaluator",
+        "claim": "Before repairing the task strategy, test whether cross-judge rubric drift or stale acceptance feedback caused the residual; calibrate the evaluator axis against trigger and placebo controls.",
+        "kind": "evaluator_policy",
+        "formal_form": null,
+        "context_conditions": [
+          "same failure residual as a strategy repair candidate",
+          "answer content looks plausible but acceptance flips across judge/model/rubric variants"
+        ],
+        "predicted_effects": [
+          "avoid promoting strategy edits when the failure is caused by evaluator drift",
+          "improve recursive retention by separating evaluator defects from method defects"
+        ],
+        "risk_predictions": [
+          "may waste ablation budget if the residual is actually a method defect",
+          "may overfit to judge phrasing unless placebo controls pass"
+        ],
+        "verifiers": [
+          "cross_judge_disagreement_probe",
+          "trigger_control_fresh_ablation",
+          "placebo_rubric_stability_check"
+        ],
+        "evidence_ids": [],
+        "residual_ids": [
+          "res_orthogonal_positive_queue_evaluator_drift"
+        ],
+        "confidence": 0.41,
+        "metaproductivity": 0.06,
+        "status": "candidate",
+        "tags": [
+          "candidate",
+          "orthogonal",
+          "rubric_drift",
+          "cross_judge_calibration",
+          "acceptance_noise"
+        ],
+        "source_refs": [
+          "parent:strategy_S01",
+          "orthogonal_positive_queue",
+          "reconstruction/md/orthogonal_hypothesis_gate_20260608.md"
+        ],
+        "payload": {
+          "orthogonal_to_existing": true,
+          "activation": {
+            "problem_ids": [
+              "business_0097",
+              "engineering_0244",
+              "mathematics_0082",
+              "engineering_0120"
+            ],
+            "min_keyword_hits": 1
+          },
+          "proposal_type": "orthogonal_failure_hypothesis",
+          "residual_cluster": "evaluator_drift_vs_strategy_repair",
+          "variation_evaluation_retention": {
+            "variation": "new evaluator-axis hypothesis for the same strategy residual",
+            "evaluation": "novelty ON/OFF gate plus trigger/control fresh-ablation preflight",
+            "selective_retention": "retain only if downstream judged trigger benefit clears controls"
+          }
+        },
+        "created_at": "2026-06-08T05:13:01Z",
+        "updated_at": "2026-06-08T05:13:01Z"
+      },
+      "edges": [
+        {
+          "source": "cand_7a605a5fdc68",
+          "target": "strategy_S01",
+          "type": "generated_from_residual",
+          "weight": 0.52,
+          "evidence": "orthogonal_positive_queue",
+          "payload": {
+            "source": "orthogonal_positive_queue",
+            "reason": "same residual/parent, different explanatory axis"
+          },
+          "created_at": "2026-06-08T05:13:01Z"
+        }
+      ],
+      "manifest": null,
+      "rationale": "The current residual may not be a controlled-variable method defect.  It may be an evaluator/rubric defect, so test that orthogonal explanatory axis before mutating the strategy family.",
+      "priority": 0.72,
+      "source_action": {
+        "action_type": "orthogonal_positive_queue",
+        "parent_node_id": "strategy_S01",
+        "trigger_problem_ids": [
+          "business_0097",
+          "engineering_0244",
+          "mathematics_0082",
+          "engineering_0120"
+        ]
+      }
+    }
+  ]
+}
