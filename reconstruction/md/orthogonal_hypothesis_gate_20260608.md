@@ -32,7 +32,7 @@ This is now implemented in `novelty_integration.py` as `orthogonal_new_family`.
 The rule is intentionally narrow:
 
 - the candidate must be grounded in the same residual, parent, or `generated_from_residual` edge;
-- it must remain low-overlap with the best existing node and with the parent node;
+- it must remain low-overlap with the best existing node and with the parent node under an informative-token similarity check that filters generic stopwords, IDs, and lifecycle metadata;
 - it must not share a substantive family tag, canonical family alias, or formal family key with the parent;
 - it must not already qualify as duplicate, specialization, formal isomorphism, or ordinary analogy;
 - accepted candidates are integrated with an `orthogonal_to` edge and a new-family action;

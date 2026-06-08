@@ -302,7 +302,6 @@ def _classify_proposal(
             candidate,
             store,
             proposal,
-            lexical,
             parent_id=parent_id,
             similarity_ceiling=orthogonal_similarity_ceiling,
         )
@@ -482,7 +481,6 @@ def _orthogonal_match(
     candidate: AssumptionNode,
     store: JsonlGraphStore,
     proposal: dict,
-    lexical: SimilarityMatch,
     *,
     parent_id: str,
     similarity_ceiling: float,
@@ -508,8 +506,8 @@ def _orthogonal_match(
     parent = store.nodes[parent_id]
     if _substantive_shared_tags(candidate, parent) or _formal_family_overlap(candidate, parent):
         return None
-    cand_tokens = tokenize(_node_text(candidate))
-    parent_similarity = cosine_counter(cand_tokens, tokenize(_node_text(parent)))
+    lexical = _best_orthogonal_informative_match(candidate, store)
+    parent_similarity = _orthogonal_informative_similarity(candidate, parent)
     max_similarity = max(float(lexical.score), float(parent_similarity))
     ceiling = 0.42 if declared_orthogonal else similarity_ceiling
     if max_similarity > ceiling:
@@ -520,8 +518,115 @@ def _orthogonal_match(
     return SimilarityMatch(
         parent_id,
         orthogonality_score,
-        "orthogonality_low_overlap_with_residual_parent",
+        "orthogonal_informative_low_overlap",
     )
+
+
+ORTHOGONAL_ENGLISH_STOP_TOKENS = {
+    "a",
+    "an",
+    "and",
+    "any",
+    "are",
+    "as",
+    "at",
+    "be",
+    "before",
+    "by",
+    "can",
+    "candidate",
+    "claim",
+    "context",
+    "effect",
+    "effects",
+    "existing",
+    "failure",
+    "first",
+    "for",
+    "from",
+    "if",
+    "in",
+    "is",
+    "it",
+    "later",
+    "may",
+    "method",
+    "node",
+    "not",
+    "of",
+    "or",
+    "parent",
+    "problem",
+    "proposal",
+    "residual",
+    "risk",
+    "should",
+    "strategy",
+    "system",
+    "test",
+    "that",
+    "the",
+    "this",
+    "to",
+    "when",
+    "whether",
+    "with",
+    "without",
+}
+
+
+ORTHOGONAL_CJK_STOP_CHARS = set(
+    "的一是在和与及或但若把被为对中上下来去时先后更最这那其"
+    "当当前现在如果因为因此需要问题情况进行判断分析解决目标"
+)
+
+
+def _best_orthogonal_informative_match(candidate: AssumptionNode, store: JsonlGraphStore) -> SimilarityMatch:
+    cand_tokens = _orthogonal_informative_tokens(candidate)
+    best = SimilarityMatch(None, 0.0, "orthogonal_informative_cosine")
+    for node in store.nodes.values():
+        if node.id == candidate.id:
+            continue
+        score = cosine_counter(cand_tokens, _orthogonal_informative_tokens(node))
+        if score > best.score:
+            best = SimilarityMatch(node.id, score, "orthogonal_informative_cosine")
+    return best
+
+
+def _orthogonal_informative_similarity(candidate: AssumptionNode, node: AssumptionNode) -> float:
+    return cosine_counter(
+        _orthogonal_informative_tokens(candidate),
+        _orthogonal_informative_tokens(node),
+    )
+
+
+def _orthogonal_informative_tokens(node: AssumptionNode) -> Counter[str]:
+    raw = tokenize(_node_text(node))
+    out: Counter[str] = Counter()
+    for token, count in raw.items():
+        if _is_orthogonal_noise_token(token):
+            continue
+        out[token] += count
+    return out
+
+
+def _is_orthogonal_noise_token(token: str) -> bool:
+    token = str(token).lower().strip()
+    if not token:
+        return True
+    if token in ORTHOGONAL_ENGLISH_STOP_TOKENS:
+        return True
+    if token in GENERIC_FAMILY_TAGS:
+        return True
+    if len(token) == 1 and "\u4e00" <= token <= "\u9fff":
+        return token in ORTHOGONAL_CJK_STOP_CHARS
+    if re.fullmatch(r"(cand|hyp|prop|res|trial|ev)_[0-9a-f]{6,}", token):
+        return True
+    if re.fullmatch(r"wcand\d+", token):
+        return True
+    if token in {"accepted", "active", "exp82", "expr", "kind", "steps", "step"}:
+        return True
+    return False
 
 
 GENERIC_FAMILY_TAGS = {

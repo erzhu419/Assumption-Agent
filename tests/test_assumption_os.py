@@ -4043,6 +4043,78 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(payload["classification_counts"]["orthogonal_new_family"], 1)
         self.assertGreaterEqual(payload["recommended_edge_counts"]["orthogonal_to"], 1)
 
+    def test_orthogonal_gate_uses_informative_overlap_not_stopword_noise(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="strategy_S26",
+                type=AssumptionType.METHOD,
+                kind=HypothesisKind.CLAIM,
+                claim="Identify lock-in caused by prior choices, switching cost, and self-reinforcing adoption.",
+                tags=["strategy", "S26", "path_dependency"],
+            ))
+            store.upsert_node(AssumptionNode(
+                id="hyp_generic_decomposition",
+                type=AssumptionType.METHOD,
+                kind=HypothesisKind.DECOMPOSITION,
+                claim=(
+                    "This decomposition operationalizes the wisdom by forcing the solver to diagnose the "
+                    "incentive structure behind the symptom before suggesting any surface-level communication fix."
+                ),
+                context_conditions=[
+                    "the candidate should test whether the answer is solving the wrong problem",
+                ],
+                predicted_effects=[
+                    "correctness should increase by at least 0.05",
+                ],
+                tags=["exp82", "decomposition", "accepted"],
+            ))
+            store.flush()
+            candidate = AssumptionNode(
+                id="cand_verbose_provenance_axis",
+                type=AssumptionType.MEMORY,
+                kind=HypothesisKind.CLAIM,
+                claim=(
+                    "Before revising the intervention logic, test whether stale provenance records or missing "
+                    "archival decision notes caused the residual; recover the source ledger and hidden "
+                    "commitments first."
+                ),
+                context_conditions=[
+                    "current-state evidence conflicts with archived source records",
+                    "the system carries hidden commitments that are not visible in the immediate task text",
+                ],
+                predicted_effects=[
+                    "avoid strategy churn when the real failure is missing provenance context",
+                    "increase later proposal quality by preserving source-ledger memory",
+                ],
+                tags=["candidate", "orthogonal", "provenance_archive", "source_ledger"],
+                residual_ids=["res_verbose_provenance_axis"],
+                payload={"orthogonal_to_existing": True},
+            )
+            proposals = {
+                "eval_id": "unit_orthogonal_stopword_noise",
+                "proposals": [{
+                    "proposal_id": "prop_verbose_provenance_axis",
+                    "proposal_type": "orthogonal_failure_hypothesis",
+                    "parent_node_id": "strategy_S26",
+                    "candidate_node": candidate.to_dict(),
+                    "edges": [{
+                        "source": candidate.id,
+                        "target": "strategy_S26",
+                        "type": "generated_from_residual",
+                    }],
+                }],
+            }
+            payload = build_novelty_integration_payload(
+                store,
+                proposals,
+                eval_id="unit_orthogonal_stopword_noise",
+            )
+            row = payload["rows"][0]
+            self.assertEqual(row["classification"], "orthogonal_new_family")
+            self.assertEqual(row["integration_edges"][0]["type"], "orthogonal_to")
+            self.assertEqual(row["match_basis"], "orthogonal_informative_low_overlap")
+
     def test_orthogonal_ablation_validates_new_axis_retention(self):
         payload = build_orthogonal_ablation_payload(eval_id="unit_orthogonal_ablation")
         self.assertTrue(payload["pass"], payload["failed_gates"])
