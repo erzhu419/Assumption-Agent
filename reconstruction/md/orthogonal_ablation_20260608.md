@@ -239,3 +239,33 @@ This answers the narrower ON/OFF question: the gate's immediate benefit is not
 that it improves the same accepted answer again, but that it keeps the accepted
 hypothesis as a separate execution-harness family for future descendants rather
 than folding it into the old parent strategy.
+
+## Three-Generation Descendant Productivity
+
+Follow-up artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_descendant_productivity_20260608.json`
+
+The retained ON/OFF graphs were then allowed to generate and evaluate three
+generations of descendant proposals.  Both branches start from the same
+live-positive seed.  The descendant loop runs proposal generation,
+novelty/integration, trigger/control acceptance, gated temp apply, and ACP
+learning.
+
+Result:
+
+- orthogonal ON accepted descendants: 5;
+- orthogonal OFF accepted descendants: 2;
+- accepted descendant delta: +3;
+- reject-harm delta, ON minus OFF: -1;
+- productivity score delta: +0.6861;
+- ACP score delta: +0.4052;
+- old-parent label delta, OFF minus ON: +6;
+- main graph mutation delta: 0;
+- pass: true.
+
+This gives the first bounded evidence that orthogonal retention changes later
+self-evolution behavior, not just the first retained edge.  The ON branch keeps
+the execution-contract seed as a family and produces more productive
+descendants; the OFF branch folds descendants into `strategy_S01`, causing more
+mixed-axis proposals and harm rejects.

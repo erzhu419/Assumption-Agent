@@ -57,6 +57,7 @@ DEFAULT_ARTIFACTS = [
     PAPER_DIR / "orthogonal_execution_scope_repair_preflight_20260608.json",
     PAPER_DIR / "orthogonal_execution_scope_repair_live_same_model_20260608.json",
     PAPER_DIR / "orthogonal_recursive_ablation_20260608.json",
+    PAPER_DIR / "orthogonal_descendant_productivity_20260608.json",
     PAPER_DIR / "morphism_claim_bundle_20260605.json",
     PAPER_DIR / "paper_negative_results_20260605.json",
     PAPER_DIR / "paper_benchmark_line_20260604.json",
@@ -91,6 +92,7 @@ DEFAULT_CODE_FILES = [
     Path("assumption_os/orthogonal_execution_queue.py"),
     Path("assumption_os/orthogonal_live_ablation.py"),
     Path("assumption_os/orthogonal_recursive_ablation.py"),
+    Path("assumption_os/orthogonal_descendant_productivity.py"),
     Path("assumption_os/morphism_claims.py"),
     Path("assumption_os/paper_negative_results.py"),
     Path("assumption_os/paper_repro_pack.py"),
@@ -320,6 +322,10 @@ def _exact_commands() -> list[dict[str, str]]:
         {
             "name": "orthogonal_recursive_ablation",
             "command": "python3 -m assumption_os.orthogonal_recursive_ablation --root . --eval-id orthogonal_recursive_ablation_20260608 --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_recursive_ablation_20260608.json'",
+        },
+        {
+            "name": "orthogonal_descendant_productivity",
+            "command": "python3 -m assumption_os.orthogonal_descendant_productivity --root . --eval-id orthogonal_descendant_productivity_20260608 --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_descendant_productivity_20260608.json'",
         },
         {
             "name": "morphism_claim_bundle",

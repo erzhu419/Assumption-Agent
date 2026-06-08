@@ -65,6 +65,7 @@ from assumption_os.novelty_integration import (
 )
 from assumption_os.objective_bench import build_objective_benchmark_payload
 from assumption_os.orthogonal_ablation import build_orthogonal_ablation_payload
+from assumption_os.orthogonal_descendant_productivity import build_orthogonal_descendant_productivity_payload
 from assumption_os.orthogonal_downstream_ablation import build_orthogonal_downstream_ablation_payload
 from assumption_os.orthogonal_execution_queue import build_orthogonal_execution_queue_payload
 from assumption_os.orthogonal_multi_cluster import build_orthogonal_multi_cluster_payload
@@ -4345,6 +4346,30 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(payload["comparison"]["downstream_utility_delta"], 0.0)
         self.assertTrue(on["daemon"]["resumed"])
         self.assertTrue(off["daemon"]["resumed"])
+
+    def test_orthogonal_descendant_productivity_improves_over_three_generations(self):
+        payload = build_orthogonal_descendant_productivity_payload(
+            root=Path("."),
+            eval_id="unit_orthogonal_descendant_productivity",
+        )
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        comparison = payload["comparison"]
+        self.assertEqual(comparison["accepted_descendant_on"], 5)
+        self.assertEqual(comparison["accepted_descendant_off"], 2)
+        self.assertEqual(comparison["accepted_descendant_delta"], 3)
+        self.assertLess(comparison["reject_harm_delta_on_minus_off"], 0)
+        self.assertGreater(comparison["productivity_score_delta"], 0.2)
+        self.assertGreater(comparison["acp_score_delta"], 0.0)
+        on = payload["conditions"]["orthogonal_on"]
+        off = payload["conditions"]["orthogonal_off"]
+        self.assertEqual(on["generation_count"], 3)
+        self.assertEqual(off["generation_count"], 3)
+        self.assertGreaterEqual(on["seed_graph_state"]["orthogonal_to_edge_count"], 1)
+        self.assertEqual(off["seed_graph_state"]["orthogonal_to_edge_count"], 0)
+        self.assertGreater(
+            off["metrics"]["old_parent_descendant_labels"],
+            on["metrics"]["old_parent_descendant_labels"],
+        )
 
     def test_proposal_overlay_is_in_memory_only(self):
         with tempfile.TemporaryDirectory() as td:
