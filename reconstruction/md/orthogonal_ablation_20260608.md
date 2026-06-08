@@ -63,3 +63,19 @@ new hypothesis families during recursive self-evolution. It does not yet prove
 that orthogonality improves live QA, heldout solver score, or long-run
 autonomous discovery under LLM calls. The next stronger validation is a live
 recursive benchmark with orthogonal ON/OFF over generated residual clusters.
+
+## Surface False-Positive Guard
+
+Follow-up artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_surface_ablation_20260608.json`
+
+The first real generated surface-proposal check found an important edge case:
+surface tags can use aliases of the same family, for example
+`world_model_screen` vs `world_model`, or `recursive_assumption_runner` vs
+`recursive_runner`. These must not be treated as orthogonal.
+
+The novelty gate now canonicalizes such family aliases before testing
+orthogonality. On the real surface proposal batch, the expected behavior is zero
+`orthogonal_to` edges: these are same-family repairs/scopes, not new orthogonal
+families. The fixture ablation still validates true orthogonal retention.

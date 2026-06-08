@@ -33,7 +33,7 @@ The rule is intentionally narrow:
 
 - the candidate must be grounded in the same residual, parent, or `generated_from_residual` edge;
 - it must remain low-overlap with the best existing node and with the parent node;
-- it must not share a substantive family tag or formal family key with the parent;
+- it must not share a substantive family tag, canonical family alias, or formal family key with the parent;
 - it must not already qualify as duplicate, specialization, formal isomorphism, or ordinary analogy;
 - accepted candidates are integrated with an `orthogonal_to` edge and a new-family action;
 - `orthogonal_to` is counted as a productive edge for clade/metaproductivity tracing.
@@ -84,6 +84,16 @@ old controlled-variable family as a `specialization`.
 
 This validates the mechanism as a recursive-retention proxy: the ON condition
 preserves the new explanation axis and avoids family-axis contamination.  It is
-still not a live downstream QA or LLM-judge ablation; the next stronger
-experiment is to run orthogonal ON/OFF on generated residual clusters in a live
-recursive benchmark line.
+still not a live downstream QA or LLM-judge ablation.
+
+Second follow-up artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_surface_ablation_20260608.json`
+
+This checks the opposite failure mode on real generated surface proposals. It
+confirms that same-family aliases such as `world_model_screen` / `world_model`
+and `recursive_assumption_runner` / `recursive_runner` do not become orthogonal
+new families. On that batch, zero `orthogonal_to` edges is the correct behavior.
+
+The next stronger experiment is to run orthogonal ON/OFF on live generated
+residual clusters with answer-quality or judge-based downstream outcomes.

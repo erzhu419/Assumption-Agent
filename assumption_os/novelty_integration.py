@@ -535,18 +535,41 @@ GENERIC_FAMILY_TAGS = {
 }
 
 
+TAG_FAMILY_ALIASES = {
+    "world_model_screen": "world_model",
+    "world-model": "world_model",
+    "cheap_world_model": "world_model",
+    "trace_world_model": "world_model",
+    "recursive_assumption_runner": "recursive_runner",
+    "recursive-assumption-runner": "recursive_runner",
+    "recursive_runner": "recursive_runner",
+    "self_modification": "recursive_runner",
+    "self-modification": "recursive_runner",
+    "manifest_logging": "manifest_logger",
+    "manifest-logger": "manifest_logger",
+    "judge_policy": "evaluator_policy",
+    "evaluator": "evaluator_policy",
+    "judge_assumption": "evaluator_policy",
+}
+
+
 def _substantive_shared_tags(candidate: AssumptionNode, node: AssumptionNode) -> set[str]:
     candidate_tags = {
-        str(tag).strip().lower()
+        _canonical_family_tag(tag)
         for tag in candidate.tags
-        if str(tag).strip().lower() not in GENERIC_FAMILY_TAGS
+        if _canonical_family_tag(tag) not in GENERIC_FAMILY_TAGS
     }
     node_tags = {
-        str(tag).strip().lower()
+        _canonical_family_tag(tag)
         for tag in node.tags
-        if str(tag).strip().lower() not in GENERIC_FAMILY_TAGS
+        if _canonical_family_tag(tag) not in GENERIC_FAMILY_TAGS
     }
     return candidate_tags & node_tags
+
+
+def _canonical_family_tag(tag: object) -> str:
+    normalized = str(tag).strip().lower().replace(" ", "_")
+    return TAG_FAMILY_ALIASES.get(normalized, normalized)
 
 
 def _formal_family_overlap(candidate: AssumptionNode, node: AssumptionNode) -> bool:

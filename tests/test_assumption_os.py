@@ -65,6 +65,7 @@ from assumption_os.novelty_integration import (
 )
 from assumption_os.objective_bench import build_objective_benchmark_payload
 from assumption_os.orthogonal_ablation import build_orthogonal_ablation_payload
+from assumption_os.orthogonal_surface_ablation import build_orthogonal_surface_ablation_payload
 from assumption_os.paper_baseline_hardening import build_paper_baseline_hardening_payload
 from assumption_os.paper_benchmark_line import build_paper_benchmark_line_payload
 from assumption_os.paper_main_experiment import build_paper_main_experiment_payload
@@ -3875,6 +3876,13 @@ class AssumptionOSTest(unittest.TestCase):
                 },
                 tags=["structural_pattern"],
             ))
+            store.upsert_node(AssumptionNode(
+                id="parent_world_model",
+                type=AssumptionType.WORLD_MODEL,
+                kind=HypothesisKind.CLAIM,
+                claim="A calibrated cheap world model should predict candidate acceptance before expensive ablation.",
+                tags=["world_model", "calibration"],
+            ))
             duplicate = AssumptionNode(
                 id="cand_duplicate",
                 type=AssumptionType.METHOD,
@@ -3935,6 +3943,15 @@ class AssumptionOSTest(unittest.TestCase):
                 tags=["control", "orthogonal"],
                 payload={"orthogonal_to_existing": True},
             )
+            same_family_alias_not_orthogonal = AssumptionNode(
+                id="cand_same_family_alias_not_orthogonal",
+                type=AssumptionType.WORLD_MODEL,
+                kind=HypothesisKind.CLAIM,
+                claim="Route-policy repairs should use a world-model screen before spending fresh ablation calls.",
+                status="candidate",
+                tags=["world_model_screen", "orthogonal"],
+                payload={"orthogonal_to_existing": True},
+            )
             proposals = {
                 "eval_id": "unit_novelty",
                 "proposals": [
@@ -3981,6 +3998,17 @@ class AssumptionOSTest(unittest.TestCase):
                             "type": "generated_from_residual",
                         }],
                     },
+                    {
+                        "proposal_id": "prop_same_family_alias_not_orthogonal",
+                        "proposal_type": "orthogonal_failure_hypothesis",
+                        "parent_node_id": "parent_world_model",
+                        "candidate_node": same_family_alias_not_orthogonal.to_dict(),
+                        "edges": [{
+                            "source": "cand_same_family_alias_not_orthogonal",
+                            "target": "parent_world_model",
+                            "type": "generated_from_residual",
+                        }],
+                    },
                 ],
             }
             payload = build_novelty_integration_payload(store, proposals, eval_id="unit_novelty_gate")
@@ -3998,6 +4026,8 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertGreaterEqual(rows["prop_orthogonal"]["match_score"], 0.58)
             self.assertNotEqual(rows["prop_same_family_not_orthogonal"]["classification"], "orthogonal_new_family")
             self.assertEqual(rows["prop_same_family_not_orthogonal"]["classification"], "specialization")
+            self.assertNotEqual(rows["prop_same_family_alias_not_orthogonal"]["classification"], "orthogonal_new_family")
+            self.assertEqual(rows["prop_same_family_alias_not_orthogonal"]["classification"], "specialization")
 
     def test_novelty_integration_performance_validation_passes(self):
         payload = build_novelty_integration_performance_payload(eval_id="unit_novelty_perf")
@@ -4024,6 +4054,20 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreater(metrics["metaproductivity_proxy_delta"], 0.0)
         self.assertTrue(payload["retention"]["enabled"]["orthogonal_new_axis_retained"])
         self.assertFalse(payload["retention"]["disabled"]["orthogonal_new_axis_retained"])
+
+    def test_orthogonal_surface_ablation_blocks_same_family_alias_false_positive(self):
+        payload = build_orthogonal_surface_ablation_payload(
+            root=Path("."),
+            eval_id="unit_orthogonal_surface_ablation",
+        )
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        metrics = payload["metrics"]
+        self.assertGreaterEqual(metrics["proposal_count"], 7)
+        self.assertGreaterEqual(metrics["same_family_alias_or_tag_count"], 5)
+        self.assertGreaterEqual(metrics["ready_same_family_alias_or_tag_count"], 2)
+        self.assertEqual(metrics["same_family_false_orthogonal_enabled_count"], 0)
+        self.assertEqual(metrics["orthogonal_edge_enabled_count"], 0)
+        self.assertEqual(metrics["classification_change_count"], 0)
 
     def test_proposal_overlay_is_in_memory_only(self):
         with tempfile.TemporaryDirectory() as td:
