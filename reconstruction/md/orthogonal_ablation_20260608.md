@@ -147,3 +147,40 @@ The positive queue now connects to the bounded recursive daemon path:
 This removes the engineering gap after live judgments are produced. The only
 remaining empirical gap for this positive arm is the live answer-quality
 judgment itself.
+
+## Multi-Cluster Positive Arm
+
+Follow-up artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_multi_cluster_20260608.json`
+
+The positive arm is now tested on three distinct real graph parents rather than
+a single curated candidate:
+
+- `strategy_S01`: evaluator/rubric drift as a new axis;
+- `strategy_S25`: simulator-scale/surrogate gap as a new axis;
+- `strategy_S26`: provenance/archive memory gap as a new axis.
+
+Performance validation result:
+
+- proposal_count: 3
+- distinct_parent_count: 3
+- enabled_orthogonal_count: 3
+- disabled_orthogonal_count: 0
+- enabled_orthogonal_edge_count: 3
+- disabled_orthogonal_edge_count: 0
+- preflight_ready_count: 3
+- min_trigger_count: 4
+- min_control_count: 8
+- dry_planned_leaf_count: 3
+- readback_accept_count: 3
+- readback_applied_count: 0
+- apply_applied_count: 3
+- temp_orthogonal_edge_count: 3
+- pass: true
+
+This is still a mechanism validation, not a live answer-quality result.  The
+important improvement is breadth: the gate now preserves several orthogonal
+new explanatory axes and the recursive daemon can consume, read back, and
+gated-apply them.  A real ON/OFF downstream utility claim still requires
+running the emitted fresh-ablation and pairwise-judge commands.

@@ -66,6 +66,7 @@ from assumption_os.novelty_integration import (
 from assumption_os.objective_bench import build_objective_benchmark_payload
 from assumption_os.orthogonal_ablation import build_orthogonal_ablation_payload
 from assumption_os.orthogonal_downstream_ablation import build_orthogonal_downstream_ablation_payload
+from assumption_os.orthogonal_multi_cluster import build_orthogonal_multi_cluster_payload
 from assumption_os.orthogonal_positive_queue import build_orthogonal_positive_queue_payload
 from assumption_os.orthogonal_positive_readback import build_orthogonal_positive_readback_payload
 from assumption_os.orthogonal_surface_ablation import build_orthogonal_surface_ablation_payload
@@ -4134,6 +4135,46 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["apply_applied_count"], 1)
         self.assertTrue(metrics["candidate_node_present_after_apply"])
         self.assertGreaterEqual(metrics["orthogonal_edge_count_after_apply"], 1)
+
+    def test_orthogonal_multi_cluster_validates_multiple_new_axes(self):
+        payload = build_orthogonal_multi_cluster_payload(
+            root=Path("."),
+            eval_id="unit_orthogonal_multi_cluster",
+        )
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertIn(payload["status"], {"multi_cluster_live_ready", "multi_cluster_live_ready_env_missing"})
+        metrics = payload["metrics"]
+        self.assertEqual(metrics["proposal_count"], 3)
+        self.assertEqual(metrics["distinct_parent_count"], 3)
+        self.assertEqual(metrics["enabled_orthogonal_count"], 3)
+        self.assertEqual(metrics["disabled_orthogonal_count"], 0)
+        self.assertEqual(metrics["enabled_orthogonal_edge_count"], 3)
+        self.assertEqual(metrics["disabled_orthogonal_edge_count"], 0)
+        self.assertEqual(metrics["preflight_ready_count"], 3)
+        self.assertGreaterEqual(metrics["min_trigger_count"], 3)
+        self.assertGreaterEqual(metrics["min_active_trigger_count"], 3)
+        self.assertGreaterEqual(metrics["min_control_count"], 3)
+        self.assertEqual(metrics["outside_active_total"], 0)
+        self.assertEqual(metrics["dry_planned_leaf_count"], 3)
+        self.assertEqual(metrics["dry_executable_leaf_count"], 3)
+        self.assertEqual(metrics["dry_status_counts"], {"planned": 3})
+        self.assertEqual(metrics["readback_accept_count"], 3)
+        self.assertTrue(metrics["readback_resumed"])
+        self.assertEqual(metrics["readback_applied_count"], 0)
+        self.assertFalse(metrics["node_mutation_without_apply"])
+        self.assertEqual(metrics["apply_accept_count"], 3)
+        self.assertTrue(metrics["apply_resumed"])
+        self.assertEqual(metrics["apply_applied_count"], 3)
+        self.assertEqual(metrics["temp_candidate_node_count"], 3)
+        self.assertGreaterEqual(metrics["temp_orthogonal_edge_count"], 3)
+        enabled_rows = payload["novelty_rows"]["enabled"]
+        disabled_rows = payload["novelty_rows"]["disabled"]
+        self.assertTrue(all(row["classification"] == "orthogonal_new_family" for row in enabled_rows))
+        self.assertTrue(all(row["classification"] != "orthogonal_new_family" for row in disabled_rows))
+        commands_text = json.dumps(payload["next_commands"], ensure_ascii=False)
+        self.assertIn("<set-in-env>", commands_text)
+        self.assertNotIn("sk-", commands_text)
+        self.assertNotIn("newapi_channel_conn", commands_text)
 
     def test_proposal_overlay_is_in_memory_only(self):
         with tempfile.TemporaryDirectory() as td:

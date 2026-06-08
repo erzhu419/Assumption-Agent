@@ -145,3 +145,39 @@ temporary graph writes both the candidate node and `orthogonal_to` edge.
 This closes the operational path around the positive candidate.  The honest
 remaining claim boundary is empirical: run the queued live answer and judge
 commands, then let the same readback path accept/reject from real judgments.
+
+Sixth follow-up artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/orthogonal_multi_cluster_20260608.json`
+
+The positive arm has been expanded from one example to three different
+residual/parent clusters:
+
+- `strategy_S01` -> evaluator/rubric drift;
+- `strategy_S25` -> simulator-scale/surrogate gap;
+- `strategy_S26` -> provenance/archive memory gap.
+
+Validation:
+
+- proposal_count: 3;
+- distinct_parent_count: 3;
+- orthogonal ON classification: 3 `orthogonal_new_family`;
+- orthogonal OFF classification: 0 `orthogonal_new_family`, 3 specializations;
+- `orthogonal_to` edges: 3 when enabled, 0 when disabled;
+- preflight readiness: 3 `ready_for_fresh_ablation`;
+- minimum trigger/control rows: 4 trigger rows, 8 control rows;
+- daemon dry-run: 3 planned executable leaves;
+- fixture readback: 3 accepted candidates, no graph mutation without apply;
+- gated temporary apply: 3 candidate nodes and 3 `orthogonal_to` edges.
+
+One useful negative finding from this run: a first S26 memory candidate was
+correctly rejected as a specialization because its wording had too much
+lexical overlap with existing nodes.  After rewriting it as a shorter
+provenance/archive axis, it passed.  This supports the intended definition of
+orthogonality: the candidate must be a genuinely different explanatory axis,
+not only a relabeled version of the old family.
+
+The empirical boundary remains unchanged: this validates multi-cluster
+mechanism readiness, not a live downstream answer-quality win.  The emitted
+commands are ready for fresh ablation once API credentials are supplied through
+environment variables.
