@@ -138,24 +138,32 @@ def build_preflight_queue_daemon_payload(
     apply_accepted: bool = False,
     writeback_manifests: bool = False,
     artifact_baseline_variant: str | None = None,
+    pre_live_screen_payload: dict | None = None,
+    enforce_pre_live_screen: bool = False,
 ) -> dict:
     """Convert a ready preflight queue into bounded daemon leaf work items."""
 
     store = JsonlGraphStore(graph_dir)
     normalized_judgment_sets = list(judgment_sets or [])
+    screen_summary = _screen_preflight_payload(
+        preflight_payload=preflight_payload,
+        pre_live_screen_payload=pre_live_screen_payload,
+        enforce=enforce_pre_live_screen,
+    )
+    queue_preflight_payload = screen_summary["screened_preflight_payload"]
     artifact_eval = None
     artifact_judgment_sets: list[JudgmentSet] = []
     if artifact_baseline_variant:
         artifact_eval = build_queue_artifact_eval_payload(
             root=root,
-            preflight_payload=preflight_payload,
+            preflight_payload=queue_preflight_payload,
             eval_id=f"{eval_id}_artifact_eval",
             baseline_variant=artifact_baseline_variant,
         )
         artifact_judgment_sets = judgment_sets_from_artifact_eval(artifact_eval)
         normalized_judgment_sets.extend(artifact_judgment_sets)
     queue_recursive = _recursive_payload_from_preflight_queue(
-        preflight_payload=preflight_payload,
+        preflight_payload=queue_preflight_payload,
         eval_id=eval_id,
         queue_name=queue_name,
     )
@@ -188,7 +196,6 @@ def build_preflight_queue_daemon_payload(
             store.append_trial(manifest)
         store.flush()
     status_counts = dict(Counter(record.get("status") for record in execution_payload.get("execution_records", [])))
-    ready_rows = _ready_preflight_rows(preflight_payload)
     return {
         "eval_id": eval_id,
         "queue_name": queue_name,
@@ -201,12 +208,15 @@ def build_preflight_queue_daemon_payload(
             "judgment_sets": len(normalized_judgment_sets),
             "artifact_baseline_variant": artifact_baseline_variant,
             "artifact_auto_judgment_sets": len(artifact_judgment_sets),
+            "pre_live_screen_enabled": bool(pre_live_screen_payload),
+            "pre_live_screen_enforced": enforce_pre_live_screen,
         },
         "source": {
             "preflight_eval_id": preflight_payload.get("eval_id"),
             "graph_dir": str(graph_dir),
         },
-        "ready_queue_count": len(ready_rows),
+        "ready_queue_count": screen_summary["ready_count_before"],
+        "screened_ready_queue_count": screen_summary["ready_count_after"],
         "planned_leaf_count": execution_payload.get("frontier", {}).get("planned_actions", 0),
         "executable_leaf_count": execution_payload.get("frontier", {}).get("executable_actions", 0),
         "succeeded_leaf_count": status_counts.get("succeeded", 0),
@@ -221,6 +231,7 @@ def build_preflight_queue_daemon_payload(
         "apply_summary": apply_summary,
         "applied_candidate_node_ids": apply_summary.get("applied_candidate_node_ids", []),
         "artifact_evaluation": artifact_eval,
+        "pre_live_screen": _compact_screen_summary(screen_summary),
         "execution_payload": _compact_execution_payload(execution_payload),
         "manifest_count": len(manifests),
         "manifest_trial_ids": [m.trial_id for m in manifests],
@@ -323,6 +334,112 @@ def _ready_preflight_rows(preflight_payload: dict) -> list[dict]:
         for row in preflight_payload.get("summaries", [])
         if row.get("readiness") == "ready_for_fresh_ablation" and row.get("command_hint")
     ]
+
+
+def _screen_preflight_payload(
+    *,
+    preflight_payload: dict,
+    pre_live_screen_payload: dict | None,
+    enforce: bool,
+) -> dict:
+    ready_before = _ready_preflight_rows(preflight_payload)
+    decisions = _pre_live_screen_decisions(pre_live_screen_payload)
+    screened_summaries = []
+    blocked_ids = []
+    deferred_ids = []
+    allowed_ids = []
+    missing_decision_ids = []
+
+    for row in preflight_payload.get("summaries", []):
+        proposal_id = str(row.get("proposal_id") or "")
+        decision = decisions.get(proposal_id)
+        annotated = dict(row)
+        if decision:
+            annotated["pre_live_screen_decision"] = {
+                "decision": decision.get("decision"),
+                "would_run_live": bool(decision.get("would_run_live")),
+                "risk_score": decision.get("risk_score"),
+                "predicted_failure_modes": decision.get("predicted_failure_modes", []),
+                "rationale": decision.get("rationale", ""),
+            }
+        elif row.get("readiness") == "ready_for_fresh_ablation":
+            missing_decision_ids.append(proposal_id)
+            annotated["pre_live_screen_decision"] = {
+                "decision": "missing_decision_allow",
+                "would_run_live": True,
+                "risk_score": None,
+                "predicted_failure_modes": [],
+                "rationale": "No pre-live screen row was available, so the bounded daemon keeps default behavior.",
+            }
+
+        should_run = bool((annotated.get("pre_live_screen_decision") or {}).get("would_run_live", True))
+        if decision and not should_run:
+            if str(decision.get("decision", "")).startswith("defer"):
+                deferred_ids.append(proposal_id)
+            else:
+                blocked_ids.append(proposal_id)
+        elif row.get("readiness") == "ready_for_fresh_ablation":
+            allowed_ids.append(proposal_id)
+
+        if enforce and row.get("readiness") == "ready_for_fresh_ablation" and not should_run:
+            annotated["pre_live_screen_enforced"] = True
+            annotated["pre_live_screen_original_readiness"] = row.get("readiness")
+            annotated["readiness"] = "deferred_by_pre_live_screen"
+            annotated["command_hint"] = ""
+        screened_summaries.append(annotated)
+
+    screened_payload = {**preflight_payload, "summaries": screened_summaries}
+    ready_after = _ready_preflight_rows(screened_payload)
+    return {
+        "enabled": bool(pre_live_screen_payload),
+        "enforced": enforce,
+        "ready_count_before": len(ready_before),
+        "ready_count_after": len(ready_after),
+        "blocked_proposal_ids": blocked_ids,
+        "deferred_proposal_ids": deferred_ids,
+        "allowed_proposal_ids": allowed_ids,
+        "missing_decision_proposal_ids": [pid for pid in missing_decision_ids if pid],
+        "decision_counts": dict(Counter(
+            (row.get("pre_live_screen_decision") or {}).get("decision", "not_ready_or_unscreened")
+            for row in screened_summaries
+        )),
+        "screened_preflight_payload": screened_payload,
+    }
+
+
+def _pre_live_screen_decisions(pre_live_screen_payload: dict | None) -> dict[str, dict]:
+    if not pre_live_screen_payload:
+        return {}
+    decisions: dict[str, dict] = {}
+    for row in pre_live_screen_payload.get("rows", []):
+        proposal_id = str(
+            row.get("proposal_id")
+            or row.get("case", {}).get("proposal_id")
+            or row.get("screen", {}).get("proposal_id")
+            or ""
+        )
+        screen = row.get("screen") or row.get("decision") or {}
+        if proposal_id and isinstance(screen, dict):
+            decisions[proposal_id] = screen
+    for row in pre_live_screen_payload.get("decisions", []):
+        proposal_id = str(row.get("proposal_id") or "")
+        if proposal_id:
+            decisions[proposal_id] = row
+    return decisions
+
+
+def _compact_screen_summary(screen_summary: dict) -> dict:
+    return {
+        "enabled": screen_summary.get("enabled", False),
+        "enforced": screen_summary.get("enforced", False),
+        "ready_count_before": screen_summary.get("ready_count_before", 0),
+        "ready_count_after": screen_summary.get("ready_count_after", 0),
+        "blocked_proposal_ids": screen_summary.get("blocked_proposal_ids", []),
+        "deferred_proposal_ids": screen_summary.get("deferred_proposal_ids", []),
+        "allowed_proposal_ids": screen_summary.get("allowed_proposal_ids", []),
+        "missing_decision_proposal_ids": screen_summary.get("missing_decision_proposal_ids", []),
+        "decision_counts": screen_summary.get("decision_counts", {}),
+    }
 
 
 def _apply_if_requested(
@@ -491,6 +608,10 @@ def main() -> None:
     ap.add_argument("--writeback-manifests", action="store_true")
     ap.add_argument("--artifact-baseline-variant", default=None,
                     help="auto-discover cached fresh-ablation judgments against this baseline variant")
+    ap.add_argument("--pre-live-screen-payload", default=None,
+                    help="optional pre-live tie/low-benefit screen payload")
+    ap.add_argument("--enforce-pre-live-screen", action="store_true",
+                    help="defer ready proposal commands when the pre-live screen says not to run live")
     ap.add_argument("--summary-out", default=None)
     args = ap.parse_args()
 
@@ -518,6 +639,12 @@ def main() -> None:
             apply_accepted=args.apply_accepted,
             writeback_manifests=args.writeback_manifests,
             artifact_baseline_variant=args.artifact_baseline_variant,
+            pre_live_screen_payload=(
+                _load_json(_resolve(root, args.pre_live_screen_payload))
+                if args.pre_live_screen_payload
+                else None
+            ),
+            enforce_pre_live_screen=args.enforce_pre_live_screen,
         )
     else:
         if not args.recursive_payload:

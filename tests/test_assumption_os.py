@@ -2576,6 +2576,88 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertGreaterEqual(len(after_store.trials), 3)
             self.assertFalse(payload["mode"]["apply_accepted"])
 
+    def test_recursive_daemon_enforces_pre_live_screen_on_preflight_queue(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            graph_dir = root / "graph"
+            store = JsonlGraphStore(graph_dir)
+            store.upsert_node(AssumptionNode(
+                id="surface_recursive",
+                type=AssumptionType.SELF_MODIFICATION,
+                claim="Recursive daemon",
+            ))
+            store.flush()
+            preflight_payload = {
+                "eval_id": "unit_screened_preflight_queue",
+                "summaries": [
+                    {
+                        "proposal_id": "prop_allow",
+                        "readiness": CandidateReadiness.READY_FOR_FRESH_ABLATION.value,
+                        "trigger_problem_ids": ["p1", "p2", "p3"],
+                        "control_problem_ids": ["c1"],
+                        "command_hint": "python3 run_candidate.py --variant proposal_allow",
+                    },
+                    {
+                        "proposal_id": "prop_block",
+                        "readiness": CandidateReadiness.READY_FOR_FRESH_ABLATION.value,
+                        "trigger_problem_ids": ["p4", "p5", "p6"],
+                        "control_problem_ids": ["c2"],
+                        "command_hint": "python3 run_candidate.py --variant proposal_block",
+                    },
+                    {
+                        "proposal_id": "prop_missing",
+                        "readiness": CandidateReadiness.READY_FOR_FRESH_ABLATION.value,
+                        "trigger_problem_ids": ["p7", "p8", "p9"],
+                        "control_problem_ids": ["c3"],
+                        "command_hint": "python3 run_candidate.py --variant proposal_missing",
+                    },
+                ],
+            }
+            screen_payload = {
+                "eval_id": "unit_pre_live_screen",
+                "rows": [
+                    {
+                        "case": {"proposal_id": "prop_allow"},
+                        "screen": {
+                            "proposal_id": "prop_allow",
+                            "decision": "run_live",
+                            "would_run_live": True,
+                            "risk_score": 0.0,
+                        },
+                    },
+                    {
+                        "case": {"proposal_id": "prop_block"},
+                        "screen": {
+                            "proposal_id": "prop_block",
+                            "decision": "block_predicted_low_benefit",
+                            "would_run_live": False,
+                            "risk_score": 0.8,
+                            "predicted_failure_modes": ["high_overlap_with_low_utility_sibling"],
+                        },
+                    },
+                ],
+            }
+            payload = build_preflight_queue_daemon_payload(
+                root=root,
+                graph_dir=graph_dir,
+                preflight_payload=preflight_payload,
+                pre_live_screen_payload=screen_payload,
+                enforce_pre_live_screen=True,
+                eval_id="unit_screened_queue_daemon",
+                queue_name="screened_trace_policy_preflight",
+                execute=False,
+            )
+            self.assertEqual(payload["ready_queue_count"], 3)
+            self.assertEqual(payload["screened_ready_queue_count"], 2)
+            self.assertEqual(payload["planned_leaf_count"], 2)
+            self.assertEqual(payload["proposal_ids"], ["prop_allow", "prop_missing"])
+            self.assertEqual(payload["pre_live_screen"]["blocked_proposal_ids"], ["prop_block"])
+            self.assertEqual(payload["pre_live_screen"]["missing_decision_proposal_ids"], ["prop_missing"])
+            self.assertEqual(
+                payload["pre_live_screen"]["decision_counts"]["block_predicted_low_benefit"],
+                1,
+            )
+
     def test_recursive_daemon_executes_queue_and_resumes_from_generated_judgments(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

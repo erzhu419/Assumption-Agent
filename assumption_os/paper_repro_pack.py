@@ -109,6 +109,7 @@ DEFAULT_CODE_FILES = [
     Path("assumption_os/orthogonal_descendant_live_queue.py"),
     Path("assumption_os/orthogonal_descendant_live_readback.py"),
     Path("assumption_os/pre_live_tie_screen.py"),
+    Path("assumption_os/recursive_daemon.py"),
     Path("assumption_os/morphism_claims.py"),
     Path("assumption_os/paper_negative_results.py"),
     Path("assumption_os/paper_repro_pack.py"),
