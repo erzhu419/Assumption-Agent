@@ -81,6 +81,7 @@ from assumption_os.paper_main_experiment import build_paper_main_experiment_payl
 from assumption_os.paper_negative_results import build_paper_negative_results_payload
 from assumption_os.paper_repro_pack import build_paper_repro_pack_payload
 from assumption_os.paper_retrieval_baselines import build_paper_retrieval_baselines_payload
+from assumption_os.pre_live_tie_screen import build_pre_live_tie_screen_payload
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
 from assumption_os.proposals import ProposalType, build_candidate_proposals
 from assumption_os.queue_artifact_eval import build_queue_artifact_eval_payload, judgment_sets_from_artifact_eval
@@ -4371,6 +4372,30 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreater(
             off["metrics"]["old_parent_descendant_labels"],
             on["metrics"]["old_parent_descendant_labels"],
+        )
+
+    def test_pre_live_tie_screen_preserves_positive_and_saves_failed_descendant_calls(self):
+        payload = build_pre_live_tie_screen_payload(
+            root=Path("."),
+            eval_id="unit_pre_live_tie_screen",
+        )
+        chronological = payload["metrics"]["chronological"]
+        no_screen = payload["metrics"]["no_screen"]
+        rows = {row["case"]["proposal_id"]: row for row in payload["rows"]}
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(no_screen["live_calls"], 7)
+        self.assertEqual(no_screen["accepted_count"], 1)
+        self.assertEqual(chronological["positive_control_allowed_count"], 1)
+        self.assertEqual(chronological["accepted_positive_block_count"], 0)
+        self.assertGreaterEqual(chronological["failed_live_calls_saved"], 4)
+        self.assertGreater(chronological["accepted_rate_among_run_calls"], no_screen["accepted_rate"])
+        self.assertTrue(rows["prop_d7abf65010d2"]["screen"]["would_run_live"])
+        self.assertFalse(rows["prop_99b7c2f9b052"]["screen"]["would_run_live"])
+        self.assertFalse(rows["prop_6c22137d982d_vs_parent"]["screen"]["would_run_live"])
+        self.assertEqual(
+            rows["prop_99b7c2f9b052"]["screen"]["decision"],
+            "block_predicted_low_benefit",
         )
 
     def test_orthogonal_descendant_live_queue_exports_retained_graph_specialization(self):

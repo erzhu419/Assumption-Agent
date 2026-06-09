@@ -69,6 +69,7 @@ DEFAULT_ARTIFACTS = [
     PAPER_DIR / "orthogonal_descendant_live_graph_20260608/edges.jsonl",
     PAPER_DIR / "orthogonal_descendant_live_graph_20260608/evidence.jsonl",
     PAPER_DIR / "orthogonal_descendant_live_graph_20260608/trials.jsonl",
+    PAPER_DIR / "pre_live_tie_screen_20260609.json",
     PAPER_DIR / "morphism_claim_bundle_20260605.json",
     PAPER_DIR / "paper_negative_results_20260605.json",
     PAPER_DIR / "paper_benchmark_line_20260604.json",
@@ -107,6 +108,7 @@ DEFAULT_CODE_FILES = [
     Path("assumption_os/orthogonal_descendant_productivity.py"),
     Path("assumption_os/orthogonal_descendant_live_queue.py"),
     Path("assumption_os/orthogonal_descendant_live_readback.py"),
+    Path("assumption_os/pre_live_tie_screen.py"),
     Path("assumption_os/morphism_claims.py"),
     Path("assumption_os/paper_negative_results.py"),
     Path("assumption_os/paper_repro_pack.py"),
@@ -352,6 +354,10 @@ def _exact_commands() -> list[dict[str, str]]:
         {
             "name": "orthogonal_descendant_live_readback",
             "command": "python3 -m assumption_os.orthogonal_descendant_live_readback --root . --eval-id orthogonal_descendant_live_readback_20260608 --out 'phase four/assumption_graph/paper_readiness_20260604/orthogonal_descendant_live_readback_20260608.json'",
+        },
+        {
+            "name": "pre_live_tie_screen",
+            "command": "python3 -m assumption_os.pre_live_tie_screen --root . --eval-id pre_live_tie_screen_20260609 --out 'phase four/assumption_graph/paper_readiness_20260604/pre_live_tie_screen_20260609.json'",
         },
         {
             "name": "morphism_claim_bundle",
