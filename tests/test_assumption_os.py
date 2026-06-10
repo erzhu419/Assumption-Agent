@@ -45,6 +45,7 @@ from assumption_os.full_v2_phase7_daemon_harness_bypass import build_full_v2_pha
 from assumption_os.full_v2_vertical_slice_bypass import build_full_v2_vertical_slice_bypass_payload
 from assumption_os.full_v3_phase1_memory_consolidation import build_full_v3_phase1_memory_consolidation_payload
 from assumption_os.full_v3_phase2_verifier_synthesis import build_full_v3_phase2_verifier_synthesis_payload
+from assumption_os.full_v3_phase3_rollout_search_control import build_full_v3_phase3_rollout_search_control_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -545,6 +546,24 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["fresh_split_generalization"], 0.90)
         self.assertGreaterEqual(metrics["falsification_power"], 0.90)
         self.assertEqual(metrics["execution_lapse_new_hypothesis_count"], 0)
+
+    def test_full_v3_phase3_rollout_search_control_selects_high_value_branches(self):
+        payload = build_full_v3_phase3_rollout_search_control_payload(
+            eval_id="unit_full_v3_phase3_rollout_search_control"
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["branch_count"], 10)
+        self.assertEqual(metrics["rollout_horizon"], 3)
+        self.assertGreaterEqual(metrics["top_branch_precision"], 0.75)
+        self.assertGreaterEqual(metrics["live_call_saving_rate"], 0.50)
+        self.assertEqual(metrics["true_positive_block_rate"], 0.0)
+        self.assertGreaterEqual(metrics["multi_step_rollout_accuracy"], 0.90)
+        self.assertGreaterEqual(metrics["descendant_productivity_correlation"], 0.90)
+        self.assertLessEqual(metrics["expected_value_mae"], 0.05)
+        self.assertGreaterEqual(metrics["regression_recall"], 0.95)
+        self.assertLessEqual(metrics["oracle_regret"], 0.05)
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
