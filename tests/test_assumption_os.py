@@ -39,6 +39,7 @@ from assumption_os.full_v2_phase1_graph_memory_bypass import build_full_v2_phase
 from assumption_os.full_v2_phase2_verifier_bypass import build_full_v2_phase2_verifier_bypass_payload
 from assumption_os.full_v2_phase3_world_model_bypass import build_full_v2_phase3_world_model_bypass_payload
 from assumption_os.full_v2_phase4_hypothesis_generator_bypass import build_full_v2_phase4_hypothesis_generator_bypass_payload
+from assumption_os.full_v2_phase5_strategy_scheduler_bypass import build_full_v2_phase5_strategy_scheduler_bypass_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -436,6 +437,23 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["residual_explained_fraction"], 0.90)
         self.assertEqual(metrics["manifest_validation_issue_count"], 0)
         self.assertGreaterEqual(metrics["world_model_screen_precision"], 0.90)
+
+    def test_full_v2_phase5_strategy_scheduler_bypass_selects_strategy_families(self):
+        payload = build_full_v2_phase5_strategy_scheduler_bypass_payload(
+            eval_id="unit_full_v2_phase5_strategy_scheduler"
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertGreaterEqual(metrics["strategy_library_size"], 20)
+        self.assertGreaterEqual(metrics["strategy_selection_accuracy_against_experts"], 0.85)
+        self.assertGreaterEqual(metrics["success_rate_improvement"], 0.20)
+        self.assertGreaterEqual(metrics["time_to_solution_reduction"], 0.25)
+        self.assertGreaterEqual(metrics["cross_domain_transfer"], 0.75)
+        self.assertGreaterEqual(metrics["method_family_ACP"], 0.65)
+        self.assertGreaterEqual(metrics["strategy_boundary_learning"], 0.85)
+        self.assertGreaterEqual(metrics["negative_transfer_reduction"], 0.30)
+        self.assertLessEqual(metrics["budget_allocation_mae"], 0.10)
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
