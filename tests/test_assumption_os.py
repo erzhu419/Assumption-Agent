@@ -52,6 +52,7 @@ from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from assumption_os.harness_observer import build_harness_observer_payload, events_from_harness_artifacts
 from assumption_os.hipporag_qa_probe import build_hipporag_qa_probe_payload
 from assumption_os.hypothesis_lifecycle_v2 import build_hypothesis_lifecycle_v2_payload
+from assumption_os.hypothesis_overlay_v2 import build_hypothesis_overlay_v2_payload
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
 from assumption_os.manifest_logger import build_component_manifest_payload, events_from_run_logs
 from assumption_os.math_science_policy import route_math_science_problem
@@ -209,6 +210,31 @@ class AssumptionOSTest(unittest.TestCase):
             {edge["type"] for edge in projection["edges"]},
             {EdgeType.PARTICIPATES_IN.value},
         )
+
+    def test_hypothesis_overlay_v2_rolls_back_and_stays_idempotent(self):
+        payload = build_hypothesis_overlay_v2_payload(
+            root=Path("."),
+            eval_id="unit_hypothesis_overlay_v2",
+            performance_iterations=25,
+        )
+        diff = payload["diff"]
+        perf = payload["performance"]
+        idempotence = payload["idempotence"]
+        transaction = payload["transaction"]
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(diff["nodes_added"], 3)
+        self.assertEqual(diff["edges_added"], 2)
+        self.assertEqual(diff["nodes_removed"], 0)
+        self.assertEqual(diff["edges_removed"], 0)
+        self.assertEqual(transaction["before"], transaction["rollback"])
+        self.assertEqual(
+            idempotence["edge_count_after_first_apply"],
+            idempotence["edge_count_after_second_apply"],
+        )
+        self.assertEqual(perf["rollback_failure_count"], 0)
+        self.assertEqual(perf["iterations"], 25)
+        self.assertLess(perf["avg_apply_rollback_ms"], 25.0)
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:

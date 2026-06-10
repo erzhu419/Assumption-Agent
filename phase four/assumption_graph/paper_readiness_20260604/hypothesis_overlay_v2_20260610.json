@@ -1,0 +1,427 @@
+{
+  "eval_id": "hypothesis_overlay_v2_20260610",
+  "eval_kind": "hypothesis_overlay_v2_diff_rollback",
+  "reconstruction_v2_phase": "phase1_overlay_diff_rollback",
+  "performance_validation": true,
+  "behavior_validation": true,
+  "validation_scope": "Candidate overlay diff, rollback, idempotence, and small apply/rollback performance loop. Uses a temp graph only; main graph is not mutated.",
+  "source": {
+    "lifecycle_fixture": "phase four/assumption_graph/paper_readiness_20260604/hypothesis_lifecycle_v2_schema_20260610.json",
+    "manifest_id": "h2_9697361f2088",
+    "root": "."
+  },
+  "overlay_ops": [
+    {
+      "op": "add_node",
+      "node": {
+        "id": "process_le_chatelier_v1",
+        "type": "process",
+        "claim": "Process model for chemical_thermodynamic_equilibrium: imposed external condition change -> equilibrium shift that partially counteracts the imposed change",
+        "kind": "process_model",
+        "formal_form": {
+          "formal_kind": "process_model_v2",
+          "id": "process_le_chatelier_v1",
+          "domain": "chemical_thermodynamic_equilibrium",
+          "state_variables": [
+            "reactant_concentration",
+            "product_concentration",
+            "temperature",
+            "pressure",
+            "reaction_quotient"
+          ],
+          "parameters": [
+            "equilibrium_constant",
+            "stoichiometric_coefficients"
+          ],
+          "interventions": [
+            "external_concentration_change",
+            "external_temperature_change",
+            "external_pressure_change"
+          ],
+          "perturbation": "imposed external condition change",
+          "response": "equilibrium shift that partially counteracts the imposed change",
+          "dynamics": {
+            "rule": "local relaxation toward constrained equilibrium",
+            "sign_relation": "response direction reduces the externally imposed deviation"
+          },
+          "observation_map": "observe shift in reaction quotient and equilibrium composition",
+          "invariants": [
+            "response partially opposes imposed perturbation",
+            "system moves toward constrained equilibrium",
+            "domain-specific thermodynamic variables remain explicit"
+          ],
+          "failure_cases": [
+            "far from equilibrium kinetics",
+            "irreversible reaction regime",
+            "ambiguous reaction coordinate"
+          ],
+          "traces": []
+        },
+        "context_conditions": [
+          "chemical_thermodynamic_equilibrium"
+        ],
+        "predicted_effects": [
+          "makes mechanism-level alignment testable beyond node-level analogy"
+        ],
+        "risk_predictions": [
+          "far from equilibrium kinetics",
+          "irreversible reaction regime",
+          "ambiguous reaction coordinate"
+        ],
+        "verifiers": [
+          "process_model_schema",
+          "invariant_check"
+        ],
+        "evidence_ids": [],
+        "residual_ids": [],
+        "confidence": 0.5,
+        "metaproductivity": 0.0,
+        "status": "active",
+        "tags": [
+          "process_model",
+          "chemical_thermodynamic_equilibrium"
+        ],
+        "source_refs": [],
+        "payload": {
+          "v2_object": "ProcessModel"
+        },
+        "created_at": "2026-06-10T09:29:34Z",
+        "updated_at": "2026-06-10T09:29:34Z"
+      },
+      "edge": null,
+      "rollback_ref": "remove::process_le_chatelier_v1"
+    },
+    {
+      "op": "add_node",
+      "node": {
+        "id": "process_lenz_law_v1",
+        "type": "process",
+        "claim": "Process model for electromagnetic_induction: change in magnetic flux over time -> induced current creates magnetic field opposing the flux change",
+        "kind": "process_model",
+        "formal_form": {
+          "formal_kind": "process_model_v2",
+          "id": "process_lenz_law_v1",
+          "domain": "electromagnetic_induction",
+          "state_variables": [
+            "magnetic_flux",
+            "flux_time_derivative",
+            "induced_emf",
+            "induced_current",
+            "induced_magnetic_field"
+          ],
+          "parameters": [
+            "circuit_resistance",
+            "loop_geometry",
+            "magnetic_permeability"
+          ],
+          "interventions": [
+            "external_flux_change"
+          ],
+          "perturbation": "change in magnetic flux over time",
+          "response": "induced current creates magnetic field opposing the flux change",
+          "dynamics": {
+            "rule": "Faraday-Lenz sign relation",
+            "sign_relation": "induced response has sign opposing flux change"
+          },
+          "observation_map": "observe induced emf/current and induced magnetic-field direction",
+          "invariants": [
+            "induced response opposes magnetic flux change",
+            "opposition relation is local and sign-sensitive",
+            "domain-specific electromagnetic variables remain explicit"
+          ],
+          "failure_cases": [
+            "open circuit with no current path",
+            "nonlinear magnetic material regime",
+            "high-frequency radiative regime"
+          ],
+          "traces": []
+        },
+        "context_conditions": [
+          "electromagnetic_induction"
+        ],
+        "predicted_effects": [
+          "makes mechanism-level alignment testable beyond node-level analogy"
+        ],
+        "risk_predictions": [
+          "open circuit with no current path",
+          "nonlinear magnetic material regime",
+          "high-frequency radiative regime"
+        ],
+        "verifiers": [
+          "process_model_schema",
+          "invariant_check"
+        ],
+        "evidence_ids": [],
+        "residual_ids": [],
+        "confidence": 0.5,
+        "metaproductivity": 0.0,
+        "status": "active",
+        "tags": [
+          "process_model",
+          "electromagnetic_induction"
+        ],
+        "source_refs": [],
+        "payload": {
+          "v2_object": "ProcessModel"
+        },
+        "created_at": "2026-06-10T09:29:34Z",
+        "updated_at": "2026-06-10T09:29:34Z"
+      },
+      "edge": null,
+      "rollback_ref": "remove::process_lenz_law_v1"
+    },
+    {
+      "op": "add_relation_node",
+      "node": {
+        "id": "align_le_chatelier_lenz_v1",
+        "type": "alignment",
+        "claim": "chemical_thermodynamic_equilibrium and electromagnetic_induction share a bounded perturbation-opposition process schema.",
+        "kind": "alignment_hypothesis",
+        "formal_form": {
+          "formal_kind": "alignment_hypothesis_v2",
+          "id": "align_le_chatelier_lenz_v1",
+          "source_process": "process_le_chatelier_v1",
+          "target_process": "process_lenz_law_v1",
+          "mapping": {
+            "perturbation": "imposed external condition change -> change in magnetic flux over time",
+            "response": "equilibrium shift -> induced current / induced magnetic field",
+            "opposition_relation": "partial counteraction -> opposing flux sign",
+            "stability_intuition": "constrained equilibrium restoration -> local negative response"
+          },
+          "preserved_structure": [
+            "typed perturbation-response-opposition schema",
+            "response direction reduces or opposes the imposed change",
+            "local negative feedback intuition"
+          ],
+          "broken_structure": [
+            "thermodynamic equilibrium equations are not electromagnetic induction equations",
+            "free-energy relaxation is not circuit dynamics",
+            "chemical composition variables are not magnetic-flux variables"
+          ],
+          "metric_scores": {
+            "role_mapping_coverage": 1.0,
+            "invariant_overlap": 0.72,
+            "broken_structure_penalty": 0.08
+          },
+          "verifier_tests": [
+            "typed_mapping_check",
+            "invariant_preservation_check",
+            "negative_control_boundary_check",
+            "fresh_cross_domain_transfer_ablation"
+          ],
+          "status": "candidate"
+        },
+        "context_conditions": [
+          "source and target process models have typed perturbation-response structure"
+        ],
+        "predicted_effects": [
+          "supports transfer when preserved structure is activated",
+          "allows bounded negative controls through broken_structure fields"
+        ],
+        "risk_predictions": [
+          "may over-transfer if broken structures are ignored",
+          "may be only surface analogy without downstream verifier pass"
+        ],
+        "verifiers": [
+          "typed_mapping_check",
+          "invariant_preservation_check",
+          "negative_control_boundary_check",
+          "fresh_cross_domain_transfer_ablation"
+        ],
+        "evidence_ids": [],
+        "residual_ids": [],
+        "confidence": 0.5,
+        "metaproductivity": 0.0,
+        "status": "active",
+        "tags": [
+          "alignment_hypothesis",
+          "relation_node"
+        ],
+        "source_refs": [],
+        "payload": {
+          "v2_object": "AlignmentHypothesis"
+        },
+        "created_at": "2026-06-10T09:29:34Z",
+        "updated_at": "2026-06-10T09:29:34Z"
+      },
+      "edge": null,
+      "rollback_ref": "remove::align_le_chatelier_lenz_v1"
+    },
+    {
+      "op": "add_edge",
+      "node": null,
+      "edge": {
+        "source": "process_le_chatelier_v1",
+        "target": "align_le_chatelier_lenz_v1",
+        "type": "participates_in",
+        "weight": 1.0,
+        "evidence": null,
+        "payload": {
+          "role": "source_process",
+          "verifier_contract": {
+            "cheap": [
+              "check typed mapping includes perturbation, response, and opposition relation",
+              "check preserved_structure does not claim thermodynamic/electromagnetic equation identity"
+            ],
+            "world_model": [
+              "predict downstream analogy benefit and regression risk before live validation",
+              "estimate whether adding the relation node is likely to be a low-benefit tie"
+            ],
+            "live": [
+              "fresh analogy/explanation tasks with placebo relation controls",
+              "negative-control tasks where equilibrium restoration is absent"
+            ],
+            "rollback": "Do not merge the relation node if verifier fails or live transfer regresses."
+          },
+          "rollback_ref": "rollback::align_le_chatelier_lenz_v1"
+        },
+        "created_at": "2026-06-10T09:29:34Z"
+      },
+      "rollback_ref": "remove_edge::process_le_chatelier_v1->align_le_chatelier_lenz_v1"
+    },
+    {
+      "op": "add_edge",
+      "node": null,
+      "edge": {
+        "source": "align_le_chatelier_lenz_v1",
+        "target": "process_lenz_law_v1",
+        "type": "participates_in",
+        "weight": 1.0,
+        "evidence": null,
+        "payload": {
+          "role": "target_process",
+          "verifier_contract": {
+            "cheap": [
+              "check typed mapping includes perturbation, response, and opposition relation",
+              "check preserved_structure does not claim thermodynamic/electromagnetic equation identity"
+            ],
+            "world_model": [
+              "predict downstream analogy benefit and regression risk before live validation",
+              "estimate whether adding the relation node is likely to be a low-benefit tie"
+            ],
+            "live": [
+              "fresh analogy/explanation tasks with placebo relation controls",
+              "negative-control tasks where equilibrium restoration is absent"
+            ],
+            "rollback": "Do not merge the relation node if verifier fails or live transfer regresses."
+          },
+          "rollback_ref": "rollback::align_le_chatelier_lenz_v1"
+        },
+        "created_at": "2026-06-10T09:29:34Z"
+      },
+      "rollback_ref": "remove_edge::align_le_chatelier_lenz_v1->process_lenz_law_v1"
+    }
+  ],
+  "transaction": {
+    "overlay_id": "h2_9697361f2088",
+    "before": {
+      "node_count": 0,
+      "edge_count": 0,
+      "node_ids": [],
+      "edge_keys": []
+    },
+    "after": {
+      "node_count": 3,
+      "edge_count": 2,
+      "node_ids": [
+        "align_le_chatelier_lenz_v1",
+        "process_le_chatelier_v1",
+        "process_lenz_law_v1"
+      ],
+      "edge_keys": [
+        [
+          "align_le_chatelier_lenz_v1",
+          "process_lenz_law_v1",
+          "participates_in"
+        ],
+        [
+          "process_le_chatelier_v1",
+          "align_le_chatelier_lenz_v1",
+          "participates_in"
+        ]
+      ]
+    },
+    "rollback": {
+      "node_count": 0,
+      "edge_count": 0,
+      "node_ids": [],
+      "edge_keys": []
+    },
+    "applied_node_ids": [
+      "process_le_chatelier_v1",
+      "process_lenz_law_v1",
+      "align_le_chatelier_lenz_v1"
+    ],
+    "applied_edge_keys": [
+      [
+        "process_le_chatelier_v1",
+        "align_le_chatelier_lenz_v1",
+        "EdgeType.PARTICIPATES_IN"
+      ],
+      [
+        "align_le_chatelier_lenz_v1",
+        "process_lenz_law_v1",
+        "EdgeType.PARTICIPATES_IN"
+      ]
+    ],
+    "rollback_refs": [
+      "remove::process_le_chatelier_v1",
+      "remove::process_lenz_law_v1",
+      "remove::align_le_chatelier_lenz_v1",
+      "remove_edge::process_le_chatelier_v1->align_le_chatelier_lenz_v1",
+      "remove_edge::align_le_chatelier_lenz_v1->process_lenz_law_v1"
+    ],
+    "issues": []
+  },
+  "diff": {
+    "nodes_added": 3,
+    "nodes_removed": 0,
+    "edges_added": 2,
+    "edges_removed": 0,
+    "added_node_ids": [
+      "align_le_chatelier_lenz_v1",
+      "process_le_chatelier_v1",
+      "process_lenz_law_v1"
+    ],
+    "added_edge_keys": [
+      [
+        "align_le_chatelier_lenz_v1",
+        "process_lenz_law_v1",
+        "participates_in"
+      ],
+      [
+        "process_le_chatelier_v1",
+        "align_le_chatelier_lenz_v1",
+        "participates_in"
+      ]
+    ]
+  },
+  "idempotence": {
+    "node_count_after_first_apply": 3,
+    "edge_count_after_first_apply": 2,
+    "node_count_after_second_apply": 3,
+    "edge_count_after_second_apply": 2,
+    "first_issues": [],
+    "second_issues": []
+  },
+  "performance": {
+    "iterations": 200,
+    "elapsed_sec": 0.00323,
+    "avg_apply_rollback_ms": 0.016148,
+    "rollback_failure_count": 0
+  },
+  "gates": {
+    "overlay_has_explicit_rollback_refs": true,
+    "overlay_adds_expected_relation_subgraph": true,
+    "rollback_restores_exact_signature": true,
+    "idempotent_reapply_does_not_duplicate_edges": true,
+    "idempotent_reapply_does_not_duplicate_nodes": true,
+    "performance_loop_has_no_rollback_failures": true,
+    "performance_loop_completes_requested_iterations": true,
+    "performance_loop_avg_ms_under_budget": true,
+    "main_graph_not_mutated": true
+  },
+  "failed_gates": [],
+  "pass": true,
+  "interpretation": "Phase 1 makes v2 graph mutation explicit: a candidate hypothesis is a reversible overlay diff, not an immediate committed graph write.  The overlay can be applied, inspected, rolled back, and re-applied without duplicating relation edges."
+}
