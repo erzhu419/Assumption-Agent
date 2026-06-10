@@ -1,0 +1,1122 @@
+{
+  "eval_id": "formal_alignment_v2_20260610",
+  "eval_kind": "formal_alignment_v2_bounded_checker",
+  "reconstruction_v2_phase": "phase5_formal_alignment_layer",
+  "performance_validation": true,
+  "validation_scope": "Bounded category-inspired formal alignment over ProcessModel and AlignmentHypothesis objects. Compares semantic, graph-edit, and trajectory-information baselines against a typed mapping checker with invariant preservation, finite diagram checks, causal-mask signal, and negative controls.",
+  "thresholds": {
+    "formal_threshold": 0.6
+  },
+  "trajectory_axes": [
+    "opposition",
+    "equilibrium_restoration",
+    "exponential_decay",
+    "monotone_relaxation",
+    "local_stabilization",
+    "oscillation",
+    "saturation",
+    "capacity_constraint",
+    "coupled_dynamics"
+  ],
+  "source": {
+    "process_zoo_eval_id": "formal_alignment_v2_20260610_zoo",
+    "causal_mask_eval_id": "formal_alignment_v2_20260610_causal"
+  },
+  "certificates": [
+    {
+      "source_id": "process_damped_oscillator_v1",
+      "target_id": "process_predator_prey_local_v1",
+      "gold_label": "positive",
+      "decision": "accept_alignment",
+      "formal_score": 0.869,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.0,
+        "graph_edit_role_similarity": 0.2,
+        "trajectory_js_similarity": 0.6042
+      },
+      "typed_mapping": {
+        "source_perturbation": "system displaced from equilibrium",
+        "target_perturbation": "population perturbation",
+        "source_response": "restoring force and damping reduce oscillation energy",
+        "target_response": "coupled response can restore local balance near fixed point",
+        "shared_process_family": "local_stabilization",
+        "shared_typed_roles": "restoring_response"
+      },
+      "preserved_invariants": [
+        "process-family invariant: local_stabilization",
+        "typed role preserved: restoring_response"
+      ],
+      "broken_structures": [
+        "domain differs: damped_oscillator vs predator_prey_local_stabilization",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": true,
+        "diagram": {
+          "source": [
+            "system displaced from equilibrium",
+            "restoring force and damping reduce oscillation energy",
+            [
+              "restoring force opposes displacement",
+              "energy dissipates over time"
+            ]
+          ],
+          "target": [
+            "population perturbation",
+            "coupled response can restore local balance near fixed point",
+            [
+              "coupled variables can damp local deviation",
+              "stability depends on parameters"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [
+          "local_stabilization"
+        ],
+        "role_overlap": [
+          "restoring_response"
+        ],
+        "trajectory_similarity": 0.6042
+      },
+      "negative_control_check": {
+        "pass": true,
+        "reject_reason": ""
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.4868,
+        "relation_utility_drop": 0.5637,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=['local_stabilization']; roles=['restoring_response']; typed_role=0.750; invariant=0.780; trajectory=0.604; causal_drop=0.4868"
+    },
+    {
+      "source_id": "process_first_order_decay_v1",
+      "target_id": "process_radioactive_decay_v1",
+      "gold_label": "positive",
+      "decision": "accept_alignment",
+      "formal_score": 0.978,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.2222,
+        "graph_edit_role_similarity": 1.0,
+        "trajectory_js_similarity": 0.9841
+      },
+      "typed_mapping": {
+        "source_perturbation": "initial amount is set away from zero",
+        "target_perturbation": "initial unstable nuclei count",
+        "source_response": "quantity decreases proportionally to current amount",
+        "target_response": "expected count decays proportionally to current count",
+        "shared_process_family": "exponential_decay",
+        "shared_typed_roles": "monotone_decrease / rate_proportional_to_state / state"
+      },
+      "preserved_invariants": [
+        "process-family invariant: exponential_decay",
+        "typed role preserved: monotone_decrease",
+        "typed role preserved: rate_proportional_to_state",
+        "typed role preserved: state"
+      ],
+      "broken_structures": [
+        "domain differs: chemical_first_order_decay vs radioactive_decay",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": true,
+        "diagram": {
+          "source": [
+            "initial amount is set away from zero",
+            "quantity decreases proportionally to current amount",
+            [
+              "monotone exponential decay",
+              "rate proportional to state"
+            ]
+          ],
+          "target": [
+            "initial unstable nuclei count",
+            "expected count decays proportionally to current count",
+            [
+              "monotone exponential decay",
+              "memoryless decay law"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [
+          "exponential_decay"
+        ],
+        "role_overlap": [
+          "monotone_decrease",
+          "rate_proportional_to_state",
+          "state"
+        ],
+        "trajectory_similarity": 0.9841
+      },
+      "negative_control_check": {
+        "pass": true,
+        "reject_reason": ""
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.808,
+        "relation_utility_drop": 0.9391,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=['exponential_decay']; roles=['monotone_decrease', 'rate_proportional_to_state', 'state']; typed_role=1.000; invariant=0.900; trajectory=0.984; causal_drop=0.808"
+    },
+    {
+      "source_id": "process_first_order_decay_v1",
+      "target_id": "process_rc_discharge_v1",
+      "gold_label": "positive",
+      "decision": "accept_alignment",
+      "formal_score": 0.978,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.1562,
+        "graph_edit_role_similarity": 1.0,
+        "trajectory_js_similarity": 0.8543
+      },
+      "typed_mapping": {
+        "source_perturbation": "initial amount is set away from zero",
+        "target_perturbation": "capacitor starts charged above equilibrium",
+        "source_response": "quantity decreases proportionally to current amount",
+        "target_response": "voltage decays proportionally to current voltage",
+        "shared_process_family": "exponential_decay / monotone_relaxation",
+        "shared_typed_roles": "monotone_decrease / rate_proportional_to_state / state"
+      },
+      "preserved_invariants": [
+        "process-family invariant: exponential_decay",
+        "process-family invariant: monotone_relaxation",
+        "typed role preserved: monotone_decrease",
+        "typed role preserved: rate_proportional_to_state",
+        "typed role preserved: state"
+      ],
+      "broken_structures": [
+        "domain differs: chemical_first_order_decay vs rc_circuit_discharge",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": true,
+        "diagram": {
+          "source": [
+            "initial amount is set away from zero",
+            "quantity decreases proportionally to current amount",
+            [
+              "monotone exponential decay",
+              "rate proportional to state"
+            ]
+          ],
+          "target": [
+            "capacitor starts charged above equilibrium",
+            "voltage decays proportionally to current voltage",
+            [
+              "monotone exponential decay",
+              "time constant controls relaxation"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [
+          "exponential_decay",
+          "monotone_relaxation"
+        ],
+        "role_overlap": [
+          "monotone_decrease",
+          "rate_proportional_to_state",
+          "state"
+        ],
+        "trajectory_similarity": 0.8543
+      },
+      "negative_control_check": {
+        "pass": true,
+        "reject_reason": ""
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.8817,
+        "relation_utility_drop": 1.0229,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=['exponential_decay', 'monotone_relaxation']; roles=['monotone_decrease', 'rate_proportional_to_state', 'state']; typed_role=1.000; invariant=0.900; trajectory=0.854; causal_drop=0.8817"
+    },
+    {
+      "source_id": "process_le_chatelier_v1",
+      "target_id": "process_lenz_law_v1",
+      "gold_label": "positive",
+      "decision": "accept_alignment",
+      "formal_score": 0.946,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.1562,
+        "graph_edit_role_similarity": 0.5,
+        "trajectory_js_similarity": 0.474
+      },
+      "typed_mapping": {
+        "source_perturbation": "imposed external condition change",
+        "target_perturbation": "change in magnetic flux over time",
+        "source_response": "equilibrium shift partially counteracts the imposed change",
+        "target_response": "induced current creates field opposing the flux change",
+        "shared_process_family": "negative_feedback",
+        "shared_typed_roles": "opposing_response / perturbation"
+      },
+      "preserved_invariants": [
+        "process-family invariant: negative_feedback",
+        "typed role preserved: opposing_response",
+        "typed role preserved: perturbation"
+      ],
+      "broken_structures": [
+        "domain differs: chemical_thermodynamic_equilibrium vs electromagnetic_induction",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": true,
+        "diagram": {
+          "source": [
+            "imposed external condition change",
+            "equilibrium shift partially counteracts the imposed change",
+            [
+              "response opposes perturbation",
+              "moves toward constrained equilibrium"
+            ]
+          ],
+          "target": [
+            "change in magnetic flux over time",
+            "induced current creates field opposing the flux change",
+            [
+              "response opposes perturbation",
+              "sign-sensitive local opposition"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [
+          "negative_feedback"
+        ],
+        "role_overlap": [
+          "opposing_response",
+          "perturbation"
+        ],
+        "trajectory_similarity": 0.474
+      },
+      "negative_control_check": {
+        "pass": true,
+        "reject_reason": ""
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.7017,
+        "relation_utility_drop": 0.8182,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=['negative_feedback']; roles=['opposing_response', 'perturbation']; typed_role=0.867; invariant=0.900; trajectory=0.474; causal_drop=0.7017"
+    },
+    {
+      "source_id": "process_le_chatelier_v1",
+      "target_id": "process_supply_demand_response_v1",
+      "gold_label": "positive",
+      "decision": "accept_alignment",
+      "formal_score": 0.978,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.1053,
+        "graph_edit_role_similarity": 1.0,
+        "trajectory_js_similarity": 0.9538
+      },
+      "typed_mapping": {
+        "source_perturbation": "imposed external condition change",
+        "target_perturbation": "market shock moves price or quantity away from clearing level",
+        "source_response": "equilibrium shift partially counteracts the imposed change",
+        "target_response": "price and quantity adjust toward local clearing balance",
+        "shared_process_family": "equilibrium_restoration / negative_feedback",
+        "shared_typed_roles": "constraint / opposing_response / perturbation"
+      },
+      "preserved_invariants": [
+        "process-family invariant: equilibrium_restoration",
+        "process-family invariant: negative_feedback",
+        "typed role preserved: constraint",
+        "typed role preserved: opposing_response",
+        "typed role preserved: perturbation"
+      ],
+      "broken_structures": [
+        "domain differs: chemical_thermodynamic_equilibrium vs supply_demand_equilibrium_response",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": true,
+        "diagram": {
+          "source": [
+            "imposed external condition change",
+            "equilibrium shift partially counteracts the imposed change",
+            [
+              "response opposes perturbation",
+              "moves toward constrained equilibrium"
+            ]
+          ],
+          "target": [
+            "market shock moves price or quantity away from clearing level",
+            "price and quantity adjust toward local clearing balance",
+            [
+              "adjustment can reduce shortage or surplus",
+              "equilibrium restoration is local and delayed"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [
+          "equilibrium_restoration",
+          "negative_feedback"
+        ],
+        "role_overlap": [
+          "constraint",
+          "opposing_response",
+          "perturbation"
+        ],
+        "trajectory_similarity": 0.9538
+      },
+      "negative_control_check": {
+        "pass": true,
+        "reject_reason": ""
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.8774,
+        "relation_utility_drop": 1.018,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=['equilibrium_restoration', 'negative_feedback']; roles=['constraint', 'opposing_response', 'perturbation']; typed_role=1.000; invariant=0.900; trajectory=0.954; causal_drop=0.8774"
+    },
+    {
+      "source_id": "process_le_chatelier_v1",
+      "target_id": "process_thermostat_v1",
+      "gold_label": "positive",
+      "decision": "accept_alignment",
+      "formal_score": 0.946,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.0606,
+        "graph_edit_role_similarity": 0.5,
+        "trajectory_js_similarity": 0.8442
+      },
+      "typed_mapping": {
+        "source_perturbation": "imposed external condition change",
+        "target_perturbation": "temperature deviates from setpoint",
+        "source_response": "equilibrium shift partially counteracts the imposed change",
+        "target_response": "controller changes heating or cooling to reduce deviation",
+        "shared_process_family": "equilibrium_restoration / negative_feedback",
+        "shared_typed_roles": "opposing_response / perturbation"
+      },
+      "preserved_invariants": [
+        "process-family invariant: equilibrium_restoration",
+        "process-family invariant: negative_feedback",
+        "typed role preserved: opposing_response",
+        "typed role preserved: perturbation"
+      ],
+      "broken_structures": [
+        "domain differs: chemical_thermodynamic_equilibrium vs thermostat_temperature_control",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": true,
+        "diagram": {
+          "source": [
+            "imposed external condition change",
+            "equilibrium shift partially counteracts the imposed change",
+            [
+              "response opposes perturbation",
+              "moves toward constrained equilibrium"
+            ]
+          ],
+          "target": [
+            "temperature deviates from setpoint",
+            "controller changes heating or cooling to reduce deviation",
+            [
+              "response opposes deviation",
+              "closed-loop error reduction"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [
+          "equilibrium_restoration",
+          "negative_feedback"
+        ],
+        "role_overlap": [
+          "opposing_response",
+          "perturbation"
+        ],
+        "trajectory_similarity": 0.8442
+      },
+      "negative_control_check": {
+        "pass": true,
+        "reject_reason": ""
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.855,
+        "relation_utility_drop": 0.9926,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=['equilibrium_restoration', 'negative_feedback']; roles=['opposing_response', 'perturbation']; typed_role=0.867; invariant=0.900; trajectory=0.844; causal_drop=0.855"
+    },
+    {
+      "source_id": "process_lenz_law_v1",
+      "target_id": "process_thermostat_v1",
+      "gold_label": "positive",
+      "decision": "accept_alignment",
+      "formal_score": 0.946,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.0556,
+        "graph_edit_role_similarity": 0.5,
+        "trajectory_js_similarity": 0.5515
+      },
+      "typed_mapping": {
+        "source_perturbation": "change in magnetic flux over time",
+        "target_perturbation": "temperature deviates from setpoint",
+        "source_response": "induced current creates field opposing the flux change",
+        "target_response": "controller changes heating or cooling to reduce deviation",
+        "shared_process_family": "negative_feedback",
+        "shared_typed_roles": "opposing_response / perturbation"
+      },
+      "preserved_invariants": [
+        "process-family invariant: negative_feedback",
+        "typed role preserved: opposing_response",
+        "typed role preserved: perturbation"
+      ],
+      "broken_structures": [
+        "domain differs: electromagnetic_induction vs thermostat_temperature_control",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": true,
+        "diagram": {
+          "source": [
+            "change in magnetic flux over time",
+            "induced current creates field opposing the flux change",
+            [
+              "response opposes perturbation",
+              "sign-sensitive local opposition"
+            ]
+          ],
+          "target": [
+            "temperature deviates from setpoint",
+            "controller changes heating or cooling to reduce deviation",
+            [
+              "response opposes deviation",
+              "closed-loop error reduction"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [
+          "negative_feedback"
+        ],
+        "role_overlap": [
+          "opposing_response",
+          "perturbation"
+        ],
+        "trajectory_similarity": 0.5515
+      },
+      "negative_control_check": {
+        "pass": true,
+        "reject_reason": ""
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.686,
+        "relation_utility_drop": 0.8003,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=['negative_feedback']; roles=['opposing_response', 'perturbation']; typed_role=0.867; invariant=0.900; trajectory=0.552; causal_drop=0.686"
+    },
+    {
+      "source_id": "process_radioactive_decay_v1",
+      "target_id": "process_rc_discharge_v1",
+      "gold_label": "positive",
+      "decision": "accept_alignment",
+      "formal_score": 0.978,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.2308,
+        "graph_edit_role_similarity": 1.0,
+        "trajectory_js_similarity": 0.8448
+      },
+      "typed_mapping": {
+        "source_perturbation": "initial unstable nuclei count",
+        "target_perturbation": "capacitor starts charged above equilibrium",
+        "source_response": "expected count decays proportionally to current count",
+        "target_response": "voltage decays proportionally to current voltage",
+        "shared_process_family": "exponential_decay",
+        "shared_typed_roles": "monotone_decrease / rate_proportional_to_state / state"
+      },
+      "preserved_invariants": [
+        "process-family invariant: exponential_decay",
+        "typed role preserved: monotone_decrease",
+        "typed role preserved: rate_proportional_to_state",
+        "typed role preserved: state"
+      ],
+      "broken_structures": [
+        "domain differs: radioactive_decay vs rc_circuit_discharge",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": true,
+        "diagram": {
+          "source": [
+            "initial unstable nuclei count",
+            "expected count decays proportionally to current count",
+            [
+              "monotone exponential decay",
+              "memoryless decay law"
+            ]
+          ],
+          "target": [
+            "capacitor starts charged above equilibrium",
+            "voltage decays proportionally to current voltage",
+            [
+              "monotone exponential decay",
+              "time constant controls relaxation"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [
+          "exponential_decay"
+        ],
+        "role_overlap": [
+          "monotone_decrease",
+          "rate_proportional_to_state",
+          "state"
+        ],
+        "trajectory_similarity": 0.8448
+      },
+      "negative_control_check": {
+        "pass": true,
+        "reject_reason": ""
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.8049,
+        "relation_utility_drop": 0.9356,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=['exponential_decay']; roles=['monotone_decrease', 'rate_proportional_to_state', 'state']; typed_role=1.000; invariant=0.900; trajectory=0.845; causal_drop=0.8049"
+    },
+    {
+      "source_id": "process_supply_demand_response_v1",
+      "target_id": "process_thermostat_v1",
+      "gold_label": "positive",
+      "decision": "accept_alignment",
+      "formal_score": 0.946,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.075,
+        "graph_edit_role_similarity": 0.5,
+        "trajectory_js_similarity": 0.8089
+      },
+      "typed_mapping": {
+        "source_perturbation": "market shock moves price or quantity away from clearing level",
+        "target_perturbation": "temperature deviates from setpoint",
+        "source_response": "price and quantity adjust toward local clearing balance",
+        "target_response": "controller changes heating or cooling to reduce deviation",
+        "shared_process_family": "equilibrium_restoration / negative_feedback",
+        "shared_typed_roles": "opposing_response / perturbation"
+      },
+      "preserved_invariants": [
+        "process-family invariant: equilibrium_restoration",
+        "process-family invariant: negative_feedback",
+        "typed role preserved: opposing_response",
+        "typed role preserved: perturbation"
+      ],
+      "broken_structures": [
+        "domain differs: supply_demand_equilibrium_response vs thermostat_temperature_control",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": true,
+        "diagram": {
+          "source": [
+            "market shock moves price or quantity away from clearing level",
+            "price and quantity adjust toward local clearing balance",
+            [
+              "adjustment can reduce shortage or surplus",
+              "equilibrium restoration is local and delayed"
+            ]
+          ],
+          "target": [
+            "temperature deviates from setpoint",
+            "controller changes heating or cooling to reduce deviation",
+            [
+              "response opposes deviation",
+              "closed-loop error reduction"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [
+          "equilibrium_restoration",
+          "negative_feedback"
+        ],
+        "role_overlap": [
+          "opposing_response",
+          "perturbation"
+        ],
+        "trajectory_similarity": 0.8089
+      },
+      "negative_control_check": {
+        "pass": true,
+        "reject_reason": ""
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.7584,
+        "relation_utility_drop": 0.8827,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=['equilibrium_restoration', 'negative_feedback']; roles=['opposing_response', 'perturbation']; typed_role=0.867; invariant=0.900; trajectory=0.809; causal_drop=0.7584"
+    },
+    {
+      "source_id": "process_damped_oscillator_v1",
+      "target_id": "process_radioactive_decay_v1",
+      "gold_label": "negative",
+      "decision": "reject_alignment",
+      "formal_score": 0.0221,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.0,
+        "graph_edit_role_similarity": 0.0,
+        "trajectory_js_similarity": 0.184
+      },
+      "typed_mapping": {
+        "source_perturbation": "system displaced from equilibrium",
+        "target_perturbation": "initial unstable nuclei count",
+        "source_response": "restoring force and damping reduce oscillation energy",
+        "target_response": "expected count decays proportionally to current count"
+      },
+      "preserved_invariants": [
+        "no formal invariant preserved"
+      ],
+      "broken_structures": [
+        "domain differs: damped_oscillator vs radioactive_decay",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": false,
+        "diagram": {
+          "source": [
+            "system displaced from equilibrium",
+            "restoring force and damping reduce oscillation energy",
+            [
+              "restoring force opposes displacement",
+              "energy dissipates over time"
+            ]
+          ],
+          "target": [
+            "initial unstable nuclei count",
+            "expected count decays proportionally to current count",
+            [
+              "monotone exponential decay",
+              "memoryless decay law"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [],
+        "role_overlap": [],
+        "trajectory_similarity": 0.184
+      },
+      "negative_control_check": {
+        "pass": false,
+        "reject_reason": "no typed family bridge with enough role preservation"
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.0,
+        "relation_utility_drop": 0.0,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=[]; roles=[]; typed_role=0.000; invariant=0.000; trajectory=0.184; causal_drop=0.0"
+    },
+    {
+      "source_id": "process_first_order_decay_v1",
+      "target_id": "process_le_chatelier_v1",
+      "gold_label": "negative",
+      "decision": "reject_alignment",
+      "formal_score": 0.0193,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.0286,
+        "graph_edit_role_similarity": 0.0,
+        "trajectory_js_similarity": 0.1606
+      },
+      "typed_mapping": {
+        "source_perturbation": "initial amount is set away from zero",
+        "target_perturbation": "imposed external condition change",
+        "source_response": "quantity decreases proportionally to current amount",
+        "target_response": "equilibrium shift partially counteracts the imposed change"
+      },
+      "preserved_invariants": [
+        "no formal invariant preserved"
+      ],
+      "broken_structures": [
+        "domain differs: chemical_first_order_decay vs chemical_thermodynamic_equilibrium",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": false,
+        "diagram": {
+          "source": [
+            "initial amount is set away from zero",
+            "quantity decreases proportionally to current amount",
+            [
+              "monotone exponential decay",
+              "rate proportional to state"
+            ]
+          ],
+          "target": [
+            "imposed external condition change",
+            "equilibrium shift partially counteracts the imposed change",
+            [
+              "response opposes perturbation",
+              "moves toward constrained equilibrium"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [],
+        "role_overlap": [],
+        "trajectory_similarity": 0.1606
+      },
+      "negative_control_check": {
+        "pass": false,
+        "reject_reason": "no typed family bridge with enough role preservation"
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.0,
+        "relation_utility_drop": 0.0,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=[]; roles=[]; typed_role=0.000; invariant=0.000; trajectory=0.161; causal_drop=0.0"
+    },
+    {
+      "source_id": "process_first_order_decay_v1",
+      "target_id": "process_supply_demand_response_v1",
+      "gold_label": "negative",
+      "decision": "reject_alignment",
+      "formal_score": 0.0201,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.0732,
+        "graph_edit_role_similarity": 0.0,
+        "trajectory_js_similarity": 0.1677
+      },
+      "typed_mapping": {
+        "source_perturbation": "initial amount is set away from zero",
+        "target_perturbation": "market shock moves price or quantity away from clearing level",
+        "source_response": "quantity decreases proportionally to current amount",
+        "target_response": "price and quantity adjust toward local clearing balance"
+      },
+      "preserved_invariants": [
+        "no formal invariant preserved"
+      ],
+      "broken_structures": [
+        "domain differs: chemical_first_order_decay vs supply_demand_equilibrium_response",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": false,
+        "diagram": {
+          "source": [
+            "initial amount is set away from zero",
+            "quantity decreases proportionally to current amount",
+            [
+              "monotone exponential decay",
+              "rate proportional to state"
+            ]
+          ],
+          "target": [
+            "market shock moves price or quantity away from clearing level",
+            "price and quantity adjust toward local clearing balance",
+            [
+              "adjustment can reduce shortage or surplus",
+              "equilibrium restoration is local and delayed"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [],
+        "role_overlap": [],
+        "trajectory_similarity": 0.1677
+      },
+      "negative_control_check": {
+        "pass": false,
+        "reject_reason": "no typed family bridge with enough role preservation"
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.0,
+        "relation_utility_drop": 0.0,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=[]; roles=[]; typed_role=0.000; invariant=0.000; trajectory=0.168; causal_drop=0.0"
+    },
+    {
+      "source_id": "process_lenz_law_v1",
+      "target_id": "process_logistic_growth_v1",
+      "gold_label": "negative",
+      "decision": "reject_alignment",
+      "formal_score": 0.0248,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.0,
+        "graph_edit_role_similarity": 0.0,
+        "trajectory_js_similarity": 0.2065
+      },
+      "typed_mapping": {
+        "source_perturbation": "change in magnetic flux over time",
+        "target_perturbation": "population starts below or above carrying capacity",
+        "source_response": "induced current creates field opposing the flux change",
+        "target_response": "growth slows as population approaches carrying capacity"
+      },
+      "preserved_invariants": [
+        "no formal invariant preserved"
+      ],
+      "broken_structures": [
+        "domain differs: electromagnetic_induction vs logistic_growth",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": false,
+        "diagram": {
+          "source": [
+            "change in magnetic flux over time",
+            "induced current creates field opposing the flux change",
+            [
+              "response opposes perturbation",
+              "sign-sensitive local opposition"
+            ]
+          ],
+          "target": [
+            "population starts below or above carrying capacity",
+            "growth slows as population approaches carrying capacity",
+            [
+              "saturation near carrying capacity",
+              "state-dependent growth slowdown"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [],
+        "role_overlap": [],
+        "trajectory_similarity": 0.2065
+      },
+      "negative_control_check": {
+        "pass": false,
+        "reject_reason": "no typed family bridge with enough role preservation"
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.0,
+        "relation_utility_drop": 0.0,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=[]; roles=[]; typed_role=0.000; invariant=0.000; trajectory=0.206; causal_drop=0.0"
+    },
+    {
+      "source_id": "process_lenz_law_v1",
+      "target_id": "process_radioactive_decay_v1",
+      "gold_label": "negative",
+      "decision": "reject_alignment",
+      "formal_score": 0.0248,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.0303,
+        "graph_edit_role_similarity": 0.0,
+        "trajectory_js_similarity": 0.2065
+      },
+      "typed_mapping": {
+        "source_perturbation": "change in magnetic flux over time",
+        "target_perturbation": "initial unstable nuclei count",
+        "source_response": "induced current creates field opposing the flux change",
+        "target_response": "expected count decays proportionally to current count"
+      },
+      "preserved_invariants": [
+        "no formal invariant preserved"
+      ],
+      "broken_structures": [
+        "domain differs: electromagnetic_induction vs radioactive_decay",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": false,
+        "diagram": {
+          "source": [
+            "change in magnetic flux over time",
+            "induced current creates field opposing the flux change",
+            [
+              "response opposes perturbation",
+              "sign-sensitive local opposition"
+            ]
+          ],
+          "target": [
+            "initial unstable nuclei count",
+            "expected count decays proportionally to current count",
+            [
+              "monotone exponential decay",
+              "memoryless decay law"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [],
+        "role_overlap": [],
+        "trajectory_similarity": 0.2065
+      },
+      "negative_control_check": {
+        "pass": false,
+        "reject_reason": "no typed family bridge with enough role preservation"
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.0,
+        "relation_utility_drop": 0.0,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=[]; roles=[]; typed_role=0.000; invariant=0.000; trajectory=0.206; causal_drop=0.0"
+    },
+    {
+      "source_id": "process_logistic_growth_v1",
+      "target_id": "process_rc_discharge_v1",
+      "gold_label": "negative",
+      "decision": "reject_alignment",
+      "formal_score": 0.0207,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.0645,
+        "graph_edit_role_similarity": 0.2,
+        "trajectory_js_similarity": 0.1721
+      },
+      "typed_mapping": {
+        "source_perturbation": "population starts below or above carrying capacity",
+        "target_perturbation": "capacitor starts charged above equilibrium",
+        "source_response": "growth slows as population approaches carrying capacity",
+        "target_response": "voltage decays proportionally to current voltage",
+        "shared_typed_roles": "state"
+      },
+      "preserved_invariants": [
+        "typed role preserved: state"
+      ],
+      "broken_structures": [
+        "domain differs: logistic_growth vs rc_circuit_discharge",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": false,
+        "diagram": {
+          "source": [
+            "population starts below or above carrying capacity",
+            "growth slows as population approaches carrying capacity",
+            [
+              "saturation near carrying capacity",
+              "state-dependent growth slowdown"
+            ]
+          ],
+          "target": [
+            "capacitor starts charged above equilibrium",
+            "voltage decays proportionally to current voltage",
+            [
+              "monotone exponential decay",
+              "time constant controls relaxation"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [],
+        "role_overlap": [
+          "state"
+        ],
+        "trajectory_similarity": 0.1721
+      },
+      "negative_control_check": {
+        "pass": false,
+        "reject_reason": "no typed family bridge with enough role preservation"
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.098,
+        "relation_utility_drop": -0.1074,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=[]; roles=['state']; typed_role=0.000; invariant=0.000; trajectory=0.172; causal_drop=0.098"
+    },
+    {
+      "source_id": "process_predator_prey_local_v1",
+      "target_id": "process_rc_discharge_v1",
+      "gold_label": "negative",
+      "decision": "reject_alignment",
+      "formal_score": 0.0189,
+      "baseline_scores": {
+        "llm_semantic_aligner_proxy": 0.0,
+        "graph_edit_role_similarity": 0.0,
+        "trajectory_js_similarity": 0.1579
+      },
+      "typed_mapping": {
+        "source_perturbation": "population perturbation",
+        "target_perturbation": "capacitor starts charged above equilibrium",
+        "source_response": "coupled response can restore local balance near fixed point",
+        "target_response": "voltage decays proportionally to current voltage"
+      },
+      "preserved_invariants": [
+        "no formal invariant preserved"
+      ],
+      "broken_structures": [
+        "domain differs: predator_prey_local_stabilization vs rc_circuit_discharge",
+        "state variables and equations are not treated as identical"
+      ],
+      "finite_diagram_check": {
+        "pass": false,
+        "diagram": {
+          "source": [
+            "population perturbation",
+            "coupled response can restore local balance near fixed point",
+            [
+              "coupled variables can damp local deviation",
+              "stability depends on parameters"
+            ]
+          ],
+          "target": [
+            "capacitor starts charged above equilibrium",
+            "voltage decays proportionally to current voltage",
+            [
+              "monotone exponential decay",
+              "time constant controls relaxation"
+            ]
+          ],
+          "required_commutation": "mapped perturbation -> mapped response preserves the same abstract invariant family"
+        },
+        "family_overlap": [],
+        "role_overlap": [],
+        "trajectory_similarity": 0.1579
+      },
+      "negative_control_check": {
+        "pass": false,
+        "reject_reason": "no typed family bridge with enough role preservation"
+      },
+      "causal_mask_signal": {
+        "relation_accept_drop": 0.0,
+        "relation_utility_drop": 0.0,
+        "masked_accept_prob": 0.0998
+      },
+      "rationale": "families=[]; roles=[]; typed_role=0.000; invariant=0.000; trajectory=0.158; causal_drop=0.0"
+    }
+  ],
+  "metrics": {
+    "certificate_count": 16,
+    "formal_accuracy": 1.0,
+    "formal_positive_recall": 1.0,
+    "formal_positive_precision": 1.0,
+    "formal_negative_rejection_rate": 1.0,
+    "formal_false_positive_count": 0,
+    "formal_false_negative_count": 0,
+    "llm_semantic_aligner_proxy_accuracy": 0.5625,
+    "graph_edit_role_similarity_accuracy": 0.6875,
+    "trajectory_js_similarity_accuracy": 0.8125,
+    "best_baseline_accuracy": 0.8125,
+    "formal_margin_over_best_baseline": 0.1875,
+    "baseline_accuracies": {
+      "llm_semantic_aligner_proxy": 0.5625,
+      "graph_edit_role_similarity": 0.6875,
+      "trajectory_js_similarity": 0.8125
+    },
+    "accepted_positive_mean_relation_drop": 0.7622,
+    "finite_diagram_pass_rate": 0.5625,
+    "negative_control_pass_rate": 0.5625
+  },
+  "gates": {
+    "source_process_zoo_passes": true,
+    "source_causal_mask_passes": true,
+    "has_typed_certificates": true,
+    "formal_accuracy_high": true,
+    "formal_beats_best_baseline": true,
+    "formal_positive_recall_high": true,
+    "formal_negative_rejection_high": true,
+    "negative_controls_blocked": true,
+    "positive_causal_signal_high": true,
+    "not_full_theorem_prover_claim": true
+  },
+  "failed_gates": [],
+  "pass": true,
+  "interpretation": "The formal layer treats an alignment as a typed relation node with a certificate.  It accepts cross-domain transfer only when typed roles, process-family structure, invariant preservation, finite diagram consistency, causal-mask contribution, and negative controls agree.  It is a bounded structural checker, not a universal category-theory engine."
+}

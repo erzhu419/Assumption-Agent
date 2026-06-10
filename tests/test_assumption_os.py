@@ -30,6 +30,7 @@ from assumption_os.evolution_context import (
     build_evolution_context_payload,
 )
 from assumption_os.failure_hypotheses import build_failure_hypothesis_payload
+from assumption_os.formal_alignment_v2 import build_formal_alignment_v2_payload
 from assumption_os.falsification import FalsificationDecision, build_falsification_payload
 from assumption_os.first_party_world_model import build_first_party_world_model_scale_payload
 from assumption_os.formal_mapping import (
@@ -286,6 +287,25 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["negative_control_mask_false_live_count"], 0)
         self.assertGreaterEqual(metrics["positive_top_relation_mask_fraction"], 0.80)
         self.assertEqual(ranking[0]["mask_id"], "do(mask_alignment_relation_node)")
+
+    def test_formal_alignment_v2_beats_process_similarity_baselines(self):
+        payload = build_formal_alignment_v2_payload(eval_id="unit_formal_alignment_v2")
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertGreaterEqual(metrics["certificate_count"], 16)
+        self.assertGreaterEqual(metrics["formal_accuracy"], 0.95)
+        self.assertGreater(metrics["formal_accuracy"], metrics["best_baseline_accuracy"])
+        self.assertGreaterEqual(metrics["formal_positive_recall"], 0.95)
+        self.assertGreaterEqual(metrics["formal_negative_rejection_rate"], 0.95)
+        self.assertEqual(metrics["formal_false_positive_count"], 0)
+        self.assertGreaterEqual(metrics["accepted_positive_mean_relation_drop"], 0.40)
+        positive_local_stabilization = [
+            row for row in payload["certificates"]
+            if row["source_id"] == "process_damped_oscillator_v1"
+            and row["target_id"] == "process_predator_prey_local_v1"
+        ]
+        self.assertEqual(positive_local_stabilization[0]["decision"], "accept_alignment")
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
