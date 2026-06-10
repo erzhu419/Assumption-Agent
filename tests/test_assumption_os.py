@@ -51,6 +51,7 @@ from assumption_os.formal_mapping import (
 from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from assumption_os.harness_observer import build_harness_observer_payload, events_from_harness_artifacts
 from assumption_os.hipporag_qa_probe import build_hipporag_qa_probe_payload
+from assumption_os.hypothesis_lifecycle_v2 import build_hypothesis_lifecycle_v2_payload
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
 from assumption_os.manifest_logger import build_component_manifest_payload, events_from_run_logs
 from assumption_os.math_science_policy import route_math_science_problem
@@ -184,6 +185,30 @@ class AssumptionOSTest(unittest.TestCase):
             activated = graph.retrieve("世界模型外推失败，应该先做最小场景并替换一个核心模块", seeds=["S15"], top_k=2)
             self.assertEqual(activated.nodes[0].id, "strategy_S15")
             self.assertIn("strategy_S01", {n.id for n in activated.nodes})
+
+    def test_hypothesis_lifecycle_v2_represents_alignment_as_relation_node(self):
+        payload = build_hypothesis_lifecycle_v2_payload(eval_id="unit_hypothesis_lifecycle_v2")
+        metrics = payload["metrics"]
+        projection = payload["graph_projection"]
+        manifest = payload["objects"]["manifest"]
+        alignment = payload["objects"]["alignment_hypothesis"]
+        trial = payload["objects"]["world_model_trial"]
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["process_model_count"], 2)
+        self.assertEqual(metrics["alignment_relation_node_count"], 1)
+        self.assertEqual(metrics["bare_alignment_edge_count"], 0)
+        self.assertEqual(metrics["participates_in_edge_count"], 2)
+        self.assertEqual(metrics["validation_issue_count"], 0)
+        self.assertGreater(metrics["mapping_score"], 0.7)
+        self.assertEqual(len(manifest["graph_ops"]), 5)
+        self.assertIn("thermodynamic equilibrium equations", " ".join(alignment["broken_structure"]))
+        self.assertEqual(trial["action"]["type"], "add_alignment_hypothesis")
+        self.assertGreaterEqual(len(trial["action"]["counterfactual_masks"]), 3)
+        self.assertEqual(
+            {edge["type"] for edge in projection["edges"]},
+            {EdgeType.PARTICIPATES_IN.value},
+        )
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:

@@ -29,6 +29,7 @@ def stable_id(prefix: str, *parts: object, length: int = 12) -> str:
 
 class AssumptionType(str, Enum):
     OBJECT = "object"
+    PROCESS = "process"
     METHOD = "method"
     EVALUATOR = "evaluator"
     MEMORY = "memory"
@@ -45,6 +46,9 @@ class AssumptionType(str, Enum):
 
 class HypothesisKind(str, Enum):
     CLAIM = "claim"
+    PROCESS_MODEL = "process_model"
+    ALIGNMENT_HYPOTHESIS = "alignment_hypothesis"
+    WORLD_MODEL_TRIAL = "world_model_trial"
     FEATURE = "feature"
     CONSTRAINT = "constraint"
     DECOMPOSITION = "decomposition"
@@ -58,6 +62,9 @@ class HypothesisKind(str, Enum):
 class EdgeType(str, Enum):
     SUPPORTS = "supports"
     CONTRADICTS = "contradicts"
+    PARTICIPATES_IN = "participates_in"
+    HAS_PROCESS_MODEL = "has_process_model"
+    HAS_ALIGNMENT = "has_alignment"
     SPECIALIZES = "specializes"
     GENERALIZES = "generalizes"
     IS_ANALOGY_OF = "is_analogy_of"
