@@ -48,6 +48,7 @@ from assumption_os.full_v3_phase2_verifier_synthesis import build_full_v3_phase2
 from assumption_os.full_v3_phase3_rollout_search_control import build_full_v3_phase3_rollout_search_control_payload
 from assumption_os.full_v3_phase5_contextual_bandit_scheduler import build_full_v3_phase5_contextual_bandit_scheduler_payload
 from assumption_os.full_v3_phase7_long_run_benchmark import build_full_v3_phase7_long_run_benchmark_payload
+from assumption_os.full_v3_paper_scale_evidence import build_full_v3_paper_scale_evidence_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -605,6 +606,30 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["rate_limit_violation_count"], 0)
         self.assertGreaterEqual(metrics["checkpoint_recovery_success"], 0.95)
         self.assertGreaterEqual(metrics["continuous_learning_acp_lift"], 0.10)
+
+    def test_full_v3_paper_scale_evidence_aggregates_live_and_mechanism_artifacts(self):
+        payload = build_full_v3_paper_scale_evidence_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_paper_scale_evidence",
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["required_artifact_pass_rate"], 1.0)
+        self.assertGreaterEqual(metrics["raw_first_party_live_event_count"], 6000)
+        self.assertGreaterEqual(metrics["valid_judge_event_count"], 2500)
+        self.assertGreaterEqual(metrics["main_problem_level_n"], 100)
+        self.assertGreater(metrics["structural_vs_base_ci_lower"], 0.50)
+        self.assertLess(metrics["structural_vs_base_p_value"], 0.05)
+        self.assertGreater(metrics["structural_vs_placebo_ci_lower"], 0.60)
+        self.assertLess(metrics["structural_vs_placebo_p_value"], 0.001)
+        self.assertGreaterEqual(metrics["retrieval_margin_over_best_baseline"], 0.70)
+        self.assertGreaterEqual(metrics["key_toggle_min_margin"], 0.05)
+        self.assertEqual(metrics["v3_mechanism_pass_rate"], 1.0)
+        self.assertGreaterEqual(metrics["long_run_downstream_win_rate"], 0.65)
+        self.assertFalse(metrics["prompt_answer_payload_stored"])
+        self.assertFalse(metrics["secret_leak_detected"])
+        self.assertGreaterEqual(metrics["boundary_case_count"], 1)
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
