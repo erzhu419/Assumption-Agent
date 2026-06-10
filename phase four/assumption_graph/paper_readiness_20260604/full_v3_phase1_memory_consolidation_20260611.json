@@ -1,0 +1,413 @@
+{
+  "eval_id": "full_v3_phase1_memory_consolidation_20260611",
+  "eval_kind": "full_v3_phase1_shadow_memory_consolidation",
+  "reconstruction_v2_full_phase": "phase1_v3_memory_consolidation",
+  "performance_validation": true,
+  "shadow_bypass": true,
+  "validation_scope": "Sleep-phase memory consolidation over assumption families: duplicate detection, evidence merge, scope refinement, stale/low-quality evidence pruning, active-conflict detection, method refinement, ACP update, and retrieval metric deltas.",
+  "input_nodes": [
+    {
+      "node_id": "n_bridge_a",
+      "family": "bridge_roles",
+      "claim": "Use typed bridge roles before retrieval.",
+      "scope_tags": [
+        "multi_hop",
+        "role_bridge",
+        "retrieval"
+      ],
+      "evidence_quality": 0.92,
+      "verified": true,
+      "stale": false,
+      "conflicts_with": null,
+      "retrieval_relevant": true,
+      "negative_transfer": false,
+      "descendant_productivity": 0.72
+    },
+    {
+      "node_id": "n_bridge_b",
+      "family": "bridge_roles",
+      "claim": "Bridge decomposition improves multi-hop retrieval.",
+      "scope_tags": [
+        "multi_hop",
+        "role_bridge",
+        "retrieval"
+      ],
+      "evidence_quality": 0.88,
+      "verified": true,
+      "stale": false,
+      "conflicts_with": null,
+      "retrieval_relevant": true,
+      "negative_transfer": false,
+      "descendant_productivity": 0.7
+    },
+    {
+      "node_id": "n_bridge_stale",
+      "family": "bridge_roles",
+      "claim": "Always add bridge entities.",
+      "scope_tags": [
+        "multi_hop",
+        "role_bridge"
+      ],
+      "evidence_quality": 0.31,
+      "verified": false,
+      "stale": true,
+      "conflicts_with": null,
+      "retrieval_relevant": false,
+      "negative_transfer": true,
+      "descendant_productivity": 0.05
+    },
+    {
+      "node_id": "n_feedback_a",
+      "family": "feedback_alignment",
+      "claim": "Feedback invariants support cross-domain transfer.",
+      "scope_tags": [
+        "feedback",
+        "invariant",
+        "formal_alignment"
+      ],
+      "evidence_quality": 0.86,
+      "verified": true,
+      "stale": false,
+      "conflicts_with": null,
+      "retrieval_relevant": true,
+      "negative_transfer": false,
+      "descendant_productivity": 0.68
+    },
+    {
+      "node_id": "n_feedback_b",
+      "family": "feedback_alignment",
+      "claim": "Opposing response schemas can transfer across domains.",
+      "scope_tags": [
+        "feedback",
+        "invariant",
+        "formal_alignment"
+      ],
+      "evidence_quality": 0.83,
+      "verified": true,
+      "stale": false,
+      "conflicts_with": null,
+      "retrieval_relevant": true,
+      "negative_transfer": false,
+      "descendant_productivity": 0.66
+    },
+    {
+      "node_id": "n_feedback_conflict",
+      "family": "feedback_alignment",
+      "claim": "Treat all feedback analogies as exact equations.",
+      "scope_tags": [
+        "feedback",
+        "surface_match"
+      ],
+      "evidence_quality": 0.55,
+      "verified": true,
+      "stale": false,
+      "conflicts_with": "n_feedback_a",
+      "retrieval_relevant": false,
+      "negative_transfer": true,
+      "descendant_productivity": 0.1
+    },
+    {
+      "node_id": "n_memory_a",
+      "family": "memory_boundary",
+      "claim": "Only inject graph context when role-compatible.",
+      "scope_tags": [
+        "memory",
+        "role_compatible",
+        "negative_control"
+      ],
+      "evidence_quality": 0.89,
+      "verified": true,
+      "stale": false,
+      "conflicts_with": null,
+      "retrieval_relevant": true,
+      "negative_transfer": false,
+      "descendant_productivity": 0.71
+    },
+    {
+      "node_id": "n_memory_b",
+      "family": "memory_boundary",
+      "claim": "Demote seductive but role-incompatible context.",
+      "scope_tags": [
+        "memory",
+        "role_compatible",
+        "negative_control"
+      ],
+      "evidence_quality": 0.84,
+      "verified": true,
+      "stale": false,
+      "conflicts_with": null,
+      "retrieval_relevant": true,
+      "negative_transfer": false,
+      "descendant_productivity": 0.69
+    },
+    {
+      "node_id": "n_memory_bad",
+      "family": "memory_boundary",
+      "claim": "Top-k semantic context is always useful.",
+      "scope_tags": [
+        "memory",
+        "semantic_topk"
+      ],
+      "evidence_quality": 0.28,
+      "verified": false,
+      "stale": true,
+      "conflicts_with": null,
+      "retrieval_relevant": false,
+      "negative_transfer": true,
+      "descendant_productivity": 0.02
+    },
+    {
+      "node_id": "n_direct",
+      "family": "direct_answer",
+      "claim": "Do not add graph context for direct lookup.",
+      "scope_tags": [
+        "direct_answer",
+        "low_context"
+      ],
+      "evidence_quality": 0.78,
+      "verified": true,
+      "stale": false,
+      "conflicts_with": null,
+      "retrieval_relevant": false,
+      "negative_transfer": false,
+      "descendant_productivity": 0.45
+    }
+  ],
+  "operations": {
+    "duplicate_groups": [
+      {
+        "family": "bridge_roles",
+        "node_ids": [
+          "n_bridge_a",
+          "n_bridge_b",
+          "n_bridge_stale"
+        ]
+      },
+      {
+        "family": "feedback_alignment",
+        "node_ids": [
+          "n_feedback_a",
+          "n_feedback_b",
+          "n_feedback_conflict"
+        ]
+      },
+      {
+        "family": "memory_boundary",
+        "node_ids": [
+          "n_memory_a",
+          "n_memory_b",
+          "n_memory_bad"
+        ]
+      }
+    ],
+    "pruned_node_ids": [
+      "n_bridge_stale",
+      "n_memory_bad"
+    ],
+    "conflicts": [
+      {
+        "source": "n_feedback_conflict",
+        "target": "n_feedback_a"
+      }
+    ],
+    "method_refinements": [
+      {
+        "family": "bridge_roles",
+        "claim": "Refine bridge_roles scope to multi_hop, retrieval, role_bridge after repeated validated evidence.",
+        "source_count": 2
+      },
+      {
+        "family": "feedback_alignment",
+        "claim": "Refine feedback_alignment scope to feedback, formal_alignment, invariant after repeated validated evidence.",
+        "source_count": 2
+      },
+      {
+        "family": "memory_boundary",
+        "claim": "Refine memory_boundary scope to memory, negative_control, role_compatible after repeated validated evidence.",
+        "source_count": 2
+      }
+    ],
+    "consolidated_nodes": [
+      {
+        "node_id": "consolidated::bridge_roles",
+        "family": "bridge_roles",
+        "merged_from": [
+          "n_bridge_a",
+          "n_bridge_b"
+        ],
+        "scope_tags": [
+          "multi_hop",
+          "retrieval",
+          "role_bridge"
+        ],
+        "evidence_count": 2,
+        "updated_acp": 0.71,
+        "retrieval_relevant": true,
+        "negative_transfer": false
+      },
+      {
+        "node_id": "consolidated::direct_answer",
+        "family": "direct_answer",
+        "merged_from": [
+          "n_direct"
+        ],
+        "scope_tags": [
+          "direct_answer",
+          "low_context"
+        ],
+        "evidence_count": 1,
+        "updated_acp": 0.45,
+        "retrieval_relevant": false,
+        "negative_transfer": false
+      },
+      {
+        "node_id": "consolidated::feedback_alignment",
+        "family": "feedback_alignment",
+        "merged_from": [
+          "n_feedback_a",
+          "n_feedback_b"
+        ],
+        "scope_tags": [
+          "feedback",
+          "formal_alignment",
+          "invariant"
+        ],
+        "evidence_count": 2,
+        "updated_acp": 0.67,
+        "retrieval_relevant": true,
+        "negative_transfer": false
+      },
+      {
+        "node_id": "consolidated::memory_boundary",
+        "family": "memory_boundary",
+        "merged_from": [
+          "n_memory_a",
+          "n_memory_b"
+        ],
+        "scope_tags": [
+          "memory",
+          "negative_control",
+          "role_compatible"
+        ],
+        "evidence_count": 2,
+        "updated_acp": 0.7,
+        "retrieval_relevant": true,
+        "negative_transfer": false
+      }
+    ],
+    "first_pass_signature": "[[\"consolidated::bridge_roles\", [\"multi_hop\", \"retrieval\", \"role_bridge\"], 0.71], [\"consolidated::direct_answer\", [\"direct_answer\", \"low_context\"], 0.45], [\"consolidated::feedback_alignment\", [\"feedback\", \"formal_alignment\", \"invariant\"], 0.67], [\"consolidated::memory_boundary\", [\"memory\", \"negative_control\", \"role_compatible\"], 0.7]]",
+    "second_pass_signature": "[[\"consolidated::bridge_roles\", [\"multi_hop\", \"retrieval\", \"role_bridge\"], 0.71], [\"consolidated::direct_answer\", [\"direct_answer\", \"low_context\"], 0.45], [\"consolidated::feedback_alignment\", [\"feedback\", \"formal_alignment\", \"invariant\"], 0.67], [\"consolidated::memory_boundary\", [\"memory\", \"negative_control\", \"role_compatible\"], 0.7]]"
+  },
+  "retrieval_before": {
+    "rows": [
+      {
+        "query": "multi-hop bridge retrieval needs typed roles",
+        "top_families": [
+          "bridge_roles",
+          "bridge_roles",
+          "bridge_roles"
+        ],
+        "precision": 0.6667,
+        "negative_transfer_hits": 1,
+        "context_efficiency": 0.1429
+      },
+      {
+        "query": "formal analogy should preserve feedback invariant",
+        "top_families": [
+          "feedback_alignment",
+          "feedback_alignment",
+          "feedback_alignment"
+        ],
+        "precision": 0.6667,
+        "negative_transfer_hits": 1,
+        "context_efficiency": 0.1429
+      },
+      {
+        "query": "graph context causes negative transfer",
+        "top_families": [
+          "memory_boundary",
+          "memory_boundary",
+          "memory_boundary"
+        ],
+        "precision": 0.6667,
+        "negative_transfer_hits": 1,
+        "context_efficiency": 0.1429
+      }
+    ],
+    "mean_precision": 0.6667,
+    "negative_transfer_count": 3,
+    "mean_context_efficiency": 0.1429
+  },
+  "retrieval_after": {
+    "rows": [
+      {
+        "query": "multi-hop bridge retrieval needs typed roles",
+        "top_families": [
+          "bridge_roles"
+        ],
+        "precision": 1.0,
+        "negative_transfer_hits": 0,
+        "context_efficiency": 0.5
+      },
+      {
+        "query": "formal analogy should preserve feedback invariant",
+        "top_families": [
+          "feedback_alignment"
+        ],
+        "precision": 1.0,
+        "negative_transfer_hits": 0,
+        "context_efficiency": 0.5
+      },
+      {
+        "query": "graph context causes negative transfer",
+        "top_families": [
+          "memory_boundary"
+        ],
+        "precision": 1.0,
+        "negative_transfer_hits": 0,
+        "context_efficiency": 0.5
+      }
+    ],
+    "mean_precision": 1.0,
+    "negative_transfer_count": 0,
+    "mean_context_efficiency": 0.5
+  },
+  "metrics": {
+    "input_node_count": 10,
+    "consolidated_node_count": 4,
+    "duplicate_detection_recall": 1.0,
+    "evidence_merge_precision": 1.0,
+    "scope_refinement_accuracy": 1.0,
+    "stale_evidence_prune_recall": 1.0,
+    "conflict_detection_recall": 1.0,
+    "method_refinement_precision": 1.0,
+    "acp_update_correlation": 1.0,
+    "retrieval_precision_before": 0.6667,
+    "retrieval_precision_after": 1.0,
+    "retrieval_precision_delta": 0.3333,
+    "negative_transfer_before": 3,
+    "negative_transfer_after": 0,
+    "negative_transfer_reduction": 1.0,
+    "context_efficiency_before": 0.1429,
+    "context_efficiency_after": 0.5,
+    "context_efficiency_delta": 0.3571,
+    "idempotence_delta": 0
+  },
+  "gates": {
+    "duplicate_detection_high": true,
+    "evidence_merge_precise": true,
+    "scope_refinement_high": true,
+    "stale_prune_high": true,
+    "conflict_detection_high": true,
+    "method_refinement_precise": true,
+    "acp_update_tracks_productivity": true,
+    "retrieval_precision_improves": true,
+    "negative_transfer_reduces": true,
+    "context_efficiency_improves": true,
+    "idempotent_consolidation": true,
+    "shadow_mode_no_graph_mutation": true
+  },
+  "failed_gates": [],
+  "pass": true,
+  "interpretation": "Full-v3 Phase 1 prevents the Assumption Graph from becoming an experience dump: it consolidates validated family evidence, narrows scope, prunes stale memories, surfaces active conflicts, and updates ACP so later retrieval uses cleaner, more transferable context."
+}

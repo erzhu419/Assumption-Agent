@@ -43,6 +43,7 @@ from assumption_os.full_v2_phase5_strategy_scheduler_bypass import build_full_v2
 from assumption_os.full_v2_phase6_formal_alignment_bypass import build_full_v2_phase6_formal_alignment_bypass_payload
 from assumption_os.full_v2_phase7_daemon_harness_bypass import build_full_v2_phase7_daemon_harness_bypass_payload
 from assumption_os.full_v2_vertical_slice_bypass import build_full_v2_vertical_slice_bypass_payload
+from assumption_os.full_v3_phase1_memory_consolidation import build_full_v3_phase1_memory_consolidation_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -508,6 +509,24 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertLessEqual(metrics["graph_pollution_rate"], 0.02)
         self.assertGreaterEqual(metrics["world_model_brier_improvement"], 0.06)
         self.assertGreaterEqual(metrics["full_loop_margin_over_best_control"], 0.08)
+
+    def test_full_v3_phase1_memory_consolidation_prunes_and_compresses_graph(self):
+        payload = build_full_v3_phase1_memory_consolidation_payload(
+            eval_id="unit_full_v3_phase1_memory_consolidation"
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertGreaterEqual(metrics["duplicate_detection_recall"], 0.95)
+        self.assertGreaterEqual(metrics["evidence_merge_precision"], 0.95)
+        self.assertGreaterEqual(metrics["scope_refinement_accuracy"], 0.90)
+        self.assertGreaterEqual(metrics["stale_evidence_prune_recall"], 0.95)
+        self.assertGreaterEqual(metrics["conflict_detection_recall"], 0.95)
+        self.assertGreaterEqual(metrics["acp_update_correlation"], 0.90)
+        self.assertGreaterEqual(metrics["retrieval_precision_delta"], 0.20)
+        self.assertGreaterEqual(metrics["negative_transfer_reduction"], 0.50)
+        self.assertGreaterEqual(metrics["context_efficiency_delta"], 0.20)
+        self.assertEqual(metrics["idempotence_delta"], 0)
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
