@@ -1,0 +1,335 @@
+{
+  "eval_id": "full_v2_phase2_verifier_bypass_20260611",
+  "eval_kind": "full_v2_phase2_shadow_residual_verifier",
+  "reconstruction_v2_full_phase": "phase2_residual_analyzer_verifier_stack",
+  "performance_validation": true,
+  "shadow_bypass": true,
+  "validation_scope": "Layered V0-V7 verifier fixture that classifies residual causes and decides whether to accept, reject, defer, repair execution, repair retrieval, or calibrate world model.",
+  "verifier_layers": [
+    "V0_schema_scope_duplicate_conflict",
+    "V1_cheap_programmatic_self_check",
+    "V2_world_model_value_risk",
+    "V3_matched_ablation",
+    "V4_placebo_length_matched_control",
+    "V5_cross_judge_cross_solver",
+    "V6_fresh_heldout",
+    "V7_objective_or_human_review"
+  ],
+  "cases": [
+    {
+      "case_id": "case_valid_candidate",
+      "residual_text": "candidate improves heldout and passes controls",
+      "active_assumption": "typed process-family bridge",
+      "gold_residual_type": "optimization",
+      "expected_action": "accept_candidate",
+      "signals": {
+        "schema_ok": true,
+        "cheap_check_pass": true,
+        "ablation_positive": true,
+        "placebo_also_wins": false,
+        "cross_judge_stable": true,
+        "fresh_pass": true,
+        "objective_or_human_pass": true
+      }
+    },
+    {
+      "case_id": "case_execution_lapse",
+      "residual_text": "the assumption was selected but the executor never applied the checklist",
+      "active_assumption": "incremental replacement",
+      "gold_residual_type": "execution_lapse",
+      "expected_action": "repair_execution",
+      "signals": {
+        "assumption_valid": true,
+        "executor_followed": false,
+        "schema_ok": true,
+        "cheap_check_pass": true
+      }
+    },
+    {
+      "case_id": "case_assumption_defect",
+      "residual_text": "overgeneralized alignment passed lexical check but failed negative control",
+      "active_assumption": "broad analogy transfer",
+      "gold_residual_type": "assumption_defect",
+      "expected_action": "reject_candidate",
+      "signals": {
+        "candidate_falsified": true,
+        "schema_ok": true,
+        "cheap_check_pass": false,
+        "ablation_positive": false,
+        "placebo_also_wins": true,
+        "cross_judge_stable": false,
+        "fresh_pass": false
+      }
+    },
+    {
+      "case_id": "case_discovery",
+      "residual_text": "no existing assumption covers the sparse-role local stabilization family",
+      "active_assumption": "current graph",
+      "gold_residual_type": "discovery",
+      "expected_action": "generate_candidate_family",
+      "signals": {
+        "no_existing_assumption_covers": true,
+        "schema_ok": true,
+        "cheap_check_pass": true,
+        "ablation_positive": true,
+        "placebo_also_wins": false,
+        "cross_judge_stable": true,
+        "fresh_pass": true
+      }
+    },
+    {
+      "case_id": "case_evaluator_defect",
+      "residual_text": "judge disagreement suggests style preference rather than objective improvement",
+      "active_assumption": "answer style repair",
+      "gold_residual_type": "evaluator_defect",
+      "expected_action": "defer_for_evaluator_review",
+      "signals": {
+        "judge_disagreement": true,
+        "objective_metric_available": false,
+        "schema_ok": true,
+        "cheap_check_pass": true,
+        "cross_judge_stable": false
+      }
+    },
+    {
+      "case_id": "case_retrieval_defect",
+      "residual_text": "retrieval injected lexical distractor and caused negative transfer",
+      "active_assumption": "graph memory retrieval",
+      "gold_residual_type": "retrieval_defect",
+      "expected_action": "repair_retrieval",
+      "signals": {
+        "retrieval_distractor": true,
+        "schema_ok": true,
+        "cheap_check_pass": true,
+        "ablation_positive": false
+      }
+    },
+    {
+      "case_id": "case_world_model_defect",
+      "residual_text": "world model predicted low regression risk but live verifier found harm",
+      "active_assumption": "cheap graph-action screen",
+      "gold_residual_type": "world_model_defect",
+      "expected_action": "calibrate_world_model",
+      "signals": {
+        "world_model_error": true,
+        "schema_ok": true,
+        "cheap_check_pass": true,
+        "world_model_blocks": false,
+        "ablation_positive": false,
+        "fresh_pass": false
+      }
+    },
+    {
+      "case_id": "case_placebo_trap",
+      "residual_text": "candidate and placebo both win, likely longer-prompt artifact",
+      "active_assumption": "lengthy formal context",
+      "gold_residual_type": "assumption_defect",
+      "expected_action": "reject_candidate",
+      "signals": {
+        "candidate_falsified": true,
+        "schema_ok": true,
+        "cheap_check_pass": true,
+        "ablation_positive": true,
+        "placebo_also_wins": true,
+        "cross_judge_stable": true,
+        "fresh_pass": false
+      }
+    }
+  ],
+  "rows": [
+    {
+      "case_id": "case_valid_candidate",
+      "gold_residual_type": "optimization",
+      "predicted_residual_type": "optimization",
+      "classification_correct": true,
+      "expected_action": "accept_candidate",
+      "decision": "accept_candidate",
+      "decision_correct": true,
+      "layers": {
+        "V0_schema_scope_duplicate_conflict": true,
+        "V1_cheap_programmatic_self_check": true,
+        "V2_world_model_value_risk": true,
+        "V3_matched_ablation": true,
+        "V4_placebo_length_matched_control": true,
+        "V5_cross_judge_cross_solver": true,
+        "V6_fresh_heldout": true,
+        "V7_objective_or_human_review": true
+      },
+      "accepted": true,
+      "new_hypothesis_allowed": true
+    },
+    {
+      "case_id": "case_execution_lapse",
+      "gold_residual_type": "execution_lapse",
+      "predicted_residual_type": "execution_lapse",
+      "classification_correct": true,
+      "expected_action": "repair_execution",
+      "decision": "repair_execution",
+      "decision_correct": true,
+      "layers": {
+        "V0_schema_scope_duplicate_conflict": true,
+        "V1_cheap_programmatic_self_check": true,
+        "V2_world_model_value_risk": true,
+        "V3_matched_ablation": false,
+        "V4_placebo_length_matched_control": true,
+        "V5_cross_judge_cross_solver": false,
+        "V6_fresh_heldout": false,
+        "V7_objective_or_human_review": true
+      },
+      "accepted": false,
+      "new_hypothesis_allowed": false
+    },
+    {
+      "case_id": "case_assumption_defect",
+      "gold_residual_type": "assumption_defect",
+      "predicted_residual_type": "assumption_defect",
+      "classification_correct": true,
+      "expected_action": "reject_candidate",
+      "decision": "reject_candidate",
+      "decision_correct": true,
+      "layers": {
+        "V0_schema_scope_duplicate_conflict": true,
+        "V1_cheap_programmatic_self_check": false,
+        "V2_world_model_value_risk": true,
+        "V3_matched_ablation": false,
+        "V4_placebo_length_matched_control": false,
+        "V5_cross_judge_cross_solver": false,
+        "V6_fresh_heldout": false,
+        "V7_objective_or_human_review": true
+      },
+      "accepted": false,
+      "new_hypothesis_allowed": false
+    },
+    {
+      "case_id": "case_discovery",
+      "gold_residual_type": "discovery",
+      "predicted_residual_type": "discovery",
+      "classification_correct": true,
+      "expected_action": "generate_candidate_family",
+      "decision": "generate_candidate_family",
+      "decision_correct": true,
+      "layers": {
+        "V0_schema_scope_duplicate_conflict": true,
+        "V1_cheap_programmatic_self_check": true,
+        "V2_world_model_value_risk": true,
+        "V3_matched_ablation": true,
+        "V4_placebo_length_matched_control": true,
+        "V5_cross_judge_cross_solver": true,
+        "V6_fresh_heldout": true,
+        "V7_objective_or_human_review": true
+      },
+      "accepted": false,
+      "new_hypothesis_allowed": true
+    },
+    {
+      "case_id": "case_evaluator_defect",
+      "gold_residual_type": "evaluator_defect",
+      "predicted_residual_type": "evaluator_defect",
+      "classification_correct": true,
+      "expected_action": "defer_for_evaluator_review",
+      "decision": "defer_for_evaluator_review",
+      "decision_correct": true,
+      "layers": {
+        "V0_schema_scope_duplicate_conflict": true,
+        "V1_cheap_programmatic_self_check": true,
+        "V2_world_model_value_risk": true,
+        "V3_matched_ablation": false,
+        "V4_placebo_length_matched_control": true,
+        "V5_cross_judge_cross_solver": false,
+        "V6_fresh_heldout": false,
+        "V7_objective_or_human_review": true
+      },
+      "accepted": false,
+      "new_hypothesis_allowed": false
+    },
+    {
+      "case_id": "case_retrieval_defect",
+      "gold_residual_type": "retrieval_defect",
+      "predicted_residual_type": "retrieval_defect",
+      "classification_correct": true,
+      "expected_action": "repair_retrieval",
+      "decision": "repair_retrieval",
+      "decision_correct": true,
+      "layers": {
+        "V0_schema_scope_duplicate_conflict": true,
+        "V1_cheap_programmatic_self_check": true,
+        "V2_world_model_value_risk": true,
+        "V3_matched_ablation": false,
+        "V4_placebo_length_matched_control": true,
+        "V5_cross_judge_cross_solver": false,
+        "V6_fresh_heldout": false,
+        "V7_objective_or_human_review": true
+      },
+      "accepted": false,
+      "new_hypothesis_allowed": false
+    },
+    {
+      "case_id": "case_world_model_defect",
+      "gold_residual_type": "world_model_defect",
+      "predicted_residual_type": "world_model_defect",
+      "classification_correct": true,
+      "expected_action": "calibrate_world_model",
+      "decision": "calibrate_world_model",
+      "decision_correct": true,
+      "layers": {
+        "V0_schema_scope_duplicate_conflict": true,
+        "V1_cheap_programmatic_self_check": true,
+        "V2_world_model_value_risk": true,
+        "V3_matched_ablation": false,
+        "V4_placebo_length_matched_control": true,
+        "V5_cross_judge_cross_solver": false,
+        "V6_fresh_heldout": false,
+        "V7_objective_or_human_review": true
+      },
+      "accepted": false,
+      "new_hypothesis_allowed": false
+    },
+    {
+      "case_id": "case_placebo_trap",
+      "gold_residual_type": "assumption_defect",
+      "predicted_residual_type": "assumption_defect",
+      "classification_correct": true,
+      "expected_action": "reject_candidate",
+      "decision": "reject_candidate",
+      "decision_correct": true,
+      "layers": {
+        "V0_schema_scope_duplicate_conflict": true,
+        "V1_cheap_programmatic_self_check": true,
+        "V2_world_model_value_risk": true,
+        "V3_matched_ablation": true,
+        "V4_placebo_length_matched_control": false,
+        "V5_cross_judge_cross_solver": true,
+        "V6_fresh_heldout": false,
+        "V7_objective_or_human_review": true
+      },
+      "accepted": false,
+      "new_hypothesis_allowed": false
+    }
+  ],
+  "metrics": {
+    "case_count": 8,
+    "residual_classification_accuracy": 1.0,
+    "decision_accuracy": 1.0,
+    "false_positive_rate_of_acceptance": 0.0,
+    "regression_detection_recall": 1.0,
+    "placebo_sensitivity": 1.0,
+    "cross_judge_stability": 1.0,
+    "fresh_split_generalization": 1.0,
+    "falsification_power": 1.0,
+    "execution_lapse_new_hypothesis_count": 0
+  },
+  "gates": {
+    "residual_classification_accuracy_high": true,
+    "false_positive_acceptance_zero": true,
+    "regression_detection_recall_high": true,
+    "placebo_sensitivity_high": true,
+    "cross_judge_stability_high": true,
+    "fresh_split_generalization_high": true,
+    "falsification_power_high": true,
+    "execution_lapse_not_treated_as_discovery": true,
+    "shadow_mode_no_graph_mutation": true
+  },
+  "failed_gates": [],
+  "pass": true,
+  "interpretation": "Full-v2 Phase 2 makes verifier output diagnostic, not just accept/reject.  Failures become execution, retrieval, evaluator, world-model, assumption, or discovery residuals before any new hypothesis is allowed."
+}

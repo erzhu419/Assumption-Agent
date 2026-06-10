@@ -36,6 +36,7 @@ from assumption_os.falsification import FalsificationDecision, build_falsificati
 from assumption_os.first_party_world_model import build_first_party_world_model_scale_payload
 from assumption_os.full_v2_phase0_contract_bypass import build_full_v2_phase0_contract_bypass_payload
 from assumption_os.full_v2_phase1_graph_memory_bypass import build_full_v2_phase1_graph_memory_bypass_payload
+from assumption_os.full_v2_phase2_verifier_bypass import build_full_v2_phase2_verifier_bypass_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -379,6 +380,23 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["full_negative_transfer_rate"], 0.0)
         self.assertEqual(metrics["risky_node_topk_count"], 0)
         self.assertEqual(metrics["residual_retrieval_accuracy"], 1.0)
+
+    def test_full_v2_phase2_verifier_bypass_classifies_residual_causes(self):
+        payload = build_full_v2_phase2_verifier_bypass_payload(eval_id="unit_full_v2_phase2_verifier")
+        metrics = payload["metrics"]
+        by_case = {row["case_id"]: row for row in payload["rows"]}
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["residual_classification_accuracy"], 1.0)
+        self.assertEqual(metrics["decision_accuracy"], 1.0)
+        self.assertEqual(metrics["false_positive_rate_of_acceptance"], 0.0)
+        self.assertEqual(metrics["regression_detection_recall"], 1.0)
+        self.assertEqual(metrics["placebo_sensitivity"], 1.0)
+        self.assertEqual(metrics["fresh_split_generalization"], 1.0)
+        self.assertEqual(metrics["falsification_power"], 1.0)
+        self.assertEqual(metrics["execution_lapse_new_hypothesis_count"], 0)
+        self.assertEqual(by_case["case_execution_lapse"]["decision"], "repair_execution")
+        self.assertEqual(by_case["case_world_model_defect"]["decision"], "calibrate_world_model")
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
