@@ -23,14 +23,18 @@ REQUIRED_ARTIFACTS = {
     "repro_pack": PAPER_DIR / "paper_repro_pack_20260605.json",
     "first_party_world_model_scale": PAPER_DIR / "first_party_world_model_scale_20260604.json",
     "v2_phase0_contract": PAPER_DIR / "full_v2_phase0_contract_bypass_20260611.json",
+    "v3_phase0_contract": PAPER_DIR / "full_v3_phase0_contract_checker_20260611.json",
     "v3_phase1_memory": PAPER_DIR / "full_v3_phase1_memory_consolidation_20260611.json",
     "v3_phase2_verifier": PAPER_DIR / "full_v3_phase2_verifier_synthesis_20260611.json",
     "v3_phase3_rollout": PAPER_DIR / "full_v3_phase3_rollout_search_control_20260611.json",
     "v2_phase4_generator": PAPER_DIR / "full_v2_phase4_hypothesis_generator_bypass_20260611.json",
+    "v3_phase4_generator": PAPER_DIR / "full_v3_phase4_hypothesis_generator_20260611.json",
     "v3_phase5_bandit": PAPER_DIR / "full_v3_phase5_contextual_bandit_scheduler_20260611.json",
     "v2_phase6_formal": PAPER_DIR / "full_v2_phase6_formal_alignment_bypass_20260611.json",
+    "v3_phase6_formal": PAPER_DIR / "full_v3_phase6_formal_transfer_engine_20260611.json",
     "v3_phase7_long_run": PAPER_DIR / "full_v3_phase7_long_run_benchmark_20260611.json",
     "vertical_slice": PAPER_DIR / "full_v2_vertical_slice_bypass_20260611.json",
+    "frozen_v3_vs_v1": PAPER_DIR / "full_v3_frozen_v1_comparison_20260611.json",
 }
 
 KEY_TOGGLE_BASELINES = {
@@ -82,6 +86,20 @@ def build_full_v3_paper_scale_evidence_payload(
                 "checkpoint_recovery_success",
             ],
         ),
+        "frozen_v3_vs_v1": _metric_subset(
+            artifacts["frozen_v3_vs_v1"].get("metrics", {}),
+            [
+                "downstream_problem_count",
+                "full_v3_downstream_accuracy",
+                "v1_kernel_accuracy",
+                "full_v3_margin_vs_v1_kernel",
+                "hipporag_style_accuracy",
+                "full_v3_margin_vs_hipporag_style",
+                "best_nonfull_system",
+                "full_v3_margin_vs_best_nonfull",
+                "assumption_capability_improvement",
+            ],
+        ),
     }
     metrics = _metrics(artifacts=artifacts, evidence=evidence)
     gates = {
@@ -98,6 +116,8 @@ def build_full_v3_paper_scale_evidence_payload(
         "v3_mechanism_artifacts_all_pass": metrics["v3_mechanism_pass_rate"] == 1.0,
         "vertical_slice_compose_passes": bool(artifacts["vertical_slice"].get("pass")),
         "long_run_pairwise_downstream_positive": metrics["long_run_downstream_win_rate"] >= 0.65,
+        "frozen_v3_beats_v1_kernel": metrics["full_v3_margin_vs_v1_kernel"] >= 0.10,
+        "frozen_v3_beats_best_nonfull": metrics["full_v3_margin_vs_best_nonfull"] >= 0.08,
         "prompt_answer_and_secret_free": metrics["prompt_answer_payload_stored"] is False and metrics["secret_leak_detected"] is False,
         "boundary_cases_recorded": metrics["boundary_case_count"] >= 1,
     }
@@ -201,13 +221,13 @@ def _world_model_scale_summary(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _v3_mechanism_summary(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
     keys = [
-        "v2_phase0_contract",
+        "v3_phase0_contract",
         "v3_phase1_memory",
         "v3_phase2_verifier",
         "v3_phase3_rollout",
-        "v2_phase4_generator",
+        "v3_phase4_generator",
         "v3_phase5_bandit",
-        "v2_phase6_formal",
+        "v3_phase6_formal",
         "v3_phase7_long_run",
     ]
     return {
@@ -257,6 +277,9 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "vertical_slice_brier_improvement": artifacts["vertical_slice"]["metrics"]["world_model_brier_improvement"],
         "long_run_downstream_win_rate": artifacts["v3_phase7_long_run"]["metrics"]["downstream_win_rate_on_unseen"],
         "long_run_capability_improvement": artifacts["v3_phase7_long_run"]["metrics"]["capability_score_improvement"],
+        "full_v3_margin_vs_v1_kernel": artifacts["frozen_v3_vs_v1"]["metrics"]["full_v3_margin_vs_v1_kernel"],
+        "full_v3_margin_vs_hipporag_style": artifacts["frozen_v3_vs_v1"]["metrics"]["full_v3_margin_vs_hipporag_style"],
+        "full_v3_margin_vs_best_nonfull": artifacts["frozen_v3_vs_v1"]["metrics"]["full_v3_margin_vs_best_nonfull"],
         "prompt_answer_payload_stored": bool(artifacts["first_party_world_model_scale"].get("prompt_answer_payload_stored")),
         "secret_leak_detected": bool(artifacts["first_party_world_model_scale"].get("secret_leak_detected")),
     }

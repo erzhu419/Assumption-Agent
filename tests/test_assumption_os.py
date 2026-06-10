@@ -43,10 +43,14 @@ from assumption_os.full_v2_phase5_strategy_scheduler_bypass import build_full_v2
 from assumption_os.full_v2_phase6_formal_alignment_bypass import build_full_v2_phase6_formal_alignment_bypass_payload
 from assumption_os.full_v2_phase7_daemon_harness_bypass import build_full_v2_phase7_daemon_harness_bypass_payload
 from assumption_os.full_v2_vertical_slice_bypass import build_full_v2_vertical_slice_bypass_payload
+from assumption_os.full_v3_frozen_v1_comparison import build_full_v3_frozen_v1_comparison_payload
+from assumption_os.full_v3_phase0_contract_checker import build_full_v3_phase0_contract_checker_payload
 from assumption_os.full_v3_phase1_memory_consolidation import build_full_v3_phase1_memory_consolidation_payload
 from assumption_os.full_v3_phase2_verifier_synthesis import build_full_v3_phase2_verifier_synthesis_payload
 from assumption_os.full_v3_phase3_rollout_search_control import build_full_v3_phase3_rollout_search_control_payload
+from assumption_os.full_v3_phase4_hypothesis_generator import build_full_v3_phase4_hypothesis_generator_payload
 from assumption_os.full_v3_phase5_contextual_bandit_scheduler import build_full_v3_phase5_contextual_bandit_scheduler_payload
+from assumption_os.full_v3_phase6_formal_transfer_engine import build_full_v3_phase6_formal_transfer_engine_payload
 from assumption_os.full_v3_phase7_long_run_benchmark import build_full_v3_phase7_long_run_benchmark_payload
 from assumption_os.full_v3_paper_scale_evidence import build_full_v3_paper_scale_evidence_payload
 from assumption_os.formal_mapping import (
@@ -515,6 +519,21 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["world_model_brier_improvement"], 0.06)
         self.assertGreaterEqual(metrics["full_loop_margin_over_best_control"], 0.08)
 
+    def test_full_v3_phase0_contract_checker_validates_overlay_admission(self):
+        payload = build_full_v3_phase0_contract_checker_payload(
+            eval_id="unit_full_v3_phase0_contract_checker"
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["contract_item_coverage"], 1.0)
+        self.assertEqual(metrics["valid_candidate_acceptance_rate"], 1.0)
+        self.assertEqual(metrics["invalid_draft_rejection_rate"], 1.0)
+        self.assertEqual(metrics["contract_decision_accuracy"], 1.0)
+        self.assertEqual(metrics["duplicate_detection_recall"], 1.0)
+        self.assertEqual(metrics["conflict_detection_recall"], 1.0)
+        self.assertEqual(metrics["main_graph_mutation_count"], 0)
+
     def test_full_v3_phase1_memory_consolidation_prunes_and_compresses_graph(self):
         payload = build_full_v3_phase1_memory_consolidation_payload(
             eval_id="unit_full_v3_phase1_memory_consolidation"
@@ -568,6 +587,22 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["regression_recall"], 0.95)
         self.assertLessEqual(metrics["oracle_regret"], 0.05)
 
+    def test_full_v3_phase4_hypothesis_generator_runs_variation_evaluation_retention(self):
+        payload = build_full_v3_phase4_hypothesis_generator_payload(
+            eval_id="unit_full_v3_phase4_hypothesis_generator"
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["layer_coverage"], 1.0)
+        self.assertGreaterEqual(metrics["min_trajectories_per_cluster"], 2)
+        self.assertEqual(metrics["execution_lapse_filtered_rate"], 1.0)
+        self.assertGreaterEqual(metrics["novelty_integration_accuracy"], 0.90)
+        self.assertGreaterEqual(metrics["selective_retention_precision"], 0.90)
+        self.assertGreaterEqual(metrics["world_model_screen_precision"], 0.90)
+        self.assertLessEqual(metrics["false_discovery_rate"], 0.10)
+        self.assertGreaterEqual(metrics["recursive_runner_seed_rate"], 0.45)
+
     def test_full_v3_phase5_contextual_bandit_scheduler_learns_policy_bundle(self):
         payload = build_full_v3_phase5_contextual_bandit_scheduler_payload(
             eval_id="unit_full_v3_phase5_contextual_bandit_scheduler"
@@ -585,6 +620,21 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["unsafe_exploration_count"], 0)
         self.assertGreaterEqual(metrics["negative_transfer_reduction"], 0.50)
         self.assertGreaterEqual(metrics["last_half_selection_accuracy"], metrics["first_half_selection_accuracy"])
+
+    def test_full_v3_phase6_formal_transfer_engine_emits_bounded_certificates(self):
+        payload = build_full_v3_phase6_formal_transfer_engine_payload(
+            eval_id="unit_full_v3_phase6_formal_transfer_engine"
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["proof_lite_certificate_coverage"], 1.0)
+        self.assertEqual(metrics["typed_role_mapping_coverage"], 1.0)
+        self.assertEqual(metrics["negative_control_coverage"], 1.0)
+        self.assertGreaterEqual(metrics["unsafe_mapping_block_rate"], 0.95)
+        self.assertGreaterEqual(metrics["formal_score_transfer_correlation"], 0.85)
+        self.assertGreaterEqual(metrics["formal_margin_over_best_baseline"], 0.15)
+        self.assertEqual(metrics["category_theorem_prover_claim_count"], 0)
 
     def test_full_v3_phase7_long_run_benchmark_validates_frozen_harness(self):
         payload = build_full_v3_phase7_long_run_benchmark_payload(
@@ -607,6 +657,22 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["checkpoint_recovery_success"], 0.95)
         self.assertGreaterEqual(metrics["continuous_learning_acp_lift"], 0.10)
 
+    def test_full_v3_frozen_v1_comparison_shows_downstream_margin(self):
+        payload = build_full_v3_frozen_v1_comparison_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_frozen_v1_comparison",
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["phase_pass_rate"], 1.0)
+        self.assertGreaterEqual(metrics["full_v3_margin_vs_v1_kernel"], 0.10)
+        self.assertGreaterEqual(metrics["full_v3_margin_vs_hipporag_style"], 0.10)
+        self.assertGreaterEqual(metrics["full_v3_margin_vs_best_nonfull"], 0.08)
+        self.assertGreaterEqual(metrics["assumption_capability_improvement"], 0.15)
+        self.assertLess(metrics["main_structural_vs_base_p_value"], 0.05)
+        self.assertEqual(metrics["fresh_api_call_count"], 0)
+
     def test_full_v3_paper_scale_evidence_aggregates_live_and_mechanism_artifacts(self):
         payload = build_full_v3_paper_scale_evidence_payload(
             root=Path("."),
@@ -627,6 +693,8 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["key_toggle_min_margin"], 0.05)
         self.assertEqual(metrics["v3_mechanism_pass_rate"], 1.0)
         self.assertGreaterEqual(metrics["long_run_downstream_win_rate"], 0.65)
+        self.assertGreaterEqual(metrics["full_v3_margin_vs_v1_kernel"], 0.10)
+        self.assertGreaterEqual(metrics["full_v3_margin_vs_best_nonfull"], 0.08)
         self.assertFalse(metrics["prompt_answer_payload_stored"])
         self.assertFalse(metrics["secret_leak_detected"])
         self.assertGreaterEqual(metrics["boundary_case_count"], 1)
