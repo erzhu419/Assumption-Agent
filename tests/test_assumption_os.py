@@ -12,6 +12,7 @@ from assumption_os.assumption_family_discovery import (
 )
 from assumption_os.assumption_bench import build_assumption_bench_payload
 from assumption_os.bayesian_policy import BayesianPolicyAction, build_bayesian_policy_payload, parent_belief
+from assumption_os.causal_mask_v2 import build_causal_mask_v2_payload
 from assumption_os.candidate_acceptance import AcceptanceDecision, apply_accepted_candidates, build_acceptance_payload
 from assumption_os.conditioned_eval import (
     ConditionedEvalRow,
@@ -271,6 +272,20 @@ class AssumptionOSTest(unittest.TestCase):
             "run_live_validation",
             {row["recommended_action"] for row in payload["predictions"]},
         )
+
+    def test_causal_mask_v2_identifies_relation_node_contribution(self):
+        payload = build_causal_mask_v2_payload(eval_id="unit_causal_mask_v2")
+        metrics = payload["metrics"]
+        ranking = payload["importance_ranking"]
+
+        self.assertTrue(payload["pass"])
+        self.assertGreaterEqual(metrics["counterfactual_trial_count"], 64)
+        self.assertGreaterEqual(metrics["mean_positive_relation_accept_drop"], 0.40)
+        self.assertLess(metrics["mean_negative_relation_accept_drop"], 0.10)
+        self.assertGreaterEqual(metrics["relation_drop_auroc"], 0.95)
+        self.assertEqual(metrics["negative_control_mask_false_live_count"], 0)
+        self.assertGreaterEqual(metrics["positive_top_relation_mask_fraction"], 0.80)
+        self.assertEqual(ranking[0]["mask_id"], "do(mask_alignment_relation_node)")
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:

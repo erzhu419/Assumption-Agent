@@ -1,0 +1,1755 @@
+{
+  "eval_id": "causal_mask_v2_20260610",
+  "eval_kind": "causal_mask_v2_counterfactual_graph_action_audit",
+  "reconstruction_v2_phase": "phase4_causal_mask_validation",
+  "performance_validation": true,
+  "validation_scope": "Counterfactual do(mask_assumption h) audit over Phase 3 graph-action predictions. Masks remove relation-node, family-overlap, role-schema, or invariant-trace support and measure prediction/utility changes.",
+  "source": {
+    "world_model_eval_id": "causal_mask_v2_20260610_world_model",
+    "world_model_metrics": {
+      "labeled_count": 16,
+      "positive_count": 9,
+      "negative_count": 7,
+      "accept_auroc": 1.0,
+      "accept_brier": 0.0247,
+      "base_rate": 0.5625,
+      "base_rate_brier": 0.2461,
+      "screen_live_count": 9,
+      "screen_block_count": 7,
+      "accepted_blocked_count": 0,
+      "negative_actions_saved": 7,
+      "screen_cost_reduction": 0.4375,
+      "mean_regression_positive": 0.1804,
+      "mean_regression_negative": 0.6617,
+      "mean_value_delta_positive": 0.147,
+      "mean_value_delta_negative": -0.0855
+    }
+  },
+  "thresholds": {
+    "live_threshold": 0.5
+  },
+  "mask_specs": [
+    {
+      "id": "do(mask_alignment_relation_node)",
+      "target": "AlignmentHypothesis relation node",
+      "description": "Remove the candidate alignment relation and all direct overlap evidence."
+    },
+    {
+      "id": "do(mask_process_family_overlap)",
+      "target": "shared process-family support",
+      "description": "Remove shared family tags while retaining any role-schema support."
+    },
+    {
+      "id": "do(mask_role_schema_overlap)",
+      "target": "shared role-schema support",
+      "description": "Remove shared perturbation/response/constraint roles while retaining family support."
+    },
+    {
+      "id": "do(mask_invariant_trace)",
+      "target": "invariant evidence trace",
+      "description": "Keep endpoints but damp the invariant and textual trace contribution."
+    }
+  ],
+  "trials": [
+    {
+      "action_id": "wm_action::process_damped_oscillator_v1::process_predator_prey_local_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 1,
+      "base_accept_prob": 0.5866,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.3674,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.4868,
+      "base_utility": 0.4948,
+      "masked_utility": -0.069,
+      "utility_delta": 0.5637,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_damped_oscillator_v1::process_predator_prey_local_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.5866,
+      "masked_accept_prob": 0.2715,
+      "base_regression_prob": 0.3674,
+      "masked_regression_prob": 0.5407,
+      "accept_prob_delta": 0.3151,
+      "base_utility": 0.4948,
+      "masked_utility": 0.1363,
+      "utility_delta": 0.3584,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.1688,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [
+          "restoring_response"
+        ],
+        "role_overlap_count": 1,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_damped_oscillator_v1::process_predator_prey_local_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.5866,
+      "masked_accept_prob": 0.3717,
+      "base_regression_prob": 0.3674,
+      "masked_regression_prob": 0.5256,
+      "accept_prob_delta": 0.2149,
+      "base_utility": 0.4948,
+      "masked_utility": 0.2403,
+      "utility_delta": 0.2545,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.2625,
+        "family_overlap": [
+          "local_stabilization"
+        ],
+        "family_overlap_count": 1,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_damped_oscillator_v1::process_predator_prey_local_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 1,
+      "base_accept_prob": 0.5866,
+      "masked_accept_prob": 0.503,
+      "base_regression_prob": 0.3674,
+      "masked_regression_prob": 0.4133,
+      "accept_prob_delta": 0.0836,
+      "base_utility": 0.4948,
+      "masked_utility": 0.3997,
+      "utility_delta": 0.0951,
+      "masked_failure_type": "underpowered_or_surface_alignment",
+      "masked_recommended_action": "run_live_validation",
+      "masked_feature_trace": {
+        "process_pair_score": 0.3187,
+        "family_overlap": [
+          "local_stabilization"
+        ],
+        "family_overlap_count": 1,
+        "role_overlap": [
+          "restoring_response"
+        ],
+        "role_overlap_count": 1,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_radioactive_decay_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 1,
+      "base_accept_prob": 0.9078,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.1507,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.808,
+      "base_utility": 0.8701,
+      "masked_utility": -0.069,
+      "utility_delta": 0.9391,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_radioactive_decay_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.9078,
+      "masked_accept_prob": 0.526,
+      "base_regression_prob": 0.1507,
+      "masked_regression_prob": 0.3607,
+      "accept_prob_delta": 0.3818,
+      "base_utility": 0.8701,
+      "masked_utility": 0.4358,
+      "utility_delta": 0.4343,
+      "masked_failure_type": "underpowered_or_surface_alignment",
+      "masked_recommended_action": "run_live_validation",
+      "masked_feature_trace": {
+        "process_pair_score": 0.284,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [
+          "monotone_decrease",
+          "rate_proportional_to_state",
+          "state"
+        ],
+        "role_overlap_count": 3,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_radioactive_decay_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.9078,
+      "masked_accept_prob": 0.6343,
+      "base_regression_prob": 0.1507,
+      "masked_regression_prob": 0.3811,
+      "accept_prob_delta": 0.2735,
+      "base_utility": 0.8701,
+      "masked_utility": 0.539,
+      "utility_delta": 0.3311,
+      "masked_failure_type": "underpowered_or_surface_alignment",
+      "masked_recommended_action": "run_live_validation",
+      "masked_feature_trace": {
+        "process_pair_score": 0.4418,
+        "family_overlap": [
+          "exponential_decay"
+        ],
+        "family_overlap_count": 1,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_radioactive_decay_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 1,
+      "base_accept_prob": 0.9078,
+      "masked_accept_prob": 0.848,
+      "base_regression_prob": 0.1507,
+      "masked_regression_prob": 0.1836,
+      "accept_prob_delta": 0.0598,
+      "base_utility": 0.8701,
+      "masked_utility": 0.8021,
+      "utility_delta": 0.068,
+      "masked_failure_type": "none_expected",
+      "masked_recommended_action": "run_live_or_promote_if_verified",
+      "masked_feature_trace": {
+        "process_pair_score": 0.5365,
+        "family_overlap": [
+          "exponential_decay"
+        ],
+        "family_overlap_count": 1,
+        "role_overlap": [
+          "monotone_decrease",
+          "rate_proportional_to_state",
+          "state"
+        ],
+        "role_overlap_count": 3,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 1,
+      "base_accept_prob": 0.9815,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.1102,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.8817,
+      "base_utility": 0.954,
+      "masked_utility": -0.069,
+      "utility_delta": 1.0229,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.9815,
+      "masked_accept_prob": 0.6934,
+      "base_regression_prob": 0.1102,
+      "masked_regression_prob": 0.2686,
+      "accept_prob_delta": 0.2881,
+      "base_utility": 0.954,
+      "masked_utility": 0.6262,
+      "utility_delta": 0.3277,
+      "masked_failure_type": "underpowered_or_surface_alignment",
+      "masked_recommended_action": "run_live_validation",
+      "masked_feature_trace": {
+        "process_pair_score": 0.4027,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [
+          "monotone_decrease",
+          "rate_proportional_to_state",
+          "state"
+        ],
+        "role_overlap_count": 3,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.9815,
+      "masked_accept_prob": 0.8531,
+      "base_regression_prob": 0.1102,
+      "masked_regression_prob": 0.2608,
+      "accept_prob_delta": 0.1284,
+      "base_utility": 0.954,
+      "masked_utility": 0.7879,
+      "utility_delta": 0.1661,
+      "masked_failure_type": "none_expected",
+      "masked_recommended_action": "run_live_or_promote_if_verified",
+      "masked_feature_trace": {
+        "process_pair_score": 0.6265,
+        "family_overlap": [
+          "exponential_decay",
+          "monotone_relaxation"
+        ],
+        "family_overlap_count": 2,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 1,
+      "base_accept_prob": 0.9815,
+      "masked_accept_prob": 0.9595,
+      "base_regression_prob": 0.1102,
+      "masked_regression_prob": 0.1223,
+      "accept_prob_delta": 0.022,
+      "base_utility": 0.954,
+      "masked_utility": 0.9289,
+      "utility_delta": 0.025,
+      "masked_failure_type": "none_expected",
+      "masked_recommended_action": "run_live_or_promote_if_verified",
+      "masked_feature_trace": {
+        "process_pair_score": 0.7608,
+        "family_overlap": [
+          "exponential_decay",
+          "monotone_relaxation"
+        ],
+        "family_overlap_count": 2,
+        "role_overlap": [
+          "monotone_decrease",
+          "rate_proportional_to_state",
+          "state"
+        ],
+        "role_overlap_count": 3,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_le_chatelier_v1::process_lenz_law_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 1,
+      "base_accept_prob": 0.8015,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.2092,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.7017,
+      "base_utility": 0.7492,
+      "masked_utility": -0.069,
+      "utility_delta": 0.8182,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_le_chatelier_v1::process_lenz_law_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.8015,
+      "masked_accept_prob": 0.3997,
+      "base_regression_prob": 0.2092,
+      "masked_regression_prob": 0.4302,
+      "accept_prob_delta": 0.4018,
+      "base_utility": 0.7492,
+      "masked_utility": 0.2922,
+      "utility_delta": 0.457,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.2322,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [
+          "opposing_response",
+          "perturbation"
+        ],
+        "role_overlap_count": 2,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_le_chatelier_v1::process_lenz_law_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.8015,
+      "masked_accept_prob": 0.5166,
+      "base_regression_prob": 0.2092,
+      "masked_regression_prob": 0.4458,
+      "accept_prob_delta": 0.2849,
+      "base_utility": 0.7492,
+      "masked_utility": 0.4051,
+      "utility_delta": 0.3441,
+      "masked_failure_type": "underpowered_or_surface_alignment",
+      "masked_recommended_action": "run_live_validation",
+      "masked_feature_trace": {
+        "process_pair_score": 0.3611,
+        "family_overlap": [
+          "negative_feedback"
+        ],
+        "family_overlap_count": 1,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_le_chatelier_v1::process_lenz_law_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 1,
+      "base_accept_prob": 0.8015,
+      "masked_accept_prob": 0.7173,
+      "base_regression_prob": 0.2092,
+      "masked_regression_prob": 0.2555,
+      "accept_prob_delta": 0.0842,
+      "base_utility": 0.7492,
+      "masked_utility": 0.6534,
+      "utility_delta": 0.0958,
+      "masked_failure_type": "none_expected",
+      "masked_recommended_action": "run_live_or_promote_if_verified",
+      "masked_feature_trace": {
+        "process_pair_score": 0.4385,
+        "family_overlap": [
+          "negative_feedback"
+        ],
+        "family_overlap_count": 1,
+        "role_overlap": [
+          "opposing_response",
+          "perturbation"
+        ],
+        "role_overlap_count": 2,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_le_chatelier_v1::process_supply_demand_response_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 1,
+      "base_accept_prob": 0.9772,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.1126,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.8774,
+      "base_utility": 0.949,
+      "masked_utility": -0.069,
+      "utility_delta": 1.018,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_le_chatelier_v1::process_supply_demand_response_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.9772,
+      "masked_accept_prob": 0.6727,
+      "base_regression_prob": 0.1126,
+      "masked_regression_prob": 0.28,
+      "accept_prob_delta": 0.3045,
+      "base_utility": 0.949,
+      "masked_utility": 0.6027,
+      "utility_delta": 0.3463,
+      "masked_failure_type": "underpowered_or_surface_alignment",
+      "masked_recommended_action": "run_live_validation",
+      "masked_feature_trace": {
+        "process_pair_score": 0.3867,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [
+          "constraint",
+          "opposing_response",
+          "perturbation"
+        ],
+        "role_overlap_count": 3,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_le_chatelier_v1::process_supply_demand_response_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.9772,
+      "masked_accept_prob": 0.8334,
+      "base_regression_prob": 0.1126,
+      "masked_regression_prob": 0.2717,
+      "accept_prob_delta": 0.1438,
+      "base_utility": 0.949,
+      "masked_utility": 0.7655,
+      "utility_delta": 0.1836,
+      "masked_failure_type": "none_expected",
+      "masked_recommended_action": "run_live_or_promote_if_verified",
+      "masked_feature_trace": {
+        "process_pair_score": 0.6016,
+        "family_overlap": [
+          "equilibrium_restoration",
+          "negative_feedback"
+        ],
+        "family_overlap_count": 2,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_le_chatelier_v1::process_supply_demand_response_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 1,
+      "base_accept_prob": 0.9772,
+      "masked_accept_prob": 0.9518,
+      "base_regression_prob": 0.1126,
+      "masked_regression_prob": 0.1265,
+      "accept_prob_delta": 0.0254,
+      "base_utility": 0.949,
+      "masked_utility": 0.9202,
+      "utility_delta": 0.0289,
+      "masked_failure_type": "none_expected",
+      "masked_recommended_action": "run_live_or_promote_if_verified",
+      "masked_feature_trace": {
+        "process_pair_score": 0.7305,
+        "family_overlap": [
+          "equilibrium_restoration",
+          "negative_feedback"
+        ],
+        "family_overlap_count": 2,
+        "role_overlap": [
+          "constraint",
+          "opposing_response",
+          "perturbation"
+        ],
+        "role_overlap_count": 3,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_le_chatelier_v1::process_thermostat_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 1,
+      "base_accept_prob": 0.9548,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.1249,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.855,
+      "base_utility": 0.9236,
+      "masked_utility": -0.069,
+      "utility_delta": 0.9926,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_le_chatelier_v1::process_thermostat_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.9548,
+      "masked_accept_prob": 0.5727,
+      "base_regression_prob": 0.1249,
+      "masked_regression_prob": 0.335,
+      "accept_prob_delta": 0.3821,
+      "base_utility": 0.9236,
+      "masked_utility": 0.4889,
+      "utility_delta": 0.4346,
+      "masked_failure_type": "underpowered_or_surface_alignment",
+      "masked_recommended_action": "run_live_validation",
+      "masked_feature_trace": {
+        "process_pair_score": 0.3488,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [
+          "opposing_response",
+          "perturbation"
+        ],
+        "role_overlap_count": 2,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_le_chatelier_v1::process_thermostat_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.9548,
+      "masked_accept_prob": 0.7782,
+      "base_regression_prob": 0.1249,
+      "masked_regression_prob": 0.302,
+      "accept_prob_delta": 0.1766,
+      "base_utility": 0.9236,
+      "masked_utility": 0.7027,
+      "utility_delta": 0.2209,
+      "masked_failure_type": "none_expected",
+      "masked_recommended_action": "run_live_validation",
+      "masked_feature_trace": {
+        "process_pair_score": 0.5425,
+        "family_overlap": [
+          "equilibrium_restoration",
+          "negative_feedback"
+        ],
+        "family_overlap_count": 2,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_le_chatelier_v1::process_thermostat_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 1,
+      "base_accept_prob": 0.9548,
+      "masked_accept_prob": 0.9131,
+      "base_regression_prob": 0.1249,
+      "masked_regression_prob": 0.1478,
+      "accept_prob_delta": 0.0417,
+      "base_utility": 0.9236,
+      "masked_utility": 0.8761,
+      "utility_delta": 0.0474,
+      "masked_failure_type": "none_expected",
+      "masked_recommended_action": "run_live_or_promote_if_verified",
+      "masked_feature_trace": {
+        "process_pair_score": 0.6587,
+        "family_overlap": [
+          "equilibrium_restoration",
+          "negative_feedback"
+        ],
+        "family_overlap_count": 2,
+        "role_overlap": [
+          "opposing_response",
+          "perturbation"
+        ],
+        "role_overlap_count": 2,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_lenz_law_v1::process_thermostat_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 1,
+      "base_accept_prob": 0.7858,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.2178,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.686,
+      "base_utility": 0.7314,
+      "masked_utility": -0.069,
+      "utility_delta": 0.8003,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_lenz_law_v1::process_thermostat_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.7858,
+      "masked_accept_prob": 0.3894,
+      "base_regression_prob": 0.2178,
+      "masked_regression_prob": 0.4359,
+      "accept_prob_delta": 0.3964,
+      "base_utility": 0.7314,
+      "masked_utility": 0.2804,
+      "utility_delta": 0.4509,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.225,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [
+          "opposing_response",
+          "perturbation"
+        ],
+        "role_overlap_count": 2,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_lenz_law_v1::process_thermostat_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.7858,
+      "masked_accept_prob": 0.5,
+      "base_regression_prob": 0.2178,
+      "masked_regression_prob": 0.455,
+      "accept_prob_delta": 0.2858,
+      "base_utility": 0.7314,
+      "masked_utility": 0.3862,
+      "utility_delta": 0.3451,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.35,
+        "family_overlap": [
+          "negative_feedback"
+        ],
+        "family_overlap_count": 1,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_lenz_law_v1::process_thermostat_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 1,
+      "base_accept_prob": 0.7858,
+      "masked_accept_prob": 0.7006,
+      "base_regression_prob": 0.2178,
+      "masked_regression_prob": 0.2647,
+      "accept_prob_delta": 0.0852,
+      "base_utility": 0.7314,
+      "masked_utility": 0.6344,
+      "utility_delta": 0.0969,
+      "masked_failure_type": "none_expected",
+      "masked_recommended_action": "run_live_or_promote_if_verified",
+      "masked_feature_trace": {
+        "process_pair_score": 0.425,
+        "family_overlap": [
+          "negative_feedback"
+        ],
+        "family_overlap_count": 1,
+        "role_overlap": [
+          "opposing_response",
+          "perturbation"
+        ],
+        "role_overlap_count": 2,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_radioactive_decay_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 1,
+      "base_accept_prob": 0.9047,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.1524,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.8049,
+      "base_utility": 0.8666,
+      "masked_utility": -0.069,
+      "utility_delta": 0.9356,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_radioactive_decay_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.9047,
+      "masked_accept_prob": 0.5218,
+      "base_regression_prob": 0.1524,
+      "masked_regression_prob": 0.363,
+      "accept_prob_delta": 0.3829,
+      "base_utility": 0.8666,
+      "masked_utility": 0.4311,
+      "utility_delta": 0.4355,
+      "masked_failure_type": "underpowered_or_surface_alignment",
+      "masked_recommended_action": "run_live_validation",
+      "masked_feature_trace": {
+        "process_pair_score": 0.2812,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [
+          "monotone_decrease",
+          "rate_proportional_to_state",
+          "state"
+        ],
+        "role_overlap_count": 3,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_radioactive_decay_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.9047,
+      "masked_accept_prob": 0.6283,
+      "base_regression_prob": 0.1524,
+      "masked_regression_prob": 0.3844,
+      "accept_prob_delta": 0.2764,
+      "base_utility": 0.8666,
+      "masked_utility": 0.5322,
+      "utility_delta": 0.3344,
+      "masked_failure_type": "underpowered_or_surface_alignment",
+      "masked_recommended_action": "run_live_validation",
+      "masked_feature_trace": {
+        "process_pair_score": 0.4375,
+        "family_overlap": [
+          "exponential_decay"
+        ],
+        "family_overlap_count": 1,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_radioactive_decay_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 1,
+      "base_accept_prob": 0.9047,
+      "masked_accept_prob": 0.8439,
+      "base_regression_prob": 0.1524,
+      "masked_regression_prob": 0.1859,
+      "accept_prob_delta": 0.0608,
+      "base_utility": 0.8666,
+      "masked_utility": 0.7974,
+      "utility_delta": 0.0692,
+      "masked_failure_type": "none_expected",
+      "masked_recommended_action": "run_live_or_promote_if_verified",
+      "masked_feature_trace": {
+        "process_pair_score": 0.5312,
+        "family_overlap": [
+          "exponential_decay"
+        ],
+        "family_overlap_count": 1,
+        "role_overlap": [
+          "monotone_decrease",
+          "rate_proportional_to_state",
+          "state"
+        ],
+        "role_overlap_count": 3,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_supply_demand_response_v1::process_thermostat_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 1,
+      "base_accept_prob": 0.8582,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.178,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.7584,
+      "base_utility": 0.8137,
+      "masked_utility": -0.069,
+      "utility_delta": 0.8827,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_supply_demand_response_v1::process_thermostat_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.8582,
+      "masked_accept_prob": 0.4329,
+      "base_regression_prob": 0.178,
+      "masked_regression_prob": 0.4119,
+      "accept_prob_delta": 0.4253,
+      "base_utility": 0.8137,
+      "masked_utility": 0.3299,
+      "utility_delta": 0.4838,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.255,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [
+          "opposing_response",
+          "perturbation"
+        ],
+        "role_overlap_count": 2,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_supply_demand_response_v1::process_thermostat_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 1,
+      "base_accept_prob": 0.8582,
+      "masked_accept_prob": 0.5939,
+      "base_regression_prob": 0.178,
+      "masked_regression_prob": 0.4033,
+      "accept_prob_delta": 0.2643,
+      "base_utility": 0.8137,
+      "masked_utility": 0.4931,
+      "utility_delta": 0.3206,
+      "masked_failure_type": "underpowered_or_surface_alignment",
+      "masked_recommended_action": "run_live_validation",
+      "masked_feature_trace": {
+        "process_pair_score": 0.3967,
+        "family_overlap": [
+          "equilibrium_restoration",
+          "negative_feedback"
+        ],
+        "family_overlap_count": 2,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_supply_demand_response_v1::process_thermostat_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 1,
+      "base_accept_prob": 0.8582,
+      "masked_accept_prob": 0.7842,
+      "base_regression_prob": 0.178,
+      "masked_regression_prob": 0.2187,
+      "accept_prob_delta": 0.074,
+      "base_utility": 0.8137,
+      "masked_utility": 0.7295,
+      "utility_delta": 0.0842,
+      "masked_failure_type": "none_expected",
+      "masked_recommended_action": "run_live_or_promote_if_verified",
+      "masked_feature_trace": {
+        "process_pair_score": 0.4817,
+        "family_overlap": [
+          "equilibrium_restoration",
+          "negative_feedback"
+        ],
+        "family_overlap_count": 2,
+        "role_overlap": [
+          "opposing_response",
+          "perturbation"
+        ],
+        "role_overlap_count": 2,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "align"
+      }
+    },
+    {
+      "action_id": "wm_action::process_damped_oscillator_v1::process_radioactive_decay_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_damped_oscillator_v1::process_radioactive_decay_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_damped_oscillator_v1::process_radioactive_decay_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_damped_oscillator_v1::process_radioactive_decay_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_le_chatelier_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_le_chatelier_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_le_chatelier_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_le_chatelier_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_supply_demand_response_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_supply_demand_response_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_supply_demand_response_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_first_order_decay_v1::process_supply_demand_response_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_lenz_law_v1::process_logistic_growth_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_lenz_law_v1::process_logistic_growth_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_lenz_law_v1::process_logistic_growth_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_lenz_law_v1::process_logistic_growth_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_lenz_law_v1::process_radioactive_decay_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_lenz_law_v1::process_radioactive_decay_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_lenz_law_v1::process_radioactive_decay_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_lenz_law_v1::process_radioactive_decay_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_logistic_growth_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 0,
+      "base_accept_prob": 0.1978,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.5812,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.098,
+      "base_utility": 0.7603,
+      "masked_utility": 0.8677,
+      "utility_delta": -0.1074,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_logistic_growth_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 0,
+      "base_accept_prob": 0.1978,
+      "masked_accept_prob": 0.1978,
+      "base_regression_prob": 0.5812,
+      "masked_regression_prob": 0.5812,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.7603,
+      "masked_utility": 0.7603,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.1,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [
+          "state"
+        ],
+        "role_overlap_count": 1,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_logistic_growth_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 0,
+      "base_accept_prob": 0.1978,
+      "masked_accept_prob": 0.1443,
+      "base_regression_prob": 0.5812,
+      "masked_regression_prob": 0.6506,
+      "accept_prob_delta": 0.0535,
+      "base_utility": 0.7603,
+      "masked_utility": 0.8208,
+      "utility_delta": -0.0604,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.07,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_logistic_growth_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 0,
+      "base_accept_prob": 0.1978,
+      "masked_accept_prob": 0.1839,
+      "base_regression_prob": 0.5812,
+      "masked_regression_prob": 0.5888,
+      "accept_prob_delta": 0.0139,
+      "base_utility": 0.7603,
+      "masked_utility": 0.775,
+      "utility_delta": -0.0147,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.085,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [
+          "state"
+        ],
+        "role_overlap_count": 1,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_predator_prey_local_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_alignment_relation_node)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_alignment_relation_node)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_predator_prey_local_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_process_family_overlap)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_process_family_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_predator_prey_local_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_role_schema_overlap)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_role_schema_overlap)",
+        "source_process_pair_decision": "reject"
+      }
+    },
+    {
+      "action_id": "wm_action::process_predator_prey_local_v1::process_rc_discharge_v1",
+      "mask_id": "do(mask_invariant_trace)",
+      "label": 0,
+      "base_accept_prob": 0.0998,
+      "masked_accept_prob": 0.0998,
+      "base_regression_prob": 0.6751,
+      "masked_regression_prob": 0.6751,
+      "accept_prob_delta": 0.0,
+      "base_utility": 0.8677,
+      "masked_utility": 0.8677,
+      "utility_delta": 0.0,
+      "masked_failure_type": "masked_relation_or_low_family_overlap",
+      "masked_recommended_action": "screen_or_collect_more_evidence",
+      "masked_feature_trace": {
+        "process_pair_score": 0.0,
+        "family_overlap": [],
+        "family_overlap_count": 0,
+        "role_overlap": [],
+        "role_overlap_count": 0,
+        "masked_by": "do(mask_invariant_trace)",
+        "source_process_pair_decision": "reject"
+      }
+    }
+  ],
+  "importance_ranking": [
+    {
+      "mask_id": "do(mask_alignment_relation_node)",
+      "mean_positive_accept_drop": 0.7622,
+      "mean_negative_accept_drop": 0.014,
+      "mean_positive_utility_drop": 0.8859,
+      "mean_negative_utility_drop": -0.0153
+    },
+    {
+      "mask_id": "do(mask_process_family_overlap)",
+      "mean_positive_accept_drop": 0.3642,
+      "mean_negative_accept_drop": 0.0,
+      "mean_positive_utility_drop": 0.4143,
+      "mean_negative_utility_drop": 0.0
+    },
+    {
+      "mask_id": "do(mask_role_schema_overlap)",
+      "mean_positive_accept_drop": 0.2276,
+      "mean_negative_accept_drop": 0.0076,
+      "mean_positive_utility_drop": 0.2778,
+      "mean_negative_utility_drop": -0.0086
+    },
+    {
+      "mask_id": "do(mask_invariant_trace)",
+      "mean_positive_accept_drop": 0.0596,
+      "mean_negative_accept_drop": 0.002,
+      "mean_positive_utility_drop": 0.0678,
+      "mean_negative_utility_drop": -0.0021
+    }
+  ],
+  "metrics": {
+    "base_action_count": 16,
+    "counterfactual_trial_count": 64,
+    "mask_count": 4,
+    "mean_positive_relation_accept_drop": 0.7622,
+    "mean_negative_relation_accept_drop": 0.014,
+    "mean_positive_relation_utility_drop": 0.8859,
+    "mean_negative_relation_utility_drop": -0.0153,
+    "relation_drop_auroc": 1.0,
+    "negative_control_mask_false_live_count": 0,
+    "positive_top_relation_mask_fraction": 1.0,
+    "masked_positive_block_count": 9,
+    "avg_mask_eval_ms": 0.0301
+  },
+  "gates": {
+    "source_world_model_passes": true,
+    "has_counterfactual_trials": true,
+    "relation_mask_drops_positive_actions": true,
+    "relation_drop_separates_negatives": true,
+    "negative_controls_stay_screened": true,
+    "relation_mask_is_top_positive_importance": true,
+    "mask_evaluation_is_cheap": true
+  },
+  "failed_gates": [],
+  "pass": true,
+  "interpretation": "The relation-node deletion acts like the environment removing a candidate assumption edge.  If the positive action's predicted utility drops while negative controls remain screened, the system has a measurable internal contribution signal for that assumption.  This remains a pipeline counterfactual, not a mathematical or physical causality proof."
+}
