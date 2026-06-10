@@ -38,6 +38,7 @@ from assumption_os.full_v2_phase0_contract_bypass import build_full_v2_phase0_co
 from assumption_os.full_v2_phase1_graph_memory_bypass import build_full_v2_phase1_graph_memory_bypass_payload
 from assumption_os.full_v2_phase2_verifier_bypass import build_full_v2_phase2_verifier_bypass_payload
 from assumption_os.full_v2_phase3_world_model_bypass import build_full_v2_phase3_world_model_bypass_payload
+from assumption_os.full_v2_phase4_hypothesis_generator_bypass import build_full_v2_phase4_hypothesis_generator_bypass_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -413,6 +414,28 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["true_positive_block_rate"], 0.0)
         self.assertGreaterEqual(metrics["multi_step_rollout_accuracy"], 0.90)
         self.assertGreaterEqual(metrics["information_gain_correlation"], 0.90)
+
+    def test_full_v2_phase4_hypothesis_generator_bypass_generates_multi_layer_families(self):
+        payload = build_full_v2_phase4_hypothesis_generator_bypass_payload(
+            eval_id="unit_full_v2_phase4_hypothesis_generator"
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["execution_lapse_filtered_rate"], 1.0)
+        self.assertGreaterEqual(metrics["cluster_count"], 6)
+        self.assertGreaterEqual(metrics["min_candidates_per_cluster"], 2)
+        self.assertEqual(metrics["candidate_layer_coverage"], 6)
+        self.assertGreaterEqual(metrics["novel_family_rate"], 0.50)
+        self.assertLessEqual(metrics["duplicate_rate"], 0.15)
+        self.assertLessEqual(metrics["conflict_rate"], 0.15)
+        self.assertGreaterEqual(metrics["fresh_validation_success_rate"], 0.80)
+        self.assertGreaterEqual(metrics["cross_domain_transfer_rate"], 0.70)
+        self.assertGreaterEqual(metrics["descendant_productivity"], 0.65)
+        self.assertLessEqual(metrics["false_discovery_rate"], 0.10)
+        self.assertGreaterEqual(metrics["residual_explained_fraction"], 0.90)
+        self.assertEqual(metrics["manifest_validation_issue_count"], 0)
+        self.assertGreaterEqual(metrics["world_model_screen_precision"], 0.90)
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
