@@ -41,6 +41,7 @@ from assumption_os.full_v2_phase3_world_model_bypass import build_full_v2_phase3
 from assumption_os.full_v2_phase4_hypothesis_generator_bypass import build_full_v2_phase4_hypothesis_generator_bypass_payload
 from assumption_os.full_v2_phase5_strategy_scheduler_bypass import build_full_v2_phase5_strategy_scheduler_bypass_payload
 from assumption_os.full_v2_phase6_formal_alignment_bypass import build_full_v2_phase6_formal_alignment_bypass_payload
+from assumption_os.full_v2_phase7_daemon_harness_bypass import build_full_v2_phase7_daemon_harness_bypass_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -470,6 +471,24 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["top1_formal_mapping_hit_rate"], 0.85)
         self.assertGreaterEqual(metrics["unsafe_mapping_block_rate"], 0.95)
         self.assertGreaterEqual(metrics["formal_margin_over_best_baseline"], 0.15)
+
+    def test_full_v2_phase7_daemon_harness_bypass_runs_bounded_episode(self):
+        payload = build_full_v2_phase7_daemon_harness_bypass_payload(
+            eval_id="unit_full_v2_phase7_daemon_harness"
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertGreaterEqual(metrics["long_run_stability"], 0.95)
+        self.assertLessEqual(metrics["graph_pollution_rate"], 0.02)
+        self.assertGreaterEqual(metrics["rollback_success_rate"], 0.95)
+        self.assertLessEqual(metrics["cost_per_accepted_assumption"], 2.50)
+        self.assertGreaterEqual(metrics["accepted_assumption_survival_rate"], 0.80)
+        self.assertGreaterEqual(metrics["downstream_win_rate_on_unseen"], 0.65)
+        self.assertGreaterEqual(metrics["capability_score_improvement"], 0.12)
+        self.assertGreaterEqual(metrics["daemon_recovery_success"], 0.95)
+        self.assertGreaterEqual(metrics["evaluator_integrity"], 0.95)
+        self.assertEqual(metrics["unconditional_apply_count"], 0)
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
