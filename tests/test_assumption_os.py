@@ -93,6 +93,7 @@ from assumption_os.proposals import ProposalType, build_candidate_proposals
 from assumption_os.queue_artifact_eval import build_queue_artifact_eval_payload, judgment_sets_from_artifact_eval
 from assumption_os.rag_to_memory_baseline import build_rag_to_memory_baseline_payload
 from assumption_os.record_phase2_eval import record_phase2_eval
+from assumption_os.residual_hypothesis_generator_v2 import build_residual_hypothesis_generator_v2_payload
 from assumption_os.retrieval_policy import format_policy_context, retrieve_phase2_assumptions
 from assumption_os.recursive_runner import (
     RecursiveFrameStatus,
@@ -306,6 +307,23 @@ class AssumptionOSTest(unittest.TestCase):
             and row["target_id"] == "process_predator_prey_local_v1"
         ]
         self.assertEqual(positive_local_stabilization[0]["decision"], "accept_alignment")
+
+    def test_residual_hypothesis_generator_v2_requires_systematic_clusters(self):
+        payload = build_residual_hypothesis_generator_v2_payload(eval_id="unit_residual_hypothesis_generator_v2")
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertGreaterEqual(metrics["residual_count"], 10)
+        self.assertGreaterEqual(metrics["cluster_count"], 3)
+        self.assertEqual(metrics["proposal_count"], metrics["cluster_count"])
+        self.assertEqual(metrics["random_proposal_count"], 0)
+        self.assertEqual(metrics["duplicate_claim_count"], 0)
+        self.assertEqual(metrics["conflict_count"], 0)
+        self.assertEqual(metrics["world_model_accept_count"], metrics["proposal_count"])
+        self.assertGreaterEqual(metrics["heldout_residual_coverage"], 0.95)
+        self.assertEqual(metrics["outside_control_harm_count"], 0)
+        self.assertEqual(metrics["manifest_validation_issue_count"], 0)
+        self.assertTrue(all(proposal["source_records"] for proposal in payload["proposals"]))
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
