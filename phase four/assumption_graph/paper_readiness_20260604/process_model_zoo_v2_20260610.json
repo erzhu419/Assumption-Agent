@@ -1,0 +1,1096 @@
+{
+  "eval_id": "process_model_zoo_v2_20260610",
+  "eval_kind": "process_model_zoo_v2_alignment_benchmark",
+  "reconstruction_v2_phase": "phase2_process_model_zoo",
+  "performance_validation": true,
+  "validation_scope": "Ten typed process models plus gold positive/negative process-family alignment pairs. Performance is measured as deterministic alignment classification over held fixture pairs.",
+  "process_entries": [
+    {
+      "model": {
+        "id": "process_le_chatelier_v1",
+        "domain": "chemical_thermodynamic_equilibrium",
+        "state_variables": [
+          "reaction_quotient",
+          "composition",
+          "temperature",
+          "pressure"
+        ],
+        "parameters": [
+          "domain_parameters"
+        ],
+        "interventions": [
+          "external_condition_change"
+        ],
+        "perturbation": "imposed external condition change",
+        "response": "equilibrium shift partially counteracts the imposed change",
+        "dynamics": {
+          "family_tags": [
+            "negative_feedback",
+            "equilibrium_restoration"
+          ],
+          "role_schema": [
+            "perturbation",
+            "opposing_response",
+            "constraint"
+          ]
+        },
+        "observation_map": "observe process state before and after intervention",
+        "invariants": [
+          "response opposes perturbation",
+          "moves toward constrained equilibrium"
+        ],
+        "failure_cases": [
+          "far from equilibrium",
+          "irreversible reaction"
+        ],
+        "traces": []
+      },
+      "family_tags": [
+        "negative_feedback",
+        "equilibrium_restoration"
+      ],
+      "role_schema": [
+        "perturbation",
+        "opposing_response",
+        "constraint"
+      ]
+    },
+    {
+      "model": {
+        "id": "process_lenz_law_v1",
+        "domain": "electromagnetic_induction",
+        "state_variables": [
+          "magnetic_flux",
+          "induced_emf",
+          "induced_current"
+        ],
+        "parameters": [
+          "domain_parameters"
+        ],
+        "interventions": [
+          "external_flux_change"
+        ],
+        "perturbation": "change in magnetic flux over time",
+        "response": "induced current creates field opposing the flux change",
+        "dynamics": {
+          "family_tags": [
+            "negative_feedback",
+            "opposition_response"
+          ],
+          "role_schema": [
+            "perturbation",
+            "opposing_response",
+            "sign_relation"
+          ]
+        },
+        "observation_map": "observe process state before and after intervention",
+        "invariants": [
+          "response opposes perturbation",
+          "sign-sensitive local opposition"
+        ],
+        "failure_cases": [
+          "open circuit",
+          "nonlinear magnetic material"
+        ],
+        "traces": []
+      },
+      "family_tags": [
+        "negative_feedback",
+        "opposition_response"
+      ],
+      "role_schema": [
+        "perturbation",
+        "opposing_response",
+        "sign_relation"
+      ]
+    },
+    {
+      "model": {
+        "id": "process_thermostat_v1",
+        "domain": "thermostat_temperature_control",
+        "state_variables": [
+          "temperature",
+          "setpoint",
+          "heating_power"
+        ],
+        "parameters": [
+          "domain_parameters"
+        ],
+        "interventions": [
+          "external_heat_loss",
+          "setpoint_change"
+        ],
+        "perturbation": "temperature deviates from setpoint",
+        "response": "controller changes heating or cooling to reduce deviation",
+        "dynamics": {
+          "family_tags": [
+            "negative_feedback",
+            "control_loop",
+            "equilibrium_restoration"
+          ],
+          "role_schema": [
+            "perturbation",
+            "opposing_response",
+            "error_signal"
+          ]
+        },
+        "observation_map": "observe process state before and after intervention",
+        "invariants": [
+          "response opposes deviation",
+          "closed-loop error reduction"
+        ],
+        "failure_cases": [
+          "sensor failure",
+          "actuator saturation"
+        ],
+        "traces": []
+      },
+      "family_tags": [
+        "negative_feedback",
+        "control_loop",
+        "equilibrium_restoration"
+      ],
+      "role_schema": [
+        "perturbation",
+        "opposing_response",
+        "error_signal"
+      ]
+    },
+    {
+      "model": {
+        "id": "process_predator_prey_local_v1",
+        "domain": "predator_prey_local_stabilization",
+        "state_variables": [
+          "prey_population",
+          "predator_population",
+          "growth_rate"
+        ],
+        "parameters": [
+          "domain_parameters"
+        ],
+        "interventions": [
+          "prey_shock",
+          "predator_shock"
+        ],
+        "perturbation": "population perturbation",
+        "response": "coupled response can restore local balance near fixed point",
+        "dynamics": {
+          "family_tags": [
+            "coupled_dynamics",
+            "local_stabilization"
+          ],
+          "role_schema": [
+            "state_coupling",
+            "restoring_response",
+            "fixed_point"
+          ]
+        },
+        "observation_map": "observe process state before and after intervention",
+        "invariants": [
+          "coupled variables can damp local deviation",
+          "stability depends on parameters"
+        ],
+        "failure_cases": [
+          "limit cycle regime",
+          "parameter instability"
+        ],
+        "traces": []
+      },
+      "family_tags": [
+        "coupled_dynamics",
+        "local_stabilization"
+      ],
+      "role_schema": [
+        "state_coupling",
+        "restoring_response",
+        "fixed_point"
+      ]
+    },
+    {
+      "model": {
+        "id": "process_first_order_decay_v1",
+        "domain": "chemical_first_order_decay",
+        "state_variables": [
+          "concentration",
+          "rate_constant",
+          "time"
+        ],
+        "parameters": [
+          "domain_parameters"
+        ],
+        "interventions": [
+          "initial_concentration_change"
+        ],
+        "perturbation": "initial amount is set away from zero",
+        "response": "quantity decreases proportionally to current amount",
+        "dynamics": {
+          "family_tags": [
+            "exponential_decay",
+            "monotone_relaxation"
+          ],
+          "role_schema": [
+            "state",
+            "rate_proportional_to_state",
+            "monotone_decrease"
+          ]
+        },
+        "observation_map": "observe process state before and after intervention",
+        "invariants": [
+          "monotone exponential decay",
+          "rate proportional to state"
+        ],
+        "failure_cases": [
+          "multi-step reaction",
+          "reversible reaction"
+        ],
+        "traces": []
+      },
+      "family_tags": [
+        "exponential_decay",
+        "monotone_relaxation"
+      ],
+      "role_schema": [
+        "state",
+        "rate_proportional_to_state",
+        "monotone_decrease"
+      ]
+    },
+    {
+      "model": {
+        "id": "process_radioactive_decay_v1",
+        "domain": "radioactive_decay",
+        "state_variables": [
+          "nuclei_count",
+          "decay_constant",
+          "time"
+        ],
+        "parameters": [
+          "domain_parameters"
+        ],
+        "interventions": [
+          "initial_nuclei_count"
+        ],
+        "perturbation": "initial unstable nuclei count",
+        "response": "expected count decays proportionally to current count",
+        "dynamics": {
+          "family_tags": [
+            "exponential_decay",
+            "memoryless_process"
+          ],
+          "role_schema": [
+            "state",
+            "rate_proportional_to_state",
+            "monotone_decrease"
+          ]
+        },
+        "observation_map": "observe process state before and after intervention",
+        "invariants": [
+          "monotone exponential decay",
+          "memoryless decay law"
+        ],
+        "failure_cases": [
+          "daughter-chain coupling",
+          "measurement noise"
+        ],
+        "traces": []
+      },
+      "family_tags": [
+        "exponential_decay",
+        "memoryless_process"
+      ],
+      "role_schema": [
+        "state",
+        "rate_proportional_to_state",
+        "monotone_decrease"
+      ]
+    },
+    {
+      "model": {
+        "id": "process_rc_discharge_v1",
+        "domain": "rc_circuit_discharge",
+        "state_variables": [
+          "capacitor_voltage",
+          "resistance",
+          "capacitance",
+          "time"
+        ],
+        "parameters": [
+          "domain_parameters"
+        ],
+        "interventions": [
+          "initial_voltage"
+        ],
+        "perturbation": "capacitor starts charged above equilibrium",
+        "response": "voltage decays proportionally to current voltage",
+        "dynamics": {
+          "family_tags": [
+            "exponential_decay",
+            "monotone_relaxation"
+          ],
+          "role_schema": [
+            "state",
+            "rate_proportional_to_state",
+            "monotone_decrease"
+          ]
+        },
+        "observation_map": "observe process state before and after intervention",
+        "invariants": [
+          "monotone exponential decay",
+          "time constant controls relaxation"
+        ],
+        "failure_cases": [
+          "nonlinear component",
+          "driven circuit"
+        ],
+        "traces": []
+      },
+      "family_tags": [
+        "exponential_decay",
+        "monotone_relaxation"
+      ],
+      "role_schema": [
+        "state",
+        "rate_proportional_to_state",
+        "monotone_decrease"
+      ]
+    },
+    {
+      "model": {
+        "id": "process_logistic_growth_v1",
+        "domain": "logistic_growth",
+        "state_variables": [
+          "population",
+          "carrying_capacity",
+          "growth_rate"
+        ],
+        "parameters": [
+          "domain_parameters"
+        ],
+        "interventions": [
+          "initial_population"
+        ],
+        "perturbation": "population starts below or above carrying capacity",
+        "response": "growth slows as population approaches carrying capacity",
+        "dynamics": {
+          "family_tags": [
+            "saturation",
+            "capacity_constraint"
+          ],
+          "role_schema": [
+            "state",
+            "capacity_limit",
+            "growth_slowdown"
+          ]
+        },
+        "observation_map": "observe process state before and after intervention",
+        "invariants": [
+          "saturation near carrying capacity",
+          "state-dependent growth slowdown"
+        ],
+        "failure_cases": [
+          "changing carrying capacity",
+          "strong stochastic shocks"
+        ],
+        "traces": []
+      },
+      "family_tags": [
+        "saturation",
+        "capacity_constraint"
+      ],
+      "role_schema": [
+        "state",
+        "capacity_limit",
+        "growth_slowdown"
+      ]
+    },
+    {
+      "model": {
+        "id": "process_damped_oscillator_v1",
+        "domain": "damped_oscillator",
+        "state_variables": [
+          "position",
+          "velocity",
+          "damping",
+          "spring_constant"
+        ],
+        "parameters": [
+          "domain_parameters"
+        ],
+        "interventions": [
+          "initial_displacement",
+          "initial_velocity"
+        ],
+        "perturbation": "system displaced from equilibrium",
+        "response": "restoring force and damping reduce oscillation energy",
+        "dynamics": {
+          "family_tags": [
+            "oscillation",
+            "damping",
+            "local_stabilization"
+          ],
+          "role_schema": [
+            "restoring_response",
+            "energy_dissipation",
+            "trajectory_shape"
+          ]
+        },
+        "observation_map": "observe process state before and after intervention",
+        "invariants": [
+          "restoring force opposes displacement",
+          "energy dissipates over time"
+        ],
+        "failure_cases": [
+          "negative damping",
+          "nonlinear forcing"
+        ],
+        "traces": []
+      },
+      "family_tags": [
+        "oscillation",
+        "damping",
+        "local_stabilization"
+      ],
+      "role_schema": [
+        "restoring_response",
+        "energy_dissipation",
+        "trajectory_shape"
+      ]
+    },
+    {
+      "model": {
+        "id": "process_supply_demand_response_v1",
+        "domain": "supply_demand_equilibrium_response",
+        "state_variables": [
+          "price",
+          "demand",
+          "supply",
+          "inventory"
+        ],
+        "parameters": [
+          "domain_parameters"
+        ],
+        "interventions": [
+          "demand_shock",
+          "supply_shock"
+        ],
+        "perturbation": "market shock moves price or quantity away from clearing level",
+        "response": "price and quantity adjust toward local clearing balance",
+        "dynamics": {
+          "family_tags": [
+            "equilibrium_restoration",
+            "negative_feedback",
+            "market_adjustment"
+          ],
+          "role_schema": [
+            "perturbation",
+            "opposing_response",
+            "constraint"
+          ]
+        },
+        "observation_map": "observe process state before and after intervention",
+        "invariants": [
+          "adjustment can reduce shortage or surplus",
+          "equilibrium restoration is local and delayed"
+        ],
+        "failure_cases": [
+          "sticky prices",
+          "market power",
+          "external rationing"
+        ],
+        "traces": []
+      },
+      "family_tags": [
+        "equilibrium_restoration",
+        "negative_feedback",
+        "market_adjustment"
+      ],
+      "role_schema": [
+        "perturbation",
+        "opposing_response",
+        "constraint"
+      ]
+    }
+  ],
+  "family_counts": {
+    "negative_feedback": 4,
+    "equilibrium_restoration": 3,
+    "opposition_response": 1,
+    "control_loop": 1,
+    "coupled_dynamics": 1,
+    "local_stabilization": 2,
+    "exponential_decay": 3,
+    "monotone_relaxation": 2,
+    "memoryless_process": 1,
+    "saturation": 1,
+    "capacity_constraint": 1,
+    "oscillation": 1,
+    "damping": 1,
+    "market_adjustment": 1
+  },
+  "gold_positive_pairs": [
+    [
+      "process_damped_oscillator_v1",
+      "process_predator_prey_local_v1"
+    ],
+    [
+      "process_first_order_decay_v1",
+      "process_radioactive_decay_v1"
+    ],
+    [
+      "process_first_order_decay_v1",
+      "process_rc_discharge_v1"
+    ],
+    [
+      "process_le_chatelier_v1",
+      "process_lenz_law_v1"
+    ],
+    [
+      "process_le_chatelier_v1",
+      "process_supply_demand_response_v1"
+    ],
+    [
+      "process_le_chatelier_v1",
+      "process_thermostat_v1"
+    ],
+    [
+      "process_lenz_law_v1",
+      "process_thermostat_v1"
+    ],
+    [
+      "process_radioactive_decay_v1",
+      "process_rc_discharge_v1"
+    ],
+    [
+      "process_supply_demand_response_v1",
+      "process_thermostat_v1"
+    ]
+  ],
+  "gold_negative_pairs": [
+    [
+      "process_damped_oscillator_v1",
+      "process_radioactive_decay_v1"
+    ],
+    [
+      "process_first_order_decay_v1",
+      "process_le_chatelier_v1"
+    ],
+    [
+      "process_first_order_decay_v1",
+      "process_supply_demand_response_v1"
+    ],
+    [
+      "process_lenz_law_v1",
+      "process_logistic_growth_v1"
+    ],
+    [
+      "process_lenz_law_v1",
+      "process_radioactive_decay_v1"
+    ],
+    [
+      "process_logistic_growth_v1",
+      "process_rc_discharge_v1"
+    ],
+    [
+      "process_predator_prey_local_v1",
+      "process_rc_discharge_v1"
+    ]
+  ],
+  "pair_judgments": [
+    {
+      "source_id": "process_damped_oscillator_v1",
+      "target_id": "process_predator_prey_local_v1",
+      "score": 0.375,
+      "decision": "reject",
+      "gold_label": "positive",
+      "family_overlap": [
+        "local_stabilization"
+      ],
+      "role_overlap": [
+        "restoring_response"
+      ],
+      "rationale": "family_overlap=['local_stabilization']; role_overlap=['restoring_response']; invariant_score=0.0"
+    },
+    {
+      "source_id": "process_first_order_decay_v1",
+      "target_id": "process_radioactive_decay_v1",
+      "score": 0.6312,
+      "decision": "align",
+      "gold_label": "positive",
+      "family_overlap": [
+        "exponential_decay"
+      ],
+      "role_overlap": [
+        "monotone_decrease",
+        "rate_proportional_to_state",
+        "state"
+      ],
+      "rationale": "family_overlap=['exponential_decay']; role_overlap=['monotone_decrease', 'rate_proportional_to_state', 'state']; invariant_score=0.375"
+    },
+    {
+      "source_id": "process_first_order_decay_v1",
+      "target_id": "process_rc_discharge_v1",
+      "score": 0.895,
+      "decision": "align",
+      "gold_label": "positive",
+      "family_overlap": [
+        "exponential_decay",
+        "monotone_relaxation"
+      ],
+      "role_overlap": [
+        "monotone_decrease",
+        "rate_proportional_to_state",
+        "state"
+      ],
+      "rationale": "family_overlap=['exponential_decay', 'monotone_relaxation']; role_overlap=['monotone_decrease', 'rate_proportional_to_state', 'state']; invariant_score=0.3"
+    },
+    {
+      "source_id": "process_le_chatelier_v1",
+      "target_id": "process_lenz_law_v1",
+      "score": 0.5159,
+      "decision": "align",
+      "gold_label": "positive",
+      "family_overlap": [
+        "negative_feedback"
+      ],
+      "role_overlap": [
+        "opposing_response",
+        "perturbation"
+      ],
+      "rationale": "family_overlap=['negative_feedback']; role_overlap=['opposing_response', 'perturbation']; invariant_score=0.2727"
+    },
+    {
+      "source_id": "process_le_chatelier_v1",
+      "target_id": "process_supply_demand_response_v1",
+      "score": 0.8594,
+      "decision": "align",
+      "gold_label": "positive",
+      "family_overlap": [
+        "equilibrium_restoration",
+        "negative_feedback"
+      ],
+      "role_overlap": [
+        "constraint",
+        "opposing_response",
+        "perturbation"
+      ],
+      "rationale": "family_overlap=['equilibrium_restoration', 'negative_feedback']; role_overlap=['constraint', 'opposing_response', 'perturbation']; invariant_score=0.0625"
+    },
+    {
+      "source_id": "process_le_chatelier_v1",
+      "target_id": "process_thermostat_v1",
+      "score": 0.775,
+      "decision": "align",
+      "gold_label": "positive",
+      "family_overlap": [
+        "equilibrium_restoration",
+        "negative_feedback"
+      ],
+      "role_overlap": [
+        "opposing_response",
+        "perturbation"
+      ],
+      "rationale": "family_overlap=['equilibrium_restoration', 'negative_feedback']; role_overlap=['opposing_response', 'perturbation']; invariant_score=0.1667"
+    },
+    {
+      "source_id": "process_lenz_law_v1",
+      "target_id": "process_thermostat_v1",
+      "score": 0.5,
+      "decision": "align",
+      "gold_label": "positive",
+      "family_overlap": [
+        "negative_feedback"
+      ],
+      "role_overlap": [
+        "opposing_response",
+        "perturbation"
+      ],
+      "rationale": "family_overlap=['negative_feedback']; role_overlap=['opposing_response', 'perturbation']; invariant_score=0.1667"
+    },
+    {
+      "source_id": "process_radioactive_decay_v1",
+      "target_id": "process_rc_discharge_v1",
+      "score": 0.625,
+      "decision": "align",
+      "gold_label": "positive",
+      "family_overlap": [
+        "exponential_decay"
+      ],
+      "role_overlap": [
+        "monotone_decrease",
+        "rate_proportional_to_state",
+        "state"
+      ],
+      "rationale": "family_overlap=['exponential_decay']; role_overlap=['monotone_decrease', 'rate_proportional_to_state', 'state']; invariant_score=0.3333"
+    },
+    {
+      "source_id": "process_supply_demand_response_v1",
+      "target_id": "process_thermostat_v1",
+      "score": 0.5667,
+      "decision": "align",
+      "gold_label": "positive",
+      "family_overlap": [
+        "equilibrium_restoration",
+        "negative_feedback"
+      ],
+      "role_overlap": [
+        "opposing_response",
+        "perturbation"
+      ],
+      "rationale": "family_overlap=['equilibrium_restoration', 'negative_feedback']; role_overlap=['opposing_response', 'perturbation']; invariant_score=0.0"
+    },
+    {
+      "source_id": "process_damped_oscillator_v1",
+      "target_id": "process_radioactive_decay_v1",
+      "score": 0.0,
+      "decision": "reject",
+      "gold_label": "negative",
+      "family_overlap": [],
+      "role_overlap": [],
+      "rationale": "family_overlap=[]; role_overlap=[]; invariant_score=0.0"
+    },
+    {
+      "source_id": "process_first_order_decay_v1",
+      "target_id": "process_le_chatelier_v1",
+      "score": 0.0,
+      "decision": "reject",
+      "gold_label": "negative",
+      "family_overlap": [],
+      "role_overlap": [],
+      "rationale": "family_overlap=[]; role_overlap=[]; invariant_score=0.0"
+    },
+    {
+      "source_id": "process_first_order_decay_v1",
+      "target_id": "process_supply_demand_response_v1",
+      "score": 0.0,
+      "decision": "reject",
+      "gold_label": "negative",
+      "family_overlap": [],
+      "role_overlap": [],
+      "rationale": "family_overlap=[]; role_overlap=[]; invariant_score=0.0"
+    },
+    {
+      "source_id": "process_lenz_law_v1",
+      "target_id": "process_logistic_growth_v1",
+      "score": 0.0,
+      "decision": "reject",
+      "gold_label": "negative",
+      "family_overlap": [],
+      "role_overlap": [],
+      "rationale": "family_overlap=[]; role_overlap=[]; invariant_score=0.0"
+    },
+    {
+      "source_id": "process_lenz_law_v1",
+      "target_id": "process_radioactive_decay_v1",
+      "score": 0.0,
+      "decision": "reject",
+      "gold_label": "negative",
+      "family_overlap": [],
+      "role_overlap": [],
+      "rationale": "family_overlap=[]; role_overlap=[]; invariant_score=0.0"
+    },
+    {
+      "source_id": "process_logistic_growth_v1",
+      "target_id": "process_rc_discharge_v1",
+      "score": 0.1,
+      "decision": "reject",
+      "gold_label": "negative",
+      "family_overlap": [],
+      "role_overlap": [
+        "state"
+      ],
+      "rationale": "family_overlap=[]; role_overlap=['state']; invariant_score=0.0"
+    },
+    {
+      "source_id": "process_predator_prey_local_v1",
+      "target_id": "process_rc_discharge_v1",
+      "score": 0.0,
+      "decision": "reject",
+      "gold_label": "negative",
+      "family_overlap": [],
+      "role_overlap": [],
+      "rationale": "family_overlap=[]; role_overlap=[]; invariant_score=0.0"
+    }
+  ],
+  "alignment_hypotheses": [
+    {
+      "id": "align2_759cffaec459",
+      "source_process": "process_first_order_decay_v1",
+      "target_process": "process_radioactive_decay_v1",
+      "mapping": {
+        "shared_family": "exponential_decay",
+        "shared_roles": "monotone_decrease / rate_proportional_to_state / state",
+        "source_perturbation": "initial amount is set away from zero",
+        "target_perturbation": "initial unstable nuclei count",
+        "source_response": "quantity decreases proportionally to current amount",
+        "target_response": "expected count decays proportionally to current count"
+      },
+      "preserved_structure": [
+        "shared family: exponential_decay",
+        "shared roles: monotone_decrease, rate_proportional_to_state, state"
+      ],
+      "broken_structure": [
+        "domain differs: chemical_first_order_decay vs radioactive_decay",
+        "equations and state variables are not assumed identical"
+      ],
+      "metric_scores": {
+        "process_family_score": 0.6312
+      },
+      "verifier_tests": [
+        "typed_process_pair_check",
+        "negative_control_pair_check",
+        "fresh_transfer_task_ablation"
+      ],
+      "status": "candidate"
+    },
+    {
+      "id": "align2_c696b75a47c6",
+      "source_process": "process_first_order_decay_v1",
+      "target_process": "process_rc_discharge_v1",
+      "mapping": {
+        "shared_family": "exponential_decay / monotone_relaxation",
+        "shared_roles": "monotone_decrease / rate_proportional_to_state / state",
+        "source_perturbation": "initial amount is set away from zero",
+        "target_perturbation": "capacitor starts charged above equilibrium",
+        "source_response": "quantity decreases proportionally to current amount",
+        "target_response": "voltage decays proportionally to current voltage"
+      },
+      "preserved_structure": [
+        "shared family: exponential_decay, monotone_relaxation",
+        "shared roles: monotone_decrease, rate_proportional_to_state, state"
+      ],
+      "broken_structure": [
+        "domain differs: chemical_first_order_decay vs rc_circuit_discharge",
+        "equations and state variables are not assumed identical"
+      ],
+      "metric_scores": {
+        "process_family_score": 0.895
+      },
+      "verifier_tests": [
+        "typed_process_pair_check",
+        "negative_control_pair_check",
+        "fresh_transfer_task_ablation"
+      ],
+      "status": "candidate"
+    },
+    {
+      "id": "align2_e6415962d179",
+      "source_process": "process_le_chatelier_v1",
+      "target_process": "process_lenz_law_v1",
+      "mapping": {
+        "shared_family": "negative_feedback",
+        "shared_roles": "opposing_response / perturbation",
+        "source_perturbation": "imposed external condition change",
+        "target_perturbation": "change in magnetic flux over time",
+        "source_response": "equilibrium shift partially counteracts the imposed change",
+        "target_response": "induced current creates field opposing the flux change"
+      },
+      "preserved_structure": [
+        "shared family: negative_feedback",
+        "shared roles: opposing_response, perturbation"
+      ],
+      "broken_structure": [
+        "domain differs: chemical_thermodynamic_equilibrium vs electromagnetic_induction",
+        "equations and state variables are not assumed identical"
+      ],
+      "metric_scores": {
+        "process_family_score": 0.5159
+      },
+      "verifier_tests": [
+        "typed_process_pair_check",
+        "negative_control_pair_check",
+        "fresh_transfer_task_ablation"
+      ],
+      "status": "candidate"
+    },
+    {
+      "id": "align2_d1b962f97b72",
+      "source_process": "process_le_chatelier_v1",
+      "target_process": "process_supply_demand_response_v1",
+      "mapping": {
+        "shared_family": "equilibrium_restoration / negative_feedback",
+        "shared_roles": "constraint / opposing_response / perturbation",
+        "source_perturbation": "imposed external condition change",
+        "target_perturbation": "market shock moves price or quantity away from clearing level",
+        "source_response": "equilibrium shift partially counteracts the imposed change",
+        "target_response": "price and quantity adjust toward local clearing balance"
+      },
+      "preserved_structure": [
+        "shared family: equilibrium_restoration, negative_feedback",
+        "shared roles: constraint, opposing_response, perturbation"
+      ],
+      "broken_structure": [
+        "domain differs: chemical_thermodynamic_equilibrium vs supply_demand_equilibrium_response",
+        "equations and state variables are not assumed identical"
+      ],
+      "metric_scores": {
+        "process_family_score": 0.8594
+      },
+      "verifier_tests": [
+        "typed_process_pair_check",
+        "negative_control_pair_check",
+        "fresh_transfer_task_ablation"
+      ],
+      "status": "candidate"
+    },
+    {
+      "id": "align2_9a15bb985bbf",
+      "source_process": "process_le_chatelier_v1",
+      "target_process": "process_thermostat_v1",
+      "mapping": {
+        "shared_family": "equilibrium_restoration / negative_feedback",
+        "shared_roles": "opposing_response / perturbation",
+        "source_perturbation": "imposed external condition change",
+        "target_perturbation": "temperature deviates from setpoint",
+        "source_response": "equilibrium shift partially counteracts the imposed change",
+        "target_response": "controller changes heating or cooling to reduce deviation"
+      },
+      "preserved_structure": [
+        "shared family: equilibrium_restoration, negative_feedback",
+        "shared roles: opposing_response, perturbation"
+      ],
+      "broken_structure": [
+        "domain differs: chemical_thermodynamic_equilibrium vs thermostat_temperature_control",
+        "equations and state variables are not assumed identical"
+      ],
+      "metric_scores": {
+        "process_family_score": 0.775
+      },
+      "verifier_tests": [
+        "typed_process_pair_check",
+        "negative_control_pair_check",
+        "fresh_transfer_task_ablation"
+      ],
+      "status": "candidate"
+    },
+    {
+      "id": "align2_fc97d3f76283",
+      "source_process": "process_lenz_law_v1",
+      "target_process": "process_thermostat_v1",
+      "mapping": {
+        "shared_family": "negative_feedback",
+        "shared_roles": "opposing_response / perturbation",
+        "source_perturbation": "change in magnetic flux over time",
+        "target_perturbation": "temperature deviates from setpoint",
+        "source_response": "induced current creates field opposing the flux change",
+        "target_response": "controller changes heating or cooling to reduce deviation"
+      },
+      "preserved_structure": [
+        "shared family: negative_feedback",
+        "shared roles: opposing_response, perturbation"
+      ],
+      "broken_structure": [
+        "domain differs: electromagnetic_induction vs thermostat_temperature_control",
+        "equations and state variables are not assumed identical"
+      ],
+      "metric_scores": {
+        "process_family_score": 0.5
+      },
+      "verifier_tests": [
+        "typed_process_pair_check",
+        "negative_control_pair_check",
+        "fresh_transfer_task_ablation"
+      ],
+      "status": "candidate"
+    },
+    {
+      "id": "align2_40d712b81719",
+      "source_process": "process_radioactive_decay_v1",
+      "target_process": "process_rc_discharge_v1",
+      "mapping": {
+        "shared_family": "exponential_decay",
+        "shared_roles": "monotone_decrease / rate_proportional_to_state / state",
+        "source_perturbation": "initial unstable nuclei count",
+        "target_perturbation": "capacitor starts charged above equilibrium",
+        "source_response": "expected count decays proportionally to current count",
+        "target_response": "voltage decays proportionally to current voltage"
+      },
+      "preserved_structure": [
+        "shared family: exponential_decay",
+        "shared roles: monotone_decrease, rate_proportional_to_state, state"
+      ],
+      "broken_structure": [
+        "domain differs: radioactive_decay vs rc_circuit_discharge",
+        "equations and state variables are not assumed identical"
+      ],
+      "metric_scores": {
+        "process_family_score": 0.625
+      },
+      "verifier_tests": [
+        "typed_process_pair_check",
+        "negative_control_pair_check",
+        "fresh_transfer_task_ablation"
+      ],
+      "status": "candidate"
+    },
+    {
+      "id": "align2_324621f2633c",
+      "source_process": "process_supply_demand_response_v1",
+      "target_process": "process_thermostat_v1",
+      "mapping": {
+        "shared_family": "equilibrium_restoration / negative_feedback",
+        "shared_roles": "opposing_response / perturbation",
+        "source_perturbation": "market shock moves price or quantity away from clearing level",
+        "target_perturbation": "temperature deviates from setpoint",
+        "source_response": "price and quantity adjust toward local clearing balance",
+        "target_response": "controller changes heating or cooling to reduce deviation"
+      },
+      "preserved_structure": [
+        "shared family: equilibrium_restoration, negative_feedback",
+        "shared roles: opposing_response, perturbation"
+      ],
+      "broken_structure": [
+        "domain differs: supply_demand_equilibrium_response vs thermostat_temperature_control",
+        "equations and state variables are not assumed identical"
+      ],
+      "metric_scores": {
+        "process_family_score": 0.5667
+      },
+      "verifier_tests": [
+        "typed_process_pair_check",
+        "negative_control_pair_check",
+        "fresh_transfer_task_ablation"
+      ],
+      "status": "candidate"
+    }
+  ],
+  "validation_issues": {
+    "process_le_chatelier_v1": [],
+    "process_lenz_law_v1": [],
+    "process_thermostat_v1": [],
+    "process_predator_prey_local_v1": [],
+    "process_first_order_decay_v1": [],
+    "process_radioactive_decay_v1": [],
+    "process_rc_discharge_v1": [],
+    "process_logistic_growth_v1": [],
+    "process_damped_oscillator_v1": [],
+    "process_supply_demand_response_v1": []
+  },
+  "metrics": {
+    "process_count": 10,
+    "family_count": 14,
+    "positive_pair_count": 9,
+    "negative_pair_count": 7,
+    "alignment_hypothesis_count": 8,
+    "validation_issue_count": 0,
+    "true_positive": 8,
+    "false_negative": 1,
+    "true_negative": 7,
+    "false_positive": 0,
+    "accuracy": 0.9375,
+    "positive_recall": 0.8889,
+    "positive_precision": 1.0,
+    "negative_rejection_rate": 1.0
+  },
+  "gates": {
+    "has_ten_process_models": true,
+    "all_process_models_validate": true,
+    "has_multiple_process_families": true,
+    "positive_alignment_recall_high": true,
+    "negative_control_rejection_high": true,
+    "overall_pair_accuracy_high": true,
+    "alignment_nodes_available_for_positives": true
+  },
+  "failed_gates": [],
+  "pass": true,
+  "interpretation": "Phase 2 gives the v2 agent a structured process state space.  Alignment is now tested between typed process models and families, not between opaque principle names."
+}

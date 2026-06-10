@@ -84,6 +84,7 @@ from assumption_os.paper_negative_results import build_paper_negative_results_pa
 from assumption_os.paper_repro_pack import build_paper_repro_pack_payload
 from assumption_os.paper_retrieval_baselines import build_paper_retrieval_baselines_payload
 from assumption_os.pre_live_tie_screen import build_pre_live_tie_screen_payload
+from assumption_os.process_model_zoo_v2 import build_process_model_zoo_v2_payload
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
 from assumption_os.proposals import ProposalType, build_candidate_proposals
 from assumption_os.queue_artifact_eval import build_queue_artifact_eval_payload, judgment_sets_from_artifact_eval
@@ -235,6 +236,24 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(perf["rollback_failure_count"], 0)
         self.assertEqual(perf["iterations"], 25)
         self.assertLess(perf["avg_apply_rollback_ms"], 25.0)
+
+    def test_process_model_zoo_v2_classifies_process_family_alignments(self):
+        payload = build_process_model_zoo_v2_payload(eval_id="unit_process_model_zoo_v2")
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["process_count"], 10)
+        self.assertEqual(metrics["validation_issue_count"], 0)
+        self.assertGreaterEqual(metrics["family_count"], 5)
+        self.assertGreaterEqual(metrics["accuracy"], 0.85)
+        self.assertGreaterEqual(metrics["positive_recall"], 0.85)
+        self.assertGreaterEqual(metrics["negative_rejection_rate"], 0.85)
+        self.assertGreaterEqual(metrics["alignment_hypothesis_count"], 6)
+        negative_false_positives = [
+            row for row in payload["pair_judgments"]
+            if row["gold_label"] == "negative" and row["decision"] != "reject"
+        ]
+        self.assertEqual(negative_false_positives, [])
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
