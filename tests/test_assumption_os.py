@@ -34,6 +34,7 @@ from assumption_os.failure_hypotheses import build_failure_hypothesis_payload
 from assumption_os.formal_alignment_v2 import build_formal_alignment_v2_payload
 from assumption_os.falsification import FalsificationDecision, build_falsification_payload
 from assumption_os.first_party_world_model import build_first_party_world_model_scale_payload
+from assumption_os.full_v2_phase0_contract_bypass import build_full_v2_phase0_contract_bypass_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -347,6 +348,24 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertIn("no_world_model", systems)
         self.assertIn("no_recursive_generator", systems)
         self.assertIn("full_recursive_assumption_graph_v2", systems)
+
+    def test_full_v2_phase0_contract_bypass_routes_invalid_drafts(self):
+        payload = build_full_v2_phase0_contract_bypass_payload(eval_id="unit_full_v2_phase0_contract")
+        metrics = payload["metrics"]
+        by_source = {row["source"]: row for row in payload["results"]}
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["valid_candidate_acceptance_rate"], 1.0)
+        self.assertEqual(metrics["invalid_draft_rejection_rate"], 1.0)
+        self.assertEqual(metrics["duplicate_detection_recall"], 1.0)
+        self.assertEqual(metrics["conflict_detection_recall"], 1.0)
+        self.assertEqual(metrics["valid_rollback_coverage"], 1.0)
+        self.assertEqual(metrics["valid_verifier_presence"], 1.0)
+        self.assertEqual(metrics["valid_negative_control_presence"], 1.0)
+        self.assertEqual(metrics["main_graph_mutation_count"], 0)
+        self.assertLess(metrics["avg_contract_check_ms"], 5.0)
+        self.assertIn("duplicate_of_existing_candidate", by_source["known_bad_duplicate"]["issues"])
+        self.assertIn("conflicts_with_harness_governance", by_source["known_bad_conflict"]["issues"])
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
