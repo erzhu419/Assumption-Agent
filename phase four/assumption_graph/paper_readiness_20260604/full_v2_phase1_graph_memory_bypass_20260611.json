@@ -1,0 +1,684 @@
+{
+  "eval_id": "full_v2_phase1_graph_memory_bypass_20260611",
+  "eval_kind": "full_v2_phase1_shadow_graph_memory_bypass",
+  "reconstruction_v2_full_phase": "phase1_assumption_graph_memory",
+  "performance_validation": true,
+  "shadow_bypass": true,
+  "validation_scope": "Assumption-subgraph retrieval policy over a frozen fixture.  The bypass compares semantic-only retrieval against a gated full-v2 score using domain, residual, verifier, confidence, ACP, graph, regression-risk, and context-cost signals.",
+  "top_k": 3,
+  "nodes": [
+    {
+      "node_id": "assumption_typed_process_bridge",
+      "claim": "Use typed process-family bridge before rejecting cross-domain alignments missed by lexical similarity.",
+      "domain_tags": [
+        "formal_alignment",
+        "science"
+      ],
+      "residual_tags": [
+        "semantic_false_negative",
+        "missed_positive_alignment"
+      ],
+      "verifier_tags": [
+        "negative_control",
+        "heldout_replay"
+      ],
+      "confidence": 0.82,
+      "acp": 0.71,
+      "regression_risk": 0.05,
+      "context_cost": 0.18,
+      "neighbors": [
+        "assumption_sparse_role_bridge",
+        "verifier_negative_control"
+      ]
+    },
+    {
+      "node_id": "assumption_sparse_role_bridge",
+      "claim": "Sparse role overlap can be accepted only with shared process family, finite diagram, invariant preservation, and causal-mask support.",
+      "domain_tags": [
+        "formal_alignment",
+        "science"
+      ],
+      "residual_tags": [
+        "graph_edit_false_negative",
+        "missed_positive_alignment"
+      ],
+      "verifier_tags": [
+        "finite_diagram",
+        "negative_control"
+      ],
+      "confidence": 0.8,
+      "acp": 0.69,
+      "regression_risk": 0.07,
+      "context_cost": 0.2,
+      "neighbors": [
+        "assumption_typed_process_bridge",
+        "verifier_negative_control"
+      ]
+    },
+    {
+      "node_id": "assumption_trajectory_support_not_gate",
+      "claim": "Use trajectory information geometry as supporting evidence, not as a hard gate, when typed invariants support alignment.",
+      "domain_tags": [
+        "formal_alignment",
+        "world_model"
+      ],
+      "residual_tags": [
+        "trajectory_false_negative",
+        "missed_positive_alignment"
+      ],
+      "verifier_tags": [
+        "heldout_replay",
+        "outside_control"
+      ],
+      "confidence": 0.76,
+      "acp": 0.63,
+      "regression_risk": 0.09,
+      "context_cost": 0.16,
+      "neighbors": [
+        "assumption_typed_process_bridge"
+      ]
+    },
+    {
+      "node_id": "verifier_negative_control",
+      "claim": "Every cross-domain alignment must preserve negative controls and block unsafe mappings.",
+      "domain_tags": [
+        "formal_alignment",
+        "harness"
+      ],
+      "residual_tags": [
+        "unsafe_mapping",
+        "negative_transfer"
+      ],
+      "verifier_tags": [
+        "negative_control",
+        "placebo"
+      ],
+      "confidence": 0.9,
+      "acp": 0.67,
+      "regression_risk": 0.03,
+      "context_cost": 0.12,
+      "neighbors": [
+        "assumption_typed_process_bridge",
+        "assumption_sparse_role_bridge"
+      ]
+    },
+    {
+      "node_id": "risk_graph_context_se_negative_transfer",
+      "claim": "Graph context can harm software engineering answers when structural analogy is injected without domain scope.",
+      "domain_tags": [
+        "software_engineering",
+        "harness"
+      ],
+      "residual_tags": [
+        "negative_transfer",
+        "retrieval_defect"
+      ],
+      "verifier_tags": [
+        "outside_control",
+        "abstain_gate"
+      ],
+      "confidence": 0.74,
+      "acp": 0.52,
+      "regression_risk": 0.65,
+      "context_cost": 0.28,
+      "neighbors": [
+        "verifier_negative_control"
+      ]
+    },
+    {
+      "node_id": "method_incremental_replacement",
+      "claim": "Use incremental replacement when a working baseline and isolated module boundary exist.",
+      "domain_tags": [
+        "software_engineering",
+        "method"
+      ],
+      "residual_tags": [
+        "execution_lapse",
+        "optimization"
+      ],
+      "verifier_tags": [
+        "controlled_ablation",
+        "rollback"
+      ],
+      "confidence": 0.84,
+      "acp": 0.77,
+      "regression_risk": 0.08,
+      "context_cost": 0.14,
+      "neighbors": [
+        "method_controlled_intervention"
+      ]
+    },
+    {
+      "node_id": "method_controlled_intervention",
+      "claim": "Use one-factor controlled intervention before making causal claims.",
+      "domain_tags": [
+        "method",
+        "science"
+      ],
+      "residual_tags": [
+        "assumption_defect",
+        "causal_confusion"
+      ],
+      "verifier_tags": [
+        "negative_control",
+        "baseline_control"
+      ],
+      "confidence": 0.86,
+      "acp": 0.74,
+      "regression_risk": 0.06,
+      "context_cost": 0.1,
+      "neighbors": [
+        "method_incremental_replacement",
+        "verifier_negative_control"
+      ]
+    },
+    {
+      "node_id": "distractor_lexical_alignment",
+      "claim": "Alignment alignment alignment process process similar similar use more context.",
+      "domain_tags": [
+        "generic"
+      ],
+      "residual_tags": [
+        "semantic_false_negative"
+      ],
+      "verifier_tags": [],
+      "confidence": 0.35,
+      "acp": 0.05,
+      "regression_risk": 0.42,
+      "context_cost": 0.55,
+      "neighbors": []
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q_semantic_missed_alignment",
+      "text": "lexical semantic retrieval missed a formally accepted chemical electromagnetic process alignment",
+      "domain": "formal_alignment",
+      "residual_tags": [
+        "semantic_false_negative",
+        "missed_positive_alignment"
+      ],
+      "gold_node_ids": [
+        "assumption_typed_process_bridge",
+        "verifier_negative_control"
+      ],
+      "risky_node_ids": [
+        "distractor_lexical_alignment"
+      ]
+    },
+    {
+      "query_id": "q_sparse_role_alignment",
+      "text": "graph edit role overlap is sparse but local stabilization family and finite diagram pass",
+      "domain": "formal_alignment",
+      "residual_tags": [
+        "graph_edit_false_negative",
+        "missed_positive_alignment"
+      ],
+      "gold_node_ids": [
+        "assumption_sparse_role_bridge",
+        "verifier_negative_control"
+      ],
+      "risky_node_ids": []
+    },
+    {
+      "query_id": "q_trajectory_hard_gate",
+      "text": "trajectory information geometry rejected a positive alignment despite invariant preservation",
+      "domain": "world_model",
+      "residual_tags": [
+        "trajectory_false_negative",
+        "missed_positive_alignment"
+      ],
+      "gold_node_ids": [
+        "assumption_trajectory_support_not_gate",
+        "assumption_typed_process_bridge"
+      ],
+      "risky_node_ids": []
+    },
+    {
+      "query_id": "q_software_negative_transfer",
+      "text": "software engineering graph context caused negative transfer and should abstain unless scoped",
+      "domain": "software_engineering",
+      "residual_tags": [
+        "negative_transfer",
+        "retrieval_defect"
+      ],
+      "gold_node_ids": [
+        "risk_graph_context_se_negative_transfer",
+        "method_incremental_replacement"
+      ],
+      "risky_node_ids": [
+        "distractor_lexical_alignment"
+      ]
+    },
+    {
+      "query_id": "q_controlled_experiment",
+      "text": "debugging needs one factor controlled intervention with rollback and baseline",
+      "domain": "method",
+      "residual_tags": [
+        "causal_confusion",
+        "optimization"
+      ],
+      "gold_node_ids": [
+        "method_controlled_intervention",
+        "method_incremental_replacement"
+      ],
+      "risky_node_ids": []
+    }
+  ],
+  "results": [
+    {
+      "query_id": "q_semantic_missed_alignment",
+      "gold_node_ids": [
+        "assumption_typed_process_bridge",
+        "verifier_negative_control"
+      ],
+      "risky_node_ids": [
+        "distractor_lexical_alignment"
+      ],
+      "semantic_topk": [
+        {
+          "node_id": "assumption_typed_process_bridge",
+          "score": 0.15
+        },
+        {
+          "node_id": "distractor_lexical_alignment",
+          "score": 0.1429
+        },
+        {
+          "node_id": "assumption_sparse_role_bridge",
+          "score": 0.0769
+        }
+      ],
+      "full_topk": [
+        {
+          "node_id": "assumption_typed_process_bridge",
+          "score": 0.684,
+          "features": {
+            "semantic": 0.15,
+            "domain_match": 1.0,
+            "residual_match": 1.0,
+            "graph_signal": 0.8333,
+            "confidence": 0.82,
+            "acp": 0.71,
+            "verifier": 1.0,
+            "regression_risk": 0.05,
+            "context_cost": 0.18
+          }
+        },
+        {
+          "node_id": "verifier_negative_control",
+          "score": 0.5341,
+          "features": {
+            "semantic": 0.0476,
+            "domain_match": 1.0,
+            "residual_match": 0.0,
+            "graph_signal": 1.0,
+            "confidence": 0.9,
+            "acp": 0.67,
+            "verifier": 1.0,
+            "regression_risk": 0.03,
+            "context_cost": 0.12
+          }
+        },
+        {
+          "node_id": "assumption_sparse_role_bridge",
+          "score": 0.5266,
+          "features": {
+            "semantic": 0.0769,
+            "domain_match": 1.0,
+            "residual_match": 0.3333,
+            "graph_signal": 0.6667,
+            "confidence": 0.8,
+            "acp": 0.69,
+            "verifier": 1.0,
+            "regression_risk": 0.07,
+            "context_cost": 0.2
+          }
+        }
+      ],
+      "semantic_precision": 0.3333333333333333,
+      "full_precision": 0.6666666666666666,
+      "semantic_top1_correct": true,
+      "full_top1_correct": true,
+      "semantic_risky_count": 1,
+      "full_risky_count": 0,
+      "semantic_context_efficiency": 1.0752688172043012,
+      "full_context_efficiency": 4.0
+    },
+    {
+      "query_id": "q_sparse_role_alignment",
+      "gold_node_ids": [
+        "assumption_sparse_role_bridge",
+        "verifier_negative_control"
+      ],
+      "risky_node_ids": [],
+      "semantic_topk": [
+        {
+          "node_id": "assumption_sparse_role_bridge",
+          "score": 0.2917
+        },
+        {
+          "node_id": "method_incremental_replacement",
+          "score": 0.0435
+        },
+        {
+          "node_id": "verifier_negative_control",
+          "score": 0.0417
+        }
+      ],
+      "full_topk": [
+        {
+          "node_id": "assumption_sparse_role_bridge",
+          "score": 0.687,
+          "features": {
+            "semantic": 0.2917,
+            "domain_match": 1.0,
+            "residual_match": 1.0,
+            "graph_signal": 0.6667,
+            "confidence": 0.8,
+            "acp": 0.69,
+            "verifier": 1.0,
+            "regression_risk": 0.07,
+            "context_cost": 0.2
+          }
+        },
+        {
+          "node_id": "assumption_typed_process_bridge",
+          "score": 0.5499,
+          "features": {
+            "semantic": 0.04,
+            "domain_match": 1.0,
+            "residual_match": 0.3333,
+            "graph_signal": 0.8333,
+            "confidence": 0.82,
+            "acp": 0.71,
+            "verifier": 1.0,
+            "regression_risk": 0.05,
+            "context_cost": 0.18
+          }
+        },
+        {
+          "node_id": "verifier_negative_control",
+          "score": 0.5326,
+          "features": {
+            "semantic": 0.0417,
+            "domain_match": 1.0,
+            "residual_match": 0.0,
+            "graph_signal": 1.0,
+            "confidence": 0.9,
+            "acp": 0.67,
+            "verifier": 1.0,
+            "regression_risk": 0.03,
+            "context_cost": 0.12
+          }
+        }
+      ],
+      "semantic_precision": 0.6666666666666666,
+      "full_precision": 0.6666666666666666,
+      "semantic_top1_correct": true,
+      "full_top1_correct": true,
+      "semantic_risky_count": 0,
+      "full_risky_count": 0,
+      "semantic_context_efficiency": 4.3478260869565215,
+      "full_context_efficiency": 4.0
+    },
+    {
+      "query_id": "q_trajectory_hard_gate",
+      "gold_node_ids": [
+        "assumption_trajectory_support_not_gate",
+        "assumption_typed_process_bridge"
+      ],
+      "risky_node_ids": [],
+      "semantic_topk": [
+        {
+          "node_id": "assumption_trajectory_support_not_gate",
+          "score": 0.2105
+        },
+        {
+          "node_id": "assumption_sparse_role_bridge",
+          "score": 0.08
+        },
+        {
+          "node_id": "distractor_lexical_alignment",
+          "score": 0.0714
+        }
+      ],
+      "full_topk": [
+        {
+          "node_id": "assumption_trajectory_support_not_gate",
+          "score": 0.5885,
+          "features": {
+            "semantic": 0.2105,
+            "domain_match": 1.0,
+            "residual_match": 1.0,
+            "graph_signal": 0.1667,
+            "confidence": 0.76,
+            "acp": 0.63,
+            "verifier": 1.0,
+            "regression_risk": 0.09,
+            "context_cost": 0.16
+          }
+        },
+        {
+          "node_id": "assumption_typed_process_bridge",
+          "score": 0.3699,
+          "features": {
+            "semantic": 0.0,
+            "domain_match": 0.0,
+            "residual_match": 0.3333,
+            "graph_signal": 0.8333,
+            "confidence": 0.82,
+            "acp": 0.71,
+            "verifier": 1.0,
+            "regression_risk": 0.05,
+            "context_cost": 0.18
+          }
+        },
+        {
+          "node_id": "verifier_negative_control",
+          "score": 0.3647,
+          "features": {
+            "semantic": 0.05,
+            "domain_match": 0.0,
+            "residual_match": 0.0,
+            "graph_signal": 1.0,
+            "confidence": 0.9,
+            "acp": 0.67,
+            "verifier": 1.0,
+            "regression_risk": 0.03,
+            "context_cost": 0.12
+          }
+        }
+      ],
+      "semantic_precision": 0.3333333333333333,
+      "full_precision": 0.6666666666666666,
+      "semantic_top1_correct": true,
+      "full_top1_correct": true,
+      "semantic_risky_count": 0,
+      "full_risky_count": 0,
+      "semantic_context_efficiency": 1.0989010989010988,
+      "full_context_efficiency": 4.347826086956522
+    },
+    {
+      "query_id": "q_software_negative_transfer",
+      "gold_node_ids": [
+        "risk_graph_context_se_negative_transfer",
+        "method_incremental_replacement"
+      ],
+      "risky_node_ids": [
+        "distractor_lexical_alignment"
+      ],
+      "semantic_topk": [
+        {
+          "node_id": "risk_graph_context_se_negative_transfer",
+          "score": 0.1818
+        },
+        {
+          "node_id": "verifier_negative_control",
+          "score": 0.0909
+        },
+        {
+          "node_id": "distractor_lexical_alignment",
+          "score": 0.0588
+        }
+      ],
+      "full_topk": [
+        {
+          "node_id": "method_incremental_replacement",
+          "score": 0.4391,
+          "features": {
+            "semantic": 0.0455,
+            "domain_match": 1.0,
+            "residual_match": 0.0,
+            "graph_signal": 0.3333,
+            "confidence": 0.84,
+            "acp": 0.77,
+            "verifier": 1.0,
+            "regression_risk": 0.08,
+            "context_cost": 0.14
+          }
+        },
+        {
+          "node_id": "risk_graph_context_se_negative_transfer",
+          "score": 0.4329,
+          "features": {
+            "semantic": 0.1818,
+            "domain_match": 1.0,
+            "residual_match": 1.0,
+            "graph_signal": 0.1667,
+            "confidence": 0.74,
+            "acp": 0.52,
+            "verifier": 1.0,
+            "regression_risk": 0.65,
+            "context_cost": 0.28
+          }
+        },
+        {
+          "node_id": "verifier_negative_control",
+          "score": 0.4283,
+          "features": {
+            "semantic": 0.0909,
+            "domain_match": 0.0,
+            "residual_match": 0.3333,
+            "graph_signal": 1.0,
+            "confidence": 0.9,
+            "acp": 0.67,
+            "verifier": 1.0,
+            "regression_risk": 0.03,
+            "context_cost": 0.12
+          }
+        }
+      ],
+      "semantic_precision": 0.3333333333333333,
+      "full_precision": 0.6666666666666666,
+      "semantic_top1_correct": true,
+      "full_top1_correct": true,
+      "semantic_risky_count": 1,
+      "full_risky_count": 0,
+      "semantic_context_efficiency": 1.0526315789473684,
+      "full_context_efficiency": 3.7037037037037033
+    },
+    {
+      "query_id": "q_controlled_experiment",
+      "gold_node_ids": [
+        "method_controlled_intervention",
+        "method_incremental_replacement"
+      ],
+      "risky_node_ids": [],
+      "semantic_topk": [
+        {
+          "node_id": "method_controlled_intervention",
+          "score": 0.2667
+        },
+        {
+          "node_id": "method_incremental_replacement",
+          "score": 0.1053
+        },
+        {
+          "node_id": "assumption_sparse_role_bridge",
+          "score": 0.0769
+        }
+      ],
+      "full_topk": [
+        {
+          "node_id": "method_controlled_intervention",
+          "score": 0.5758,
+          "features": {
+            "semantic": 0.2667,
+            "domain_match": 1.0,
+            "residual_match": 0.3333,
+            "graph_signal": 0.5,
+            "confidence": 0.86,
+            "acp": 0.74,
+            "verifier": 1.0,
+            "regression_risk": 0.06,
+            "context_cost": 0.1
+          }
+        },
+        {
+          "node_id": "method_incremental_replacement",
+          "score": 0.5074,
+          "features": {
+            "semantic": 0.1053,
+            "domain_match": 1.0,
+            "residual_match": 0.3333,
+            "graph_signal": 0.3333,
+            "confidence": 0.84,
+            "acp": 0.77,
+            "verifier": 1.0,
+            "regression_risk": 0.08,
+            "context_cost": 0.14
+          }
+        },
+        {
+          "node_id": "verifier_negative_control",
+          "score": 0.3641,
+          "features": {
+            "semantic": 0.0476,
+            "domain_match": 0.0,
+            "residual_match": 0.0,
+            "graph_signal": 1.0,
+            "confidence": 0.9,
+            "acp": 0.67,
+            "verifier": 1.0,
+            "regression_risk": 0.03,
+            "context_cost": 0.12
+          }
+        }
+      ],
+      "semantic_precision": 0.6666666666666666,
+      "full_precision": 0.6666666666666666,
+      "semantic_top1_correct": true,
+      "full_top1_correct": true,
+      "semantic_risky_count": 0,
+      "full_risky_count": 0,
+      "semantic_context_efficiency": 4.545454545454545,
+      "full_context_efficiency": 5.555555555555555
+    }
+  ],
+  "metrics": {
+    "query_count": 5,
+    "semantic_topk_precision": 0.4667,
+    "full_topk_precision": 0.6667,
+    "semantic_top1_accuracy": 1.0,
+    "full_top1_accuracy": 1.0,
+    "semantic_negative_transfer_rate": 0.4,
+    "full_negative_transfer_rate": 0.0,
+    "risky_node_topk_count": 0,
+    "semantic_context_efficiency": 2.424,
+    "full_context_efficiency": 4.3214,
+    "residual_retrieval_accuracy": 1.0
+  },
+  "gates": {
+    "semantic_plus_graph_beats_semantic_precision": true,
+    "full_top1_activation_high": true,
+    "full_residual_retrieval_high": true,
+    "negative_transfer_blocked": true,
+    "context_efficiency_beats_semantic": true,
+    "known_risky_nodes_demoted": true,
+    "shadow_mode_no_graph_mutation": true
+  },
+  "failed_gates": [],
+  "pass": true,
+  "interpretation": "Full-v2 Phase 1 changes the memory question from 'what looks similar?' to 'which assumption subgraph is relevant, verified, productive, low-risk, and useful for this residual?'"
+}

@@ -35,6 +35,7 @@ from assumption_os.formal_alignment_v2 import build_formal_alignment_v2_payload
 from assumption_os.falsification import FalsificationDecision, build_falsification_payload
 from assumption_os.first_party_world_model import build_first_party_world_model_scale_payload
 from assumption_os.full_v2_phase0_contract_bypass import build_full_v2_phase0_contract_bypass_payload
+from assumption_os.full_v2_phase1_graph_memory_bypass import build_full_v2_phase1_graph_memory_bypass_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -366,6 +367,18 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertLess(metrics["avg_contract_check_ms"], 5.0)
         self.assertIn("duplicate_of_existing_candidate", by_source["known_bad_duplicate"]["issues"])
         self.assertIn("conflicts_with_harness_governance", by_source["known_bad_conflict"]["issues"])
+
+    def test_full_v2_phase1_graph_memory_bypass_demotes_risky_context(self):
+        payload = build_full_v2_phase1_graph_memory_bypass_payload(eval_id="unit_full_v2_phase1_graph_memory")
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertGreater(metrics["full_topk_precision"], metrics["semantic_topk_precision"])
+        self.assertGreater(metrics["full_context_efficiency"], metrics["semantic_context_efficiency"])
+        self.assertGreaterEqual(metrics["full_top1_accuracy"], 0.80)
+        self.assertEqual(metrics["full_negative_transfer_rate"], 0.0)
+        self.assertEqual(metrics["risky_node_topk_count"], 0)
+        self.assertEqual(metrics["residual_retrieval_accuracy"], 1.0)
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
