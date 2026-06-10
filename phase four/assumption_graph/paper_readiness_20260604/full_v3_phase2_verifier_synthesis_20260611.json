@@ -1,0 +1,785 @@
+{
+  "eval_id": "full_v3_phase2_verifier_synthesis_20260611",
+  "eval_kind": "full_v3_phase2_shadow_verifier_synthesis",
+  "reconstruction_v2_full_phase": "phase2_v3_verifier_synthesis",
+  "performance_validation": true,
+  "shadow_bypass": true,
+  "validation_scope": "Automatically synthesize positive, negative-control, placebo, regression, minimal falsification, scope-boundary, and fresh-distribution tests for candidate assumptions, then validate that the verifier contract accepts good candidates, rejects harmful/overbroad candidates, and routes execution lapses to repair instead of new hypothesis generation.",
+  "candidates": [
+    {
+      "candidate_id": "cand_incremental_good",
+      "claim": "Incremental replacement helps when baseline and module boundary exist.",
+      "residual_type": "assumption_defect",
+      "quality_label": "good",
+      "scope_tags": [
+        "working_baseline",
+        "module_boundary"
+      ],
+      "expected_decision": "accept"
+    },
+    {
+      "candidate_id": "cand_overbroad_analogy",
+      "claim": "All feedback analogies should transfer.",
+      "residual_type": "assumption_defect",
+      "quality_label": "overbroad",
+      "scope_tags": [
+        "feedback",
+        "surface_match"
+      ],
+      "expected_decision": "reject_overbroad"
+    },
+    {
+      "candidate_id": "cand_placebo_style",
+      "claim": "Longer structured answers are always better.",
+      "residual_type": "evaluator_defect",
+      "quality_label": "placebo_only",
+      "scope_tags": [
+        "style_bias",
+        "judge_preference"
+      ],
+      "expected_decision": "reject_placebo"
+    },
+    {
+      "candidate_id": "cand_regressive_context",
+      "claim": "Always inject graph context before answering.",
+      "residual_type": "memory_defect",
+      "quality_label": "regressive",
+      "scope_tags": [
+        "graph_context",
+        "retrieval"
+      ],
+      "expected_decision": "reject_regression"
+    },
+    {
+      "candidate_id": "cand_execution_lapse",
+      "claim": "Use bridge decomposition for multi-hop QA.",
+      "residual_type": "execution_lapse",
+      "quality_label": "execution_lapse",
+      "scope_tags": [
+        "multi_hop",
+        "bridge"
+      ],
+      "expected_decision": "repair_execution"
+    }
+  ],
+  "rows": [
+    {
+      "candidate_id": "cand_incremental_good",
+      "quality_label": "good",
+      "expected_decision": "accept",
+      "synthesized_tests": [
+        {
+          "test_id": "cand_incremental_good::positive",
+          "test_type": "positive",
+          "scope_tags": [
+            "working_baseline",
+            "module_boundary"
+          ],
+          "oracle": "candidate improves matched in-scope cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_incremental_good::negative_control",
+          "test_type": "negative_control",
+          "scope_tags": [
+            "working_baseline",
+            "module_boundary"
+          ],
+          "oracle": "candidate must not improve role-incompatible cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_incremental_good::placebo_control",
+          "test_type": "placebo_control",
+          "scope_tags": [
+            "working_baseline",
+            "module_boundary"
+          ],
+          "oracle": "same-length placebo must not match candidate gain",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_incremental_good::regression",
+          "test_type": "regression",
+          "scope_tags": [
+            "working_baseline",
+            "module_boundary"
+          ],
+          "oracle": "candidate must not slow or harm simple/direct cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_incremental_good::minimal_falsification",
+          "test_type": "minimal_falsification",
+          "scope_tags": [
+            "working_baseline",
+            "module_boundary"
+          ],
+          "oracle": "single counterexample should reject overbroad claim",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_incremental_good::scope_boundary",
+          "test_type": "scope_boundary",
+          "scope_tags": [
+            "working_baseline",
+            "module_boundary"
+          ],
+          "oracle": "boundary conditions must abstain or defer",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_incremental_good::fresh_distribution",
+          "test_type": "fresh_distribution",
+          "scope_tags": [
+            "working_baseline",
+            "module_boundary"
+          ],
+          "oracle": "candidate must transfer to heldout domain",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": true
+        }
+      ],
+      "outcomes": [
+        {
+          "test_id": "cand_incremental_good::positive",
+          "test_type": "positive",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_incremental_good::negative_control",
+          "test_type": "negative_control",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_incremental_good::placebo_control",
+          "test_type": "placebo_control",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_incremental_good::regression",
+          "test_type": "regression",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_incremental_good::minimal_falsification",
+          "test_type": "minimal_falsification",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_incremental_good::scope_boundary",
+          "test_type": "scope_boundary",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_incremental_good::fresh_distribution",
+          "test_type": "fresh_distribution",
+          "passed": true,
+          "signal": "expected_pass"
+        }
+      ],
+      "decision": "accept",
+      "decision_correct": true,
+      "contract_complete": true
+    },
+    {
+      "candidate_id": "cand_overbroad_analogy",
+      "quality_label": "overbroad",
+      "expected_decision": "reject_overbroad",
+      "synthesized_tests": [
+        {
+          "test_id": "cand_overbroad_analogy::positive",
+          "test_type": "positive",
+          "scope_tags": [
+            "feedback",
+            "surface_match"
+          ],
+          "oracle": "candidate improves matched in-scope cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_overbroad_analogy::negative_control",
+          "test_type": "negative_control",
+          "scope_tags": [
+            "feedback",
+            "surface_match"
+          ],
+          "oracle": "candidate must not improve role-incompatible cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_overbroad_analogy::placebo_control",
+          "test_type": "placebo_control",
+          "scope_tags": [
+            "feedback",
+            "surface_match"
+          ],
+          "oracle": "same-length placebo must not match candidate gain",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_overbroad_analogy::regression",
+          "test_type": "regression",
+          "scope_tags": [
+            "feedback",
+            "surface_match"
+          ],
+          "oracle": "candidate must not slow or harm simple/direct cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_overbroad_analogy::minimal_falsification",
+          "test_type": "minimal_falsification",
+          "scope_tags": [
+            "feedback",
+            "surface_match"
+          ],
+          "oracle": "single counterexample should reject overbroad claim",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_overbroad_analogy::scope_boundary",
+          "test_type": "scope_boundary",
+          "scope_tags": [
+            "feedback",
+            "surface_match"
+          ],
+          "oracle": "boundary conditions must abstain or defer",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_overbroad_analogy::fresh_distribution",
+          "test_type": "fresh_distribution",
+          "scope_tags": [
+            "feedback",
+            "surface_match"
+          ],
+          "oracle": "candidate must transfer to heldout domain",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": true
+        }
+      ],
+      "outcomes": [
+        {
+          "test_id": "cand_overbroad_analogy::positive",
+          "test_type": "positive",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_overbroad_analogy::negative_control",
+          "test_type": "negative_control",
+          "passed": false,
+          "signal": "negative_control_harm"
+        },
+        {
+          "test_id": "cand_overbroad_analogy::placebo_control",
+          "test_type": "placebo_control",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_overbroad_analogy::regression",
+          "test_type": "regression",
+          "passed": false,
+          "signal": "regression_detected"
+        },
+        {
+          "test_id": "cand_overbroad_analogy::minimal_falsification",
+          "test_type": "minimal_falsification",
+          "passed": false,
+          "signal": "counterexample_found"
+        },
+        {
+          "test_id": "cand_overbroad_analogy::scope_boundary",
+          "test_type": "scope_boundary",
+          "passed": false,
+          "signal": "scope_boundary_violation"
+        },
+        {
+          "test_id": "cand_overbroad_analogy::fresh_distribution",
+          "test_type": "fresh_distribution",
+          "passed": false,
+          "signal": "fresh_generalization_failed"
+        }
+      ],
+      "decision": "reject_overbroad",
+      "decision_correct": true,
+      "contract_complete": true
+    },
+    {
+      "candidate_id": "cand_placebo_style",
+      "quality_label": "placebo_only",
+      "expected_decision": "reject_placebo",
+      "synthesized_tests": [
+        {
+          "test_id": "cand_placebo_style::positive",
+          "test_type": "positive",
+          "scope_tags": [
+            "style_bias",
+            "judge_preference"
+          ],
+          "oracle": "candidate improves matched in-scope cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_placebo_style::negative_control",
+          "test_type": "negative_control",
+          "scope_tags": [
+            "style_bias",
+            "judge_preference"
+          ],
+          "oracle": "candidate must not improve role-incompatible cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_placebo_style::placebo_control",
+          "test_type": "placebo_control",
+          "scope_tags": [
+            "style_bias",
+            "judge_preference"
+          ],
+          "oracle": "same-length placebo must not match candidate gain",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_placebo_style::regression",
+          "test_type": "regression",
+          "scope_tags": [
+            "style_bias",
+            "judge_preference"
+          ],
+          "oracle": "candidate must not slow or harm simple/direct cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_placebo_style::minimal_falsification",
+          "test_type": "minimal_falsification",
+          "scope_tags": [
+            "style_bias",
+            "judge_preference"
+          ],
+          "oracle": "single counterexample should reject overbroad claim",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_placebo_style::scope_boundary",
+          "test_type": "scope_boundary",
+          "scope_tags": [
+            "style_bias",
+            "judge_preference"
+          ],
+          "oracle": "boundary conditions must abstain or defer",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_placebo_style::fresh_distribution",
+          "test_type": "fresh_distribution",
+          "scope_tags": [
+            "style_bias",
+            "judge_preference"
+          ],
+          "oracle": "candidate must transfer to heldout domain",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": true
+        }
+      ],
+      "outcomes": [
+        {
+          "test_id": "cand_placebo_style::positive",
+          "test_type": "positive",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_placebo_style::negative_control",
+          "test_type": "negative_control",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_placebo_style::placebo_control",
+          "test_type": "placebo_control",
+          "passed": false,
+          "signal": "placebo_matches_candidate"
+        },
+        {
+          "test_id": "cand_placebo_style::regression",
+          "test_type": "regression",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_placebo_style::minimal_falsification",
+          "test_type": "minimal_falsification",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_placebo_style::scope_boundary",
+          "test_type": "scope_boundary",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_placebo_style::fresh_distribution",
+          "test_type": "fresh_distribution",
+          "passed": false,
+          "signal": "fresh_generalization_failed"
+        }
+      ],
+      "decision": "reject_placebo",
+      "decision_correct": true,
+      "contract_complete": true
+    },
+    {
+      "candidate_id": "cand_regressive_context",
+      "quality_label": "regressive",
+      "expected_decision": "reject_regression",
+      "synthesized_tests": [
+        {
+          "test_id": "cand_regressive_context::positive",
+          "test_type": "positive",
+          "scope_tags": [
+            "graph_context",
+            "retrieval"
+          ],
+          "oracle": "candidate improves matched in-scope cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_regressive_context::negative_control",
+          "test_type": "negative_control",
+          "scope_tags": [
+            "graph_context",
+            "retrieval"
+          ],
+          "oracle": "candidate must not improve role-incompatible cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_regressive_context::placebo_control",
+          "test_type": "placebo_control",
+          "scope_tags": [
+            "graph_context",
+            "retrieval"
+          ],
+          "oracle": "same-length placebo must not match candidate gain",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_regressive_context::regression",
+          "test_type": "regression",
+          "scope_tags": [
+            "graph_context",
+            "retrieval"
+          ],
+          "oracle": "candidate must not slow or harm simple/direct cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_regressive_context::minimal_falsification",
+          "test_type": "minimal_falsification",
+          "scope_tags": [
+            "graph_context",
+            "retrieval"
+          ],
+          "oracle": "single counterexample should reject overbroad claim",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_regressive_context::scope_boundary",
+          "test_type": "scope_boundary",
+          "scope_tags": [
+            "graph_context",
+            "retrieval"
+          ],
+          "oracle": "boundary conditions must abstain or defer",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_regressive_context::fresh_distribution",
+          "test_type": "fresh_distribution",
+          "scope_tags": [
+            "graph_context",
+            "retrieval"
+          ],
+          "oracle": "candidate must transfer to heldout domain",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": true
+        }
+      ],
+      "outcomes": [
+        {
+          "test_id": "cand_regressive_context::positive",
+          "test_type": "positive",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_regressive_context::negative_control",
+          "test_type": "negative_control",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_regressive_context::placebo_control",
+          "test_type": "placebo_control",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_regressive_context::regression",
+          "test_type": "regression",
+          "passed": false,
+          "signal": "regression_detected"
+        },
+        {
+          "test_id": "cand_regressive_context::minimal_falsification",
+          "test_type": "minimal_falsification",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_regressive_context::scope_boundary",
+          "test_type": "scope_boundary",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_regressive_context::fresh_distribution",
+          "test_type": "fresh_distribution",
+          "passed": true,
+          "signal": "expected_pass"
+        }
+      ],
+      "decision": "reject_regression",
+      "decision_correct": true,
+      "contract_complete": true
+    },
+    {
+      "candidate_id": "cand_execution_lapse",
+      "quality_label": "execution_lapse",
+      "expected_decision": "repair_execution",
+      "synthesized_tests": [
+        {
+          "test_id": "cand_execution_lapse::positive",
+          "test_type": "positive",
+          "scope_tags": [
+            "multi_hop",
+            "bridge"
+          ],
+          "oracle": "candidate improves matched in-scope cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_execution_lapse::negative_control",
+          "test_type": "negative_control",
+          "scope_tags": [
+            "multi_hop",
+            "bridge"
+          ],
+          "oracle": "candidate must not improve role-incompatible cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_execution_lapse::placebo_control",
+          "test_type": "placebo_control",
+          "scope_tags": [
+            "multi_hop",
+            "bridge"
+          ],
+          "oracle": "same-length placebo must not match candidate gain",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_execution_lapse::regression",
+          "test_type": "regression",
+          "scope_tags": [
+            "multi_hop",
+            "bridge"
+          ],
+          "oracle": "candidate must not slow or harm simple/direct cases",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_execution_lapse::minimal_falsification",
+          "test_type": "minimal_falsification",
+          "scope_tags": [
+            "multi_hop",
+            "bridge"
+          ],
+          "oracle": "single counterexample should reject overbroad claim",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_execution_lapse::scope_boundary",
+          "test_type": "scope_boundary",
+          "scope_tags": [
+            "multi_hop",
+            "bridge"
+          ],
+          "oracle": "boundary conditions must abstain or defer",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": false
+        },
+        {
+          "test_id": "cand_execution_lapse::fresh_distribution",
+          "test_type": "fresh_distribution",
+          "scope_tags": [
+            "multi_hop",
+            "bridge"
+          ],
+          "oracle": "candidate must transfer to heldout domain",
+          "has_oracle": true,
+          "has_failure_condition": true,
+          "fresh": true
+        }
+      ],
+      "outcomes": [
+        {
+          "test_id": "cand_execution_lapse::positive",
+          "test_type": "positive",
+          "passed": false,
+          "signal": "execution_or_effect_failure"
+        },
+        {
+          "test_id": "cand_execution_lapse::negative_control",
+          "test_type": "negative_control",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_execution_lapse::placebo_control",
+          "test_type": "placebo_control",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_execution_lapse::regression",
+          "test_type": "regression",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_execution_lapse::minimal_falsification",
+          "test_type": "minimal_falsification",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_execution_lapse::scope_boundary",
+          "test_type": "scope_boundary",
+          "passed": true,
+          "signal": "expected_pass"
+        },
+        {
+          "test_id": "cand_execution_lapse::fresh_distribution",
+          "test_type": "fresh_distribution",
+          "passed": false,
+          "signal": "fresh_generalization_failed"
+        }
+      ],
+      "decision": "repair_execution",
+      "decision_correct": true,
+      "contract_complete": true
+    }
+  ],
+  "metrics": {
+    "candidate_count": 5,
+    "test_count": 35,
+    "test_type_coverage": 1.0,
+    "contract_completeness": 1.0,
+    "decision_accuracy": 1.0,
+    "false_positive_rate_of_acceptance": 0.0,
+    "regression_detection_recall": 1.0,
+    "placebo_sensitivity": 1.0,
+    "fresh_split_generalization": 1.0,
+    "falsification_power": 1.0,
+    "execution_lapse_new_hypothesis_count": 0
+  },
+  "gates": {
+    "all_test_types_synthesized": true,
+    "contract_completeness_high": true,
+    "decision_accuracy_high": true,
+    "false_positive_acceptance_low": true,
+    "regression_recall_high": true,
+    "placebo_sensitive": true,
+    "fresh_generalization_high": true,
+    "falsification_power_high": true,
+    "execution_lapse_not_new_hypothesis": true,
+    "shadow_mode_no_graph_mutation": true
+  },
+  "failed_gates": [],
+  "pass": true,
+  "interpretation": "Full-v3 Phase 2 makes verifier construction an explicit synthesized artifact.  Each candidate receives a falsifiable test battery, and promotion depends on passing positives/fresh cases while not improving placebo, negative controls, regression probes, or scope-boundary traps."
+}

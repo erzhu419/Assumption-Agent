@@ -44,6 +44,7 @@ from assumption_os.full_v2_phase6_formal_alignment_bypass import build_full_v2_p
 from assumption_os.full_v2_phase7_daemon_harness_bypass import build_full_v2_phase7_daemon_harness_bypass_payload
 from assumption_os.full_v2_vertical_slice_bypass import build_full_v2_vertical_slice_bypass_payload
 from assumption_os.full_v3_phase1_memory_consolidation import build_full_v3_phase1_memory_consolidation_payload
+from assumption_os.full_v3_phase2_verifier_synthesis import build_full_v3_phase2_verifier_synthesis_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -527,6 +528,23 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["negative_transfer_reduction"], 0.50)
         self.assertGreaterEqual(metrics["context_efficiency_delta"], 0.20)
         self.assertEqual(metrics["idempotence_delta"], 0)
+
+    def test_full_v3_phase2_verifier_synthesis_generates_falsification_contracts(self):
+        payload = build_full_v3_phase2_verifier_synthesis_payload(
+            eval_id="unit_full_v3_phase2_verifier_synthesis"
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["test_type_coverage"], 1.0)
+        self.assertGreaterEqual(metrics["contract_completeness"], 0.95)
+        self.assertGreaterEqual(metrics["decision_accuracy"], 0.95)
+        self.assertEqual(metrics["false_positive_rate_of_acceptance"], 0.0)
+        self.assertGreaterEqual(metrics["regression_detection_recall"], 0.95)
+        self.assertGreaterEqual(metrics["placebo_sensitivity"], 0.95)
+        self.assertGreaterEqual(metrics["fresh_split_generalization"], 0.90)
+        self.assertGreaterEqual(metrics["falsification_power"], 0.90)
+        self.assertEqual(metrics["execution_lapse_new_hypothesis_count"], 0)
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
