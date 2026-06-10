@@ -49,6 +49,7 @@ from assumption_os.formal_mapping import (
     search_formal_mappings,
 )
 from assumption_os.graph_memory import JsonlGraphStore, SimpleAssumptionGraph
+from assumption_os.graph_action_world_model_v2 import build_graph_action_world_model_v2_payload
 from assumption_os.harness_observer import build_harness_observer_payload, events_from_harness_artifacts
 from assumption_os.hipporag_qa_probe import build_hipporag_qa_probe_payload
 from assumption_os.hypothesis_lifecycle_v2 import build_hypothesis_lifecycle_v2_payload
@@ -254,6 +255,22 @@ class AssumptionOSTest(unittest.TestCase):
             if row["gold_label"] == "negative" and row["decision"] != "reject"
         ]
         self.assertEqual(negative_false_positives, [])
+
+    def test_graph_action_world_model_v2_predicts_alignment_action_outcomes(self):
+        payload = build_graph_action_world_model_v2_payload(eval_id="unit_graph_action_world_model_v2")
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertGreaterEqual(metrics["labeled_count"], 16)
+        self.assertGreaterEqual(metrics["accept_auroc"], 0.95)
+        self.assertLess(metrics["accept_brier"], metrics["base_rate_brier"])
+        self.assertEqual(metrics["accepted_blocked_count"], 0)
+        self.assertGreaterEqual(metrics["negative_actions_saved"], 7)
+        self.assertLess(metrics["mean_regression_positive"], metrics["mean_regression_negative"])
+        self.assertIn(
+            "run_live_validation",
+            {row["recommended_action"] for row in payload["predictions"]},
+        )
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
