@@ -46,6 +46,7 @@ from assumption_os.full_v2_vertical_slice_bypass import build_full_v2_vertical_s
 from assumption_os.full_v3_phase1_memory_consolidation import build_full_v3_phase1_memory_consolidation_payload
 from assumption_os.full_v3_phase2_verifier_synthesis import build_full_v3_phase2_verifier_synthesis_payload
 from assumption_os.full_v3_phase3_rollout_search_control import build_full_v3_phase3_rollout_search_control_payload
+from assumption_os.full_v3_phase5_contextual_bandit_scheduler import build_full_v3_phase5_contextual_bandit_scheduler_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -564,6 +565,24 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertLessEqual(metrics["expected_value_mae"], 0.05)
         self.assertGreaterEqual(metrics["regression_recall"], 0.95)
         self.assertLessEqual(metrics["oracle_regret"], 0.05)
+
+    def test_full_v3_phase5_contextual_bandit_scheduler_learns_policy_bundle(self):
+        payload = build_full_v3_phase5_contextual_bandit_scheduler_payload(
+            eval_id="unit_full_v3_phase5_contextual_bandit_scheduler"
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertGreaterEqual(metrics["strategy_selection_accuracy"], 0.85)
+        self.assertGreaterEqual(metrics["cumulative_reward_lift"], 0.20)
+        self.assertGreaterEqual(metrics["regret_reduction_vs_baseline"], 0.50)
+        self.assertLessEqual(metrics["posterior_brier"], 0.08)
+        self.assertLessEqual(metrics["budget_allocation_mae"], 0.10)
+        self.assertGreaterEqual(metrics["verifier_selection_accuracy"], 0.90)
+        self.assertGreaterEqual(metrics["world_model_selection_accuracy"], 0.90)
+        self.assertEqual(metrics["unsafe_exploration_count"], 0)
+        self.assertGreaterEqual(metrics["negative_transfer_reduction"], 0.50)
+        self.assertGreaterEqual(metrics["last_half_selection_accuracy"], metrics["first_half_selection_accuracy"])
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
