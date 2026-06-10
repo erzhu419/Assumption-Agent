@@ -24,6 +24,7 @@ from assumption_os.conditioned_eval import (
 )
 from assumption_os.continuous_daemon import build_continuous_daemon_autonomy_payload
 from assumption_os.domain_templates import format_phase2_domain_execution_template
+from assumption_os.downstream_paper_claim_v2 import build_downstream_paper_claim_v2_payload
 from assumption_os.evolution_cycle import build_evolution_cycle_payload, build_policy_update_plan
 from assumption_os.evolution_context import (
     EvolutionPolicyDecision,
@@ -324,6 +325,28 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["outside_control_harm_count"], 0)
         self.assertEqual(metrics["manifest_validation_issue_count"], 0)
         self.assertTrue(all(proposal["source_records"] for proposal in payload["proposals"]))
+
+    def test_downstream_paper_claim_v2_builds_frozen_mechanism_line(self):
+        payload = build_downstream_paper_claim_v2_payload(
+            eval_id="unit_downstream_paper_claim_v2",
+            bootstrap_samples=200,
+            seed=13,
+        )
+        metrics = payload["metrics"]
+        systems = {row["system_id"]: row for row in payload["systems"]}
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["problem_count"], 16)
+        self.assertGreaterEqual(metrics["accuracy_margin_over_retrieval_or_no_formal"], 0.18)
+        self.assertGreaterEqual(metrics["utility_margin_over_best_non_full"], 0.05)
+        self.assertEqual(metrics["full_negative_control_safety"], 1.0)
+        self.assertGreaterEqual(metrics["full_residual_coverage"], 0.95)
+        self.assertGreaterEqual(metrics["full_screen_cost_reduction"], 0.40)
+        self.assertIn("ordinary_rag_semantic_proxy", systems)
+        self.assertIn("hipporag_style_graph_proxy", systems)
+        self.assertIn("no_world_model", systems)
+        self.assertIn("no_recursive_generator", systems)
+        self.assertIn("full_recursive_assumption_graph_v2", systems)
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
