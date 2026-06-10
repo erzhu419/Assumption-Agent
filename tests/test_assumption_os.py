@@ -47,6 +47,7 @@ from assumption_os.full_v3_phase1_memory_consolidation import build_full_v3_phas
 from assumption_os.full_v3_phase2_verifier_synthesis import build_full_v3_phase2_verifier_synthesis_payload
 from assumption_os.full_v3_phase3_rollout_search_control import build_full_v3_phase3_rollout_search_control_payload
 from assumption_os.full_v3_phase5_contextual_bandit_scheduler import build_full_v3_phase5_contextual_bandit_scheduler_payload
+from assumption_os.full_v3_phase7_long_run_benchmark import build_full_v3_phase7_long_run_benchmark_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -583,6 +584,27 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["unsafe_exploration_count"], 0)
         self.assertGreaterEqual(metrics["negative_transfer_reduction"], 0.50)
         self.assertGreaterEqual(metrics["last_half_selection_accuracy"], metrics["first_half_selection_accuracy"])
+
+    def test_full_v3_phase7_long_run_benchmark_validates_frozen_harness(self):
+        payload = build_full_v3_phase7_long_run_benchmark_payload(
+            eval_id="unit_full_v3_phase7_long_run_benchmark"
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertGreaterEqual(metrics["long_run_stability"], 0.95)
+        self.assertLessEqual(metrics["graph_pollution_rate"], 0.02)
+        self.assertGreaterEqual(metrics["rollback_success_rate"], 0.95)
+        self.assertLessEqual(metrics["cost_per_accepted_assumption"], 2.50)
+        self.assertGreaterEqual(metrics["accepted_assumption_survival_rate"], 0.80)
+        self.assertGreaterEqual(metrics["downstream_win_rate_on_unseen"], 0.65)
+        self.assertGreaterEqual(metrics["capability_score_improvement"], 0.15)
+        self.assertGreaterEqual(metrics["daemon_recovery_success"], 0.95)
+        self.assertGreaterEqual(metrics["evaluator_integrity"], 0.95)
+        self.assertGreaterEqual(metrics["parallel_speedup_proxy"], 2.0)
+        self.assertEqual(metrics["rate_limit_violation_count"], 0)
+        self.assertGreaterEqual(metrics["checkpoint_recovery_success"], 0.95)
+        self.assertGreaterEqual(metrics["continuous_learning_acp_lift"], 0.10)
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
