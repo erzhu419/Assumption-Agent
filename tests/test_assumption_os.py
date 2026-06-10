@@ -42,6 +42,7 @@ from assumption_os.full_v2_phase4_hypothesis_generator_bypass import build_full_
 from assumption_os.full_v2_phase5_strategy_scheduler_bypass import build_full_v2_phase5_strategy_scheduler_bypass_payload
 from assumption_os.full_v2_phase6_formal_alignment_bypass import build_full_v2_phase6_formal_alignment_bypass_payload
 from assumption_os.full_v2_phase7_daemon_harness_bypass import build_full_v2_phase7_daemon_harness_bypass_payload
+from assumption_os.full_v2_vertical_slice_bypass import build_full_v2_vertical_slice_bypass_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -489,6 +490,24 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["daemon_recovery_success"], 0.95)
         self.assertGreaterEqual(metrics["evaluator_integrity"], 0.95)
         self.assertEqual(metrics["unconditional_apply_count"], 0)
+
+    def test_full_v2_vertical_slice_bypass_runs_five_generation_loop(self):
+        payload = build_full_v2_vertical_slice_bypass_payload(
+            eval_id="unit_full_v2_vertical_slice"
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["generation_count"], 5)
+        self.assertGreaterEqual(metrics["candidate_count"], 25)
+        self.assertGreaterEqual(metrics["live_call_saving_rate"], 0.50)
+        self.assertEqual(metrics["true_positive_block_rate"], 0.0)
+        self.assertGreaterEqual(metrics["accepted_assumption_survival_rate"], 0.80)
+        self.assertGreaterEqual(metrics["residual_explained_delta"], 0.45)
+        self.assertGreaterEqual(metrics["downstream_score_delta"], 0.10)
+        self.assertLessEqual(metrics["graph_pollution_rate"], 0.02)
+        self.assertGreaterEqual(metrics["world_model_brier_improvement"], 0.06)
+        self.assertGreaterEqual(metrics["full_loop_margin_over_best_control"], 0.08)
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
