@@ -37,6 +37,7 @@ from assumption_os.first_party_world_model import build_first_party_world_model_
 from assumption_os.full_v2_phase0_contract_bypass import build_full_v2_phase0_contract_bypass_payload
 from assumption_os.full_v2_phase1_graph_memory_bypass import build_full_v2_phase1_graph_memory_bypass_payload
 from assumption_os.full_v2_phase2_verifier_bypass import build_full_v2_phase2_verifier_bypass_payload
+from assumption_os.full_v2_phase3_world_model_bypass import build_full_v2_phase3_world_model_bypass_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -397,6 +398,21 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["execution_lapse_new_hypothesis_count"], 0)
         self.assertEqual(by_case["case_execution_lapse"]["decision"], "repair_execution")
         self.assertEqual(by_case["case_world_model_defect"]["decision"], "calibrate_world_model")
+
+    def test_full_v2_phase3_world_model_bypass_predicts_graph_action_rollouts(self):
+        payload = build_full_v2_phase3_world_model_bypass_payload(eval_id="unit_full_v2_phase3_world_model")
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertGreaterEqual(metrics["accept_auroc"], 0.95)
+        self.assertLess(metrics["accept_brier"], metrics["base_rate_brier"])
+        self.assertGreaterEqual(metrics["regression_auroc"], 0.95)
+        self.assertGreaterEqual(metrics["failure_type_f1"], 0.90)
+        self.assertLessEqual(metrics["expected_value_mae"], 0.05)
+        self.assertGreaterEqual(metrics["cost_saved"], 3)
+        self.assertEqual(metrics["true_positive_block_rate"], 0.0)
+        self.assertGreaterEqual(metrics["multi_step_rollout_accuracy"], 0.90)
+        self.assertGreaterEqual(metrics["information_gain_correlation"], 0.90)
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
