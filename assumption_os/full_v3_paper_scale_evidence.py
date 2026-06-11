@@ -33,6 +33,7 @@ REQUIRED_ARTIFACTS = {
     "v2_phase6_formal": PAPER_DIR / "full_v2_phase6_formal_alignment_bypass_20260611.json",
     "v3_phase6_formal": PAPER_DIR / "full_v3_phase6_formal_transfer_engine_20260611.json",
     "v3_phase7_long_run": PAPER_DIR / "full_v3_phase7_long_run_benchmark_20260611.json",
+    "v3_phase8_creativity_world_coverage": PAPER_DIR / "full_v3_phase8_creativity_world_coverage_20260611.json",
     "vertical_slice": PAPER_DIR / "full_v2_vertical_slice_bypass_20260611.json",
     "frozen_v3_vs_v1": PAPER_DIR / "full_v3_frozen_v1_comparison_20260611.json",
     "fresh_live_guarded_300": PAPER_DIR / "full_v3_fresh_live_business_guard_heldout300_gptmini_gpt55_20260611.json",
@@ -106,6 +107,22 @@ def build_full_v3_paper_scale_evidence_payload(
         "fresh_live_guarded_300": _fresh_live_summary(artifacts["fresh_live_guarded_300"]),
         "fresh_live_guarded_full_remaining": _fresh_live_summary(artifacts["fresh_live_guarded_full_remaining"]),
         "fresh_live_selective_expansion": _fresh_live_summary(artifacts["fresh_live_selective_expansion"]),
+        "phase8_creativity_world_coverage": _metric_subset(
+            artifacts["v3_phase8_creativity_world_coverage"].get("metrics", {}),
+            [
+                "creative_candidate_count",
+                "nonlocal_candidate_ratio",
+                "residual_cluster_coverage",
+                "quality_world_model_auroc",
+                "quality_world_model_brier",
+                "quality_base_rate_brier",
+                "selected_quality_profile_id",
+                "selected_coverage_profile_id",
+                "coverage_profile_active_gain_over_quality",
+                "coverage_profile_vs_base_utility",
+                "coverage_profile_vs_placebo_utility",
+            ],
+        ),
     }
     metrics = _metrics(artifacts=artifacts, evidence=evidence)
     gates = {
@@ -144,6 +161,10 @@ def build_full_v3_paper_scale_evidence_payload(
         ),
         "fresh_live_selective_placebo_ci_above_half": metrics["fresh_live_selective_vs_placebo_ci_lower"] > 0.50,
         "fresh_live_selective_low_call_budget": metrics["fresh_live_selective_planned_total_calls"] <= 200,
+        "phase8_creative_generator_nonlocal": metrics["phase8_nonlocal_candidate_ratio"] >= 0.35,
+        "phase8_world_model_profile_selector_passes": metrics["phase8_quality_world_model_auroc"] >= 0.85,
+        "phase8_coverage_profile_positive": metrics["phase8_coverage_profile_vs_base_utility"] > 0.50
+        and metrics["phase8_coverage_profile_vs_placebo_utility"] > 0.50,
         "prompt_answer_and_secret_free": metrics["prompt_answer_payload_stored"] is False and metrics["secret_leak_detected"] is False,
         "boundary_cases_recorded": metrics["boundary_case_count"] >= 1,
     }
@@ -403,6 +424,35 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         ),
         "fresh_live_selective_planned_total_calls": int(
             artifacts["fresh_live_selective_expansion"]["metrics"]["planned_total_model_calls"]
+        ),
+        "phase8_creative_candidate_count": int(
+            artifacts["v3_phase8_creativity_world_coverage"]["metrics"]["creative_candidate_count"]
+        ),
+        "phase8_nonlocal_candidate_ratio": float(
+            artifacts["v3_phase8_creativity_world_coverage"]["metrics"]["nonlocal_candidate_ratio"]
+        ),
+        "phase8_residual_cluster_coverage": float(
+            artifacts["v3_phase8_creativity_world_coverage"]["metrics"]["residual_cluster_coverage"]
+        ),
+        "phase8_quality_world_model_auroc": float(
+            artifacts["v3_phase8_creativity_world_coverage"]["metrics"]["quality_world_model_auroc"]
+        ),
+        "phase8_quality_world_model_brier": float(
+            artifacts["v3_phase8_creativity_world_coverage"]["metrics"]["quality_world_model_brier"]
+        ),
+        "phase8_quality_base_rate_brier": float(
+            artifacts["v3_phase8_creativity_world_coverage"]["metrics"]["quality_base_rate_brier"]
+        ),
+        "phase8_selected_quality_profile_id": artifacts["v3_phase8_creativity_world_coverage"]["metrics"]["selected_quality_profile_id"],
+        "phase8_selected_coverage_profile_id": artifacts["v3_phase8_creativity_world_coverage"]["metrics"]["selected_coverage_profile_id"],
+        "phase8_coverage_profile_active_gain_over_quality": int(
+            artifacts["v3_phase8_creativity_world_coverage"]["metrics"]["coverage_profile_active_gain_over_quality"]
+        ),
+        "phase8_coverage_profile_vs_base_utility": float(
+            artifacts["v3_phase8_creativity_world_coverage"]["metrics"]["coverage_profile_vs_base_utility"]
+        ),
+        "phase8_coverage_profile_vs_placebo_utility": float(
+            artifacts["v3_phase8_creativity_world_coverage"]["metrics"]["coverage_profile_vs_placebo_utility"]
         ),
         "prompt_answer_payload_stored": bool(artifacts["first_party_world_model_scale"].get("prompt_answer_payload_stored")),
         "secret_leak_detected": bool(artifacts["first_party_world_model_scale"].get("secret_leak_detected")),

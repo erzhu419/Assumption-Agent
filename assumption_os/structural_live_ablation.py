@@ -310,6 +310,26 @@ FRESH_LIVE_GUARDED_CLADES = {
 }
 
 
+FRESH_LIVE_GUARD_CUE_REQUIREMENTS = {
+    # S24 is useful on concrete profiling/hotspot bottleneck tasks, but broad
+    # "bottleneck" language over-routes architecture tradeoff and diagnosis
+    # tasks.  Keep this clade conditional until live evidence justifies a wider
+    # promotion.
+    ("software_engineering", "pat_bottleneck_capacity", "S24"): {
+        "any_route_cue_terms": {
+            "91%的CPU时间",
+            "CPU时间",
+            "消耗了",
+            "异常缓慢",
+            "处理时间",
+            "优化这个回溯函数",
+            "调度效率",
+        },
+        "policy_id": "fresh_live_conditional_guard_s24_profile_hotspot_20260611",
+    },
+}
+
+
 TRACE_REPAIR_GUIDANCE = {
     "pat_bottleneck_capacity": {
         "_default": (
@@ -678,6 +698,10 @@ def _choose_top_application(
                 "decision": "activate",
                 "guard_key": [row.get("domain"), candidate.get("pattern_id"), candidate.get("route_strategy_tag")],
             })
+            guard_requirement = _fresh_live_guard_requirement(row, candidate)
+            if guard_requirement:
+                policy["conditional_guard_policy_id"] = guard_requirement.get("policy_id")
+                policy["conditional_guard_terms"] = sorted(guard_requirement.get("any_route_cue_terms", []))
             candidate["route_policy"] = policy
             return candidate, f"fresh_guard_{route_source}"
         return None, "fresh_guard_abstain"
@@ -844,7 +868,34 @@ def _passes_fresh_live_guard(
     pattern_id = str(app.get("pattern_id") or "")
     tag = str(app.get("route_strategy_tag") or "")
     clades = guard_clades or FRESH_LIVE_GUARDED_CLADES
-    return (domain, pattern_id, None) in clades or (domain, pattern_id, tag) in clades
+    matched = (domain, pattern_id, tag) if (domain, pattern_id, tag) in clades else (
+        (domain, pattern_id, None) if (domain, pattern_id, None) in clades else None
+    )
+    if not matched:
+        return False
+    return _passes_fresh_live_guard_requirements(app, clade=matched)
+
+
+def _passes_fresh_live_guard_requirements(app: dict, *, clade: tuple[str, str, str | None]) -> bool:
+    requirement = FRESH_LIVE_GUARD_CUE_REQUIREMENTS.get(clade)
+    if not requirement:
+        return True
+    required_terms = {str(term) for term in requirement.get("any_route_cue_terms", set())}
+    if required_terms:
+        observed = {str(term) for term in app.get("route_cue_terms", [])}
+        if not observed & required_terms:
+            return False
+    return True
+
+
+def _fresh_live_guard_requirement(row: dict, app: dict) -> dict | None:
+    domain = str(row.get("domain") or "")
+    pattern_id = str(app.get("pattern_id") or "")
+    tag = str(app.get("route_strategy_tag") or "")
+    return (
+        FRESH_LIVE_GUARD_CUE_REQUIREMENTS.get((domain, pattern_id, tag))
+        or FRESH_LIVE_GUARD_CUE_REQUIREMENTS.get((domain, pattern_id, None))
+    )
 
 
 def _repaired_pattern_app(row: dict, routed_app: dict, *, repair_patterns: set[str]) -> dict | None:

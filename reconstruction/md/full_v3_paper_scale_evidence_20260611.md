@@ -23,7 +23,7 @@ Result: pass.
 
 Key metrics:
 
-- Required artifact pass rate: 1.0 over 21 artifacts
+- Required artifact pass rate: 1.0 over 22 artifacts
 - V3 mechanism pass rate: 1.0 over 8 mechanism artifacts
 - Raw first-party live events: 6403
 - Valid judge events: 2818
@@ -43,6 +43,12 @@ Key metrics:
 - Fresh cue-repair selective active interventions: 31/556
 - Fresh cue-repair selective vs base utility / CI lower: 0.5144 / 0.5054
 - Fresh cue-repair selective vs placebo utility / CI lower: 0.5153 / 0.5063
+- Phase8 creative candidates: 8
+- Phase8 nonlocal candidate ratio: 0.35
+- Phase8 world-model quality AUROC / Brier: 1.0 / 0.1156
+- Phase8 selected quality profile: quality_v4
+- Phase8 selected coverage profile: coverage_v6
+- Phase8 coverage profile active gain: +4, utility 0.5108 / 0.5135
 - Prompt/answer payload stored: false
 - Secret leak detected: false
 - Boundary case count: 1
@@ -52,3 +58,5 @@ Key metrics:
 The evidence chain is now less fragmented: the paper-facing claim can point to one artifact that combines the frozen main experiment, hard baselines, retrieval baselines, first-party trace scale, phase validations, and long-run/vertical recursive results.
 
 The artifact now includes the fresh live guarded heldout300, strict full-remaining, and cue-repair selective expansion runs.  The fresh reruns are still small-effect validations, but the latest retained profile improves both active coverage and problem-level utility over the previous selective guard.
+
+Phase8 adds a separate post-v3 bottleneck artifact for generator creativity, world-model profile selection, and coverage exploration.  It does not promote the broader coverage profile as default because quality_v4 still has higher base/placebo utility; instead it records coverage_v6 as a positive but lower-utility exploration profile.

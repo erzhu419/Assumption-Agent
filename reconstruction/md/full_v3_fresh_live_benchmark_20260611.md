@@ -242,3 +242,29 @@ Rejected follow-up:
 Interpretation:
 
 The bottleneck is partially repaired.  Active coverage is still small at 31/556, but cue repair plus guarded retention now improves coverage and both utility axes simultaneously.  The safe next step is not to reopen broad S25/S01/S24 routing, but to run more candidate clades through the same preflight -> live -> clade breakdown -> retained/rejected loop.
+
+## Phase 8 Conditional Coverage Probe
+
+A follow-up coverage probe tested whether one more software-engineering clade could be added without reopening broad bottleneck harm:
+
+- candidate clade: `software_engineering:pat_bottleneck_capacity:S24`
+- added guard: route only when S24 is supported by profiling/hotspot cues such as CPU time, processing time, abnormal slowness, or explicit backtracking hotspot terms
+- preflight active coverage: 31 -> 35
+- added rows: 4 software profiling/hotspot bottleneck tasks
+
+Live result:
+
+- artifact: `phase four/assumption_graph/paper_readiness_20260604/full_v3_phase8_conditional_guard_full_remaining_gptmini_gpt55_20260611.json`
+- active interventions: 35/556
+- planned calls: 175
+- structural vs base utility: 0.5108, CI lower 0.5009
+- structural vs placebo utility: 0.5135, CI lower 0.5036
+
+Decision:
+
+This is positive and expands coverage, but it does not replace the v4 quality profile:
+
+- v4 quality profile: active 31, base 0.5144, placebo 0.5153
+- v6 coverage profile: active 35, base 0.5108, placebo 0.5135
+
+So phase8 keeps v4 as the default quality-retention profile and records v6 as a coverage-exploration profile.  The useful improvement here is not "promote S24 broadly"; it is that the system can now represent a neutral coverage expansion separately from the default high-utility policy.

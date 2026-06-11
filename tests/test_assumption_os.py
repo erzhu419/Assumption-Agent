@@ -53,6 +53,9 @@ from assumption_os.full_v3_phase4_hypothesis_generator import build_full_v3_phas
 from assumption_os.full_v3_phase5_contextual_bandit_scheduler import build_full_v3_phase5_contextual_bandit_scheduler_payload
 from assumption_os.full_v3_phase6_formal_transfer_engine import build_full_v3_phase6_formal_transfer_engine_payload
 from assumption_os.full_v3_phase7_long_run_benchmark import build_full_v3_phase7_long_run_benchmark_payload
+from assumption_os.full_v3_phase8_creativity_world_coverage import (
+    build_full_v3_phase8_creativity_world_coverage_payload,
+)
 from assumption_os.full_v3_paper_scale_evidence import build_full_v3_paper_scale_evidence_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
@@ -759,6 +762,29 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertFalse(metrics["secret_value_exposed"])
         self.assertFalse(payload["problem_level_ci"]["available"])
         self.assertIn("run_300", payload["commands"])
+
+    def test_full_v3_phase8_separates_creativity_world_model_and_coverage_profiles(self):
+        payload = build_full_v3_phase8_creativity_world_coverage_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_phase8_creativity_world_coverage",
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertGreaterEqual(metrics["creative_candidate_count"], 8)
+        self.assertGreaterEqual(metrics["nonlocal_candidate_ratio"], 0.35)
+        self.assertEqual(metrics["residual_cluster_coverage"], 1.0)
+        self.assertGreaterEqual(metrics["quality_world_model_auroc"], 0.85)
+        self.assertLess(metrics["quality_world_model_brier"], metrics["quality_base_rate_brier"])
+        self.assertEqual(metrics["selected_quality_profile_id"], "quality_v4")
+        self.assertEqual(metrics["selected_coverage_profile_id"], "coverage_v6")
+        self.assertGreaterEqual(metrics["coverage_profile_active_gain_over_quality"], 4)
+        self.assertGreater(metrics["coverage_profile_vs_base_utility"], 0.50)
+        self.assertGreater(metrics["coverage_profile_vs_placebo_utility"], 0.50)
+        self.assertGreater(
+            metrics["quality_profile_vs_base_utility"],
+            metrics["coverage_profile_vs_base_utility"],
+        )
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
