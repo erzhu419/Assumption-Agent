@@ -61,6 +61,7 @@ from assumption_os.full_v3_phase9_v1_live_regression import build_full_v3_phase9
 from assumption_os.full_v3_phase10_discrete_world_model_selector import (
     build_full_v3_phase10_discrete_world_model_selector_payload,
 )
+from assumption_os.full_v3_phase11_capability_audit import build_full_v3_phase11_capability_audit_payload
 from assumption_os.full_v3_paper_scale_evidence import build_full_v3_paper_scale_evidence_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
@@ -743,6 +744,8 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreater(metrics["phase10_world_model_candidate_v1_lift_over_v3"], 0.04)
         self.assertGreaterEqual(metrics["phase10_world_model_all_lift_over_v3"], 0.015)
         self.assertEqual(metrics["phase10_world_model_recommended_promotion"], "keep_as_world_model_candidate")
+        self.assertEqual(metrics["phase11_outer_shell_production_claim_count"], 0)
+        self.assertGreaterEqual(metrics["phase11_blocked_claim_count"], 10)
         self.assertFalse(metrics["prompt_answer_payload_stored"])
         self.assertFalse(metrics["secret_leak_detected"])
         self.assertGreaterEqual(metrics["boundary_case_count"], 1)
@@ -783,6 +786,25 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["recommended_promotion"], "keep_as_world_model_candidate")
         self.assertFalse(metrics["uses_raw_prompts_or_answers"])
         self.assertTrue(payload["teacher_distillation_bootstrap"]["not_counted_as_independent_validation"])
+
+    def test_full_v3_phase11_capability_audit_separates_fixture_from_production(self):
+        payload = build_full_v3_phase11_capability_audit_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_phase11_capability_audit",
+        )
+        metrics = payload["metrics"]
+        by_id = {row["capability_id"]: row for row in payload["capability_rows"]}
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(metrics["capability_count"], 11)
+        self.assertEqual(metrics["artifact_pass_rate"], 1.0)
+        self.assertEqual(metrics["outer_shell_count"], 5)
+        self.assertEqual(metrics["outer_shell_production_claim_count"], 0)
+        self.assertEqual(metrics["phase10_status"], "learned_candidate_not_promoted")
+        self.assertEqual(by_id["phase9_hybrid_guard"]["production_default_status"], "retained_gated_profile")
+        self.assertIn("not_main_loop", by_id["phase1_memory_consolidation"]["implementation_level"])
+        self.assertIn("not_long_running_production", by_id["phase7_long_run_benchmark"]["implementation_level"])
+        self.assertGreaterEqual(metrics["blocked_claim_count"], 10)
 
     def test_full_v3_fresh_live_benchmark_plans_parallel_problem_level_run(self):
         with tempfile.TemporaryDirectory() as td:

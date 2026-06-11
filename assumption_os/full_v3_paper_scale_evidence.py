@@ -42,6 +42,7 @@ REQUIRED_ARTIFACTS = {
     "v3_phase9_compact_frame_guard": PAPER_DIR / "full_v3_phase9_compact_frame_guard_20260611.json",
     "v3_phase9_hybrid_guard": PAPER_DIR / "full_v3_phase9_hybrid_guard_heldout_20260611.json",
     "v3_phase10_discrete_world_model": PAPER_DIR / "full_v3_phase10_discrete_world_model_selector_20260611.json",
+    "v3_phase11_capability_audit": PAPER_DIR / "full_v3_phase11_capability_audit_20260611.json",
 }
 
 KEY_TOGGLE_BASELINES = {
@@ -169,6 +170,20 @@ def build_full_v3_paper_scale_evidence_payload(
                 "calibration_beats_base_rate",
             ],
         ),
+        "phase11_capability_audit": _metric_subset(
+            artifacts["v3_phase11_capability_audit"].get("metrics", {}),
+            [
+                "capability_count",
+                "artifact_pass_rate",
+                "outer_shell_count",
+                "outer_shell_production_claim_count",
+                "live_or_live_derived_count",
+                "shadow_or_fixture_count",
+                "blocked_claim_count",
+                "promotion_requirement_count",
+                "phase10_status",
+            ],
+        ),
     }
     metrics = _metrics(artifacts=artifacts, evidence=evidence)
     gates = {
@@ -225,6 +240,9 @@ def build_full_v3_paper_scale_evidence_payload(
         "phase10_discrete_world_model_keeps_hybrid_when_weaker": (
             metrics["phase10_world_model_recommended_promotion"] == "keep_as_world_model_candidate"
         ),
+        "phase11_capability_audit_passes": metrics["phase11_artifact_pass_rate"] == 1.0,
+        "phase11_outer_shells_not_overclaimed": metrics["phase11_outer_shell_production_claim_count"] == 0,
+        "phase11_phase10_remains_candidate": metrics["phase11_phase10_status"] == "learned_candidate_not_promoted",
         "prompt_answer_and_secret_free": metrics["prompt_answer_payload_stored"] is False and metrics["secret_leak_detected"] is False,
         "boundary_cases_recorded": metrics["boundary_case_count"] >= 1,
     }
@@ -374,6 +392,7 @@ def _v3_mechanism_summary(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any
         "v3_phase6_formal",
         "v3_phase7_long_run",
         "v3_phase10_discrete_world_model",
+        "v3_phase11_capability_audit",
     ]
     return {
         key: {
@@ -589,6 +608,22 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "phase10_world_model_calibration_beats_base_rate": bool(
             artifacts["v3_phase10_discrete_world_model"]["metrics"]["calibration_beats_base_rate"]
         ),
+        "phase11_capability_count": int(
+            artifacts["v3_phase11_capability_audit"]["metrics"]["capability_count"]
+        ),
+        "phase11_artifact_pass_rate": float(
+            artifacts["v3_phase11_capability_audit"]["metrics"]["artifact_pass_rate"]
+        ),
+        "phase11_outer_shell_count": int(
+            artifacts["v3_phase11_capability_audit"]["metrics"]["outer_shell_count"]
+        ),
+        "phase11_outer_shell_production_claim_count": int(
+            artifacts["v3_phase11_capability_audit"]["metrics"]["outer_shell_production_claim_count"]
+        ),
+        "phase11_blocked_claim_count": int(
+            artifacts["v3_phase11_capability_audit"]["metrics"]["blocked_claim_count"]
+        ),
+        "phase11_phase10_status": artifacts["v3_phase11_capability_audit"]["metrics"]["phase10_status"],
         "prompt_answer_payload_stored": bool(artifacts["first_party_world_model_scale"].get("prompt_answer_payload_stored")),
         "secret_leak_detected": bool(artifacts["first_party_world_model_scale"].get("secret_leak_detected")),
     }
