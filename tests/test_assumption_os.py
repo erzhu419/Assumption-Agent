@@ -50,6 +50,7 @@ from assumption_os.full_v3_phase1_memory_consolidation import build_full_v3_phas
 from assumption_os.full_v3_phase2_verifier_synthesis import build_full_v3_phase2_verifier_synthesis_payload
 from assumption_os.full_v3_phase3_rollout_search_control import build_full_v3_phase3_rollout_search_control_payload
 from assumption_os.full_v3_phase4_hypothesis_generator import build_full_v3_phase4_hypothesis_generator_payload
+from assumption_os.full_v3_live_residual_clusterer import build_full_v3_live_residual_clusterer_payload
 from assumption_os.full_v3_phase5_contextual_bandit_scheduler import build_full_v3_phase5_contextual_bandit_scheduler_payload
 from assumption_os.full_v3_phase6_formal_transfer_engine import build_full_v3_phase6_formal_transfer_engine_payload
 from assumption_os.full_v3_phase7_long_run_benchmark import build_full_v3_phase7_long_run_benchmark_payload
@@ -698,6 +699,37 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["world_model_screen_precision"], 0.90)
         self.assertLessEqual(metrics["false_discovery_rate"], 0.10)
         self.assertGreaterEqual(metrics["recursive_runner_seed_rate"], 0.45)
+        self.assertGreaterEqual(metrics["live_residual_source_artifact_count"], 7)
+        self.assertGreaterEqual(metrics["live_residual_cluster_count"], 25)
+        self.assertGreaterEqual(metrics["live_residual_systematic_weighted_coverage"], 0.85)
+        self.assertEqual(metrics["live_residual_largest_cluster_domain"], "business")
+        self.assertEqual(metrics["live_residual_largest_cluster_pattern"], "pat_controlled_intervention")
+        self.assertEqual(metrics["live_residual_largest_cluster_status"], "resolved_by_phase9_hybrid_guard")
+        self.assertGreaterEqual(metrics["live_residual_next_generation_seed_count"], 15)
+        self.assertFalse(metrics["live_residual_uses_raw_prompts_or_answers"])
+
+    def test_full_v3_live_residual_clusterer_unifies_live_residuals(self):
+        payload = build_full_v3_live_residual_clusterer_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_live_residual_clusterer",
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(metrics["source_artifact_count"], 7)
+        self.assertGreaterEqual(metrics["observation_count"], 40)
+        self.assertGreaterEqual(metrics["weighted_residual_count"], 70)
+        self.assertGreaterEqual(metrics["cluster_count"], 25)
+        self.assertGreaterEqual(metrics["systematic_weighted_coverage"], 0.85)
+        self.assertGreaterEqual(metrics["phase9_live_residual_observation_count"], 16)
+        self.assertGreaterEqual(metrics["formal_residual_observation_count"], 15)
+        self.assertGreaterEqual(metrics["profile_residual_observation_count"], 4)
+        self.assertEqual(metrics["largest_live_cluster_domain"], "business")
+        self.assertEqual(metrics["largest_live_cluster_pattern"], "pat_controlled_intervention")
+        self.assertEqual(metrics["largest_live_cluster_status"], "resolved_by_phase9_hybrid_guard")
+        self.assertGreaterEqual(metrics["next_generation_proposal_seed_count"], 15)
+        self.assertGreaterEqual(metrics["blocked_profile_residual_count"], 2)
+        self.assertFalse(metrics["uses_raw_prompts_or_answers"])
 
     def test_full_v3_phase5_contextual_bandit_scheduler_learns_policy_bundle(self):
         payload = build_full_v3_phase5_contextual_bandit_scheduler_payload(
@@ -833,6 +865,13 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreater(metrics["fresh_live_selective_vs_placebo_utility"], 0.51)
         self.assertGreater(metrics["fresh_live_selective_vs_placebo_ci_lower"], 0.50)
         self.assertLessEqual(metrics["fresh_live_selective_planned_total_calls"], 200)
+        self.assertGreaterEqual(metrics["live_residual_cluster_count"], 25)
+        self.assertGreaterEqual(metrics["live_residual_systematic_weighted_coverage"], 0.85)
+        self.assertEqual(metrics["live_residual_largest_cluster_domain"], "business")
+        self.assertEqual(metrics["live_residual_largest_cluster_pattern"], "pat_controlled_intervention")
+        self.assertEqual(metrics["live_residual_largest_cluster_status"], "resolved_by_phase9_hybrid_guard")
+        self.assertGreaterEqual(metrics["live_residual_next_generation_seed_count"], 15)
+        self.assertFalse(metrics["live_residual_uses_raw_prompts_or_answers"])
         self.assertEqual(metrics["phase5_live_selected_production_profile"], "phase9_hybrid_guard")
         self.assertEqual(metrics["phase5_live_selected_exploration_profile"], "phase10_discrete_world_model_candidate")
         self.assertGreaterEqual(metrics["phase5_live_scheduler_lift_over_v3"], 0.05)
@@ -907,11 +946,20 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["artifact_pass_rate"], 1.0)
         self.assertEqual(metrics["outer_shell_count"], 4)
         self.assertEqual(metrics["outer_shell_production_claim_count"], 0)
+        self.assertEqual(metrics["phase4_status"], "validated_live_residual_clusterer_not_full_generator")
         self.assertEqual(metrics["phase5_status"], "validated_scheduler_not_unconditional_default")
         self.assertEqual(metrics["phase10_status"], "learned_candidate_not_promoted")
         self.assertIn("production_contract_gate_available", by_id["phase0_contract_checker"]["implementation_level"])
         self.assertEqual(by_id["phase9_hybrid_guard"]["production_default_status"], "retained_gated_profile")
         self.assertIn("jsonl_memory_sleep_job_available", by_id["phase1_memory_consolidation"]["implementation_level"])
+        self.assertIn(
+            "live_residual_clusterer",
+            by_id["phase4_hypothesis_generator"]["implementation_level"],
+        )
+        self.assertEqual(
+            by_id["phase4_hypothesis_generator"]["validation_mode"],
+            "live_or_live_derived_validation",
+        )
         self.assertIn(
             "live_artifact_contextual_scheduler",
             by_id["phase5_contextual_bandit_scheduler"]["implementation_level"],

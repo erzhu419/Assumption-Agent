@@ -74,6 +74,9 @@ def build_full_v3_phase11_capability_audit_payload(
         "all_expected_phase_artifacts_present": metrics["capability_count"] == len(PHASE_ARTIFACTS),
         "all_phase_artifacts_pass": metrics["artifact_pass_rate"] == 1.0,
         "outer_shells_not_claimed_as_production": metrics["outer_shell_production_claim_count"] == 0,
+        "phase4_live_residual_clusterer_recorded": (
+            metrics["phase4_status"] == "validated_live_residual_clusterer_not_full_generator"
+        ),
         "phase5_scheduler_live_realified": metrics["phase5_status"] == "validated_scheduler_not_unconditional_default",
         "phase10_candidate_not_promoted_over_hybrid": metrics["phase10_status"] == "learned_candidate_not_promoted",
         "live_evidence_count_nonzero": metrics["live_or_live_derived_count"] >= 2,
@@ -130,6 +133,8 @@ def _capability_row(*, name: str, path: Path, artifact: dict[str, Any]) -> Capab
 
 
 def _validation_mode(*, name: str, artifact: dict[str, Any]) -> str:
+    if artifact.get("implementation_level") == "live_residual_clusterer_with_v2_generator_regression":
+        return "live_or_live_derived_validation"
     if artifact.get("implementation_level") == "live_artifact_contextual_scheduler_with_fixture_regression":
         return "live_or_live_derived_validation"
     if artifact.get("implementation_level") == "live_artifact_learned_candidate":
@@ -166,6 +171,8 @@ def _implementation_level(*, name: str, artifact: dict[str, Any], validation_mod
 def _production_default_status(*, name: str, artifact: dict[str, Any], validation_mode: str) -> str:
     if name == "phase9_hybrid_guard":
         return "retained_gated_profile"
+    if name == "phase4_hypothesis_generator":
+        return "validated_live_residual_clusterer_not_full_generator"
     if name == "phase5_contextual_bandit_scheduler":
         return "validated_scheduler_not_unconditional_default"
     if name == "phase10_discrete_world_model":
@@ -199,6 +206,12 @@ def _claim_policy(
             "Outcome-only discrete graph-action world-model candidate improves original V3 on Phase9 heldout.",
             ["replacement for retained hybrid", "strong calibrated task-world simulator"],
             "Beat retained hybrid and beat base-rate calibration on leave-domain-out live traces.",
+        )
+    if name == "phase4_hypothesis_generator":
+        return (
+            "Live-derived residual clusterer unifies formal, live, creative, and profile-level residual evidence.",
+            ["fully creative autonomous generator", "production graph mutation without recursive validation"],
+            "Show multi-generation fresh-live descendants from the emitted residual proposal seeds.",
         )
     if name == "phase5_contextual_bandit_scheduler":
         return (
@@ -246,6 +259,9 @@ def _metrics(rows: list[CapabilityRow]) -> dict[str, Any]:
         "shadow_or_fixture_count": shadow_or_fixture_count,
         "blocked_claim_count": sum(len(row.blocked_claims) for row in rows),
         "promotion_requirement_count": sum(1 for row in rows if row.promotion_requirement),
+        "phase4_status": next(
+            row.production_default_status for row in rows if row.capability_id == "phase4_hypothesis_generator"
+        ),
         "phase5_status": next(
             row.production_default_status for row in rows if row.capability_id == "phase5_contextual_bandit_scheduler"
         ),

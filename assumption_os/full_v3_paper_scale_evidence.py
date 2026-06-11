@@ -29,6 +29,7 @@ REQUIRED_ARTIFACTS = {
     "v3_phase3_rollout": PAPER_DIR / "full_v3_phase3_rollout_search_control_20260611.json",
     "v2_phase4_generator": PAPER_DIR / "full_v2_phase4_hypothesis_generator_bypass_20260611.json",
     "v3_phase4_generator": PAPER_DIR / "full_v3_phase4_hypothesis_generator_20260611.json",
+    "v3_live_residual_clusterer": PAPER_DIR / "full_v3_live_residual_clusterer_20260611.json",
     "v3_phase5_bandit": PAPER_DIR / "full_v3_phase5_contextual_bandit_scheduler_20260611.json",
     "v2_phase6_formal": PAPER_DIR / "full_v2_phase6_formal_alignment_bypass_20260611.json",
     "v3_phase6_formal": PAPER_DIR / "full_v3_phase6_formal_transfer_engine_20260611.json",
@@ -68,6 +69,28 @@ def build_full_v3_paper_scale_evidence_payload(
         "retrieval_baselines": _retrieval_summary(artifacts["retrieval_baselines"]),
         "first_party_world_model_scale": _world_model_scale_summary(artifacts["first_party_world_model_scale"]),
         "v3_mechanism": _v3_mechanism_summary(artifacts),
+        "live_residual_clusterer": _metric_subset(
+            artifacts["v3_live_residual_clusterer"].get("metrics", {}),
+            [
+                "source_artifact_count",
+                "observation_count",
+                "weighted_residual_count",
+                "cluster_count",
+                "systematic_weighted_coverage",
+                "phase9_live_residual_observation_count",
+                "formal_residual_observation_count",
+                "profile_residual_observation_count",
+                "resolved_cluster_count",
+                "blocked_profile_residual_count",
+                "next_generation_proposal_seed_count",
+                "largest_live_cluster_support",
+                "largest_live_cluster_axis",
+                "largest_live_cluster_domain",
+                "largest_live_cluster_pattern",
+                "largest_live_cluster_status",
+                "uses_raw_prompts_or_answers",
+            ],
+        ),
         "vertical_slice": _metric_subset(
             artifacts["vertical_slice"].get("metrics", {}),
             [
@@ -250,6 +273,15 @@ def build_full_v3_paper_scale_evidence_payload(
         "phase8_world_model_profile_selector_passes": metrics["phase8_quality_world_model_auroc"] >= 0.85,
         "phase8_coverage_profile_positive": metrics["phase8_coverage_profile_vs_base_utility"] > 0.50
         and metrics["phase8_coverage_profile_vs_placebo_utility"] > 0.50,
+        "live_residual_clusterer_passes": metrics["live_residual_cluster_count"] >= 25,
+        "live_residual_clusterer_covers_weighted_residuals": metrics[
+            "live_residual_systematic_weighted_coverage"
+        ] >= 0.85,
+        "live_residual_clusterer_resolves_largest_live_cluster": (
+            metrics["live_residual_largest_cluster_status"] == "resolved_by_phase9_hybrid_guard"
+        ),
+        "live_residual_clusterer_emits_next_seeds": metrics["live_residual_next_generation_seed_count"] >= 15,
+        "live_residual_clusterer_redacted": metrics["live_residual_uses_raw_prompts_or_answers"] is False,
         "phase5_live_scheduler_realified": metrics["phase5_live_profile_count"] >= 7,
         "phase5_live_scheduler_selects_hybrid": (
             metrics["phase5_live_selected_production_profile"] == "phase9_hybrid_guard"
@@ -307,7 +339,9 @@ def build_full_v3_paper_scale_evidence_payload(
             "2500+ judge events, hard retrieval/toggle baselines, full-v3 mechanism validations, a fresh "
             "guarded heldout-300 live rerun, a guarded full-remaining live rerun, and a selective clade-expansion "
             "full-remaining rerun.  Phase9 additionally records the failed broad/compact tradeoff and the retained "
-            "cue-level hybrid guard that beats V1 on the heldout slice without regressing against original V3.  Phase5 "
+            "cue-level hybrid guard that beats V1 on the heldout slice without regressing against original V3.  The "
+            "live residual clusterer now unifies formal, live, creative, and profile-level residual evidence and emits "
+            "next-generation proposal seeds while marking the largest same-batch residual as resolved by Phase9.  Phase5 "
             "now adds a live-derived contextual scheduler that selects that retained hybrid profile, keeps the weaker "
             "world-model selector as exploration, and blocks over-structured compact framing as a default.  The "
             "fresh reruns are positive but intentionally reported as small-effect safety/abstention validations, "
@@ -422,6 +456,7 @@ def _v3_mechanism_summary(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any
         "v3_phase2_verifier",
         "v3_phase3_rollout",
         "v3_phase4_generator",
+        "v3_live_residual_clusterer",
         "v3_phase5_bandit",
         "v3_phase6_formal",
         "v3_phase7_long_run",
@@ -600,6 +635,57 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "phase8_coverage_profile_vs_placebo_utility": float(
             artifacts["v3_phase8_creativity_world_coverage"]["metrics"]["coverage_profile_vs_placebo_utility"]
         ),
+        "live_residual_source_artifact_count": int(
+            artifacts["v3_live_residual_clusterer"]["metrics"]["source_artifact_count"]
+        ),
+        "live_residual_observation_count": int(
+            artifacts["v3_live_residual_clusterer"]["metrics"]["observation_count"]
+        ),
+        "live_weighted_residual_count": int(
+            artifacts["v3_live_residual_clusterer"]["metrics"]["weighted_residual_count"]
+        ),
+        "live_residual_cluster_count": int(
+            artifacts["v3_live_residual_clusterer"]["metrics"]["cluster_count"]
+        ),
+        "live_residual_systematic_weighted_coverage": float(
+            artifacts["v3_live_residual_clusterer"]["metrics"]["systematic_weighted_coverage"]
+        ),
+        "live_residual_phase9_observation_count": int(
+            artifacts["v3_live_residual_clusterer"]["metrics"]["phase9_live_residual_observation_count"]
+        ),
+        "live_residual_formal_observation_count": int(
+            artifacts["v3_live_residual_clusterer"]["metrics"]["formal_residual_observation_count"]
+        ),
+        "live_residual_profile_observation_count": int(
+            artifacts["v3_live_residual_clusterer"]["metrics"]["profile_residual_observation_count"]
+        ),
+        "live_residual_resolved_cluster_count": int(
+            artifacts["v3_live_residual_clusterer"]["metrics"]["resolved_cluster_count"]
+        ),
+        "live_residual_blocked_profile_residual_count": int(
+            artifacts["v3_live_residual_clusterer"]["metrics"]["blocked_profile_residual_count"]
+        ),
+        "live_residual_next_generation_seed_count": int(
+            artifacts["v3_live_residual_clusterer"]["metrics"]["next_generation_proposal_seed_count"]
+        ),
+        "live_residual_largest_cluster_support": int(
+            artifacts["v3_live_residual_clusterer"]["metrics"]["largest_live_cluster_support"]
+        ),
+        "live_residual_largest_cluster_axis": artifacts["v3_live_residual_clusterer"]["metrics"][
+            "largest_live_cluster_axis"
+        ],
+        "live_residual_largest_cluster_domain": artifacts["v3_live_residual_clusterer"]["metrics"][
+            "largest_live_cluster_domain"
+        ],
+        "live_residual_largest_cluster_pattern": artifacts["v3_live_residual_clusterer"]["metrics"][
+            "largest_live_cluster_pattern"
+        ],
+        "live_residual_largest_cluster_status": artifacts["v3_live_residual_clusterer"]["metrics"][
+            "largest_live_cluster_status"
+        ],
+        "live_residual_uses_raw_prompts_or_answers": bool(
+            artifacts["v3_live_residual_clusterer"]["metrics"]["uses_raw_prompts_or_answers"]
+        ),
         "phase5_live_profile_source_artifact_count": int(
             artifacts["v3_phase5_bandit"]["metrics"]["live_profile_source_artifact_count"]
         ),
@@ -717,6 +803,7 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "phase11_blocked_claim_count": int(
             artifacts["v3_phase11_capability_audit"]["metrics"]["blocked_claim_count"]
         ),
+        "phase11_phase4_status": artifacts["v3_phase11_capability_audit"]["metrics"]["phase4_status"],
         "phase11_phase10_status": artifacts["v3_phase11_capability_audit"]["metrics"]["phase10_status"],
         "prompt_answer_payload_stored": bool(artifacts["first_party_world_model_scale"].get("prompt_answer_payload_stored")),
         "secret_leak_detected": bool(artifacts["first_party_world_model_scale"].get("secret_leak_detected")),

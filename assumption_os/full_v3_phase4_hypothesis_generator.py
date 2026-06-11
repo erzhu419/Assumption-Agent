@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .full_v2_phase4_hypothesis_generator_bypass import build_full_v2_phase4_hypothesis_generator_bypass_payload
+from .full_v3_live_residual_clusterer import build_full_v3_live_residual_clusterer_payload
 
 
 PAPER_DIR = Path("phase four/assumption_graph/paper_readiness_20260604")
@@ -19,14 +20,32 @@ REQUIRED_LAYERS = {"object", "method", "evaluator", "memory", "world_model", "me
 
 def build_full_v3_phase4_hypothesis_generator_payload(
     *,
+    root: Path = Path("."),
     eval_id: str = "full_v3_phase4_hypothesis_generator_20260611",
 ) -> dict[str, Any]:
+    root = root.resolve()
     source = build_full_v2_phase4_hypothesis_generator_bypass_payload(eval_id=f"{eval_id}_source")
+    live_residual_clusterer = build_full_v3_live_residual_clusterer_payload(
+        root=root,
+        eval_id=f"{eval_id}_live_residual_clusterer",
+    )
     candidates = list(source["candidates"])
     clusters = list(source["clusters"])
-    metrics = _metrics(source, clusters=clusters, candidates=candidates)
+    metrics = _metrics(
+        source,
+        clusters=clusters,
+        candidates=candidates,
+        live_residual_clusterer=live_residual_clusterer,
+    )
     gates = {
         "source_generator_passes": bool(source.get("pass")),
+        "live_residual_clusterer_passes": bool(live_residual_clusterer.get("pass")),
+        "live_residual_sources_unified": metrics["live_residual_source_artifact_count"] >= 7,
+        "live_residual_cluster_count_high": metrics["live_residual_cluster_count"] >= 25,
+        "live_residual_largest_cluster_resolved": (
+            metrics["live_residual_largest_cluster_status"] == "resolved_by_phase9_hybrid_guard"
+        ),
+        "live_residual_next_generation_seed_count_high": metrics["live_residual_next_generation_seed_count"] >= 15,
         "all_hypothesis_layers_present": metrics["layer_coverage"] == 1.0,
         "multi_trajectory_per_cluster": metrics["min_trajectories_per_cluster"] >= 2,
         "execution_lapses_filtered": metrics["execution_lapse_filtered_rate"] == 1.0,
@@ -43,17 +62,28 @@ def build_full_v3_phase4_hypothesis_generator_payload(
         "eval_id": eval_id,
         "eval_kind": "full_v3_phase4_multi_layer_hypothesis_generator",
         "reconstruction_v2_full_phase": "phase4_v3_multi_layer_hypothesis_generator",
+        "implementation_level": "live_residual_clusterer_with_v2_generator_regression",
         "performance_validation": True,
-        "shadow_bypass": True,
+        "synthetic_fixture_regression": True,
         "validation_scope": (
             "Variation-evaluation-selective-retention validation for object, method, evaluator, memory, "
             "world-model, and meta-evolution hypotheses.  Candidates are generated from systematic residuals, "
-            "classified as old-family/new-family/risky controls, screened, and retained only after fresh tests."
+            "classified as old-family/new-family/risky controls, screened, and retained only after fresh tests. "
+            "The residual clusterer now also ingests live-derived Phase8/Phase9/Phase10 artifacts and emits "
+            "next-generation proposal seeds."
         ),
         "source": {
             "eval_id": source["eval_id"],
             "eval_kind": source["eval_kind"],
             "pass": source["pass"],
+        },
+        "live_residual_clusterer": {
+            "eval_id": live_residual_clusterer["eval_id"],
+            "eval_kind": live_residual_clusterer["eval_kind"],
+            "pass": live_residual_clusterer["pass"],
+            "metrics": live_residual_clusterer["metrics"],
+            "top_clusters": live_residual_clusterer["clusters"][:8],
+            "next_generation_seed_count": len(live_residual_clusterer["next_generation_proposal_seeds"]),
         },
         "layer_counts": metrics["layer_counts"],
         "trajectory_counts_by_cluster": metrics["trajectory_counts_by_cluster"],
@@ -65,7 +95,9 @@ def build_full_v3_phase4_hypothesis_generator_payload(
         "interpretation": (
             "Phase 4 is now an explicit v3 hypothesis generator: it creates multiple hypothesis trajectories "
             "per residual cluster, covers every assumption layer, and implements variation, evaluation, and "
-            "selective retention before recursive execution."
+            "selective retention before recursive execution.  Its residual clustering evidence is now live-derived: "
+            "the largest same-batch residual is marked as resolved by the retained Phase9 hybrid guard, while "
+            "unresolved clusters become next-generation proposal seeds."
         ),
     }
 
@@ -96,8 +128,10 @@ def _metrics(
     *,
     clusters: list[dict[str, Any]],
     candidates: list[dict[str, Any]],
+    live_residual_clusterer: dict[str, Any],
 ) -> dict[str, Any]:
     source_metrics = source["metrics"]
+    live_metrics = live_residual_clusterer["metrics"]
     layer_counts = Counter(candidate["layer"] for candidate in candidates)
     by_cluster: dict[str, set[str]] = defaultdict(set)
     for candidate in candidates:
@@ -139,6 +173,18 @@ def _metrics(
         "descendant_productivity": source_metrics["descendant_productivity"],
         "recursive_runner_seed_rate": round(len(retained) / max(1, len(candidates)), 4),
         "residual_explained_fraction": source_metrics["residual_explained_fraction"],
+        "live_residual_source_artifact_count": live_metrics["source_artifact_count"],
+        "live_residual_observation_count": live_metrics["observation_count"],
+        "live_weighted_residual_count": live_metrics["weighted_residual_count"],
+        "live_residual_cluster_count": live_metrics["cluster_count"],
+        "live_residual_systematic_weighted_coverage": live_metrics["systematic_weighted_coverage"],
+        "live_residual_next_generation_seed_count": live_metrics["next_generation_proposal_seed_count"],
+        "live_residual_largest_cluster_support": live_metrics["largest_live_cluster_support"],
+        "live_residual_largest_cluster_axis": live_metrics["largest_live_cluster_axis"],
+        "live_residual_largest_cluster_domain": live_metrics["largest_live_cluster_domain"],
+        "live_residual_largest_cluster_pattern": live_metrics["largest_live_cluster_pattern"],
+        "live_residual_largest_cluster_status": live_metrics["largest_live_cluster_status"],
+        "live_residual_uses_raw_prompts_or_answers": live_metrics["uses_raw_prompts_or_answers"],
     }
 
 
@@ -149,7 +195,7 @@ def main() -> None:
     parser.add_argument("--root", default=".")
     args = parser.parse_args()
     root = Path(args.root).resolve()
-    payload = build_full_v3_phase4_hypothesis_generator_payload(eval_id=args.eval_id)
+    payload = build_full_v3_phase4_hypothesis_generator_payload(root=root, eval_id=args.eval_id)
     out = Path(args.out)
     out = out if out.is_absolute() else root / out
     out.parent.mkdir(parents=True, exist_ok=True)
