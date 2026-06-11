@@ -85,6 +85,9 @@ from assumption_os.full_v3_supervised_daemon_background_smoke import (
 from assumption_os.full_v3_frozen_end_to_end_line import build_full_v3_frozen_end_to_end_line_payload
 from assumption_os.full_v3_world_model_calibration import build_full_v3_world_model_calibration_payload
 from assumption_os.full_v3_phase11_capability_audit import build_full_v3_phase11_capability_audit_payload
+from assumption_os.full_v3_phase12_claim_gap_hardening import (
+    build_full_v3_phase12_claim_gap_hardening_payload,
+)
 from assumption_os.full_v3_paper_scale_evidence import build_full_v3_paper_scale_evidence_payload
 from assumption_os.full_v3_residual_multigeneration_loop import (
     build_full_v3_residual_multigeneration_loop_payload,
@@ -1306,6 +1309,33 @@ class AssumptionOSTest(unittest.TestCase):
             metrics["phase11_phase10_calibration_status"],
             "calibration_audit_promotes_guard_blocks_raw_predictor",
         )
+        self.assertEqual(
+            metrics["phase11_phase12_status"],
+            "claim_gap_hardening_passed_with_open_scale_gaps",
+        )
+        self.assertEqual(metrics["phase12_source_artifact_pass_rate"], 1.0)
+        self.assertFalse(metrics["phase12_raw_world_model_promoted"])
+        self.assertTrue(metrics["phase12_calibrated_budget_gate_promotable"])
+        self.assertGreaterEqual(metrics["phase12_world_model_observed_arm_record_count"], 45)
+        self.assertGreater(metrics["phase12_world_model_transition_scale_gap"], 0)
+        self.assertEqual(metrics["phase12_guard_policy_harm_vs_hybrid_count"], 0)
+        self.assertGreaterEqual(metrics["phase12_creative_nonlocal_new_family_count"], 7)
+        self.assertGreaterEqual(metrics["phase12_residual_multigen_proposal_count"], 60)
+        self.assertGreaterEqual(metrics["phase12_residual_multigen_family_count"], 8)
+        self.assertGreaterEqual(metrics["phase12_live_multigen_accepted_count"], 1)
+        self.assertGreaterEqual(metrics["phase12_live_multigen_rejected_count"], 1)
+        self.assertEqual(metrics["phase12_daemon_ungated_graph_mutation_count"], 0)
+        self.assertTrue(metrics["phase12_frozen_end_to_end_pass"])
+        self.assertGreaterEqual(metrics["phase12_same_batch_toggle_pair_count"], 4)
+        self.assertEqual(metrics["phase12_formal_morphism_status"], "bounded_structural_layer")
+        self.assertGreaterEqual(metrics["phase12_open_claim_gap_count"], 5)
+        self.assertGreaterEqual(
+            metrics["phase12_blocked_strong_claim_count"],
+            metrics["phase12_open_claim_gap_count"],
+        )
+        self.assertGreaterEqual(metrics["phase12_review_engineering_item_closure_rate"], 0.94)
+        self.assertGreaterEqual(metrics["phase12_paper_strong_claim_readiness_rate"], 0.77)
+        self.assertFalse(metrics["phase12_secret_or_prompt_payload_detected"])
         self.assertFalse(metrics["prompt_answer_payload_stored"])
         self.assertFalse(metrics["secret_leak_detected"])
         self.assertGreaterEqual(metrics["boundary_case_count"], 1)
@@ -1453,6 +1483,44 @@ class AssumptionOSTest(unittest.TestCase):
             "promote_calibrated_residual_guard",
         )
 
+    def test_full_v3_phase12_claim_gap_hardening_blocks_overclaims(self):
+        payload = build_full_v3_phase12_claim_gap_hardening_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_phase12_claim_gap_hardening",
+        )
+        metrics = payload["metrics"]
+        decisions = payload["promotion_decisions"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(metrics["source_artifact_pass_rate"], 1.0)
+        self.assertFalse(metrics["raw_world_model_promoted"])
+        self.assertTrue(metrics["calibrated_budget_gate_promotable"])
+        self.assertGreaterEqual(metrics["world_model_observed_arm_record_count"], 45)
+        self.assertGreater(metrics["world_model_transition_scale_gap"], 0)
+        self.assertEqual(metrics["guard_policy_harm_vs_hybrid_count"], 0)
+        self.assertGreaterEqual(metrics["creative_nonlocal_new_family_count"], 7)
+        self.assertGreaterEqual(metrics["residual_multigen_proposal_count"], 60)
+        self.assertGreaterEqual(metrics["residual_multigen_family_count"], 8)
+        self.assertGreaterEqual(metrics["live_multigen_accepted_count"], 1)
+        self.assertGreaterEqual(metrics["live_multigen_rejected_count"], 1)
+        self.assertGreaterEqual(metrics["continuous_daemon_scheduled_cycle_count"], 10)
+        self.assertTrue(metrics["supervised_daemon_background_started"])
+        self.assertEqual(metrics["daemon_ungated_graph_mutation_count"], 0)
+        self.assertTrue(metrics["frozen_end_to_end_pass"])
+        self.assertGreaterEqual(metrics["same_batch_toggle_pair_count"], 4)
+        self.assertEqual(metrics["formal_morphism_status"], "bounded_structural_layer")
+        self.assertGreaterEqual(metrics["open_claim_gap_count"], 5)
+        self.assertGreaterEqual(metrics["blocked_strong_claim_count"], metrics["open_claim_gap_count"])
+        self.assertGreaterEqual(metrics["review_engineering_item_closure_rate"], 0.94)
+        self.assertGreaterEqual(metrics["paper_strong_claim_readiness_rate"], 0.77)
+        self.assertFalse(metrics["secret_or_prompt_payload_detected"])
+        self.assertEqual(decisions["raw_world_model"], "block_production_promote_exploration_only")
+        self.assertEqual(decisions["calibrated_budget_gate"], "allow_budget_search_gate")
+        self.assertEqual(
+            decisions["benchmark"],
+            "allow_frozen_artifact_chain_require_new_blinded_run_for_paper_main_claim",
+        )
+
     def test_full_v3_phase11_capability_audit_separates_fixture_from_production(self):
         payload = build_full_v3_phase11_capability_audit_payload(
             root=Path("."),
@@ -1462,7 +1530,7 @@ class AssumptionOSTest(unittest.TestCase):
         by_id = {row["capability_id"]: row for row in payload["capability_rows"]}
 
         self.assertTrue(payload["pass"], payload["failed_gates"])
-        self.assertEqual(metrics["capability_count"], 15)
+        self.assertEqual(metrics["capability_count"], 16)
         self.assertEqual(metrics["artifact_pass_rate"], 1.0)
         self.assertEqual(metrics["outer_shell_count"], 3)
         self.assertEqual(metrics["outer_shell_production_claim_count"], 0)
@@ -1477,6 +1545,7 @@ class AssumptionOSTest(unittest.TestCase):
             metrics["phase10_calibration_status"],
             "calibration_audit_promotes_guard_blocks_raw_predictor",
         )
+        self.assertEqual(metrics["phase12_status"], "claim_gap_hardening_passed_with_open_scale_gaps")
         self.assertIn("production_contract_gate_available", by_id["phase0_contract_checker"]["implementation_level"])
         self.assertEqual(by_id["phase9_hybrid_guard"]["production_default_status"], "retained_gated_profile")
         self.assertEqual(
@@ -1499,6 +1568,14 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(
             by_id["phase7_supervised_daemon_background_smoke"]["production_default_status"],
             "supervised_background_worker_validated_bounded",
+        )
+        self.assertEqual(
+            by_id["phase12_claim_gap_hardening"]["production_default_status"],
+            "claim_gap_hardening_passed_with_open_scale_gaps",
+        )
+        self.assertIn(
+            "promotion_blocker",
+            by_id["phase12_claim_gap_hardening"]["implementation_level"],
         )
         self.assertEqual(
             by_id["phase4_hypothesis_generator"]["validation_mode"],

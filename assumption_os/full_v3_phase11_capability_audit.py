@@ -34,6 +34,7 @@ PHASE_ARTIFACTS = {
     "phase10_discrete_world_model": PAPER_DIR / "full_v3_phase10_discrete_world_model_selector_20260611.json",
     "phase10_world_model_calibration": PAPER_DIR / "full_v3_world_model_calibration_20260611.json",
     "phase1_main_graph_controlled_apply": PAPER_DIR / "full_v3_main_graph_memory_controlled_apply_20260611.json",
+    "phase12_claim_gap_hardening": PAPER_DIR / "full_v3_phase12_claim_gap_hardening_20260612.json",
 }
 
 OUTER_SHELL_PHASES = {
@@ -98,6 +99,9 @@ def build_full_v3_phase11_capability_audit_payload(
         ),
         "phase10_calibration_blocks_uncalibrated_promotion": (
             metrics["phase10_calibration_status"] == "calibration_audit_promotes_guard_blocks_raw_predictor"
+        ),
+        "phase12_claim_gap_hardening_recorded": (
+            metrics["phase12_status"] == "claim_gap_hardening_passed_with_open_scale_gaps"
         ),
         "live_evidence_count_nonzero": metrics["live_or_live_derived_count"] >= 2,
         "shadow_and_fixture_count_recorded": metrics["shadow_or_fixture_count"] >= 4,
@@ -167,6 +171,8 @@ def _validation_mode(*, name: str, artifact: dict[str, Any]) -> str:
         return "live_or_live_derived_validation"
     if artifact.get("implementation_level") == "bounded_background_worker_spawn_checkpoint_stop_readback":
         return "live_or_live_derived_validation"
+    if artifact.get("implementation_level") == "claim_gap_hardening_and_promotion_blocker":
+        return "governance_validation"
     if artifact.get("implementation_level") == "live_artifact_learned_candidate":
         return "live_derived_learned_candidate"
     if name == "phase7_long_run_benchmark":
@@ -194,6 +200,8 @@ def _implementation_level(*, name: str, artifact: dict[str, Any], validation_mod
         return "committed_memory_apply_with_rollback_readback"
     if name == "phase7_supervised_daemon_background_smoke":
         return "supervised_background_worker_with_bounded_stop"
+    if name == "phase12_claim_gap_hardening":
+        return "machine_readable_review_gap_promotion_blocker"
     explicit = artifact.get("implementation_level")
     if explicit:
         return str(explicit)
@@ -229,6 +237,10 @@ def _production_default_status(*, name: str, artifact: dict[str, Any], validatio
         if artifact.get("metrics", {}).get("phase10_recommended_promotion") == "promote_calibrated_residual_guard":
             return "calibration_audit_promotes_guard_blocks_raw_predictor"
         return "calibration_audit_blocks_uncalibrated_world_model"
+    if name == "phase12_claim_gap_hardening":
+        if artifact.get("pass") and int(artifact.get("metrics", {}).get("open_claim_gap_count") or 0) >= 5:
+            return "claim_gap_hardening_passed_with_open_scale_gaps"
+        return "claim_gap_hardening_incomplete"
     if validation_mode in {"shadow_validation_harness", "fixture_or_frozen_harness", "frozen_mechanism_validation"}:
         return "not_default_requires_fresh_promotion"
     if artifact.get("pass"):
@@ -301,6 +313,12 @@ def _claim_policy(
             ["unreviewed destructive graph rewrite", "memory consolidation without rollback"],
             "Monitor long-run retrieval/regression after the committed apply before making default sleep-job claims.",
         )
+    if name == "phase12_claim_gap_hardening":
+        return (
+            "Remaining V3/V4 review gaps are machine-readable promotion blockers rather than ambiguous prose.",
+            ["raw simulator promotion", "24/7 autonomous OS", "fresh blinded paper-scale result already complete"],
+            "Run the quantified open gaps: larger calibrated transitions, long daemon soak, and new blinded frozen benchmark.",
+        )
     if validation_mode == "shadow_validation_harness":
         return (
             "Shadow validation demonstrates the mechanism contract on audited inputs.",
@@ -366,6 +384,9 @@ def _metrics(rows: list[CapabilityRow]) -> dict[str, Any]:
         ),
         "phase10_calibration_status": next(
             row.production_default_status for row in rows if row.capability_id == "phase10_world_model_calibration"
+        ),
+        "phase12_status": next(
+            row.production_default_status for row in rows if row.capability_id == "phase12_claim_gap_hardening"
         ),
     }
 

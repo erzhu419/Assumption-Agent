@@ -59,6 +59,7 @@ REQUIRED_ARTIFACTS = {
     "v3_world_model_calibration": PAPER_DIR / "full_v3_world_model_calibration_20260611.json",
     "v3_same_batch_ablation_suite": PAPER_DIR / "full_v3_same_batch_ablation_suite_20260611.json",
     "v3_phase11_capability_audit": PAPER_DIR / "full_v3_phase11_capability_audit_20260611.json",
+    "v3_phase12_claim_gap_hardening": PAPER_DIR / "full_v3_phase12_claim_gap_hardening_20260612.json",
 }
 
 KEY_TOGGLE_BASELINES = {
@@ -556,6 +557,42 @@ def build_full_v3_paper_scale_evidence_payload(
                 "phase7_background_status",
                 "phase10_status",
                 "phase10_calibration_status",
+                "phase12_status",
+            ],
+        ),
+        "phase12_claim_gap_hardening": _metric_subset(
+            artifacts["v3_phase12_claim_gap_hardening"].get("metrics", {}),
+            [
+                "source_artifact_count",
+                "source_artifact_pass_rate",
+                "raw_world_model_promoted",
+                "calibrated_budget_gate_promotable",
+                "world_model_observed_arm_record_count",
+                "world_model_transition_scale_gap",
+                "guard_policy_learned_update_count",
+                "guard_policy_harm_vs_hybrid_count",
+                "creative_candidate_count",
+                "creative_nonlocal_new_family_count",
+                "residual_cluster_count",
+                "residual_next_generation_seed_count",
+                "residual_multigen_proposal_count",
+                "residual_multigen_family_count",
+                "residual_multigen_retained_count",
+                "live_multigen_generation_count",
+                "live_multigen_accepted_count",
+                "live_multigen_rejected_count",
+                "live_multigen_api_call_count",
+                "continuous_daemon_scheduled_cycle_count",
+                "supervised_daemon_background_started",
+                "daemon_ungated_graph_mutation_count",
+                "frozen_end_to_end_pass",
+                "same_batch_toggle_pair_count",
+                "formal_morphism_status",
+                "open_claim_gap_count",
+                "blocked_strong_claim_count",
+                "review_engineering_item_closure_rate",
+                "paper_strong_claim_readiness_rate",
+                "secret_or_prompt_payload_detected",
             ],
         ),
     }
@@ -839,6 +876,17 @@ def build_full_v3_paper_scale_evidence_payload(
         "phase11_world_model_calibration_status_recorded": (
             metrics["phase11_phase10_calibration_status"] == "calibration_audit_promotes_guard_blocks_raw_predictor"
         ),
+        "phase12_claim_gap_hardening_passes": (
+            metrics["phase12_source_artifact_pass_rate"] == 1.0
+            and metrics["phase12_raw_world_model_promoted"] is False
+            and metrics["phase12_calibrated_budget_gate_promotable"] is True
+            and metrics["phase12_open_claim_gap_count"] >= 5
+            and metrics["phase12_blocked_strong_claim_count"] >= metrics["phase12_open_claim_gap_count"]
+        ),
+        "phase12_records_strong_claim_boundaries": (
+            metrics["phase12_formal_morphism_status"] == "bounded_structural_layer"
+            and metrics["phase12_secret_or_prompt_payload_detected"] is False
+        ),
         "prompt_answer_and_secret_free": metrics["prompt_answer_payload_stored"] is False and metrics["secret_leak_detected"] is False,
         "boundary_cases_recorded": metrics["boundary_case_count"] >= 1,
     }
@@ -1014,6 +1062,7 @@ def _v3_mechanism_summary(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any
         "v3_world_model_calibration",
         "v3_same_batch_ablation_suite",
         "v3_phase11_capability_audit",
+        "v3_phase12_claim_gap_hardening",
     ]
     return {
         key: {
@@ -1992,6 +2041,82 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "phase11_phase10_calibration_status": artifacts["v3_phase11_capability_audit"]["metrics"][
             "phase10_calibration_status"
         ],
+        "phase11_phase12_status": artifacts["v3_phase11_capability_audit"]["metrics"].get("phase12_status"),
+        "phase12_source_artifact_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["source_artifact_count"]
+        ),
+        "phase12_source_artifact_pass_rate": float(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["source_artifact_pass_rate"]
+        ),
+        "phase12_raw_world_model_promoted": bool(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["raw_world_model_promoted"]
+        ),
+        "phase12_calibrated_budget_gate_promotable": bool(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["calibrated_budget_gate_promotable"]
+        ),
+        "phase12_world_model_observed_arm_record_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["world_model_observed_arm_record_count"]
+        ),
+        "phase12_world_model_transition_scale_gap": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["world_model_transition_scale_gap"]
+        ),
+        "phase12_guard_policy_harm_vs_hybrid_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["guard_policy_harm_vs_hybrid_count"]
+        ),
+        "phase12_creative_nonlocal_new_family_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["creative_nonlocal_new_family_count"]
+        ),
+        "phase12_residual_multigen_proposal_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["residual_multigen_proposal_count"]
+        ),
+        "phase12_residual_multigen_family_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["residual_multigen_family_count"]
+        ),
+        "phase12_residual_multigen_retained_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["residual_multigen_retained_count"]
+        ),
+        "phase12_live_multigen_generation_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["live_multigen_generation_count"]
+        ),
+        "phase12_live_multigen_accepted_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["live_multigen_accepted_count"]
+        ),
+        "phase12_live_multigen_rejected_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["live_multigen_rejected_count"]
+        ),
+        "phase12_live_multigen_api_call_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["live_multigen_api_call_count"]
+        ),
+        "phase12_continuous_daemon_scheduled_cycle_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["continuous_daemon_scheduled_cycle_count"]
+        ),
+        "phase12_daemon_ungated_graph_mutation_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["daemon_ungated_graph_mutation_count"]
+        ),
+        "phase12_frozen_end_to_end_pass": bool(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["frozen_end_to_end_pass"]
+        ),
+        "phase12_same_batch_toggle_pair_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["same_batch_toggle_pair_count"]
+        ),
+        "phase12_formal_morphism_status": artifacts["v3_phase12_claim_gap_hardening"]["metrics"][
+            "formal_morphism_status"
+        ],
+        "phase12_open_claim_gap_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["open_claim_gap_count"]
+        ),
+        "phase12_blocked_strong_claim_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["blocked_strong_claim_count"]
+        ),
+        "phase12_review_engineering_item_closure_rate": float(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["review_engineering_item_closure_rate"]
+        ),
+        "phase12_paper_strong_claim_readiness_rate": float(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["paper_strong_claim_readiness_rate"]
+        ),
+        "phase12_secret_or_prompt_payload_detected": bool(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["secret_or_prompt_payload_detected"]
+        ),
         "prompt_answer_payload_stored": bool(artifacts["first_party_world_model_scale"].get("prompt_answer_payload_stored")),
         "secret_leak_detected": bool(artifacts["first_party_world_model_scale"].get("secret_leak_detected")),
     }
