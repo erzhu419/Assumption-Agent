@@ -127,6 +127,22 @@ def build_full_v3_paper_scale_evidence_payload(
                 "coverage_profile_vs_placebo_utility",
             ],
         ),
+        "phase5_live_scheduler": _metric_subset(
+            artifacts["v3_phase5_bandit"].get("metrics", {}),
+            [
+                "live_profile_source_artifact_count",
+                "live_profile_count",
+                "live_profile_pass_count",
+                "live_selected_production_profile",
+                "live_selected_exploration_profile",
+                "live_scheduler_vs_v1_utility",
+                "live_scheduler_vs_original_v3_utility",
+                "live_scheduler_lift_over_v3",
+                "live_scheduler_blocks_compact_default",
+                "live_scheduler_keeps_phase10_as_candidate",
+                "live_scheduler_uses_raw_prompts_or_answers",
+            ],
+        ),
         "phase9_compact_frame_guard": _metric_subset(
             artifacts["v3_phase9_compact_frame_guard"].get("metrics", {}),
             [
@@ -234,6 +250,14 @@ def build_full_v3_paper_scale_evidence_payload(
         "phase8_world_model_profile_selector_passes": metrics["phase8_quality_world_model_auroc"] >= 0.85,
         "phase8_coverage_profile_positive": metrics["phase8_coverage_profile_vs_base_utility"] > 0.50
         and metrics["phase8_coverage_profile_vs_placebo_utility"] > 0.50,
+        "phase5_live_scheduler_realified": metrics["phase5_live_profile_count"] >= 7,
+        "phase5_live_scheduler_selects_hybrid": (
+            metrics["phase5_live_selected_production_profile"] == "phase9_hybrid_guard"
+        ),
+        "phase5_live_scheduler_improves_v3": metrics["phase5_live_scheduler_lift_over_v3"] >= 0.05,
+        "phase5_live_scheduler_keeps_phase10_candidate": metrics["phase5_live_keeps_phase10_candidate"] is True,
+        "phase5_live_scheduler_blocks_compact_default": metrics["phase5_live_blocks_compact_default"] is True,
+        "phase5_live_scheduler_redacted": metrics["phase5_live_uses_raw_prompts_or_answers"] is False,
         "phase9_compact_guard_v1_regression_passes": metrics["phase9_compact_guard_vs_v1_margin"] >= 0.10,
         "phase9_compact_guard_improves_original_v3_vs_v1": metrics["phase9_compact_guard_margin_gain_over_v3"] > 0.05,
         "phase9_compact_guard_noninferior_to_original_v3": metrics["phase9_compact_guard_vs_v3_utility"] >= 0.48,
@@ -283,7 +307,9 @@ def build_full_v3_paper_scale_evidence_payload(
             "2500+ judge events, hard retrieval/toggle baselines, full-v3 mechanism validations, a fresh "
             "guarded heldout-300 live rerun, a guarded full-remaining live rerun, and a selective clade-expansion "
             "full-remaining rerun.  Phase9 additionally records the failed broad/compact tradeoff and the retained "
-            "cue-level hybrid guard that beats V1 on the heldout slice without regressing against original V3.  The "
+            "cue-level hybrid guard that beats V1 on the heldout slice without regressing against original V3.  Phase5 "
+            "now adds a live-derived contextual scheduler that selects that retained hybrid profile, keeps the weaker "
+            "world-model selector as exploration, and blocks over-structured compact framing as a default.  The "
             "fresh reruns are positive but intentionally reported as small-effect safety/abstention validations, "
             "not as the main paper claim."
         ),
@@ -573,6 +599,36 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         ),
         "phase8_coverage_profile_vs_placebo_utility": float(
             artifacts["v3_phase8_creativity_world_coverage"]["metrics"]["coverage_profile_vs_placebo_utility"]
+        ),
+        "phase5_live_profile_source_artifact_count": int(
+            artifacts["v3_phase5_bandit"]["metrics"]["live_profile_source_artifact_count"]
+        ),
+        "phase5_live_profile_count": int(
+            artifacts["v3_phase5_bandit"]["metrics"]["live_profile_count"]
+        ),
+        "phase5_live_selected_production_profile": artifacts["v3_phase5_bandit"]["metrics"][
+            "live_selected_production_profile"
+        ],
+        "phase5_live_selected_exploration_profile": artifacts["v3_phase5_bandit"]["metrics"][
+            "live_selected_exploration_profile"
+        ],
+        "phase5_live_scheduler_vs_v1_utility": float(
+            artifacts["v3_phase5_bandit"]["metrics"]["live_scheduler_vs_v1_utility"]
+        ),
+        "phase5_live_scheduler_vs_original_v3_utility": float(
+            artifacts["v3_phase5_bandit"]["metrics"]["live_scheduler_vs_original_v3_utility"]
+        ),
+        "phase5_live_scheduler_lift_over_v3": float(
+            artifacts["v3_phase5_bandit"]["metrics"]["live_scheduler_lift_over_v3"]
+        ),
+        "phase5_live_blocks_compact_default": bool(
+            artifacts["v3_phase5_bandit"]["metrics"]["live_scheduler_blocks_compact_default"]
+        ),
+        "phase5_live_keeps_phase10_candidate": bool(
+            artifacts["v3_phase5_bandit"]["metrics"]["live_scheduler_keeps_phase10_as_candidate"]
+        ),
+        "phase5_live_uses_raw_prompts_or_answers": bool(
+            artifacts["v3_phase5_bandit"]["metrics"]["live_scheduler_uses_raw_prompts_or_answers"]
         ),
         "phase9_compact_guard_active_case_count": int(
             artifacts["v3_phase9_compact_frame_guard"]["metrics"]["active_case_count"]

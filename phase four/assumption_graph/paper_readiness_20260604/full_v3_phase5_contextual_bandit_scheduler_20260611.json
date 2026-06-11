@@ -2,9 +2,263 @@
   "eval_id": "full_v3_phase5_contextual_bandit_scheduler_20260611",
   "eval_kind": "full_v3_phase5_contextual_bandit_bayesian_scheduler",
   "reconstruction_v2_full_phase": "phase5_v3_contextual_bandit_scheduler",
+  "implementation_level": "live_artifact_contextual_scheduler_with_fixture_regression",
   "performance_validation": true,
-  "shadow_bypass": true,
-  "validation_scope": "Contextual bandit / Bayesian scheduler over strategy family, verifier, world model, and budget. Rewards combine task success, residual reduction, cost penalty, regression penalty, and descendant productivity.",
+  "synthetic_fixture_regression": true,
+  "validation_scope": "Contextual bandit / Bayesian scheduler over strategy family, verifier, world model, and budget. The fixture rows remain as a contract regression, while the production-facing scheduler now reads committed live-derived heldout artifacts, scores real profiles, selects the retained hybrid guard as the default profile, and keeps the discrete world model as an exploration candidate.",
+  "live_scheduler_source_artifacts": {
+    "phase8_creativity_world_coverage": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase8_creativity_world_coverage_20260611.json",
+      "exists": true,
+      "pass": true,
+      "eval_kind": "full_v3_phase8_creativity_world_model_coverage"
+    },
+    "phase9_compact_frame_guard": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_compact_frame_guard_20260611.json",
+      "exists": true,
+      "pass": true,
+      "eval_kind": "full_v3_phase9_frame_morphism_repair"
+    },
+    "phase9_hybrid_guard": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_hybrid_guard_heldout_20260611.json",
+      "exists": true,
+      "pass": true,
+      "eval_kind": "full_v3_phase9_hybrid_guard_heldout"
+    },
+    "phase9_micro_guard": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_micro_guard_heldout_20260611.json",
+      "exists": true,
+      "pass": false,
+      "eval_kind": "full_v3_phase9_micro_guard_heldout"
+    },
+    "phase9_selective_compact_guard": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_selective_compact_guard_heldout_20260611.json",
+      "exists": true,
+      "pass": false,
+      "eval_kind": "full_v3_phase9_selective_compact_guard_heldout"
+    },
+    "phase10_discrete_world_model": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase10_discrete_world_model_selector_20260611.json",
+      "exists": true,
+      "pass": true,
+      "eval_kind": "full_v3_phase10_discrete_graph_action_world_model_selector"
+    }
+  },
+  "live_scheduler_profiles": [
+    {
+      "profile_id": "original_v3_default",
+      "source_artifact": "phase9_hybrid_guard",
+      "profile_type": "baseline_default",
+      "utility_vs_v1": 0.5926,
+      "utility_vs_original_v3": 0.5,
+      "heldout_n": 54,
+      "active_n": 54,
+      "lift_over_default": 0.0,
+      "posterior_alpha": 33.0004,
+      "posterior_beta": 22.9996,
+      "posterior_mean": 0.5893,
+      "production_score": 0.5009,
+      "exploration_score": 0.4417,
+      "production_eligible": true,
+      "exploration_eligible": false,
+      "calibrated": true,
+      "scope_penalty": 0.0,
+      "risk_penalty": 0.0,
+      "reason": "Current V3 default on the Phase9 heldout slice."
+    },
+    {
+      "profile_id": "phase9_hybrid_guard",
+      "source_artifact": "phase9_hybrid_guard",
+      "profile_type": "retained_gated_profile",
+      "utility_vs_v1": 0.6481,
+      "utility_vs_original_v3": 0.6111,
+      "heldout_n": 54,
+      "active_n": 17,
+      "lift_over_default": 0.0555,
+      "posterior_alpha": 35.9974,
+      "posterior_beta": 20.0026,
+      "posterior_mean": 0.6428,
+      "production_score": 0.5759,
+      "exploration_score": 0.5166,
+      "production_eligible": true,
+      "exploration_eligible": false,
+      "calibrated": true,
+      "scope_penalty": 0.0,
+      "risk_penalty": 0.0,
+      "reason": "Retained heldout-wide hybrid guard: improves V1 margin and does not regress against original V3."
+    },
+    {
+      "profile_id": "phase10_discrete_world_model_candidate",
+      "source_artifact": "phase10_discrete_world_model",
+      "profile_type": "world_model_exploration_candidate",
+      "utility_vs_v1": 0.6111,
+      "utility_vs_original_v3": 0.5093,
+      "heldout_n": 54,
+      "active_n": 17,
+      "lift_over_default": 0.0185,
+      "posterior_alpha": 33.9994,
+      "posterior_beta": 22.0006,
+      "posterior_mean": 0.6071,
+      "production_score": 0.4362,
+      "exploration_score": 0.4169,
+      "production_eligible": false,
+      "exploration_eligible": true,
+      "calibrated": false,
+      "scope_penalty": 0.02,
+      "risk_penalty": 0.03,
+      "reason": "Positive learned arm selector, but weaker than retained hybrid and not calibrated beyond base rate."
+    },
+    {
+      "profile_id": "phase9_micro_guard",
+      "source_artifact": "phase9_micro_guard",
+      "profile_type": "rejected_broad_profile",
+      "utility_vs_v1": 0.5926,
+      "utility_vs_original_v3": 0.5278,
+      "heldout_n": 54,
+      "active_n": 17,
+      "lift_over_default": 0.0,
+      "posterior_alpha": 33.0004,
+      "posterior_beta": 22.9996,
+      "posterior_mean": 0.5893,
+      "production_score": 0.4707,
+      "exploration_score": 0.4264,
+      "production_eligible": false,
+      "exploration_eligible": false,
+      "calibrated": true,
+      "scope_penalty": 0.03,
+      "risk_penalty": 0.01,
+      "reason": "Non-regressive against V3 but no heldout lift over current V3-vs-V1 default."
+    },
+    {
+      "profile_id": "phase9_selective_compact_guard",
+      "source_artifact": "phase9_selective_compact_guard",
+      "profile_type": "rejected_overstructured_profile",
+      "utility_vs_v1": 0.6111,
+      "utility_vs_original_v3": 0.4722,
+      "heldout_n": 54,
+      "active_n": 17,
+      "lift_over_default": 0.0185,
+      "posterior_alpha": 33.9994,
+      "posterior_beta": 22.0006,
+      "posterior_mean": 0.6071,
+      "production_score": 0.3832,
+      "exploration_score": 0.344,
+      "production_eligible": false,
+      "exploration_eligible": false,
+      "calibrated": true,
+      "scope_penalty": 0.04,
+      "risk_penalty": 0.08,
+      "reason": "Broad compact framing improves V1 but regresses against original V3, so it is a negative-control profile."
+    },
+    {
+      "profile_id": "phase9_compact_frame_scoped_repair",
+      "source_artifact": "phase9_compact_frame_guard",
+      "profile_type": "scoped_repair_profile",
+      "utility_vs_v1": 0.6774,
+      "utility_vs_original_v3": 0.4839,
+      "heldout_n": 31,
+      "active_n": 31,
+      "lift_over_default": 0.129,
+      "posterior_alpha": 21.9994,
+      "posterior_beta": 11.0006,
+      "posterior_mean": 0.6666,
+      "production_score": 0.4148,
+      "exploration_score": 0.39,
+      "production_eligible": false,
+      "exploration_eligible": false,
+      "calibrated": true,
+      "scope_penalty": 0.06,
+      "risk_penalty": 0.08,
+      "reason": "Strong scoped V1 repair but slightly negative against V3, so it cannot be a default profile."
+    },
+    {
+      "profile_id": "phase8_quality_profile",
+      "source_artifact": "phase8_creativity_world_coverage",
+      "profile_type": "residual_cluster_exploration_profile",
+      "utility_vs_v1": 0.5144,
+      "utility_vs_original_v3": 0.5153,
+      "heldout_n": 31,
+      "active_n": 31,
+      "lift_over_default": 0.0144,
+      "posterior_alpha": 16.9464,
+      "posterior_beta": 16.0536,
+      "posterior_mean": 0.5135,
+      "production_score": 0.3747,
+      "exploration_score": 0.3497,
+      "production_eligible": false,
+      "exploration_eligible": false,
+      "calibrated": true,
+      "scope_penalty": 0.05,
+      "risk_penalty": 0.04,
+      "reason": "Useful residual-cluster profile on a different benchmark, not same-slice default evidence."
+    },
+    {
+      "profile_id": "phase8_coverage_profile",
+      "source_artifact": "phase8_creativity_world_coverage",
+      "profile_type": "coverage_expansion_profile",
+      "utility_vs_v1": 0.5108,
+      "utility_vs_original_v3": 0.5135,
+      "heldout_n": 35,
+      "active_n": 35,
+      "lift_over_default": 0.0108,
+      "posterior_alpha": 18.878,
+      "posterior_beta": 18.122,
+      "posterior_mean": 0.5102,
+      "production_score": 0.3517,
+      "exploration_score": 0.3317,
+      "production_eligible": false,
+      "exploration_eligible": false,
+      "calibrated": true,
+      "scope_penalty": 0.06,
+      "risk_penalty": 0.05,
+      "reason": "Expands coverage but is lower quality than Phase8 quality profile and not same-slice default evidence."
+    }
+  ],
+  "live_scheduler_selection": {
+    "production_profile": {
+      "profile_id": "phase9_hybrid_guard",
+      "source_artifact": "phase9_hybrid_guard",
+      "profile_type": "retained_gated_profile",
+      "utility_vs_v1": 0.6481,
+      "utility_vs_original_v3": 0.6111,
+      "heldout_n": 54,
+      "active_n": 17,
+      "lift_over_default": 0.0555,
+      "posterior_alpha": 35.9974,
+      "posterior_beta": 20.0026,
+      "posterior_mean": 0.6428,
+      "production_score": 0.5759,
+      "exploration_score": 0.5166,
+      "production_eligible": true,
+      "exploration_eligible": false,
+      "calibrated": true,
+      "scope_penalty": 0.0,
+      "risk_penalty": 0.0,
+      "reason": "Retained heldout-wide hybrid guard: improves V1 margin and does not regress against original V3."
+    },
+    "exploration_profile": {
+      "profile_id": "phase10_discrete_world_model_candidate",
+      "source_artifact": "phase10_discrete_world_model",
+      "profile_type": "world_model_exploration_candidate",
+      "utility_vs_v1": 0.6111,
+      "utility_vs_original_v3": 0.5093,
+      "heldout_n": 54,
+      "active_n": 17,
+      "lift_over_default": 0.0185,
+      "posterior_alpha": 33.9994,
+      "posterior_beta": 22.0006,
+      "posterior_mean": 0.6071,
+      "production_score": 0.4362,
+      "exploration_score": 0.4169,
+      "production_eligible": false,
+      "exploration_eligible": true,
+      "calibrated": false,
+      "scope_penalty": 0.02,
+      "risk_penalty": 0.03,
+      "reason": "Positive learned arm selector, but weaker than retained hybrid and not calibrated beyond base rate."
+    },
+    "selection_rule": "Production requires heldout-wide non-regression against original V3 and positive lift over the V3-vs-V1 default.  Profiles with scoped support, calibration miss, or negative transfer remain exploration-only unless they beat retained hybrid on the same heldout slice."
+  },
   "tasks": [
     {
       "task_id": "cb01",
@@ -185,12 +439,12 @@
       "negative_transfer": 0,
       "baseline_negative_transfer": 0,
       "posterior": {
-        "minimal_prototype": {
-          "alpha": 2.0,
-          "beta": 1.0
-        },
         "incremental_replacement": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "minimal_prototype": {
+          "alpha": 2.0,
           "beta": 1.0
         }
       }
@@ -222,12 +476,12 @@
       "negative_transfer": 0,
       "baseline_negative_transfer": 0,
       "posterior": {
-        "minimal_prototype": {
-          "alpha": 2.0,
-          "beta": 1.0
-        },
         "incremental_replacement": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "minimal_prototype": {
+          "alpha": 2.0,
           "beta": 1.0
         },
         "model_comparison": {
@@ -267,12 +521,12 @@
       "negative_transfer": 0,
       "baseline_negative_transfer": 1,
       "posterior": {
-        "minimal_prototype": {
-          "alpha": 2.0,
-          "beta": 1.0
-        },
         "incremental_replacement": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "minimal_prototype": {
+          "alpha": 2.0,
           "beta": 1.0
         },
         "model_comparison": {
@@ -283,12 +537,12 @@
           "alpha": 3.0,
           "beta": 1.0
         },
-        "negative_control": {
-          "alpha": 3.0,
-          "beta": 1.0
-        },
         "analogy": {
           "alpha": 2.0,
+          "beta": 1.0
+        },
+        "negative_control": {
+          "alpha": 3.0,
           "beta": 1.0
         }
       }
@@ -320,12 +574,12 @@
       "negative_transfer": 0,
       "baseline_negative_transfer": 1,
       "posterior": {
-        "minimal_prototype": {
-          "alpha": 2.0,
-          "beta": 1.0
-        },
         "incremental_replacement": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "minimal_prototype": {
+          "alpha": 2.0,
           "beta": 1.0
         },
         "model_comparison": {
@@ -336,20 +590,20 @@
           "alpha": 3.0,
           "beta": 1.0
         },
-        "negative_control": {
-          "alpha": 3.0,
-          "beta": 1.0
-        },
         "analogy": {
           "alpha": 2.0,
           "beta": 1.0
         },
-        "occam": {
-          "alpha": 2.0,
+        "negative_control": {
+          "alpha": 3.0,
           "beta": 1.0
         },
         "boundary_case_analysis": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "occam": {
+          "alpha": 2.0,
           "beta": 1.0
         }
       }
@@ -381,12 +635,12 @@
       "negative_transfer": 0,
       "baseline_negative_transfer": 0,
       "posterior": {
-        "minimal_prototype": {
-          "alpha": 2.0,
-          "beta": 1.0
-        },
         "incremental_replacement": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "minimal_prototype": {
+          "alpha": 2.0,
           "beta": 1.0
         },
         "model_comparison": {
@@ -397,28 +651,28 @@
           "alpha": 3.0,
           "beta": 1.0
         },
-        "negative_control": {
-          "alpha": 3.0,
-          "beta": 1.0
-        },
         "analogy": {
           "alpha": 2.0,
           "beta": 1.0
         },
-        "occam": {
-          "alpha": 2.0,
+        "negative_control": {
+          "alpha": 3.0,
           "beta": 1.0
         },
         "boundary_case_analysis": {
           "alpha": 3.0,
           "beta": 1.0
         },
-        "abduction": {
+        "occam": {
           "alpha": 2.0,
           "beta": 1.0
         },
         "error_decomposition": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "abduction": {
+          "alpha": 2.0,
           "beta": 1.0
         }
       }
@@ -450,12 +704,12 @@
       "negative_transfer": 0,
       "baseline_negative_transfer": 0,
       "posterior": {
-        "minimal_prototype": {
-          "alpha": 2.0,
-          "beta": 1.0
-        },
         "incremental_replacement": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "minimal_prototype": {
+          "alpha": 2.0,
           "beta": 1.0
         },
         "model_comparison": {
@@ -466,28 +720,28 @@
           "alpha": 3.0,
           "beta": 1.0
         },
-        "negative_control": {
-          "alpha": 3.0,
-          "beta": 1.0
-        },
         "analogy": {
           "alpha": 2.0,
           "beta": 1.0
         },
-        "occam": {
-          "alpha": 2.0,
+        "negative_control": {
+          "alpha": 3.0,
           "beta": 1.0
         },
         "boundary_case_analysis": {
           "alpha": 3.0,
           "beta": 1.0
         },
-        "abduction": {
+        "occam": {
           "alpha": 2.0,
           "beta": 1.0
         },
         "error_decomposition": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "abduction": {
+          "alpha": 2.0,
           "beta": 1.0
         },
         "deduction": {
@@ -523,12 +777,12 @@
       "negative_transfer": 0,
       "baseline_negative_transfer": 0,
       "posterior": {
-        "minimal_prototype": {
-          "alpha": 2.0,
-          "beta": 1.0
-        },
         "incremental_replacement": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "minimal_prototype": {
+          "alpha": 2.0,
           "beta": 1.0
         },
         "model_comparison": {
@@ -539,11 +793,15 @@
           "alpha": 3.0,
           "beta": 1.0
         },
+        "analogy": {
+          "alpha": 3.0,
+          "beta": 1.0
+        },
         "negative_control": {
           "alpha": 3.0,
           "beta": 1.0
         },
-        "analogy": {
+        "boundary_case_analysis": {
           "alpha": 3.0,
           "beta": 1.0
         },
@@ -551,16 +809,12 @@
           "alpha": 2.0,
           "beta": 1.0
         },
-        "boundary_case_analysis": {
+        "error_decomposition": {
           "alpha": 3.0,
           "beta": 1.0
         },
         "abduction": {
           "alpha": 2.0,
-          "beta": 1.0
-        },
-        "error_decomposition": {
-          "alpha": 3.0,
           "beta": 1.0
         },
         "deduction": {
@@ -596,12 +850,12 @@
       "negative_transfer": 0,
       "baseline_negative_transfer": 0,
       "posterior": {
-        "minimal_prototype": {
-          "alpha": 2.0,
-          "beta": 1.0
-        },
         "incremental_replacement": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "minimal_prototype": {
+          "alpha": 2.0,
           "beta": 1.0
         },
         "model_comparison": {
@@ -612,11 +866,15 @@
           "alpha": 3.0,
           "beta": 1.0
         },
+        "analogy": {
+          "alpha": 3.0,
+          "beta": 1.0
+        },
         "negative_control": {
           "alpha": 3.0,
           "beta": 1.0
         },
-        "analogy": {
+        "boundary_case_analysis": {
           "alpha": 3.0,
           "beta": 1.0
         },
@@ -624,16 +882,12 @@
           "alpha": 2.0,
           "beta": 1.0
         },
-        "boundary_case_analysis": {
+        "error_decomposition": {
           "alpha": 3.0,
           "beta": 1.0
         },
         "abduction": {
           "alpha": 2.0,
-          "beta": 1.0
-        },
-        "error_decomposition": {
-          "alpha": 3.0,
           "beta": 1.0
         },
         "deduction": {
@@ -673,12 +927,12 @@
       "negative_transfer": 0,
       "baseline_negative_transfer": 0,
       "posterior": {
-        "minimal_prototype": {
-          "alpha": 2.0,
-          "beta": 1.0
-        },
         "incremental_replacement": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "minimal_prototype": {
+          "alpha": 2.0,
           "beta": 1.0
         },
         "model_comparison": {
@@ -689,11 +943,15 @@
           "alpha": 3.0,
           "beta": 1.0
         },
+        "analogy": {
+          "alpha": 3.0,
+          "beta": 1.0
+        },
         "negative_control": {
           "alpha": 3.0,
           "beta": 1.0
         },
-        "analogy": {
+        "boundary_case_analysis": {
           "alpha": 3.0,
           "beta": 1.0
         },
@@ -701,16 +959,12 @@
           "alpha": 2.0,
           "beta": 1.0
         },
-        "boundary_case_analysis": {
+        "error_decomposition": {
           "alpha": 3.0,
           "beta": 1.0
         },
         "abduction": {
           "alpha": 2.0,
-          "beta": 1.0
-        },
-        "error_decomposition": {
-          "alpha": 3.0,
           "beta": 1.0
         },
         "deduction": {
@@ -754,12 +1008,12 @@
       "negative_transfer": 0,
       "baseline_negative_transfer": 0,
       "posterior": {
-        "minimal_prototype": {
-          "alpha": 2.0,
-          "beta": 1.0
-        },
         "incremental_replacement": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "minimal_prototype": {
+          "alpha": 2.0,
           "beta": 1.0
         },
         "model_comparison": {
@@ -770,11 +1024,15 @@
           "alpha": 3.0,
           "beta": 1.0
         },
+        "analogy": {
+          "alpha": 3.0,
+          "beta": 1.0
+        },
         "negative_control": {
           "alpha": 3.0,
           "beta": 1.0
         },
-        "analogy": {
+        "boundary_case_analysis": {
           "alpha": 3.0,
           "beta": 1.0
         },
@@ -782,16 +1040,12 @@
           "alpha": 2.0,
           "beta": 1.0
         },
-        "boundary_case_analysis": {
+        "error_decomposition": {
           "alpha": 3.0,
           "beta": 1.0
         },
         "abduction": {
           "alpha": 2.0,
-          "beta": 1.0
-        },
-        "error_decomposition": {
-          "alpha": 3.0,
           "beta": 1.0
         },
         "deduction": {
@@ -828,22 +1082,43 @@
     "unsafe_exploration_count": 0,
     "selected_negative_transfer_count": 0,
     "baseline_negative_transfer_count": 2,
-    "negative_transfer_reduction": 1.0
+    "negative_transfer_reduction": 1.0,
+    "live_profile_source_artifact_count": 6,
+    "live_profile_count": 8,
+    "live_profile_pass_count": 4,
+    "live_selected_production_profile": "phase9_hybrid_guard",
+    "live_selected_exploration_profile": "phase10_discrete_world_model_candidate",
+    "live_scheduler_vs_v1_utility": 0.6481,
+    "live_scheduler_vs_original_v3_utility": 0.6111,
+    "live_scheduler_lift_over_v3": 0.0555,
+    "live_scheduler_reward_lift_over_default": 0.0555,
+    "live_scheduler_blocks_compact_default": true,
+    "live_scheduler_keeps_phase10_as_candidate": true,
+    "live_scheduler_uses_raw_prompts_or_answers": false,
+    "live_scheduler_candidate_gap_to_hybrid": -0.037
   },
   "gates": {
-    "selection_accuracy_high": true,
-    "reward_lift_high": true,
-    "regret_reduction_high": true,
-    "posterior_calibrated": true,
-    "budget_allocation_calibrated": true,
-    "verifier_selection_high": true,
-    "world_model_selection_high": true,
-    "exploration_safe": true,
-    "negative_transfer_reduced": true,
-    "policy_converges": true,
-    "shadow_mode_no_graph_mutation": true
+    "fixture_selection_accuracy_high": true,
+    "fixture_reward_lift_high": true,
+    "fixture_regret_reduction_high": true,
+    "fixture_posterior_calibrated": true,
+    "fixture_budget_allocation_calibrated": true,
+    "fixture_verifier_selection_high": true,
+    "fixture_world_model_selection_high": true,
+    "fixture_exploration_safe": true,
+    "fixture_negative_transfer_reduced": true,
+    "fixture_policy_converges": true,
+    "fixture_regression_no_graph_mutation": true,
+    "live_artifacts_loaded": true,
+    "live_profile_count_high": true,
+    "live_scheduler_selects_retained_hybrid": true,
+    "live_scheduler_improves_v3": true,
+    "live_scheduler_nonregresses_original_v3": true,
+    "live_scheduler_blocks_overstructured_compact_default": true,
+    "live_scheduler_keeps_world_model_candidate": true,
+    "live_scheduler_uses_redacted_artifacts_only": true
   },
   "failed_gates": [],
   "pass": true,
-  "interpretation": "Full-v3 Phase 5 upgrades philosophy scheduling into a learned policy surface: the scheduler maintains posterior success estimates, chooses a strategy/verifier/world-model/budget bundle, updates after reward, and improves regret and negative-transfer behavior over a naive baseline."
+  "interpretation": "Full-v3 Phase 5 now has a live-derived policy surface instead of only a synthetic demonstration: the scheduler ranks retained, rejected, scoped, and world-model candidate profiles from the same heldout artifacts used elsewhere in the V3 evidence table.  It selects Phase9 hybrid as the production profile, blocks compact over-structure as a default, and keeps Phase10 for exploration."
 }

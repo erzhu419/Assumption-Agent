@@ -36,7 +36,6 @@ OUTER_SHELL_PHASES = {
     "phase0_contract_checker",
     "phase1_memory_consolidation",
     "phase3_rollout_search_control",
-    "phase5_contextual_bandit_scheduler",
     "phase7_long_run_benchmark",
 }
 
@@ -75,9 +74,10 @@ def build_full_v3_phase11_capability_audit_payload(
         "all_expected_phase_artifacts_present": metrics["capability_count"] == len(PHASE_ARTIFACTS),
         "all_phase_artifacts_pass": metrics["artifact_pass_rate"] == 1.0,
         "outer_shells_not_claimed_as_production": metrics["outer_shell_production_claim_count"] == 0,
+        "phase5_scheduler_live_realified": metrics["phase5_status"] == "validated_scheduler_not_unconditional_default",
         "phase10_candidate_not_promoted_over_hybrid": metrics["phase10_status"] == "learned_candidate_not_promoted",
         "live_evidence_count_nonzero": metrics["live_or_live_derived_count"] >= 2,
-        "shadow_and_fixture_count_recorded": metrics["shadow_or_fixture_count"] >= 5,
+        "shadow_and_fixture_count_recorded": metrics["shadow_or_fixture_count"] >= 4,
         "blocked_claims_recorded": metrics["blocked_claim_count"] >= 10,
         "promotion_requirements_recorded": metrics["promotion_requirement_count"] == metrics["capability_count"],
     }
@@ -130,6 +130,8 @@ def _capability_row(*, name: str, path: Path, artifact: dict[str, Any]) -> Capab
 
 
 def _validation_mode(*, name: str, artifact: dict[str, Any]) -> str:
+    if artifact.get("implementation_level") == "live_artifact_contextual_scheduler_with_fixture_regression":
+        return "live_or_live_derived_validation"
     if artifact.get("implementation_level") == "live_artifact_learned_candidate":
         return "live_derived_learned_candidate"
     if name == "phase7_long_run_benchmark":
@@ -164,6 +166,8 @@ def _implementation_level(*, name: str, artifact: dict[str, Any], validation_mod
 def _production_default_status(*, name: str, artifact: dict[str, Any], validation_mode: str) -> str:
     if name == "phase9_hybrid_guard":
         return "retained_gated_profile"
+    if name == "phase5_contextual_bandit_scheduler":
+        return "validated_scheduler_not_unconditional_default"
     if name == "phase10_discrete_world_model":
         return "learned_candidate_not_promoted"
     if validation_mode in {"shadow_validation_harness", "fixture_or_frozen_harness", "frozen_mechanism_validation"}:
@@ -195,6 +199,12 @@ def _claim_policy(
             "Outcome-only discrete graph-action world-model candidate improves original V3 on Phase9 heldout.",
             ["replacement for retained hybrid", "strong calibrated task-world simulator"],
             "Beat retained hybrid and beat base-rate calibration on leave-domain-out live traces.",
+        )
+    if name == "phase5_contextual_bandit_scheduler":
+        return (
+            "Live-derived contextual scheduler selects retained hybrid and keeps weaker candidates in exploration.",
+            ["long-running autonomous scheduler", "unconditional default replacement without fresh same-batch run"],
+            "Run same-batch fresh live V1/V3/profile toggles and pass regression gates before wider default use.",
         )
     if validation_mode == "shadow_validation_harness":
         return (
@@ -236,6 +246,9 @@ def _metrics(rows: list[CapabilityRow]) -> dict[str, Any]:
         "shadow_or_fixture_count": shadow_or_fixture_count,
         "blocked_claim_count": sum(len(row.blocked_claims) for row in rows),
         "promotion_requirement_count": sum(1 for row in rows if row.promotion_requirement),
+        "phase5_status": next(
+            row.production_default_status for row in rows if row.capability_id == "phase5_contextual_bandit_scheduler"
+        ),
         "phase10_status": next(
             row.production_default_status for row in rows if row.capability_id == "phase10_discrete_world_model"
         ),

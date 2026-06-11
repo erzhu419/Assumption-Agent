@@ -716,6 +716,15 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["unsafe_exploration_count"], 0)
         self.assertGreaterEqual(metrics["negative_transfer_reduction"], 0.50)
         self.assertGreaterEqual(metrics["last_half_selection_accuracy"], metrics["first_half_selection_accuracy"])
+        self.assertEqual(metrics["live_profile_source_artifact_count"], 6)
+        self.assertGreaterEqual(metrics["live_profile_count"], 7)
+        self.assertEqual(metrics["live_selected_production_profile"], "phase9_hybrid_guard")
+        self.assertEqual(metrics["live_selected_exploration_profile"], "phase10_discrete_world_model_candidate")
+        self.assertGreaterEqual(metrics["live_scheduler_lift_over_v3"], 0.05)
+        self.assertGreaterEqual(metrics["live_scheduler_vs_original_v3_utility"], 0.50)
+        self.assertTrue(metrics["live_scheduler_blocks_compact_default"])
+        self.assertTrue(metrics["live_scheduler_keeps_phase10_as_candidate"])
+        self.assertFalse(metrics["live_scheduler_uses_raw_prompts_or_answers"])
 
     def test_full_v3_phase6_formal_transfer_engine_emits_bounded_certificates(self):
         payload = build_full_v3_phase6_formal_transfer_engine_payload(
@@ -824,6 +833,12 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreater(metrics["fresh_live_selective_vs_placebo_utility"], 0.51)
         self.assertGreater(metrics["fresh_live_selective_vs_placebo_ci_lower"], 0.50)
         self.assertLessEqual(metrics["fresh_live_selective_planned_total_calls"], 200)
+        self.assertEqual(metrics["phase5_live_selected_production_profile"], "phase9_hybrid_guard")
+        self.assertEqual(metrics["phase5_live_selected_exploration_profile"], "phase10_discrete_world_model_candidate")
+        self.assertGreaterEqual(metrics["phase5_live_scheduler_lift_over_v3"], 0.05)
+        self.assertTrue(metrics["phase5_live_blocks_compact_default"])
+        self.assertTrue(metrics["phase5_live_keeps_phase10_candidate"])
+        self.assertFalse(metrics["phase5_live_uses_raw_prompts_or_answers"])
         self.assertGreaterEqual(metrics["phase9_compact_guard_vs_v1_n"], 31)
         self.assertGreaterEqual(metrics["phase9_compact_guard_vs_v1_margin"], 0.10)
         self.assertGreater(metrics["phase9_compact_guard_margin_gain_over_v3"], 0.05)
@@ -890,12 +905,21 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertTrue(payload["pass"], payload["failed_gates"])
         self.assertEqual(metrics["capability_count"], 11)
         self.assertEqual(metrics["artifact_pass_rate"], 1.0)
-        self.assertEqual(metrics["outer_shell_count"], 5)
+        self.assertEqual(metrics["outer_shell_count"], 4)
         self.assertEqual(metrics["outer_shell_production_claim_count"], 0)
+        self.assertEqual(metrics["phase5_status"], "validated_scheduler_not_unconditional_default")
         self.assertEqual(metrics["phase10_status"], "learned_candidate_not_promoted")
         self.assertIn("production_contract_gate_available", by_id["phase0_contract_checker"]["implementation_level"])
         self.assertEqual(by_id["phase9_hybrid_guard"]["production_default_status"], "retained_gated_profile")
         self.assertIn("jsonl_memory_sleep_job_available", by_id["phase1_memory_consolidation"]["implementation_level"])
+        self.assertIn(
+            "live_artifact_contextual_scheduler",
+            by_id["phase5_contextual_bandit_scheduler"]["implementation_level"],
+        )
+        self.assertEqual(
+            by_id["phase5_contextual_bandit_scheduler"]["validation_mode"],
+            "live_or_live_derived_validation",
+        )
         self.assertIn("not_long_running_production", by_id["phase7_long_run_benchmark"]["implementation_level"])
         self.assertGreaterEqual(metrics["blocked_claim_count"], 10)
 
