@@ -1,0 +1,5343 @@
+{
+  "eval_id": "full_v3_phase10_discrete_world_model_selector_20260611",
+  "eval_kind": "full_v3_phase10_discrete_graph_action_world_model_selector",
+  "reconstruction_v2_full_phase": "phase10_learned_discrete_world_model_selector",
+  "implementation_level": "live_artifact_learned_candidate",
+  "performance_validation": true,
+  "validation_scope": "Learn a discrete graph-action world-model candidate from real Phase9 compact/micro/V3 transition outcomes.  It uses a redacted Boolean feature snapshot and leave-one-out candidate policy evaluation.  Teacher distillation is reported only as a bootstrap upper bound, not as independent world-model performance.",
+  "literature_design_basis": {
+    "discrete_world_models_via_regularization": "Boolean latent state, decorrelated bits, and sparse action-change framing motivate the redacted graph-action feature representation.",
+    "dreamer_v2_v3": "The world model is used for policy/search control over compact latent transitions rather than full observation reconstruction.",
+    "causal_world_models_for_language_agents": "State and action variables remain language-facing and auditable instead of hidden prompt rules.",
+    "web_agents_with_world_models": "The model predicts transition outcomes for decision support, matching transition-focused agent world-model practice."
+  },
+  "source_artifacts": {
+    "phase9_hybrid": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_hybrid_guard_heldout_20260611.json",
+      "exists": true,
+      "pass": true,
+      "eval_kind": "full_v3_phase9_hybrid_guard_heldout",
+      "execution_mode": "offline_policy_validation"
+    },
+    "phase9_compact": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_selective_compact_guard_heldout_20260611.json",
+      "exists": true,
+      "pass": false,
+      "eval_kind": "full_v3_phase9_selective_compact_guard_heldout",
+      "execution_mode": "execute"
+    },
+    "phase9_micro": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_micro_guard_heldout_20260611.json",
+      "exists": true,
+      "pass": false,
+      "eval_kind": "full_v3_phase9_micro_guard_heldout",
+      "execution_mode": "summarize"
+    },
+    "phase9_compact_support": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_compact_frame_guard_20260611.json",
+      "exists": true,
+      "pass": true,
+      "eval_kind": "full_v3_phase9_frame_morphism_repair",
+      "execution_mode": "summarize"
+    },
+    "feature_snapshot": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase10_discrete_world_model_feature_snapshot_20260611.json",
+      "exists": true,
+      "pass": null,
+      "eval_kind": null,
+      "execution_mode": null
+    }
+  },
+  "model": {
+    "state_representation": "Redacted Boolean/tag latent vector over route, domain, pattern, and safe trigger bits.",
+    "actions": [
+      "v3_full",
+      "v3_micro_guard",
+      "v3_selective_compact_guard"
+    ],
+    "transition_targets": [
+      "utility_vs_v1",
+      "utility_vs_original_v3",
+      "scalar_reward",
+      "regression_or_overstructure_risk"
+    ],
+    "learner": "leave-one-out bucket estimator over shared latent bits with compact-action support rows",
+    "prior_weight": 2.0,
+    "similarity_power": 2.0,
+    "support_weight": 1.0,
+    "abstain_margin": 0.0,
+    "not_a_full_simulator": true
+  },
+  "heldout_transition_rows": [
+    {
+      "problem_id": "business_0008",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S01",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S01"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0013",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0032",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0038",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0041",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0065",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0092",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0096",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S01",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S01"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0148",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0152",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0153",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0154",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0189",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S01",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S01"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0213",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S01",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S01"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0219",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S01",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S01"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0236",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0241",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0242",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0249",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S01",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S01"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0259",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "business_0271",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S01",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "domain:business",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S01"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0126",
+      "domain": "engineering",
+      "pattern_id": "pat_bottleneck_capacity",
+      "route_strategy_tag": "S19",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:engineering",
+        "engineering_bottleneck",
+        "multi_objective",
+        "pattern:pat_bottleneck_capacity",
+        "route:S19",
+        "route_s19"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_selective_compact_guard",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 0.45,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0175",
+      "domain": "engineering",
+      "pattern_id": "pat_decomposition_composition",
+      "route_strategy_tag": "S25",
+      "state_bits": [
+        "bias",
+        "domain:engineering",
+        "noncandidate_route",
+        "pattern:pat_decomposition_composition",
+        "route:S25"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0178",
+      "domain": "engineering",
+      "pattern_id": "pat_decomposition_composition",
+      "route_strategy_tag": "S25",
+      "state_bits": [
+        "bias",
+        "domain:engineering",
+        "noncandidate_route",
+        "pattern:pat_decomposition_composition",
+        "route:S25"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0179",
+      "domain": "engineering",
+      "pattern_id": "pat_decomposition_composition",
+      "route_strategy_tag": "S25",
+      "state_bits": [
+        "bias",
+        "domain:engineering",
+        "noncandidate_route",
+        "pattern:pat_decomposition_composition",
+        "route:S25"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0185",
+      "domain": "engineering",
+      "pattern_id": "pat_decomposition_composition",
+      "route_strategy_tag": "S25",
+      "state_bits": [
+        "bias",
+        "domain:engineering",
+        "noncandidate_route",
+        "pattern:pat_decomposition_composition",
+        "route:S25"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0201",
+      "domain": "engineering",
+      "pattern_id": "pat_bottleneck_capacity",
+      "route_strategy_tag": "S19",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:engineering",
+        "engineering_bottleneck",
+        "hard_ecological_constraint",
+        "pattern:pat_bottleneck_capacity",
+        "route:S19",
+        "route_s19"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_micro_guard",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0265",
+      "domain": "engineering",
+      "pattern_id": "pat_decomposition_composition",
+      "route_strategy_tag": "S25",
+      "state_bits": [
+        "bias",
+        "domain:engineering",
+        "noncandidate_route",
+        "pattern:pat_decomposition_composition",
+        "route:S25"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0268",
+      "domain": "engineering",
+      "pattern_id": "pat_decomposition_composition",
+      "route_strategy_tag": "S25",
+      "state_bits": [
+        "bias",
+        "domain:engineering",
+        "noncandidate_route",
+        "pattern:pat_decomposition_composition",
+        "route:S25"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0270",
+      "domain": "engineering",
+      "pattern_id": "pat_decomposition_composition",
+      "route_strategy_tag": "S25",
+      "state_bits": [
+        "bias",
+        "domain:engineering",
+        "noncandidate_route",
+        "pattern:pat_decomposition_composition",
+        "route:S25"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0271",
+      "domain": "engineering",
+      "pattern_id": "pat_decomposition_composition",
+      "route_strategy_tag": "S25",
+      "state_bits": [
+        "bias",
+        "domain:engineering",
+        "noncandidate_route",
+        "pattern:pat_decomposition_composition",
+        "route:S25"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0297",
+      "domain": "engineering",
+      "pattern_id": "pat_bottleneck_capacity",
+      "route_strategy_tag": "S19",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "deep_space",
+        "domain:engineering",
+        "engineering_bottleneck",
+        "pattern:pat_bottleneck_capacity",
+        "route:S19",
+        "route_s19"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0300",
+      "domain": "engineering",
+      "pattern_id": "pat_decomposition_composition",
+      "route_strategy_tag": "S25",
+      "state_bits": [
+        "bias",
+        "domain:engineering",
+        "latency_tradeoff",
+        "noncandidate_route",
+        "pattern:pat_decomposition_composition",
+        "route:S25"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0029",
+      "domain": "software_engineering",
+      "pattern_id": "pat_monotone_progress",
+      "route_strategy_tag": "S06",
+      "state_bits": [
+        "bias",
+        "domain:software_engineering",
+        "noncandidate_route",
+        "pattern:pat_monotone_progress",
+        "route:S06"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0072",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "global_scaling",
+        "hft_scaling",
+        "latency_tradeoff",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_selective_compact_guard",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 0.45,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0075",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "global_scaling",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_selective_compact_guard",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0113",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "emergent_sequence",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_micro_guard",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0151",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample",
+        "urgent_triage"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_selective_compact_guard",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0164",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "generic_review",
+        "medical_safety",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_selective_compact_guard",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0165",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "generic_review",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0203",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "common_cause",
+        "domain:software_engineering",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_micro_guard",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0207",
+      "domain": "software_engineering",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "common_cause",
+        "domain:software_engineering",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0208",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "common_cause",
+        "domain:software_engineering",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_micro_guard",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0253",
+      "domain": "software_engineering",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "domain:software_engineering",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0273",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample",
+        "termination"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_selective_compact_guard",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0292",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "hidden_dependency_deletion",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_micro_guard",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0295",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "hidden_dependency_deletion",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_micro_guard",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0302",
+      "domain": "software_engineering",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "domain:software_engineering",
+        "noncandidate_route",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0315",
+      "domain": "software_engineering",
+      "pattern_id": "pat_monotone_progress",
+      "route_strategy_tag": "S06",
+      "state_bits": [
+        "bias",
+        "domain:software_engineering",
+        "noncandidate_route",
+        "pattern:pat_monotone_progress",
+        "route:S06"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0320",
+      "domain": "software_engineering",
+      "pattern_id": "pat_monotone_progress",
+      "route_strategy_tag": "S06",
+      "state_bits": [
+        "bias",
+        "domain:software_engineering",
+        "noncandidate_route",
+        "pattern:pat_monotone_progress",
+        "route:S06"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0327",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "latency_tradeoff",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_selective_compact_guard",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 0.45,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 0.45,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0341",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "formal_proof",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0348",
+      "domain": "software_engineering",
+      "pattern_id": "pat_monotone_progress",
+      "route_strategy_tag": "S06",
+      "state_bits": [
+        "bias",
+        "domain:software_engineering",
+        "formal_proof",
+        "noncandidate_route",
+        "pattern:pat_monotone_progress",
+        "route:S06"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "v3_full",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.775,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0357",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample",
+        "urgent_triage"
+      ],
+      "candidate_case": true,
+      "teacher_arm": "v3_selective_compact_guard",
+      "source": "phase9_heldout",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.5,
+          "scalar_reward": 0.225,
+          "observed": true
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": true
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    }
+  ],
+  "compact_support_transition_rows": [
+    {
+      "problem_id": "business_0026",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "candidate_route",
+        "domain:business",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "business_0027",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "candidate_route",
+        "domain:business",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 0.45,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "business_0051",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "candidate_route",
+        "domain:business",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "business_0057",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S01",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "candidate_route",
+        "domain:business",
+        "pattern:pat_controlled_intervention",
+        "route:S01"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "business_0080",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S01",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "candidate_route",
+        "domain:business",
+        "pattern:pat_controlled_intervention",
+        "route:S01"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "business_0087",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S01",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "candidate_route",
+        "domain:business",
+        "pattern:pat_controlled_intervention",
+        "route:S01"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "business_0103",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S01",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "candidate_route",
+        "domain:business",
+        "formal_proof",
+        "pattern:pat_controlled_intervention",
+        "route:S01"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "business_0151",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "candidate_route",
+        "domain:business",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "business_0155",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "candidate_route",
+        "domain:business",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "business_0175",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S01",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "candidate_route",
+        "domain:business",
+        "pattern:pat_controlled_intervention",
+        "route:S01"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "business_0211",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "candidate_route",
+        "domain:business",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "business_0226",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "candidate_route",
+        "domain:business",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "business_0243",
+      "domain": "business",
+      "pattern_id": "pat_controlled_intervention",
+      "route_strategy_tag": "S17",
+      "state_bits": [
+        "bias",
+        "business_control",
+        "candidate_route",
+        "domain:business",
+        "formal_proof",
+        "pattern:pat_controlled_intervention",
+        "route:S17"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0130",
+      "domain": "engineering",
+      "pattern_id": "pat_bottleneck_capacity",
+      "route_strategy_tag": "S19",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:engineering",
+        "emergent_sequence",
+        "engineering_bottleneck",
+        "pattern:pat_bottleneck_capacity",
+        "route:S19",
+        "route_s19"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0176",
+      "domain": "engineering",
+      "pattern_id": "pat_decomposition_composition",
+      "route_strategy_tag": "S25",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:engineering",
+        "pattern:pat_decomposition_composition",
+        "route:S25"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0192",
+      "domain": "engineering",
+      "pattern_id": "pat_decomposition_composition",
+      "route_strategy_tag": "S25",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:engineering",
+        "pattern:pat_decomposition_composition",
+        "route:S25"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0235",
+      "domain": "engineering",
+      "pattern_id": "pat_bottleneck_capacity",
+      "route_strategy_tag": "S19",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:engineering",
+        "engineering_bottleneck",
+        "pattern:pat_bottleneck_capacity",
+        "route:S19",
+        "route_s19"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0249",
+      "domain": "engineering",
+      "pattern_id": "pat_decomposition_composition",
+      "route_strategy_tag": "S25",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:engineering",
+        "emergent_sequence",
+        "pattern:pat_decomposition_composition",
+        "route:S25"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0267",
+      "domain": "engineering",
+      "pattern_id": "pat_decomposition_composition",
+      "route_strategy_tag": "S25",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:engineering",
+        "pattern:pat_decomposition_composition",
+        "route:S25"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 0.45,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "engineering_0269",
+      "domain": "engineering",
+      "pattern_id": "pat_decomposition_composition",
+      "route_strategy_tag": "S25",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:engineering",
+        "pattern:pat_decomposition_composition",
+        "route:S25"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0066",
+      "domain": "software_engineering",
+      "pattern_id": "pat_monotone_progress",
+      "route_strategy_tag": "S06",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "pattern:pat_monotone_progress",
+        "route:S06"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0155",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0162",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "generic_review",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0169",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "medical_safety",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0215",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "hft_scaling",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0276",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "hft_scaling",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample",
+        "termination"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 1.0,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0293",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "hidden_dependency_deletion",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0297",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 1.0,
+          "scalar_reward": 0.45,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0312",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "hft_scaling",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0316",
+      "domain": "software_engineering",
+      "pattern_id": "pat_monotone_progress",
+      "route_strategy_tag": "S06",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "pattern:pat_monotone_progress",
+        "route:S06"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    },
+    {
+      "problem_id": "software_engineering_0358",
+      "domain": "software_engineering",
+      "pattern_id": "pat_counterexample_refinement",
+      "route_strategy_tag": "S14",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "common_cause",
+        "domain:software_engineering",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "candidate_case": false,
+      "teacher_arm": "support_only",
+      "source": "phase9_compact_frame_support",
+      "action_rewards": {
+        "v3_full": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_micro_guard": {
+          "utility_vs_v1": 0.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.0,
+          "observed": false
+        },
+        "v3_selective_compact_guard": {
+          "utility_vs_v1": 1.0,
+          "utility_vs_original_v3": 0.0,
+          "scalar_reward": 0.55,
+          "observed": true
+        }
+      }
+    }
+  ],
+  "loo_policy_rows": [
+    {
+      "problem_id": "engineering_0126",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:engineering",
+        "engineering_bottleneck",
+        "multi_objective",
+        "pattern:pat_bottleneck_capacity",
+        "route:S19",
+        "route_s19"
+      ],
+      "selected_arm": "v3_selective_compact_guard",
+      "teacher_arm": "v3_selective_compact_guard",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.5453,
+          "arm_prior": 0.5688,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.5876,
+          "arm_prior": 0.6312,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.6047,
+          "arm_prior": 0.5755,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 1.0,
+        "scalar_reward": 1.0,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.775,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": 0.225,
+      "selected_vs_v1_lift_over_v3": 0.0,
+      "selected_vs_v3_utility": 1.0,
+      "matches_teacher": true
+    },
+    {
+      "problem_id": "engineering_0201",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:engineering",
+        "engineering_bottleneck",
+        "hard_ecological_constraint",
+        "pattern:pat_bottleneck_capacity",
+        "route:S19",
+        "route_s19"
+      ],
+      "selected_arm": "v3_selective_compact_guard",
+      "teacher_arm": "v3_micro_guard",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.5453,
+          "arm_prior": 0.5688,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.4725,
+          "arm_prior": 0.5969,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.6541,
+          "arm_prior": 0.5851,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.0,
+        "scalar_reward": 0.55,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.775,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": -0.225,
+      "selected_vs_v1_lift_over_v3": 0.0,
+      "selected_vs_v3_utility": 0.0,
+      "matches_teacher": false
+    },
+    {
+      "problem_id": "engineering_0297",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "deep_space",
+        "domain:engineering",
+        "engineering_bottleneck",
+        "pattern:pat_bottleneck_capacity",
+        "route:S19",
+        "route_s19"
+      ],
+      "selected_arm": "v3_selective_compact_guard",
+      "teacher_arm": "v3_full",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.6604,
+          "arm_prior": 0.6031,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.6817,
+          "arm_prior": 0.6594,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.7145,
+          "arm_prior": 0.5968,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 0.0,
+        "utility_vs_original_v3": 0.0,
+        "scalar_reward": 0.0,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 0.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.225,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": -0.225,
+      "selected_vs_v1_lift_over_v3": 0.0,
+      "selected_vs_v3_utility": 0.0,
+      "matches_teacher": false
+    },
+    {
+      "problem_id": "software_engineering_0072",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "global_scaling",
+        "hft_scaling",
+        "latency_tradeoff",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "selected_arm": "v3_micro_guard",
+      "teacher_arm": "v3_selective_compact_guard",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.5426,
+          "arm_prior": 0.5688,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.66,
+          "arm_prior": 0.6312,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.6277,
+          "arm_prior": 0.5968,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 0.0,
+        "utility_vs_original_v3": 1.0,
+        "scalar_reward": 0.45,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.775,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": -0.325,
+      "selected_vs_v1_lift_over_v3": -1.0,
+      "selected_vs_v3_utility": 1.0,
+      "matches_teacher": false
+    },
+    {
+      "problem_id": "software_engineering_0075",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "global_scaling",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "selected_arm": "v3_micro_guard",
+      "teacher_arm": "v3_selective_compact_guard",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.6038,
+          "arm_prior": 0.6031,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.6171,
+          "arm_prior": 0.5969,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.569,
+          "arm_prior": 0.5755,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 1.0,
+        "scalar_reward": 1.0,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 0.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.225,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": 0.775,
+      "selected_vs_v1_lift_over_v3": 1.0,
+      "selected_vs_v3_utility": 1.0,
+      "matches_teacher": false
+    },
+    {
+      "problem_id": "software_engineering_0113",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "emergent_sequence",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "selected_arm": "v3_micro_guard",
+      "teacher_arm": "v3_micro_guard",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.5578,
+          "arm_prior": 0.5688,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.6212,
+          "arm_prior": 0.5969,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.5975,
+          "arm_prior": 0.5851,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 1.0,
+        "scalar_reward": 1.0,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.775,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": 0.225,
+      "selected_vs_v1_lift_over_v3": 0.0,
+      "selected_vs_v3_utility": 1.0,
+      "matches_teacher": true
+    },
+    {
+      "problem_id": "software_engineering_0151",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample",
+        "urgent_triage"
+      ],
+      "selected_arm": "v3_micro_guard",
+      "teacher_arm": "v3_selective_compact_guard",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.5848,
+          "arm_prior": 0.6031,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.6295,
+          "arm_prior": 0.625,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.5875,
+          "arm_prior": 0.5755,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.0,
+        "scalar_reward": 0.55,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 0.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.225,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": 0.325,
+      "selected_vs_v1_lift_over_v3": 1.0,
+      "selected_vs_v3_utility": 0.0,
+      "matches_teacher": false
+    },
+    {
+      "problem_id": "software_engineering_0164",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "generic_review",
+        "medical_safety",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "selected_arm": "v3_micro_guard",
+      "teacher_arm": "v3_selective_compact_guard",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.5686,
+          "arm_prior": 0.5688,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.6488,
+          "arm_prior": 0.625,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.5882,
+          "arm_prior": 0.5755,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.0,
+        "scalar_reward": 0.55,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.775,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": -0.225,
+      "selected_vs_v1_lift_over_v3": 0.0,
+      "selected_vs_v3_utility": 0.0,
+      "matches_teacher": false
+    },
+    {
+      "problem_id": "software_engineering_0165",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "generic_review",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "selected_arm": "v3_micro_guard",
+      "teacher_arm": "v3_full",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.5644,
+          "arm_prior": 0.5688,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.6522,
+          "arm_prior": 0.625,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.6017,
+          "arm_prior": 0.5851,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.0,
+        "scalar_reward": 0.55,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.775,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": -0.225,
+      "selected_vs_v1_lift_over_v3": 0.0,
+      "selected_vs_v3_utility": 0.0,
+      "matches_teacher": false
+    },
+    {
+      "problem_id": "software_engineering_0203",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "common_cause",
+        "domain:software_engineering",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "selected_arm": "v3_micro_guard",
+      "teacher_arm": "v3_micro_guard",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.6065,
+          "arm_prior": 0.6031,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.6362,
+          "arm_prior": 0.5969,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.6017,
+          "arm_prior": 0.5968,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0208",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 1.0,
+        "scalar_reward": 1.0,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 0.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.225,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": 0.775,
+      "selected_vs_v1_lift_over_v3": 1.0,
+      "selected_vs_v3_utility": 1.0,
+      "matches_teacher": true
+    },
+    {
+      "problem_id": "software_engineering_0208",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "common_cause",
+        "domain:software_engineering",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "selected_arm": "v3_micro_guard",
+      "teacher_arm": "v3_micro_guard",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.5447,
+          "arm_prior": 0.5688,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.6362,
+          "arm_prior": 0.5969,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.6017,
+          "arm_prior": 0.5968,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0273",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 1.0,
+        "scalar_reward": 1.0,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.775,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": 0.225,
+      "selected_vs_v1_lift_over_v3": 0.0,
+      "selected_vs_v3_utility": 1.0,
+      "matches_teacher": true
+    },
+    {
+      "problem_id": "software_engineering_0273",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample",
+        "termination"
+      ],
+      "selected_arm": "v3_micro_guard",
+      "teacher_arm": "v3_selective_compact_guard",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.5578,
+          "arm_prior": 0.5688,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.6972,
+          "arm_prior": 0.6594,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.5851,
+          "arm_prior": 0.5755,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0292"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 0.0,
+        "utility_vs_original_v3": 0.0,
+        "scalar_reward": 0.0,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.775,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": -0.775,
+      "selected_vs_v1_lift_over_v3": -1.0,
+      "selected_vs_v3_utility": 0.0,
+      "matches_teacher": false
+    },
+    {
+      "problem_id": "software_engineering_0292",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "hidden_dependency_deletion",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "selected_arm": "v3_micro_guard",
+      "teacher_arm": "v3_micro_guard",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.5664,
+          "arm_prior": 0.5688,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.6362,
+          "arm_prior": 0.5969,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.5934,
+          "arm_prior": 0.5851,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 1.0,
+        "scalar_reward": 1.0,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.775,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": 0.225,
+      "selected_vs_v1_lift_over_v3": 0.0,
+      "selected_vs_v3_utility": 1.0,
+      "matches_teacher": true
+    },
+    {
+      "problem_id": "software_engineering_0295",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "hidden_dependency_deletion",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "selected_arm": "v3_micro_guard",
+      "teacher_arm": "v3_micro_guard",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.5664,
+          "arm_prior": 0.5688,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.6362,
+          "arm_prior": 0.5969,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.5934,
+          "arm_prior": 0.5851,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 1.0,
+        "scalar_reward": 1.0,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.775,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": 0.225,
+      "selected_vs_v1_lift_over_v3": 0.0,
+      "selected_vs_v3_utility": 1.0,
+      "matches_teacher": true
+    },
+    {
+      "problem_id": "software_engineering_0327",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "latency_tradeoff",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "selected_arm": "v3_micro_guard",
+      "teacher_arm": "v3_selective_compact_guard",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.6038,
+          "arm_prior": 0.6031,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.6579,
+          "arm_prior": 0.6313,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.5909,
+          "arm_prior": 0.5872,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 0.0,
+        "utility_vs_original_v3": 1.0,
+        "scalar_reward": 0.45,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 0.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.225,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": 0.225,
+      "selected_vs_v1_lift_over_v3": 0.0,
+      "selected_vs_v3_utility": 1.0,
+      "matches_teacher": false
+    },
+    {
+      "problem_id": "software_engineering_0341",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "formal_proof",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample"
+      ],
+      "selected_arm": "v3_micro_guard",
+      "teacher_arm": "v3_full",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.5578,
+          "arm_prior": 0.5688,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.6554,
+          "arm_prior": 0.625,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.5964,
+          "arm_prior": 0.5851,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.0,
+        "scalar_reward": 0.55,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 1.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.775,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": -0.225,
+      "selected_vs_v1_lift_over_v3": 0.0,
+      "selected_vs_v3_utility": 0.0,
+      "matches_teacher": false
+    },
+    {
+      "problem_id": "software_engineering_0357",
+      "state_bits": [
+        "bias",
+        "candidate_route",
+        "domain:software_engineering",
+        "pattern:pat_counterexample_refinement",
+        "route:S14",
+        "route_s14",
+        "software_counterexample",
+        "urgent_triage"
+      ],
+      "selected_arm": "v3_micro_guard",
+      "teacher_arm": "v3_selective_compact_guard",
+      "predictions": {
+        "v3_full": {
+          "predicted_scalar_reward": 0.5848,
+          "arm_prior": 0.6031,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_micro_guard": {
+          "predicted_scalar_reward": 0.6914,
+          "arm_prior": 0.6594,
+          "matched_transition_count": 16,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 0
+        },
+        "v3_selective_compact_guard": {
+          "predicted_scalar_reward": 0.5875,
+          "arm_prior": 0.5755,
+          "matched_transition_count": 47,
+          "matched_transition_ids": [
+            "engineering_0126",
+            "engineering_0201",
+            "engineering_0297",
+            "software_engineering_0072",
+            "software_engineering_0075",
+            "software_engineering_0113",
+            "software_engineering_0151",
+            "software_engineering_0164",
+            "software_engineering_0165",
+            "software_engineering_0203",
+            "software_engineering_0208",
+            "software_engineering_0273"
+          ],
+          "support_transition_count": 31
+        }
+      },
+      "observed_selected": {
+        "utility_vs_v1": 0.0,
+        "utility_vs_original_v3": 0.0,
+        "scalar_reward": 0.0,
+        "observed": true
+      },
+      "observed_v3": {
+        "utility_vs_v1": 0.0,
+        "utility_vs_original_v3": 0.5,
+        "scalar_reward": 0.225,
+        "observed": true
+      },
+      "selected_reward_lift_over_v3": -0.225,
+      "selected_vs_v1_lift_over_v3": 0.0,
+      "selected_vs_v3_utility": 0.0,
+      "matches_teacher": false
+    }
+  ],
+  "all_heldout_policy_rows": [
+    {
+      "problem_id": "business_0008",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "business_0013",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "business_0032",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "business_0038",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "business_0041",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "business_0065",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "business_0092",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "business_0096",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "business_0148",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "business_0152",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "business_0153",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "business_0154",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "business_0189",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "business_0213",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "business_0219",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "business_0236",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "business_0241",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "business_0242",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "business_0249",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "business_0259",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "business_0271",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "engineering_0126",
+      "selected_arm": "v3_selective_compact_guard",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 1.0,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "engineering_0175",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "engineering_0178",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "engineering_0179",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "engineering_0185",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "engineering_0201",
+      "selected_arm": "v3_selective_compact_guard",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.0,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "engineering_0265",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "engineering_0268",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "engineering_0270",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "engineering_0271",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "engineering_0297",
+      "selected_arm": "v3_selective_compact_guard",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.0,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "engineering_0300",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "software_engineering_0029",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "software_engineering_0072",
+      "selected_arm": "v3_micro_guard",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 1.0,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "software_engineering_0075",
+      "selected_arm": "v3_micro_guard",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 1.0,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "software_engineering_0113",
+      "selected_arm": "v3_micro_guard",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 1.0,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "software_engineering_0151",
+      "selected_arm": "v3_micro_guard",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.0,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "software_engineering_0164",
+      "selected_arm": "v3_micro_guard",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.0,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "software_engineering_0165",
+      "selected_arm": "v3_micro_guard",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.0,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "software_engineering_0203",
+      "selected_arm": "v3_micro_guard",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 1.0,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "software_engineering_0207",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "software_engineering_0208",
+      "selected_arm": "v3_micro_guard",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 1.0,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "software_engineering_0253",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "software_engineering_0273",
+      "selected_arm": "v3_micro_guard",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.0,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "software_engineering_0292",
+      "selected_arm": "v3_micro_guard",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 1.0,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "software_engineering_0295",
+      "selected_arm": "v3_micro_guard",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 1.0,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "software_engineering_0302",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "software_engineering_0315",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "software_engineering_0320",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "software_engineering_0327",
+      "selected_arm": "v3_micro_guard",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 1.0,
+      "v3_utility_vs_v1": 0.0
+    },
+    {
+      "problem_id": "software_engineering_0341",
+      "selected_arm": "v3_micro_guard",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.0,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "software_engineering_0348",
+      "selected_arm": "v3_full",
+      "utility_vs_v1": 1.0,
+      "utility_vs_original_v3": 0.5,
+      "v3_utility_vs_v1": 1.0
+    },
+    {
+      "problem_id": "software_engineering_0357",
+      "selected_arm": "v3_micro_guard",
+      "utility_vs_v1": 0.0,
+      "utility_vs_original_v3": 0.0,
+      "v3_utility_vs_v1": 0.0
+    }
+  ],
+  "teacher_distillation_bootstrap": {
+    "status": "teacher_distilled_bootstrap_only",
+    "not_counted_as_independent_validation": true,
+    "selected_arm_counts": {
+      "v3_full": 40,
+      "v3_selective_compact_guard": 8,
+      "v3_micro_guard": 6
+    },
+    "all_heldout_vs_v1_utility": 0.6481,
+    "all_heldout_vs_original_v3_utility": 0.6111,
+    "candidate_teacher_vs_v3_utility": 0.8529
+  },
+  "latent_metrics": {
+    "bit_count": 26,
+    "active_bit_rate_mean": 0.3145,
+    "latent_entropy_proxy": 0.2262,
+    "latent_mean_abs_correlation": 0.2687,
+    "bit_rates": {
+      "bias": 1.0,
+      "candidate_route": 1.0,
+      "common_cause": 0.1176,
+      "deep_space": 0.0588,
+      "domain:engineering": 0.1765,
+      "domain:software_engineering": 0.8235,
+      "emergent_sequence": 0.0588,
+      "engineering_bottleneck": 0.1765,
+      "formal_proof": 0.0588,
+      "generic_review": 0.1176,
+      "global_scaling": 0.1176,
+      "hard_ecological_constraint": 0.0588,
+      "hft_scaling": 0.0588,
+      "hidden_dependency_deletion": 0.1176,
+      "latency_tradeoff": 0.1176,
+      "medical_safety": 0.0588,
+      "multi_objective": 0.0588,
+      "pattern:pat_bottleneck_capacity": 0.1765,
+      "pattern:pat_counterexample_refinement": 0.8235,
+      "route:S14": 0.8235,
+      "route:S19": 0.1765,
+      "route_s14": 0.8235,
+      "route_s19": 0.1765,
+      "software_counterexample": 0.8235,
+      "termination": 0.0588,
+      "urgent_triage": 0.1176
+    }
+  },
+  "calibration": {
+    "all_arm_mae": 0.3129,
+    "all_arm_base_rate_mae": 0.3032,
+    "selected_arm_mae": 0.3308,
+    "selected_arm_base_rate_mae": 0.321,
+    "calibration_count": 51,
+    "calibration_beats_base_rate": false
+  },
+  "metrics": {
+    "heldout_transition_row_count": 54,
+    "compact_support_row_count": 31,
+    "candidate_transition_count": 17,
+    "candidate_action_coverage": 1.0,
+    "learned_selected_arm_counts": {
+      "v3_selective_compact_guard": 3,
+      "v3_micro_guard": 14
+    },
+    "loo_selected_reward": 0.6265,
+    "loo_v3_reward": 0.5809,
+    "loo_selected_reward_lift_over_v3": 0.0456,
+    "loo_selected_vs_v1_utility": 0.7059,
+    "loo_v3_vs_v1_selected_utility": 0.6471,
+    "loo_selected_vs_v1_lift_over_v3": 0.0588,
+    "loo_selected_vs_v3_utility": 0.5294,
+    "loo_teacher_match_rate": 0.3529,
+    "all_heldout_policy_vs_v1_utility": 0.6111,
+    "all_heldout_v3_vs_v1_utility": 0.5926,
+    "all_heldout_policy_lift_over_v3": 0.0185,
+    "all_heldout_policy_vs_original_v3_utility": 0.5093,
+    "retained_hybrid_vs_v1_utility": 0.6481,
+    "retained_hybrid_vs_original_v3_utility": 0.6111,
+    "teacher_bootstrap_vs_v1_utility": 0.6481,
+    "teacher_bootstrap_vs_original_v3_utility": 0.6111,
+    "learned_gap_to_retained_hybrid": -0.037,
+    "recommended_promotion": "keep_as_world_model_candidate",
+    "latent_entropy_proxy": 0.2262,
+    "latent_mean_abs_correlation": 0.2687,
+    "latent_bit_count": 26,
+    "all_arm_mae": 0.3129,
+    "all_arm_base_rate_mae": 0.3032,
+    "selected_arm_mae": 0.3308,
+    "selected_arm_base_rate_mae": 0.321,
+    "calibration_beats_base_rate": false,
+    "feature_snapshot_redacted": true,
+    "uses_raw_prompts_or_answers": false
+  },
+  "gates": {
+    "source_artifacts_loaded": true,
+    "source_artifacts_are_live_or_live_derived": true,
+    "feature_snapshot_redacted": true,
+    "heldout_transition_rows_present": true,
+    "support_transition_rows_present": true,
+    "candidate_transition_rows_present": true,
+    "all_actions_observed_on_candidates": true,
+    "boolean_latent_not_collapsed": true,
+    "latent_bits_not_duplicate_only": true,
+    "loo_selected_reward_beats_v3": true,
+    "loo_selected_vs_v1_improves_v3": true,
+    "loo_selected_noninferior_to_v3": true,
+    "all_heldout_policy_improves_v3": true,
+    "kept_below_retained_hybrid_when_weaker": true,
+    "redacted_artifacts_only": true
+  },
+  "failed_gates": [],
+  "pass": true,
+  "limitations": [
+    "The outcome-only model improves original V3 on this heldout slice but remains weaker than the retained hybrid guard.",
+    "Scalar reward calibration is still not better than a per-arm base-rate predictor, so it must not replace live ablation.",
+    "The compact support rows observe compact-action outcomes only and are used as support evidence, not as full V3/V1 labels."
+  ],
+  "interpretation": "The outcome-only discrete world-model candidate improves original V3 on the Phase9 heldout slice (all-policy lift +0.0185; candidate lift +0.0588) while staying below the retained hybrid guard (gap -0.0370).  This is enough to keep it as a learned world-model/search-control candidate, but not enough to promote it over the current hybrid profile."
+}

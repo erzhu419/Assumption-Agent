@@ -58,6 +58,9 @@ from assumption_os.full_v3_phase8_creativity_world_coverage import (
 )
 from assumption_os.full_v3_phase9_hybrid_guard_heldout import build_full_v3_phase9_hybrid_guard_heldout_payload
 from assumption_os.full_v3_phase9_v1_live_regression import build_full_v3_phase9_v1_live_regression_payload
+from assumption_os.full_v3_phase10_discrete_world_model_selector import (
+    build_full_v3_phase10_discrete_world_model_selector_payload,
+)
 from assumption_os.full_v3_paper_scale_evidence import build_full_v3_paper_scale_evidence_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
@@ -736,6 +739,10 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["phase9_hybrid_guard_vs_v1_margin"], 0.10)
         self.assertGreater(metrics["phase9_hybrid_guard_lift_over_v3"], 0.03)
         self.assertGreaterEqual(metrics["phase9_hybrid_guard_vs_v3_utility"], 0.50)
+        self.assertGreaterEqual(metrics["phase10_world_model_candidate_count"], 17)
+        self.assertGreater(metrics["phase10_world_model_candidate_v1_lift_over_v3"], 0.04)
+        self.assertGreaterEqual(metrics["phase10_world_model_all_lift_over_v3"], 0.015)
+        self.assertEqual(metrics["phase10_world_model_recommended_promotion"], "keep_as_world_model_candidate")
         self.assertFalse(metrics["prompt_answer_payload_stored"])
         self.assertFalse(metrics["secret_leak_detected"])
         self.assertGreaterEqual(metrics["boundary_case_count"], 1)
@@ -755,6 +762,27 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["hybrid_vs_v1_heldout_margin"], 0.10)
         self.assertGreater(metrics["hybrid_lift_over_v3_vs_v1_heldout"], 0.03)
         self.assertGreaterEqual(metrics["hybrid_vs_original_v3_heldout_utility"], 0.50)
+
+    def test_full_v3_phase10_discrete_world_model_selector_beats_original_v3(self):
+        payload = build_full_v3_phase10_discrete_world_model_selector_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_phase10_discrete_world_model_selector",
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(metrics["heldout_transition_row_count"], 54)
+        self.assertEqual(metrics["compact_support_row_count"], 31)
+        self.assertEqual(metrics["candidate_transition_count"], 17)
+        self.assertEqual(metrics["candidate_action_coverage"], 1.0)
+        self.assertGreater(metrics["loo_selected_reward_lift_over_v3"], 0.02)
+        self.assertGreater(metrics["loo_selected_vs_v1_lift_over_v3"], 0.04)
+        self.assertGreaterEqual(metrics["loo_selected_vs_v3_utility"], 0.52)
+        self.assertGreaterEqual(metrics["all_heldout_policy_lift_over_v3"], 0.015)
+        self.assertLess(metrics["all_heldout_policy_vs_v1_utility"], metrics["retained_hybrid_vs_v1_utility"])
+        self.assertEqual(metrics["recommended_promotion"], "keep_as_world_model_candidate")
+        self.assertFalse(metrics["uses_raw_prompts_or_answers"])
+        self.assertTrue(payload["teacher_distillation_bootstrap"]["not_counted_as_independent_validation"])
 
     def test_full_v3_fresh_live_benchmark_plans_parallel_problem_level_run(self):
         with tempfile.TemporaryDirectory() as td:

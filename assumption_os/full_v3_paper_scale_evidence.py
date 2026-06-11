@@ -41,6 +41,7 @@ REQUIRED_ARTIFACTS = {
     "fresh_live_selective_expansion": PAPER_DIR / "full_v3_fresh_live_cue_repair_v4_full_remaining_gptmini_gpt55_20260611.json",
     "v3_phase9_compact_frame_guard": PAPER_DIR / "full_v3_phase9_compact_frame_guard_20260611.json",
     "v3_phase9_hybrid_guard": PAPER_DIR / "full_v3_phase9_hybrid_guard_heldout_20260611.json",
+    "v3_phase10_discrete_world_model": PAPER_DIR / "full_v3_phase10_discrete_world_model_selector_20260611.json",
 }
 
 KEY_TOGGLE_BASELINES = {
@@ -150,6 +151,24 @@ def build_full_v3_paper_scale_evidence_payload(
                 "hybrid_lift_over_v3_vs_v1_heldout",
             ],
         ),
+        "phase10_discrete_world_model": _metric_subset(
+            artifacts["v3_phase10_discrete_world_model"].get("metrics", {}),
+            [
+                "candidate_transition_count",
+                "compact_support_row_count",
+                "learned_selected_arm_counts",
+                "loo_selected_vs_v1_utility",
+                "loo_selected_vs_v1_lift_over_v3",
+                "loo_selected_vs_v3_utility",
+                "all_heldout_policy_vs_v1_utility",
+                "all_heldout_policy_lift_over_v3",
+                "all_heldout_policy_vs_original_v3_utility",
+                "retained_hybrid_vs_v1_utility",
+                "learned_gap_to_retained_hybrid",
+                "recommended_promotion",
+                "calibration_beats_base_rate",
+            ],
+        ),
     }
     metrics = _metrics(artifacts=artifacts, evidence=evidence)
     gates = {
@@ -199,6 +218,13 @@ def build_full_v3_paper_scale_evidence_payload(
         "phase9_hybrid_guard_v1_regression_passes": metrics["phase9_hybrid_guard_vs_v1_margin"] >= 0.10,
         "phase9_hybrid_guard_improves_original_v3_vs_v1": metrics["phase9_hybrid_guard_lift_over_v3"] > 0.03,
         "phase9_hybrid_guard_noninferior_to_original_v3": metrics["phase9_hybrid_guard_vs_v3_utility"] >= 0.50,
+        "phase10_discrete_world_model_candidate_positive": metrics["phase10_world_model_all_lift_over_v3"] >= 0.015,
+        "phase10_discrete_world_model_candidate_v1_positive": (
+            metrics["phase10_world_model_candidate_v1_lift_over_v3"] > 0.04
+        ),
+        "phase10_discrete_world_model_keeps_hybrid_when_weaker": (
+            metrics["phase10_world_model_recommended_promotion"] == "keep_as_world_model_candidate"
+        ),
         "prompt_answer_and_secret_free": metrics["prompt_answer_payload_stored"] is False and metrics["secret_leak_detected"] is False,
         "boundary_cases_recorded": metrics["boundary_case_count"] >= 1,
     }
@@ -347,6 +373,7 @@ def _v3_mechanism_summary(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any
         "v3_phase5_bandit",
         "v3_phase6_formal",
         "v3_phase7_long_run",
+        "v3_phase10_discrete_world_model",
     ]
     return {
         key: {
@@ -531,6 +558,36 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         ),
         "phase9_hybrid_guard_vs_v3_utility": float(
             artifacts["v3_phase9_hybrid_guard"]["metrics"]["hybrid_vs_original_v3_heldout_utility"]
+        ),
+        "phase10_world_model_candidate_count": int(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["candidate_transition_count"]
+        ),
+        "phase10_world_model_support_count": int(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["compact_support_row_count"]
+        ),
+        "phase10_world_model_candidate_v1_utility": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["loo_selected_vs_v1_utility"]
+        ),
+        "phase10_world_model_candidate_v1_lift_over_v3": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["loo_selected_vs_v1_lift_over_v3"]
+        ),
+        "phase10_world_model_candidate_vs_v3_utility": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["loo_selected_vs_v3_utility"]
+        ),
+        "phase10_world_model_all_vs_v1_utility": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["all_heldout_policy_vs_v1_utility"]
+        ),
+        "phase10_world_model_all_lift_over_v3": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["all_heldout_policy_lift_over_v3"]
+        ),
+        "phase10_world_model_gap_to_hybrid": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["learned_gap_to_retained_hybrid"]
+        ),
+        "phase10_world_model_recommended_promotion": artifacts["v3_phase10_discrete_world_model"]["metrics"][
+            "recommended_promotion"
+        ],
+        "phase10_world_model_calibration_beats_base_rate": bool(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["calibration_beats_base_rate"]
         ),
         "prompt_answer_payload_stored": bool(artifacts["first_party_world_model_scale"].get("prompt_answer_payload_stored")),
         "secret_leak_detected": bool(artifacts["first_party_world_model_scale"].get("secret_leak_detected")),
