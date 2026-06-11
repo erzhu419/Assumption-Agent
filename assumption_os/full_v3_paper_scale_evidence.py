@@ -54,6 +54,7 @@ REQUIRED_ARTIFACTS = {
     "v3_main_graph_memory_controlled_apply": PAPER_DIR / "full_v3_main_graph_memory_controlled_apply_20260611.json",
     "v3_residual_fresh_live_loop": PAPER_DIR / "full_v3_residual_fresh_live_loop_20260611.json",
     "v3_live_multigeneration_expansion": PAPER_DIR / "full_v3_live_multigeneration_expansion_20260612.json",
+    "v3_blinded_recursive_live_line": PAPER_DIR / "full_v3_blinded_recursive_live_line_20260612.json",
     "v3_continuous_daemon_scheduler": PAPER_DIR / "full_v3_continuous_daemon_scheduler_20260611.json",
     "v3_supervised_daemon_background_smoke": PAPER_DIR / "full_v3_supervised_daemon_background_smoke_20260612.json",
     "v3_world_model_calibration": PAPER_DIR / "full_v3_world_model_calibration_20260611.json",
@@ -182,6 +183,39 @@ def build_full_v3_paper_scale_evidence_payload(
                 "applied_count",
                 "applied_node_delta",
                 "main_graph_mutation_count",
+                "secret_value_exposed",
+            ],
+        ),
+        "blinded_recursive_live_line": _metric_subset(
+            artifacts["v3_blinded_recursive_live_line"].get("metrics", {}),
+            [
+                "execution_mode",
+                "source_generation_count",
+                "seed_count",
+                "executed_generation_count",
+                "selected_candidate_count",
+                "selection_tier_counts",
+                "fresh_api_call_count",
+                "planned_fresh_api_call_count",
+                "live_error_count",
+                "real_problem_assignment_rate",
+                "side_assignment_rate",
+                "trigger_problem_count",
+                "trigger_problem_level_mean_utility",
+                "trigger_problem_level_ci95",
+                "accepted_trigger_problem_count",
+                "accepted_trigger_problem_level_mean_utility",
+                "accepted_trigger_problem_level_ci95",
+                "control_problem_count",
+                "control_problem_level_mean_loss_rate",
+                "control_problem_level_ci95",
+                "accepted_control_problem_count",
+                "accepted_control_problem_level_mean_loss_rate",
+                "accepted_count",
+                "rejected_count",
+                "applied_count",
+                "main_graph_mutation_count",
+                "prompt_answer_or_secret_payload_detected",
                 "secret_value_exposed",
             ],
         ),
@@ -1547,6 +1581,56 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "live_multigen_secret_value_exposed": bool(
             artifacts["v3_live_multigeneration_expansion"]["metrics"]["secret_value_exposed"]
         ),
+        "blinded_recursive_execution_mode": artifacts["v3_blinded_recursive_live_line"]["metrics"]["execution_mode"],
+        "blinded_recursive_seed_count": int(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["seed_count"]
+        ),
+        "blinded_recursive_generation_count": int(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["executed_generation_count"]
+        ),
+        "blinded_recursive_selected_candidate_count": int(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["selected_candidate_count"]
+        ),
+        "blinded_recursive_api_call_count": int(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["fresh_api_call_count"]
+        ),
+        "blinded_recursive_planned_api_call_count": int(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["planned_fresh_api_call_count"]
+        ),
+        "blinded_recursive_live_error_count": int(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["live_error_count"]
+        ),
+        "blinded_recursive_trigger_problem_count": int(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["trigger_problem_count"]
+        ),
+        "blinded_recursive_trigger_utility": float(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["trigger_problem_level_mean_utility"]
+        ),
+        "blinded_recursive_accepted_trigger_problem_count": int(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["accepted_trigger_problem_count"]
+        ),
+        "blinded_recursive_accepted_trigger_utility": float(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["accepted_trigger_problem_level_mean_utility"]
+        ),
+        "blinded_recursive_control_problem_count": int(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["control_problem_count"]
+        ),
+        "blinded_recursive_control_loss_rate": float(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["control_problem_level_mean_loss_rate"]
+        ),
+        "blinded_recursive_accepted_count": int(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["accepted_count"]
+        ),
+        "blinded_recursive_rejected_count": int(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["rejected_count"]
+        ),
+        "blinded_recursive_main_graph_mutation_count": int(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["main_graph_mutation_count"]
+        ),
+        "blinded_recursive_prompt_answer_or_secret_payload_detected": bool(
+            artifacts["v3_blinded_recursive_live_line"]["metrics"]["prompt_answer_or_secret_payload_detected"]
+            or artifacts["v3_blinded_recursive_live_line"]["metrics"]["secret_value_exposed"]
+        ),
         "phase5_live_profile_source_artifact_count": int(
             artifacts["v3_phase5_bandit"]["metrics"]["live_profile_source_artifact_count"]
         ),
@@ -2086,6 +2170,41 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         ),
         "phase12_live_multigen_api_call_count": int(
             artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["live_multigen_api_call_count"]
+        ),
+        "phase12_blinded_recursive_generation_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["blinded_recursive_generation_count"]
+        ),
+        "phase12_blinded_recursive_seed_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["blinded_recursive_seed_count"]
+        ),
+        "phase12_blinded_recursive_selected_candidate_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["blinded_recursive_selected_candidate_count"]
+        ),
+        "phase12_blinded_recursive_accepted_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["blinded_recursive_accepted_count"]
+        ),
+        "phase12_blinded_recursive_rejected_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["blinded_recursive_rejected_count"]
+        ),
+        "phase12_blinded_recursive_api_call_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["blinded_recursive_api_call_count"]
+        ),
+        "phase12_blinded_recursive_trigger_problem_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["blinded_recursive_trigger_problem_count"]
+        ),
+        "phase12_blinded_recursive_trigger_utility": float(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["blinded_recursive_trigger_utility"]
+        ),
+        "phase12_blinded_recursive_accepted_trigger_problem_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"][
+                "blinded_recursive_accepted_trigger_problem_count"
+            ]
+        ),
+        "phase12_blinded_recursive_accepted_trigger_utility": float(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["blinded_recursive_accepted_trigger_utility"]
+        ),
+        "phase12_blinded_recursive_control_loss_rate": float(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["blinded_recursive_control_loss_rate"]
         ),
         "phase12_continuous_daemon_scheduled_cycle_count": int(
             artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["continuous_daemon_scheduled_cycle_count"]

@@ -97,6 +97,9 @@ from assumption_os.full_v3_residual_fresh_live_loop import build_full_v3_residua
 from assumption_os.full_v3_live_multigeneration_expansion import (
     build_full_v3_live_multigeneration_expansion_payload,
 )
+from assumption_os.full_v3_blinded_recursive_live_line import (
+    build_full_v3_blinded_recursive_live_line_payload,
+)
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -909,6 +912,39 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["main_graph_mutation_count"], 0)
         self.assertFalse(metrics["secret_value_exposed"])
 
+    def test_full_v3_blinded_recursive_live_line_preflights_large_fresh_line(self):
+        payload = build_full_v3_blinded_recursive_live_line_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_blinded_recursive_live_line",
+            execution_mode="dry_run",
+            generations=5,
+            seed_values=[101, 202],
+            candidates_per_generation=2,
+            trigger_rows_per_candidate=2,
+            control_rows_per_candidate=1,
+            min_planned_calls_for_gate=50,
+            bootstrap_samples=100,
+            load_keyfile=False,
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(metrics["execution_mode"], "dry_run")
+        self.assertEqual(metrics["seed_count"], 2)
+        self.assertEqual(metrics["executed_generation_count"], 5)
+        self.assertEqual(metrics["selected_candidate_count"], 20)
+        self.assertEqual(metrics["planned_fresh_api_call_count"], 60)
+        self.assertEqual(metrics["fresh_api_call_count"], 0)
+        self.assertEqual(metrics["real_problem_assignment_rate"], 1.0)
+        self.assertEqual(metrics["side_assignment_rate"], 1.0)
+        self.assertGreater(metrics["trigger_problem_level_mean_utility"], 0.5)
+        self.assertLessEqual(metrics["control_problem_level_mean_loss_rate"], 0.35)
+        self.assertGreaterEqual(metrics["accepted_count"], 1)
+        self.assertGreaterEqual(metrics["rejected_count"], 1)
+        self.assertEqual(metrics["applied_count"], metrics["accepted_count"])
+        self.assertEqual(metrics["main_graph_mutation_count"], 0)
+        self.assertFalse(metrics["prompt_answer_or_secret_payload_detected"])
+
     def test_full_v3_live_residual_clusterer_unifies_live_residuals(self):
         payload = build_full_v3_live_residual_clusterer_payload(
             root=Path("."),
@@ -1195,6 +1231,18 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["live_multigen_applied_node_delta"], metrics["live_multigen_accepted_count"])
         self.assertEqual(metrics["live_multigen_main_graph_mutation_count"], 0)
         self.assertFalse(metrics["live_multigen_secret_value_exposed"])
+        self.assertEqual(metrics["blinded_recursive_execution_mode"], "execute_live")
+        self.assertEqual(metrics["blinded_recursive_generation_count"], 5)
+        self.assertEqual(metrics["blinded_recursive_seed_count"], 2)
+        self.assertGreaterEqual(metrics["blinded_recursive_api_call_count"], 180)
+        self.assertEqual(metrics["blinded_recursive_live_error_count"], 0)
+        self.assertGreaterEqual(metrics["blinded_recursive_trigger_problem_count"], 100)
+        self.assertGreater(metrics["blinded_recursive_accepted_trigger_utility"], 0.60)
+        self.assertLessEqual(metrics["blinded_recursive_control_loss_rate"], 0.35)
+        self.assertGreaterEqual(metrics["blinded_recursive_accepted_count"], 1)
+        self.assertGreaterEqual(metrics["blinded_recursive_rejected_count"], 1)
+        self.assertEqual(metrics["blinded_recursive_main_graph_mutation_count"], 0)
+        self.assertFalse(metrics["blinded_recursive_prompt_answer_or_secret_payload_detected"])
         self.assertEqual(metrics["phase5_live_selected_production_profile"], "phase10_calibrated_residual_guard")
         self.assertEqual(metrics["phase5_live_selected_exploration_profile"], "phase10_discrete_world_model_candidate")
         self.assertGreaterEqual(metrics["phase5_live_scheduler_lift_over_v3"], 0.07)
@@ -1324,6 +1372,11 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["phase12_residual_multigen_family_count"], 8)
         self.assertGreaterEqual(metrics["phase12_live_multigen_accepted_count"], 1)
         self.assertGreaterEqual(metrics["phase12_live_multigen_rejected_count"], 1)
+        self.assertEqual(metrics["phase12_blinded_recursive_generation_count"], 5)
+        self.assertEqual(metrics["phase12_blinded_recursive_seed_count"], 2)
+        self.assertGreaterEqual(metrics["phase12_blinded_recursive_api_call_count"], 180)
+        self.assertGreater(metrics["phase12_blinded_recursive_accepted_trigger_utility"], 0.60)
+        self.assertLessEqual(metrics["phase12_blinded_recursive_control_loss_rate"], 0.35)
         self.assertEqual(metrics["phase12_daemon_ungated_graph_mutation_count"], 0)
         self.assertTrue(metrics["phase12_frozen_end_to_end_pass"])
         self.assertGreaterEqual(metrics["phase12_same_batch_toggle_pair_count"], 4)
@@ -1503,6 +1556,15 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["residual_multigen_family_count"], 8)
         self.assertGreaterEqual(metrics["live_multigen_accepted_count"], 1)
         self.assertGreaterEqual(metrics["live_multigen_rejected_count"], 1)
+        self.assertEqual(metrics["blinded_recursive_generation_count"], 5)
+        self.assertEqual(metrics["blinded_recursive_seed_count"], 2)
+        self.assertGreaterEqual(metrics["blinded_recursive_api_call_count"], 180)
+        self.assertEqual(metrics["blinded_recursive_live_error_count"], 0)
+        self.assertGreaterEqual(metrics["blinded_recursive_trigger_problem_count"], 100)
+        self.assertGreater(metrics["blinded_recursive_accepted_trigger_utility"], 0.60)
+        self.assertLessEqual(metrics["blinded_recursive_control_loss_rate"], 0.35)
+        self.assertGreaterEqual(metrics["blinded_recursive_accepted_count"], 1)
+        self.assertGreaterEqual(metrics["blinded_recursive_rejected_count"], 1)
         self.assertGreaterEqual(metrics["continuous_daemon_scheduled_cycle_count"], 10)
         self.assertTrue(metrics["supervised_daemon_background_started"])
         self.assertEqual(metrics["daemon_ungated_graph_mutation_count"], 0)
@@ -1518,7 +1580,7 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(decisions["calibrated_budget_gate"], "allow_budget_search_gate")
         self.assertEqual(
             decisions["benchmark"],
-            "allow_frozen_artifact_chain_require_new_blinded_run_for_paper_main_claim",
+            "allow_blinded_recursive_line_require_downstream_paper_benchmark",
         )
 
     def test_full_v3_phase11_capability_audit_separates_fixture_from_production(self):

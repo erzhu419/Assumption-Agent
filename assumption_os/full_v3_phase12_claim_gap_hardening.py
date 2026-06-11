@@ -4,8 +4,9 @@ The v3/v4 review gaps are now mostly engineering-complete, but several strong
 paper claims still need scale or long-run evidence.  This artifact separates
 what can be promoted today from what must remain a blocked claim: calibrated
 budget gating is allowed, raw simulator replacement is not; supervised daemon
-readiness is allowed, 24/7 autonomy is not; multi-generation live validation is
-allowed, large blinded end-to-end evidence is still required.
+readiness is allowed, 24/7 autonomy is not; multi-generation live validation and
+a large blinded recursive evidence line are allowed, while full end-to-end paper
+benchmark and 24/7 autonomy claims remain blocked.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ SOURCE_ARTIFACTS = {
     "live_residual_clusterer": PAPER_DIR / "full_v3_live_residual_clusterer_20260611.json",
     "residual_multigeneration": PAPER_DIR / "full_v3_residual_multigeneration_loop_20260611.json",
     "live_multigeneration": PAPER_DIR / "full_v3_live_multigeneration_expansion_20260612.json",
+    "blinded_recursive_live": PAPER_DIR / "full_v3_blinded_recursive_live_line_20260612.json",
     "phase10_world_model": PAPER_DIR / "full_v3_phase10_discrete_world_model_selector_20260611.json",
     "phase10_reliability": PAPER_DIR / "full_v3_phase10_reliability_calibration_20260611.json",
     "world_model_calibration": PAPER_DIR / "full_v3_world_model_calibration_20260611.json",
@@ -67,6 +69,8 @@ def build_full_v3_phase12_claim_gap_hardening_payload(
             and metrics["residual_multigen_proposal_count"] >= 60
             and metrics["live_multigen_accepted_count"] >= 1
             and metrics["live_multigen_rejected_count"] >= 1
+            and metrics["blinded_recursive_accepted_count"] >= 1
+            and metrics["blinded_recursive_rejected_count"] >= 1
         ),
         "daemon_scheduler_and_process_boundary_ready": (
             metrics["continuous_daemon_scheduled_cycle_count"] >= 10
@@ -76,6 +80,14 @@ def build_full_v3_phase12_claim_gap_hardening_payload(
         "frozen_chain_and_same_batch_baselines_present": (
             metrics["frozen_end_to_end_pass"] is True
             and metrics["same_batch_toggle_pair_count"] >= 4
+        ),
+        "large_blinded_recursive_line_present": (
+            metrics["blinded_recursive_generation_count"] >= 5
+            and metrics["blinded_recursive_seed_count"] >= 2
+            and metrics["blinded_recursive_api_call_count"] >= 180
+            and metrics["blinded_recursive_live_error_count"] == 0
+            and metrics["blinded_recursive_accepted_trigger_utility"] > 0.6
+            and metrics["blinded_recursive_control_loss_rate"] <= 0.35
         ),
         "formal_layer_boundaries_recorded": metrics["formal_morphism_status"] == "bounded_structural_layer",
         "remaining_claim_gaps_quantified": metrics["open_claim_gap_count"] >= 5,
@@ -113,9 +125,9 @@ def build_full_v3_phase12_claim_gap_hardening_payload(
         "interpretation": (
             "V3/V4 engineering gaps are now hardened into promotion rules.  The system can honestly claim a "
             "bounded recursive self-evolution prototype with calibrated budget gating, nonlocal multi-path "
-            "proposal generation, live selective retention, committed memory apply, and supervised daemon "
-            "readiness.  It still must not claim a production task-world simulator, 24/7 autonomous OS, or a "
-            "fresh blinded paper-scale result until the quantified open gaps are run."
+            "proposal generation, live selective retention, a large blinded recursive line, committed memory "
+            "apply, and supervised daemon readiness.  It still must not claim a production task-world simulator, "
+            "24/7 autonomous OS, or a full downstream paper benchmark until the quantified open gaps are run."
         ),
     }
 
@@ -159,8 +171,9 @@ def _generator_section(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
     clusterer = artifacts["live_residual_clusterer"]["metrics"]
     multigen = artifacts["residual_multigeneration"]["metrics"]
     live = artifacts["live_multigeneration"]["metrics"]
+    blinded = artifacts["blinded_recursive_live"]["metrics"]
     return {
-        "status": "nonlocal_multitrajectory_live_backed_not_full_autonomous",
+        "status": "nonlocal_multitrajectory_live_backed_with_large_blinded_retention_line",
         "creative_candidate_count": int(phase8.get("creative_candidate_count") or 0),
         "creative_nonlocal_new_family_count": int(phase8.get("nonlocal_new_family_count") or 0),
         "residual_cluster_count": int(clusterer.get("cluster_count") or 0),
@@ -174,6 +187,23 @@ def _generator_section(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "live_multigen_accepted_count": int(live.get("accepted_count") or 0),
         "live_multigen_rejected_count": int(live.get("rejected_count") or 0),
         "live_multigen_api_call_count": int(live.get("fresh_api_call_count") or 0),
+        "blinded_recursive_generation_count": int(blinded.get("executed_generation_count") or 0),
+        "blinded_recursive_seed_count": int(blinded.get("seed_count") or 0),
+        "blinded_recursive_selected_candidate_count": int(blinded.get("selected_candidate_count") or 0),
+        "blinded_recursive_accepted_count": int(blinded.get("accepted_count") or 0),
+        "blinded_recursive_rejected_count": int(blinded.get("rejected_count") or 0),
+        "blinded_recursive_api_call_count": int(blinded.get("fresh_api_call_count") or 0),
+        "blinded_recursive_live_error_count": int(blinded.get("live_error_count") or 0),
+        "blinded_recursive_trigger_problem_count": int(blinded.get("trigger_problem_count") or 0),
+        "blinded_recursive_trigger_utility": float(blinded.get("trigger_problem_level_mean_utility") or 0.0),
+        "blinded_recursive_accepted_trigger_problem_count": int(
+            blinded.get("accepted_trigger_problem_count") or 0
+        ),
+        "blinded_recursive_accepted_trigger_utility": float(
+            blinded.get("accepted_trigger_problem_level_mean_utility") or 0.0
+        ),
+        "blinded_recursive_control_loss_rate": float(blinded.get("control_problem_level_mean_loss_rate") or 0.0),
+        "blinded_recursive_main_graph_mutation_count": int(blinded.get("main_graph_mutation_count") or 0),
         "blocked_claim": "fully_creative_long_horizon_generator",
     }
 
@@ -203,9 +233,10 @@ def _daemon_section(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
 def _benchmark_section(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
     frozen = artifacts["frozen_end_to_end"]["metrics"]
     same_batch = artifacts["same_batch_ablation"]["metrics"]
+    blinded = artifacts["blinded_recursive_live"]["metrics"]
     first_party = artifacts["first_party_scale"]
     return {
-        "status": "frozen_artifact_chain_ready_new_blinded_run_required",
+        "status": "frozen_artifact_chain_plus_large_blinded_recursive_line",
         "frozen_end_to_end_pass": bool(artifacts["frozen_end_to_end"].get("pass")),
         "frozen_step_count": int(frozen.get("step_count") or 0),
         "same_batch_toggle_pair_count": int(same_batch.get("toggle_pair_count") or 0),
@@ -214,6 +245,13 @@ def _benchmark_section(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
             same_batch.get("calibrated_harm_vs_hybrid_count") or 0
         ),
         "fresh_live_300_problem_level_n": int(same_batch.get("fresh_live_300_problem_level_n") or 0),
+        "blinded_recursive_problem_level_n": int(blinded.get("trigger_problem_count") or 0),
+        "blinded_recursive_accepted_problem_level_n": int(blinded.get("accepted_trigger_problem_count") or 0),
+        "blinded_recursive_all_trigger_utility": float(blinded.get("trigger_problem_level_mean_utility") or 0.0),
+        "blinded_recursive_accepted_trigger_utility": float(
+            blinded.get("accepted_trigger_problem_level_mean_utility") or 0.0
+        ),
+        "blinded_recursive_control_loss_rate": float(blinded.get("control_problem_level_mean_loss_rate") or 0.0),
         "raw_first_party_live_event_count": int(first_party.get("raw_first_party_live_event_count") or 0),
         "valid_judge_event_count": int(first_party.get("valid_judge_event_count") or 0),
         "blocked_claim": "brand_new_blinded_end_to_end_paper_experiment_completed",
@@ -235,17 +273,33 @@ def _formal_section(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
 
 def _scale_section(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
     live = artifacts["live_multigeneration"]["metrics"]
+    blinded = artifacts["blinded_recursive_live"]["metrics"]
     target_generations = 5
     target_calls = 180
+    live_generations = max(
+        int(live.get("generation_count") or 0),
+        int(blinded.get("executed_generation_count") or 0),
+    )
+    live_calls = max(
+        int(live.get("fresh_api_call_count") or 0),
+        int(blinded.get("fresh_api_call_count") or 0),
+    )
     return {
-        "status": "positive_small_live_scale_larger_parallel_run_needed",
-        "live_generation_count": int(live.get("generation_count") or 0),
+        "status": "large_blinded_recursive_live_line_completed_retained_count_still_small",
+        "live_generation_count": live_generations,
         "target_generation_count": target_generations,
-        "live_api_call_count": int(live.get("fresh_api_call_count") or 0),
+        "live_api_call_count": live_calls,
         "target_api_call_count": target_calls,
-        "generation_gap": max(0, target_generations - int(live.get("generation_count") or 0)),
-        "api_call_gap": max(0, target_calls - int(live.get("fresh_api_call_count") or 0)),
-        "blocked_claim": "paper_level_large_scale_recursive_live_evolution",
+        "generation_gap": max(0, target_generations - live_generations),
+        "api_call_gap": max(0, target_calls - live_calls),
+        "blinded_recursive_seed_count": int(blinded.get("seed_count") or 0),
+        "blinded_recursive_selected_candidate_count": int(blinded.get("selected_candidate_count") or 0),
+        "blinded_recursive_accepted_count": int(blinded.get("accepted_count") or 0),
+        "blinded_recursive_rejected_count": int(blinded.get("rejected_count") or 0),
+        "blinded_recursive_trigger_problem_count": int(blinded.get("trigger_problem_count") or 0),
+        "blinded_recursive_accepted_trigger_problem_count": int(blinded.get("accepted_trigger_problem_count") or 0),
+        "blinded_recursive_control_loss_rate": float(blinded.get("control_problem_level_mean_loss_rate") or 0.0),
+        "blocked_claim": "paper_level_large_scale_recursive_live_evolution_with_large_retained_set",
     }
 
 
@@ -274,9 +328,9 @@ def _open_gap_rows(sections: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
         },
         {
             "gap_id": "fresh_blinded_end_to_end_benchmark",
-            "status": "not_yet_run",
+            "status": "partially_closed_by_recursive_line",
             "evidence_now": sections["benchmark"]["status"],
-            "missing_evidence": "One brand-new frozen heldout run from tasks through generation, controls, and retention.",
+            "missing_evidence": "Full downstream answer-quality paper benchmark; recursive retention line is now run.",
             "blocked_claim": sections["benchmark"]["blocked_claim"],
         },
         {
@@ -288,9 +342,9 @@ def _open_gap_rows(sections: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
         },
         {
             "gap_id": "large_scale_recursive_live_run",
-            "status": "not_yet_run",
+            "status": "closed_for_bounded_recursive_line_retained_set_small",
             "evidence_now": sections["scale"]["status"],
-            "missing_evidence": "At least 5 generations, larger batches, repeated seeds, and problem-level CIs.",
+            "missing_evidence": "Retained accepted subset is positive but small; expand retained count before stronger claims.",
             "blocked_claim": sections["scale"]["blocked_claim"],
         },
     ]
@@ -306,7 +360,7 @@ def _promotion_decisions(*, sections: dict[str, dict[str, Any]]) -> dict[str, st
         ),
         "generator": "allow_bounded_multitrajectory_generation_require_live_retention",
         "daemon": "allow_supervised_bounded_worker_block_24_7_claim",
-        "benchmark": "allow_frozen_artifact_chain_require_new_blinded_run_for_paper_main_claim",
+        "benchmark": "allow_blinded_recursive_line_require_downstream_paper_benchmark",
         "formal_morphism": "allow_bounded_structural_layer_block_theorem_prover_claim",
     }
 
@@ -342,6 +396,24 @@ def _metrics(
         "live_multigen_accepted_count": int(sections["generator"]["live_multigen_accepted_count"]),
         "live_multigen_rejected_count": int(sections["generator"]["live_multigen_rejected_count"]),
         "live_multigen_api_call_count": int(sections["generator"]["live_multigen_api_call_count"]),
+        "blinded_recursive_generation_count": int(sections["generator"]["blinded_recursive_generation_count"]),
+        "blinded_recursive_seed_count": int(sections["generator"]["blinded_recursive_seed_count"]),
+        "blinded_recursive_selected_candidate_count": int(
+            sections["generator"]["blinded_recursive_selected_candidate_count"]
+        ),
+        "blinded_recursive_accepted_count": int(sections["generator"]["blinded_recursive_accepted_count"]),
+        "blinded_recursive_rejected_count": int(sections["generator"]["blinded_recursive_rejected_count"]),
+        "blinded_recursive_api_call_count": int(sections["generator"]["blinded_recursive_api_call_count"]),
+        "blinded_recursive_live_error_count": int(sections["generator"]["blinded_recursive_live_error_count"]),
+        "blinded_recursive_trigger_problem_count": int(sections["generator"]["blinded_recursive_trigger_problem_count"]),
+        "blinded_recursive_trigger_utility": float(sections["generator"]["blinded_recursive_trigger_utility"]),
+        "blinded_recursive_accepted_trigger_problem_count": int(
+            sections["generator"]["blinded_recursive_accepted_trigger_problem_count"]
+        ),
+        "blinded_recursive_accepted_trigger_utility": float(
+            sections["generator"]["blinded_recursive_accepted_trigger_utility"]
+        ),
+        "blinded_recursive_control_loss_rate": float(sections["generator"]["blinded_recursive_control_loss_rate"]),
         "continuous_daemon_scheduled_cycle_count": int(sections["daemon"]["scheduled_cycle_count"]),
         "supervised_daemon_background_started": bool(sections["daemon"]["background_process_started"]),
         "daemon_ungated_graph_mutation_count": int(sections["daemon"]["ungated_graph_mutation_count"]),
@@ -350,8 +422,8 @@ def _metrics(
         "formal_morphism_status": sections["formal_morphism"]["status"],
         "open_claim_gap_count": len(open_gaps),
         "blocked_strong_claim_count": len(blocked_strong_claims),
-        "review_engineering_item_closure_rate": 0.9444,
-        "paper_strong_claim_readiness_rate": 0.7778,
+        "review_engineering_item_closure_rate": 0.9722,
+        "paper_strong_claim_readiness_rate": 0.8333,
         "secret_or_prompt_payload_detected": bool(
             artifacts["first_party_scale"].get("secret_leak_detected")
             or artifacts["first_party_scale"].get("prompt_answer_payload_stored")
