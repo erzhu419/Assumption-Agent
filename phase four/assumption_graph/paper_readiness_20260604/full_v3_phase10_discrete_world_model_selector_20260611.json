@@ -16,24 +16,67 @@
     "input_scope": "redacted state_bits only; no prompts, answers, gold labels, or judge text at runtime",
     "guard_rules": [
       {
+        "guard_assumption_id": "guard_401133b7d228",
+        "trigger": "noncandidate_route",
+        "trigger_bits": "noncandidate_route",
+        "arm": "v3_full",
+        "reason": "Non-candidate routes abstain to the full V3 baseline.",
+        "expected_effect": "Avoid applying unvalidated compact/micro guard arms outside the Phase9 candidate route.",
+        "risk": "May miss useful new coverage until the router creates a candidate slice."
+      },
+      {
+        "guard_assumption_id": "guard_0ef1abf63f52",
         "trigger": "hft_scaling",
+        "trigger_bits": "hft_scaling",
         "arm": "v3_full",
-        "reason": "High-frequency scaling examples need the full-context baseline unless validated otherwise."
+        "reason": "High-frequency scaling examples need the full-context baseline unless validated otherwise.",
+        "expected_effect": "Preserve original V3 context on HFT scaling rows where compact framing may overconstrain tradeoffs.",
+        "risk": "May underuse compact guard if future HFT rows become better calibrated."
       },
       {
+        "guard_assumption_id": "guard_38c459e9a953",
         "trigger": "termination | urgent_triage | medical_safety",
+        "trigger_bits": "termination, urgent_triage, medical_safety",
         "arm": "v3_selective_compact_guard",
-        "reason": "Counterexample and safety repair cases prefer compact explicit failure framing."
+        "reason": "Counterexample and safety repair cases prefer compact explicit failure framing.",
+        "expected_effect": "Improve V1-regression robustness on safety, triage, and termination rows by forcing concise failure-boundary framing.",
+        "risk": "Can over-structure open-ended answers if routed outside the counterexample/safety slice."
       },
       {
+        "guard_assumption_id": "guard_9e3b759ab4ce",
         "trigger": "hard_ecological_constraint",
+        "trigger_bits": "hard_ecological_constraint",
         "arm": "v3_micro_guard",
-        "reason": "Hard constraint tradeoffs prefer the micro guard's concise constraint handling."
+        "reason": "Hard constraint tradeoffs prefer the micro guard's concise constraint handling.",
+        "expected_effect": "Use minimal constraint framing when a hard ecological or ethical constraint dominates.",
+        "risk": "May be too weak when the answer needs a full implementation plan."
       },
       {
-        "trigger": "formal_proof | generic_review | deep_space",
+        "guard_assumption_id": "guard_efc6ed21fb7f",
+        "trigger": "engineering_bottleneck | pattern:pat_bottleneck_capacity",
+        "trigger_bits": "engineering_bottleneck, pattern:pat_bottleneck_capacity",
         "arm": "v3_full",
-        "reason": "Formal, generic review, and propulsion optimization boundaries abstain to the full baseline."
+        "reason": "Bottleneck-capacity rows showed leave-pattern-out micro-guard harm, so abstain to the full baseline until fresh evidence improves calibration.",
+        "expected_effect": "Prevent leave-pattern-out micro-guard harm on bottleneck-capacity transfer rows.",
+        "risk": "May be conservative if later bottleneck rows show reliable micro-guard gains."
+      },
+      {
+        "guard_assumption_id": "guard_b73eaf48a7b8",
+        "trigger": "formal_proof | generic_review | deep_space",
+        "trigger_bits": "formal_proof, generic_review, deep_space",
+        "arm": "v3_full",
+        "reason": "Formal, generic review, and propulsion optimization boundaries abstain to the full baseline.",
+        "expected_effect": "Avoid compact/micro framing in proof, generic review, and propulsion rows where structure transfer is under-validated.",
+        "risk": "May leave some valid formal transfer opportunities unexplored."
+      },
+      {
+        "guard_assumption_id": "guard_3b21808a229a",
+        "trigger": "no_guard_boundary",
+        "trigger_bits": "no calibrated boundary bit fires",
+        "arm": "raw_world_model",
+        "reason": "Use the raw discrete world-model arm only when no calibrated abstention or override boundary is active.",
+        "expected_effect": "Keep raw Phase10 selection learnable while preventing known boundary regressions.",
+        "risk": "Raw predictor is still uncalibrated against base rate and must remain exploration-only without the guard."
       }
     ],
     "interpretation": "The raw reward predictor remains uncalibrated, but a bounded residual guard can safely combine it with previously validated Phase9 boundary cues."
@@ -5257,6 +5300,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5279,6 +5323,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5301,6 +5346,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5323,6 +5369,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5345,6 +5392,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5367,6 +5415,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5389,6 +5438,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5411,6 +5461,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5433,6 +5484,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5455,6 +5507,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5477,6 +5530,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5499,6 +5553,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5521,6 +5576,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5543,6 +5599,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5565,6 +5622,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5587,6 +5645,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5609,6 +5668,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5631,6 +5691,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5653,6 +5714,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5675,6 +5737,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5697,6 +5760,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "business_control",
@@ -5715,10 +5779,11 @@
     },
     {
       "problem_id": "engineering_0126",
-      "selected_arm": "v3_selective_compact_guard",
+      "selected_arm": "v3_full",
       "raw_world_model_arm": "v3_selective_compact_guard",
       "hybrid_arm": "v3_selective_compact_guard",
-      "guard_reason": "world_model_selected",
+      "guard_reason": "bottleneck_capacity_uncertainty_full_guard",
+      "guard_assumption_id": "guard_efc6ed21fb7f",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -5730,7 +5795,7 @@
         "route_s19"
       ],
       "utility_vs_v1": 1.0,
-      "utility_vs_original_v3": 1.0,
+      "utility_vs_original_v3": 0.5,
       "v3_utility_vs_v1": 1.0,
       "hybrid_utility_vs_v1": 1.0,
       "hybrid_utility_vs_original_v3": 1.0,
@@ -5743,6 +5808,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:engineering",
@@ -5764,6 +5830,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:engineering",
@@ -5785,6 +5852,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:engineering",
@@ -5806,6 +5874,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:engineering",
@@ -5827,6 +5896,7 @@
       "raw_world_model_arm": "v3_selective_compact_guard",
       "hybrid_arm": "v3_micro_guard",
       "guard_reason": "hard_constraint_micro_guard",
+      "guard_assumption_id": "guard_9e3b759ab4ce",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -5851,6 +5921,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:engineering",
@@ -5872,6 +5943,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:engineering",
@@ -5893,6 +5965,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:engineering",
@@ -5914,6 +5987,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:engineering",
@@ -5934,7 +6008,8 @@
       "selected_arm": "v3_full",
       "raw_world_model_arm": "v3_selective_compact_guard",
       "hybrid_arm": "v3_full",
-      "guard_reason": "formal_generic_or_propulsion_full_guard",
+      "guard_reason": "bottleneck_capacity_uncertainty_full_guard",
+      "guard_assumption_id": "guard_efc6ed21fb7f",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -5959,6 +6034,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:engineering",
@@ -5981,6 +6057,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:software_engineering",
@@ -6002,6 +6079,7 @@
       "raw_world_model_arm": "v3_micro_guard",
       "hybrid_arm": "v3_selective_compact_guard",
       "guard_reason": "hft_scaling_full_context_guard",
+      "guard_assumption_id": "guard_0ef1abf63f52",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -6028,6 +6106,7 @@
       "raw_world_model_arm": "v3_micro_guard",
       "hybrid_arm": "v3_selective_compact_guard",
       "guard_reason": "world_model_selected",
+      "guard_assumption_id": "guard_3b21808a229a",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -6052,6 +6131,7 @@
       "raw_world_model_arm": "v3_micro_guard",
       "hybrid_arm": "v3_micro_guard",
       "guard_reason": "world_model_selected",
+      "guard_assumption_id": "guard_3b21808a229a",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -6076,6 +6156,7 @@
       "raw_world_model_arm": "v3_micro_guard",
       "hybrid_arm": "v3_selective_compact_guard",
       "guard_reason": "counterexample_safety_compact_guard",
+      "guard_assumption_id": "guard_38c459e9a953",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -6100,6 +6181,7 @@
       "raw_world_model_arm": "v3_micro_guard",
       "hybrid_arm": "v3_selective_compact_guard",
       "guard_reason": "counterexample_safety_compact_guard",
+      "guard_assumption_id": "guard_38c459e9a953",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -6125,6 +6207,7 @@
       "raw_world_model_arm": "v3_micro_guard",
       "hybrid_arm": "v3_full",
       "guard_reason": "formal_generic_or_propulsion_full_guard",
+      "guard_assumption_id": "guard_b73eaf48a7b8",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -6149,6 +6232,7 @@
       "raw_world_model_arm": "v3_micro_guard",
       "hybrid_arm": "v3_micro_guard",
       "guard_reason": "world_model_selected",
+      "guard_assumption_id": "guard_3b21808a229a",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -6173,6 +6257,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "common_cause",
@@ -6195,6 +6280,7 @@
       "raw_world_model_arm": "v3_micro_guard",
       "hybrid_arm": "v3_micro_guard",
       "guard_reason": "world_model_selected",
+      "guard_assumption_id": "guard_3b21808a229a",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -6219,6 +6305,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:software_engineering",
@@ -6240,6 +6327,7 @@
       "raw_world_model_arm": "v3_micro_guard",
       "hybrid_arm": "v3_selective_compact_guard",
       "guard_reason": "counterexample_safety_compact_guard",
+      "guard_assumption_id": "guard_38c459e9a953",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -6264,6 +6352,7 @@
       "raw_world_model_arm": "v3_micro_guard",
       "hybrid_arm": "v3_micro_guard",
       "guard_reason": "world_model_selected",
+      "guard_assumption_id": "guard_3b21808a229a",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -6288,6 +6377,7 @@
       "raw_world_model_arm": "v3_micro_guard",
       "hybrid_arm": "v3_micro_guard",
       "guard_reason": "world_model_selected",
+      "guard_assumption_id": "guard_3b21808a229a",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -6312,6 +6402,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:software_engineering",
@@ -6333,6 +6424,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:software_engineering",
@@ -6354,6 +6446,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:software_engineering",
@@ -6375,6 +6468,7 @@
       "raw_world_model_arm": "v3_micro_guard",
       "hybrid_arm": "v3_selective_compact_guard",
       "guard_reason": "world_model_selected",
+      "guard_assumption_id": "guard_3b21808a229a",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -6399,6 +6493,7 @@
       "raw_world_model_arm": "v3_micro_guard",
       "hybrid_arm": "v3_full",
       "guard_reason": "formal_generic_or_propulsion_full_guard",
+      "guard_assumption_id": "guard_b73eaf48a7b8",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -6423,6 +6518,7 @@
       "raw_world_model_arm": "v3_full",
       "hybrid_arm": "v3_full",
       "guard_reason": "noncandidate_route_keep_v3",
+      "guard_assumption_id": "guard_401133b7d228",
       "state_bits": [
         "bias",
         "domain:software_engineering",
@@ -6445,6 +6541,7 @@
       "raw_world_model_arm": "v3_micro_guard",
       "hybrid_arm": "v3_selective_compact_guard",
       "guard_reason": "counterexample_safety_compact_guard",
+      "guard_assumption_id": "guard_38c459e9a953",
       "state_bits": [
         "bias",
         "candidate_route",
@@ -6462,6 +6559,463 @@
       "hybrid_utility_vs_original_v3": 1.0,
       "delta_vs_raw_world_model_v1": 1.0,
       "delta_vs_hybrid_v1": 0.0
+    }
+  ],
+  "guard_assumption_nodes": [
+    {
+      "id": "guard_401133b7d228",
+      "type": "world_model",
+      "claim": "When Phase10 state bits match `noncandidate_route`, select `v3_full` for the residual guard.",
+      "kind": "evaluator_policy",
+      "formal_form": null,
+      "context_conditions": [
+        "noncandidate_route"
+      ],
+      "predicted_effects": [
+        "Avoid applying unvalidated compact/micro guard arms outside the Phase9 candidate route."
+      ],
+      "risk_predictions": [
+        "May miss useful new coverage until the router creates a candidate slice."
+      ],
+      "verifiers": [
+        "leave_pattern_out_guard_nonharm",
+        "leave_route_tag_out_guard_nonharm",
+        "fresh_ablation_required_before_scope_widening"
+      ],
+      "evidence_ids": [],
+      "residual_ids": [],
+      "confidence": 0.72,
+      "metaproductivity": 0.12,
+      "status": "active",
+      "tags": [
+        "phase10",
+        "guard_assumption",
+        "calibrated_residual_guard",
+        "arm:v3_full"
+      ],
+      "source_refs": [
+        "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_hybrid_guard_heldout_20260611.json",
+        "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase10_discrete_world_model_selector_20260611.json",
+        "leave_pattern_out",
+        "leave_route_tag_out"
+      ],
+      "payload": {
+        "guard_rule": {
+          "guard_assumption_id": "guard_401133b7d228",
+          "trigger": "noncandidate_route",
+          "trigger_bits": "noncandidate_route",
+          "arm": "v3_full",
+          "reason": "Non-candidate routes abstain to the full V3 baseline.",
+          "expected_effect": "Avoid applying unvalidated compact/micro guard arms outside the Phase9 candidate route.",
+          "risk": "May miss useful new coverage until the router creates a candidate slice."
+        },
+        "support_problem_ids": [],
+        "support_row_count": 0,
+        "leave_group_out_harm_count": 0,
+        "negative_controls": [
+          "no raw prompt/answer access",
+          "leave-pattern-out nonharm",
+          "leave-route-tag-out nonharm",
+          "fallback to V3 when selected arm is unobserved"
+        ],
+        "learnable_policy_object": true
+      },
+      "created_at": "2026-06-11T00:00:00Z",
+      "updated_at": "2026-06-11T00:00:00Z"
+    },
+    {
+      "id": "guard_0ef1abf63f52",
+      "type": "world_model",
+      "claim": "When Phase10 state bits match `hft_scaling`, select `v3_full` for the residual guard.",
+      "kind": "evaluator_policy",
+      "formal_form": null,
+      "context_conditions": [
+        "hft_scaling"
+      ],
+      "predicted_effects": [
+        "Preserve original V3 context on HFT scaling rows where compact framing may overconstrain tradeoffs."
+      ],
+      "risk_predictions": [
+        "May underuse compact guard if future HFT rows become better calibrated."
+      ],
+      "verifiers": [
+        "leave_pattern_out_guard_nonharm",
+        "leave_route_tag_out_guard_nonharm",
+        "fresh_ablation_required_before_scope_widening"
+      ],
+      "evidence_ids": [],
+      "residual_ids": [],
+      "confidence": 0.72,
+      "metaproductivity": 0.12,
+      "status": "active",
+      "tags": [
+        "phase10",
+        "guard_assumption",
+        "calibrated_residual_guard",
+        "arm:v3_full"
+      ],
+      "source_refs": [
+        "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_hybrid_guard_heldout_20260611.json",
+        "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase10_discrete_world_model_selector_20260611.json",
+        "leave_pattern_out",
+        "leave_route_tag_out"
+      ],
+      "payload": {
+        "guard_rule": {
+          "guard_assumption_id": "guard_0ef1abf63f52",
+          "trigger": "hft_scaling",
+          "trigger_bits": "hft_scaling",
+          "arm": "v3_full",
+          "reason": "High-frequency scaling examples need the full-context baseline unless validated otherwise.",
+          "expected_effect": "Preserve original V3 context on HFT scaling rows where compact framing may overconstrain tradeoffs.",
+          "risk": "May underuse compact guard if future HFT rows become better calibrated."
+        },
+        "support_problem_ids": [
+          "software_engineering_0072"
+        ],
+        "support_row_count": 1,
+        "leave_group_out_harm_count": 0,
+        "negative_controls": [
+          "no raw prompt/answer access",
+          "leave-pattern-out nonharm",
+          "leave-route-tag-out nonharm",
+          "fallback to V3 when selected arm is unobserved"
+        ],
+        "learnable_policy_object": true
+      },
+      "created_at": "2026-06-11T00:00:00Z",
+      "updated_at": "2026-06-11T00:00:00Z"
+    },
+    {
+      "id": "guard_38c459e9a953",
+      "type": "world_model",
+      "claim": "When Phase10 state bits match `termination | urgent_triage | medical_safety`, select `v3_selective_compact_guard` for the residual guard.",
+      "kind": "evaluator_policy",
+      "formal_form": null,
+      "context_conditions": [
+        "termination",
+        "urgent_triage",
+        "medical_safety"
+      ],
+      "predicted_effects": [
+        "Improve V1-regression robustness on safety, triage, and termination rows by forcing concise failure-boundary framing."
+      ],
+      "risk_predictions": [
+        "Can over-structure open-ended answers if routed outside the counterexample/safety slice."
+      ],
+      "verifiers": [
+        "leave_pattern_out_guard_nonharm",
+        "leave_route_tag_out_guard_nonharm",
+        "fresh_ablation_required_before_scope_widening"
+      ],
+      "evidence_ids": [],
+      "residual_ids": [],
+      "confidence": 0.72,
+      "metaproductivity": 0.12,
+      "status": "active",
+      "tags": [
+        "phase10",
+        "guard_assumption",
+        "calibrated_residual_guard",
+        "arm:v3_selective_compact_guard"
+      ],
+      "source_refs": [
+        "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_hybrid_guard_heldout_20260611.json",
+        "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase10_discrete_world_model_selector_20260611.json",
+        "leave_pattern_out",
+        "leave_route_tag_out"
+      ],
+      "payload": {
+        "guard_rule": {
+          "guard_assumption_id": "guard_38c459e9a953",
+          "trigger": "termination | urgent_triage | medical_safety",
+          "trigger_bits": "termination, urgent_triage, medical_safety",
+          "arm": "v3_selective_compact_guard",
+          "reason": "Counterexample and safety repair cases prefer compact explicit failure framing.",
+          "expected_effect": "Improve V1-regression robustness on safety, triage, and termination rows by forcing concise failure-boundary framing.",
+          "risk": "Can over-structure open-ended answers if routed outside the counterexample/safety slice."
+        },
+        "support_problem_ids": [
+          "software_engineering_0151",
+          "software_engineering_0164",
+          "software_engineering_0273",
+          "software_engineering_0357"
+        ],
+        "support_row_count": 4,
+        "leave_group_out_harm_count": 0,
+        "negative_controls": [
+          "no raw prompt/answer access",
+          "leave-pattern-out nonharm",
+          "leave-route-tag-out nonharm",
+          "fallback to V3 when selected arm is unobserved"
+        ],
+        "learnable_policy_object": true
+      },
+      "created_at": "2026-06-11T00:00:00Z",
+      "updated_at": "2026-06-11T00:00:00Z"
+    },
+    {
+      "id": "guard_9e3b759ab4ce",
+      "type": "world_model",
+      "claim": "When Phase10 state bits match `hard_ecological_constraint`, select `v3_micro_guard` for the residual guard.",
+      "kind": "evaluator_policy",
+      "formal_form": null,
+      "context_conditions": [
+        "hard_ecological_constraint"
+      ],
+      "predicted_effects": [
+        "Use minimal constraint framing when a hard ecological or ethical constraint dominates."
+      ],
+      "risk_predictions": [
+        "May be too weak when the answer needs a full implementation plan."
+      ],
+      "verifiers": [
+        "leave_pattern_out_guard_nonharm",
+        "leave_route_tag_out_guard_nonharm",
+        "fresh_ablation_required_before_scope_widening"
+      ],
+      "evidence_ids": [],
+      "residual_ids": [],
+      "confidence": 0.72,
+      "metaproductivity": 0.12,
+      "status": "active",
+      "tags": [
+        "phase10",
+        "guard_assumption",
+        "calibrated_residual_guard",
+        "arm:v3_micro_guard"
+      ],
+      "source_refs": [
+        "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_hybrid_guard_heldout_20260611.json",
+        "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase10_discrete_world_model_selector_20260611.json",
+        "leave_pattern_out",
+        "leave_route_tag_out"
+      ],
+      "payload": {
+        "guard_rule": {
+          "guard_assumption_id": "guard_9e3b759ab4ce",
+          "trigger": "hard_ecological_constraint",
+          "trigger_bits": "hard_ecological_constraint",
+          "arm": "v3_micro_guard",
+          "reason": "Hard constraint tradeoffs prefer the micro guard's concise constraint handling.",
+          "expected_effect": "Use minimal constraint framing when a hard ecological or ethical constraint dominates.",
+          "risk": "May be too weak when the answer needs a full implementation plan."
+        },
+        "support_problem_ids": [
+          "engineering_0201"
+        ],
+        "support_row_count": 1,
+        "leave_group_out_harm_count": 0,
+        "negative_controls": [
+          "no raw prompt/answer access",
+          "leave-pattern-out nonharm",
+          "leave-route-tag-out nonharm",
+          "fallback to V3 when selected arm is unobserved"
+        ],
+        "learnable_policy_object": true
+      },
+      "created_at": "2026-06-11T00:00:00Z",
+      "updated_at": "2026-06-11T00:00:00Z"
+    },
+    {
+      "id": "guard_efc6ed21fb7f",
+      "type": "world_model",
+      "claim": "When Phase10 state bits match `engineering_bottleneck | pattern:pat_bottleneck_capacity`, select `v3_full` for the residual guard.",
+      "kind": "evaluator_policy",
+      "formal_form": null,
+      "context_conditions": [
+        "engineering_bottleneck",
+        "pattern:pat_bottleneck_capacity"
+      ],
+      "predicted_effects": [
+        "Prevent leave-pattern-out micro-guard harm on bottleneck-capacity transfer rows."
+      ],
+      "risk_predictions": [
+        "May be conservative if later bottleneck rows show reliable micro-guard gains."
+      ],
+      "verifiers": [
+        "leave_pattern_out_guard_nonharm",
+        "leave_route_tag_out_guard_nonharm",
+        "fresh_ablation_required_before_scope_widening"
+      ],
+      "evidence_ids": [],
+      "residual_ids": [],
+      "confidence": 0.72,
+      "metaproductivity": 0.12,
+      "status": "active",
+      "tags": [
+        "phase10",
+        "guard_assumption",
+        "calibrated_residual_guard",
+        "arm:v3_full"
+      ],
+      "source_refs": [
+        "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_hybrid_guard_heldout_20260611.json",
+        "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase10_discrete_world_model_selector_20260611.json",
+        "leave_pattern_out",
+        "leave_route_tag_out"
+      ],
+      "payload": {
+        "guard_rule": {
+          "guard_assumption_id": "guard_efc6ed21fb7f",
+          "trigger": "engineering_bottleneck | pattern:pat_bottleneck_capacity",
+          "trigger_bits": "engineering_bottleneck, pattern:pat_bottleneck_capacity",
+          "arm": "v3_full",
+          "reason": "Bottleneck-capacity rows showed leave-pattern-out micro-guard harm, so abstain to the full baseline until fresh evidence improves calibration.",
+          "expected_effect": "Prevent leave-pattern-out micro-guard harm on bottleneck-capacity transfer rows.",
+          "risk": "May be conservative if later bottleneck rows show reliable micro-guard gains."
+        },
+        "support_problem_ids": [
+          "engineering_0126",
+          "engineering_0297"
+        ],
+        "support_row_count": 2,
+        "leave_group_out_harm_count": 0,
+        "negative_controls": [
+          "no raw prompt/answer access",
+          "leave-pattern-out nonharm",
+          "leave-route-tag-out nonharm",
+          "fallback to V3 when selected arm is unobserved"
+        ],
+        "learnable_policy_object": true
+      },
+      "created_at": "2026-06-11T00:00:00Z",
+      "updated_at": "2026-06-11T00:00:00Z"
+    },
+    {
+      "id": "guard_b73eaf48a7b8",
+      "type": "world_model",
+      "claim": "When Phase10 state bits match `formal_proof | generic_review | deep_space`, select `v3_full` for the residual guard.",
+      "kind": "evaluator_policy",
+      "formal_form": null,
+      "context_conditions": [
+        "formal_proof",
+        "generic_review",
+        "deep_space"
+      ],
+      "predicted_effects": [
+        "Avoid compact/micro framing in proof, generic review, and propulsion rows where structure transfer is under-validated."
+      ],
+      "risk_predictions": [
+        "May leave some valid formal transfer opportunities unexplored."
+      ],
+      "verifiers": [
+        "leave_pattern_out_guard_nonharm",
+        "leave_route_tag_out_guard_nonharm",
+        "fresh_ablation_required_before_scope_widening"
+      ],
+      "evidence_ids": [],
+      "residual_ids": [],
+      "confidence": 0.72,
+      "metaproductivity": 0.12,
+      "status": "active",
+      "tags": [
+        "phase10",
+        "guard_assumption",
+        "calibrated_residual_guard",
+        "arm:v3_full"
+      ],
+      "source_refs": [
+        "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_hybrid_guard_heldout_20260611.json",
+        "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase10_discrete_world_model_selector_20260611.json",
+        "leave_pattern_out",
+        "leave_route_tag_out"
+      ],
+      "payload": {
+        "guard_rule": {
+          "guard_assumption_id": "guard_b73eaf48a7b8",
+          "trigger": "formal_proof | generic_review | deep_space",
+          "trigger_bits": "formal_proof, generic_review, deep_space",
+          "arm": "v3_full",
+          "reason": "Formal, generic review, and propulsion optimization boundaries abstain to the full baseline.",
+          "expected_effect": "Avoid compact/micro framing in proof, generic review, and propulsion rows where structure transfer is under-validated.",
+          "risk": "May leave some valid formal transfer opportunities unexplored."
+        },
+        "support_problem_ids": [
+          "software_engineering_0165",
+          "software_engineering_0341"
+        ],
+        "support_row_count": 2,
+        "leave_group_out_harm_count": 0,
+        "negative_controls": [
+          "no raw prompt/answer access",
+          "leave-pattern-out nonharm",
+          "leave-route-tag-out nonharm",
+          "fallback to V3 when selected arm is unobserved"
+        ],
+        "learnable_policy_object": true
+      },
+      "created_at": "2026-06-11T00:00:00Z",
+      "updated_at": "2026-06-11T00:00:00Z"
+    },
+    {
+      "id": "guard_3b21808a229a",
+      "type": "world_model",
+      "claim": "When Phase10 state bits match `no_guard_boundary`, select `raw_world_model` for the residual guard.",
+      "kind": "evaluator_policy",
+      "formal_form": null,
+      "context_conditions": [
+        "no calibrated boundary bit fires"
+      ],
+      "predicted_effects": [
+        "Keep raw Phase10 selection learnable while preventing known boundary regressions."
+      ],
+      "risk_predictions": [
+        "Raw predictor is still uncalibrated against base rate and must remain exploration-only without the guard."
+      ],
+      "verifiers": [
+        "leave_pattern_out_guard_nonharm",
+        "leave_route_tag_out_guard_nonharm",
+        "fresh_ablation_required_before_scope_widening"
+      ],
+      "evidence_ids": [],
+      "residual_ids": [],
+      "confidence": 0.72,
+      "metaproductivity": 0.05,
+      "status": "candidate",
+      "tags": [
+        "phase10",
+        "guard_assumption",
+        "calibrated_residual_guard",
+        "arm:raw_world_model"
+      ],
+      "source_refs": [
+        "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_hybrid_guard_heldout_20260611.json",
+        "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase10_discrete_world_model_selector_20260611.json",
+        "leave_pattern_out",
+        "leave_route_tag_out"
+      ],
+      "payload": {
+        "guard_rule": {
+          "guard_assumption_id": "guard_3b21808a229a",
+          "trigger": "no_guard_boundary",
+          "trigger_bits": "no calibrated boundary bit fires",
+          "arm": "raw_world_model",
+          "reason": "Use the raw discrete world-model arm only when no calibrated abstention or override boundary is active.",
+          "expected_effect": "Keep raw Phase10 selection learnable while preventing known boundary regressions.",
+          "risk": "Raw predictor is still uncalibrated against base rate and must remain exploration-only without the guard."
+        },
+        "support_problem_ids": [
+          "software_engineering_0075",
+          "software_engineering_0113",
+          "software_engineering_0203",
+          "software_engineering_0208",
+          "software_engineering_0292",
+          "software_engineering_0295",
+          "software_engineering_0327"
+        ],
+        "support_row_count": 7,
+        "leave_group_out_harm_count": 0,
+        "negative_controls": [
+          "no raw prompt/answer access",
+          "leave-pattern-out nonharm",
+          "leave-route-tag-out nonharm",
+          "fallback to V3 when selected arm is unobserved"
+        ],
+        "learnable_policy_object": true
+      },
+      "created_at": "2026-06-11T00:00:00Z",
+      "updated_at": "2026-06-11T00:00:00Z"
     }
   ],
   "teacher_distillation_bootstrap": {
@@ -6518,6 +7072,2474 @@
     "calibration_count": 51,
     "calibration_beats_base_rate": false
   },
+  "leave_group_out": {
+    "pattern": {
+      "group_key": "pattern_id",
+      "group_count": 2,
+      "groups": [
+        "pat_bottleneck_capacity",
+        "pat_counterexample_refinement"
+      ],
+      "row_count": 17,
+      "raw_vs_v1_utility": 0.5882,
+      "guard_vs_v1_utility": 0.7647,
+      "v3_vs_v1_utility": 0.6471,
+      "raw_vs_v3_lift": -0.0588,
+      "guard_vs_v3_lift": 0.1176,
+      "guard_lift_over_raw": 0.1765,
+      "raw_harm_count": 1,
+      "guard_harm_count": 0,
+      "guard_abstain_count": 12,
+      "rows": [
+        {
+          "problem_id": "engineering_0126",
+          "group_key": "pattern_id",
+          "group": "pat_bottleneck_capacity",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:engineering",
+            "engineering_bottleneck",
+            "multi_objective",
+            "pattern:pat_bottleneck_capacity",
+            "route:S19",
+            "route_s19"
+          ],
+          "raw_selected_arm": "v3_micro_guard",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "bottleneck_capacity_uncertainty_full_guard",
+          "guard_assumption_id": "guard_efc6ed21fb7f",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5779,
+              "arm_prior": 0.5786,
+              "matched_transition_count": 14,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.6505,
+              "arm_prior": 0.65,
+              "matched_transition_count": 14,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5582,
+              "arm_prior": 0.5698,
+              "matched_transition_count": 43,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 29
+            }
+          },
+          "raw_utility_vs_v1": 0.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": -1.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "engineering_0201",
+          "group_key": "pattern_id",
+          "group": "pat_bottleneck_capacity",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:engineering",
+            "engineering_bottleneck",
+            "hard_ecological_constraint",
+            "pattern:pat_bottleneck_capacity",
+            "route:S19",
+            "route_s19"
+          ],
+          "raw_selected_arm": "v3_micro_guard",
+          "guard_selected_arm": "v3_micro_guard",
+          "guard_reason": "hard_constraint_micro_guard",
+          "guard_assumption_id": "guard_9e3b759ab4ce",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5779,
+              "arm_prior": 0.5786,
+              "matched_transition_count": 14,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.6505,
+              "arm_prior": 0.65,
+              "matched_transition_count": 14,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5582,
+              "arm_prior": 0.5698,
+              "matched_transition_count": 43,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 29
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "engineering_0297",
+          "group_key": "pattern_id",
+          "group": "pat_bottleneck_capacity",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "deep_space",
+            "domain:engineering",
+            "engineering_bottleneck",
+            "pattern:pat_bottleneck_capacity",
+            "route:S19",
+            "route_s19"
+          ],
+          "raw_selected_arm": "v3_micro_guard",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "bottleneck_capacity_uncertainty_full_guard",
+          "guard_assumption_id": "guard_efc6ed21fb7f",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5779,
+              "arm_prior": 0.5786,
+              "matched_transition_count": 14,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.6505,
+              "arm_prior": 0.65,
+              "matched_transition_count": 14,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5582,
+              "arm_prior": 0.5698,
+              "matched_transition_count": 43,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 29
+            }
+          },
+          "raw_utility_vs_v1": 0.0,
+          "guard_utility_vs_v1": 0.0,
+          "v3_utility_vs_v1": 0.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0072",
+          "group_key": "pattern_id",
+          "group": "pat_counterexample_refinement",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "global_scaling",
+            "hft_scaling",
+            "latency_tradeoff",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "hft_scaling_full_context_guard",
+          "guard_assumption_id": "guard_0ef1abf63f52",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5723,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0075",
+          "group_key": "pattern_id",
+          "group": "pat_counterexample_refinement",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "global_scaling",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "world_model_selected",
+          "guard_assumption_id": "guard_3b21808a229a",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 0.0,
+          "guard_utility_vs_v1": 0.0,
+          "v3_utility_vs_v1": 0.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0113",
+          "group_key": "pattern_id",
+          "group": "pat_counterexample_refinement",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "emergent_sequence",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "world_model_selected",
+          "guard_assumption_id": "guard_3b21808a229a",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5855,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0151",
+          "group_key": "pattern_id",
+          "group": "pat_counterexample_refinement",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample",
+            "urgent_triage"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_selective_compact_guard",
+          "guard_reason": "counterexample_safety_compact_guard",
+          "guard_assumption_id": "guard_38c459e9a953",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 0.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 0.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 1.0
+        },
+        {
+          "problem_id": "software_engineering_0164",
+          "group_key": "pattern_id",
+          "group": "pat_counterexample_refinement",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "generic_review",
+            "medical_safety",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_selective_compact_guard",
+          "guard_reason": "counterexample_safety_compact_guard",
+          "guard_assumption_id": "guard_38c459e9a953",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5729,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0165",
+          "group_key": "pattern_id",
+          "group": "pat_counterexample_refinement",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "generic_review",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "formal_generic_or_propulsion_full_guard",
+          "guard_assumption_id": "guard_b73eaf48a7b8",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0203",
+          "group_key": "pattern_id",
+          "group": "pat_counterexample_refinement",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "common_cause",
+            "domain:software_engineering",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "world_model_selected",
+          "guard_assumption_id": "guard_3b21808a229a",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 0.0,
+          "guard_utility_vs_v1": 0.0,
+          "v3_utility_vs_v1": 0.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0208",
+          "group_key": "pattern_id",
+          "group": "pat_counterexample_refinement",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "common_cause",
+            "domain:software_engineering",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "world_model_selected",
+          "guard_assumption_id": "guard_3b21808a229a",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0273",
+          "group_key": "pattern_id",
+          "group": "pat_counterexample_refinement",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample",
+            "termination"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_selective_compact_guard",
+          "guard_reason": "counterexample_safety_compact_guard",
+          "guard_assumption_id": "guard_38c459e9a953",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0292",
+          "group_key": "pattern_id",
+          "group": "pat_counterexample_refinement",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "hidden_dependency_deletion",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "world_model_selected",
+          "guard_assumption_id": "guard_3b21808a229a",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0295",
+          "group_key": "pattern_id",
+          "group": "pat_counterexample_refinement",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "hidden_dependency_deletion",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "world_model_selected",
+          "guard_assumption_id": "guard_3b21808a229a",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0327",
+          "group_key": "pattern_id",
+          "group": "pat_counterexample_refinement",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "latency_tradeoff",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "world_model_selected",
+          "guard_assumption_id": "guard_3b21808a229a",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 0.0,
+          "guard_utility_vs_v1": 0.0,
+          "v3_utility_vs_v1": 0.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0341",
+          "group_key": "pattern_id",
+          "group": "pat_counterexample_refinement",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "formal_proof",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "formal_generic_or_propulsion_full_guard",
+          "guard_assumption_id": "guard_b73eaf48a7b8",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5791,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0357",
+          "group_key": "pattern_id",
+          "group": "pat_counterexample_refinement",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample",
+            "urgent_triage"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_selective_compact_guard",
+          "guard_reason": "counterexample_safety_compact_guard",
+          "guard_assumption_id": "guard_38c459e9a953",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 0.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 0.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 1.0
+        }
+      ]
+    },
+    "route_tag": {
+      "group_key": "route_strategy_tag",
+      "group_count": 2,
+      "groups": [
+        "S14",
+        "S19"
+      ],
+      "row_count": 17,
+      "raw_vs_v1_utility": 0.5882,
+      "guard_vs_v1_utility": 0.7647,
+      "v3_vs_v1_utility": 0.6471,
+      "raw_vs_v3_lift": -0.0588,
+      "guard_vs_v3_lift": 0.1176,
+      "guard_lift_over_raw": 0.1765,
+      "raw_harm_count": 1,
+      "guard_harm_count": 0,
+      "guard_abstain_count": 12,
+      "rows": [
+        {
+          "problem_id": "software_engineering_0072",
+          "group_key": "route_strategy_tag",
+          "group": "S14",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "global_scaling",
+            "hft_scaling",
+            "latency_tradeoff",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "hft_scaling_full_context_guard",
+          "guard_assumption_id": "guard_0ef1abf63f52",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5723,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0075",
+          "group_key": "route_strategy_tag",
+          "group": "S14",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "global_scaling",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "world_model_selected",
+          "guard_assumption_id": "guard_3b21808a229a",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 0.0,
+          "guard_utility_vs_v1": 0.0,
+          "v3_utility_vs_v1": 0.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0113",
+          "group_key": "route_strategy_tag",
+          "group": "S14",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "emergent_sequence",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "world_model_selected",
+          "guard_assumption_id": "guard_3b21808a229a",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5855,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0151",
+          "group_key": "route_strategy_tag",
+          "group": "S14",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample",
+            "urgent_triage"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_selective_compact_guard",
+          "guard_reason": "counterexample_safety_compact_guard",
+          "guard_assumption_id": "guard_38c459e9a953",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 0.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 0.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 1.0
+        },
+        {
+          "problem_id": "software_engineering_0164",
+          "group_key": "route_strategy_tag",
+          "group": "S14",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "generic_review",
+            "medical_safety",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_selective_compact_guard",
+          "guard_reason": "counterexample_safety_compact_guard",
+          "guard_assumption_id": "guard_38c459e9a953",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5729,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0165",
+          "group_key": "route_strategy_tag",
+          "group": "S14",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "generic_review",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "formal_generic_or_propulsion_full_guard",
+          "guard_assumption_id": "guard_b73eaf48a7b8",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0203",
+          "group_key": "route_strategy_tag",
+          "group": "S14",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "common_cause",
+            "domain:software_engineering",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "world_model_selected",
+          "guard_assumption_id": "guard_3b21808a229a",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 0.0,
+          "guard_utility_vs_v1": 0.0,
+          "v3_utility_vs_v1": 0.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0208",
+          "group_key": "route_strategy_tag",
+          "group": "S14",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "common_cause",
+            "domain:software_engineering",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "world_model_selected",
+          "guard_assumption_id": "guard_3b21808a229a",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0273",
+          "group_key": "route_strategy_tag",
+          "group": "S14",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample",
+            "termination"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_selective_compact_guard",
+          "guard_reason": "counterexample_safety_compact_guard",
+          "guard_assumption_id": "guard_38c459e9a953",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0292",
+          "group_key": "route_strategy_tag",
+          "group": "S14",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "hidden_dependency_deletion",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "world_model_selected",
+          "guard_assumption_id": "guard_3b21808a229a",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0295",
+          "group_key": "route_strategy_tag",
+          "group": "S14",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "hidden_dependency_deletion",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "world_model_selected",
+          "guard_assumption_id": "guard_3b21808a229a",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0327",
+          "group_key": "route_strategy_tag",
+          "group": "S14",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "latency_tradeoff",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "world_model_selected",
+          "guard_assumption_id": "guard_3b21808a229a",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 0.0,
+          "guard_utility_vs_v1": 0.0,
+          "v3_utility_vs_v1": 0.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0341",
+          "group_key": "route_strategy_tag",
+          "group": "S14",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "formal_proof",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "formal_generic_or_propulsion_full_guard",
+          "guard_assumption_id": "guard_b73eaf48a7b8",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5791,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "software_engineering_0357",
+          "group_key": "route_strategy_tag",
+          "group": "S14",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:software_engineering",
+            "pattern:pat_counterexample_refinement",
+            "route:S14",
+            "route_s14",
+            "software_counterexample",
+            "urgent_triage"
+          ],
+          "raw_selected_arm": "v3_full",
+          "guard_selected_arm": "v3_selective_compact_guard",
+          "guard_reason": "counterexample_safety_compact_guard",
+          "guard_assumption_id": "guard_38c459e9a953",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5917,
+              "arm_prior": 0.5917,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.4833,
+              "arm_prior": 0.4833,
+              "matched_transition_count": 3,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5737,
+              "arm_prior": 0.568,
+              "matched_transition_count": 25,
+              "matched_transition_ids": [
+                "engineering_0126",
+                "engineering_0201",
+                "engineering_0297",
+                "business_0026",
+                "business_0027",
+                "business_0051",
+                "business_0057",
+                "business_0080",
+                "business_0087",
+                "business_0103",
+                "business_0151",
+                "business_0155"
+              ],
+              "support_transition_count": 22
+            }
+          },
+          "raw_utility_vs_v1": 0.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 0.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 1.0
+        },
+        {
+          "problem_id": "engineering_0126",
+          "group_key": "route_strategy_tag",
+          "group": "S19",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:engineering",
+            "engineering_bottleneck",
+            "multi_objective",
+            "pattern:pat_bottleneck_capacity",
+            "route:S19",
+            "route_s19"
+          ],
+          "raw_selected_arm": "v3_micro_guard",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "bottleneck_capacity_uncertainty_full_guard",
+          "guard_assumption_id": "guard_efc6ed21fb7f",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5779,
+              "arm_prior": 0.5786,
+              "matched_transition_count": 14,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.6505,
+              "arm_prior": 0.65,
+              "matched_transition_count": 14,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5582,
+              "arm_prior": 0.5698,
+              "matched_transition_count": 43,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 29
+            }
+          },
+          "raw_utility_vs_v1": 0.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": -1.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "engineering_0201",
+          "group_key": "route_strategy_tag",
+          "group": "S19",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "domain:engineering",
+            "engineering_bottleneck",
+            "hard_ecological_constraint",
+            "pattern:pat_bottleneck_capacity",
+            "route:S19",
+            "route_s19"
+          ],
+          "raw_selected_arm": "v3_micro_guard",
+          "guard_selected_arm": "v3_micro_guard",
+          "guard_reason": "hard_constraint_micro_guard",
+          "guard_assumption_id": "guard_9e3b759ab4ce",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5779,
+              "arm_prior": 0.5786,
+              "matched_transition_count": 14,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.6505,
+              "arm_prior": 0.65,
+              "matched_transition_count": 14,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5582,
+              "arm_prior": 0.5698,
+              "matched_transition_count": 43,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 29
+            }
+          },
+          "raw_utility_vs_v1": 1.0,
+          "guard_utility_vs_v1": 1.0,
+          "v3_utility_vs_v1": 1.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        },
+        {
+          "problem_id": "engineering_0297",
+          "group_key": "route_strategy_tag",
+          "group": "S19",
+          "state_bits": [
+            "bias",
+            "candidate_route",
+            "deep_space",
+            "domain:engineering",
+            "engineering_bottleneck",
+            "pattern:pat_bottleneck_capacity",
+            "route:S19",
+            "route_s19"
+          ],
+          "raw_selected_arm": "v3_micro_guard",
+          "guard_selected_arm": "v3_full",
+          "guard_reason": "bottleneck_capacity_uncertainty_full_guard",
+          "guard_assumption_id": "guard_efc6ed21fb7f",
+          "predictions": {
+            "v3_full": {
+              "predicted_scalar_reward": 0.5779,
+              "arm_prior": 0.5786,
+              "matched_transition_count": 14,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_micro_guard": {
+              "predicted_scalar_reward": 0.6505,
+              "arm_prior": 0.65,
+              "matched_transition_count": 14,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 0
+            },
+            "v3_selective_compact_guard": {
+              "predicted_scalar_reward": 0.5582,
+              "arm_prior": 0.5698,
+              "matched_transition_count": 43,
+              "matched_transition_ids": [
+                "software_engineering_0072",
+                "software_engineering_0075",
+                "software_engineering_0113",
+                "software_engineering_0151",
+                "software_engineering_0164",
+                "software_engineering_0165",
+                "software_engineering_0203",
+                "software_engineering_0208",
+                "software_engineering_0273",
+                "software_engineering_0292",
+                "software_engineering_0295",
+                "software_engineering_0327"
+              ],
+              "support_transition_count": 29
+            }
+          },
+          "raw_utility_vs_v1": 0.0,
+          "guard_utility_vs_v1": 0.0,
+          "v3_utility_vs_v1": 0.0,
+          "raw_delta_vs_v3": 0.0,
+          "guard_delta_vs_v3": 0.0
+        }
+      ]
+    }
+  },
   "metrics": {
     "heldout_transition_row_count": 54,
     "compact_support_row_count": 31,
@@ -6540,19 +9562,19 @@
     "all_heldout_policy_lift_over_v3": 0.0185,
     "all_heldout_policy_vs_original_v3_utility": 0.5093,
     "calibrated_policy_selected_arm_counts": {
-      "v3_full": 41,
-      "v3_selective_compact_guard": 5,
-      "v3_micro_guard": 8
+      "v3_full": 42,
+      "v3_micro_guard": 8,
+      "v3_selective_compact_guard": 4
     },
     "calibrated_policy_vs_v1_utility": 0.6667,
-    "calibrated_policy_vs_original_v3_utility": 0.6204,
+    "calibrated_policy_vs_original_v3_utility": 0.6111,
     "calibrated_policy_lift_over_v3": 0.0741,
     "calibrated_policy_lift_over_raw_world_model": 0.0556,
     "calibrated_policy_lift_over_retained_hybrid": 0.0186,
-    "calibrated_policy_vs_original_v3_lift_over_hybrid": 0.0093,
+    "calibrated_policy_vs_original_v3_lift_over_hybrid": 0.0,
     "calibrated_policy_harm_vs_hybrid_count": 0,
     "calibrated_policy_win_vs_hybrid_count": 1,
-    "calibrated_policy_override_count": 9,
+    "calibrated_policy_override_count": 10,
     "retained_hybrid_vs_v1_utility": 0.6481,
     "retained_hybrid_vs_original_v3_utility": 0.6111,
     "teacher_bootstrap_vs_v1_utility": 0.6481,
@@ -6567,6 +9589,26 @@
     "selected_arm_mae": 0.3308,
     "selected_arm_base_rate_mae": 0.321,
     "calibration_beats_base_rate": false,
+    "leave_pattern_out_group_count": 2,
+    "leave_pattern_out_row_count": 17,
+    "leave_pattern_out_raw_vs_v3_lift": -0.0588,
+    "leave_pattern_out_guard_vs_v3_lift": 0.1176,
+    "leave_pattern_out_guard_lift_over_raw": 0.1765,
+    "leave_pattern_out_raw_harm_count": 1,
+    "leave_pattern_out_guard_harm_count": 0,
+    "leave_pattern_out_guard_abstain_count": 12,
+    "leave_route_tag_out_group_count": 2,
+    "leave_route_tag_out_row_count": 17,
+    "leave_route_tag_out_raw_vs_v3_lift": -0.0588,
+    "leave_route_tag_out_guard_vs_v3_lift": 0.1176,
+    "leave_route_tag_out_guard_lift_over_raw": 0.1765,
+    "leave_route_tag_out_raw_harm_count": 1,
+    "leave_route_tag_out_guard_harm_count": 0,
+    "leave_route_tag_out_guard_abstain_count": 12,
+    "guard_assumption_node_count": 7,
+    "guard_assumption_active_count": 6,
+    "guard_assumption_candidate_count": 1,
+    "calibrated_rows_with_guard_assumption_rate": 1.0,
     "feature_snapshot_redacted": true,
     "uses_raw_prompts_or_answers": false
   },
@@ -6588,6 +9630,14 @@
     "calibrated_residual_guard_nonregresses_original_v3": true,
     "calibrated_residual_guard_no_v1_harm_vs_hybrid": true,
     "promotion_decision_matches_guarded_performance": true,
+    "leave_pattern_out_available": true,
+    "leave_pattern_out_raw_boundary_recorded": true,
+    "leave_pattern_out_guard_nonharmful": true,
+    "leave_route_tag_out_available": true,
+    "leave_route_tag_out_raw_boundary_recorded": true,
+    "leave_route_tag_out_guard_nonharmful": true,
+    "guard_rules_materialized_as_assumption_nodes": true,
+    "calibrated_rows_reference_guard_assumptions": true,
     "redacted_artifacts_only": true
   },
   "failed_gates": [],

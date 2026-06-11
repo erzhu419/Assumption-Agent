@@ -65,6 +65,9 @@ def build_proposal_contract_payload(
     )
     results = [validate_proposal_contract(proposal, store=store) for proposal in proposals]
     metrics = _metrics(results)
+    admitted_ids = [result.proposal_id for result in results if result.admission == "candidate_overlay"]
+    manifest_only_ids = [result.proposal_id for result in results if result.admission == "manifest_only"]
+    quarantined_ids = [result.proposal_id for result in results if result.admission == "draft_pool"]
     gates = {
         "all_candidates_have_contract_result": metrics["proposal_count"] == len(proposals),
         "invalid_candidates_quarantined": metrics["invalid_admitted_count"] == 0,
@@ -83,12 +86,45 @@ def build_proposal_contract_payload(
         ),
         "source_eval_id": proposal_payload.get("eval_id"),
         "results": [result.to_dict() for result in results],
-        "admitted_proposal_ids": [result.proposal_id for result in results if result.admitted],
-        "quarantined_proposal_ids": [result.proposal_id for result in results if not result.admitted],
+        "admitted_proposal_ids": admitted_ids,
+        "manifest_only_proposal_ids": manifest_only_ids,
+        "preflight_proposal_ids": [*admitted_ids, *manifest_only_ids],
+        "quarantined_proposal_ids": quarantined_ids,
         "metrics": metrics,
         "gates": gates,
         "failed_gates": [name for name, passed in gates.items() if not passed],
         "pass": all(gates.values()),
+    }
+
+
+def filter_proposal_payload_by_contract(
+    proposal_payload: dict,
+    contract_payload: dict,
+    *,
+    include_manifest_only: bool = True,
+) -> dict[str, Any]:
+    """Return a proposal payload containing only contract-ready proposals."""
+
+    allowed = set(contract_payload.get("admitted_proposal_ids", []))
+    if include_manifest_only:
+        allowed.update(contract_payload.get("manifest_only_proposal_ids", []))
+    proposals = [
+        proposal
+        for proposal in proposal_payload.get("proposals", [])
+        if proposal.get("proposal_id") in allowed
+    ]
+    counts: dict[str, int] = {}
+    for proposal in proposals:
+        ptype = str(proposal.get("proposal_type", ""))
+        counts[ptype] = counts.get(ptype, 0) + 1
+    return {
+        "eval_id": proposal_payload.get("eval_id"),
+        "source_eval_ids": proposal_payload.get("source_eval_ids", []),
+        "contract_eval_id": contract_payload.get("eval_id"),
+        "proposal_counts": dict(sorted(counts.items())),
+        "proposals": proposals,
+        "filtered_by_contract": True,
+        "quarantined_proposal_ids": contract_payload.get("quarantined_proposal_ids", []),
     }
 
 
@@ -326,10 +362,14 @@ def _require(condition: bool, issue: str, issues: list[str]) -> None:
 def _metrics(results: list[ProposalContractResult]) -> dict[str, Any]:
     admitted = [row for row in results if row.admitted]
     invalid_admitted = [row for row in admitted if row.issues]
+    quarantined = [row for row in results if row.admission == "draft_pool"]
+    manifest_only = [row for row in results if row.admission == "manifest_only"]
     return {
         "proposal_count": len(results),
         "admitted_count": len(admitted),
-        "quarantined_count": len(results) - len(admitted),
+        "manifest_only_count": len(manifest_only),
+        "preflight_ready_count": len(admitted) + len(manifest_only),
+        "quarantined_count": len(quarantined),
         "invalid_admitted_count": len(invalid_admitted),
         "admitted_verifier_coverage": _coverage(admitted, "verifier_present"),
         "admitted_rollback_coverage": _coverage(admitted, "rollback_present"),

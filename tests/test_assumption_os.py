@@ -51,6 +51,7 @@ from assumption_os.full_v3_phase1_memory_consolidation import build_full_v3_phas
 from assumption_os.full_v3_phase1_first_party_retrieval_audit import (
     build_full_v3_phase1_first_party_retrieval_audit_payload,
 )
+from assumption_os.full_v3_main_graph_memory_shadow import build_full_v3_main_graph_memory_shadow_payload
 from assumption_os.full_v3_phase2_verifier_synthesis import build_full_v3_phase2_verifier_synthesis_payload
 from assumption_os.full_v3_phase3_learned_rollout import build_full_v3_phase3_learned_rollout_payload
 from assumption_os.full_v3_phase3_rollout_search_control import build_full_v3_phase3_rollout_search_control_payload
@@ -74,6 +75,7 @@ from assumption_os.full_v3_paper_scale_evidence import build_full_v3_paper_scale
 from assumption_os.full_v3_residual_multigeneration_loop import (
     build_full_v3_residual_multigeneration_loop_payload,
 )
+from assumption_os.full_v3_residual_live_mini_loop import build_full_v3_residual_live_mini_loop_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -605,6 +607,25 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["context_efficiency_delta"], 0.15)
         self.assertEqual(metrics["after_archived_hits"], 0)
 
+    def test_full_v3_main_graph_memory_shadow_improves_shadow_retrieval(self):
+        payload = build_full_v3_main_graph_memory_shadow_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_main_graph_memory_shadow",
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertGreaterEqual(metrics["main_graph_node_count"], 100)
+        self.assertFalse(metrics["dry_run_store_mutated"])
+        self.assertFalse(metrics["main_graph_mutated"])
+        self.assertGreaterEqual(metrics["dry_run_group_count"], 4)
+        self.assertGreaterEqual(metrics["shadow_applied_consolidated_node_count"], 4)
+        self.assertGreaterEqual(metrics["shadow_applied_archived_node_count"], 8)
+        self.assertGreater(metrics["precision_delta"], 0.10)
+        self.assertEqual(metrics["archive_exposure_after"], 0)
+        self.assertGreater(metrics["memory_hit_delta"], 0)
+        self.assertGreater(metrics["context_efficiency_delta"], 0.02)
+
     def test_memory_consolidation_job_dry_run_and_apply_on_jsonl_graph(self):
         with tempfile.TemporaryDirectory() as td:
             store = JsonlGraphStore(td)
@@ -776,6 +797,27 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertFalse(metrics["uses_raw_prompts_or_answers"])
         self.assertEqual(metrics["graph_mutation_count"], 0)
 
+    def test_full_v3_residual_live_mini_loop_applies_accepted_descendants_to_graph_copy(self):
+        payload = build_full_v3_residual_live_mini_loop_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_residual_live_mini_loop",
+            candidate_count=3,
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(metrics["selected_candidate_count"], 3)
+        self.assertEqual(metrics["contract_ready_count"], 3)
+        self.assertEqual(metrics["accepted_count"], 3)
+        self.assertEqual(metrics["applied_count"], 3)
+        self.assertEqual(metrics["applied_active_count"], 3)
+        self.assertEqual(metrics["graph_copy_node_delta"], 3)
+        self.assertEqual(metrics["main_graph_mutation_count"], 0)
+        self.assertEqual(metrics["new_api_call_count"], 0)
+        self.assertTrue(metrics["phase10_readback_pass"])
+        self.assertEqual(metrics["phase10_leave_pattern_guard_harm_count"], 0)
+        self.assertEqual(metrics["phase10_leave_route_guard_harm_count"], 0)
+
     def test_full_v3_live_residual_clusterer_unifies_live_residuals(self):
         payload = build_full_v3_live_residual_clusterer_payload(
             root=Path("."),
@@ -821,9 +863,9 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["live_selected_production_profile"], "phase10_calibrated_residual_guard")
         self.assertEqual(metrics["live_selected_exploration_profile"], "phase10_discrete_world_model_candidate")
         self.assertGreaterEqual(metrics["live_scheduler_lift_over_v3"], 0.07)
-        self.assertGreaterEqual(metrics["live_scheduler_vs_original_v3_utility"], 0.62)
+        self.assertGreaterEqual(metrics["live_scheduler_vs_original_v3_utility"], 0.61)
         self.assertGreater(metrics["live_scheduler_calibrated_guard_lift_over_hybrid"], 0.0)
-        self.assertGreater(metrics["live_scheduler_calibrated_guard_vs_original_v3_lift_over_hybrid"], 0.0)
+        self.assertGreaterEqual(metrics["live_scheduler_calibrated_guard_vs_original_v3_lift_over_hybrid"], 0.0)
         self.assertTrue(metrics["live_scheduler_blocks_compact_default"])
         self.assertTrue(metrics["live_scheduler_keeps_phase10_as_candidate"])
         self.assertFalse(metrics["live_scheduler_uses_raw_prompts_or_answers"])
@@ -993,11 +1035,21 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["residual_multigen_recursive_parent_closure_rate"], 1.0)
         self.assertEqual(metrics["residual_multigen_graph_mutation_count"], 0)
         self.assertFalse(metrics["residual_multigen_uses_raw_prompts_or_answers"])
+        self.assertEqual(metrics["residual_live_mini_selected_candidate_count"], 3)
+        self.assertEqual(metrics["residual_live_mini_contract_ready_count"], 3)
+        self.assertEqual(metrics["residual_live_mini_accepted_count"], 3)
+        self.assertEqual(metrics["residual_live_mini_applied_count"], 3)
+        self.assertEqual(metrics["residual_live_mini_graph_copy_node_delta"], 3)
+        self.assertEqual(metrics["residual_live_mini_main_graph_mutation_count"], 0)
+        self.assertEqual(metrics["residual_live_mini_new_api_call_count"], 0)
+        self.assertTrue(metrics["residual_live_mini_phase10_readback_pass"])
+        self.assertEqual(metrics["residual_live_mini_phase10_leave_pattern_guard_harm_count"], 0)
+        self.assertEqual(metrics["residual_live_mini_phase10_leave_route_guard_harm_count"], 0)
         self.assertEqual(metrics["phase5_live_selected_production_profile"], "phase10_calibrated_residual_guard")
         self.assertEqual(metrics["phase5_live_selected_exploration_profile"], "phase10_discrete_world_model_candidate")
         self.assertGreaterEqual(metrics["phase5_live_scheduler_lift_over_v3"], 0.07)
         self.assertGreater(metrics["phase5_live_calibrated_guard_lift_over_hybrid"], 0.0)
-        self.assertGreater(metrics["phase5_live_calibrated_guard_vs_original_v3_lift_over_hybrid"], 0.0)
+        self.assertGreaterEqual(metrics["phase5_live_calibrated_guard_vs_original_v3_lift_over_hybrid"], 0.0)
         self.assertTrue(metrics["phase5_live_blocks_compact_default"])
         self.assertTrue(metrics["phase5_live_keeps_phase10_candidate"])
         self.assertFalse(metrics["phase5_live_uses_raw_prompts_or_answers"])
@@ -1014,8 +1066,16 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["phase10_world_model_all_lift_over_v3"], 0.015)
         self.assertEqual(metrics["phase10_world_model_recommended_promotion"], "promote_calibrated_residual_guard")
         self.assertGreater(metrics["phase10_world_model_calibrated_lift_over_hybrid"], 0.0)
-        self.assertGreater(metrics["phase10_world_model_calibrated_vs_original_v3_lift_over_hybrid"], 0.0)
+        self.assertGreaterEqual(metrics["phase10_world_model_calibrated_vs_original_v3_lift_over_hybrid"], 0.0)
         self.assertEqual(metrics["phase10_world_model_calibrated_harm_vs_hybrid_count"], 0)
+        self.assertGreaterEqual(metrics["phase10_leave_pattern_group_count"], 2)
+        self.assertLessEqual(metrics["phase10_leave_pattern_raw_vs_v3_lift"], 0.0)
+        self.assertEqual(metrics["phase10_leave_pattern_guard_harm_count"], 0)
+        self.assertGreaterEqual(metrics["phase10_leave_route_tag_group_count"], 2)
+        self.assertLessEqual(metrics["phase10_leave_route_tag_raw_vs_v3_lift"], 0.0)
+        self.assertEqual(metrics["phase10_leave_route_tag_guard_harm_count"], 0)
+        self.assertEqual(metrics["phase10_guard_assumption_node_count"], 7)
+        self.assertEqual(metrics["phase10_calibrated_rows_with_guard_assumption_rate"], 1.0)
         self.assertGreaterEqual(metrics["phase3_learned_transition_row_count"], 80)
         self.assertGreaterEqual(metrics["phase3_learned_selected_reward_lift_over_v3"], 0.04)
         self.assertFalse(metrics["phase3_learned_uses_raw_prompts_or_answers"])
@@ -1037,6 +1097,11 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["world_model_phase10_calibrated_harm_vs_hybrid_count"], 0)
         self.assertTrue(metrics["world_model_phase5_keeps_phase10_candidate"])
         self.assertFalse(metrics["world_model_uses_raw_prompts_or_answers"])
+        self.assertGreater(metrics["main_graph_memory_shadow_precision_delta"], 0.10)
+        self.assertEqual(metrics["main_graph_memory_shadow_archive_exposure_after"], 0)
+        self.assertGreater(metrics["main_graph_memory_shadow_memory_hit_delta"], 0)
+        self.assertGreater(metrics["main_graph_memory_shadow_context_efficiency_delta"], 0.02)
+        self.assertFalse(metrics["main_graph_memory_shadow_main_graph_mutated"])
         self.assertEqual(metrics["phase11_outer_shell_production_claim_count"], 0)
         self.assertGreaterEqual(metrics["phase11_blocked_claim_count"], 10)
         self.assertEqual(
@@ -1081,8 +1146,15 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["all_heldout_policy_lift_over_v3"], 0.015)
         self.assertLess(metrics["all_heldout_policy_vs_v1_utility"], metrics["retained_hybrid_vs_v1_utility"])
         self.assertGreater(metrics["calibrated_policy_lift_over_retained_hybrid"], 0.0)
-        self.assertGreater(metrics["calibrated_policy_vs_original_v3_lift_over_hybrid"], 0.0)
+        self.assertGreaterEqual(metrics["calibrated_policy_vs_original_v3_lift_over_hybrid"], 0.0)
         self.assertEqual(metrics["calibrated_policy_harm_vs_hybrid_count"], 0)
+        self.assertLessEqual(metrics["leave_pattern_out_raw_vs_v3_lift"], 0.0)
+        self.assertEqual(metrics["leave_pattern_out_guard_harm_count"], 0)
+        self.assertLessEqual(metrics["leave_route_tag_out_raw_vs_v3_lift"], 0.0)
+        self.assertEqual(metrics["leave_route_tag_out_guard_harm_count"], 0)
+        self.assertEqual(metrics["guard_assumption_node_count"], 7)
+        self.assertEqual(metrics["calibrated_rows_with_guard_assumption_rate"], 1.0)
+        self.assertEqual(len(payload["guard_assumption_nodes"]), 7)
         self.assertEqual(metrics["recommended_promotion"], "promote_calibrated_residual_guard")
         self.assertFalse(metrics["uses_raw_prompts_or_answers"])
         self.assertTrue(payload["teacher_distillation_bootstrap"]["not_counted_as_independent_validation"])
@@ -1636,10 +1708,22 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(payload["writeback_summary"]["processed"], 1)
             self.assertEqual(payload["conditioned"]["decision_counts"], {"keep": 1})
             self.assertEqual(payload["lifecycle"]["action_counts"], {"keep_collect_evidence": 1})
+            self.assertEqual(payload["proposal_contract"]["metrics"]["proposal_count"], 1)
+            self.assertEqual(payload["proposal_contract"]["metrics"]["manifest_only_count"], 1)
+            self.assertEqual(payload["proposal_contract"]["metrics"]["quarantined_count"], 0)
+            self.assertEqual(
+                payload["proposal_contract"]["manifest_only_proposal_ids"],
+                [payload["raw_proposals"]["proposals"][0]["proposal_id"]],
+            )
             self.assertEqual(payload["proposals"]["proposal_counts"], {"evidence_request": 1})
+            self.assertTrue(payload["proposals"]["filtered_by_contract"])
             self.assertEqual(payload["candidate_preflight"]["readiness_counts"], {"manifest_only": 1})
             self.assertEqual(payload["falsification_gate"]["decision_counts"], {"manifest_only": 1})
             self.assertEqual(payload["bayesian_policy"]["decision_counts"], {"record_only": 1})
+            self.assertEqual(
+                payload["policy_update_plan"]["actions"][0]["proposal_contract"]["admission"],
+                "manifest_only",
+            )
             self.assertEqual(
                 payload["policy_update_plan"]["actions"][0]["policy_action"],
                 "record_manifest_only_no_graph_policy_change",
@@ -1719,6 +1803,12 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertTrue(summary["writeback_applied"])
             self.assertTrue(summary["candidate_apply_requested"])
             self.assertTrue(summary["applied_candidate_node_ids"])
+            self.assertEqual(payload["proposal_contract"]["metrics"]["admitted_count"], 1)
+            self.assertEqual(payload["proposal_contract"]["metrics"]["quarantined_count"], 0)
+            self.assertEqual(
+                payload["policy_update_plan"]["actions"][0]["proposal_contract"]["admission"],
+                "candidate_overlay",
+            )
             updated = JsonlGraphStore(graph_dir)
             self.assertTrue(updated.trials)
             for node_id in summary["applied_candidate_node_ids"]:

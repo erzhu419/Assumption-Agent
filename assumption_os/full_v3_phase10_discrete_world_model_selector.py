@@ -20,6 +20,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from .schema import AssumptionNode, AssumptionType, HypothesisKind, stable_id
+
 
 PAPER_DIR = Path("phase four/assumption_graph/paper_readiness_20260604")
 DEFAULT_OUT = PAPER_DIR / "full_v3_phase10_discrete_world_model_selector_20260611.json"
@@ -92,6 +94,27 @@ def build_full_v3_phase10_discrete_world_model_selector_payload(
         similarity_power=similarity_power,
         support_weight=support_weight,
     )
+    leave_group_out = {
+        "pattern": _leave_group_out_eval(
+            candidate_rows=candidate_rows,
+            support_rows=compact_support_rows,
+            group_key="pattern_id",
+            prior_weight=prior_weight,
+            similarity_power=similarity_power,
+            support_weight=support_weight,
+            abstain_margin=abstain_margin,
+        ),
+        "route_tag": _leave_group_out_eval(
+            candidate_rows=candidate_rows,
+            support_rows=compact_support_rows,
+            group_key="route_strategy_tag",
+            prior_weight=prior_weight,
+            similarity_power=similarity_power,
+            support_weight=support_weight,
+            abstain_margin=abstain_margin,
+        ),
+    }
+    guard_assumption_nodes = _guard_assumption_nodes(leave_group_out=leave_group_out)
     teacher_bootstrap = _teacher_distillation_bootstrap(candidate_rows=candidate_rows, heldout_rows=heldout_rows)
     metrics = _metrics(
         heldout_rows=heldout_rows,
@@ -102,6 +125,8 @@ def build_full_v3_phase10_discrete_world_model_selector_payload(
         calibrated_policy_rows=calibrated_policy_rows,
         latent_metrics=latent_metrics,
         calibration=calibration,
+        leave_group_out=leave_group_out,
+        guard_assumption_nodes=guard_assumption_nodes,
         teacher_bootstrap=teacher_bootstrap,
         artifacts=artifacts,
     )
@@ -130,6 +155,16 @@ def build_full_v3_phase10_discrete_world_model_selector_payload(
         "promotion_decision_matches_guarded_performance": (
             metrics["recommended_promotion"] == "promote_calibrated_residual_guard"
         ),
+        "leave_pattern_out_available": metrics["leave_pattern_out_group_count"] >= 2,
+        "leave_pattern_out_raw_boundary_recorded": metrics["leave_pattern_out_raw_vs_v3_lift"] <= 0.0,
+        "leave_pattern_out_guard_nonharmful": metrics["leave_pattern_out_guard_harm_count"] == 0,
+        "leave_route_tag_out_available": metrics["leave_route_tag_out_group_count"] >= 2,
+        "leave_route_tag_out_raw_boundary_recorded": metrics["leave_route_tag_out_raw_vs_v3_lift"] <= 0.0,
+        "leave_route_tag_out_guard_nonharmful": metrics["leave_route_tag_out_guard_harm_count"] == 0,
+        "guard_rules_materialized_as_assumption_nodes": metrics["guard_assumption_node_count"] >= 7,
+        "calibrated_rows_reference_guard_assumptions": metrics[
+            "calibrated_rows_with_guard_assumption_rate"
+        ] == 1.0,
         "redacted_artifacts_only": metrics["uses_raw_prompts_or_answers"] is False,
     }
     return {
@@ -192,9 +227,11 @@ def build_full_v3_phase10_discrete_world_model_selector_payload(
         "loo_policy_rows": loo_rows,
         "all_heldout_policy_rows": all_policy_rows,
         "calibrated_policy_rows": calibrated_policy_rows,
+        "guard_assumption_nodes": guard_assumption_nodes,
         "teacher_distillation_bootstrap": teacher_bootstrap,
         "latent_metrics": latent_metrics,
         "calibration": calibration,
+        "leave_group_out": leave_group_out,
         "metrics": metrics,
         "gates": gates,
         "failed_gates": [name for name, passed in gates.items() if not passed],
@@ -432,11 +469,12 @@ def _calibrated_residual_guard_policy_rows(
     for row in rows:
         raw = loo_by_id.get(row.problem_id)
         raw_arm = raw["selected_arm"] if raw else V3_ARM
-        selected_arm, reason = _calibrated_residual_guard_arm(row=row, raw_arm=raw_arm)
+        selected_arm, reason, guard_assumption_id = _calibrated_residual_guard_decision(row=row, raw_arm=raw_arm)
         selected_reward = row.action_rewards[selected_arm]
         if not selected_reward.get("observed"):
             selected_arm = V3_ARM
             reason = "unobserved_guard_arm_fallback_to_v3"
+            guard_assumption_id = _guard_assumption_id(reason, V3_ARM)
             selected_reward = row.action_rewards[V3_ARM]
         hybrid_arm = row.teacher_arm if row.candidate_case else V3_ARM
         hybrid_reward = row.action_rewards[hybrid_arm]
@@ -449,6 +487,7 @@ def _calibrated_residual_guard_policy_rows(
                 "raw_world_model_arm": raw_arm,
                 "hybrid_arm": hybrid_arm,
                 "guard_reason": reason,
+                "guard_assumption_id": guard_assumption_id,
                 "state_bits": row.state_bits,
                 "utility_vs_v1": selected_reward["utility_vs_v1"],
                 "utility_vs_original_v3": selected_reward["utility_vs_original_v3"],
@@ -470,43 +509,174 @@ def _calibrated_residual_guard_policy_rows(
 
 
 def _calibrated_residual_guard_arm(*, row: TransitionRow, raw_arm: str) -> tuple[str, str]:
+    arm, reason, _guard_assumption_id_value = _calibrated_residual_guard_decision(row=row, raw_arm=raw_arm)
+    return arm, reason
+
+
+def _calibrated_residual_guard_decision(*, row: TransitionRow, raw_arm: str) -> tuple[str, str, str]:
     if not row.candidate_case:
-        return V3_ARM, "noncandidate_route_keep_v3"
+        return V3_ARM, "noncandidate_route_keep_v3", _guard_assumption_id("noncandidate_route_keep_v3", V3_ARM)
     bits = set(row.state_bits)
     if "hft_scaling" in bits:
-        return V3_ARM, "hft_scaling_full_context_guard"
+        return V3_ARM, "hft_scaling_full_context_guard", _guard_assumption_id("hft_scaling", V3_ARM)
     if bits & {"termination", "urgent_triage", "medical_safety"}:
-        return COMPACT_ARM, "counterexample_safety_compact_guard"
+        return (
+            COMPACT_ARM,
+            "counterexample_safety_compact_guard",
+            _guard_assumption_id("termination_urgent_triage_medical_safety", COMPACT_ARM),
+        )
     if "hard_ecological_constraint" in bits:
-        return MICRO_ARM, "hard_constraint_micro_guard"
+        return MICRO_ARM, "hard_constraint_micro_guard", _guard_assumption_id("hard_ecological_constraint", MICRO_ARM)
+    if bits & {"engineering_bottleneck", "pattern:pat_bottleneck_capacity"}:
+        return (
+            V3_ARM,
+            "bottleneck_capacity_uncertainty_full_guard",
+            _guard_assumption_id("engineering_bottleneck_pat_bottleneck_capacity", V3_ARM),
+        )
     if bits & {"formal_proof", "generic_review", "deep_space"}:
-        return V3_ARM, "formal_generic_or_propulsion_full_guard"
-    return raw_arm, "world_model_selected"
+        return (
+            V3_ARM,
+            "formal_generic_or_propulsion_full_guard",
+            _guard_assumption_id("formal_proof_generic_review_deep_space", V3_ARM),
+        )
+    return raw_arm, "world_model_selected", _guard_assumption_id("world_model_selected", "raw_world_model")
+
+
+def _guard_assumption_id(trigger_key: str, arm: str) -> str:
+    return stable_id("guard", "phase10", trigger_key, arm)
 
 
 def _residual_guard_rules() -> list[dict[str, str]]:
     return [
         {
+            "guard_assumption_id": _guard_assumption_id("noncandidate_route_keep_v3", V3_ARM),
+            "trigger": "noncandidate_route",
+            "trigger_bits": "noncandidate_route",
+            "arm": V3_ARM,
+            "reason": "Non-candidate routes abstain to the full V3 baseline.",
+            "expected_effect": "Avoid applying unvalidated compact/micro guard arms outside the Phase9 candidate route.",
+            "risk": "May miss useful new coverage until the router creates a candidate slice.",
+        },
+        {
+            "guard_assumption_id": _guard_assumption_id("hft_scaling", V3_ARM),
             "trigger": "hft_scaling",
+            "trigger_bits": "hft_scaling",
             "arm": V3_ARM,
             "reason": "High-frequency scaling examples need the full-context baseline unless validated otherwise.",
+            "expected_effect": "Preserve original V3 context on HFT scaling rows where compact framing may overconstrain tradeoffs.",
+            "risk": "May underuse compact guard if future HFT rows become better calibrated.",
         },
         {
+            "guard_assumption_id": _guard_assumption_id("termination_urgent_triage_medical_safety", COMPACT_ARM),
             "trigger": "termination | urgent_triage | medical_safety",
+            "trigger_bits": "termination, urgent_triage, medical_safety",
             "arm": COMPACT_ARM,
             "reason": "Counterexample and safety repair cases prefer compact explicit failure framing.",
+            "expected_effect": "Improve V1-regression robustness on safety, triage, and termination rows by forcing concise failure-boundary framing.",
+            "risk": "Can over-structure open-ended answers if routed outside the counterexample/safety slice.",
         },
         {
+            "guard_assumption_id": _guard_assumption_id("hard_ecological_constraint", MICRO_ARM),
             "trigger": "hard_ecological_constraint",
+            "trigger_bits": "hard_ecological_constraint",
             "arm": MICRO_ARM,
             "reason": "Hard constraint tradeoffs prefer the micro guard's concise constraint handling.",
+            "expected_effect": "Use minimal constraint framing when a hard ecological or ethical constraint dominates.",
+            "risk": "May be too weak when the answer needs a full implementation plan.",
         },
         {
+            "guard_assumption_id": _guard_assumption_id("engineering_bottleneck_pat_bottleneck_capacity", V3_ARM),
+            "trigger": "engineering_bottleneck | pattern:pat_bottleneck_capacity",
+            "trigger_bits": "engineering_bottleneck, pattern:pat_bottleneck_capacity",
+            "arm": V3_ARM,
+            "reason": "Bottleneck-capacity rows showed leave-pattern-out micro-guard harm, so abstain to the full baseline until fresh evidence improves calibration.",
+            "expected_effect": "Prevent leave-pattern-out micro-guard harm on bottleneck-capacity transfer rows.",
+            "risk": "May be conservative if later bottleneck rows show reliable micro-guard gains.",
+        },
+        {
+            "guard_assumption_id": _guard_assumption_id("formal_proof_generic_review_deep_space", V3_ARM),
             "trigger": "formal_proof | generic_review | deep_space",
+            "trigger_bits": "formal_proof, generic_review, deep_space",
             "arm": V3_ARM,
             "reason": "Formal, generic review, and propulsion optimization boundaries abstain to the full baseline.",
+            "expected_effect": "Avoid compact/micro framing in proof, generic review, and propulsion rows where structure transfer is under-validated.",
+            "risk": "May leave some valid formal transfer opportunities unexplored.",
+        },
+        {
+            "guard_assumption_id": _guard_assumption_id("world_model_selected", "raw_world_model"),
+            "trigger": "no_guard_boundary",
+            "trigger_bits": "no calibrated boundary bit fires",
+            "arm": "raw_world_model",
+            "reason": "Use the raw discrete world-model arm only when no calibrated abstention or override boundary is active.",
+            "expected_effect": "Keep raw Phase10 selection learnable while preventing known boundary regressions.",
+            "risk": "Raw predictor is still uncalibrated against base rate and must remain exploration-only without the guard.",
         },
     ]
+
+
+def _guard_assumption_nodes(*, leave_group_out: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    support_by_guard: dict[str, list[str]] = {}
+    harm_by_guard: dict[str, int] = {}
+    for surface in leave_group_out.values():
+        for row in surface.get("rows", []):
+            guard_id = str(row.get("guard_assumption_id") or "")
+            if not guard_id:
+                continue
+            support_by_guard.setdefault(guard_id, []).append(str(row.get("problem_id")))
+            if float(row.get("guard_delta_vs_v3") or 0.0) < 0.0:
+                harm_by_guard[guard_id] = harm_by_guard.get(guard_id, 0) + 1
+    nodes = []
+    for rule in _residual_guard_rules():
+        guard_id = rule["guard_assumption_id"]
+        arm = rule["arm"]
+        support_ids = sorted(set(support_by_guard.get(guard_id, [])))
+        harm_count = harm_by_guard.get(guard_id, 0)
+        node = AssumptionNode(
+            id=guard_id,
+            type=AssumptionType.WORLD_MODEL,
+            kind=HypothesisKind.EVALUATOR_POLICY,
+            claim=f"When Phase10 state bits match `{rule['trigger']}`, select `{arm}` for the residual guard.",
+            context_conditions=[part.strip() for part in rule["trigger_bits"].split(",") if part.strip()],
+            predicted_effects=[rule["expected_effect"]],
+            risk_predictions=[rule["risk"]],
+            verifiers=[
+                "leave_pattern_out_guard_nonharm",
+                "leave_route_tag_out_guard_nonharm",
+                "fresh_ablation_required_before_scope_widening",
+            ],
+            confidence=0.72 if harm_count == 0 else 0.45,
+            metaproductivity=0.12 if arm != "raw_world_model" else 0.05,
+            status="active" if arm != "raw_world_model" else "candidate",
+            tags=[
+                "phase10",
+                "guard_assumption",
+                "calibrated_residual_guard",
+                f"arm:{arm}",
+            ],
+            source_refs=[
+                str(HYBRID_ARTIFACT),
+                str(DEFAULT_OUT),
+                "leave_pattern_out",
+                "leave_route_tag_out",
+            ],
+            payload={
+                "guard_rule": rule,
+                "support_problem_ids": support_ids,
+                "support_row_count": len(support_ids),
+                "leave_group_out_harm_count": harm_count,
+                "negative_controls": [
+                    "no raw prompt/answer access",
+                    "leave-pattern-out nonharm",
+                    "leave-route-tag-out nonharm",
+                    "fallback to V3 when selected arm is unobserved",
+                ],
+                "learnable_policy_object": True,
+            },
+            created_at="2026-06-11T00:00:00Z",
+            updated_at="2026-06-11T00:00:00Z",
+        )
+        nodes.append(node.to_dict())
+    return nodes
 
 
 def _teacher_distillation_bootstrap(
@@ -631,6 +801,98 @@ def _calibration_metrics(
     }
 
 
+def _leave_group_out_eval(
+    *,
+    candidate_rows: list[TransitionRow],
+    support_rows: list[TransitionRow],
+    group_key: str,
+    prior_weight: float,
+    similarity_power: float,
+    support_weight: float,
+    abstain_margin: float,
+) -> dict[str, Any]:
+    groups = sorted({str(getattr(row, group_key) or "") for row in candidate_rows})
+    rows = []
+    for group in groups:
+        heldout = [row for row in candidate_rows if str(getattr(row, group_key) or "") == group]
+        train_candidates = [row for row in candidate_rows if str(getattr(row, group_key) or "") != group]
+        train_support = [row for row in support_rows if str(getattr(row, group_key) or "") != group]
+        train = [*train_candidates, *train_support]
+        for row in heldout:
+            predictions = {
+                arm: _predict_arm_reward(
+                    row=row,
+                    train=train,
+                    arm=arm,
+                    prior_weight=prior_weight,
+                    similarity_power=similarity_power,
+                    support_weight=support_weight,
+                )
+                for arm in ARMS
+            }
+            raw_arm = max(predictions, key=lambda arm: predictions[arm]["predicted_scalar_reward"])
+            if (
+                raw_arm != V3_ARM
+                and predictions[raw_arm]["predicted_scalar_reward"]
+                < predictions[V3_ARM]["predicted_scalar_reward"] + abstain_margin
+            ):
+                raw_arm = V3_ARM
+            guard_arm, guard_reason, guard_assumption_id = _calibrated_residual_guard_decision(
+                row=row,
+                raw_arm=raw_arm,
+            )
+            if not row.action_rewards[guard_arm].get("observed"):
+                guard_arm = V3_ARM
+                guard_reason = "unobserved_guard_arm_fallback_to_v3"
+                guard_assumption_id = _guard_assumption_id(guard_reason, V3_ARM)
+            raw_reward = row.action_rewards[raw_arm]
+            guard_reward = row.action_rewards[guard_arm]
+            v3_reward = row.action_rewards[V3_ARM]
+            rows.append(
+                {
+                    "problem_id": row.problem_id,
+                    "group_key": group_key,
+                    "group": group,
+                    "state_bits": row.state_bits,
+                    "raw_selected_arm": raw_arm,
+                    "guard_selected_arm": guard_arm,
+                    "guard_reason": guard_reason,
+                    "guard_assumption_id": guard_assumption_id,
+                    "predictions": predictions,
+                    "raw_utility_vs_v1": raw_reward["utility_vs_v1"],
+                    "guard_utility_vs_v1": guard_reward["utility_vs_v1"],
+                    "v3_utility_vs_v1": v3_reward["utility_vs_v1"],
+                    "raw_delta_vs_v3": round(
+                        float(raw_reward["utility_vs_v1"]) - float(v3_reward["utility_vs_v1"]),
+                        4,
+                    ),
+                    "guard_delta_vs_v3": round(
+                        float(guard_reward["utility_vs_v1"]) - float(v3_reward["utility_vs_v1"]),
+                        4,
+                    ),
+                }
+            )
+    raw_values = [float(row["raw_utility_vs_v1"]) for row in rows]
+    guard_values = [float(row["guard_utility_vs_v1"]) for row in rows]
+    v3_values = [float(row["v3_utility_vs_v1"]) for row in rows]
+    return {
+        "group_key": group_key,
+        "group_count": len(groups),
+        "groups": groups,
+        "row_count": len(rows),
+        "raw_vs_v1_utility": round(_mean(raw_values), 4),
+        "guard_vs_v1_utility": round(_mean(guard_values), 4),
+        "v3_vs_v1_utility": round(_mean(v3_values), 4),
+        "raw_vs_v3_lift": round(_mean(raw_values) - _mean(v3_values), 4),
+        "guard_vs_v3_lift": round(_mean(guard_values) - _mean(v3_values), 4),
+        "guard_lift_over_raw": round(_mean(guard_values) - _mean(raw_values), 4),
+        "raw_harm_count": sum(1 for row in rows if float(row["raw_delta_vs_v3"]) < 0.0),
+        "guard_harm_count": sum(1 for row in rows if float(row["guard_delta_vs_v3"]) < 0.0),
+        "guard_abstain_count": sum(1 for row in rows if row["guard_selected_arm"] == V3_ARM),
+        "rows": rows,
+    }
+
+
 def _metrics(
     *,
     heldout_rows: list[TransitionRow],
@@ -641,6 +903,8 @@ def _metrics(
     calibrated_policy_rows: list[dict[str, Any]],
     latent_metrics: dict[str, Any],
     calibration: dict[str, Any],
+    leave_group_out: dict[str, dict[str, Any]],
+    guard_assumption_nodes: list[dict[str, Any]],
     teacher_bootstrap: dict[str, Any],
     artifacts: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
@@ -661,6 +925,10 @@ def _metrics(
     hybrid_metrics = artifacts["phase9_hybrid"].get("metrics", {})
     selected_arm_counts = Counter(row["selected_arm"] for row in loo_rows)
     calibrated_arm_counts = Counter(row["selected_arm"] for row in calibrated_policy_rows)
+    leave_pattern = leave_group_out["pattern"]
+    leave_route = leave_group_out["route_tag"]
+    guard_node_ids = {row.get("id") for row in guard_assumption_nodes}
+    calibrated_guard_ids = [row.get("guard_assumption_id") for row in calibrated_policy_rows]
     retained_hybrid_v1 = float(hybrid_metrics.get("hybrid_vs_v1_heldout_utility") or 0.0)
     retained_hybrid_v3 = float(hybrid_metrics.get("hybrid_vs_original_v3_heldout_utility") or 0.0)
     return {
@@ -724,6 +992,29 @@ def _metrics(
         "selected_arm_mae": calibration["selected_arm_mae"],
         "selected_arm_base_rate_mae": calibration["selected_arm_base_rate_mae"],
         "calibration_beats_base_rate": calibration["calibration_beats_base_rate"],
+        "leave_pattern_out_group_count": leave_pattern["group_count"],
+        "leave_pattern_out_row_count": leave_pattern["row_count"],
+        "leave_pattern_out_raw_vs_v3_lift": leave_pattern["raw_vs_v3_lift"],
+        "leave_pattern_out_guard_vs_v3_lift": leave_pattern["guard_vs_v3_lift"],
+        "leave_pattern_out_guard_lift_over_raw": leave_pattern["guard_lift_over_raw"],
+        "leave_pattern_out_raw_harm_count": leave_pattern["raw_harm_count"],
+        "leave_pattern_out_guard_harm_count": leave_pattern["guard_harm_count"],
+        "leave_pattern_out_guard_abstain_count": leave_pattern["guard_abstain_count"],
+        "leave_route_tag_out_group_count": leave_route["group_count"],
+        "leave_route_tag_out_row_count": leave_route["row_count"],
+        "leave_route_tag_out_raw_vs_v3_lift": leave_route["raw_vs_v3_lift"],
+        "leave_route_tag_out_guard_vs_v3_lift": leave_route["guard_vs_v3_lift"],
+        "leave_route_tag_out_guard_lift_over_raw": leave_route["guard_lift_over_raw"],
+        "leave_route_tag_out_raw_harm_count": leave_route["raw_harm_count"],
+        "leave_route_tag_out_guard_harm_count": leave_route["guard_harm_count"],
+        "leave_route_tag_out_guard_abstain_count": leave_route["guard_abstain_count"],
+        "guard_assumption_node_count": len(guard_assumption_nodes),
+        "guard_assumption_active_count": sum(1 for row in guard_assumption_nodes if row.get("status") == "active"),
+        "guard_assumption_candidate_count": sum(1 for row in guard_assumption_nodes if row.get("status") == "candidate"),
+        "calibrated_rows_with_guard_assumption_rate": round(
+            _mean([1.0 if guard_id in guard_node_ids else 0.0 for guard_id in calibrated_guard_ids]),
+            4,
+        ),
         "feature_snapshot_redacted": _feature_snapshot_redacted(artifacts["feature_snapshot"]),
         "uses_raw_prompts_or_answers": False,
     }

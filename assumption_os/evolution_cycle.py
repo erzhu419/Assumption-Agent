@@ -28,6 +28,7 @@ from .formal_mapping import build_formal_mapping_gate_payload, build_formal_mapp
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .lifecycle import build_lifecycle_payload
 from .novelty_integration import build_novelty_integration_payload
+from .proposal_contract import build_proposal_contract_payload, filter_proposal_payload_by_contract
 from .proposal_overlay import parse_csv_set
 from .proposals import build_proposal_payload
 from .record_phase2_eval import record_phase2_eval
@@ -150,9 +151,19 @@ def build_evolution_cycle_payload(
         "proposal_counts": {},
         "proposals": [],
     }
-    proposal_payload = merge_proposal_payloads(
+    raw_proposal_payload = merge_proposal_payloads(
         eval_id=f"{eval_id}_proposals",
         payloads=[lifecycle_proposal_payload, failure_hypothesis_payload],
+    )
+    proposal_contract_payload = build_proposal_contract_payload(
+        proposal_payload=raw_proposal_payload,
+        eval_id=f"{eval_id}_proposal_contract",
+        store=graph.store,
+    )
+    proposal_payload = filter_proposal_payload_by_contract(
+        raw_proposal_payload,
+        proposal_contract_payload,
+        include_manifest_only=True,
     )
     novelty_integration_payload = build_novelty_integration_payload(
         graph.store,
@@ -250,7 +261,7 @@ def build_evolution_cycle_payload(
         regression_predictions=regression_predictions,
     )
     policy_update_plan = build_policy_update_plan(
-        proposal_payload=proposal_payload,
+        proposal_payload=raw_proposal_payload,
         preflight_payload=preflight_payload,
         acceptance_payload=acceptance_payload,
         apply_accepted=effective_apply_accepted,
@@ -258,6 +269,7 @@ def build_evolution_cycle_payload(
         bayesian_policy_payload=bayesian_policy_payload,
         formal_mapping_gate_payload=formal_mapping_gate_payload,
         novelty_integration_payload=novelty_integration_payload,
+        proposal_contract_payload=proposal_contract_payload,
     )
 
     return {
@@ -294,6 +306,8 @@ def build_evolution_cycle_payload(
         "formal_mapping_gate": formal_mapping_gate_payload,
         "novelty_integration": novelty_integration_payload,
         "failure_hypotheses": failure_hypothesis_payload,
+        "raw_proposals": raw_proposal_payload,
+        "proposal_contract": proposal_contract_payload,
         "proposals": proposal_payload,
         "candidate_preflight": preflight_payload,
         "candidate_acceptance": acceptance_payload,
@@ -405,9 +419,14 @@ def build_policy_update_plan(
     bayesian_policy_payload: dict | None = None,
     formal_mapping_gate_payload: dict | None = None,
     novelty_integration_payload: dict | None = None,
+    proposal_contract_payload: dict | None = None,
 ) -> dict:
     accepted = set((acceptance_payload or {}).get("accepted_proposal_ids", []))
     summary_by_proposal = {s["proposal_id"]: s for s in preflight_payload.get("summaries", [])}
+    contract_by_proposal = {
+        row["proposal_id"]: row
+        for row in (proposal_contract_payload or {}).get("results", [])
+    }
     bayes_by_proposal = {
         s["proposal_id"]: s
         for s in (bayesian_policy_payload or {}).get("scores", [])
@@ -425,9 +444,12 @@ def build_policy_update_plan(
         pid = proposal.get("proposal_id")
         preflight = summary_by_proposal.get(pid, {})
         candidate = proposal.get("candidate_node") or {}
+        contract = contract_by_proposal.get(pid, {})
         formal_gate = formal_gate_by_proposal.get(pid, {})
         novelty = novelty_by_proposal.get(pid, {})
-        if pid in accepted:
+        if contract.get("admission") == "draft_pool":
+            action = "quarantine_failed_proposal_contract"
+        elif pid in accepted:
             if novelty.get("classification") == "duplicate":
                 action = "merge_with_existing_assumption"
             else:
@@ -448,6 +470,7 @@ def build_policy_update_plan(
             "proposal_type": proposal.get("proposal_type"),
             "parent_node_id": proposal.get("parent_node_id"),
             "candidate_node_id": candidate.get("id"),
+            "proposal_contract": contract or {"admission": "not_available"},
             "preflight_readiness": preflight.get("readiness"),
             "formal_mapping_gate": formal_gate or {"decision": "not_applicable"},
             "novelty_integration": novelty or {"classification": "not_available"},

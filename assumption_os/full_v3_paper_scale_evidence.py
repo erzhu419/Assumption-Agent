@@ -33,6 +33,7 @@ REQUIRED_ARTIFACTS = {
     "v3_phase4_generator": PAPER_DIR / "full_v3_phase4_hypothesis_generator_20260611.json",
     "v3_live_residual_clusterer": PAPER_DIR / "full_v3_live_residual_clusterer_20260611.json",
     "v3_residual_multigeneration_loop": PAPER_DIR / "full_v3_residual_multigeneration_loop_20260611.json",
+    "v3_residual_live_mini_loop": PAPER_DIR / "full_v3_residual_live_mini_loop_20260611.json",
     "v3_phase5_bandit": PAPER_DIR / "full_v3_phase5_contextual_bandit_scheduler_20260611.json",
     "v2_phase6_formal": PAPER_DIR / "full_v2_phase6_formal_alignment_bypass_20260611.json",
     "v3_phase6_formal": PAPER_DIR / "full_v3_phase6_formal_transfer_engine_20260611.json",
@@ -47,6 +48,7 @@ REQUIRED_ARTIFACTS = {
     "v3_phase9_compact_frame_guard": PAPER_DIR / "full_v3_phase9_compact_frame_guard_20260611.json",
     "v3_phase9_hybrid_guard": PAPER_DIR / "full_v3_phase9_hybrid_guard_heldout_20260611.json",
     "v3_phase10_discrete_world_model": PAPER_DIR / "full_v3_phase10_discrete_world_model_selector_20260611.json",
+    "v3_main_graph_memory_shadow": PAPER_DIR / "full_v3_main_graph_memory_shadow_20260611.json",
     "v3_world_model_calibration": PAPER_DIR / "full_v3_world_model_calibration_20260611.json",
     "v3_same_batch_ablation_suite": PAPER_DIR / "full_v3_same_batch_ablation_suite_20260611.json",
     "v3_phase11_capability_audit": PAPER_DIR / "full_v3_phase11_capability_audit_20260611.json",
@@ -111,6 +113,28 @@ def build_full_v3_paper_scale_evidence_payload(
                 "negative_control_coverage",
                 "uses_raw_prompts_or_answers",
                 "graph_mutation_count",
+            ],
+        ),
+        "residual_live_mini_loop": _metric_subset(
+            artifacts["v3_residual_live_mini_loop"].get("metrics", {}),
+            [
+                "source_generation_count",
+                "source_retained_count",
+                "selected_candidate_count",
+                "contract_ready_count",
+                "preflight_ready_count",
+                "accepted_count",
+                "applied_count",
+                "applied_active_count",
+                "graph_copy_node_delta",
+                "main_graph_mutation_count",
+                "new_api_call_count",
+                "trigger_rows_per_candidate",
+                "control_rows_per_candidate",
+                "phase10_readback_pass",
+                "phase10_leave_pattern_guard_harm_count",
+                "phase10_leave_route_guard_harm_count",
+                "phase10_guard_assumption_node_count",
             ],
         ),
         "vertical_slice": _metric_subset(
@@ -290,6 +314,48 @@ def build_full_v3_paper_scale_evidence_payload(
                 "learned_gap_to_retained_hybrid",
                 "recommended_promotion",
                 "calibration_beats_base_rate",
+                "leave_pattern_out_group_count",
+                "leave_pattern_out_raw_vs_v3_lift",
+                "leave_pattern_out_guard_vs_v3_lift",
+                "leave_pattern_out_guard_lift_over_raw",
+                "leave_pattern_out_raw_harm_count",
+                "leave_pattern_out_guard_harm_count",
+                "leave_route_tag_out_group_count",
+                "leave_route_tag_out_raw_vs_v3_lift",
+                "leave_route_tag_out_guard_vs_v3_lift",
+                "leave_route_tag_out_guard_lift_over_raw",
+                "leave_route_tag_out_raw_harm_count",
+                "leave_route_tag_out_guard_harm_count",
+                "guard_assumption_node_count",
+                "guard_assumption_active_count",
+                "guard_assumption_candidate_count",
+                "calibrated_rows_with_guard_assumption_rate",
+            ],
+        ),
+        "main_graph_memory_shadow": _metric_subset(
+            artifacts["v3_main_graph_memory_shadow"].get("metrics", {}),
+            [
+                "main_graph_node_count",
+                "dry_run_group_count",
+                "dry_run_planned_archive_count",
+                "dry_run_planned_consolidated_node_count",
+                "dry_run_store_mutated",
+                "main_graph_mutated",
+                "shadow_applied_archived_node_count",
+                "shadow_applied_consolidated_node_count",
+                "shadow_added_edge_count",
+                "shadow_node_delta",
+                "query_count",
+                "precision_before",
+                "precision_after",
+                "precision_delta",
+                "archive_exposure_before",
+                "archive_exposure_after",
+                "archive_exposure_delta",
+                "memory_hits_before",
+                "memory_hits_after",
+                "memory_hit_delta",
+                "context_efficiency_delta",
             ],
         ),
         "same_batch_ablation_suite": _metric_subset(
@@ -449,6 +515,20 @@ def build_full_v3_paper_scale_evidence_payload(
             metrics["residual_multigen_graph_mutation_count"] == 0
             and metrics["residual_multigen_uses_raw_prompts_or_answers"] is False
         ),
+        "residual_live_mini_loop_applies_to_shadow_graph_only": (
+            metrics["residual_live_mini_selected_candidate_count"] >= 3
+            and metrics["residual_live_mini_contract_ready_count"] == metrics["residual_live_mini_selected_candidate_count"]
+            and metrics["residual_live_mini_accepted_count"] == metrics["residual_live_mini_selected_candidate_count"]
+            and metrics["residual_live_mini_applied_count"] == metrics["residual_live_mini_selected_candidate_count"]
+            and metrics["residual_live_mini_graph_copy_node_delta"] == metrics["residual_live_mini_selected_candidate_count"]
+            and metrics["residual_live_mini_main_graph_mutation_count"] == 0
+            and metrics["residual_live_mini_new_api_call_count"] == 0
+        ),
+        "residual_live_mini_loop_recalibrates_phase10_readback": (
+            metrics["residual_live_mini_phase10_readback_pass"] is True
+            and metrics["residual_live_mini_phase10_leave_pattern_guard_harm_count"] == 0
+            and metrics["residual_live_mini_phase10_leave_route_guard_harm_count"] == 0
+        ),
         "phase5_live_scheduler_realified": metrics["phase5_live_profile_count"] >= 7,
         "phase5_live_scheduler_selects_calibrated_guard": (
             metrics["phase5_live_selected_production_profile"] == "phase10_calibrated_residual_guard"
@@ -473,6 +553,18 @@ def build_full_v3_paper_scale_evidence_payload(
         ),
         "phase10_calibrated_guard_beats_hybrid": (
             metrics["phase10_world_model_calibrated_lift_over_hybrid"] > 0.0
+        ),
+        "phase10_leave_pattern_and_route_out_nonharmful": (
+            metrics["phase10_leave_pattern_group_count"] >= 2
+            and metrics["phase10_leave_route_tag_group_count"] >= 2
+            and metrics["phase10_leave_pattern_raw_harm_count"] >= 1
+            and metrics["phase10_leave_route_tag_raw_harm_count"] >= 1
+            and metrics["phase10_leave_pattern_guard_harm_count"] == 0
+            and metrics["phase10_leave_route_tag_guard_harm_count"] == 0
+        ),
+        "phase10_guard_rules_are_graph_assumptions": (
+            metrics["phase10_guard_assumption_node_count"] >= 7
+            and metrics["phase10_calibrated_rows_with_guard_assumption_rate"] == 1.0
         ),
         "phase10_raw_predictor_still_marked_uncalibrated": (
             metrics["phase10_world_model_calibration_beats_base_rate"] is False
@@ -511,6 +603,13 @@ def build_full_v3_paper_scale_evidence_payload(
             and metrics["world_model_phase10_calibrated_harm_vs_hybrid_count"] == 0
         ),
         "world_model_calibration_redacted": metrics["world_model_uses_raw_prompts_or_answers"] is False,
+        "main_graph_memory_shadow_improves_retrieval_without_mutation": (
+            metrics["main_graph_memory_shadow_precision_delta"] >= 0.10
+            and metrics["main_graph_memory_shadow_archive_exposure_after"] == 0
+            and metrics["main_graph_memory_shadow_memory_hit_delta"] > 0
+            and metrics["main_graph_memory_shadow_context_efficiency_delta"] > 0.02
+            and metrics["main_graph_memory_shadow_main_graph_mutated"] is False
+        ),
         "phase11_capability_audit_passes": metrics["phase11_artifact_pass_rate"] == 1.0,
         "phase11_outer_shells_not_overclaimed": metrics["phase11_outer_shell_production_claim_count"] == 0,
         "phase11_phase7_bounded_daemon_recorded": (
@@ -680,11 +779,13 @@ def _v3_mechanism_summary(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any
         "v3_phase4_generator",
         "v3_live_residual_clusterer",
         "v3_residual_multigeneration_loop",
+        "v3_residual_live_mini_loop",
         "v3_phase5_bandit",
         "v3_phase6_formal",
         "v3_phase7_long_run",
         "v3_phase7_daemon_soak",
         "v3_phase10_discrete_world_model",
+        "v3_main_graph_memory_shadow",
         "v3_world_model_calibration",
         "v3_same_batch_ablation_suite",
         "v3_phase11_capability_audit",
@@ -1035,6 +1136,51 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "residual_multigen_graph_mutation_count": int(
             artifacts["v3_residual_multigeneration_loop"]["metrics"]["graph_mutation_count"]
         ),
+        "residual_live_mini_source_generation_count": int(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["source_generation_count"]
+        ),
+        "residual_live_mini_source_retained_count": int(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["source_retained_count"]
+        ),
+        "residual_live_mini_selected_candidate_count": int(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["selected_candidate_count"]
+        ),
+        "residual_live_mini_contract_ready_count": int(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["contract_ready_count"]
+        ),
+        "residual_live_mini_preflight_ready_count": int(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["preflight_ready_count"]
+        ),
+        "residual_live_mini_accepted_count": int(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["accepted_count"]
+        ),
+        "residual_live_mini_applied_count": int(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["applied_count"]
+        ),
+        "residual_live_mini_applied_active_count": int(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["applied_active_count"]
+        ),
+        "residual_live_mini_graph_copy_node_delta": int(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["graph_copy_node_delta"]
+        ),
+        "residual_live_mini_main_graph_mutation_count": int(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["main_graph_mutation_count"]
+        ),
+        "residual_live_mini_new_api_call_count": int(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["new_api_call_count"]
+        ),
+        "residual_live_mini_phase10_readback_pass": bool(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["phase10_readback_pass"]
+        ),
+        "residual_live_mini_phase10_leave_pattern_guard_harm_count": int(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["phase10_leave_pattern_guard_harm_count"]
+        ),
+        "residual_live_mini_phase10_leave_route_guard_harm_count": int(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["phase10_leave_route_guard_harm_count"]
+        ),
+        "residual_live_mini_phase10_guard_assumption_node_count": int(
+            artifacts["v3_residual_live_mini_loop"]["metrics"]["phase10_guard_assumption_node_count"]
+        ),
         "phase5_live_profile_source_artifact_count": int(
             artifacts["v3_phase5_bandit"]["metrics"]["live_profile_source_artifact_count"]
         ),
@@ -1174,6 +1320,54 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "phase10_world_model_calibration_beats_base_rate": bool(
             artifacts["v3_phase10_discrete_world_model"]["metrics"]["calibration_beats_base_rate"]
         ),
+        "phase10_leave_pattern_group_count": int(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["leave_pattern_out_group_count"]
+        ),
+        "phase10_leave_pattern_raw_vs_v3_lift": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["leave_pattern_out_raw_vs_v3_lift"]
+        ),
+        "phase10_leave_pattern_guard_vs_v3_lift": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["leave_pattern_out_guard_vs_v3_lift"]
+        ),
+        "phase10_leave_pattern_guard_lift_over_raw": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["leave_pattern_out_guard_lift_over_raw"]
+        ),
+        "phase10_leave_pattern_raw_harm_count": int(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["leave_pattern_out_raw_harm_count"]
+        ),
+        "phase10_leave_pattern_guard_harm_count": int(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["leave_pattern_out_guard_harm_count"]
+        ),
+        "phase10_leave_route_tag_group_count": int(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["leave_route_tag_out_group_count"]
+        ),
+        "phase10_leave_route_tag_raw_vs_v3_lift": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["leave_route_tag_out_raw_vs_v3_lift"]
+        ),
+        "phase10_leave_route_tag_guard_vs_v3_lift": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["leave_route_tag_out_guard_vs_v3_lift"]
+        ),
+        "phase10_leave_route_tag_guard_lift_over_raw": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["leave_route_tag_out_guard_lift_over_raw"]
+        ),
+        "phase10_leave_route_tag_raw_harm_count": int(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["leave_route_tag_out_raw_harm_count"]
+        ),
+        "phase10_leave_route_tag_guard_harm_count": int(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["leave_route_tag_out_guard_harm_count"]
+        ),
+        "phase10_guard_assumption_node_count": int(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["guard_assumption_node_count"]
+        ),
+        "phase10_guard_assumption_active_count": int(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["guard_assumption_active_count"]
+        ),
+        "phase10_guard_assumption_candidate_count": int(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["guard_assumption_candidate_count"]
+        ),
+        "phase10_calibrated_rows_with_guard_assumption_rate": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["calibrated_rows_with_guard_assumption_rate"]
+        ),
         "same_batch_judged_n": int(
             artifacts["v3_same_batch_ablation_suite"]["metrics"]["same_batch_judged_n"]
         ),
@@ -1283,6 +1477,42 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         ),
         "world_model_uses_raw_prompts_or_answers": bool(
             artifacts["v3_world_model_calibration"]["metrics"]["uses_raw_prompts_or_answers"]
+        ),
+        "main_graph_memory_shadow_main_graph_node_count": int(
+            artifacts["v3_main_graph_memory_shadow"]["metrics"]["main_graph_node_count"]
+        ),
+        "main_graph_memory_shadow_dry_run_group_count": int(
+            artifacts["v3_main_graph_memory_shadow"]["metrics"]["dry_run_group_count"]
+        ),
+        "main_graph_memory_shadow_dry_run_store_mutated": bool(
+            artifacts["v3_main_graph_memory_shadow"]["metrics"]["dry_run_store_mutated"]
+        ),
+        "main_graph_memory_shadow_main_graph_mutated": bool(
+            artifacts["v3_main_graph_memory_shadow"]["metrics"]["main_graph_mutated"]
+        ),
+        "main_graph_memory_shadow_archived_node_count": int(
+            artifacts["v3_main_graph_memory_shadow"]["metrics"]["shadow_applied_archived_node_count"]
+        ),
+        "main_graph_memory_shadow_consolidated_node_count": int(
+            artifacts["v3_main_graph_memory_shadow"]["metrics"]["shadow_applied_consolidated_node_count"]
+        ),
+        "main_graph_memory_shadow_query_count": int(
+            artifacts["v3_main_graph_memory_shadow"]["metrics"]["query_count"]
+        ),
+        "main_graph_memory_shadow_precision_delta": float(
+            artifacts["v3_main_graph_memory_shadow"]["metrics"]["precision_delta"]
+        ),
+        "main_graph_memory_shadow_archive_exposure_after": int(
+            artifacts["v3_main_graph_memory_shadow"]["metrics"]["archive_exposure_after"]
+        ),
+        "main_graph_memory_shadow_archive_exposure_delta": int(
+            artifacts["v3_main_graph_memory_shadow"]["metrics"]["archive_exposure_delta"]
+        ),
+        "main_graph_memory_shadow_memory_hit_delta": int(
+            artifacts["v3_main_graph_memory_shadow"]["metrics"]["memory_hit_delta"]
+        ),
+        "main_graph_memory_shadow_context_efficiency_delta": float(
+            artifacts["v3_main_graph_memory_shadow"]["metrics"]["context_efficiency_delta"]
         ),
         "phase11_capability_count": int(
             artifacts["v3_phase11_capability_audit"]["metrics"]["capability_count"]
