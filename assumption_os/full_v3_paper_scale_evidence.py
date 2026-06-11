@@ -39,6 +39,7 @@ REQUIRED_ARTIFACTS = {
     "fresh_live_guarded_300": PAPER_DIR / "full_v3_fresh_live_business_guard_heldout300_gptmini_gpt55_20260611.json",
     "fresh_live_guarded_full_remaining": PAPER_DIR / "full_v3_fresh_live_business_guard_full_remaining_gptmini_gpt55_20260611.json",
     "fresh_live_selective_expansion": PAPER_DIR / "full_v3_fresh_live_cue_repair_v4_full_remaining_gptmini_gpt55_20260611.json",
+    "v3_phase9_compact_frame_guard": PAPER_DIR / "full_v3_phase9_compact_frame_guard_20260611.json",
 }
 
 KEY_TOGGLE_BASELINES = {
@@ -123,6 +124,18 @@ def build_full_v3_paper_scale_evidence_payload(
                 "coverage_profile_vs_placebo_utility",
             ],
         ),
+        "phase9_compact_frame_guard": _metric_subset(
+            artifacts["v3_phase9_compact_frame_guard"].get("metrics", {}),
+            [
+                "active_case_count",
+                "repair_vs_v1_n",
+                "repair_vs_v1_utility",
+                "repair_vs_v1_margin",
+                "repair_vs_v3_utility",
+                "repair_margin_gain_over_v3_vs_v1",
+                "planned_total_model_calls",
+            ],
+        ),
     }
     metrics = _metrics(artifacts=artifacts, evidence=evidence)
     gates = {
@@ -165,6 +178,9 @@ def build_full_v3_paper_scale_evidence_payload(
         "phase8_world_model_profile_selector_passes": metrics["phase8_quality_world_model_auroc"] >= 0.85,
         "phase8_coverage_profile_positive": metrics["phase8_coverage_profile_vs_base_utility"] > 0.50
         and metrics["phase8_coverage_profile_vs_placebo_utility"] > 0.50,
+        "phase9_compact_guard_v1_regression_passes": metrics["phase9_compact_guard_vs_v1_margin"] >= 0.10,
+        "phase9_compact_guard_improves_original_v3_vs_v1": metrics["phase9_compact_guard_margin_gain_over_v3"] > 0.05,
+        "phase9_compact_guard_noninferior_to_original_v3": metrics["phase9_compact_guard_vs_v3_utility"] >= 0.48,
         "prompt_answer_and_secret_free": metrics["prompt_answer_payload_stored"] is False and metrics["secret_leak_detected"] is False,
         "boundary_cases_recorded": metrics["boundary_case_count"] >= 1,
     }
@@ -453,6 +469,27 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         ),
         "phase8_coverage_profile_vs_placebo_utility": float(
             artifacts["v3_phase8_creativity_world_coverage"]["metrics"]["coverage_profile_vs_placebo_utility"]
+        ),
+        "phase9_compact_guard_active_case_count": int(
+            artifacts["v3_phase9_compact_frame_guard"]["metrics"]["active_case_count"]
+        ),
+        "phase9_compact_guard_vs_v1_n": int(
+            artifacts["v3_phase9_compact_frame_guard"]["metrics"]["repair_vs_v1_n"]
+        ),
+        "phase9_compact_guard_vs_v1_utility": float(
+            artifacts["v3_phase9_compact_frame_guard"]["metrics"]["repair_vs_v1_utility"]
+        ),
+        "phase9_compact_guard_vs_v1_margin": float(
+            artifacts["v3_phase9_compact_frame_guard"]["metrics"]["repair_vs_v1_margin"]
+        ),
+        "phase9_compact_guard_vs_v3_utility": float(
+            artifacts["v3_phase9_compact_frame_guard"]["metrics"]["repair_vs_v3_utility"]
+        ),
+        "phase9_compact_guard_margin_gain_over_v3": float(
+            artifacts["v3_phase9_compact_frame_guard"]["metrics"]["repair_margin_gain_over_v3_vs_v1"]
+        ),
+        "phase9_compact_guard_planned_total_calls": int(
+            artifacts["v3_phase9_compact_frame_guard"]["metrics"]["planned_total_model_calls"]
         ),
         "prompt_answer_payload_stored": bool(artifacts["first_party_world_model_scale"].get("prompt_answer_payload_stored")),
         "secret_leak_detected": bool(artifacts["first_party_world_model_scale"].get("secret_leak_detected")),

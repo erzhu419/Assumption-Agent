@@ -56,6 +56,7 @@ from assumption_os.full_v3_phase7_long_run_benchmark import build_full_v3_phase7
 from assumption_os.full_v3_phase8_creativity_world_coverage import (
     build_full_v3_phase8_creativity_world_coverage_payload,
 )
+from assumption_os.full_v3_phase9_v1_live_regression import build_full_v3_phase9_v1_live_regression_payload
 from assumption_os.full_v3_paper_scale_evidence import build_full_v3_paper_scale_evidence_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
@@ -726,6 +727,10 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreater(metrics["fresh_live_selective_vs_placebo_utility"], 0.51)
         self.assertGreater(metrics["fresh_live_selective_vs_placebo_ci_lower"], 0.50)
         self.assertLessEqual(metrics["fresh_live_selective_planned_total_calls"], 200)
+        self.assertGreaterEqual(metrics["phase9_compact_guard_vs_v1_n"], 31)
+        self.assertGreaterEqual(metrics["phase9_compact_guard_vs_v1_margin"], 0.10)
+        self.assertGreater(metrics["phase9_compact_guard_margin_gain_over_v3"], 0.05)
+        self.assertGreaterEqual(metrics["phase9_compact_guard_vs_v3_utility"], 0.48)
         self.assertFalse(metrics["prompt_answer_payload_stored"])
         self.assertFalse(metrics["secret_leak_detected"])
         self.assertGreaterEqual(metrics["boundary_case_count"], 1)
@@ -785,6 +790,36 @@ class AssumptionOSTest(unittest.TestCase):
             metrics["quality_profile_vs_base_utility"],
             metrics["coverage_profile_vs_base_utility"],
         )
+
+    def test_full_v3_phase9_plans_same_batch_v1_live_regression_gate(self):
+        with tempfile.TemporaryDirectory() as td:
+            payload = build_full_v3_phase9_v1_live_regression_payload(
+                root=Path("."),
+                eval_id="unit_full_v3_phase9_v1_live_regression",
+                execution_mode="dry_run",
+                sample_size=300,
+                active_sample_size=0,
+                run_dir=Path(td),
+                sample_out=Path(td) / "sample.json",
+                solve_workers=8,
+                judge_workers=4,
+                bootstrap_samples=100,
+            )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(payload["arms"]["primary"], "v3_full")
+        self.assertIn("v1_case_reflection_kernel", payload["arms"]["baselines"])
+        self.assertIn("v3_no_morphism", payload["arms"]["baselines"])
+        self.assertIn("v3_no_recursive", payload["arms"]["baselines"])
+        self.assertIn("v3_no_world_model", payload["arms"]["baselines"])
+        self.assertGreaterEqual(metrics["active_case_count"], 18)
+        self.assertGreaterEqual(metrics["active_domain_count"], 3)
+        self.assertGreaterEqual(metrics["active_pattern_count"], 3)
+        self.assertEqual(metrics["planned_total_model_calls"], metrics["active_case_count"] * 9)
+        self.assertEqual(payload["hard_regression_policy"]["min_v3_margin_vs_v1"], 0.10)
+        self.assertGreaterEqual(metrics["coverage_profile_active_gain_over_quality"], 4)
+        self.assertFalse(metrics["compact_payload_contains_prompts_answers"])
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
