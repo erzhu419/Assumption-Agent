@@ -88,6 +88,9 @@ from assumption_os.full_v3_phase11_capability_audit import build_full_v3_phase11
 from assumption_os.full_v3_phase12_claim_gap_hardening import (
     build_full_v3_phase12_claim_gap_hardening_payload,
 )
+from assumption_os.full_v3_phase13_general_autonomy_lift import (
+    build_full_v3_phase13_general_autonomy_lift_payload,
+)
 from assumption_os.full_v3_paper_scale_evidence import build_full_v3_paper_scale_evidence_payload
 from assumption_os.full_v3_residual_multigeneration_loop import (
     build_full_v3_residual_multigeneration_loop_payload,
@@ -1365,7 +1368,8 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertFalse(metrics["phase12_raw_world_model_promoted"])
         self.assertTrue(metrics["phase12_calibrated_budget_gate_promotable"])
         self.assertGreaterEqual(metrics["phase12_world_model_observed_arm_record_count"], 45)
-        self.assertGreater(metrics["phase12_world_model_transition_scale_gap"], 0)
+        self.assertGreaterEqual(metrics["phase12_world_model_phase13_transition_like_row_count"], 300)
+        self.assertEqual(metrics["phase12_world_model_transition_scale_gap"], 0)
         self.assertEqual(metrics["phase12_guard_policy_harm_vs_hybrid_count"], 0)
         self.assertGreaterEqual(metrics["phase12_creative_nonlocal_new_family_count"], 7)
         self.assertGreaterEqual(metrics["phase12_residual_multigen_proposal_count"], 60)
@@ -1380,14 +1384,23 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["phase12_daemon_ungated_graph_mutation_count"], 0)
         self.assertTrue(metrics["phase12_frozen_end_to_end_pass"])
         self.assertGreaterEqual(metrics["phase12_same_batch_toggle_pair_count"], 4)
-        self.assertEqual(metrics["phase12_formal_morphism_status"], "bounded_structural_layer")
+        self.assertEqual(metrics["phase12_formal_morphism_status"], "finite_category_proof_engine_bounded")
+        self.assertGreaterEqual(metrics["phase13_autonomy_cycle_count"], 72)
+        self.assertGreaterEqual(metrics["phase13_autonomy_restart_recovery_count"], 4)
+        self.assertGreaterEqual(metrics["phase13_simulator_transition_like_row_count"], 300)
+        self.assertFalse(metrics["phase13_simulator_raw_predictor_promoted"])
+        self.assertEqual(metrics["phase13_category_identity_law_pass_rate"], 1.0)
+        self.assertEqual(metrics["phase13_category_composition_closure_pass_rate"], 1.0)
+        self.assertEqual(metrics["phase13_category_functor_law_pass_rate"], 1.0)
+        self.assertEqual(metrics["phase13_category_naturality_square_pass_rate"], 1.0)
+        self.assertTrue(metrics["phase13_replacement_claims_blocked"])
         self.assertGreaterEqual(metrics["phase12_open_claim_gap_count"], 5)
         self.assertGreaterEqual(
             metrics["phase12_blocked_strong_claim_count"],
             metrics["phase12_open_claim_gap_count"],
         )
-        self.assertGreaterEqual(metrics["phase12_review_engineering_item_closure_rate"], 0.94)
-        self.assertGreaterEqual(metrics["phase12_paper_strong_claim_readiness_rate"], 0.77)
+        self.assertGreaterEqual(metrics["phase12_review_engineering_item_closure_rate"], 0.98)
+        self.assertGreaterEqual(metrics["phase12_paper_strong_claim_readiness_rate"], 0.88)
         self.assertFalse(metrics["phase12_secret_or_prompt_payload_detected"])
         self.assertFalse(metrics["prompt_answer_payload_stored"])
         self.assertFalse(metrics["secret_leak_detected"])
@@ -1549,7 +1562,8 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertFalse(metrics["raw_world_model_promoted"])
         self.assertTrue(metrics["calibrated_budget_gate_promotable"])
         self.assertGreaterEqual(metrics["world_model_observed_arm_record_count"], 45)
-        self.assertGreater(metrics["world_model_transition_scale_gap"], 0)
+        self.assertGreaterEqual(metrics["world_model_phase13_transition_like_row_count"], 300)
+        self.assertEqual(metrics["world_model_transition_scale_gap"], 0)
         self.assertEqual(metrics["guard_policy_harm_vs_hybrid_count"], 0)
         self.assertGreaterEqual(metrics["creative_nonlocal_new_family_count"], 7)
         self.assertGreaterEqual(metrics["residual_multigen_proposal_count"], 60)
@@ -1570,17 +1584,76 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["daemon_ungated_graph_mutation_count"], 0)
         self.assertTrue(metrics["frozen_end_to_end_pass"])
         self.assertGreaterEqual(metrics["same_batch_toggle_pair_count"], 4)
-        self.assertEqual(metrics["formal_morphism_status"], "bounded_structural_layer")
+        self.assertEqual(metrics["formal_morphism_status"], "finite_category_proof_engine_bounded")
+        self.assertTrue(metrics["phase13_source_pass"])
+        self.assertGreaterEqual(metrics["phase13_autonomy_cycle_count"], 72)
+        self.assertGreaterEqual(metrics["phase13_autonomy_restart_recovery_count"], 4)
+        self.assertGreaterEqual(metrics["phase13_simulator_transition_like_row_count"], 300)
+        self.assertFalse(metrics["phase13_simulator_raw_predictor_promoted"])
+        self.assertGreaterEqual(metrics["phase13_category_finite_category_count"], 4)
+        self.assertEqual(metrics["phase13_category_identity_law_pass_rate"], 1.0)
+        self.assertEqual(metrics["phase13_category_composition_closure_pass_rate"], 1.0)
+        self.assertEqual(metrics["phase13_category_functor_law_pass_rate"], 1.0)
+        self.assertEqual(metrics["phase13_category_naturality_square_pass_rate"], 1.0)
         self.assertGreaterEqual(metrics["open_claim_gap_count"], 5)
         self.assertGreaterEqual(metrics["blocked_strong_claim_count"], metrics["open_claim_gap_count"])
-        self.assertGreaterEqual(metrics["review_engineering_item_closure_rate"], 0.94)
-        self.assertGreaterEqual(metrics["paper_strong_claim_readiness_rate"], 0.77)
+        self.assertGreaterEqual(metrics["review_engineering_item_closure_rate"], 0.98)
+        self.assertGreaterEqual(metrics["paper_strong_claim_readiness_rate"], 0.88)
         self.assertFalse(metrics["secret_or_prompt_payload_detected"])
         self.assertEqual(decisions["raw_world_model"], "block_production_promote_exploration_only")
         self.assertEqual(decisions["calibrated_budget_gate"], "allow_budget_search_gate")
         self.assertEqual(
+            decisions["daemon"],
+            "allow_long_run_bounded_envelope_block_wallclock_24_7_claim",
+        )
+        self.assertEqual(
+            decisions["formal_morphism"],
+            "allow_finite_category_proof_engine_block_unbounded_theorem_prover_claim",
+        )
+        self.assertEqual(
             decisions["benchmark"],
             "allow_blinded_recursive_line_require_downstream_paper_benchmark",
+        )
+
+    def test_full_v3_phase13_general_autonomy_lift_adds_bounded_interfaces(self):
+        payload = build_full_v3_phase13_general_autonomy_lift_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_phase13_general_autonomy_lift",
+        )
+        metrics = payload["metrics"]
+        policy = payload["promotion_policy"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(metrics["source_artifact_pass_rate"], 1.0)
+        self.assertGreaterEqual(metrics["autonomy_cycle_count"], 72)
+        self.assertGreaterEqual(metrics["autonomy_queue_source_count"], 5)
+        self.assertTrue(metrics["autonomy_checkpoint_chain_valid"])
+        self.assertGreaterEqual(metrics["autonomy_restart_recovery_count"], 4)
+        self.assertEqual(metrics["autonomy_rate_limit_violation_count"], 0)
+        self.assertEqual(metrics["autonomy_ungated_graph_mutation_count"], 0)
+        self.assertTrue(metrics["autonomy_graph_mutation_requires_apply"])
+        self.assertFalse(metrics["autonomy_wallclock_24_7_soak_completed"])
+        self.assertGreaterEqual(metrics["simulator_first_party_transition_like_row_count"], 300)
+        self.assertEqual(metrics["simulator_transition_scale_gap"], 0)
+        self.assertFalse(metrics["simulator_raw_predictor_promoted"])
+        self.assertTrue(metrics["simulator_calibrated_budget_gate_promotable"])
+        self.assertGreater(metrics["simulator_calibrated_mae_lift_over_base_rate"], 0.02)
+        self.assertGreater(metrics["simulator_calibrated_brier_lift_over_base_rate"], 0.01)
+        self.assertGreaterEqual(metrics["simulator_calibrated_policy_lift_over_hybrid"], 0.0)
+        self.assertEqual(metrics["simulator_guard_harm_vs_hybrid_count"], 0)
+        self.assertGreaterEqual(metrics["category_finite_category_count"], 4)
+        self.assertEqual(metrics["category_identity_law_pass_rate"], 1.0)
+        self.assertEqual(metrics["category_composition_closure_pass_rate"], 1.0)
+        self.assertEqual(metrics["category_functor_law_pass_rate"], 1.0)
+        self.assertEqual(metrics["category_naturality_square_pass_rate"], 1.0)
+        self.assertEqual(metrics["category_negative_control_block_rate"], 1.0)
+        self.assertFalse(metrics["production_simulator_replacement_claim_allowed"])
+        self.assertFalse(metrics["unbounded_24_7_os_claim_allowed"])
+        self.assertFalse(metrics["unbounded_theorem_prover_claim_allowed"])
+        self.assertFalse(metrics["secret_or_prompt_payload_detected"])
+        self.assertEqual(
+            policy["production_world_simulator"],
+            "allow_calibrated_budget_simulator_candidate_block_live_ablation_replacement",
         )
 
     def test_full_v3_phase11_capability_audit_separates_fixture_from_production(self):

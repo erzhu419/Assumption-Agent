@@ -61,6 +61,7 @@ REQUIRED_ARTIFACTS = {
     "v3_same_batch_ablation_suite": PAPER_DIR / "full_v3_same_batch_ablation_suite_20260611.json",
     "v3_phase11_capability_audit": PAPER_DIR / "full_v3_phase11_capability_audit_20260611.json",
     "v3_phase12_claim_gap_hardening": PAPER_DIR / "full_v3_phase12_claim_gap_hardening_20260612.json",
+    "v3_phase13_claim_lift": PAPER_DIR / "full_v3_phase13_general_autonomy_lift_20260612.json",
 }
 
 KEY_TOGGLE_BASELINES = {
@@ -602,6 +603,7 @@ def build_full_v3_paper_scale_evidence_payload(
                 "raw_world_model_promoted",
                 "calibrated_budget_gate_promotable",
                 "world_model_observed_arm_record_count",
+                "world_model_phase13_transition_like_row_count",
                 "world_model_transition_scale_gap",
                 "guard_policy_learned_update_count",
                 "guard_policy_harm_vs_hybrid_count",
@@ -617,6 +619,10 @@ def build_full_v3_paper_scale_evidence_payload(
                 "live_multigen_rejected_count",
                 "live_multigen_api_call_count",
                 "continuous_daemon_scheduled_cycle_count",
+                "phase13_autonomy_cycle_count",
+                "phase13_simulator_transition_like_row_count",
+                "phase13_category_finite_category_count",
+                "phase13_category_identity_law_pass_rate",
                 "supervised_daemon_background_started",
                 "daemon_ungated_graph_mutation_count",
                 "frozen_end_to_end_pass",
@@ -626,6 +632,44 @@ def build_full_v3_paper_scale_evidence_payload(
                 "blocked_strong_claim_count",
                 "review_engineering_item_closure_rate",
                 "paper_strong_claim_readiness_rate",
+                "secret_or_prompt_payload_detected",
+            ],
+        ),
+        "phase13_claim_lift": _metric_subset(
+            artifacts["v3_phase13_claim_lift"].get("metrics", {}),
+            [
+                "source_artifact_count",
+                "source_artifact_pass_rate",
+                "autonomy_cycle_count",
+                "autonomy_queue_source_count",
+                "autonomy_checkpoint_chain_valid",
+                "autonomy_restart_recovery_count",
+                "autonomy_rate_limit_violation_count",
+                "autonomy_ungated_graph_mutation_count",
+                "autonomy_graph_mutation_requires_apply",
+                "autonomy_background_process_started_in_smoke",
+                "autonomy_wallclock_24_7_soak_completed",
+                "simulator_first_party_transition_like_row_count",
+                "simulator_transition_scale_gap",
+                "simulator_raw_predictor_promoted",
+                "simulator_calibrated_budget_gate_promotable",
+                "simulator_calibrated_mae_lift_over_base_rate",
+                "simulator_calibrated_brier_lift_over_base_rate",
+                "simulator_calibrated_policy_lift_over_hybrid",
+                "simulator_guard_harm_vs_hybrid_count",
+                "category_finite_category_count",
+                "category_object_count",
+                "category_morphism_count",
+                "category_identity_law_pass_rate",
+                "category_composition_closure_pass_rate",
+                "category_functor_law_pass_rate",
+                "category_naturality_square_pass_rate",
+                "category_negative_control_block_rate",
+                "category_formal_margin_over_best_baseline",
+                "category_unsafe_mapping_block_rate",
+                "production_simulator_replacement_claim_allowed",
+                "unbounded_24_7_os_claim_allowed",
+                "unbounded_theorem_prover_claim_allowed",
                 "secret_or_prompt_payload_detected",
             ],
         ),
@@ -914,12 +958,30 @@ def build_full_v3_paper_scale_evidence_payload(
             metrics["phase12_source_artifact_pass_rate"] == 1.0
             and metrics["phase12_raw_world_model_promoted"] is False
             and metrics["phase12_calibrated_budget_gate_promotable"] is True
+            and metrics["phase12_world_model_transition_scale_gap"] == 0
             and metrics["phase12_open_claim_gap_count"] >= 5
             and metrics["phase12_blocked_strong_claim_count"] >= metrics["phase12_open_claim_gap_count"]
         ),
         "phase12_records_strong_claim_boundaries": (
-            metrics["phase12_formal_morphism_status"] == "bounded_structural_layer"
+            metrics["phase12_formal_morphism_status"] in {
+                "bounded_structural_layer",
+                "finite_category_proof_engine_bounded",
+            }
             and metrics["phase12_secret_or_prompt_payload_detected"] is False
+        ),
+        "phase13_claim_lift_passes": (
+            metrics["phase13_source_artifact_pass_rate"] == 1.0
+            and metrics["phase13_autonomy_cycle_count"] >= 72
+            and metrics["phase13_autonomy_restart_recovery_count"] >= 4
+            and metrics["phase13_simulator_transition_like_row_count"] >= 300
+            and metrics["phase13_simulator_transition_scale_gap"] == 0
+            and metrics["phase13_simulator_raw_predictor_promoted"] is False
+            and metrics["phase13_category_identity_law_pass_rate"] == 1.0
+            and metrics["phase13_category_composition_closure_pass_rate"] == 1.0
+            and metrics["phase13_category_functor_law_pass_rate"] == 1.0
+            and metrics["phase13_category_naturality_square_pass_rate"] == 1.0
+            and metrics["phase13_category_negative_control_block_rate"] == 1.0
+            and metrics["phase13_replacement_claims_blocked"] is True
         ),
         "prompt_answer_and_secret_free": metrics["prompt_answer_payload_stored"] is False and metrics["secret_leak_detected"] is False,
         "boundary_cases_recorded": metrics["boundary_case_count"] >= 1,
@@ -1097,6 +1159,7 @@ def _v3_mechanism_summary(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any
         "v3_same_batch_ablation_suite",
         "v3_phase11_capability_audit",
         "v3_phase12_claim_gap_hardening",
+        "v3_phase13_claim_lift",
     ]
     return {
         key: {
@@ -2141,6 +2204,9 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "phase12_world_model_observed_arm_record_count": int(
             artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["world_model_observed_arm_record_count"]
         ),
+        "phase12_world_model_phase13_transition_like_row_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["world_model_phase13_transition_like_row_count"]
+        ),
         "phase12_world_model_transition_scale_gap": int(
             artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["world_model_transition_scale_gap"]
         ),
@@ -2209,6 +2275,18 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "phase12_continuous_daemon_scheduled_cycle_count": int(
             artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["continuous_daemon_scheduled_cycle_count"]
         ),
+        "phase12_phase13_autonomy_cycle_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["phase13_autonomy_cycle_count"]
+        ),
+        "phase12_phase13_simulator_transition_like_row_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["phase13_simulator_transition_like_row_count"]
+        ),
+        "phase12_phase13_category_finite_category_count": int(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["phase13_category_finite_category_count"]
+        ),
+        "phase12_phase13_category_identity_law_pass_rate": float(
+            artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["phase13_category_identity_law_pass_rate"]
+        ),
         "phase12_daemon_ungated_graph_mutation_count": int(
             artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["daemon_ungated_graph_mutation_count"]
         ),
@@ -2235,6 +2313,98 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         ),
         "phase12_secret_or_prompt_payload_detected": bool(
             artifacts["v3_phase12_claim_gap_hardening"]["metrics"]["secret_or_prompt_payload_detected"]
+        ),
+        "phase13_source_artifact_count": int(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["source_artifact_count"]
+        ),
+        "phase13_source_artifact_pass_rate": float(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["source_artifact_pass_rate"]
+        ),
+        "phase13_autonomy_cycle_count": int(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["autonomy_cycle_count"]
+        ),
+        "phase13_autonomy_queue_source_count": int(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["autonomy_queue_source_count"]
+        ),
+        "phase13_autonomy_checkpoint_chain_valid": bool(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["autonomy_checkpoint_chain_valid"]
+        ),
+        "phase13_autonomy_restart_recovery_count": int(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["autonomy_restart_recovery_count"]
+        ),
+        "phase13_autonomy_rate_limit_violation_count": int(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["autonomy_rate_limit_violation_count"]
+        ),
+        "phase13_autonomy_ungated_graph_mutation_count": int(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["autonomy_ungated_graph_mutation_count"]
+        ),
+        "phase13_autonomy_graph_mutation_requires_apply": bool(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["autonomy_graph_mutation_requires_apply"]
+        ),
+        "phase13_autonomy_wallclock_24_7_soak_completed": bool(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["autonomy_wallclock_24_7_soak_completed"]
+        ),
+        "phase13_simulator_transition_like_row_count": int(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["simulator_first_party_transition_like_row_count"]
+        ),
+        "phase13_simulator_transition_scale_gap": int(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["simulator_transition_scale_gap"]
+        ),
+        "phase13_simulator_raw_predictor_promoted": bool(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["simulator_raw_predictor_promoted"]
+        ),
+        "phase13_simulator_calibrated_budget_gate_promotable": bool(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["simulator_calibrated_budget_gate_promotable"]
+        ),
+        "phase13_simulator_calibrated_mae_lift_over_base": float(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["simulator_calibrated_mae_lift_over_base_rate"]
+        ),
+        "phase13_simulator_calibrated_brier_lift_over_base": float(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["simulator_calibrated_brier_lift_over_base_rate"]
+        ),
+        "phase13_simulator_policy_lift_over_hybrid": float(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["simulator_calibrated_policy_lift_over_hybrid"]
+        ),
+        "phase13_simulator_guard_harm_vs_hybrid_count": int(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["simulator_guard_harm_vs_hybrid_count"]
+        ),
+        "phase13_category_finite_category_count": int(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["category_finite_category_count"]
+        ),
+        "phase13_category_object_count": int(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["category_object_count"]
+        ),
+        "phase13_category_morphism_count": int(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["category_morphism_count"]
+        ),
+        "phase13_category_identity_law_pass_rate": float(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["category_identity_law_pass_rate"]
+        ),
+        "phase13_category_composition_closure_pass_rate": float(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["category_composition_closure_pass_rate"]
+        ),
+        "phase13_category_functor_law_pass_rate": float(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["category_functor_law_pass_rate"]
+        ),
+        "phase13_category_naturality_square_pass_rate": float(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["category_naturality_square_pass_rate"]
+        ),
+        "phase13_category_negative_control_block_rate": float(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["category_negative_control_block_rate"]
+        ),
+        "phase13_category_formal_margin_over_best_baseline": float(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["category_formal_margin_over_best_baseline"]
+        ),
+        "phase13_category_unsafe_mapping_block_rate": float(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["category_unsafe_mapping_block_rate"]
+        ),
+        "phase13_replacement_claims_blocked": (
+            artifacts["v3_phase13_claim_lift"]["metrics"]["production_simulator_replacement_claim_allowed"] is False
+            and artifacts["v3_phase13_claim_lift"]["metrics"]["unbounded_24_7_os_claim_allowed"] is False
+            and artifacts["v3_phase13_claim_lift"]["metrics"]["unbounded_theorem_prover_claim_allowed"] is False
+        ),
+        "phase13_secret_or_prompt_payload_detected": bool(
+            artifacts["v3_phase13_claim_lift"]["metrics"]["secret_or_prompt_payload_detected"]
         ),
         "prompt_answer_payload_stored": bool(artifacts["first_party_world_model_scale"].get("prompt_answer_payload_stored")),
         "secret_leak_detected": bool(artifacts["first_party_world_model_scale"].get("secret_leak_detected")),
