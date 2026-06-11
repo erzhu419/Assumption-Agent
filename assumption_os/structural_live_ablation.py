@@ -295,12 +295,17 @@ TRACE_LEARNED_PATTERN_ABSTAIN = {
 }
 
 
-FRESH_LIVE_GUARDED_DOMAIN_PATTERNS = {
+FRESH_LIVE_GUARDED_CLADES = {
     # Learned from the first fresh-300 live run and narrowed after a disjoint
     # guarded holdout on 2026-06-11.  The math counterexample/control clades were
     # positive against base in the discovery run but negative against placebo on
-    # holdout, so they remain gated off until a stronger operator is validated.
-    ("business", "pat_controlled_intervention"),
+    # holdout.  A later selective full-remaining validation expanded only the
+    # clades that improved both base and placebo metrics without reopening
+    # daily_life/science harm.
+    ("business", "pat_controlled_intervention", "S01"),
+    ("business", "pat_controlled_intervention", "S17"),
+    ("engineering", "pat_decomposition_composition", "S25"),
+    ("software_engineering", "pat_counterexample_refinement", "S14"),
 }
 
 
@@ -421,6 +426,7 @@ def build_structural_live_ablation_payload(
     focus_pattern_id: str | None = None,
     repair_patterns: set[str] | None = None,
     extra_abstain_patterns: set[str] | None = None,
+    guard_clades: set[tuple[str, str, str | None]] | None = None,
 ) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     forensic_path = out_dir / f"{eval_id}_forensic.jsonl"
@@ -440,6 +446,7 @@ def build_structural_live_ablation_payload(
         focus_pattern_id=focus_pattern_id,
         repair_patterns=repair_patterns,
         abstain_patterns=abstain_patterns,
+        guard_clades=guard_clades,
     )
     answers = _load_json(answers_path) if resume else {}
     judgments = _load_json(judgments_path) if resume else {}
@@ -458,6 +465,7 @@ def build_structural_live_ablation_payload(
         "focus_pattern_id": focus_pattern_id,
         "repair_patterns": sorted(repair_patterns),
         "abstain_patterns": sorted(abstain_patterns),
+        "guard_clades": sorted(":".join(part for part in clade if part) for clade in (guard_clades or FRESH_LIVE_GUARDED_CLADES)),
         "answer_cells": len(cases) * 3,
         "judge_pairs": len(cases) * 2,
         "case_pattern_counts": dict(Counter(c["top_pattern_id"] for c in cases)),
@@ -512,6 +520,7 @@ def _select_cases(
     focus_pattern_id: str | None,
     repair_patterns: set[str],
     abstain_patterns: set[str],
+    guard_clades: set[tuple[str, str, str | None]] | None,
 ) -> list[dict]:
     if selection_mode not in {
         "retrieval",
@@ -538,6 +547,7 @@ def _select_cases(
             selection_mode=selection_mode,
             repair_patterns=repair_patterns,
             abstain_patterns=abstain_patterns,
+            guard_clades=guard_clades,
         )
         if not top:
             continue
@@ -590,6 +600,7 @@ def _choose_top_application(
     selection_mode: str,
     repair_patterns: set[str],
     abstain_patterns: set[str],
+    guard_clades: set[tuple[str, str, str | None]] | None,
 ) -> tuple[dict | None, str]:
     retrieval_top = retrieval_apps[0] if retrieval_apps else None
     retrieval_ok = bool(retrieval_top and float(retrieval_top.get("score", 0.0) or 0.0) >= min_score)
@@ -657,14 +668,14 @@ def _choose_top_application(
                 "decision": "accepted",
             }
             route_source = "natural_trace_policy"
-        if candidate and _passes_fresh_live_guard(row, candidate):
+        if candidate and _passes_fresh_live_guard(row, candidate, guard_clades=guard_clades):
             candidate = dict(candidate)
             policy = dict(candidate.get("route_policy") or {})
             policy.update({
                 "policy_id": "fresh_live_guarded_policy_20260611",
                 "source_eval_id": "full_v3_fresh_live_300_gptmini_gpt55_20260611",
                 "decision": "activate",
-                "guard_key": [row.get("domain"), candidate.get("pattern_id")],
+                "guard_key": [row.get("domain"), candidate.get("pattern_id"), candidate.get("route_strategy_tag")],
             })
             candidate["route_policy"] = policy
             return candidate, f"fresh_guard_{route_source}"
@@ -822,8 +833,17 @@ def _passes_trace_learned_policy(app: dict, *, abstain_patterns: set[str]) -> bo
     return app.get("pattern_id") not in abstain_patterns
 
 
-def _passes_fresh_live_guard(row: dict, app: dict) -> bool:
-    return (str(row.get("domain") or ""), str(app.get("pattern_id") or "")) in FRESH_LIVE_GUARDED_DOMAIN_PATTERNS
+def _passes_fresh_live_guard(
+    row: dict,
+    app: dict,
+    *,
+    guard_clades: set[tuple[str, str, str | None]] | None,
+) -> bool:
+    domain = str(row.get("domain") or "")
+    pattern_id = str(app.get("pattern_id") or "")
+    tag = str(app.get("route_strategy_tag") or "")
+    clades = guard_clades or FRESH_LIVE_GUARDED_CLADES
+    return (domain, pattern_id, None) in clades or (domain, pattern_id, tag) in clades
 
 
 def _repaired_pattern_app(row: dict, routed_app: dict, *, repair_patterns: set[str]) -> dict | None:

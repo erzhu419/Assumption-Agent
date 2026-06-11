@@ -58,6 +58,7 @@ def build_full_v3_fresh_live_benchmark_payload(
     sample_out: Path | None = None,
     run_dir: Path | None = None,
     extra_existing_samples: list[Path] | None = None,
+    guard_clades: set[tuple[str, str, str | None]] | None = None,
 ) -> dict[str, Any]:
     root = root.resolve()
     run_dir = _resolve(root, run_dir or DEFAULT_RUN_DIR)
@@ -97,6 +98,7 @@ def build_full_v3_fresh_live_benchmark_payload(
                 dry_run=execution_mode == "dry_run",
                 repair_patterns={"pat_bottleneck_capacity", "pat_signal_nuisance_separation"},
                 extra_abstain_patterns=set(),
+                guard_clades=guard_clades,
             )
             run_status = "dry_run_complete" if execution_mode == "dry_run" else "execute_complete"
         else:
@@ -134,6 +136,7 @@ def build_full_v3_fresh_live_benchmark_payload(
         judge_model=judge_model,
         selection_mode=selection_mode,
         min_score=min_score,
+        guard_clades=guard_clades,
     )
     return {
         "eval_id": eval_id,
@@ -157,6 +160,7 @@ def build_full_v3_fresh_live_benchmark_payload(
             "judge_pairs": ["structural_vs_base", "structural_vs_placebo"],
             "selection_mode": selection_mode,
             "abstained_problems_count_as_tie": fill_absent_as_tie,
+            "guard_clades": _format_guard_clades(guard_clades),
             "planned_answer_calls": metrics["planned_answer_calls"],
             "planned_judge_calls": metrics["planned_judge_calls"],
             "planned_total_model_calls": metrics["planned_total_model_calls"],
@@ -491,12 +495,14 @@ def _commands(
     judge_model: str,
     selection_mode: str,
     min_score: float,
+    guard_clades: set[tuple[str, str, str | None]] | None,
 ) -> dict[str, str]:
+    clade_args = "".join(f" --guard-clade {clade}" for clade in _format_guard_clades(guard_clades))
     base = (
         "python3 -m assumption_os.full_v3_fresh_live_benchmark --root . "
         "--execute --solver-model {solver} --judge-model {judge} "
         "--solve-workers {solve_workers} --judge-workers {judge_workers} "
-        "--selection-mode {selection_mode} --min-score {min_score}"
+        "--selection-mode {selection_mode} --min-score {min_score}{clade_args}"
     ).format(
         solver=solver_model,
         judge=judge_model,
@@ -504,6 +510,7 @@ def _commands(
         judge_workers=judge_workers,
         selection_mode=selection_mode,
         min_score=min_score,
+        clade_args=clade_args,
     )
     return {
         "env_required": (
@@ -546,6 +553,23 @@ def _extract_cases(live_payload: dict[str, Any] | None) -> list[dict[str, Any]]:
 
 def _selection_abstains_as_tie(selection_mode: str) -> bool:
     return selection_mode in {"natural_repaired_guarded"}
+
+
+def _parse_guard_clade(value: str) -> tuple[str, str, str | None]:
+    parts = [part.strip() for part in value.split(":")]
+    if len(parts) not in {2, 3} or not parts[0] or not parts[1]:
+        raise argparse.ArgumentTypeError("guard clade must be domain:pattern_id[:strategy_tag]")
+    tag = parts[2] if len(parts) == 3 and parts[2] else None
+    return parts[0], parts[1], tag
+
+
+def _format_guard_clades(guard_clades: set[tuple[str, str, str | None]] | None) -> list[str]:
+    if not guard_clades:
+        return []
+    return [
+        ":".join(part for part in clade if part)
+        for clade in sorted(guard_clades)
+    ]
 
 
 def _interpretation(*, execution_mode: str, env: dict[str, Any], ci: dict[str, Any]) -> str:
@@ -594,7 +618,9 @@ def main() -> None:
     parser.add_argument("--min-score", type=float, default=0.22)
     parser.add_argument("--bootstrap-samples", type=int, default=2000)
     parser.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))
+    parser.add_argument("--sample-out")
     parser.add_argument("--exclude-sample", action="append", default=[])
+    parser.add_argument("--guard-clade", action="append", type=_parse_guard_clade, default=[])
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     args = parser.parse_args()
 
@@ -614,8 +640,10 @@ def main() -> None:
         selection_mode=args.selection_mode,
         min_score=args.min_score,
         bootstrap_samples=args.bootstrap_samples,
+        sample_out=Path(args.sample_out) if args.sample_out else None,
         run_dir=Path(args.run_dir),
         extra_existing_samples=[Path(path) for path in args.exclude_sample],
+        guard_clades=set(args.guard_clade) if args.guard_clade else None,
     )
     out = Path(args.out)
     out = out if out.is_absolute() else root / out

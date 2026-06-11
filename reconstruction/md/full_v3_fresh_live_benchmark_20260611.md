@@ -117,6 +117,52 @@ Interpretation:
 
 The full-remaining run keeps the guarded policy non-negative at larger scale, but the gain is extremely small. The important result is that the self-evolution loop found a harmful broad policy, narrowed it to a stable clade, and prevented large-scale graph/prompt pollution. The performance bottleneck is now coverage: active interventions are only 21/556.
 
+## Selective Coverage Expansion
+
+To address the active-coverage bottleneck without reopening harmful broad routing, the guard was extended from a single domain-pattern clade to four domain-pattern-tag clades:
+
+- `business:pat_controlled_intervention:S01`
+- `business:pat_controlled_intervention:S17`
+- `engineering:pat_decomposition_composition:S25`
+- `software_engineering:pat_counterexample_refinement:S14`
+
+Rejected during expansion:
+
+- `software_engineering:pat_conservation_balance:S10`: hurt base in expanded validation.
+- `business:pat_controlled_intervention:S08`: helped base but hurt placebo, so it was not retained.
+- math counterexample/control clades: positive on discovery but negative against placebo on heldout.
+
+Selective full-remaining command:
+
+```bash
+python3 -m assumption_os.full_v3_fresh_live_benchmark --root . \
+  --eval-id full_v3_fresh_live_selective_guard_full_remaining_gptmini_gpt55_20260611 \
+  --full --seed 20260614 --execute \
+  --selection-mode natural_repaired_guarded \
+  --solver-model gpt_mini --judge-model gpt55 \
+  --solve-workers 16 --judge-workers 8 \
+  --exclude-sample 'phase four/assumption_graph/paper_readiness_20260604/fresh_live_runs/full_v3_fresh_live_300_gptmini_gpt55_20260611_sample.json' \
+  --exclude-sample 'phase four/assumption_graph/paper_readiness_20260604/fresh_live_runs/full_v3_fresh_live_guarded_heldout300_gptmini_gpt55_20260611_sample.json' \
+  --exclude-sample 'phase four/assumption_graph/paper_readiness_20260604/fresh_live_runs/full_v3_fresh_live_business_guard_heldout300_gptmini_gpt55_20260611_sample.json' \
+  --guard-clade business:pat_controlled_intervention:S01 \
+  --guard-clade business:pat_controlled_intervention:S17 \
+  --guard-clade engineering:pat_decomposition_composition:S25 \
+  --guard-clade software_engineering:pat_counterexample_refinement:S14 \
+  --out 'phase four/assumption_graph/paper_readiness_20260604/full_v3_fresh_live_selective_guard_full_remaining_gptmini_gpt55_20260611.json'
+```
+
+Result versus strict full-remaining guard:
+
+- active interventions: 21 -> 27
+- planned calls: 105 -> 135
+- structural vs base utility: 0.5009 -> 0.5063
+- structural vs placebo utility: 0.5027 -> 0.5108
+- structural vs placebo CI lower: 0.4946 -> 0.5018
+
+Interpretation:
+
+This is the first coverage-expansion step that improves both utility axes while keeping the no-op/tie denominator. The bottleneck is not solved completely: 27/556 is still only 4.9% active coverage. But the system now has a safe expansion mechanism: candidate clades must beat strict guard on base and placebo before retention.
+
 ## Paper Evidence Update
 
 Updated:
@@ -135,5 +181,9 @@ Fresh guarded metrics now included:
 - full-remaining planned total calls: 105
 - full-remaining vs base utility: 0.5009
 - full-remaining vs placebo utility: 0.5027
+- selective active interventions: 27
+- selective planned total calls: 135
+- selective vs base utility: 0.5063
+- selective vs placebo utility: 0.5108
 
 The paper evidence remains pass, while explicitly treating this as a small-effect validation.
