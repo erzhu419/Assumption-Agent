@@ -52,6 +52,9 @@ from assumption_os.full_v3_phase1_first_party_retrieval_audit import (
     build_full_v3_phase1_first_party_retrieval_audit_payload,
 )
 from assumption_os.full_v3_main_graph_memory_shadow import build_full_v3_main_graph_memory_shadow_payload
+from assumption_os.full_v3_main_graph_memory_controlled_apply import (
+    build_full_v3_main_graph_memory_controlled_apply_payload,
+)
 from assumption_os.full_v3_phase2_verifier_synthesis import build_full_v3_phase2_verifier_synthesis_payload
 from assumption_os.full_v3_phase3_learned_rollout import build_full_v3_phase3_learned_rollout_payload
 from assumption_os.full_v3_phase3_rollout_search_control import build_full_v3_phase3_rollout_search_control_payload
@@ -69,6 +72,13 @@ from assumption_os.full_v3_phase9_v1_live_regression import build_full_v3_phase9
 from assumption_os.full_v3_phase10_discrete_world_model_selector import (
     build_full_v3_phase10_discrete_world_model_selector_payload,
 )
+from assumption_os.full_v3_phase10_reliability_calibration import (
+    build_full_v3_phase10_reliability_calibration_payload,
+)
+from assumption_os.full_v3_guard_policy_learning import build_full_v3_guard_policy_learning_payload
+from assumption_os.full_v3_continuous_daemon_scheduler import (
+    build_full_v3_continuous_daemon_scheduler_payload,
+)
 from assumption_os.full_v3_world_model_calibration import build_full_v3_world_model_calibration_payload
 from assumption_os.full_v3_phase11_capability_audit import build_full_v3_phase11_capability_audit_payload
 from assumption_os.full_v3_paper_scale_evidence import build_full_v3_paper_scale_evidence_payload
@@ -76,6 +86,7 @@ from assumption_os.full_v3_residual_multigeneration_loop import (
     build_full_v3_residual_multigeneration_loop_payload,
 )
 from assumption_os.full_v3_residual_live_mini_loop import build_full_v3_residual_live_mini_loop_payload
+from assumption_os.full_v3_residual_fresh_live_loop import build_full_v3_residual_fresh_live_loop_payload
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -626,6 +637,22 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreater(metrics["memory_hit_delta"], 0)
         self.assertGreater(metrics["context_efficiency_delta"], 0.02)
 
+    def test_full_v3_main_graph_memory_controlled_apply_has_rollback_and_readback(self):
+        payload = build_full_v3_main_graph_memory_controlled_apply_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_main_graph_memory_controlled_apply",
+            apply_main=False,
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertFalse(metrics["main_graph_mutated"])
+        self.assertGreaterEqual(metrics["rollback_entry_count"], metrics["planned_archive_count"])
+        self.assertGreaterEqual(metrics["applied_consolidated_node_count"], 4)
+        self.assertGreater(metrics["precision_delta"], 0.10)
+        self.assertEqual(metrics["archive_exposure_after"], 0)
+        self.assertGreater(metrics["context_efficiency_delta"], 0.02)
+
     def test_memory_consolidation_job_dry_run_and_apply_on_jsonl_graph(self):
         with tempfile.TemporaryDirectory() as td:
             store = JsonlGraphStore(td)
@@ -818,6 +845,29 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["phase10_leave_pattern_guard_harm_count"], 0)
         self.assertEqual(metrics["phase10_leave_route_guard_harm_count"], 0)
 
+    def test_full_v3_residual_fresh_live_loop_preflights_api_capable_path(self):
+        payload = build_full_v3_residual_fresh_live_loop_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_residual_fresh_live_loop",
+            execution_mode="dry_run",
+            candidate_count=3,
+            load_keyfile=False,
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(metrics["execution_mode"], "dry_run")
+        self.assertEqual(metrics["selected_candidate_count"], 3)
+        self.assertEqual(metrics["contract_ready_count"], 3)
+        self.assertEqual(metrics["preflight_ready_count"], 3)
+        self.assertTrue(metrics["fresh_live_path_present"])
+        self.assertEqual(metrics["planned_fresh_api_call_count"], 18)
+        self.assertEqual(metrics["fresh_api_call_count"], 0)
+        self.assertEqual(metrics["accepted_count"], 3)
+        self.assertEqual(metrics["applied_count"], 3)
+        self.assertEqual(metrics["main_graph_mutation_count"], 0)
+        self.assertFalse(metrics["secret_value_exposed"])
+
     def test_full_v3_live_residual_clusterer_unifies_live_residuals(self):
         payload = build_full_v3_live_residual_clusterer_payload(
             root=Path("."),
@@ -937,6 +987,26 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["execute_enabled_count"], 0)
         self.assertFalse(metrics["continuous_background_daemon"])
 
+    def test_full_v3_continuous_daemon_scheduler_integrates_long_horizon_queues(self):
+        payload = build_full_v3_continuous_daemon_scheduler_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_continuous_daemon_scheduler",
+            max_cycles=12,
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertGreaterEqual(metrics["scheduled_cycle_count"], 10)
+        self.assertEqual(metrics["checkpoint_pair_count"], metrics["scheduled_cycle_count"])
+        self.assertEqual(metrics["rate_limit_violation_count"], 0)
+        self.assertGreaterEqual(metrics["recovery_action_count"], 2)
+        self.assertTrue(metrics["fresh_loop_queue_integrated"])
+        self.assertTrue(metrics["memory_apply_queue_integrated"])
+        self.assertTrue(metrics["daemon_readback_queue_integrated"])
+        self.assertEqual(metrics["ungated_graph_mutation_count"], 0)
+        self.assertTrue(metrics["continuous_background_ready"])
+        self.assertFalse(metrics["background_process_started"])
+
     def test_full_v3_frozen_v1_comparison_shows_downstream_margin(self):
         payload = build_full_v3_frozen_v1_comparison_payload(
             root=Path("."),
@@ -1045,6 +1115,12 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertTrue(metrics["residual_live_mini_phase10_readback_pass"])
         self.assertEqual(metrics["residual_live_mini_phase10_leave_pattern_guard_harm_count"], 0)
         self.assertEqual(metrics["residual_live_mini_phase10_leave_route_guard_harm_count"], 0)
+        self.assertTrue(metrics["residual_fresh_live_path_present"])
+        self.assertEqual(metrics["residual_fresh_contract_ready_count"], 3)
+        self.assertEqual(metrics["residual_fresh_preflight_ready_count"], 3)
+        self.assertEqual(metrics["residual_fresh_planned_api_call_count"], 18)
+        self.assertEqual(metrics["residual_fresh_main_graph_mutation_count"], 0)
+        self.assertFalse(metrics["residual_fresh_secret_value_exposed"])
         self.assertEqual(metrics["phase5_live_selected_production_profile"], "phase10_calibrated_residual_guard")
         self.assertEqual(metrics["phase5_live_selected_exploration_profile"], "phase10_discrete_world_model_candidate")
         self.assertGreaterEqual(metrics["phase5_live_scheduler_lift_over_v3"], 0.07)
@@ -1076,6 +1152,18 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["phase10_leave_route_tag_guard_harm_count"], 0)
         self.assertEqual(metrics["phase10_guard_assumption_node_count"], 7)
         self.assertEqual(metrics["phase10_calibrated_rows_with_guard_assumption_rate"], 1.0)
+        self.assertGreaterEqual(metrics["phase10_reliability_observed_arm_record_count"], 45)
+        self.assertFalse(metrics["phase10_reliability_source_raw_beats_base"])
+        self.assertLess(metrics["phase10_reliability_calibrated_mae"], metrics["phase10_reliability_base_rate_mae"])
+        self.assertGreater(metrics["phase10_reliability_calibrated_mae_lift_over_base"], 0.02)
+        self.assertGreater(metrics["phase10_reliability_calibrated_brier_lift_over_base"], 0.01)
+        self.assertGreater(metrics["phase10_reliability_calibrated_ece_lift_over_raw"], 0.0)
+        self.assertEqual(metrics["guard_policy_learned_update_count"], 7)
+        self.assertGreaterEqual(metrics["guard_policy_supported_guard_count"], 5)
+        self.assertGreaterEqual(metrics["guard_policy_weight_range"], 0.05)
+        self.assertGreaterEqual(metrics["guard_policy_learned_lift_over_hybrid"], 0.0)
+        self.assertEqual(metrics["guard_policy_harm_vs_hybrid_count"], 0)
+        self.assertEqual(metrics["guard_policy_raw_world_model_status"], "candidate")
         self.assertGreaterEqual(metrics["phase3_learned_transition_row_count"], 80)
         self.assertGreaterEqual(metrics["phase3_learned_selected_reward_lift_over_v3"], 0.04)
         self.assertFalse(metrics["phase3_learned_uses_raw_prompts_or_answers"])
@@ -1102,6 +1190,25 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreater(metrics["main_graph_memory_shadow_memory_hit_delta"], 0)
         self.assertGreater(metrics["main_graph_memory_shadow_context_efficiency_delta"], 0.02)
         self.assertFalse(metrics["main_graph_memory_shadow_main_graph_mutated"])
+        self.assertGreaterEqual(
+            metrics["main_graph_memory_controlled_apply_rollback_entry_count"],
+            metrics["main_graph_memory_controlled_apply_planned_archive_count"],
+        )
+        self.assertGreater(metrics["main_graph_memory_controlled_apply_precision_delta"], 0.10)
+        self.assertEqual(metrics["main_graph_memory_controlled_apply_archive_exposure_after"], 0)
+        self.assertFalse(metrics["main_graph_memory_controlled_apply_main_graph_mutated"])
+        self.assertGreaterEqual(metrics["continuous_daemon_scheduled_cycle_count"], 10)
+        self.assertEqual(
+            metrics["continuous_daemon_checkpoint_pair_count"],
+            metrics["continuous_daemon_scheduled_cycle_count"],
+        )
+        self.assertEqual(metrics["continuous_daemon_rate_limit_violation_count"], 0)
+        self.assertGreaterEqual(metrics["continuous_daemon_recovery_action_count"], 2)
+        self.assertTrue(metrics["continuous_daemon_fresh_loop_queue_integrated"])
+        self.assertTrue(metrics["continuous_daemon_memory_apply_queue_integrated"])
+        self.assertEqual(metrics["continuous_daemon_ungated_graph_mutation_count"], 0)
+        self.assertTrue(metrics["continuous_daemon_background_ready"])
+        self.assertFalse(metrics["continuous_daemon_background_process_started"])
         self.assertEqual(metrics["phase11_outer_shell_production_claim_count"], 0)
         self.assertGreaterEqual(metrics["phase11_blocked_claim_count"], 10)
         self.assertEqual(
@@ -1158,6 +1265,39 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["recommended_promotion"], "promote_calibrated_residual_guard")
         self.assertFalse(metrics["uses_raw_prompts_or_answers"])
         self.assertTrue(payload["teacher_distillation_bootstrap"]["not_counted_as_independent_validation"])
+
+    def test_full_v3_phase10_reliability_calibration_beats_base_rate(self):
+        payload = build_full_v3_phase10_reliability_calibration_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_phase10_reliability_calibration",
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertGreaterEqual(metrics["observed_arm_record_count"], 45)
+        self.assertFalse(metrics["source_phase10_calibration_beats_base_rate"])
+        self.assertLess(metrics["calibrated_mae"], metrics["base_rate_mae"])
+        self.assertGreater(metrics["calibrated_mae_lift_over_base_rate"], 0.02)
+        self.assertGreater(metrics["calibrated_brier_lift_over_base_rate"], 0.01)
+        self.assertLess(metrics["calibrated_ece"], metrics["raw_ece"])
+        self.assertFalse(metrics["uses_raw_prompts_or_answers"])
+
+    def test_full_v3_guard_policy_learning_updates_guard_assumptions(self):
+        payload = build_full_v3_guard_policy_learning_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_guard_policy_learning",
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(metrics["learned_guard_update_count"], 7)
+        self.assertGreaterEqual(metrics["supported_guard_count"], 5)
+        self.assertGreaterEqual(metrics["guard_weight_range"], 0.05)
+        self.assertGreaterEqual(metrics["learned_policy_lift_over_hybrid"], 0.0)
+        self.assertEqual(metrics["learned_policy_harm_vs_hybrid_count"], 0)
+        self.assertEqual(metrics["raw_world_model_status"], "candidate")
+        self.assertGreater(metrics["reliability_calibrated_mae_lift_over_base"], 0.02)
+        self.assertFalse(metrics["uses_raw_prompts_or_answers"])
 
     def test_full_v3_world_model_calibration_blocks_uncalibrated_promotion(self):
         payload = build_full_v3_world_model_calibration_payload(

@@ -48,7 +48,12 @@ REQUIRED_ARTIFACTS = {
     "v3_phase9_compact_frame_guard": PAPER_DIR / "full_v3_phase9_compact_frame_guard_20260611.json",
     "v3_phase9_hybrid_guard": PAPER_DIR / "full_v3_phase9_hybrid_guard_heldout_20260611.json",
     "v3_phase10_discrete_world_model": PAPER_DIR / "full_v3_phase10_discrete_world_model_selector_20260611.json",
+    "v3_phase10_reliability_calibration": PAPER_DIR / "full_v3_phase10_reliability_calibration_20260611.json",
+    "v3_guard_policy_learning": PAPER_DIR / "full_v3_guard_policy_learning_20260611.json",
     "v3_main_graph_memory_shadow": PAPER_DIR / "full_v3_main_graph_memory_shadow_20260611.json",
+    "v3_main_graph_memory_controlled_apply": PAPER_DIR / "full_v3_main_graph_memory_controlled_apply_20260611.json",
+    "v3_residual_fresh_live_loop": PAPER_DIR / "full_v3_residual_fresh_live_loop_20260611.json",
+    "v3_continuous_daemon_scheduler": PAPER_DIR / "full_v3_continuous_daemon_scheduler_20260611.json",
     "v3_world_model_calibration": PAPER_DIR / "full_v3_world_model_calibration_20260611.json",
     "v3_same_batch_ablation_suite": PAPER_DIR / "full_v3_same_batch_ablation_suite_20260611.json",
     "v3_phase11_capability_audit": PAPER_DIR / "full_v3_phase11_capability_audit_20260611.json",
@@ -135,6 +140,24 @@ def build_full_v3_paper_scale_evidence_payload(
                 "phase10_leave_pattern_guard_harm_count",
                 "phase10_leave_route_guard_harm_count",
                 "phase10_guard_assumption_node_count",
+            ],
+        ),
+        "residual_fresh_live_loop": _metric_subset(
+            artifacts["v3_residual_fresh_live_loop"].get("metrics", {}),
+            [
+                "execution_mode",
+                "selected_candidate_count",
+                "contract_ready_count",
+                "preflight_ready_count",
+                "fresh_live_path_present",
+                "live_env_ready",
+                "fresh_api_call_count",
+                "planned_fresh_api_call_count",
+                "accepted_count",
+                "applied_count",
+                "graph_copy_node_delta",
+                "main_graph_mutation_count",
+                "secret_value_exposed",
             ],
         ),
         "vertical_slice": _metric_subset(
@@ -332,6 +355,44 @@ def build_full_v3_paper_scale_evidence_payload(
                 "calibrated_rows_with_guard_assumption_rate",
             ],
         ),
+        "phase10_reliability_calibration": _metric_subset(
+            artifacts["v3_phase10_reliability_calibration"].get("metrics", {}),
+            [
+                "observed_arm_record_count",
+                "problem_count",
+                "arm_count",
+                "bin_count",
+                "raw_mae",
+                "calibrated_mae",
+                "base_rate_mae",
+                "calibrated_mae_lift_over_raw",
+                "calibrated_mae_lift_over_base_rate",
+                "raw_brier",
+                "calibrated_brier",
+                "base_rate_brier",
+                "calibrated_brier_lift_over_base_rate",
+                "raw_ece",
+                "calibrated_ece",
+                "calibrated_ece_lift_over_raw",
+                "source_phase10_calibration_beats_base_rate",
+            ],
+        ),
+        "guard_policy_learning": _metric_subset(
+            artifacts["v3_guard_policy_learning"].get("metrics", {}),
+            [
+                "learned_guard_update_count",
+                "supported_guard_count",
+                "guard_weight_range",
+                "promote_weight_count",
+                "demote_weight_count",
+                "keep_candidate_count",
+                "learned_policy_vs_v1_utility",
+                "learned_policy_lift_over_hybrid",
+                "learned_policy_harm_vs_hybrid_count",
+                "raw_world_model_status",
+                "reliability_calibrated_mae_lift_over_base",
+            ],
+        ),
         "main_graph_memory_shadow": _metric_subset(
             artifacts["v3_main_graph_memory_shadow"].get("metrics", {}),
             [
@@ -356,6 +417,39 @@ def build_full_v3_paper_scale_evidence_payload(
                 "memory_hits_after",
                 "memory_hit_delta",
                 "context_efficiency_delta",
+            ],
+        ),
+        "main_graph_memory_controlled_apply": _metric_subset(
+            artifacts["v3_main_graph_memory_controlled_apply"].get("metrics", {}),
+            [
+                "apply_main",
+                "dry_run_group_count",
+                "planned_archive_count",
+                "planned_consolidated_node_count",
+                "rollback_entry_count",
+                "applied_archived_node_count",
+                "applied_consolidated_node_count",
+                "node_delta",
+                "main_graph_mutated",
+                "precision_delta",
+                "archive_exposure_after",
+                "memory_hit_delta",
+                "context_efficiency_delta",
+            ],
+        ),
+        "continuous_daemon_scheduler": _metric_subset(
+            artifacts["v3_continuous_daemon_scheduler"].get("metrics", {}),
+            [
+                "scheduled_cycle_count",
+                "checkpoint_pair_count",
+                "rate_limit_violation_count",
+                "recovery_action_count",
+                "fresh_loop_queue_integrated",
+                "memory_apply_queue_integrated",
+                "daemon_readback_queue_integrated",
+                "ungated_graph_mutation_count",
+                "continuous_background_ready",
+                "background_process_started",
             ],
         ),
         "same_batch_ablation_suite": _metric_subset(
@@ -529,6 +623,14 @@ def build_full_v3_paper_scale_evidence_payload(
             and metrics["residual_live_mini_phase10_leave_pattern_guard_harm_count"] == 0
             and metrics["residual_live_mini_phase10_leave_route_guard_harm_count"] == 0
         ),
+        "residual_fresh_live_loop_path_is_ready": (
+            metrics["residual_fresh_live_path_present"] is True
+            and metrics["residual_fresh_contract_ready_count"] >= 3
+            and metrics["residual_fresh_preflight_ready_count"] >= 3
+            and metrics["residual_fresh_planned_api_call_count"] >= 18
+            and metrics["residual_fresh_main_graph_mutation_count"] == 0
+            and metrics["residual_fresh_secret_value_exposed"] is False
+        ),
         "phase5_live_scheduler_realified": metrics["phase5_live_profile_count"] >= 7,
         "phase5_live_scheduler_selects_calibrated_guard": (
             metrics["phase5_live_selected_production_profile"] == "phase10_calibrated_residual_guard"
@@ -565,6 +667,21 @@ def build_full_v3_paper_scale_evidence_payload(
         "phase10_guard_rules_are_graph_assumptions": (
             metrics["phase10_guard_assumption_node_count"] >= 7
             and metrics["phase10_calibrated_rows_with_guard_assumption_rate"] == 1.0
+        ),
+        "phase10_reliability_calibration_promotes_budget_gate": (
+            metrics["phase10_reliability_source_raw_beats_base"] is False
+            and metrics["phase10_reliability_calibrated_mae"] < metrics["phase10_reliability_base_rate_mae"]
+            and metrics["phase10_reliability_calibrated_mae_lift_over_base"] > 0.02
+            and metrics["phase10_reliability_calibrated_brier_lift_over_base"] > 0.01
+            and metrics["phase10_reliability_calibrated_ece_lift_over_raw"] > 0.0
+        ),
+        "guard_policy_learning_nonharmful": (
+            metrics["guard_policy_learned_update_count"] >= 7
+            and metrics["guard_policy_supported_guard_count"] >= 5
+            and metrics["guard_policy_weight_range"] >= 0.05
+            and metrics["guard_policy_learned_lift_over_hybrid"] >= 0.0
+            and metrics["guard_policy_harm_vs_hybrid_count"] == 0
+            and metrics["guard_policy_raw_world_model_status"] == "candidate"
         ),
         "phase10_raw_predictor_still_marked_uncalibrated": (
             metrics["phase10_world_model_calibration_beats_base_rate"] is False
@@ -609,6 +726,26 @@ def build_full_v3_paper_scale_evidence_payload(
             and metrics["main_graph_memory_shadow_memory_hit_delta"] > 0
             and metrics["main_graph_memory_shadow_context_efficiency_delta"] > 0.02
             and metrics["main_graph_memory_shadow_main_graph_mutated"] is False
+        ),
+        "main_graph_memory_controlled_apply_ready": (
+            metrics["main_graph_memory_controlled_apply_rollback_entry_count"]
+            >= metrics["main_graph_memory_controlled_apply_planned_archive_count"]
+            and metrics["main_graph_memory_controlled_apply_consolidated_count"] >= 4
+            and metrics["main_graph_memory_controlled_apply_precision_delta"] > 0.10
+            and metrics["main_graph_memory_controlled_apply_archive_exposure_after"] == 0
+            and metrics["main_graph_memory_controlled_apply_context_efficiency_delta"] > 0.02
+            and metrics["main_graph_memory_controlled_apply_main_graph_mutated"] is False
+        ),
+        "continuous_daemon_scheduler_ready": (
+            metrics["continuous_daemon_scheduled_cycle_count"] >= 10
+            and metrics["continuous_daemon_checkpoint_pair_count"] == metrics["continuous_daemon_scheduled_cycle_count"]
+            and metrics["continuous_daemon_rate_limit_violation_count"] == 0
+            and metrics["continuous_daemon_recovery_action_count"] >= 2
+            and metrics["continuous_daemon_fresh_loop_queue_integrated"] is True
+            and metrics["continuous_daemon_memory_apply_queue_integrated"] is True
+            and metrics["continuous_daemon_ungated_graph_mutation_count"] == 0
+            and metrics["continuous_daemon_background_ready"] is True
+            and metrics["continuous_daemon_background_process_started"] is False
         ),
         "phase11_capability_audit_passes": metrics["phase11_artifact_pass_rate"] == 1.0,
         "phase11_outer_shells_not_overclaimed": metrics["phase11_outer_shell_production_claim_count"] == 0,
@@ -785,7 +922,12 @@ def _v3_mechanism_summary(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any
         "v3_phase7_long_run",
         "v3_phase7_daemon_soak",
         "v3_phase10_discrete_world_model",
+        "v3_phase10_reliability_calibration",
+        "v3_guard_policy_learning",
         "v3_main_graph_memory_shadow",
+        "v3_main_graph_memory_controlled_apply",
+        "v3_residual_fresh_live_loop",
+        "v3_continuous_daemon_scheduler",
         "v3_world_model_calibration",
         "v3_same_batch_ablation_suite",
         "v3_phase11_capability_audit",
@@ -1181,6 +1323,43 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "residual_live_mini_phase10_guard_assumption_node_count": int(
             artifacts["v3_residual_live_mini_loop"]["metrics"]["phase10_guard_assumption_node_count"]
         ),
+        "residual_fresh_execution_mode": artifacts["v3_residual_fresh_live_loop"]["metrics"]["execution_mode"],
+        "residual_fresh_selected_candidate_count": int(
+            artifacts["v3_residual_fresh_live_loop"]["metrics"]["selected_candidate_count"]
+        ),
+        "residual_fresh_contract_ready_count": int(
+            artifacts["v3_residual_fresh_live_loop"]["metrics"]["contract_ready_count"]
+        ),
+        "residual_fresh_preflight_ready_count": int(
+            artifacts["v3_residual_fresh_live_loop"]["metrics"]["preflight_ready_count"]
+        ),
+        "residual_fresh_live_path_present": bool(
+            artifacts["v3_residual_fresh_live_loop"]["metrics"]["fresh_live_path_present"]
+        ),
+        "residual_fresh_live_env_ready": bool(
+            artifacts["v3_residual_fresh_live_loop"]["metrics"]["live_env_ready"]
+        ),
+        "residual_fresh_api_call_count": int(
+            artifacts["v3_residual_fresh_live_loop"]["metrics"]["fresh_api_call_count"]
+        ),
+        "residual_fresh_planned_api_call_count": int(
+            artifacts["v3_residual_fresh_live_loop"]["metrics"]["planned_fresh_api_call_count"]
+        ),
+        "residual_fresh_accepted_count": int(
+            artifacts["v3_residual_fresh_live_loop"]["metrics"]["accepted_count"]
+        ),
+        "residual_fresh_applied_count": int(
+            artifacts["v3_residual_fresh_live_loop"]["metrics"]["applied_count"]
+        ),
+        "residual_fresh_graph_copy_node_delta": int(
+            artifacts["v3_residual_fresh_live_loop"]["metrics"]["graph_copy_node_delta"]
+        ),
+        "residual_fresh_main_graph_mutation_count": int(
+            artifacts["v3_residual_fresh_live_loop"]["metrics"]["main_graph_mutation_count"]
+        ),
+        "residual_fresh_secret_value_exposed": bool(
+            artifacts["v3_residual_fresh_live_loop"]["metrics"]["secret_value_exposed"]
+        ),
         "phase5_live_profile_source_artifact_count": int(
             artifacts["v3_phase5_bandit"]["metrics"]["live_profile_source_artifact_count"]
         ),
@@ -1368,6 +1547,62 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "phase10_calibrated_rows_with_guard_assumption_rate": float(
             artifacts["v3_phase10_discrete_world_model"]["metrics"]["calibrated_rows_with_guard_assumption_rate"]
         ),
+        "phase10_reliability_observed_arm_record_count": int(
+            artifacts["v3_phase10_reliability_calibration"]["metrics"]["observed_arm_record_count"]
+        ),
+        "phase10_reliability_bin_count": int(
+            artifacts["v3_phase10_reliability_calibration"]["metrics"]["bin_count"]
+        ),
+        "phase10_reliability_raw_mae": float(
+            artifacts["v3_phase10_reliability_calibration"]["metrics"]["raw_mae"]
+        ),
+        "phase10_reliability_calibrated_mae": float(
+            artifacts["v3_phase10_reliability_calibration"]["metrics"]["calibrated_mae"]
+        ),
+        "phase10_reliability_base_rate_mae": float(
+            artifacts["v3_phase10_reliability_calibration"]["metrics"]["base_rate_mae"]
+        ),
+        "phase10_reliability_calibrated_mae_lift_over_base": float(
+            artifacts["v3_phase10_reliability_calibration"]["metrics"]["calibrated_mae_lift_over_base_rate"]
+        ),
+        "phase10_reliability_calibrated_brier_lift_over_base": float(
+            artifacts["v3_phase10_reliability_calibration"]["metrics"]["calibrated_brier_lift_over_base_rate"]
+        ),
+        "phase10_reliability_raw_ece": float(
+            artifacts["v3_phase10_reliability_calibration"]["metrics"]["raw_ece"]
+        ),
+        "phase10_reliability_calibrated_ece": float(
+            artifacts["v3_phase10_reliability_calibration"]["metrics"]["calibrated_ece"]
+        ),
+        "phase10_reliability_calibrated_ece_lift_over_raw": float(
+            artifacts["v3_phase10_reliability_calibration"]["metrics"]["calibrated_ece_lift_over_raw"]
+        ),
+        "phase10_reliability_source_raw_beats_base": bool(
+            artifacts["v3_phase10_reliability_calibration"]["metrics"][
+                "source_phase10_calibration_beats_base_rate"
+            ]
+        ),
+        "guard_policy_learned_update_count": int(
+            artifacts["v3_guard_policy_learning"]["metrics"]["learned_guard_update_count"]
+        ),
+        "guard_policy_supported_guard_count": int(
+            artifacts["v3_guard_policy_learning"]["metrics"]["supported_guard_count"]
+        ),
+        "guard_policy_weight_range": float(
+            artifacts["v3_guard_policy_learning"]["metrics"]["guard_weight_range"]
+        ),
+        "guard_policy_promote_weight_count": int(
+            artifacts["v3_guard_policy_learning"]["metrics"]["promote_weight_count"]
+        ),
+        "guard_policy_learned_lift_over_hybrid": float(
+            artifacts["v3_guard_policy_learning"]["metrics"]["learned_policy_lift_over_hybrid"]
+        ),
+        "guard_policy_harm_vs_hybrid_count": int(
+            artifacts["v3_guard_policy_learning"]["metrics"]["learned_policy_harm_vs_hybrid_count"]
+        ),
+        "guard_policy_raw_world_model_status": artifacts["v3_guard_policy_learning"]["metrics"][
+            "raw_world_model_status"
+        ],
         "same_batch_judged_n": int(
             artifacts["v3_same_batch_ablation_suite"]["metrics"]["same_batch_judged_n"]
         ),
@@ -1513,6 +1748,54 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         ),
         "main_graph_memory_shadow_context_efficiency_delta": float(
             artifacts["v3_main_graph_memory_shadow"]["metrics"]["context_efficiency_delta"]
+        ),
+        "main_graph_memory_controlled_apply_main_graph_mutated": bool(
+            artifacts["v3_main_graph_memory_controlled_apply"]["metrics"]["main_graph_mutated"]
+        ),
+        "main_graph_memory_controlled_apply_rollback_entry_count": int(
+            artifacts["v3_main_graph_memory_controlled_apply"]["metrics"]["rollback_entry_count"]
+        ),
+        "main_graph_memory_controlled_apply_planned_archive_count": int(
+            artifacts["v3_main_graph_memory_controlled_apply"]["metrics"]["planned_archive_count"]
+        ),
+        "main_graph_memory_controlled_apply_consolidated_count": int(
+            artifacts["v3_main_graph_memory_controlled_apply"]["metrics"]["applied_consolidated_node_count"]
+        ),
+        "main_graph_memory_controlled_apply_precision_delta": float(
+            artifacts["v3_main_graph_memory_controlled_apply"]["metrics"]["precision_delta"]
+        ),
+        "main_graph_memory_controlled_apply_archive_exposure_after": int(
+            artifacts["v3_main_graph_memory_controlled_apply"]["metrics"]["archive_exposure_after"]
+        ),
+        "main_graph_memory_controlled_apply_context_efficiency_delta": float(
+            artifacts["v3_main_graph_memory_controlled_apply"]["metrics"]["context_efficiency_delta"]
+        ),
+        "continuous_daemon_scheduled_cycle_count": int(
+            artifacts["v3_continuous_daemon_scheduler"]["metrics"]["scheduled_cycle_count"]
+        ),
+        "continuous_daemon_checkpoint_pair_count": int(
+            artifacts["v3_continuous_daemon_scheduler"]["metrics"]["checkpoint_pair_count"]
+        ),
+        "continuous_daemon_rate_limit_violation_count": int(
+            artifacts["v3_continuous_daemon_scheduler"]["metrics"]["rate_limit_violation_count"]
+        ),
+        "continuous_daemon_recovery_action_count": int(
+            artifacts["v3_continuous_daemon_scheduler"]["metrics"]["recovery_action_count"]
+        ),
+        "continuous_daemon_fresh_loop_queue_integrated": bool(
+            artifacts["v3_continuous_daemon_scheduler"]["metrics"]["fresh_loop_queue_integrated"]
+        ),
+        "continuous_daemon_memory_apply_queue_integrated": bool(
+            artifacts["v3_continuous_daemon_scheduler"]["metrics"]["memory_apply_queue_integrated"]
+        ),
+        "continuous_daemon_ungated_graph_mutation_count": int(
+            artifacts["v3_continuous_daemon_scheduler"]["metrics"]["ungated_graph_mutation_count"]
+        ),
+        "continuous_daemon_background_ready": bool(
+            artifacts["v3_continuous_daemon_scheduler"]["metrics"]["continuous_background_ready"]
+        ),
+        "continuous_daemon_background_process_started": bool(
+            artifacts["v3_continuous_daemon_scheduler"]["metrics"]["background_process_started"]
         ),
         "phase11_capability_count": int(
             artifacts["v3_phase11_capability_audit"]["metrics"]["capability_count"]
