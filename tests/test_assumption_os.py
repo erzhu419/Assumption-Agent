@@ -710,14 +710,17 @@ class AssumptionOSTest(unittest.TestCase):
             metrics["fresh_live_selective_active_intervention_n"],
             metrics["fresh_live_full_active_intervention_n"],
         )
+        self.assertGreaterEqual(metrics["fresh_live_selective_active_intervention_n"], 31)
         self.assertGreater(
             metrics["fresh_live_selective_vs_base_utility"],
             metrics["fresh_live_full_vs_base_utility"],
         )
+        self.assertGreater(metrics["fresh_live_selective_vs_base_utility"], 0.51)
         self.assertGreater(
             metrics["fresh_live_selective_vs_placebo_utility"],
             metrics["fresh_live_full_vs_placebo_utility"],
         )
+        self.assertGreater(metrics["fresh_live_selective_vs_placebo_utility"], 0.51)
         self.assertGreater(metrics["fresh_live_selective_vs_placebo_ci_lower"], 0.50)
         self.assertLessEqual(metrics["fresh_live_selective_planned_total_calls"], 200)
         self.assertFalse(metrics["prompt_answer_payload_stored"])

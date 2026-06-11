@@ -23,7 +23,7 @@ Result: pass.
 
 Key metrics:
 
-- Required artifact pass rate: 1.0 over 14 artifacts
+- Required artifact pass rate: 1.0 over 21 artifacts
 - V3 mechanism pass rate: 1.0 over 8 mechanism artifacts
 - Raw first-party live events: 6403
 - Valid judge events: 2818
@@ -38,6 +38,11 @@ Key metrics:
 - Key toggle minimum margin: 0.08
 - Long-run downstream win rate: 0.75
 - Long-run capability improvement: 0.1945
+- Fresh guarded heldout300 active interventions: 11/300
+- Fresh guarded full-remaining active interventions: 21/556
+- Fresh cue-repair selective active interventions: 31/556
+- Fresh cue-repair selective vs base utility / CI lower: 0.5144 / 0.5054
+- Fresh cue-repair selective vs placebo utility / CI lower: 0.5153 / 0.5063
 - Prompt/answer payload stored: false
 - Secret leak detected: false
 - Boundary case count: 1
@@ -46,4 +51,4 @@ Key metrics:
 
 The evidence chain is now less fragmented: the paper-facing claim can point to one artifact that combines the frozen main experiment, hard baselines, retrieval baselines, first-party trace scale, phase validations, and long-run/vertical recursive results.
 
-This still is not a fresh large API rerun. The next stronger version would rerun the same frozen pipeline on a larger unseen benchmark with live model calls and the same gates.
+The artifact now includes the fresh live guarded heldout300, strict full-remaining, and cue-repair selective expansion runs.  The fresh reruns are still small-effect validations, but the latest retained profile improves both active coverage and problem-level utility over the previous selective guard.

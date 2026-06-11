@@ -37,7 +37,7 @@ REQUIRED_ARTIFACTS = {
     "frozen_v3_vs_v1": PAPER_DIR / "full_v3_frozen_v1_comparison_20260611.json",
     "fresh_live_guarded_300": PAPER_DIR / "full_v3_fresh_live_business_guard_heldout300_gptmini_gpt55_20260611.json",
     "fresh_live_guarded_full_remaining": PAPER_DIR / "full_v3_fresh_live_business_guard_full_remaining_gptmini_gpt55_20260611.json",
-    "fresh_live_selective_expansion": PAPER_DIR / "full_v3_fresh_live_selective_guard_full_remaining_gptmini_gpt55_20260611.json",
+    "fresh_live_selective_expansion": PAPER_DIR / "full_v3_fresh_live_cue_repair_v4_full_remaining_gptmini_gpt55_20260611.json",
 }
 
 KEY_TOGGLE_BASELINES = {

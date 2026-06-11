@@ -187,3 +187,58 @@ Fresh guarded metrics now included:
 - selective vs placebo utility: 0.5108
 
 The paper evidence remains pass, while explicitly treating this as a small-effect validation.
+
+## Cue-Repair Guard Expansion
+
+The next bottleneck was active coverage.  A naive expansion over additional math/software clades increased active rows but reopened placebo risk:
+
+- selective v2: active 37/556, vs base utility 0.5090, vs placebo utility 0.5036; rejected because placebo fell below the retained v1 result.
+- selective v3: active 29/556, vs base utility 0.5054, vs placebo utility 0.5054; rejected because both utilities were below v1.
+
+Diagnosis:
+
+- `software_engineering:pat_decomposition_composition:S25` was over-routed by broad cues such as "network" and "unit/integration tests".
+- Several software problems were actually controlled diagnosis, monotone/special-case progression, or boundary/counterexample tests, not composition/emergence.
+- Plainly expanding clades raised coverage but did not reliably protect against placebo.
+
+Code repair:
+
+- narrowed S25 cues from broad "network / macro / whole" terms to true emergence terms such as macro behavior, macro performance, swarm intelligence, crosstalk, and final consistency;
+- added more specific cues for software controlled diagnosis (`S01`, `S17`), monotone/special-case transfer (`S06`), and bottleneck profiling (`S24`);
+- kept all expansion behind `natural_repaired_guarded`, so unpromoted clades still abstain.
+
+Retained v4 command:
+
+```bash
+python3 -m assumption_os.full_v3_fresh_live_benchmark --root . \
+  --eval-id full_v3_fresh_live_cue_repair_v4_full_remaining_gptmini_gpt55_20260611 \
+  --full --seed 20260614 --execute \
+  --selection-mode natural_repaired_guarded \
+  --solver-model gpt_mini --judge-model gpt55 \
+  --solve-workers 16 --judge-workers 8 \
+  --guard-clade business:pat_controlled_intervention:S01 \
+  --guard-clade business:pat_controlled_intervention:S17 \
+  --guard-clade engineering:pat_decomposition_composition:S25 \
+  --guard-clade engineering:pat_bottleneck_capacity:S19 \
+  --guard-clade software_engineering:pat_counterexample_refinement:S14 \
+  --guard-clade software_engineering:pat_controlled_intervention:S17 \
+  --guard-clade software_engineering:pat_monotone_progress:S06
+```
+
+Retained v4 result versus previous selective v1:
+
+- active interventions: 27 -> 31
+- planned calls: 135 -> 155
+- structural vs base utility: 0.5063 -> 0.5144
+- structural vs base CI lower: 0.4982 -> 0.5054
+- structural vs placebo utility: 0.5108 -> 0.5153
+- structural vs placebo CI lower: 0.5018 -> 0.5063
+- sign-test p-values: base 0.0037, placebo 0.0023
+
+Rejected follow-up:
+
+- v5 removed engineering S25 after v4 clade-level breakdown showed local harm, but the fresh rerun dropped to base utility 0.5054 and placebo utility 0.5090.  Because the overall heldout profile was worse than v4 and not better than v1 on base, v5 was not retained.
+
+Interpretation:
+
+The bottleneck is partially repaired.  Active coverage is still small at 31/556, but cue repair plus guarded retention now improves coverage and both utility axes simultaneously.  The safe next step is not to reopen broad S25/S01/S24 routing, but to run more candidate clades through the same preflight -> live -> clade breakdown -> retained/rejected loop.
