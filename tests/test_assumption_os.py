@@ -45,15 +45,21 @@ from assumption_os.full_v2_phase7_daemon_harness_bypass import build_full_v2_pha
 from assumption_os.full_v2_vertical_slice_bypass import build_full_v2_vertical_slice_bypass_payload
 from assumption_os.full_v3_frozen_v1_comparison import build_full_v3_frozen_v1_comparison_payload
 from assumption_os.full_v3_fresh_live_benchmark import build_full_v3_fresh_live_benchmark_payload
+from assumption_os.full_v3_same_batch_ablation_suite import build_full_v3_same_batch_ablation_suite_payload
 from assumption_os.full_v3_phase0_contract_checker import build_full_v3_phase0_contract_checker_payload
 from assumption_os.full_v3_phase1_memory_consolidation import build_full_v3_phase1_memory_consolidation_payload
+from assumption_os.full_v3_phase1_first_party_retrieval_audit import (
+    build_full_v3_phase1_first_party_retrieval_audit_payload,
+)
 from assumption_os.full_v3_phase2_verifier_synthesis import build_full_v3_phase2_verifier_synthesis_payload
+from assumption_os.full_v3_phase3_learned_rollout import build_full_v3_phase3_learned_rollout_payload
 from assumption_os.full_v3_phase3_rollout_search_control import build_full_v3_phase3_rollout_search_control_payload
 from assumption_os.full_v3_phase4_hypothesis_generator import build_full_v3_phase4_hypothesis_generator_payload
 from assumption_os.full_v3_live_residual_clusterer import build_full_v3_live_residual_clusterer_payload
 from assumption_os.full_v3_phase5_contextual_bandit_scheduler import build_full_v3_phase5_contextual_bandit_scheduler_payload
 from assumption_os.full_v3_phase6_formal_transfer_engine import build_full_v3_phase6_formal_transfer_engine_payload
 from assumption_os.full_v3_phase7_long_run_benchmark import build_full_v3_phase7_long_run_benchmark_payload
+from assumption_os.full_v3_phase7_daemon_soak import build_full_v3_phase7_daemon_soak_payload
 from assumption_os.full_v3_phase8_creativity_world_coverage import (
     build_full_v3_phase8_creativity_world_coverage_payload,
 )
@@ -65,6 +71,9 @@ from assumption_os.full_v3_phase10_discrete_world_model_selector import (
 from assumption_os.full_v3_world_model_calibration import build_full_v3_world_model_calibration_payload
 from assumption_os.full_v3_phase11_capability_audit import build_full_v3_phase11_capability_audit_payload
 from assumption_os.full_v3_paper_scale_evidence import build_full_v3_paper_scale_evidence_payload
+from assumption_os.full_v3_residual_multigeneration_loop import (
+    build_full_v3_residual_multigeneration_loop_payload,
+)
 from assumption_os.formal_mapping import (
     FormalMappingGateDecision,
     FormalMappingStatus,
@@ -579,6 +588,23 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["production_sleep_applied_archived_node_count"], 3)
         self.assertFalse(metrics["production_sleep_dry_run_mutated"])
 
+    def test_full_v3_phase1_first_party_retrieval_audit_improves_active_view(self):
+        payload = build_full_v3_phase1_first_party_retrieval_audit_payload(
+            eval_id="unit_full_v3_phase1_first_party_retrieval_audit"
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertTrue(metrics["first_party_store_used"])
+        self.assertGreaterEqual(metrics["query_count"], 4)
+        self.assertFalse(metrics["dry_run_store_mutated"])
+        self.assertGreaterEqual(metrics["applied_consolidated_node_count"], 3)
+        self.assertGreaterEqual(metrics["archived_node_count"], 4)
+        self.assertGreaterEqual(metrics["precision_delta"], 0.20)
+        self.assertGreaterEqual(metrics["negative_transfer_delta"], 2)
+        self.assertGreaterEqual(metrics["context_efficiency_delta"], 0.15)
+        self.assertEqual(metrics["after_archived_hits"], 0)
+
     def test_memory_consolidation_job_dry_run_and_apply_on_jsonl_graph(self):
         with tempfile.TemporaryDirectory() as td:
             store = JsonlGraphStore(td)
@@ -685,6 +711,24 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["regression_recall"], 0.95)
         self.assertLessEqual(metrics["oracle_regret"], 0.05)
 
+    def test_full_v3_phase3_learned_rollout_uses_live_transitions(self):
+        payload = build_full_v3_phase3_learned_rollout_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_phase3_learned_rollout",
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertGreaterEqual(metrics["transition_row_count"], 80)
+        self.assertGreaterEqual(metrics["rollout_row_count"], 15)
+        self.assertEqual(metrics["candidate_action_coverage"], 1.0)
+        self.assertGreaterEqual(metrics["selected_reward_lift_over_v3"], 0.04)
+        self.assertGreaterEqual(metrics["selected_vs_v1_lift_over_v3"], 0.05)
+        self.assertGreaterEqual(metrics["selected_vs_v1_utility"], 0.65)
+        self.assertGreaterEqual(metrics["teacher_match_rate"], 0.30)
+        self.assertFalse(metrics["uses_raw_prompts_or_answers"])
+        self.assertEqual(metrics["recommended_promotion"], "promote_calibrated_residual_guard")
+
     def test_full_v3_phase4_hypothesis_generator_runs_variation_evaluation_retention(self):
         payload = build_full_v3_phase4_hypothesis_generator_payload(
             eval_id="unit_full_v3_phase4_hypothesis_generator"
@@ -708,6 +752,29 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["live_residual_largest_cluster_status"], "resolved_by_phase9_hybrid_guard")
         self.assertGreaterEqual(metrics["live_residual_next_generation_seed_count"], 15)
         self.assertFalse(metrics["live_residual_uses_raw_prompts_or_answers"])
+
+    def test_full_v3_residual_multigeneration_loop_retains_descendants(self):
+        payload = build_full_v3_residual_multigeneration_loop_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_residual_multigeneration_loop",
+            generations=3,
+            seed_limit=8,
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(metrics["generation_count"], 3)
+        self.assertGreaterEqual(metrics["seed_cluster_count"], 8)
+        self.assertGreaterEqual(metrics["proposal_count"], 30)
+        self.assertGreaterEqual(metrics["retained_count"], 12)
+        self.assertGreaterEqual(metrics["retention_rate"], 0.25)
+        self.assertLessEqual(metrics["retention_rate"], 0.75)
+        self.assertEqual(metrics["recursive_parent_closure_rate"], 1.0)
+        self.assertEqual(metrics["evaluation_plan_coverage"], 1.0)
+        self.assertEqual(metrics["negative_control_coverage"], 1.0)
+        self.assertGreaterEqual(metrics["proposal_family_count"], 4)
+        self.assertFalse(metrics["uses_raw_prompts_or_answers"])
+        self.assertEqual(metrics["graph_mutation_count"], 0)
 
     def test_full_v3_live_residual_clusterer_unifies_live_residuals(self):
         payload = build_full_v3_live_residual_clusterer_payload(
@@ -808,6 +875,26 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["production_execute_enabled_count"], 0)
         self.assertEqual(metrics["production_rate_limit_violation_count"], 0)
 
+    def test_full_v3_phase7_daemon_soak_runs_checkpointed_cycles(self):
+        payload = build_full_v3_phase7_daemon_soak_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_phase7_daemon_soak",
+            cycles=3,
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(metrics["cycle_count"], 3)
+        self.assertEqual(metrics["queue_source_load_count"], 6)
+        self.assertGreaterEqual(metrics["planned_leaf_count"], 6)
+        self.assertGreaterEqual(metrics["screen_block_or_defer_count"], 6)
+        self.assertGreaterEqual(metrics["manifest_reopen_count"], 12)
+        self.assertEqual(metrics["checkpoint_reopen_success_rate"], 1.0)
+        self.assertEqual(metrics["node_mutation_count"], 0)
+        self.assertEqual(metrics["apply_enabled_count"], 0)
+        self.assertEqual(metrics["execute_enabled_count"], 0)
+        self.assertFalse(metrics["continuous_background_daemon"])
+
     def test_full_v3_frozen_v1_comparison_shows_downstream_margin(self):
         payload = build_full_v3_frozen_v1_comparison_payload(
             root=Path("."),
@@ -849,6 +936,9 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["phase1_production_sleep_group_count"], 3)
         self.assertGreaterEqual(metrics["phase1_production_sleep_applied_consolidated_node_count"], 3)
         self.assertFalse(metrics["phase1_production_sleep_dry_run_mutated"])
+        self.assertGreaterEqual(metrics["phase1_retrieval_precision_delta"], 0.20)
+        self.assertGreaterEqual(metrics["phase1_retrieval_negative_transfer_delta"], 2)
+        self.assertEqual(metrics["phase1_retrieval_after_archived_hits"], 0)
         self.assertGreaterEqual(metrics["long_run_downstream_win_rate"], 0.65)
         self.assertEqual(metrics["phase7_production_queue_source_count"], 2)
         self.assertEqual(metrics["phase7_production_planned_leaf_count"], 2)
@@ -857,6 +947,11 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["phase7_production_node_mutation_count"], 0)
         self.assertEqual(metrics["phase7_production_apply_enabled_count"], 0)
         self.assertEqual(metrics["phase7_production_execute_enabled_count"], 0)
+        self.assertEqual(metrics["phase7_soak_cycle_count"], 3)
+        self.assertEqual(metrics["phase7_soak_checkpoint_reopen_success_rate"], 1.0)
+        self.assertEqual(metrics["phase7_soak_node_mutation_count"], 0)
+        self.assertEqual(metrics["phase7_soak_apply_enabled_count"], 0)
+        self.assertEqual(metrics["phase7_soak_execute_enabled_count"], 0)
         self.assertGreaterEqual(metrics["full_v3_margin_vs_v1_kernel"], 0.10)
         self.assertGreaterEqual(metrics["full_v3_margin_vs_best_nonfull"], 0.08)
         self.assertEqual(metrics["fresh_live_guarded_problem_level_n"], 300)
@@ -893,6 +988,11 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["live_residual_largest_cluster_status"], "resolved_by_phase9_hybrid_guard")
         self.assertGreaterEqual(metrics["live_residual_next_generation_seed_count"], 15)
         self.assertFalse(metrics["live_residual_uses_raw_prompts_or_answers"])
+        self.assertEqual(metrics["residual_multigen_generation_count"], 3)
+        self.assertGreaterEqual(metrics["residual_multigen_retained_count"], 12)
+        self.assertEqual(metrics["residual_multigen_recursive_parent_closure_rate"], 1.0)
+        self.assertEqual(metrics["residual_multigen_graph_mutation_count"], 0)
+        self.assertFalse(metrics["residual_multigen_uses_raw_prompts_or_answers"])
         self.assertEqual(metrics["phase5_live_selected_production_profile"], "phase10_calibrated_residual_guard")
         self.assertEqual(metrics["phase5_live_selected_exploration_profile"], "phase10_discrete_world_model_candidate")
         self.assertGreaterEqual(metrics["phase5_live_scheduler_lift_over_v3"], 0.07)
@@ -916,6 +1016,13 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreater(metrics["phase10_world_model_calibrated_lift_over_hybrid"], 0.0)
         self.assertGreater(metrics["phase10_world_model_calibrated_vs_original_v3_lift_over_hybrid"], 0.0)
         self.assertEqual(metrics["phase10_world_model_calibrated_harm_vs_hybrid_count"], 0)
+        self.assertGreaterEqual(metrics["phase3_learned_transition_row_count"], 80)
+        self.assertGreaterEqual(metrics["phase3_learned_selected_reward_lift_over_v3"], 0.04)
+        self.assertFalse(metrics["phase3_learned_uses_raw_prompts_or_answers"])
+        self.assertEqual(metrics["same_batch_toggle_pair_count"], 4)
+        self.assertLess(metrics["same_batch_raw_v3_vs_v1_ci_lower"], 0.50)
+        self.assertGreater(metrics["same_batch_calibrated_lift_over_hybrid"], 0.0)
+        self.assertEqual(metrics["same_batch_calibrated_harm_vs_hybrid_count"], 0)
         self.assertEqual(metrics["world_model_calibration_surface_count"], 5)
         self.assertGreaterEqual(metrics["world_model_calibrated_surface_count"], 3)
         self.assertEqual(metrics["world_model_leave_domain_out_domain_count"], 3)
@@ -1159,6 +1266,26 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(payload["hard_regression_policy"]["min_v3_margin_vs_v1"], 0.10)
         self.assertGreaterEqual(metrics["coverage_profile_active_gain_over_quality"], 4)
         self.assertFalse(metrics["compact_payload_contains_prompts_answers"])
+
+    def test_full_v3_same_batch_ablation_suite_records_raw_and_guarded_results(self):
+        payload = build_full_v3_same_batch_ablation_suite_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_same_batch_ablation_suite",
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertGreaterEqual(metrics["same_batch_judged_n"], 30)
+        self.assertEqual(metrics["toggle_pair_count"], 4)
+        self.assertLess(metrics["raw_v3_vs_v1_ci_lower"], 0.50)
+        self.assertGreaterEqual(metrics["raw_v3_vs_no_morphism_utility"], 0.70)
+        self.assertGreaterEqual(metrics["raw_v3_vs_no_recursive_utility"], 0.50)
+        self.assertGreaterEqual(metrics["raw_v3_vs_no_world_model_utility"], 0.50)
+        self.assertGreater(metrics["hybrid_lift_over_raw_v3"], 0.04)
+        self.assertGreater(metrics["calibrated_lift_over_hybrid"], 0.0)
+        self.assertEqual(metrics["calibrated_harm_vs_hybrid_count"], 0)
+        self.assertGreaterEqual(metrics["fresh_live_300_problem_level_n"], 200)
+        self.assertFalse(metrics["uses_raw_prompts_or_answers"])
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:
