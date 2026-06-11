@@ -56,6 +56,7 @@ from assumption_os.full_v3_phase7_long_run_benchmark import build_full_v3_phase7
 from assumption_os.full_v3_phase8_creativity_world_coverage import (
     build_full_v3_phase8_creativity_world_coverage_payload,
 )
+from assumption_os.full_v3_phase9_hybrid_guard_heldout import build_full_v3_phase9_hybrid_guard_heldout_payload
 from assumption_os.full_v3_phase9_v1_live_regression import build_full_v3_phase9_v1_live_regression_payload
 from assumption_os.full_v3_paper_scale_evidence import build_full_v3_paper_scale_evidence_payload
 from assumption_os.formal_mapping import (
@@ -731,9 +732,29 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["phase9_compact_guard_vs_v1_margin"], 0.10)
         self.assertGreater(metrics["phase9_compact_guard_margin_gain_over_v3"], 0.05)
         self.assertGreaterEqual(metrics["phase9_compact_guard_vs_v3_utility"], 0.48)
+        self.assertGreaterEqual(metrics["phase9_hybrid_guard_heldout_n"], 50)
+        self.assertGreaterEqual(metrics["phase9_hybrid_guard_vs_v1_margin"], 0.10)
+        self.assertGreater(metrics["phase9_hybrid_guard_lift_over_v3"], 0.03)
+        self.assertGreaterEqual(metrics["phase9_hybrid_guard_vs_v3_utility"], 0.50)
         self.assertFalse(metrics["prompt_answer_payload_stored"])
         self.assertFalse(metrics["secret_leak_detected"])
         self.assertGreaterEqual(metrics["boundary_case_count"], 1)
+
+    def test_full_v3_phase9_hybrid_guard_selectively_repairs_v1_regression(self):
+        payload = build_full_v3_phase9_hybrid_guard_heldout_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_phase9_hybrid_guard",
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"])
+        self.assertEqual(metrics["heldout_case_count"], 54)
+        self.assertEqual(metrics["selected_candidate_case_count"], 17)
+        self.assertEqual(metrics["hybrid_selected_arm_counts"]["v3_micro_guard"], 6)
+        self.assertEqual(metrics["hybrid_selected_arm_counts"]["v3_selective_compact_guard"], 8)
+        self.assertGreaterEqual(metrics["hybrid_vs_v1_heldout_margin"], 0.10)
+        self.assertGreater(metrics["hybrid_lift_over_v3_vs_v1_heldout"], 0.03)
+        self.assertGreaterEqual(metrics["hybrid_vs_original_v3_heldout_utility"], 0.50)
 
     def test_full_v3_fresh_live_benchmark_plans_parallel_problem_level_run(self):
         with tempfile.TemporaryDirectory() as td:

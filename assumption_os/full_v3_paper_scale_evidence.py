@@ -40,6 +40,7 @@ REQUIRED_ARTIFACTS = {
     "fresh_live_guarded_full_remaining": PAPER_DIR / "full_v3_fresh_live_business_guard_full_remaining_gptmini_gpt55_20260611.json",
     "fresh_live_selective_expansion": PAPER_DIR / "full_v3_fresh_live_cue_repair_v4_full_remaining_gptmini_gpt55_20260611.json",
     "v3_phase9_compact_frame_guard": PAPER_DIR / "full_v3_phase9_compact_frame_guard_20260611.json",
+    "v3_phase9_hybrid_guard": PAPER_DIR / "full_v3_phase9_hybrid_guard_heldout_20260611.json",
 }
 
 KEY_TOGGLE_BASELINES = {
@@ -136,6 +137,19 @@ def build_full_v3_paper_scale_evidence_payload(
                 "planned_total_model_calls",
             ],
         ),
+        "phase9_hybrid_guard": _metric_subset(
+            artifacts["v3_phase9_hybrid_guard"].get("metrics", {}),
+            [
+                "heldout_case_count",
+                "selected_candidate_case_count",
+                "hybrid_selected_arm_counts",
+                "v3_vs_v1_heldout_utility",
+                "hybrid_vs_v1_heldout_utility",
+                "hybrid_vs_v1_heldout_margin",
+                "hybrid_vs_original_v3_heldout_utility",
+                "hybrid_lift_over_v3_vs_v1_heldout",
+            ],
+        ),
     }
     metrics = _metrics(artifacts=artifacts, evidence=evidence)
     gates = {
@@ -181,6 +195,10 @@ def build_full_v3_paper_scale_evidence_payload(
         "phase9_compact_guard_v1_regression_passes": metrics["phase9_compact_guard_vs_v1_margin"] >= 0.10,
         "phase9_compact_guard_improves_original_v3_vs_v1": metrics["phase9_compact_guard_margin_gain_over_v3"] > 0.05,
         "phase9_compact_guard_noninferior_to_original_v3": metrics["phase9_compact_guard_vs_v3_utility"] >= 0.48,
+        "phase9_hybrid_guard_heldout_slice_large": metrics["phase9_hybrid_guard_heldout_n"] >= 50,
+        "phase9_hybrid_guard_v1_regression_passes": metrics["phase9_hybrid_guard_vs_v1_margin"] >= 0.10,
+        "phase9_hybrid_guard_improves_original_v3_vs_v1": metrics["phase9_hybrid_guard_lift_over_v3"] > 0.03,
+        "phase9_hybrid_guard_noninferior_to_original_v3": metrics["phase9_hybrid_guard_vs_v3_utility"] >= 0.50,
         "prompt_answer_and_secret_free": metrics["prompt_answer_payload_stored"] is False and metrics["secret_leak_detected"] is False,
         "boundary_cases_recorded": metrics["boundary_case_count"] >= 1,
     }
@@ -212,8 +230,10 @@ def build_full_v3_paper_scale_evidence_payload(
             "problem-level live/cached main statistics with bootstrap CIs, 6400+ first-party live events, "
             "2500+ judge events, hard retrieval/toggle baselines, full-v3 mechanism validations, a fresh "
             "guarded heldout-300 live rerun, a guarded full-remaining live rerun, and a selective clade-expansion "
-            "full-remaining rerun.  The fresh reruns are positive but intentionally reported as small-effect "
-            "safety/abstention validations, not as the main paper claim."
+            "full-remaining rerun.  Phase9 additionally records the failed broad/compact tradeoff and the retained "
+            "cue-level hybrid guard that beats V1 on the heldout slice without regressing against original V3.  The "
+            "fresh reruns are positive but intentionally reported as small-effect safety/abstention validations, "
+            "not as the main paper claim."
         ),
     }
 
@@ -490,6 +510,27 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         ),
         "phase9_compact_guard_planned_total_calls": int(
             artifacts["v3_phase9_compact_frame_guard"]["metrics"]["planned_total_model_calls"]
+        ),
+        "phase9_hybrid_guard_heldout_n": int(
+            artifacts["v3_phase9_hybrid_guard"]["metrics"]["heldout_case_count"]
+        ),
+        "phase9_hybrid_guard_selected_candidate_n": int(
+            artifacts["v3_phase9_hybrid_guard"]["metrics"]["selected_candidate_case_count"]
+        ),
+        "phase9_hybrid_guard_v3_vs_v1_utility": float(
+            artifacts["v3_phase9_hybrid_guard"]["metrics"]["v3_vs_v1_heldout_utility"]
+        ),
+        "phase9_hybrid_guard_vs_v1_utility": float(
+            artifacts["v3_phase9_hybrid_guard"]["metrics"]["hybrid_vs_v1_heldout_utility"]
+        ),
+        "phase9_hybrid_guard_vs_v1_margin": float(
+            artifacts["v3_phase9_hybrid_guard"]["metrics"]["hybrid_vs_v1_heldout_margin"]
+        ),
+        "phase9_hybrid_guard_lift_over_v3": float(
+            artifacts["v3_phase9_hybrid_guard"]["metrics"]["hybrid_lift_over_v3_vs_v1_heldout"]
+        ),
+        "phase9_hybrid_guard_vs_v3_utility": float(
+            artifacts["v3_phase9_hybrid_guard"]["metrics"]["hybrid_vs_original_v3_heldout_utility"]
         ),
         "prompt_answer_payload_stored": bool(artifacts["first_party_world_model_scale"].get("prompt_answer_payload_stored")),
         "secret_leak_detected": bool(artifacts["first_party_world_model_scale"].get("secret_leak_detected")),
