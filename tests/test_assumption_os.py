@@ -44,6 +44,7 @@ from assumption_os.full_v2_phase6_formal_alignment_bypass import build_full_v2_p
 from assumption_os.full_v2_phase7_daemon_harness_bypass import build_full_v2_phase7_daemon_harness_bypass_payload
 from assumption_os.full_v2_vertical_slice_bypass import build_full_v2_vertical_slice_bypass_payload
 from assumption_os.full_v3_frozen_v1_comparison import build_full_v3_frozen_v1_comparison_payload
+from assumption_os.full_v3_fresh_live_benchmark import build_full_v3_fresh_live_benchmark_payload
 from assumption_os.full_v3_phase0_contract_checker import build_full_v3_phase0_contract_checker_payload
 from assumption_os.full_v3_phase1_memory_consolidation import build_full_v3_phase1_memory_consolidation_payload
 from assumption_os.full_v3_phase2_verifier_synthesis import build_full_v3_phase2_verifier_synthesis_payload
@@ -695,9 +696,47 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["long_run_downstream_win_rate"], 0.65)
         self.assertGreaterEqual(metrics["full_v3_margin_vs_v1_kernel"], 0.10)
         self.assertGreaterEqual(metrics["full_v3_margin_vs_best_nonfull"], 0.08)
+        self.assertEqual(metrics["fresh_live_guarded_problem_level_n"], 300)
+        self.assertGreaterEqual(metrics["fresh_live_guarded_active_intervention_n"], 10)
+        self.assertGreater(metrics["fresh_live_guarded_vs_base_utility"], 0.50)
+        self.assertGreater(metrics["fresh_live_guarded_vs_placebo_utility"], 0.50)
+        self.assertLessEqual(metrics["fresh_live_guarded_planned_total_calls"], 100)
         self.assertFalse(metrics["prompt_answer_payload_stored"])
         self.assertFalse(metrics["secret_leak_detected"])
         self.assertGreaterEqual(metrics["boundary_case_count"], 1)
+
+    def test_full_v3_fresh_live_benchmark_plans_parallel_problem_level_run(self):
+        with tempfile.TemporaryDirectory() as td:
+            payload = build_full_v3_fresh_live_benchmark_payload(
+                root=Path("."),
+                eval_id="unit_full_v3_fresh_live_preflight",
+                sample_size=300,
+                execution_mode="dry_run",
+                solve_workers=16,
+                judge_workers=8,
+                solver_model="gpt_mini",
+                judge_model="gpt55",
+                run_dir=Path(td),
+                sample_out=Path(td) / "sample.json",
+            )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(metrics["sample_problem_count"], 300)
+        self.assertTrue(metrics["disjoint_from_existing_samples"])
+        self.assertGreaterEqual(metrics["domain_count"], 5)
+        self.assertEqual(metrics["selection_mode"], "natural_repaired_guarded")
+        self.assertTrue(metrics["abstained_problems_count_as_tie"])
+        self.assertGreaterEqual(metrics["selected_case_count"], 5)
+        self.assertEqual(
+            metrics["planned_total_model_calls"],
+            metrics["selected_case_count"] * 5,
+        )
+        self.assertEqual(payload["parallel_plan"]["solve_workers"], 16)
+        self.assertEqual(payload["parallel_plan"]["judge_workers"], 8)
+        self.assertFalse(metrics["secret_value_exposed"])
+        self.assertFalse(payload["problem_level_ci"]["available"])
+        self.assertIn("run_300", payload["commands"])
 
     def test_metaproductivity_benchmark_prefers_productive_clade(self):
         with tempfile.TemporaryDirectory() as td:

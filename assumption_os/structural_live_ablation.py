@@ -295,6 +295,15 @@ TRACE_LEARNED_PATTERN_ABSTAIN = {
 }
 
 
+FRESH_LIVE_GUARDED_DOMAIN_PATTERNS = {
+    # Learned from the first fresh-300 live run and narrowed after a disjoint
+    # guarded holdout on 2026-06-11.  The math counterexample/control clades were
+    # positive against base in the discovery run but negative against placebo on
+    # holdout, so they remain gated off until a stronger operator is validated.
+    ("business", "pat_controlled_intervention"),
+}
+
+
 TRACE_REPAIR_GUIDANCE = {
     "pat_bottleneck_capacity": {
         "_default": (
@@ -504,7 +513,16 @@ def _select_cases(
     repair_patterns: set[str],
     abstain_patterns: set[str],
 ) -> list[dict]:
-    if selection_mode not in {"retrieval", "natural", "natural_gated", "natural_safe", "natural_repaired", "coverage", "hybrid"}:
+    if selection_mode not in {
+        "retrieval",
+        "natural",
+        "natural_gated",
+        "natural_safe",
+        "natural_repaired",
+        "natural_repaired_guarded",
+        "coverage",
+        "hybrid",
+    }:
         raise ValueError(f"unknown selection_mode={selection_mode}")
     patterns = load_structural_patterns(store)
     pattern_by_id = {p["pattern_id"]: p for p in patterns}
@@ -624,6 +642,33 @@ def _choose_top_application(
                 return natural_app, "natural_trace_policy"
             return _safe_abstain_app(row, natural_app, abstain_patterns=abstain_patterns), "natural_safe_abstain"
         return (retrieval_top, "retrieval") if retrieval_ok else (None, "none")
+    if selection_mode == "natural_repaired_guarded":
+        if not natural_app:
+            return None, "fresh_guard_no_route"
+        repaired = _repaired_pattern_app(row, natural_app, repair_patterns=repair_patterns)
+        candidate = repaired
+        route_source = "natural_repaired_pattern"
+        if not candidate and _passes_trace_learned_policy(natural_app, abstain_patterns=abstain_patterns):
+            candidate = dict(natural_app)
+            candidate["decision"] = "natural_trace_policy_route"
+            candidate["route_policy"] = {
+                "policy_id": "trace_learned_repair_policy_20260603",
+                "source_eval_id": "structural_live_natural100_v1_gpt54mini_gpt55_20260603",
+                "decision": "accepted",
+            }
+            route_source = "natural_trace_policy"
+        if candidate and _passes_fresh_live_guard(row, candidate):
+            candidate = dict(candidate)
+            policy = dict(candidate.get("route_policy") or {})
+            policy.update({
+                "policy_id": "fresh_live_guarded_policy_20260611",
+                "source_eval_id": "full_v3_fresh_live_300_gptmini_gpt55_20260611",
+                "decision": "activate",
+                "guard_key": [row.get("domain"), candidate.get("pattern_id")],
+            })
+            candidate["route_policy"] = policy
+            return candidate, f"fresh_guard_{route_source}"
+        return None, "fresh_guard_abstain"
     if selection_mode == "coverage":
         return (coverage_app, "coverage_gold") if coverage_app else (None, "none")
     if coverage_app:
@@ -775,6 +820,10 @@ def _strategy_transfer_prediction(
 
 def _passes_trace_learned_policy(app: dict, *, abstain_patterns: set[str]) -> bool:
     return app.get("pattern_id") not in abstain_patterns
+
+
+def _passes_fresh_live_guard(row: dict, app: dict) -> bool:
+    return (str(row.get("domain") or ""), str(app.get("pattern_id") or "")) in FRESH_LIVE_GUARDED_DOMAIN_PATTERNS
 
 
 def _repaired_pattern_app(row: dict, routed_app: dict, *, repair_patterns: set[str]) -> dict | None:
