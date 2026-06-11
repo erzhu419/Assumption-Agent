@@ -30,6 +30,7 @@ PHASE_ARTIFACTS = {
     "phase8_creativity_world_coverage": PAPER_DIR / "full_v3_phase8_creativity_world_coverage_20260611.json",
     "phase9_hybrid_guard": PAPER_DIR / "full_v3_phase9_hybrid_guard_heldout_20260611.json",
     "phase10_discrete_world_model": PAPER_DIR / "full_v3_phase10_discrete_world_model_selector_20260611.json",
+    "phase10_world_model_calibration": PAPER_DIR / "full_v3_world_model_calibration_20260611.json",
 }
 
 OUTER_SHELL_PHASES = {
@@ -81,6 +82,9 @@ def build_full_v3_phase11_capability_audit_payload(
             metrics["phase7_status"] == "bounded_production_queue_daemon_not_unbounded_background"
         ),
         "phase10_candidate_not_promoted_over_hybrid": metrics["phase10_status"] == "learned_candidate_not_promoted",
+        "phase10_calibration_blocks_uncalibrated_promotion": (
+            metrics["phase10_calibration_status"] == "calibration_audit_blocks_uncalibrated_world_model"
+        ),
         "live_evidence_count_nonzero": metrics["live_or_live_derived_count"] >= 2,
         "shadow_and_fixture_count_recorded": metrics["shadow_or_fixture_count"] >= 4,
         "blocked_claims_recorded": metrics["blocked_claim_count"] >= 10,
@@ -135,6 +139,8 @@ def _capability_row(*, name: str, path: Path, artifact: dict[str, Any]) -> Capab
 
 
 def _validation_mode(*, name: str, artifact: dict[str, Any]) -> str:
+    if artifact.get("implementation_level") == "calibrated_promotion_audit_for_world_model_surfaces":
+        return "live_or_live_derived_validation"
     if artifact.get("implementation_level") == "production_queue_daemon_with_frozen_long_run_regression":
         return "live_or_live_derived_validation"
     if artifact.get("implementation_level") == "live_residual_clusterer_with_v2_generator_regression":
@@ -160,6 +166,8 @@ def _implementation_level(*, name: str, artifact: dict[str, Any], validation_mod
         return "retained_gated_profile_with_live_heldout_evidence"
     if name == "phase10_discrete_world_model":
         return "discrete_graph_action_world_model_candidate"
+    if name == "phase10_world_model_calibration":
+        return "world_model_calibration_and_leave_domain_out_audit"
     explicit = artifact.get("implementation_level")
     if explicit:
         return str(explicit)
@@ -183,6 +191,8 @@ def _production_default_status(*, name: str, artifact: dict[str, Any], validatio
         return "bounded_production_queue_daemon_not_unbounded_background"
     if name == "phase10_discrete_world_model":
         return "learned_candidate_not_promoted"
+    if name == "phase10_world_model_calibration":
+        return "calibration_audit_blocks_uncalibrated_world_model"
     if validation_mode in {"shadow_validation_harness", "fixture_or_frozen_harness", "frozen_mechanism_validation"}:
         return "not_default_requires_fresh_promotion"
     if artifact.get("pass"):
@@ -212,6 +222,12 @@ def _claim_policy(
             "Outcome-only discrete graph-action world-model candidate improves original V3 on Phase9 heldout.",
             ["replacement for retained hybrid", "strong calibrated task-world simulator"],
             "Beat retained hybrid and beat base-rate calibration on leave-domain-out live traces.",
+        )
+    if name == "phase10_world_model_calibration":
+        return (
+            "Calibration audit separates calibrated profile selectors from positive-but-uncalibrated world-model candidates.",
+            ["production simulator", "permission to promote Phase10 without base-rate-beating calibration"],
+            "Phase10 must beat base-rate calibration and leave-domain-out non-regression before default promotion.",
         )
     if name == "phase4_hypothesis_generator":
         return (
@@ -282,6 +298,9 @@ def _metrics(rows: list[CapabilityRow]) -> dict[str, Any]:
         ),
         "phase10_status": next(
             row.production_default_status for row in rows if row.capability_id == "phase10_discrete_world_model"
+        ),
+        "phase10_calibration_status": next(
+            row.production_default_status for row in rows if row.capability_id == "phase10_world_model_calibration"
         ),
     }
 

@@ -62,6 +62,7 @@ from assumption_os.full_v3_phase9_v1_live_regression import build_full_v3_phase9
 from assumption_os.full_v3_phase10_discrete_world_model_selector import (
     build_full_v3_phase10_discrete_world_model_selector_payload,
 )
+from assumption_os.full_v3_world_model_calibration import build_full_v3_world_model_calibration_payload
 from assumption_os.full_v3_phase11_capability_audit import build_full_v3_phase11_capability_audit_payload
 from assumption_os.full_v3_paper_scale_evidence import build_full_v3_paper_scale_evidence_payload
 from assumption_os.formal_mapping import (
@@ -908,8 +909,24 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreater(metrics["phase10_world_model_candidate_v1_lift_over_v3"], 0.04)
         self.assertGreaterEqual(metrics["phase10_world_model_all_lift_over_v3"], 0.015)
         self.assertEqual(metrics["phase10_world_model_recommended_promotion"], "keep_as_world_model_candidate")
+        self.assertEqual(metrics["world_model_calibration_surface_count"], 4)
+        self.assertGreaterEqual(metrics["world_model_calibrated_surface_count"], 2)
+        self.assertEqual(metrics["world_model_leave_domain_out_domain_count"], 3)
+        self.assertLess(
+            metrics["world_model_leave_domain_out_nonnegative_domain_count"],
+            metrics["world_model_leave_domain_out_domain_count"],
+        )
+        self.assertEqual(metrics["world_model_uncalibrated_promotion_count"], 0)
+        self.assertFalse(metrics["world_model_phase10_calibration_beats_base_rate"])
+        self.assertGreaterEqual(metrics["world_model_phase10_all_lift_over_v3"], 0.015)
+        self.assertTrue(metrics["world_model_phase5_keeps_phase10_candidate"])
+        self.assertFalse(metrics["world_model_uses_raw_prompts_or_answers"])
         self.assertEqual(metrics["phase11_outer_shell_production_claim_count"], 0)
         self.assertGreaterEqual(metrics["phase11_blocked_claim_count"], 10)
+        self.assertEqual(
+            metrics["phase11_phase10_calibration_status"],
+            "calibration_audit_blocks_uncalibrated_world_model",
+        )
         self.assertFalse(metrics["prompt_answer_payload_stored"])
         self.assertFalse(metrics["secret_leak_detected"])
         self.assertGreaterEqual(metrics["boundary_case_count"], 1)
@@ -951,6 +968,39 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertFalse(metrics["uses_raw_prompts_or_answers"])
         self.assertTrue(payload["teacher_distillation_bootstrap"]["not_counted_as_independent_validation"])
 
+    def test_full_v3_world_model_calibration_blocks_uncalibrated_promotion(self):
+        payload = build_full_v3_world_model_calibration_payload(
+            root=Path("."),
+            eval_id="unit_full_v3_world_model_calibration",
+        )
+        metrics = payload["metrics"]
+        by_id = {row["surface_id"]: row for row in payload["calibration_surfaces"]}
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(metrics["source_artifact_count"], 4)
+        self.assertEqual(metrics["calibration_surface_count"], 4)
+        self.assertGreaterEqual(metrics["calibrated_surface_count"], 2)
+        self.assertGreater(metrics["phase8_quality_brier_improvement"], 0.05)
+        self.assertTrue(metrics["phase9_leave_domain_out_available"])
+        self.assertEqual(metrics["phase9_leave_domain_out_domain_count"], 3)
+        self.assertEqual(metrics["phase9_leave_domain_out_nonnegative_domain_count"], 2)
+        self.assertGreaterEqual(metrics["phase9_leave_domain_out_max_calibration_error"], 0.30)
+        self.assertGreaterEqual(metrics["phase10_all_lift_over_v3"], 0.015)
+        self.assertFalse(metrics["phase10_calibration_beats_base_rate"])
+        self.assertGreater(metrics["phase10_selected_arm_mae_minus_base_rate"], 0.0)
+        self.assertEqual(metrics["uncalibrated_promotion_count"], 0)
+        self.assertTrue(metrics["phase5_keeps_phase10_candidate"])
+        self.assertFalse(metrics["uses_raw_prompts_or_answers"])
+        self.assertEqual(
+            by_id["phase10_discrete_graph_action_world_model"]["production_status"],
+            "positive_uncalibrated_candidate",
+        )
+        self.assertFalse(by_id["phase10_discrete_graph_action_world_model"]["promotion_allowed"])
+        self.assertEqual(
+            payload["promotion_policy"]["phase10_current_decision"],
+            "keep_as_candidate_until_calibrated",
+        )
+
     def test_full_v3_phase11_capability_audit_separates_fixture_from_production(self):
         payload = build_full_v3_phase11_capability_audit_payload(
             root=Path("."),
@@ -960,7 +1010,7 @@ class AssumptionOSTest(unittest.TestCase):
         by_id = {row["capability_id"]: row for row in payload["capability_rows"]}
 
         self.assertTrue(payload["pass"], payload["failed_gates"])
-        self.assertEqual(metrics["capability_count"], 11)
+        self.assertEqual(metrics["capability_count"], 12)
         self.assertEqual(metrics["artifact_pass_rate"], 1.0)
         self.assertEqual(metrics["outer_shell_count"], 3)
         self.assertEqual(metrics["outer_shell_production_claim_count"], 0)
@@ -968,8 +1018,16 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["phase5_status"], "validated_scheduler_not_unconditional_default")
         self.assertEqual(metrics["phase7_status"], "bounded_production_queue_daemon_not_unbounded_background")
         self.assertEqual(metrics["phase10_status"], "learned_candidate_not_promoted")
+        self.assertEqual(
+            metrics["phase10_calibration_status"],
+            "calibration_audit_blocks_uncalibrated_world_model",
+        )
         self.assertIn("production_contract_gate_available", by_id["phase0_contract_checker"]["implementation_level"])
         self.assertEqual(by_id["phase9_hybrid_guard"]["production_default_status"], "retained_gated_profile")
+        self.assertEqual(
+            by_id["phase10_world_model_calibration"]["production_default_status"],
+            "calibration_audit_blocks_uncalibrated_world_model",
+        )
         self.assertIn("jsonl_memory_sleep_job_available", by_id["phase1_memory_consolidation"]["implementation_level"])
         self.assertIn(
             "live_residual_clusterer",

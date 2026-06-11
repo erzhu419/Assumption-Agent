@@ -43,6 +43,7 @@ REQUIRED_ARTIFACTS = {
     "v3_phase9_compact_frame_guard": PAPER_DIR / "full_v3_phase9_compact_frame_guard_20260611.json",
     "v3_phase9_hybrid_guard": PAPER_DIR / "full_v3_phase9_hybrid_guard_heldout_20260611.json",
     "v3_phase10_discrete_world_model": PAPER_DIR / "full_v3_phase10_discrete_world_model_selector_20260611.json",
+    "v3_world_model_calibration": PAPER_DIR / "full_v3_world_model_calibration_20260611.json",
     "v3_phase11_capability_audit": PAPER_DIR / "full_v3_phase11_capability_audit_20260611.json",
 }
 
@@ -216,6 +217,26 @@ def build_full_v3_paper_scale_evidence_payload(
                 "calibration_beats_base_rate",
             ],
         ),
+        "world_model_calibration": _metric_subset(
+            artifacts["v3_world_model_calibration"].get("metrics", {}),
+            [
+                "source_artifact_count",
+                "calibration_surface_count",
+                "calibrated_surface_count",
+                "leave_domain_out_surface_count",
+                "uncalibrated_promotion_count",
+                "phase8_quality_brier_improvement",
+                "phase9_leave_domain_out_available",
+                "phase9_leave_domain_out_domain_count",
+                "phase9_leave_domain_out_nonnegative_domain_count",
+                "phase9_leave_domain_out_max_calibration_error",
+                "phase10_all_lift_over_v3",
+                "phase10_calibration_beats_base_rate",
+                "phase10_selected_arm_mae_minus_base_rate",
+                "phase5_keeps_phase10_candidate",
+                "uses_raw_prompts_or_answers",
+            ],
+        ),
         "phase11_capability_audit": _metric_subset(
             artifacts["v3_phase11_capability_audit"].get("metrics", {}),
             [
@@ -230,6 +251,7 @@ def build_full_v3_paper_scale_evidence_payload(
                 "phase4_status",
                 "phase7_status",
                 "phase10_status",
+                "phase10_calibration_status",
             ],
         ),
     }
@@ -324,12 +346,31 @@ def build_full_v3_paper_scale_evidence_payload(
         "phase10_discrete_world_model_keeps_hybrid_when_weaker": (
             metrics["phase10_world_model_recommended_promotion"] == "keep_as_world_model_candidate"
         ),
+        "world_model_calibration_artifact_passes": metrics["world_model_calibration_surface_count"] >= 4,
+        "world_model_calibrated_surface_available": metrics["world_model_calibrated_surface_count"] >= 2,
+        "world_model_leave_domain_out_records_boundary": (
+            metrics["world_model_leave_domain_out_domain_count"] >= 3
+            and metrics["world_model_leave_domain_out_nonnegative_domain_count"]
+            < metrics["world_model_leave_domain_out_domain_count"]
+        ),
+        "world_model_blocks_uncalibrated_phase10_promotion": (
+            metrics["world_model_uncalibrated_promotion_count"] == 0
+            and metrics["world_model_phase10_calibration_beats_base_rate"] is False
+        ),
+        "world_model_phase10_positive_but_unpromoted": (
+            metrics["world_model_phase10_all_lift_over_v3"] >= 0.015
+            and metrics["world_model_phase5_keeps_phase10_candidate"] is True
+        ),
+        "world_model_calibration_redacted": metrics["world_model_uses_raw_prompts_or_answers"] is False,
         "phase11_capability_audit_passes": metrics["phase11_artifact_pass_rate"] == 1.0,
         "phase11_outer_shells_not_overclaimed": metrics["phase11_outer_shell_production_claim_count"] == 0,
         "phase11_phase7_bounded_daemon_recorded": (
             metrics["phase11_phase7_status"] == "bounded_production_queue_daemon_not_unbounded_background"
         ),
         "phase11_phase10_remains_candidate": metrics["phase11_phase10_status"] == "learned_candidate_not_promoted",
+        "phase11_world_model_calibration_status_recorded": (
+            metrics["phase11_phase10_calibration_status"] == "calibration_audit_blocks_uncalibrated_world_model"
+        ),
         "prompt_answer_and_secret_free": metrics["prompt_answer_payload_stored"] is False and metrics["secret_leak_detected"] is False,
         "boundary_cases_recorded": metrics["boundary_case_count"] >= 1,
     }
@@ -369,6 +410,9 @@ def build_full_v3_paper_scale_evidence_payload(
             "world-model selector as exploration, and blocks over-structured compact framing as a default.  Phase7 "
             "now validates the real bounded daemon path over committed preflight queues, with manifests, pre-live "
             "budget screening, and closed execute/apply gates.  The "
+            "world-model calibration audit now records the useful but uncalibrated Phase10 selector as "
+            "exploration-only, preserves the calibrated Phase8 profile selector, and reports the Phase9 "
+            "leave-domain-out business boundary instead of overclaiming a simulator.  The "
             "fresh reruns are positive but intentionally reported as small-effect safety/abstention validations, "
             "not as the main paper claim."
         ),
@@ -486,6 +530,7 @@ def _v3_mechanism_summary(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any
         "v3_phase6_formal",
         "v3_phase7_long_run",
         "v3_phase10_discrete_world_model",
+        "v3_world_model_calibration",
         "v3_phase11_capability_audit",
     ]
     return {
@@ -846,6 +891,51 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "phase10_world_model_calibration_beats_base_rate": bool(
             artifacts["v3_phase10_discrete_world_model"]["metrics"]["calibration_beats_base_rate"]
         ),
+        "world_model_calibration_source_artifact_count": int(
+            artifacts["v3_world_model_calibration"]["metrics"]["source_artifact_count"]
+        ),
+        "world_model_calibration_surface_count": int(
+            artifacts["v3_world_model_calibration"]["metrics"]["calibration_surface_count"]
+        ),
+        "world_model_calibrated_surface_count": int(
+            artifacts["v3_world_model_calibration"]["metrics"]["calibrated_surface_count"]
+        ),
+        "world_model_leave_domain_out_surface_count": int(
+            artifacts["v3_world_model_calibration"]["metrics"]["leave_domain_out_surface_count"]
+        ),
+        "world_model_uncalibrated_promotion_count": int(
+            artifacts["v3_world_model_calibration"]["metrics"]["uncalibrated_promotion_count"]
+        ),
+        "world_model_phase8_brier_improvement": float(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase8_quality_brier_improvement"]
+        ),
+        "world_model_leave_domain_out_available": bool(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase9_leave_domain_out_available"]
+        ),
+        "world_model_leave_domain_out_domain_count": int(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase9_leave_domain_out_domain_count"]
+        ),
+        "world_model_leave_domain_out_nonnegative_domain_count": int(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase9_leave_domain_out_nonnegative_domain_count"]
+        ),
+        "world_model_leave_domain_out_max_error": float(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase9_leave_domain_out_max_calibration_error"]
+        ),
+        "world_model_phase10_all_lift_over_v3": float(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase10_all_lift_over_v3"]
+        ),
+        "world_model_phase10_calibration_beats_base_rate": bool(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase10_calibration_beats_base_rate"]
+        ),
+        "world_model_phase10_selected_arm_mae_minus_base_rate": float(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase10_selected_arm_mae_minus_base_rate"]
+        ),
+        "world_model_phase5_keeps_phase10_candidate": bool(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase5_keeps_phase10_candidate"]
+        ),
+        "world_model_uses_raw_prompts_or_answers": bool(
+            artifacts["v3_world_model_calibration"]["metrics"]["uses_raw_prompts_or_answers"]
+        ),
         "phase11_capability_count": int(
             artifacts["v3_phase11_capability_audit"]["metrics"]["capability_count"]
         ),
@@ -864,6 +954,9 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "phase11_phase4_status": artifacts["v3_phase11_capability_audit"]["metrics"]["phase4_status"],
         "phase11_phase7_status": artifacts["v3_phase11_capability_audit"]["metrics"]["phase7_status"],
         "phase11_phase10_status": artifacts["v3_phase11_capability_audit"]["metrics"]["phase10_status"],
+        "phase11_phase10_calibration_status": artifacts["v3_phase11_capability_audit"]["metrics"][
+            "phase10_calibration_status"
+        ],
         "prompt_answer_payload_stored": bool(artifacts["first_party_world_model_scale"].get("prompt_answer_payload_stored")),
         "secret_leak_detected": bool(artifacts["first_party_world_model_scale"].get("secret_leak_detected")),
     }

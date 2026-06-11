@@ -1,0 +1,201 @@
+{
+  "eval_id": "full_v3_world_model_calibration_20260611",
+  "eval_kind": "full_v3_world_model_calibration_and_leave_domain_out_audit",
+  "reconstruction_v2_full_phase": "phase10_world_model_calibration_leave_domain_out",
+  "implementation_level": "calibrated_promotion_audit_for_world_model_surfaces",
+  "performance_validation": true,
+  "validation_scope": "Audits world-model surfaces across profile selection, leave-domain-out generalization, discrete graph-action policy selection, and scheduler promotion.  The audit intentionally separates positive action-value lift from calibrated simulator status.",
+  "source_artifacts": {
+    "phase8_creativity_world_coverage": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase8_creativity_world_coverage_20260611.json",
+      "exists": true,
+      "pass": true,
+      "eval_kind": "full_v3_phase8_creativity_world_model_coverage"
+    },
+    "phase9_v1_leave_domain_out": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_v1_live_regression_20260611.json",
+      "exists": true,
+      "pass": false,
+      "eval_kind": "full_v3_phase9_same_batch_v1_live_regression"
+    },
+    "phase10_discrete_world_model": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase10_discrete_world_model_selector_20260611.json",
+      "exists": true,
+      "pass": true,
+      "eval_kind": "full_v3_phase10_discrete_graph_action_world_model_selector"
+    },
+    "phase5_contextual_scheduler": {
+      "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase5_contextual_bandit_scheduler_20260611.json",
+      "exists": true,
+      "pass": true,
+      "eval_kind": "full_v3_phase5_contextual_bandit_bayesian_scheduler"
+    }
+  },
+  "calibration_surfaces": [
+    {
+      "surface_id": "phase8_quality_profile_world_model",
+      "source_artifact": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase8_creativity_world_coverage_20260611.json",
+      "validation_unit": "profile",
+      "target": "profile quality pass/fail",
+      "calibration_pass": true,
+      "promotion_allowed": true,
+      "production_status": "calibrated_profile_selector",
+      "metrics": {
+        "quality_world_model_auroc": 1.0,
+        "quality_world_model_brier": 0.1156,
+        "quality_base_rate_brier": 0.2222,
+        "brier_improvement": 0.1066,
+        "selected_quality_profile_id": "quality_v4"
+      },
+      "interpretation": "Profile-level quality model beats base-rate Brier and can support scheduler gating."
+    },
+    {
+      "surface_id": "phase9_leave_domain_out_nonregression",
+      "source_artifact": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase9_v1_live_regression_20260611.json",
+      "validation_unit": "domain",
+      "target": "V3 full is non-worse than V1 on a held-out domain",
+      "calibration_pass": false,
+      "promotion_allowed": false,
+      "production_status": "boundary_audit_blocks_broad_default",
+      "metrics": {
+        "available": true,
+        "domain_count": 3,
+        "nonnegative_domain_count": 2,
+        "macro_heldout_utility": 0.5564,
+        "max_calibration_error": 0.3611,
+        "domains": {
+          "business": {
+            "heldout_n": 13,
+            "observed_utility": 0.4615,
+            "observed_nonloss_rate": 0.4615,
+            "predicted_nonloss_rate_from_nonheldout_profile": 0.8226,
+            "calibration_error": 0.3611,
+            "nonnegative": false
+          },
+          "engineering": {
+            "heldout_n": 7,
+            "observed_utility": 0.5714,
+            "observed_nonloss_rate": 0.5714,
+            "predicted_nonloss_rate_from_nonheldout_profile": 0.8226,
+            "calibration_error": 0.2512,
+            "nonnegative": true
+          },
+          "software_engineering": {
+            "heldout_n": 11,
+            "observed_utility": 0.6364,
+            "observed_nonloss_rate": 0.6364,
+            "predicted_nonloss_rate_from_nonheldout_profile": 0.8226,
+            "calibration_error": 0.1862,
+            "nonnegative": true
+          }
+        }
+      },
+      "interpretation": "Leave-domain-out validation is available and intentionally records the business-domain negative transfer that blocks broad default promotion."
+    },
+    {
+      "surface_id": "phase10_discrete_graph_action_world_model",
+      "source_artifact": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase10_discrete_world_model_selector_20260611.json",
+      "validation_unit": "candidate_problem",
+      "target": "scalar action reward for graph-action profile selection",
+      "calibration_pass": false,
+      "promotion_allowed": false,
+      "production_status": "positive_uncalibrated_candidate",
+      "metrics": {
+        "candidate_transition_count": 17,
+        "support_transition_count": 31,
+        "all_heldout_policy_lift_over_v3": 0.0185,
+        "candidate_v1_lift_over_v3": 0.0588,
+        "gap_to_retained_hybrid": -0.037,
+        "recommended_promotion": "keep_as_world_model_candidate",
+        "calibration": {
+          "all_arm_mae": 0.3129,
+          "all_arm_base_rate_mae": 0.3032,
+          "selected_arm_mae": 0.3308,
+          "selected_arm_base_rate_mae": 0.321,
+          "calibration_count": 51,
+          "calibration_beats_base_rate": false
+        },
+        "calibration_beats_base_rate": false,
+        "selected_arm_mae_minus_base_rate": 0.0098
+      },
+      "interpretation": "Action-value selection improves original V3 on the heldout slice, but scalar calibration is not base-rate-beating, so it stays an exploration candidate."
+    },
+    {
+      "surface_id": "phase5_scheduler_promotion_gate",
+      "source_artifact": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase5_contextual_bandit_scheduler_20260611.json",
+      "validation_unit": "profile",
+      "target": "production default profile selection",
+      "calibration_pass": true,
+      "promotion_allowed": true,
+      "production_status": "retains_hybrid_and_quarantines_uncalibrated_candidate",
+      "metrics": {
+        "live_selected_production_profile": "phase9_hybrid_guard",
+        "live_selected_exploration_profile": "phase10_discrete_world_model_candidate",
+        "live_scheduler_lift_over_v3": 0.0555,
+        "live_scheduler_keeps_phase10_as_candidate": true,
+        "live_scheduler_blocks_compact_default": true
+      },
+      "interpretation": "Scheduler chooses the retained hybrid profile and keeps Phase10 as exploration-only."
+    }
+  ],
+  "promotion_policy": {
+    "production_default": "phase9_hybrid_guard",
+    "exploration_candidate": "phase10_discrete_world_model_candidate",
+    "promotion_rule": "A world-model policy can become production default only after positive utility, base-rate-beating calibration, leave-domain-out non-regression, and scheduler acceptance.",
+    "phase10_current_decision": "keep_as_candidate_until_calibrated",
+    "business_domain_boundary": "Phase9 leave-domain-out records business-domain negative transfer, so broad promotion is blocked."
+  },
+  "metrics": {
+    "source_artifact_count": 4,
+    "calibration_surface_count": 4,
+    "calibrated_surface_count": 2,
+    "leave_domain_out_surface_count": 1,
+    "uncalibrated_promotion_count": 0,
+    "uncalibrated_promotion_surface_ids": [],
+    "phase8_quality_world_model_auroc": 1.0,
+    "phase8_quality_world_model_brier": 0.1156,
+    "phase8_quality_base_rate_brier": 0.2222,
+    "phase8_quality_brier_improvement": 0.1066,
+    "phase9_leave_domain_out_available": true,
+    "phase9_leave_domain_out_domain_count": 3,
+    "phase9_leave_domain_out_nonnegative_domain_count": 2,
+    "phase9_leave_domain_out_macro_utility": 0.5564,
+    "phase9_leave_domain_out_max_calibration_error": 0.3611,
+    "phase10_candidate_transition_count": 17,
+    "phase10_support_transition_count": 31,
+    "phase10_all_lift_over_v3": 0.0185,
+    "phase10_candidate_v1_lift_over_v3": 0.0588,
+    "phase10_gap_to_retained_hybrid": -0.037,
+    "phase10_calibration_beats_base_rate": false,
+    "phase10_selected_arm_mae_minus_base_rate": 0.0098,
+    "phase10_recommended_promotion": "keep_as_world_model_candidate",
+    "phase5_selected_production_profile": "phase9_hybrid_guard",
+    "phase5_selected_exploration_profile": "phase10_discrete_world_model_candidate",
+    "phase5_keeps_phase10_candidate": true,
+    "phase5_scheduler_lift_over_v3": 0.0555,
+    "uses_raw_prompts_or_answers": false
+  },
+  "gates": {
+    "source_artifacts_loaded": true,
+    "phase8_profile_brier_beats_base_rate": true,
+    "phase9_leave_domain_out_available": true,
+    "phase9_leave_domain_out_domain_count_sufficient": true,
+    "phase9_leave_domain_out_negative_transfer_recorded": true,
+    "phase9_leave_domain_out_max_error_recorded": true,
+    "phase10_positive_candidate_recorded": true,
+    "phase10_uncalibrated_candidate_recorded": true,
+    "phase10_uncalibrated_candidate_not_promoted": true,
+    "phase5_scheduler_keeps_uncalibrated_world_model_exploratory": true,
+    "calibrated_surface_available": true,
+    "leave_domain_out_surface_available": true,
+    "redacted_artifacts_only": true
+  },
+  "failed_gates": [],
+  "pass": true,
+  "limitations": [
+    "The calibrated Phase8 selector is profile-level, not a task-world simulator.",
+    "Phase9 leave-domain-out exposes a business-domain regression boundary rather than proving domain-robust autonomy.",
+    "Phase10 has positive heldout action-value lift but scalar reward calibration remains worse than base-rate prediction."
+  ],
+  "interpretation": "The current world model is useful as a cheap verifier and exploration gate, not as a replacement for live ablation.  The audit blocks uncalibrated promotion while preserving the positive Phase10 candidate for future trace-distilled calibration."
+}
