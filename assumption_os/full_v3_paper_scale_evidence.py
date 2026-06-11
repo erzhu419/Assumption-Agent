@@ -202,6 +202,10 @@ def build_full_v3_paper_scale_evidence_payload(
             metrics["phase0_production_contract_invalid_admitted_count"] == 0
             and metrics["phase0_production_contract_applied_count"] == 1
         ),
+        "phase1_production_sleep_job_writes_consolidated": (
+            metrics["phase1_production_sleep_applied_consolidated_node_count"] >= 1
+            and metrics["phase1_production_sleep_dry_run_mutated"] is False
+        ),
         "vertical_slice_compose_passes": bool(artifacts["vertical_slice"].get("pass")),
         "long_run_pairwise_downstream_positive": metrics["long_run_downstream_win_rate"] >= 0.65,
         "frozen_v3_beats_v1_kernel": metrics["full_v3_margin_vs_v1_kernel"] >= 0.10,
@@ -455,6 +459,21 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         ),
         "phase0_production_contract_applied_count": int(
             artifacts["v3_phase0_contract"]["metrics"]["production_contract_applied_count"]
+        ),
+        "phase1_production_sleep_group_count": int(
+            artifacts["v3_phase1_memory"]["metrics"]["production_sleep_group_count"]
+        ),
+        "phase1_production_sleep_planned_archive_count": int(
+            artifacts["v3_phase1_memory"]["metrics"]["production_sleep_planned_archive_count"]
+        ),
+        "phase1_production_sleep_applied_archived_node_count": int(
+            artifacts["v3_phase1_memory"]["metrics"]["production_sleep_applied_archived_node_count"]
+        ),
+        "phase1_production_sleep_applied_consolidated_node_count": int(
+            artifacts["v3_phase1_memory"]["metrics"]["production_sleep_applied_consolidated_node_count"]
+        ),
+        "phase1_production_sleep_dry_run_mutated": bool(
+            artifacts["v3_phase1_memory"]["metrics"]["production_sleep_dry_run_mutated"]
         ),
         "vertical_slice_downstream_delta": artifacts["vertical_slice"]["metrics"]["downstream_score_delta"],
         "vertical_slice_brier_improvement": artifacts["vertical_slice"]["metrics"]["world_model_brier_improvement"],

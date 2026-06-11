@@ -89,6 +89,7 @@ from assumption_os.hypothesis_overlay_v2 import build_hypothesis_overlay_v2_payl
 from assumption_os.lifecycle import LifecycleActionType, plan_lifecycle_actions
 from assumption_os.manifest_logger import build_component_manifest_payload, events_from_run_logs
 from assumption_os.math_science_policy import route_math_science_problem
+from assumption_os.memory_consolidation_job import build_memory_consolidation_job_payload
 from assumption_os.memory_surfaces import build_memory_surface_payload
 from assumption_os.meta_qa_evolution import build_meta_qa_evolution_payload
 from assumption_os.morphism_benchmark import build_morphism_independent_benchmark_payload
@@ -570,6 +571,82 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["negative_transfer_reduction"], 0.50)
         self.assertGreaterEqual(metrics["context_efficiency_delta"], 0.20)
         self.assertEqual(metrics["idempotence_delta"], 0)
+        self.assertGreaterEqual(metrics["production_sleep_group_count"], 3)
+        self.assertGreaterEqual(metrics["production_sleep_planned_consolidated_node_count"], 3)
+        self.assertGreaterEqual(metrics["production_sleep_applied_consolidated_node_count"], 3)
+        self.assertGreaterEqual(metrics["production_sleep_applied_archived_node_count"], 3)
+        self.assertFalse(metrics["production_sleep_dry_run_mutated"])
+
+    def test_memory_consolidation_job_dry_run_and_apply_on_jsonl_graph(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="mem_bridge_a",
+                type=AssumptionType.METHOD,
+                claim="Bridge roles improve retrieval",
+                context_conditions=["multi_hop", "role_bridge"],
+                predicted_effects=["increase retrieval precision"],
+                risk_predictions=["outside control harm"],
+                verifiers=["retrieval_hit_audit", "outside_negative_control"],
+                confidence=0.85,
+                metaproductivity=0.7,
+                status="active",
+                tags=["family:bridge_roles"],
+                payload={"family": "bridge_roles"},
+            ))
+            store.upsert_node(AssumptionNode(
+                id="mem_bridge_b",
+                type=AssumptionType.METHOD,
+                claim="Typed bridge decomposition improves retrieval",
+                context_conditions=["multi_hop", "role_bridge"],
+                predicted_effects=["increase retrieval precision"],
+                risk_predictions=["outside control harm"],
+                verifiers=["retrieval_hit_audit", "outside_negative_control"],
+                confidence=0.82,
+                metaproductivity=0.68,
+                status="active",
+                tags=["family:bridge_roles"],
+                payload={"family": "bridge_roles"},
+            ))
+            store.upsert_node(AssumptionNode(
+                id="mem_bridge_stale",
+                type=AssumptionType.METHOD,
+                claim="Always add bridge entities",
+                confidence=0.2,
+                status="stale",
+                tags=["family:bridge_roles"],
+                payload={"family": "bridge_roles"},
+            ))
+            store.flush()
+
+            dry_run = build_memory_consolidation_job_payload(
+                store=JsonlGraphStore(td),
+                eval_id="unit_memory_consolidation_dry_run",
+                apply=False,
+            )
+            self.assertTrue(dry_run["pass"], dry_run["failed_gates"])
+            self.assertFalse(dry_run["metrics"]["store_mutated"])
+            self.assertEqual(dry_run["metrics"]["planned_consolidated_node_count"], 1)
+            self.assertEqual(dry_run["metrics"]["planned_archive_count"], 2)
+            self.assertFalse(any(
+                node.payload.get("memory_consolidation") for node in JsonlGraphStore(td).nodes.values()
+            ))
+
+            apply_payload = build_memory_consolidation_job_payload(
+                store=JsonlGraphStore(td),
+                eval_id="unit_memory_consolidation_apply",
+                apply=True,
+            )
+            self.assertTrue(apply_payload["pass"], apply_payload["failed_gates"])
+            self.assertTrue(apply_payload["metrics"]["store_mutated"])
+            self.assertEqual(apply_payload["metrics"]["applied_consolidated_node_count"], 1)
+            self.assertGreaterEqual(apply_payload["metrics"]["applied_archived_node_count"], 1)
+            updated = JsonlGraphStore(td)
+            consolidated_ids = apply_payload["result"]["consolidated_node_ids"]
+            self.assertEqual(len(consolidated_ids), 1)
+            self.assertIn(consolidated_ids[0], updated.nodes)
+            self.assertEqual(updated.nodes["mem_bridge_b"].status, "archived")
+            self.assertEqual(updated.nodes["mem_bridge_stale"].status, "archived")
 
     def test_full_v3_phase2_verifier_synthesis_generates_falsification_contracts(self):
         payload = build_full_v3_phase2_verifier_synthesis_payload(
@@ -714,6 +791,9 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["phase0_production_contract_proposal_count"], 2)
         self.assertEqual(metrics["phase0_production_contract_invalid_admitted_count"], 0)
         self.assertEqual(metrics["phase0_production_contract_applied_count"], 1)
+        self.assertGreaterEqual(metrics["phase1_production_sleep_group_count"], 3)
+        self.assertGreaterEqual(metrics["phase1_production_sleep_applied_consolidated_node_count"], 3)
+        self.assertFalse(metrics["phase1_production_sleep_dry_run_mutated"])
         self.assertGreaterEqual(metrics["long_run_downstream_win_rate"], 0.65)
         self.assertGreaterEqual(metrics["full_v3_margin_vs_v1_kernel"], 0.10)
         self.assertGreaterEqual(metrics["full_v3_margin_vs_best_nonfull"], 0.08)
@@ -815,7 +895,7 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["phase10_status"], "learned_candidate_not_promoted")
         self.assertIn("production_contract_gate_available", by_id["phase0_contract_checker"]["implementation_level"])
         self.assertEqual(by_id["phase9_hybrid_guard"]["production_default_status"], "retained_gated_profile")
-        self.assertIn("not_main_loop", by_id["phase1_memory_consolidation"]["implementation_level"])
+        self.assertIn("jsonl_memory_sleep_job_available", by_id["phase1_memory_consolidation"]["implementation_level"])
         self.assertIn("not_long_running_production", by_id["phase7_long_run_benchmark"]["implementation_level"])
         self.assertGreaterEqual(metrics["blocked_claim_count"], 10)
 

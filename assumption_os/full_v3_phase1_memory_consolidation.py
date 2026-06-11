@@ -10,9 +10,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+
+from .graph_memory import JsonlGraphStore
+from .memory_consolidation_job import build_memory_consolidation_job_payload
+from .schema import AssumptionEdge, AssumptionNode, AssumptionType, EdgeType
 
 
 PAPER_DIR = Path("phase four/assumption_graph/paper_readiness_20260604")
@@ -42,11 +47,18 @@ def build_full_v3_phase1_memory_consolidation_payload(
     eval_id: str = "full_v3_phase1_memory_consolidation_20260611",
 ) -> dict[str, Any]:
     nodes = _nodes()
+    production_sleep_job = _production_sleep_job_probe(nodes)
     before = _retrieval_probe(nodes)
     operations = _consolidate(nodes)
     consolidated_nodes = operations["consolidated_nodes"]
     after = _retrieval_probe(consolidated_nodes)
-    metrics = _metrics(nodes=nodes, operations=operations, before=before, after=after)
+    metrics = _metrics(
+        nodes=nodes,
+        operations=operations,
+        before=before,
+        after=after,
+        production_sleep_job=production_sleep_job,
+    )
     gates = {
         "duplicate_detection_high": metrics["duplicate_detection_recall"] >= 0.95,
         "evidence_merge_precise": metrics["evidence_merge_precision"] >= 0.95,
@@ -59,12 +71,24 @@ def build_full_v3_phase1_memory_consolidation_payload(
         "negative_transfer_reduces": metrics["negative_transfer_reduction"] >= 0.50,
         "context_efficiency_improves": metrics["context_efficiency_delta"] >= 0.20,
         "idempotent_consolidation": metrics["idempotence_delta"] == 0,
+        "production_jsonl_sleep_dry_run_passes": production_sleep_job["dry_run"]["pass"],
+        "production_jsonl_sleep_dry_run_no_mutation": (
+            production_sleep_job["dry_run"]["metrics"]["store_mutated"] is False
+        ),
+        "production_jsonl_sleep_apply_passes": production_sleep_job["apply"]["pass"],
+        "production_jsonl_sleep_writes_consolidated": (
+            production_sleep_job["apply"]["metrics"]["applied_consolidated_node_count"] >= 1
+        ),
+        "production_jsonl_sleep_archives_nodes": (
+            production_sleep_job["apply"]["metrics"]["applied_archived_node_count"] >= 1
+        ),
         "shadow_mode_no_graph_mutation": True,
     }
     return {
         "eval_id": eval_id,
         "eval_kind": "full_v3_phase1_shadow_memory_consolidation",
         "reconstruction_v2_full_phase": "phase1_v3_memory_consolidation",
+        "implementation_level": "jsonl_memory_sleep_job_available_with_shadow_fixture_validation",
         "performance_validation": True,
         "shadow_bypass": True,
         "validation_scope": (
@@ -74,6 +98,7 @@ def build_full_v3_phase1_memory_consolidation_payload(
         ),
         "input_nodes": [node.to_dict() for node in nodes],
         "operations": operations,
+        "production_sleep_job": production_sleep_job,
         "retrieval_before": before,
         "retrieval_after": after,
         "metrics": metrics,
@@ -83,7 +108,8 @@ def build_full_v3_phase1_memory_consolidation_payload(
         "interpretation": (
             "Full-v3 Phase 1 prevents the Assumption Graph from becoming an experience dump: it consolidates "
             "validated family evidence, narrows scope, prunes stale memories, surfaces active conflicts, and "
-            "updates ACP so later retrieval uses cleaner, more transferable context."
+            "updates ACP so later retrieval uses cleaner, more transferable context.  A JSONL sleep-job probe now "
+            "validates the production dry-run/apply path separately from the shadow retrieval fixture."
         ),
     }
 
@@ -193,6 +219,7 @@ def _metrics(
     operations: dict[str, Any],
     before: dict[str, Any],
     after: dict[str, Any],
+    production_sleep_job: dict[str, Any],
 ) -> dict[str, Any]:
     expected_duplicates = {"bridge_roles", "feedback_alignment", "memory_boundary"}
     detected_duplicates = {group["family"] for group in operations["duplicate_groups"]}
@@ -225,7 +252,56 @@ def _metrics(
         "context_efficiency_after": after["mean_context_efficiency"],
         "context_efficiency_delta": round(after["mean_context_efficiency"] - before["mean_context_efficiency"], 4),
         "idempotence_delta": 0 if operations["first_pass_signature"] == operations["second_pass_signature"] else 1,
+        "production_sleep_group_count": production_sleep_job["apply"]["metrics"]["group_count"],
+        "production_sleep_planned_archive_count": production_sleep_job["dry_run"]["metrics"]["planned_archive_count"],
+        "production_sleep_planned_consolidated_node_count": production_sleep_job["dry_run"]["metrics"]["planned_consolidated_node_count"],
+        "production_sleep_applied_archived_node_count": production_sleep_job["apply"]["metrics"]["applied_archived_node_count"],
+        "production_sleep_applied_consolidated_node_count": production_sleep_job["apply"]["metrics"]["applied_consolidated_node_count"],
+        "production_sleep_dry_run_mutated": production_sleep_job["dry_run"]["metrics"]["store_mutated"],
     }
+
+
+def _production_sleep_job_probe(nodes: list[MemoryNodeFixture]) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory() as td:
+        store = JsonlGraphStore(td)
+        for fixture in nodes:
+            store.upsert_node(AssumptionNode(
+                id=fixture.node_id,
+                type=AssumptionType.METHOD,
+                claim=fixture.claim,
+                context_conditions=fixture.scope_tags,
+                predicted_effects=["improve retrieval precision"] if fixture.retrieval_relevant else [],
+                risk_predictions=["outside negative-control harm"] if fixture.negative_transfer else ["scope regression risk"],
+                verifiers=["retrieval_hit_audit", "outside_negative_control"] if fixture.retrieval_relevant else ["manual_review"],
+                confidence=fixture.evidence_quality,
+                metaproductivity=fixture.descendant_productivity,
+                status="stale" if fixture.stale else "active",
+                tags=[f"family:{fixture.family}", *fixture.scope_tags[:3]],
+                payload={"family": fixture.family},
+            ))
+        for fixture in nodes:
+            if fixture.conflicts_with:
+                store.add_edge(AssumptionEdge(
+                    source=fixture.node_id,
+                    target=fixture.conflicts_with,
+                    type=EdgeType.CONTRADICTS,
+                    weight=1.0,
+                ))
+        store.flush()
+        dry_run = build_memory_consolidation_job_payload(
+            store=JsonlGraphStore(td),
+            eval_id="phase1_jsonl_sleep_dry_run",
+            apply=False,
+        )
+        apply = build_memory_consolidation_job_payload(
+            store=JsonlGraphStore(td),
+            eval_id="phase1_jsonl_sleep_apply",
+            apply=True,
+        )
+        return {
+            "dry_run": dry_run,
+            "apply": apply,
+        }
 
 
 def _nodes() -> list[MemoryNodeFixture]:
