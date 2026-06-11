@@ -2874,8 +2874,15 @@ class AssumptionOSTest(unittest.TestCase):
             eval_id="unit_verifier",
         )
         by_id = {row["proposal_id"]: row for row in payload["summaries"]}
+        self.assertEqual(payload["protocol_ids"], ["method_hypothesis_candidate"])
+        self.assertEqual(payload["protocol_count"], 1)
         self.assertEqual(by_id["prop_accept"]["verdict"], "accepted_for_gated_apply")
         self.assertEqual(by_id["prop_accept"]["next_action"], "apply_accepted_candidate_if_requested")
+        self.assertEqual(by_id["prop_accept"]["protocol"]["protocol_id"], "method_hypothesis_candidate")
+        self.assertTrue(by_id["prop_accept"]["protocol_report"]["protocol_pass"])
+        self.assertTrue(by_id["prop_accept"]["protocol_report"]["negative_control_satisfied"])
+        self.assertTrue(by_id["prop_accept"]["protocol_report"]["objective_evidence_satisfied"])
+        self.assertEqual(by_id["prop_accept"]["protocol_report"]["threshold_violations"], [])
         self.assertEqual(by_id["prop_repair"]["verdict"], "needs_preflight_repair")
         self.assertEqual(by_id["prop_repair"]["stages"][0]["status"], "repair")
         v3 = next(stage for stage in by_id["prop_accept"]["stages"] if stage["tier"] == "V3")
@@ -2887,6 +2894,36 @@ class AssumptionOSTest(unittest.TestCase):
         v6 = next(stage for stage in by_id["prop_accept"]["stages"] if stage["tier"] == "V6")
         self.assertEqual(v6["status"], "required")
         self.assertEqual(v6["evidence"]["permission_boundary"], "explicit_apply_or_writeback_required")
+
+    def test_verifier_protocol_specializes_candidate_types(self):
+        proposal_payload = {
+            "eval_id": "unit_protocol_props",
+            "proposals": [
+                {"proposal_id": "p_method", "proposal_type": "assumption_revision"},
+                {"proposal_id": "p_retrieval", "proposal_type": "retrieval_policy_candidate"},
+                {"proposal_id": "p_formal", "proposal_type": "formal_mapping_candidate"},
+                {"proposal_id": "p_world", "proposal_type": "world_model_calibration_candidate"},
+                {"proposal_id": "p_memory", "proposal_type": "memory_consolidation_candidate"},
+                {"proposal_id": "p_guard", "proposal_type": "prompt_guard_candidate"},
+            ],
+        }
+        payload = build_verifier_stack_payload(
+            proposal_payload=proposal_payload,
+            eval_id="unit_verifier_protocols",
+        )
+        by_id = {row["proposal_id"]: row for row in payload["summaries"]}
+        self.assertEqual(payload["protocol_count"], 6)
+        self.assertEqual(by_id["p_method"]["protocol"]["protocol_id"], "method_hypothesis_candidate")
+        self.assertEqual(by_id["p_retrieval"]["protocol"]["protocol_id"], "retrieval_policy_candidate")
+        self.assertEqual(by_id["p_formal"]["protocol"]["protocol_id"], "bounded_structural_morphism_candidate")
+        self.assertEqual(by_id["p_world"]["protocol"]["protocol_id"], "world_model_calibration_candidate")
+        self.assertEqual(by_id["p_memory"]["protocol"]["protocol_id"], "memory_consolidation_candidate")
+        self.assertEqual(by_id["p_guard"]["protocol"]["protocol_id"], "prompt_guard_candidate")
+        self.assertIn("V2b:structural_morphism_gate", by_id["p_formal"]["protocol"]["required_stages"])
+        self.assertIn("retrieval_negative_control", by_id["p_retrieval"]["protocol"]["required_negative_controls"])
+        self.assertIn("leave_domain_out_split", by_id["p_world"]["protocol"]["required_negative_controls"])
+        self.assertIn("retrieval_before_after_nonregression", by_id["p_memory"]["protocol"]["required_negative_controls"])
+        self.assertIn("over_structuring_high_risk_rows", by_id["p_guard"]["protocol"]["blocked_claims"])
 
     def test_v5_external_objective_benchmark_blocks_failed_acceptance(self):
         proposal_payload = {

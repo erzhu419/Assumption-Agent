@@ -13,6 +13,7 @@ import json
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,23 @@ class VerifierStage:
 
 
 @dataclass(frozen=True)
+class VerifierProtocol:
+    proposal_type: str
+    protocol_id: str
+    required_stages: list[str]
+    required_negative_controls: list[str]
+    required_objective_evidence: list[str]
+    acceptance_thresholds: dict[str, float]
+    manual_review_policy: dict[str, str]
+    default_next_action: str
+    blocked_claims: list[str]
+    notes: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class VerifierStackSummary:
     proposal_id: str
     proposal_type: str
@@ -36,11 +54,14 @@ class VerifierStackSummary:
     verdict: str
     confidence: str
     next_action: str
+    protocol: VerifierProtocol
+    protocol_report: dict[str, Any]
     stages: list[VerifierStage]
     rationale: str
 
     def to_dict(self) -> dict:
         d = asdict(self)
+        d["protocol"] = self.protocol.to_dict()
         d["stages"] = [stage.to_dict() for stage in self.stages]
         return d
 
@@ -79,6 +100,7 @@ def build_verifier_stack_payload(
         )
         for proposal in proposal_payload.get("proposals", [])
     ]
+    protocol_ids = sorted({s.protocol.protocol_id for s in summaries})
     return {
         "eval_id": eval_id,
         "source_proposal_eval_id": proposal_payload.get("eval_id"),
@@ -90,6 +112,14 @@ def build_verifier_stack_payload(
         "source_structural_gate_eval_id": (structural_morphism_gate_payload or {}).get("eval_id"),
         "source_objective_benchmark_eval_id": (objective_benchmark_payload or {}).get("eval_id"),
         "proposal_count": len(summaries),
+        "protocol_count": len(protocol_ids),
+        "protocol_ids": protocol_ids,
+        "protocol_pass_count": sum(1 for s in summaries if s.protocol_report.get("protocol_pass")),
+        "protocol_violation_counts": dict(Counter(
+            violation
+            for summary in summaries
+            for violation in summary.protocol_report.get("violations", [])
+        )),
         "verdict_counts": dict(Counter(s.verdict for s in summaries)),
         "confidence_counts": dict(Counter(s.confidence for s in summaries)),
         "next_action_counts": dict(Counter(s.next_action for s in summaries)),
@@ -110,6 +140,7 @@ def _summarize(
 ) -> VerifierStackSummary:
     proposal_id = proposal.get("proposal_id", "")
     candidate = proposal.get("candidate_node") or {}
+    protocol = _protocol_for(proposal.get("proposal_type", ""))
     stages = [
         _preflight_stage(preflight),
         _world_stage(world),
@@ -140,6 +171,12 @@ def _summarize(
         structural=structural,
         objective=objective,
     )
+    protocol_report = _protocol_report(
+        protocol=protocol,
+        stages=stages,
+        verdict=verdict,
+        next_action=next_action,
+    )
     return VerifierStackSummary(
         proposal_id=proposal_id,
         proposal_type=proposal.get("proposal_type", ""),
@@ -148,9 +185,412 @@ def _summarize(
         verdict=verdict,
         confidence=confidence,
         next_action=next_action,
+        protocol=protocol,
+        protocol_report=protocol_report,
         stages=stages,
         rationale=rationale,
     )
+
+
+def _protocol_for(proposal_type: str | None) -> VerifierProtocol:
+    p = str(proposal_type or "").lower()
+    if "formal" in p or "morphism" in p or "mapping" in p:
+        return VerifierProtocol(
+            proposal_type=proposal_type or "",
+            protocol_id="bounded_structural_morphism_candidate",
+            required_stages=[
+                "V0:candidate_preflight",
+                "V1:world_model_screen",
+                "V2:formal_mapping_gate",
+                "V2b:structural_morphism_gate",
+                "V3:sequential_falsification",
+                "V4:fresh_ablation_acceptance",
+                "V5:objective_task_regression",
+                "V6:manual_review_gate",
+            ],
+            required_negative_controls=[
+                "negative_control_hits_absent",
+                "broken_or_uncertain_invariants_absent",
+                "outside_active_problem_ids",
+            ],
+            required_objective_evidence=[
+                "preserved_invariants",
+                "functor_check",
+                "trigger_lcb90",
+                "fresh_cross_judge_replay",
+            ],
+            acceptance_thresholds={
+                "trigger_lcb90_min": 0.54,
+                "control_loss_ucb90_max": 0.35,
+                "world_model_min_probability": 0.55,
+            },
+            manual_review_policy={
+                "accepted_candidates": "required",
+                "policy_sensitive_candidates": "required",
+                "graph_mutation": "explicit_apply_or_writeback_required",
+            },
+            default_next_action="run_fresh_ablation_after_formal_and_structural_gates",
+            blocked_claims=[
+                "full_category_theory_theorem_prover",
+                "formal_transfer_without_negative_controls",
+                "default_policy_update_without_manual_apply",
+            ],
+            notes=[
+                "This is a bounded structural protocol, not a mathematical proof certificate.",
+                "Accepted morphisms must preserve stated invariants and survive negative controls.",
+            ],
+        )
+    if "retrieval" in p or "rag" in p or "meta_qa" in p:
+        return VerifierProtocol(
+            proposal_type=proposal_type or "",
+            protocol_id="retrieval_policy_candidate",
+            required_stages=[
+                "V0:candidate_preflight",
+                "V1:world_model_screen",
+                "V3:sequential_falsification",
+                "V4:fresh_ablation_acceptance",
+                "V5:objective_task_regression",
+                "V6:manual_review_gate",
+            ],
+            required_negative_controls=[
+                "control_problem_ids",
+                "outside_active_problem_ids",
+                "retrieval_negative_control",
+            ],
+            required_objective_evidence=[
+                "target_trigger_coverage",
+                "answer_f1_or_em_noninferiority",
+                "fresh_cross_judge_replay",
+            ],
+            acceptance_thresholds={
+                "trigger_lcb90_min": 0.54,
+                "control_loss_ucb90_max": 0.25,
+                "world_model_min_probability": 0.55,
+            },
+            manual_review_policy={
+                "accepted_candidates": "required",
+                "default_retrieval_policy": "requires_global_noninferiority",
+                "graph_mutation": "explicit_apply_or_writeback_required",
+            },
+            default_next_action="run_retrieval_ablation_with_negative_controls",
+            blocked_claims=[
+                "answer_leakage",
+                "gold_title_routing",
+                "default_rag_policy_without_qa_metric",
+            ],
+        )
+    if "world" in p or "calibration" in p or "selector" in p:
+        return VerifierProtocol(
+            proposal_type=proposal_type or "",
+            protocol_id="world_model_calibration_candidate",
+            required_stages=[
+                "V0:candidate_preflight",
+                "V1:world_model_screen",
+                "V3:sequential_falsification",
+                "V5:objective_task_regression",
+                "V6:manual_review_gate",
+            ],
+            required_negative_controls=[
+                "leave_domain_out_split",
+                "base_rate_baseline",
+                "raw_predictor_not_promoted_when_uncalibrated",
+            ],
+            required_objective_evidence=[
+                "auroc_or_rank_auc",
+                "brier_score",
+                "expected_utility_noninferiority",
+            ],
+            acceptance_thresholds={
+                "world_model_min_probability": 0.55,
+                "calibration_error_max": 0.12,
+                "expected_utility_delta_min": 0.0,
+            },
+            manual_review_policy={
+                "production_selector": "requires_guarded_promotion",
+                "raw_predictor": "shadow_until_calibrated",
+                "graph_mutation": "explicit_apply_or_writeback_required",
+            },
+            default_next_action="promote_guarded_policy_only_if_calibrated",
+            blocked_claims=[
+                "world_model_as_task_simulator",
+                "raw_uncalibrated_selector_as_production_policy",
+            ],
+        )
+    if "memory" in p or "consolidation" in p or "sleep" in p:
+        return VerifierProtocol(
+            proposal_type=proposal_type or "",
+            protocol_id="memory_consolidation_candidate",
+            required_stages=[
+                "V0:candidate_preflight",
+                "V3:sequential_falsification",
+                "V5:objective_task_regression",
+                "V6:manual_review_gate",
+            ],
+            required_negative_controls=[
+                "retrieval_before_after_nonregression",
+                "archived_nodes_recoverable",
+                "no_main_graph_mutation_in_dry_run",
+            ],
+            required_objective_evidence=[
+                "duplicate_reduction",
+                "retrieval_probe_noninferiority",
+                "manifested_archive_write",
+            ],
+            acceptance_thresholds={
+                "retrieval_noninferiority_min": 0.0,
+                "duplicate_reduction_min": 0.1,
+            },
+            manual_review_policy={
+                "apply_mode": "requires_explicit_apply",
+                "deletions": "archive_only_unless_reviewed",
+                "graph_mutation": "explicit_apply_or_writeback_required",
+            },
+            default_next_action="run_sleep_job_dry_run_then_apply_on_review",
+            blocked_claims=[
+                "irreversible_memory_delete",
+                "main_graph_mutation_from_shadow_sleep",
+            ],
+        )
+    if "prompt" in p or "guard" in p or "phase9" in p:
+        return VerifierProtocol(
+            proposal_type=proposal_type or "",
+            protocol_id="prompt_guard_candidate",
+            required_stages=[
+                "V0:candidate_preflight",
+                "V1:world_model_screen",
+                "V3:sequential_falsification",
+                "V4:fresh_ablation_acceptance",
+                "V5:objective_task_regression",
+                "V6:manual_review_gate",
+            ],
+            required_negative_controls=[
+                "formal_high_risk_abstention",
+                "math_science_noninferiority",
+                "original_v3_noninferiority",
+            ],
+            required_objective_evidence=[
+                "target_trigger_lift",
+                "family_split_noninferiority",
+                "heldout_noninferiority_to_v1",
+            ],
+            acceptance_thresholds={
+                "trigger_lcb90_min": 0.54,
+                "control_loss_ucb90_max": 0.25,
+                "world_model_min_probability": 0.55,
+            },
+            manual_review_policy={
+                "default_policy": "requires_global_win_threshold",
+                "accepted_candidates": "required",
+                "graph_mutation": "explicit_apply_or_writeback_required",
+            },
+            default_next_action="promote_as_selective_guard_only",
+            blocked_claims=[
+                "longer_prompt_is_sufficient_explanation",
+                "default_injection_without_family_split",
+                "over_structuring_high_risk_rows",
+            ],
+        )
+    return VerifierProtocol(
+        proposal_type=proposal_type or "",
+        protocol_id="method_hypothesis_candidate",
+        required_stages=[
+            "V0:candidate_preflight",
+            "V1:world_model_screen",
+            "V3:sequential_falsification",
+            "V4:fresh_ablation_acceptance",
+            "V5:objective_task_regression",
+            "V6:manual_review_gate",
+        ],
+        required_negative_controls=[
+            "control_problem_ids",
+            "outside_active_problem_ids",
+            "control_harm_sequential",
+        ],
+        required_objective_evidence=[
+            "trigger_lcb90",
+            "control_harm_sequential",
+            "fresh_cross_judge_replay",
+        ],
+        acceptance_thresholds={
+            "trigger_lcb90_min": 0.54,
+            "control_loss_ucb90_max": 0.35,
+            "world_model_min_probability": 0.55,
+        },
+        manual_review_policy={
+            "accepted_candidates": "required",
+            "high_risk_candidates": "required",
+            "graph_mutation": "explicit_apply_or_writeback_required",
+        },
+        default_next_action="run_fresh_ablation",
+        blocked_claims=[
+            "automatic_graph_mutation_without_apply",
+            "acceptance_without_trigger_control_evidence",
+            "general_method_claim_without_scope",
+        ],
+    )
+
+
+def _protocol_report(
+    *,
+    protocol: VerifierProtocol,
+    stages: list[VerifierStage],
+    verdict: str,
+    next_action: str,
+) -> dict[str, Any]:
+    by_key = {_stage_key(stage): stage for stage in stages}
+    missing_required_stages = [
+        stage_key
+        for stage_key in protocol.required_stages
+        if stage_key not in by_key
+    ]
+    mutating_verdict = verdict == "accepted_for_gated_apply"
+    negative_control_satisfied = _negative_control_satisfied(stages)
+    objective_evidence_satisfied = _objective_evidence_satisfied(protocol, stages)
+    threshold_violations = _threshold_violations(protocol, stages)
+    manual_review_satisfied = _manual_review_satisfied(stages, mutating_verdict=mutating_verdict)
+
+    violations: list[str] = []
+    violations.extend(f"missing_stage:{stage_key}" for stage_key in missing_required_stages)
+    if mutating_verdict:
+        blocking_statuses = _blocking_statuses_for_accepted(protocol, by_key)
+        violations.extend(blocking_statuses)
+        if not negative_control_satisfied:
+            violations.append("accepted_without_negative_control_evidence")
+        if not objective_evidence_satisfied:
+            violations.append("accepted_without_required_objective_evidence")
+        if threshold_violations:
+            violations.extend(threshold_violations)
+        if not manual_review_satisfied:
+            violations.append("accepted_without_manual_review_gate")
+    elif verdict.startswith("rejected"):
+        if not _has_falsifying_stage(stages):
+            violations.append("rejected_without_falsifying_stage")
+    elif "apply" in next_action:
+        violations.append("nonaccepted_verdict_requests_apply")
+
+    return {
+        "protocol_id": protocol.protocol_id,
+        "protocol_pass": not violations,
+        "verdict": verdict,
+        "next_action": next_action,
+        "missing_required_stages": missing_required_stages,
+        "negative_control_satisfied": negative_control_satisfied,
+        "objective_evidence_satisfied": objective_evidence_satisfied,
+        "threshold_violations": threshold_violations,
+        "manual_review_satisfied": manual_review_satisfied,
+        "violations": violations,
+        "stage_status": {
+            _stage_key(stage): stage.status
+            for stage in stages
+        },
+    }
+
+
+def _stage_key(stage: VerifierStage) -> str:
+    return f"{stage.tier}:{stage.name}"
+
+
+def _blocking_statuses_for_accepted(protocol: VerifierProtocol, by_key: dict[str, VerifierStage]) -> list[str]:
+    statuses: list[str] = []
+    for key in protocol.required_stages:
+        stage = by_key.get(key)
+        if not stage:
+            continue
+        if key == "V6:manual_review_gate":
+            if stage.status != "required":
+                statuses.append(f"accepted_manual_gate_not_required:{key}")
+            continue
+        if stage.status in {"missing", "block", "fail", "repair", "defer"}:
+            statuses.append(f"accepted_blocking_stage:{key}:{stage.status}")
+        if stage.status == "not_applicable" and key in {"V2:formal_mapping_gate", "V2b:structural_morphism_gate"}:
+            statuses.append(f"accepted_required_stage_not_applicable:{key}")
+    return statuses
+
+
+def _negative_control_satisfied(stages: list[VerifierStage]) -> bool:
+    for stage in stages:
+        evidence = stage.evidence
+        if int(evidence.get("control_n") or 0) > 0 or int(evidence.get("outside_active_n") or 0) > 0:
+            return True
+        if "control_harm_sequential" in evidence.get("passed_required_experiments", []):
+            return True
+        if "control_harm_sequential" in evidence.get("experiment_name_counts", {}):
+            return True
+        if evidence.get("control_outcomes"):
+            return True
+        if evidence.get("negative_control_hits") == [] and "negative_control_hits" in evidence:
+            return True
+    return False
+
+
+def _objective_evidence_satisfied(protocol: VerifierProtocol, stages: list[VerifierStage]) -> bool:
+    evidence = _merged_evidence(stages)
+    for required in protocol.required_objective_evidence:
+        if required in {"trigger_lcb90", "target_trigger_lift"}:
+            if evidence.get("trigger_lcb90") is None and evidence.get("target_trigger_lift") is None:
+                return False
+        elif required == "control_harm_sequential":
+            if "control_harm_sequential" not in evidence.get("passed_required_experiments", []):
+                return False
+        elif required == "fresh_cross_judge_replay":
+            if "fresh_cross_judge_replay" not in evidence.get("passed_required_experiments", []):
+                return False
+        elif required == "preserved_invariants":
+            if not evidence.get("preserved_invariants"):
+                return False
+        elif required == "functor_check":
+            if not evidence.get("functor_check"):
+                return False
+        else:
+            if required not in evidence or evidence.get(required) in {None, False, []}:
+                return False
+    v5 = next((stage for stage in stages if _stage_key(stage) == "V5:objective_task_regression"), None)
+    return bool(v5 and v5.evidence.get("objective_gate_passed"))
+
+
+def _threshold_violations(protocol: VerifierProtocol, stages: list[VerifierStage]) -> list[str]:
+    evidence = _merged_evidence(stages)
+    violations: list[str] = []
+    trigger_min = protocol.acceptance_thresholds.get("trigger_lcb90_min")
+    if trigger_min is not None:
+        trigger_lcb = evidence.get("trigger_lcb90")
+        if trigger_lcb is None or float(trigger_lcb) < trigger_min:
+            violations.append("threshold:trigger_lcb90_min")
+    control_max = protocol.acceptance_thresholds.get("control_loss_ucb90_max")
+    if control_max is not None:
+        control_ucb = evidence.get("control_loss_ucb90")
+        control_exp_ok = "control_harm_sequential" in evidence.get("passed_required_experiments", [])
+        if control_ucb is not None and float(control_ucb) > control_max:
+            violations.append("threshold:control_loss_ucb90_max")
+        elif control_ucb is None and not control_exp_ok:
+            violations.append("threshold:control_loss_ucb90_missing")
+    world_min = protocol.acceptance_thresholds.get("world_model_min_probability")
+    if world_min is not None:
+        probability = evidence.get("predicted_acceptance_probability")
+        if probability is None or float(probability) < world_min:
+            violations.append("threshold:world_model_min_probability")
+    return violations
+
+
+def _manual_review_satisfied(stages: list[VerifierStage], *, mutating_verdict: bool) -> bool:
+    if not mutating_verdict:
+        return True
+    v6 = next((stage for stage in stages if _stage_key(stage) == "V6:manual_review_gate"), None)
+    return bool(v6 and v6.status == "required" and v6.evidence.get("permission_boundary") == "explicit_apply_or_writeback_required")
+
+
+def _has_falsifying_stage(stages: list[VerifierStage]) -> bool:
+    return any(
+        stage.status == "fail" and stage.tier in {"V3", "V4"}
+        for stage in stages
+    )
+
+
+def _merged_evidence(stages: list[VerifierStage]) -> dict[str, Any]:
+    merged: dict[str, Any] = {}
+    for stage in stages:
+        merged.update(stage.evidence)
+    return merged
 
 
 def _preflight_stage(preflight: dict) -> VerifierStage:
