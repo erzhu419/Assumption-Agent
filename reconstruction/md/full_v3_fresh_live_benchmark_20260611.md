@@ -86,6 +86,37 @@ Interpretation:
 
 The guarded repair turns a negative fresh-300 result into a small positive heldout result and cuts call budget sharply. The effect is not statistically strong; it is a mechanism validation for safe abstention and clade retention, not a paper-grade main result. The next scale step should be 600/full with the guarded policy, or a better router that increases active coverage without reintroducing daily_life/science harm.
 
+## Guarded Full-Remaining Result
+
+After the discovery 300 and two heldout 300 samples, the remaining fresh pool was run with the strict `business + pat_controlled_intervention` guard.
+
+Command:
+
+```bash
+python3 -m assumption_os.full_v3_fresh_live_benchmark --root . \
+  --eval-id full_v3_fresh_live_business_guard_full_remaining_gptmini_gpt55_20260611 \
+  --full --seed 20260614 --execute \
+  --selection-mode natural_repaired_guarded \
+  --solver-model gpt_mini --judge-model gpt55 \
+  --solve-workers 16 --judge-workers 8 \
+  --exclude-sample 'phase four/assumption_graph/paper_readiness_20260604/fresh_live_runs/full_v3_fresh_live_300_gptmini_gpt55_20260611_sample.json' \
+  --exclude-sample 'phase four/assumption_graph/paper_readiness_20260604/fresh_live_runs/full_v3_fresh_live_guarded_heldout300_gptmini_gpt55_20260611_sample.json' \
+  --exclude-sample 'phase four/assumption_graph/paper_readiness_20260604/fresh_live_runs/full_v3_fresh_live_business_guard_heldout300_gptmini_gpt55_20260611_sample.json' \
+  --out 'phase four/assumption_graph/paper_readiness_20260604/full_v3_fresh_live_business_guard_full_remaining_gptmini_gpt55_20260611.json'
+```
+
+Result:
+
+- remaining fresh sample n: 556
+- active interventions: 21
+- planned calls: 105
+- structural vs base: utility 0.5009, CI [0.4928, 0.5090], wins/losses/ties 11/10/535
+- structural vs placebo: utility 0.5027, CI [0.4946, 0.5108], wins/losses/ties 12/9/535
+
+Interpretation:
+
+The full-remaining run keeps the guarded policy non-negative at larger scale, but the gain is extremely small. The important result is that the self-evolution loop found a harmful broad policy, narrowed it to a stable clade, and prevented large-scale graph/prompt pollution. The performance bottleneck is now coverage: active interventions are only 21/556.
+
 ## Paper Evidence Update
 
 Updated:
@@ -99,5 +130,10 @@ Fresh guarded metrics now included:
 - planned total calls: 55
 - vs base utility: 0.5050
 - vs placebo utility: 0.5050
+- full-remaining problem-level n: 556
+- full-remaining active interventions: 21
+- full-remaining planned total calls: 105
+- full-remaining vs base utility: 0.5009
+- full-remaining vs placebo utility: 0.5027
 
 The paper evidence remains pass, while explicitly treating this as a small-effect validation.

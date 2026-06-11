@@ -36,6 +36,7 @@ REQUIRED_ARTIFACTS = {
     "vertical_slice": PAPER_DIR / "full_v2_vertical_slice_bypass_20260611.json",
     "frozen_v3_vs_v1": PAPER_DIR / "full_v3_frozen_v1_comparison_20260611.json",
     "fresh_live_guarded_300": PAPER_DIR / "full_v3_fresh_live_business_guard_heldout300_gptmini_gpt55_20260611.json",
+    "fresh_live_guarded_full_remaining": PAPER_DIR / "full_v3_fresh_live_business_guard_full_remaining_gptmini_gpt55_20260611.json",
 }
 
 KEY_TOGGLE_BASELINES = {
@@ -102,6 +103,7 @@ def build_full_v3_paper_scale_evidence_payload(
             ],
         ),
         "fresh_live_guarded_300": _fresh_live_summary(artifacts["fresh_live_guarded_300"]),
+        "fresh_live_guarded_full_remaining": _fresh_live_summary(artifacts["fresh_live_guarded_full_remaining"]),
     }
     metrics = _metrics(artifacts=artifacts, evidence=evidence)
     gates = {
@@ -124,6 +126,11 @@ def build_full_v3_paper_scale_evidence_payload(
         "fresh_live_guarded_300_positive_vs_base": metrics["fresh_live_guarded_vs_base_utility"] > 0.50,
         "fresh_live_guarded_300_positive_vs_placebo": metrics["fresh_live_guarded_vs_placebo_utility"] > 0.50,
         "fresh_live_guarded_300_low_call_budget": metrics["fresh_live_guarded_planned_total_calls"] <= 100,
+        "fresh_live_guarded_full_remaining_problem_level": metrics["fresh_live_full_problem_level_n"] >= 500,
+        "fresh_live_guarded_full_remaining_active_count": metrics["fresh_live_full_active_intervention_n"] >= 20,
+        "fresh_live_guarded_full_remaining_positive_vs_base": metrics["fresh_live_full_vs_base_utility"] > 0.50,
+        "fresh_live_guarded_full_remaining_positive_vs_placebo": metrics["fresh_live_full_vs_placebo_utility"] > 0.50,
+        "fresh_live_guarded_full_remaining_low_call_budget": metrics["fresh_live_full_planned_total_calls"] <= 150,
         "prompt_answer_and_secret_free": metrics["prompt_answer_payload_stored"] is False and metrics["secret_leak_detected"] is False,
         "boundary_cases_recorded": metrics["boundary_case_count"] >= 1,
     }
@@ -153,9 +160,10 @@ def build_full_v3_paper_scale_evidence_payload(
         "interpretation": (
             "The v3 mechanisms are now supported by a single paper-scale evidence table: 100-problem "
             "problem-level live/cached main statistics with bootstrap CIs, 6400+ first-party live events, "
-            "2500+ judge events, hard retrieval/toggle baselines, full-v3 mechanism validations, and a fresh "
-            "guarded heldout-300 live rerun.  The fresh rerun is positive but intentionally reported as a "
-            "small-effect validation, not as the main paper claim."
+            "2500+ judge events, hard retrieval/toggle baselines, full-v3 mechanism validations, a fresh "
+            "guarded heldout-300 live rerun, and a guarded full-remaining live rerun.  The fresh reruns are "
+            "positive but intentionally reported as small-effect safety/abstention validations, not as the "
+            "main paper claim."
         ),
     }
 
@@ -340,6 +348,27 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         ),
         "fresh_live_guarded_planned_total_calls": int(
             artifacts["fresh_live_guarded_300"]["metrics"]["planned_total_model_calls"]
+        ),
+        "fresh_live_full_problem_level_n": int(
+            artifacts["fresh_live_guarded_full_remaining"]["metrics"]["structural_vs_base_problem_level_n"]
+        ),
+        "fresh_live_full_active_intervention_n": int(
+            artifacts["fresh_live_guarded_full_remaining"]["metrics"]["structural_vs_base_active_intervention_n"]
+        ),
+        "fresh_live_full_vs_base_utility": float(
+            artifacts["fresh_live_guarded_full_remaining"]["metrics"]["structural_vs_base_utility"]
+        ),
+        "fresh_live_full_vs_base_ci_lower": float(
+            artifacts["fresh_live_guarded_full_remaining"]["metrics"]["structural_vs_base_ci_lower"]
+        ),
+        "fresh_live_full_vs_placebo_utility": float(
+            artifacts["fresh_live_guarded_full_remaining"]["metrics"]["structural_vs_placebo_utility"]
+        ),
+        "fresh_live_full_vs_placebo_ci_lower": float(
+            artifacts["fresh_live_guarded_full_remaining"]["metrics"]["structural_vs_placebo_ci_lower"]
+        ),
+        "fresh_live_full_planned_total_calls": int(
+            artifacts["fresh_live_guarded_full_remaining"]["metrics"]["planned_total_model_calls"]
         ),
         "prompt_answer_payload_stored": bool(artifacts["first_party_world_model_scale"].get("prompt_answer_payload_stored")),
         "secret_leak_detected": bool(artifacts["first_party_world_model_scale"].get("secret_leak_detected")),
