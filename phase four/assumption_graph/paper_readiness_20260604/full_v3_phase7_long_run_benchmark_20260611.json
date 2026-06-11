@@ -2,13 +2,14 @@
   "eval_id": "full_v3_phase7_long_run_benchmark_20260611",
   "eval_kind": "full_v3_phase7_frozen_long_run_benchmark",
   "reconstruction_v2_full_phase": "phase7_v3_frozen_benchmark_long_running_evaluation",
+  "implementation_level": "production_queue_daemon_with_frozen_long_run_regression",
   "performance_validation": true,
-  "shadow_bypass": true,
-  "validation_scope": "Frozen long-run evaluation over bounded daemon episodes, AssumptionBench capability deltas, DownstreamBench baseline comparisons, checkpoint recovery, rate-limit safety, evaluator integrity, parallel scheduling, and continuous ACP learning.",
+  "synthetic_fixture_regression": true,
+  "validation_scope": "Frozen long-run evaluation over bounded daemon episodes, AssumptionBench capability deltas, DownstreamBench baseline comparisons, checkpoint recovery, rate-limit safety, evaluator integrity, parallel scheduling, and continuous ACP learning.  The production queue validation additionally consumes committed preflight queues through the real recursive daemon in a temporary graph, writes manifests, enforces pre-live budget screens, and verifies that graph mutation remains gated.",
   "mode": {
     "episode_count": 12,
     "parallel_workers": 4,
-    "persistent_scheduler": "simulated_checkpointed_queue",
+    "persistent_scheduler": "bounded_checkpointed_queue_with_committed_preflight_artifacts",
     "continuous_background_daemon": false,
     "graph_mutation": "gated_only"
   },
@@ -218,6 +219,105 @@
       "checkpoint_restored": true
     }
   ],
+  "production_queue_daemon": {
+    "source_artifacts": {
+      "orthogonal_descendant_nextgen": {
+        "path": "phase four/assumption_graph/paper_readiness_20260604/orthogonal_descendant_nextgen_live_queue_preflight_20260609.json",
+        "exists": true,
+        "ready_count": 1
+      },
+      "orthogonal_technical_descendant": {
+        "path": "phase four/assumption_graph/paper_readiness_20260604/orthogonal_technical_descendant_live_queue_preflight_20260609.json",
+        "exists": true,
+        "ready_count": 1
+      },
+      "pre_live_screen": {
+        "path": "phase four/assumption_graph/paper_readiness_20260604/pre_live_tie_screen_20260609.json",
+        "exists": true,
+        "pass": true
+      }
+    },
+    "queue_rows": [
+      {
+        "queue_name": "orthogonal_descendant_nextgen",
+        "ready_queue_count": 1,
+        "planned_leaf_count": 1,
+        "executable_leaf_count": 1,
+        "planned_status_counts": {
+          "planned": 1
+        },
+        "planned_manifest_count": 2,
+        "planned_apply_enabled": false,
+        "planned_execute_enabled": false,
+        "screened_ready_queue_count": 0,
+        "screened_leaf_count": 0,
+        "screened_manifest_count": 1,
+        "screen_blocked_ids": [
+          "prop_99b7c2f9b052"
+        ],
+        "screen_deferred_ids": [],
+        "screen_missing_decision_ids": [],
+        "screen_decision_counts": {
+          "block_predicted_low_benefit": 1
+        },
+        "proposal_ids_planned": [
+          "prop_99b7c2f9b052"
+        ],
+        "proposal_ids_screened": [],
+        "node_mutation_without_apply": false
+      },
+      {
+        "queue_name": "orthogonal_technical_descendant",
+        "ready_queue_count": 1,
+        "planned_leaf_count": 1,
+        "executable_leaf_count": 1,
+        "planned_status_counts": {
+          "planned": 1
+        },
+        "planned_manifest_count": 2,
+        "planned_apply_enabled": false,
+        "planned_execute_enabled": false,
+        "screened_ready_queue_count": 0,
+        "screened_leaf_count": 0,
+        "screened_manifest_count": 1,
+        "screen_blocked_ids": [],
+        "screen_deferred_ids": [
+          "prop_6c22137d982d"
+        ],
+        "screen_missing_decision_ids": [],
+        "screen_decision_counts": {
+          "defer_expand_before_live": 1
+        },
+        "proposal_ids_planned": [
+          "prop_6c22137d982d"
+        ],
+        "proposal_ids_screened": [],
+        "node_mutation_without_apply": false
+      }
+    ],
+    "metrics": {
+      "production_queue_source_count": 2,
+      "production_ready_queue_count": 2,
+      "production_planned_leaf_count": 2,
+      "production_executable_leaf_count": 2,
+      "production_screened_leaf_count": 0,
+      "production_pre_live_block_or_defer_count": 2,
+      "production_manifest_count": 6,
+      "production_manifest_reopen_count": 6,
+      "production_node_mutation_count": 0,
+      "production_apply_enabled_count": 0,
+      "production_execute_enabled_count": 0,
+      "production_rate_limit_violation_count": 0,
+      "production_queue_names": [
+        "orthogonal_descendant_nextgen",
+        "orthogonal_technical_descendant"
+      ],
+      "production_screen_decision_counts": {
+        "block_predicted_low_benefit": 1,
+        "defer_expand_before_live": 1
+      }
+    }
+  },
   "assumption_bench": {
     "before": {
       "explicitness": 0.72,
@@ -308,7 +408,27 @@
     "parallel_speedup_proxy": 2.7,
     "rate_limit_violation_count": 0,
     "checkpoint_recovery_success": 1.0,
-    "continuous_learning_acp_lift": 0.14
+    "continuous_learning_acp_lift": 0.14,
+    "production_queue_source_count": 2,
+    "production_ready_queue_count": 2,
+    "production_planned_leaf_count": 2,
+    "production_executable_leaf_count": 2,
+    "production_screened_leaf_count": 0,
+    "production_pre_live_block_or_defer_count": 2,
+    "production_manifest_count": 6,
+    "production_manifest_reopen_count": 6,
+    "production_node_mutation_count": 0,
+    "production_apply_enabled_count": 0,
+    "production_execute_enabled_count": 0,
+    "production_rate_limit_violation_count": 0,
+    "production_queue_names": [
+      "orthogonal_descendant_nextgen",
+      "orthogonal_technical_descendant"
+    ],
+    "production_screen_decision_counts": {
+      "block_predicted_low_benefit": 1,
+      "defer_expand_before_live": 1
+    }
   },
   "gates": {
     "long_run_stability_high": true,
@@ -324,9 +444,17 @@
     "rate_limit_safe": true,
     "checkpoint_recovery_high": true,
     "continuous_learning_positive": true,
-    "shadow_mode_no_unbounded_daemon": true
+    "production_queue_sources_loaded": true,
+    "production_queue_consumes_real_preflight": true,
+    "production_pre_live_screen_saves_budget": true,
+    "production_manifests_written": true,
+    "production_no_graph_mutation_without_apply": true,
+    "production_apply_gate_closed": true,
+    "production_execute_gate_closed": true,
+    "production_rate_limit_safe": true,
+    "bounded_mode_no_unbounded_background_daemon": true
   },
   "failed_gates": [],
   "pass": true,
-  "interpretation": "Full-v3 Phase 7 validates the long-run harness contract under frozen, reproducible conditions: bounded parallel execution, persistent recovery, rate-limit safety, evaluator isolation, low graph pollution, improving assumption capabilities, and downstream wins over frozen baselines."
+  "interpretation": "Full-v3 Phase 7 validates the long-run harness contract under frozen, reproducible conditions: bounded parallel execution, persistent recovery, rate-limit safety, evaluator isolation, low graph pollution, improving assumption capabilities, and downstream wins over frozen baselines.  It now also validates the real bounded daemon path on committed queues: plan leaves, write manifests, enforce pre-live screens, and keep apply/execute gates closed by default."
 }

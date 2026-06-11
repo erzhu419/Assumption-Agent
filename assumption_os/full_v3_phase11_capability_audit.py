@@ -36,7 +36,6 @@ OUTER_SHELL_PHASES = {
     "phase0_contract_checker",
     "phase1_memory_consolidation",
     "phase3_rollout_search_control",
-    "phase7_long_run_benchmark",
 }
 
 
@@ -78,6 +77,9 @@ def build_full_v3_phase11_capability_audit_payload(
             metrics["phase4_status"] == "validated_live_residual_clusterer_not_full_generator"
         ),
         "phase5_scheduler_live_realified": metrics["phase5_status"] == "validated_scheduler_not_unconditional_default",
+        "phase7_bounded_daemon_productionized": (
+            metrics["phase7_status"] == "bounded_production_queue_daemon_not_unbounded_background"
+        ),
         "phase10_candidate_not_promoted_over_hybrid": metrics["phase10_status"] == "learned_candidate_not_promoted",
         "live_evidence_count_nonzero": metrics["live_or_live_derived_count"] >= 2,
         "shadow_and_fixture_count_recorded": metrics["shadow_or_fixture_count"] >= 4,
@@ -133,6 +135,8 @@ def _capability_row(*, name: str, path: Path, artifact: dict[str, Any]) -> Capab
 
 
 def _validation_mode(*, name: str, artifact: dict[str, Any]) -> str:
+    if artifact.get("implementation_level") == "production_queue_daemon_with_frozen_long_run_regression":
+        return "live_or_live_derived_validation"
     if artifact.get("implementation_level") == "live_residual_clusterer_with_v2_generator_regression":
         return "live_or_live_derived_validation"
     if artifact.get("implementation_level") == "live_artifact_contextual_scheduler_with_fixture_regression":
@@ -175,6 +179,8 @@ def _production_default_status(*, name: str, artifact: dict[str, Any], validatio
         return "validated_live_residual_clusterer_not_full_generator"
     if name == "phase5_contextual_bandit_scheduler":
         return "validated_scheduler_not_unconditional_default"
+    if name == "phase7_long_run_benchmark":
+        return "bounded_production_queue_daemon_not_unbounded_background"
     if name == "phase10_discrete_world_model":
         return "learned_candidate_not_promoted"
     if validation_mode in {"shadow_validation_harness", "fixture_or_frozen_harness", "frozen_mechanism_validation"}:
@@ -218,6 +224,12 @@ def _claim_policy(
             "Live-derived contextual scheduler selects retained hybrid and keeps weaker candidates in exploration.",
             ["long-running autonomous scheduler", "unconditional default replacement without fresh same-batch run"],
             "Run same-batch fresh live V1/V3/profile toggles and pass regression gates before wider default use.",
+        )
+    if name == "phase7_long_run_benchmark":
+        return (
+            "Bounded production queue daemon consumes committed preflight queues with manifests and gated mutation.",
+            ["unbounded background autonomy", "automatic graph mutation without acceptance/apply gates"],
+            "Add scheduler/rate-limit service supervision before claiming continuous unattended daemon operation.",
         )
     if validation_mode == "shadow_validation_harness":
         return (
@@ -264,6 +276,9 @@ def _metrics(rows: list[CapabilityRow]) -> dict[str, Any]:
         ),
         "phase5_status": next(
             row.production_default_status for row in rows if row.capability_id == "phase5_contextual_bandit_scheduler"
+        ),
+        "phase7_status": next(
+            row.production_default_status for row in rows if row.capability_id == "phase7_long_run_benchmark"
         ),
         "phase10_status": next(
             row.production_default_status for row in rows if row.capability_id == "phase10_discrete_world_model"

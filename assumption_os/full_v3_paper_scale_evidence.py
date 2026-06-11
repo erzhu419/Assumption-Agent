@@ -115,6 +115,13 @@ def build_full_v3_paper_scale_evidence_payload(
                 "capability_score_improvement",
                 "parallel_speedup_proxy",
                 "checkpoint_recovery_success",
+                "production_queue_source_count",
+                "production_planned_leaf_count",
+                "production_pre_live_block_or_defer_count",
+                "production_manifest_reopen_count",
+                "production_node_mutation_count",
+                "production_apply_enabled_count",
+                "production_execute_enabled_count",
             ],
         ),
         "frozen_v3_vs_v1": _metric_subset(
@@ -220,6 +227,8 @@ def build_full_v3_paper_scale_evidence_payload(
                 "shadow_or_fixture_count",
                 "blocked_claim_count",
                 "promotion_requirement_count",
+                "phase4_status",
+                "phase7_status",
                 "phase10_status",
             ],
         ),
@@ -247,6 +256,17 @@ def build_full_v3_paper_scale_evidence_payload(
         ),
         "vertical_slice_compose_passes": bool(artifacts["vertical_slice"].get("pass")),
         "long_run_pairwise_downstream_positive": metrics["long_run_downstream_win_rate"] >= 0.65,
+        "phase7_production_queue_sources_loaded": metrics["phase7_production_queue_source_count"] >= 2,
+        "phase7_production_queue_plans_leaves": metrics["phase7_production_planned_leaf_count"] >= 2,
+        "phase7_production_pre_live_screen_saves_budget": (
+            metrics["phase7_production_pre_live_block_or_defer_count"] >= 2
+        ),
+        "phase7_production_manifests_reopen": metrics["phase7_production_manifest_reopen_count"] >= 4,
+        "phase7_production_no_graph_mutation_without_apply": metrics["phase7_production_node_mutation_count"] == 0,
+        "phase7_production_apply_execute_gates_closed": (
+            metrics["phase7_production_apply_enabled_count"] == 0
+            and metrics["phase7_production_execute_enabled_count"] == 0
+        ),
         "frozen_v3_beats_v1_kernel": metrics["full_v3_margin_vs_v1_kernel"] >= 0.10,
         "frozen_v3_beats_best_nonfull": metrics["full_v3_margin_vs_best_nonfull"] >= 0.08,
         "fresh_live_guarded_300_problem_level": metrics["fresh_live_guarded_problem_level_n"] >= 300,
@@ -306,6 +326,9 @@ def build_full_v3_paper_scale_evidence_payload(
         ),
         "phase11_capability_audit_passes": metrics["phase11_artifact_pass_rate"] == 1.0,
         "phase11_outer_shells_not_overclaimed": metrics["phase11_outer_shell_production_claim_count"] == 0,
+        "phase11_phase7_bounded_daemon_recorded": (
+            metrics["phase11_phase7_status"] == "bounded_production_queue_daemon_not_unbounded_background"
+        ),
         "phase11_phase10_remains_candidate": metrics["phase11_phase10_status"] == "learned_candidate_not_promoted",
         "prompt_answer_and_secret_free": metrics["prompt_answer_payload_stored"] is False and metrics["secret_leak_detected"] is False,
         "boundary_cases_recorded": metrics["boundary_case_count"] >= 1,
@@ -343,7 +366,9 @@ def build_full_v3_paper_scale_evidence_payload(
             "live residual clusterer now unifies formal, live, creative, and profile-level residual evidence and emits "
             "next-generation proposal seeds while marking the largest same-batch residual as resolved by Phase9.  Phase5 "
             "now adds a live-derived contextual scheduler that selects that retained hybrid profile, keeps the weaker "
-            "world-model selector as exploration, and blocks over-structured compact framing as a default.  The "
+            "world-model selector as exploration, and blocks over-structured compact framing as a default.  Phase7 "
+            "now validates the real bounded daemon path over committed preflight queues, with manifests, pre-live "
+            "budget screening, and closed execute/apply gates.  The "
             "fresh reruns are positive but intentionally reported as small-effect safety/abstention validations, "
             "not as the main paper claim."
         ),
@@ -540,6 +565,39 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "vertical_slice_brier_improvement": artifacts["vertical_slice"]["metrics"]["world_model_brier_improvement"],
         "long_run_downstream_win_rate": artifacts["v3_phase7_long_run"]["metrics"]["downstream_win_rate_on_unseen"],
         "long_run_capability_improvement": artifacts["v3_phase7_long_run"]["metrics"]["capability_score_improvement"],
+        "phase7_production_queue_source_count": int(
+            artifacts["v3_phase7_long_run"]["metrics"]["production_queue_source_count"]
+        ),
+        "phase7_production_ready_queue_count": int(
+            artifacts["v3_phase7_long_run"]["metrics"]["production_ready_queue_count"]
+        ),
+        "phase7_production_planned_leaf_count": int(
+            artifacts["v3_phase7_long_run"]["metrics"]["production_planned_leaf_count"]
+        ),
+        "phase7_production_executable_leaf_count": int(
+            artifacts["v3_phase7_long_run"]["metrics"]["production_executable_leaf_count"]
+        ),
+        "phase7_production_screened_leaf_count": int(
+            artifacts["v3_phase7_long_run"]["metrics"]["production_screened_leaf_count"]
+        ),
+        "phase7_production_pre_live_block_or_defer_count": int(
+            artifacts["v3_phase7_long_run"]["metrics"]["production_pre_live_block_or_defer_count"]
+        ),
+        "phase7_production_manifest_reopen_count": int(
+            artifacts["v3_phase7_long_run"]["metrics"]["production_manifest_reopen_count"]
+        ),
+        "phase7_production_node_mutation_count": int(
+            artifacts["v3_phase7_long_run"]["metrics"]["production_node_mutation_count"]
+        ),
+        "phase7_production_apply_enabled_count": int(
+            artifacts["v3_phase7_long_run"]["metrics"]["production_apply_enabled_count"]
+        ),
+        "phase7_production_execute_enabled_count": int(
+            artifacts["v3_phase7_long_run"]["metrics"]["production_execute_enabled_count"]
+        ),
+        "phase7_production_rate_limit_violation_count": int(
+            artifacts["v3_phase7_long_run"]["metrics"]["production_rate_limit_violation_count"]
+        ),
         "full_v3_margin_vs_v1_kernel": artifacts["frozen_v3_vs_v1"]["metrics"]["full_v3_margin_vs_v1_kernel"],
         "full_v3_margin_vs_hipporag_style": artifacts["frozen_v3_vs_v1"]["metrics"]["full_v3_margin_vs_hipporag_style"],
         "full_v3_margin_vs_best_nonfull": artifacts["frozen_v3_vs_v1"]["metrics"]["full_v3_margin_vs_best_nonfull"],
@@ -804,6 +862,7 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
             artifacts["v3_phase11_capability_audit"]["metrics"]["blocked_claim_count"]
         ),
         "phase11_phase4_status": artifacts["v3_phase11_capability_audit"]["metrics"]["phase4_status"],
+        "phase11_phase7_status": artifacts["v3_phase11_capability_audit"]["metrics"]["phase7_status"],
         "phase11_phase10_status": artifacts["v3_phase11_capability_audit"]["metrics"]["phase10_status"],
         "prompt_answer_payload_stored": bool(artifacts["first_party_world_model_scale"].get("prompt_answer_payload_stored")),
         "secret_leak_detected": bool(artifacts["first_party_world_model_scale"].get("secret_leak_detected")),

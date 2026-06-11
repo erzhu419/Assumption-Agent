@@ -793,6 +793,17 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["rate_limit_violation_count"], 0)
         self.assertGreaterEqual(metrics["checkpoint_recovery_success"], 0.95)
         self.assertGreaterEqual(metrics["continuous_learning_acp_lift"], 0.10)
+        self.assertEqual(metrics["production_queue_source_count"], 2)
+        self.assertEqual(metrics["production_ready_queue_count"], 2)
+        self.assertEqual(metrics["production_planned_leaf_count"], 2)
+        self.assertEqual(metrics["production_executable_leaf_count"], 2)
+        self.assertEqual(metrics["production_screened_leaf_count"], 0)
+        self.assertEqual(metrics["production_pre_live_block_or_defer_count"], 2)
+        self.assertGreaterEqual(metrics["production_manifest_reopen_count"], 4)
+        self.assertEqual(metrics["production_node_mutation_count"], 0)
+        self.assertEqual(metrics["production_apply_enabled_count"], 0)
+        self.assertEqual(metrics["production_execute_enabled_count"], 0)
+        self.assertEqual(metrics["production_rate_limit_violation_count"], 0)
 
     def test_full_v3_frozen_v1_comparison_shows_downstream_margin(self):
         payload = build_full_v3_frozen_v1_comparison_payload(
@@ -836,6 +847,13 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["phase1_production_sleep_applied_consolidated_node_count"], 3)
         self.assertFalse(metrics["phase1_production_sleep_dry_run_mutated"])
         self.assertGreaterEqual(metrics["long_run_downstream_win_rate"], 0.65)
+        self.assertEqual(metrics["phase7_production_queue_source_count"], 2)
+        self.assertEqual(metrics["phase7_production_planned_leaf_count"], 2)
+        self.assertEqual(metrics["phase7_production_pre_live_block_or_defer_count"], 2)
+        self.assertGreaterEqual(metrics["phase7_production_manifest_reopen_count"], 4)
+        self.assertEqual(metrics["phase7_production_node_mutation_count"], 0)
+        self.assertEqual(metrics["phase7_production_apply_enabled_count"], 0)
+        self.assertEqual(metrics["phase7_production_execute_enabled_count"], 0)
         self.assertGreaterEqual(metrics["full_v3_margin_vs_v1_kernel"], 0.10)
         self.assertGreaterEqual(metrics["full_v3_margin_vs_best_nonfull"], 0.08)
         self.assertEqual(metrics["fresh_live_guarded_problem_level_n"], 300)
@@ -944,10 +962,11 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertTrue(payload["pass"], payload["failed_gates"])
         self.assertEqual(metrics["capability_count"], 11)
         self.assertEqual(metrics["artifact_pass_rate"], 1.0)
-        self.assertEqual(metrics["outer_shell_count"], 4)
+        self.assertEqual(metrics["outer_shell_count"], 3)
         self.assertEqual(metrics["outer_shell_production_claim_count"], 0)
         self.assertEqual(metrics["phase4_status"], "validated_live_residual_clusterer_not_full_generator")
         self.assertEqual(metrics["phase5_status"], "validated_scheduler_not_unconditional_default")
+        self.assertEqual(metrics["phase7_status"], "bounded_production_queue_daemon_not_unbounded_background")
         self.assertEqual(metrics["phase10_status"], "learned_candidate_not_promoted")
         self.assertIn("production_contract_gate_available", by_id["phase0_contract_checker"]["implementation_level"])
         self.assertEqual(by_id["phase9_hybrid_guard"]["production_default_status"], "retained_gated_profile")
@@ -968,7 +987,14 @@ class AssumptionOSTest(unittest.TestCase):
             by_id["phase5_contextual_bandit_scheduler"]["validation_mode"],
             "live_or_live_derived_validation",
         )
-        self.assertIn("not_long_running_production", by_id["phase7_long_run_benchmark"]["implementation_level"])
+        self.assertIn(
+            "production_queue_daemon",
+            by_id["phase7_long_run_benchmark"]["implementation_level"],
+        )
+        self.assertEqual(
+            by_id["phase7_long_run_benchmark"]["validation_mode"],
+            "live_or_live_derived_validation",
+        )
         self.assertGreaterEqual(metrics["blocked_claim_count"], 10)
 
     def test_full_v3_fresh_live_benchmark_plans_parallel_problem_level_run(self):
