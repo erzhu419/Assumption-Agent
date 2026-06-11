@@ -81,9 +81,11 @@ def build_full_v3_phase11_capability_audit_payload(
         "phase7_bounded_daemon_productionized": (
             metrics["phase7_status"] == "bounded_production_queue_daemon_not_unbounded_background"
         ),
-        "phase10_candidate_not_promoted_over_hybrid": metrics["phase10_status"] == "learned_candidate_not_promoted",
+        "phase10_guard_promoted_raw_predictor_not_promoted": (
+            metrics["phase10_status"] == "calibrated_guard_promoted_raw_predictor_candidate"
+        ),
         "phase10_calibration_blocks_uncalibrated_promotion": (
-            metrics["phase10_calibration_status"] == "calibration_audit_blocks_uncalibrated_world_model"
+            metrics["phase10_calibration_status"] == "calibration_audit_promotes_guard_blocks_raw_predictor"
         ),
         "live_evidence_count_nonzero": metrics["live_or_live_derived_count"] >= 2,
         "shadow_and_fixture_count_recorded": metrics["shadow_or_fixture_count"] >= 4,
@@ -190,8 +192,12 @@ def _production_default_status(*, name: str, artifact: dict[str, Any], validatio
     if name == "phase7_long_run_benchmark":
         return "bounded_production_queue_daemon_not_unbounded_background"
     if name == "phase10_discrete_world_model":
+        if artifact.get("metrics", {}).get("recommended_promotion") == "promote_calibrated_residual_guard":
+            return "calibrated_guard_promoted_raw_predictor_candidate"
         return "learned_candidate_not_promoted"
     if name == "phase10_world_model_calibration":
+        if artifact.get("metrics", {}).get("phase10_recommended_promotion") == "promote_calibrated_residual_guard":
+            return "calibration_audit_promotes_guard_blocks_raw_predictor"
         return "calibration_audit_blocks_uncalibrated_world_model"
     if validation_mode in {"shadow_validation_harness", "fixture_or_frozen_harness", "frozen_mechanism_validation"}:
         return "not_default_requires_fresh_promotion"
@@ -219,15 +225,15 @@ def _claim_policy(
         )
     if name == "phase10_discrete_world_model":
         return (
-            "Outcome-only discrete graph-action world-model candidate improves original V3 on Phase9 heldout.",
-            ["replacement for retained hybrid", "strong calibrated task-world simulator"],
-            "Beat retained hybrid and beat base-rate calibration on leave-domain-out live traces.",
+            "Calibrated residual guard over the discrete graph-action world-model beats retained hybrid on Phase9 heldout.",
+            ["raw predictor replacement for retained hybrid", "strong calibrated task-world simulator"],
+            "Raw predictor must beat base-rate calibration before being promoted without the residual guard.",
         )
     if name == "phase10_world_model_calibration":
         return (
-            "Calibration audit separates calibrated profile selectors from positive-but-uncalibrated world-model candidates.",
-            ["production simulator", "permission to promote Phase10 without base-rate-beating calibration"],
-            "Phase10 must beat base-rate calibration and leave-domain-out non-regression before default promotion.",
+            "Calibration audit promotes the bounded residual guard while blocking raw uncalibrated world-model promotion.",
+            ["production simulator", "permission to promote raw Phase10 without base-rate-beating calibration"],
+            "Raw Phase10 must beat base-rate calibration and leave-domain-out non-regression before guard-free promotion.",
         )
     if name == "phase4_hypothesis_generator":
         return (

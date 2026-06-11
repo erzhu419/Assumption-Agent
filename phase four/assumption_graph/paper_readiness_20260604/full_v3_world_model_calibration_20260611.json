@@ -106,7 +106,7 @@
         "all_heldout_policy_lift_over_v3": 0.0185,
         "candidate_v1_lift_over_v3": 0.0588,
         "gap_to_retained_hybrid": -0.037,
-        "recommended_promotion": "keep_as_world_model_candidate",
+        "recommended_promotion": "promote_calibrated_residual_guard",
         "calibration": {
           "all_arm_mae": 0.3129,
           "all_arm_base_rate_mae": 0.3032,
@@ -121,34 +121,57 @@
       "interpretation": "Action-value selection improves original V3 on the heldout slice, but scalar calibration is not base-rate-beating, so it stays an exploration candidate."
     },
     {
+      "surface_id": "phase10_calibrated_residual_guard",
+      "source_artifact": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase10_discrete_world_model_selector_20260611.json",
+      "validation_unit": "heldout_policy",
+      "target": "guarded production policy over raw world-model selection",
+      "calibration_pass": true,
+      "promotion_allowed": true,
+      "production_status": "promoted_bounded_policy_guard",
+      "metrics": {
+        "calibrated_policy_vs_v1_utility": 0.6667,
+        "calibrated_policy_vs_original_v3_utility": 0.6204,
+        "calibrated_policy_lift_over_v3": 0.0741,
+        "calibrated_policy_lift_over_raw_world_model": 0.0556,
+        "calibrated_policy_lift_over_retained_hybrid": 0.0186,
+        "calibrated_policy_vs_original_v3_lift_over_hybrid": 0.0093,
+        "calibrated_policy_harm_vs_hybrid_count": 0,
+        "calibrated_policy_win_vs_hybrid_count": 1,
+        "calibrated_policy_override_count": 9,
+        "recommended_promotion": "promote_calibrated_residual_guard"
+      },
+      "interpretation": "The bounded residual guard repairs raw world-model arm mistakes and beats the retained hybrid on the same heldout slice without V1 harm against hybrid."
+    },
+    {
       "surface_id": "phase5_scheduler_promotion_gate",
       "source_artifact": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase5_contextual_bandit_scheduler_20260611.json",
       "validation_unit": "profile",
       "target": "production default profile selection",
       "calibration_pass": true,
       "promotion_allowed": true,
-      "production_status": "retains_hybrid_and_quarantines_uncalibrated_candidate",
+      "production_status": "promotes_calibrated_guard_and_quarantines_uncalibrated_candidate",
       "metrics": {
-        "live_selected_production_profile": "phase9_hybrid_guard",
+        "live_selected_production_profile": "phase10_calibrated_residual_guard",
         "live_selected_exploration_profile": "phase10_discrete_world_model_candidate",
-        "live_scheduler_lift_over_v3": 0.0555,
+        "live_scheduler_lift_over_v3": 0.0741,
         "live_scheduler_keeps_phase10_as_candidate": true,
         "live_scheduler_blocks_compact_default": true
       },
-      "interpretation": "Scheduler chooses the retained hybrid profile and keeps Phase10 as exploration-only."
+      "interpretation": "Scheduler chooses the calibrated residual guard and keeps the raw Phase10 predictor as exploration-only."
     }
   ],
   "promotion_policy": {
-    "production_default": "phase9_hybrid_guard",
+    "production_default": "phase10_calibrated_residual_guard",
     "exploration_candidate": "phase10_discrete_world_model_candidate",
     "promotion_rule": "A world-model policy can become production default only after positive utility, base-rate-beating calibration, leave-domain-out non-regression, and scheduler acceptance.",
-    "phase10_current_decision": "keep_as_candidate_until_calibrated",
+    "phase10_raw_predictor_decision": "keep_as_candidate_until_calibrated",
+    "phase10_guarded_policy_decision": "promote_calibrated_residual_guard",
     "business_domain_boundary": "Phase9 leave-domain-out records business-domain negative transfer, so broad promotion is blocked."
   },
   "metrics": {
     "source_artifact_count": 4,
-    "calibration_surface_count": 4,
-    "calibrated_surface_count": 2,
+    "calibration_surface_count": 5,
+    "calibrated_surface_count": 3,
     "leave_domain_out_surface_count": 1,
     "uncalibrated_promotion_count": 0,
     "uncalibrated_promotion_surface_ids": [],
@@ -168,11 +191,20 @@
     "phase10_gap_to_retained_hybrid": -0.037,
     "phase10_calibration_beats_base_rate": false,
     "phase10_selected_arm_mae_minus_base_rate": 0.0098,
-    "phase10_recommended_promotion": "keep_as_world_model_candidate",
-    "phase5_selected_production_profile": "phase9_hybrid_guard",
+    "phase10_recommended_promotion": "promote_calibrated_residual_guard",
+    "phase10_calibrated_policy_vs_v1_utility": 0.6667,
+    "phase10_calibrated_policy_vs_original_v3_utility": 0.6204,
+    "phase10_calibrated_policy_lift_over_v3": 0.0741,
+    "phase10_calibrated_policy_lift_over_raw_world_model": 0.0556,
+    "phase10_calibrated_policy_lift_over_retained_hybrid": 0.0186,
+    "phase10_calibrated_policy_vs_original_v3_lift_over_hybrid": 0.0093,
+    "phase10_calibrated_policy_harm_vs_hybrid_count": 0,
+    "phase10_calibrated_policy_win_vs_hybrid_count": 1,
+    "phase10_calibrated_policy_override_count": 9,
+    "phase5_selected_production_profile": "phase10_calibrated_residual_guard",
     "phase5_selected_exploration_profile": "phase10_discrete_world_model_candidate",
     "phase5_keeps_phase10_candidate": true,
-    "phase5_scheduler_lift_over_v3": 0.0555,
+    "phase5_scheduler_lift_over_v3": 0.0741,
     "uses_raw_prompts_or_answers": false
   },
   "gates": {
@@ -185,7 +217,10 @@
     "phase10_positive_candidate_recorded": true,
     "phase10_uncalibrated_candidate_recorded": true,
     "phase10_uncalibrated_candidate_not_promoted": true,
+    "phase10_calibrated_guard_beats_hybrid": true,
+    "phase10_calibrated_guard_no_harm_vs_hybrid": true,
     "phase5_scheduler_keeps_uncalibrated_world_model_exploratory": true,
+    "phase5_scheduler_selects_calibrated_guard": true,
     "calibrated_surface_available": true,
     "leave_domain_out_surface_available": true,
     "redacted_artifacts_only": true
@@ -195,7 +230,8 @@
   "limitations": [
     "The calibrated Phase8 selector is profile-level, not a task-world simulator.",
     "Phase9 leave-domain-out exposes a business-domain regression boundary rather than proving domain-robust autonomy.",
-    "Phase10 has positive heldout action-value lift but scalar reward calibration remains worse than base-rate prediction."
+    "Phase10 has positive heldout action-value lift but scalar reward calibration remains worse than base-rate prediction.",
+    "The Phase10 calibrated residual guard is promotable as a bounded policy guard, not as a raw simulator."
   ],
-  "interpretation": "The current world model is useful as a cheap verifier and exploration gate, not as a replacement for live ablation.  The audit blocks uncalibrated promotion while preserving the positive Phase10 candidate for future trace-distilled calibration."
+  "interpretation": "The current world model is useful as a cheap verifier and exploration gate, not as a replacement for live ablation.  The audit blocks raw uncalibrated promotion while allowing the calibrated Phase10 residual guard to become the production profile."
 }

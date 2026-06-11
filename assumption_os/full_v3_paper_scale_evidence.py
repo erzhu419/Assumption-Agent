@@ -172,6 +172,8 @@ def build_full_v3_paper_scale_evidence_payload(
                 "live_scheduler_blocks_compact_default",
                 "live_scheduler_keeps_phase10_as_candidate",
                 "live_scheduler_uses_raw_prompts_or_answers",
+                "live_scheduler_calibrated_guard_lift_over_hybrid",
+                "live_scheduler_calibrated_guard_vs_original_v3_lift_over_hybrid",
             ],
         ),
         "phase9_compact_frame_guard": _metric_subset(
@@ -211,6 +213,15 @@ def build_full_v3_paper_scale_evidence_payload(
                 "all_heldout_policy_vs_v1_utility",
                 "all_heldout_policy_lift_over_v3",
                 "all_heldout_policy_vs_original_v3_utility",
+                "calibrated_policy_vs_v1_utility",
+                "calibrated_policy_vs_original_v3_utility",
+                "calibrated_policy_lift_over_v3",
+                "calibrated_policy_lift_over_raw_world_model",
+                "calibrated_policy_lift_over_retained_hybrid",
+                "calibrated_policy_vs_original_v3_lift_over_hybrid",
+                "calibrated_policy_harm_vs_hybrid_count",
+                "calibrated_policy_win_vs_hybrid_count",
+                "calibrated_policy_override_count",
                 "retained_hybrid_vs_v1_utility",
                 "learned_gap_to_retained_hybrid",
                 "recommended_promotion",
@@ -233,6 +244,15 @@ def build_full_v3_paper_scale_evidence_payload(
                 "phase10_all_lift_over_v3",
                 "phase10_calibration_beats_base_rate",
                 "phase10_selected_arm_mae_minus_base_rate",
+                "phase10_calibrated_policy_vs_v1_utility",
+                "phase10_calibrated_policy_vs_original_v3_utility",
+                "phase10_calibrated_policy_lift_over_v3",
+                "phase10_calibrated_policy_lift_over_raw_world_model",
+                "phase10_calibrated_policy_lift_over_retained_hybrid",
+                "phase10_calibrated_policy_vs_original_v3_lift_over_hybrid",
+                "phase10_calibrated_policy_harm_vs_hybrid_count",
+                "phase10_calibrated_policy_win_vs_hybrid_count",
+                "phase10_calibrated_policy_override_count",
                 "phase5_keeps_phase10_candidate",
                 "uses_raw_prompts_or_answers",
             ],
@@ -325,10 +345,13 @@ def build_full_v3_paper_scale_evidence_payload(
         "live_residual_clusterer_emits_next_seeds": metrics["live_residual_next_generation_seed_count"] >= 15,
         "live_residual_clusterer_redacted": metrics["live_residual_uses_raw_prompts_or_answers"] is False,
         "phase5_live_scheduler_realified": metrics["phase5_live_profile_count"] >= 7,
-        "phase5_live_scheduler_selects_hybrid": (
-            metrics["phase5_live_selected_production_profile"] == "phase9_hybrid_guard"
+        "phase5_live_scheduler_selects_calibrated_guard": (
+            metrics["phase5_live_selected_production_profile"] == "phase10_calibrated_residual_guard"
         ),
-        "phase5_live_scheduler_improves_v3": metrics["phase5_live_scheduler_lift_over_v3"] >= 0.05,
+        "phase5_live_scheduler_improves_v3": metrics["phase5_live_scheduler_lift_over_v3"] >= 0.07,
+        "phase5_live_scheduler_improves_hybrid": (
+            metrics["phase5_live_calibrated_guard_lift_over_hybrid"] > 0.0
+        ),
         "phase5_live_scheduler_keeps_phase10_candidate": metrics["phase5_live_keeps_phase10_candidate"] is True,
         "phase5_live_scheduler_blocks_compact_default": metrics["phase5_live_blocks_compact_default"] is True,
         "phase5_live_scheduler_redacted": metrics["phase5_live_uses_raw_prompts_or_answers"] is False,
@@ -343,11 +366,17 @@ def build_full_v3_paper_scale_evidence_payload(
         "phase10_discrete_world_model_candidate_v1_positive": (
             metrics["phase10_world_model_candidate_v1_lift_over_v3"] > 0.04
         ),
-        "phase10_discrete_world_model_keeps_hybrid_when_weaker": (
-            metrics["phase10_world_model_recommended_promotion"] == "keep_as_world_model_candidate"
+        "phase10_calibrated_guard_beats_hybrid": (
+            metrics["phase10_world_model_calibrated_lift_over_hybrid"] > 0.0
+        ),
+        "phase10_raw_predictor_still_marked_uncalibrated": (
+            metrics["phase10_world_model_calibration_beats_base_rate"] is False
+        ),
+        "phase10_promotion_is_guarded": (
+            metrics["phase10_world_model_recommended_promotion"] == "promote_calibrated_residual_guard"
         ),
         "world_model_calibration_artifact_passes": metrics["world_model_calibration_surface_count"] >= 4,
-        "world_model_calibrated_surface_available": metrics["world_model_calibrated_surface_count"] >= 2,
+        "world_model_calibrated_surface_available": metrics["world_model_calibrated_surface_count"] >= 3,
         "world_model_leave_domain_out_records_boundary": (
             metrics["world_model_leave_domain_out_domain_count"] >= 3
             and metrics["world_model_leave_domain_out_nonnegative_domain_count"]
@@ -361,15 +390,21 @@ def build_full_v3_paper_scale_evidence_payload(
             metrics["world_model_phase10_all_lift_over_v3"] >= 0.015
             and metrics["world_model_phase5_keeps_phase10_candidate"] is True
         ),
+        "world_model_guarded_policy_promoted": (
+            metrics["world_model_phase10_calibrated_lift_over_hybrid"] > 0.0
+            and metrics["world_model_phase10_calibrated_harm_vs_hybrid_count"] == 0
+        ),
         "world_model_calibration_redacted": metrics["world_model_uses_raw_prompts_or_answers"] is False,
         "phase11_capability_audit_passes": metrics["phase11_artifact_pass_rate"] == 1.0,
         "phase11_outer_shells_not_overclaimed": metrics["phase11_outer_shell_production_claim_count"] == 0,
         "phase11_phase7_bounded_daemon_recorded": (
             metrics["phase11_phase7_status"] == "bounded_production_queue_daemon_not_unbounded_background"
         ),
-        "phase11_phase10_remains_candidate": metrics["phase11_phase10_status"] == "learned_candidate_not_promoted",
+        "phase11_phase10_guard_promoted_raw_candidate": (
+            metrics["phase11_phase10_status"] == "calibrated_guard_promoted_raw_predictor_candidate"
+        ),
         "phase11_world_model_calibration_status_recorded": (
-            metrics["phase11_phase10_calibration_status"] == "calibration_audit_blocks_uncalibrated_world_model"
+            metrics["phase11_phase10_calibration_status"] == "calibration_audit_promotes_guard_blocks_raw_predictor"
         ),
         "prompt_answer_and_secret_free": metrics["prompt_answer_payload_stored"] is False and metrics["secret_leak_detected"] is False,
         "boundary_cases_recorded": metrics["boundary_case_count"] >= 1,
@@ -406,13 +441,13 @@ def build_full_v3_paper_scale_evidence_payload(
             "cue-level hybrid guard that beats V1 on the heldout slice without regressing against original V3.  The "
             "live residual clusterer now unifies formal, live, creative, and profile-level residual evidence and emits "
             "next-generation proposal seeds while marking the largest same-batch residual as resolved by Phase9.  Phase5 "
-            "now adds a live-derived contextual scheduler that selects that retained hybrid profile, keeps the weaker "
-            "world-model selector as exploration, and blocks over-structured compact framing as a default.  Phase7 "
+            "now adds a live-derived contextual scheduler that selects the Phase10 calibrated residual guard, keeps the "
+            "raw world-model selector as exploration, and blocks over-structured compact framing as a default.  Phase7 "
             "now validates the real bounded daemon path over committed preflight queues, with manifests, pre-live "
             "budget screening, and closed execute/apply gates.  The "
-            "world-model calibration audit now records the useful but uncalibrated Phase10 selector as "
-            "exploration-only, preserves the calibrated Phase8 profile selector, and reports the Phase9 "
-            "leave-domain-out business boundary instead of overclaiming a simulator.  The "
+            "world-model calibration audit now records the useful but uncalibrated raw Phase10 selector as "
+            "exploration-only, promotes only the bounded calibrated residual guard, preserves the calibrated Phase8 "
+            "profile selector, and reports the Phase9 leave-domain-out business boundary instead of overclaiming a simulator.  The "
             "fresh reruns are positive but intentionally reported as small-effect safety/abstention validations, "
             "not as the main paper claim."
         ),
@@ -819,6 +854,14 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "phase5_live_uses_raw_prompts_or_answers": bool(
             artifacts["v3_phase5_bandit"]["metrics"]["live_scheduler_uses_raw_prompts_or_answers"]
         ),
+        "phase5_live_calibrated_guard_lift_over_hybrid": float(
+            artifacts["v3_phase5_bandit"]["metrics"]["live_scheduler_calibrated_guard_lift_over_hybrid"]
+        ),
+        "phase5_live_calibrated_guard_vs_original_v3_lift_over_hybrid": float(
+            artifacts["v3_phase5_bandit"]["metrics"][
+                "live_scheduler_calibrated_guard_vs_original_v3_lift_over_hybrid"
+            ]
+        ),
         "phase9_compact_guard_active_case_count": int(
             artifacts["v3_phase9_compact_frame_guard"]["metrics"]["active_case_count"]
         ),
@@ -882,6 +925,35 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "phase10_world_model_all_lift_over_v3": float(
             artifacts["v3_phase10_discrete_world_model"]["metrics"]["all_heldout_policy_lift_over_v3"]
         ),
+        "phase10_world_model_calibrated_vs_v1_utility": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["calibrated_policy_vs_v1_utility"]
+        ),
+        "phase10_world_model_calibrated_vs_original_v3_utility": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["calibrated_policy_vs_original_v3_utility"]
+        ),
+        "phase10_world_model_calibrated_lift_over_v3": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["calibrated_policy_lift_over_v3"]
+        ),
+        "phase10_world_model_calibrated_lift_over_raw": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["calibrated_policy_lift_over_raw_world_model"]
+        ),
+        "phase10_world_model_calibrated_lift_over_hybrid": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["calibrated_policy_lift_over_retained_hybrid"]
+        ),
+        "phase10_world_model_calibrated_vs_original_v3_lift_over_hybrid": float(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"][
+                "calibrated_policy_vs_original_v3_lift_over_hybrid"
+            ]
+        ),
+        "phase10_world_model_calibrated_harm_vs_hybrid_count": int(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["calibrated_policy_harm_vs_hybrid_count"]
+        ),
+        "phase10_world_model_calibrated_win_vs_hybrid_count": int(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["calibrated_policy_win_vs_hybrid_count"]
+        ),
+        "phase10_world_model_calibrated_override_count": int(
+            artifacts["v3_phase10_discrete_world_model"]["metrics"]["calibrated_policy_override_count"]
+        ),
         "phase10_world_model_gap_to_hybrid": float(
             artifacts["v3_phase10_discrete_world_model"]["metrics"]["learned_gap_to_retained_hybrid"]
         ),
@@ -929,6 +1001,35 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         ),
         "world_model_phase10_selected_arm_mae_minus_base_rate": float(
             artifacts["v3_world_model_calibration"]["metrics"]["phase10_selected_arm_mae_minus_base_rate"]
+        ),
+        "world_model_phase10_calibrated_vs_v1_utility": float(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase10_calibrated_policy_vs_v1_utility"]
+        ),
+        "world_model_phase10_calibrated_vs_original_v3_utility": float(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase10_calibrated_policy_vs_original_v3_utility"]
+        ),
+        "world_model_phase10_calibrated_lift_over_v3": float(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase10_calibrated_policy_lift_over_v3"]
+        ),
+        "world_model_phase10_calibrated_lift_over_raw": float(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase10_calibrated_policy_lift_over_raw_world_model"]
+        ),
+        "world_model_phase10_calibrated_lift_over_hybrid": float(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase10_calibrated_policy_lift_over_retained_hybrid"]
+        ),
+        "world_model_phase10_calibrated_vs_original_v3_lift_over_hybrid": float(
+            artifacts["v3_world_model_calibration"]["metrics"][
+                "phase10_calibrated_policy_vs_original_v3_lift_over_hybrid"
+            ]
+        ),
+        "world_model_phase10_calibrated_harm_vs_hybrid_count": int(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase10_calibrated_policy_harm_vs_hybrid_count"]
+        ),
+        "world_model_phase10_calibrated_win_vs_hybrid_count": int(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase10_calibrated_policy_win_vs_hybrid_count"]
+        ),
+        "world_model_phase10_calibrated_override_count": int(
+            artifacts["v3_world_model_calibration"]["metrics"]["phase10_calibrated_policy_override_count"]
         ),
         "world_model_phase5_keeps_phase10_candidate": bool(
             artifacts["v3_world_model_calibration"]["metrics"]["phase5_keeps_phase10_candidate"]

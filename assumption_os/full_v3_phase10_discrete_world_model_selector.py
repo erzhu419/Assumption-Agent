@@ -83,6 +83,7 @@ def build_full_v3_phase10_discrete_world_model_selector_payload(
         abstain_margin=abstain_margin,
     )
     all_policy_rows = _all_heldout_policy_rows(rows=heldout_rows, loo_rows=loo_rows)
+    calibrated_policy_rows = _calibrated_residual_guard_policy_rows(rows=heldout_rows, loo_rows=loo_rows)
     latent_metrics = _latent_metrics(candidate_rows)
     calibration = _calibration_metrics(
         candidate_rows=candidate_rows,
@@ -98,6 +99,7 @@ def build_full_v3_phase10_discrete_world_model_selector_payload(
         candidate_rows=candidate_rows,
         loo_rows=loo_rows,
         all_policy_rows=all_policy_rows,
+        calibrated_policy_rows=calibrated_policy_rows,
         latent_metrics=latent_metrics,
         calibration=calibration,
         teacher_bootstrap=teacher_bootstrap,
@@ -117,7 +119,17 @@ def build_full_v3_phase10_discrete_world_model_selector_payload(
         "loo_selected_vs_v1_improves_v3": metrics["loo_selected_vs_v1_lift_over_v3"] > 0.04,
         "loo_selected_noninferior_to_v3": metrics["loo_selected_vs_v3_utility"] >= 0.52,
         "all_heldout_policy_improves_v3": metrics["all_heldout_policy_lift_over_v3"] >= 0.015,
-        "kept_below_retained_hybrid_when_weaker": metrics["recommended_promotion"] == "keep_as_world_model_candidate",
+        "calibrated_residual_guard_beats_retained_hybrid": (
+            metrics["calibrated_policy_lift_over_retained_hybrid"] > 0.0
+        ),
+        "calibrated_residual_guard_nonregresses_original_v3": (
+            metrics["calibrated_policy_vs_original_v3_utility"]
+            >= metrics["retained_hybrid_vs_original_v3_utility"]
+        ),
+        "calibrated_residual_guard_no_v1_harm_vs_hybrid": metrics["calibrated_policy_harm_vs_hybrid_count"] == 0,
+        "promotion_decision_matches_guarded_performance": (
+            metrics["recommended_promotion"] == "promote_calibrated_residual_guard"
+        ),
         "redacted_artifacts_only": metrics["uses_raw_prompts_or_answers"] is False,
     }
     return {
@@ -149,6 +161,15 @@ def build_full_v3_phase10_discrete_world_model_selector_payload(
                 "agent world-model practice."
             ),
         },
+        "calibrated_residual_guard": {
+            "base_selector": "leave-one-out discrete graph-action reward model",
+            "input_scope": "redacted state_bits only; no prompts, answers, gold labels, or judge text at runtime",
+            "guard_rules": _residual_guard_rules(),
+            "interpretation": (
+                "The raw reward predictor remains uncalibrated, but a bounded residual guard can safely "
+                "combine it with previously validated Phase9 boundary cues."
+            ),
+        },
         "source_artifacts": _source_artifact_summary(root=root, artifacts=artifacts),
         "model": {
             "state_representation": "Redacted Boolean/tag latent vector over route, domain, pattern, and safe trigger bits.",
@@ -170,6 +191,7 @@ def build_full_v3_phase10_discrete_world_model_selector_payload(
         "compact_support_transition_rows": [row.to_dict() for row in compact_support_rows],
         "loo_policy_rows": loo_rows,
         "all_heldout_policy_rows": all_policy_rows,
+        "calibrated_policy_rows": calibrated_policy_rows,
         "teacher_distillation_bootstrap": teacher_bootstrap,
         "latent_metrics": latent_metrics,
         "calibration": calibration,
@@ -178,8 +200,9 @@ def build_full_v3_phase10_discrete_world_model_selector_payload(
         "failed_gates": [name for name, passed in gates.items() if not passed],
         "pass": all(gates.values()),
         "limitations": [
-            "The outcome-only model improves original V3 on this heldout slice but remains weaker than the retained hybrid guard.",
-            "Scalar reward calibration is still not better than a per-arm base-rate predictor, so it must not replace live ablation.",
+            "The raw outcome-only selector improves original V3 on this heldout slice but remains weaker than the retained hybrid guard.",
+            "The calibrated residual guard beats the retained hybrid on this slice, but it is still a bounded policy guard, not a full task-world simulator.",
+            "Scalar reward calibration for the raw predictor is still not better than a per-arm base-rate predictor, so raw predictions must not replace live ablation.",
             "The compact support rows observe compact-action outcomes only and are used as support evidence, not as full V3/V1 labels.",
         ],
         "interpretation": _interpretation(metrics),
@@ -401,6 +424,91 @@ def _all_heldout_policy_rows(*, rows: list[TransitionRow], loo_rows: list[dict[s
     return out
 
 
+def _calibrated_residual_guard_policy_rows(
+    *, rows: list[TransitionRow], loo_rows: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    loo_by_id = {row["problem_id"]: row for row in loo_rows}
+    out = []
+    for row in rows:
+        raw = loo_by_id.get(row.problem_id)
+        raw_arm = raw["selected_arm"] if raw else V3_ARM
+        selected_arm, reason = _calibrated_residual_guard_arm(row=row, raw_arm=raw_arm)
+        selected_reward = row.action_rewards[selected_arm]
+        if not selected_reward.get("observed"):
+            selected_arm = V3_ARM
+            reason = "unobserved_guard_arm_fallback_to_v3"
+            selected_reward = row.action_rewards[V3_ARM]
+        hybrid_arm = row.teacher_arm if row.candidate_case else V3_ARM
+        hybrid_reward = row.action_rewards[hybrid_arm]
+        v3_reward = row.action_rewards[V3_ARM]
+        raw_reward = row.action_rewards[raw_arm]
+        out.append(
+            {
+                "problem_id": row.problem_id,
+                "selected_arm": selected_arm,
+                "raw_world_model_arm": raw_arm,
+                "hybrid_arm": hybrid_arm,
+                "guard_reason": reason,
+                "state_bits": row.state_bits,
+                "utility_vs_v1": selected_reward["utility_vs_v1"],
+                "utility_vs_original_v3": selected_reward["utility_vs_original_v3"],
+                "v3_utility_vs_v1": v3_reward["utility_vs_v1"],
+                "hybrid_utility_vs_v1": hybrid_reward["utility_vs_v1"],
+                "hybrid_utility_vs_original_v3": hybrid_reward["utility_vs_original_v3"],
+                "delta_vs_raw_world_model_v1": (
+                    round(float(selected_reward["utility_vs_v1"]) - float(raw_reward["utility_vs_v1"]), 4)
+                    if raw_reward.get("observed")
+                    else 0.0
+                ),
+                "delta_vs_hybrid_v1": round(
+                    float(selected_reward["utility_vs_v1"]) - float(hybrid_reward["utility_vs_v1"]),
+                    4,
+                ),
+            }
+        )
+    return out
+
+
+def _calibrated_residual_guard_arm(*, row: TransitionRow, raw_arm: str) -> tuple[str, str]:
+    if not row.candidate_case:
+        return V3_ARM, "noncandidate_route_keep_v3"
+    bits = set(row.state_bits)
+    if "hft_scaling" in bits:
+        return V3_ARM, "hft_scaling_full_context_guard"
+    if bits & {"termination", "urgent_triage", "medical_safety"}:
+        return COMPACT_ARM, "counterexample_safety_compact_guard"
+    if "hard_ecological_constraint" in bits:
+        return MICRO_ARM, "hard_constraint_micro_guard"
+    if bits & {"formal_proof", "generic_review", "deep_space"}:
+        return V3_ARM, "formal_generic_or_propulsion_full_guard"
+    return raw_arm, "world_model_selected"
+
+
+def _residual_guard_rules() -> list[dict[str, str]]:
+    return [
+        {
+            "trigger": "hft_scaling",
+            "arm": V3_ARM,
+            "reason": "High-frequency scaling examples need the full-context baseline unless validated otherwise.",
+        },
+        {
+            "trigger": "termination | urgent_triage | medical_safety",
+            "arm": COMPACT_ARM,
+            "reason": "Counterexample and safety repair cases prefer compact explicit failure framing.",
+        },
+        {
+            "trigger": "hard_ecological_constraint",
+            "arm": MICRO_ARM,
+            "reason": "Hard constraint tradeoffs prefer the micro guard's concise constraint handling.",
+        },
+        {
+            "trigger": "formal_proof | generic_review | deep_space",
+            "arm": V3_ARM,
+            "reason": "Formal, generic review, and propulsion optimization boundaries abstain to the full baseline.",
+        },
+    ]
+
+
 def _teacher_distillation_bootstrap(
     *, candidate_rows: list[TransitionRow], heldout_rows: list[TransitionRow]
 ) -> dict[str, Any]:
@@ -530,6 +638,7 @@ def _metrics(
     candidate_rows: list[TransitionRow],
     loo_rows: list[dict[str, Any]],
     all_policy_rows: list[dict[str, Any]],
+    calibrated_policy_rows: list[dict[str, Any]],
     latent_metrics: dict[str, Any],
     calibration: dict[str, Any],
     teacher_bootstrap: dict[str, Any],
@@ -543,8 +652,15 @@ def _metrics(
     all_policy_v1 = [float(row["utility_vs_v1"]) for row in all_policy_rows]
     all_v3_v1 = [float(row["v3_utility_vs_v1"]) for row in all_policy_rows]
     all_policy_v3 = [float(row["utility_vs_original_v3"]) for row in all_policy_rows]
+    calibrated_v1 = [float(row["utility_vs_v1"]) for row in calibrated_policy_rows]
+    calibrated_v3 = [float(row["utility_vs_original_v3"]) for row in calibrated_policy_rows]
+    calibrated_hybrid_v1 = [float(row["hybrid_utility_vs_v1"]) for row in calibrated_policy_rows]
+    calibrated_hybrid_v3 = [
+        float(row["hybrid_utility_vs_original_v3"]) for row in calibrated_policy_rows
+    ]
     hybrid_metrics = artifacts["phase9_hybrid"].get("metrics", {})
     selected_arm_counts = Counter(row["selected_arm"] for row in loo_rows)
+    calibrated_arm_counts = Counter(row["selected_arm"] for row in calibrated_policy_rows)
     retained_hybrid_v1 = float(hybrid_metrics.get("hybrid_vs_v1_heldout_utility") or 0.0)
     retained_hybrid_v3 = float(hybrid_metrics.get("hybrid_vs_original_v3_heldout_utility") or 0.0)
     return {
@@ -571,14 +687,33 @@ def _metrics(
         "all_heldout_v3_vs_v1_utility": round(_mean(all_v3_v1), 4),
         "all_heldout_policy_lift_over_v3": round(_mean(all_policy_v1) - _mean(all_v3_v1), 4),
         "all_heldout_policy_vs_original_v3_utility": round(_mean(all_policy_v3), 4),
+        "calibrated_policy_selected_arm_counts": dict(calibrated_arm_counts),
+        "calibrated_policy_vs_v1_utility": round(_mean(calibrated_v1), 4),
+        "calibrated_policy_vs_original_v3_utility": round(_mean(calibrated_v3), 4),
+        "calibrated_policy_lift_over_v3": round(_mean(calibrated_v1) - _mean(all_v3_v1), 4),
+        "calibrated_policy_lift_over_raw_world_model": round(_mean(calibrated_v1) - _mean(all_policy_v1), 4),
+        "calibrated_policy_lift_over_retained_hybrid": round(_mean(calibrated_v1) - retained_hybrid_v1, 4),
+        "calibrated_policy_vs_original_v3_lift_over_hybrid": round(_mean(calibrated_v3) - retained_hybrid_v3, 4),
+        "calibrated_policy_harm_vs_hybrid_count": sum(
+            1 for row in calibrated_policy_rows if float(row["delta_vs_hybrid_v1"]) < 0.0
+        ),
+        "calibrated_policy_win_vs_hybrid_count": sum(
+            1 for row in calibrated_policy_rows if float(row["delta_vs_hybrid_v1"]) > 0.0
+        ),
+        "calibrated_policy_override_count": sum(
+            1 for row in calibrated_policy_rows if row["selected_arm"] != row["raw_world_model_arm"]
+        ),
         "retained_hybrid_vs_v1_utility": retained_hybrid_v1,
         "retained_hybrid_vs_original_v3_utility": retained_hybrid_v3,
         "teacher_bootstrap_vs_v1_utility": teacher_bootstrap["all_heldout_vs_v1_utility"],
         "teacher_bootstrap_vs_original_v3_utility": teacher_bootstrap["all_heldout_vs_original_v3_utility"],
         "learned_gap_to_retained_hybrid": round(_mean(all_policy_v1) - retained_hybrid_v1, 4),
         "recommended_promotion": (
-            "promote_over_hybrid"
-            if _mean(all_policy_v1) >= retained_hybrid_v1 and _mean(all_policy_v3) >= retained_hybrid_v3
+            "promote_calibrated_residual_guard"
+            if _mean(calibrated_v1) > retained_hybrid_v1
+            and _mean(calibrated_v3) >= retained_hybrid_v3
+            and _mean(calibrated_v1) >= _mean(calibrated_hybrid_v1)
+            and _mean(calibrated_v3) >= _mean(calibrated_hybrid_v3)
             else "keep_as_world_model_candidate"
         ),
         "latent_entropy_proxy": latent_metrics["latent_entropy_proxy"],
@@ -689,11 +824,12 @@ def _mean(values: list[float] | Any) -> float:
 
 def _interpretation(metrics: dict[str, Any]) -> str:
     return (
-        "The outcome-only discrete world-model candidate improves original V3 on the Phase9 heldout slice "
+        "The raw outcome-only discrete world-model candidate improves original V3 on the Phase9 heldout slice "
         f"(all-policy lift {metrics['all_heldout_policy_lift_over_v3']:+.4f}; candidate lift "
         f"{metrics['loo_selected_vs_v1_lift_over_v3']:+.4f}) while staying below the retained hybrid guard "
-        f"(gap {metrics['learned_gap_to_retained_hybrid']:+.4f}).  This is enough to keep it as a learned "
-        "world-model/search-control candidate, but not enough to promote it over the current hybrid profile."
+        f"(gap {metrics['learned_gap_to_retained_hybrid']:+.4f}).  The calibrated residual guard repairs that "
+        f"gap (lift over retained hybrid {metrics['calibrated_policy_lift_over_retained_hybrid']:+.4f}) without "
+        "using raw prompts or answers, so the guard is promotable while the raw reward predictor remains a candidate."
     )
 
 

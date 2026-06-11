@@ -56,6 +56,7 @@ def build_full_v3_world_model_calibration_payload(
         _phase8_profile_surface(artifacts["phase8_creativity_world_coverage"]),
         _phase9_leave_domain_surface(artifacts["phase9_v1_leave_domain_out"]),
         _phase10_action_value_surface(artifacts["phase10_discrete_world_model"]),
+        _phase10_calibrated_guard_surface(artifacts["phase10_discrete_world_model"]),
         _phase5_promotion_surface(artifacts["phase5_contextual_scheduler"]),
     ]
     metrics = _metrics(artifacts=artifacts, surfaces=surfaces)
@@ -71,10 +72,19 @@ def build_full_v3_world_model_calibration_payload(
         "phase10_positive_candidate_recorded": metrics["phase10_all_lift_over_v3"] >= 0.015,
         "phase10_uncalibrated_candidate_recorded": metrics["phase10_calibration_beats_base_rate"] is False,
         "phase10_uncalibrated_candidate_not_promoted": metrics["uncalibrated_promotion_count"] == 0,
+        "phase10_calibrated_guard_beats_hybrid": metrics[
+            "phase10_calibrated_policy_lift_over_retained_hybrid"
+        ] > 0.0,
+        "phase10_calibrated_guard_no_harm_vs_hybrid": (
+            metrics["phase10_calibrated_policy_harm_vs_hybrid_count"] == 0
+        ),
         "phase5_scheduler_keeps_uncalibrated_world_model_exploratory": metrics[
             "phase5_keeps_phase10_candidate"
         ] is True,
-        "calibrated_surface_available": metrics["calibrated_surface_count"] >= 1,
+        "phase5_scheduler_selects_calibrated_guard": (
+            metrics["phase5_selected_production_profile"] == "phase10_calibrated_residual_guard"
+        ),
+        "calibrated_surface_available": metrics["calibrated_surface_count"] >= 3,
         "leave_domain_out_surface_available": metrics["leave_domain_out_surface_count"] >= 1,
         "redacted_artifacts_only": metrics["uses_raw_prompts_or_answers"] is False,
     }
@@ -92,13 +102,14 @@ def build_full_v3_world_model_calibration_payload(
         "source_artifacts": _source_summary(root=root, artifacts=artifacts),
         "calibration_surfaces": [surface.to_dict() for surface in surfaces],
         "promotion_policy": {
-            "production_default": "phase9_hybrid_guard",
+            "production_default": "phase10_calibrated_residual_guard",
             "exploration_candidate": "phase10_discrete_world_model_candidate",
             "promotion_rule": (
                 "A world-model policy can become production default only after positive utility, "
                 "base-rate-beating calibration, leave-domain-out non-regression, and scheduler acceptance."
             ),
-            "phase10_current_decision": "keep_as_candidate_until_calibrated",
+            "phase10_raw_predictor_decision": "keep_as_candidate_until_calibrated",
+            "phase10_guarded_policy_decision": "promote_calibrated_residual_guard",
             "business_domain_boundary": "Phase9 leave-domain-out records business-domain negative transfer, so broad promotion is blocked.",
         },
         "metrics": metrics,
@@ -109,11 +120,12 @@ def build_full_v3_world_model_calibration_payload(
             "The calibrated Phase8 selector is profile-level, not a task-world simulator.",
             "Phase9 leave-domain-out exposes a business-domain regression boundary rather than proving domain-robust autonomy.",
             "Phase10 has positive heldout action-value lift but scalar reward calibration remains worse than base-rate prediction.",
+            "The Phase10 calibrated residual guard is promotable as a bounded policy guard, not as a raw simulator.",
         ],
         "interpretation": (
             "The current world model is useful as a cheap verifier and exploration gate, not as a replacement "
-            "for live ablation.  The audit blocks uncalibrated promotion while preserving the positive Phase10 "
-            "candidate for future trace-distilled calibration."
+            "for live ablation.  The audit blocks raw uncalibrated promotion while allowing the calibrated "
+            "Phase10 residual guard to become the production profile."
         ),
     }
 
@@ -207,18 +219,61 @@ def _phase10_action_value_surface(payload: dict[str, Any]) -> CalibrationSurface
     )
 
 
+def _phase10_calibrated_guard_surface(payload: dict[str, Any]) -> CalibrationSurface:
+    metrics = payload.get("metrics", {})
+    lift_over_hybrid = float(metrics.get("calibrated_policy_lift_over_retained_hybrid") or 0.0)
+    no_harm = int(metrics.get("calibrated_policy_harm_vs_hybrid_count") or 0) == 0
+    promoted = metrics.get("recommended_promotion") == "promote_calibrated_residual_guard"
+    calibration_pass = promoted and no_harm and lift_over_hybrid > 0.0
+    return CalibrationSurface(
+        surface_id="phase10_calibrated_residual_guard",
+        source_artifact=str(PHASE10_ARTIFACT),
+        validation_unit="heldout_policy",
+        target="guarded production policy over raw world-model selection",
+        calibration_pass=calibration_pass,
+        promotion_allowed=calibration_pass,
+        production_status="promoted_bounded_policy_guard",
+        metrics={
+            "calibrated_policy_vs_v1_utility": float(metrics.get("calibrated_policy_vs_v1_utility") or 0.0),
+            "calibrated_policy_vs_original_v3_utility": float(
+                metrics.get("calibrated_policy_vs_original_v3_utility") or 0.0
+            ),
+            "calibrated_policy_lift_over_v3": float(metrics.get("calibrated_policy_lift_over_v3") or 0.0),
+            "calibrated_policy_lift_over_raw_world_model": float(
+                metrics.get("calibrated_policy_lift_over_raw_world_model") or 0.0
+            ),
+            "calibrated_policy_lift_over_retained_hybrid": lift_over_hybrid,
+            "calibrated_policy_vs_original_v3_lift_over_hybrid": float(
+                metrics.get("calibrated_policy_vs_original_v3_lift_over_hybrid") or 0.0
+            ),
+            "calibrated_policy_harm_vs_hybrid_count": int(
+                metrics.get("calibrated_policy_harm_vs_hybrid_count") or 0
+            ),
+            "calibrated_policy_win_vs_hybrid_count": int(
+                metrics.get("calibrated_policy_win_vs_hybrid_count") or 0
+            ),
+            "calibrated_policy_override_count": int(metrics.get("calibrated_policy_override_count") or 0),
+            "recommended_promotion": metrics.get("recommended_promotion"),
+        },
+        interpretation=(
+            "The bounded residual guard repairs raw world-model arm mistakes and beats the retained hybrid "
+            "on the same heldout slice without V1 harm against hybrid."
+        ),
+    )
+
+
 def _phase5_promotion_surface(payload: dict[str, Any]) -> CalibrationSurface:
     metrics = payload.get("metrics", {})
     keeps_candidate = bool(metrics.get("live_scheduler_keeps_phase10_as_candidate"))
-    selects_hybrid = metrics.get("live_selected_production_profile") == "phase9_hybrid_guard"
+    selects_guard = metrics.get("live_selected_production_profile") == "phase10_calibrated_residual_guard"
     return CalibrationSurface(
         surface_id="phase5_scheduler_promotion_gate",
         source_artifact=str(PHASE5_ARTIFACT),
         validation_unit="profile",
         target="production default profile selection",
-        calibration_pass=keeps_candidate and selects_hybrid,
+        calibration_pass=keeps_candidate and selects_guard,
         promotion_allowed=True,
-        production_status="retains_hybrid_and_quarantines_uncalibrated_candidate",
+        production_status="promotes_calibrated_guard_and_quarantines_uncalibrated_candidate",
         metrics={
             "live_selected_production_profile": metrics.get("live_selected_production_profile"),
             "live_selected_exploration_profile": metrics.get("live_selected_exploration_profile"),
@@ -226,7 +281,7 @@ def _phase5_promotion_surface(payload: dict[str, Any]) -> CalibrationSurface:
             "live_scheduler_keeps_phase10_as_candidate": keeps_candidate,
             "live_scheduler_blocks_compact_default": bool(metrics.get("live_scheduler_blocks_compact_default")),
         },
-        interpretation="Scheduler chooses the retained hybrid profile and keeps Phase10 as exploration-only.",
+        interpretation="Scheduler chooses the calibrated residual guard and keeps the raw Phase10 predictor as exploration-only.",
     )
 
 
@@ -234,6 +289,7 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], surfaces: list[Calibration
     phase8 = next(surface for surface in surfaces if surface.surface_id == "phase8_quality_profile_world_model")
     phase9 = next(surface for surface in surfaces if surface.surface_id == "phase9_leave_domain_out_nonregression")
     phase10 = next(surface for surface in surfaces if surface.surface_id == "phase10_discrete_graph_action_world_model")
+    phase10_guard = next(surface for surface in surfaces if surface.surface_id == "phase10_calibrated_residual_guard")
     phase5 = next(surface for surface in surfaces if surface.surface_id == "phase5_scheduler_promotion_gate")
     uncalibrated_promotions = [
         surface.surface_id
@@ -264,6 +320,27 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], surfaces: list[Calibration
         "phase10_calibration_beats_base_rate": phase10.metrics["calibration_beats_base_rate"],
         "phase10_selected_arm_mae_minus_base_rate": phase10.metrics["selected_arm_mae_minus_base_rate"],
         "phase10_recommended_promotion": phase10.metrics["recommended_promotion"],
+        "phase10_calibrated_policy_vs_v1_utility": phase10_guard.metrics["calibrated_policy_vs_v1_utility"],
+        "phase10_calibrated_policy_vs_original_v3_utility": phase10_guard.metrics[
+            "calibrated_policy_vs_original_v3_utility"
+        ],
+        "phase10_calibrated_policy_lift_over_v3": phase10_guard.metrics["calibrated_policy_lift_over_v3"],
+        "phase10_calibrated_policy_lift_over_raw_world_model": phase10_guard.metrics[
+            "calibrated_policy_lift_over_raw_world_model"
+        ],
+        "phase10_calibrated_policy_lift_over_retained_hybrid": phase10_guard.metrics[
+            "calibrated_policy_lift_over_retained_hybrid"
+        ],
+        "phase10_calibrated_policy_vs_original_v3_lift_over_hybrid": phase10_guard.metrics[
+            "calibrated_policy_vs_original_v3_lift_over_hybrid"
+        ],
+        "phase10_calibrated_policy_harm_vs_hybrid_count": phase10_guard.metrics[
+            "calibrated_policy_harm_vs_hybrid_count"
+        ],
+        "phase10_calibrated_policy_win_vs_hybrid_count": phase10_guard.metrics[
+            "calibrated_policy_win_vs_hybrid_count"
+        ],
+        "phase10_calibrated_policy_override_count": phase10_guard.metrics["calibrated_policy_override_count"],
         "phase5_selected_production_profile": phase5.metrics["live_selected_production_profile"],
         "phase5_selected_exploration_profile": phase5.metrics["live_selected_exploration_profile"],
         "phase5_keeps_phase10_candidate": phase5.metrics["live_scheduler_keeps_phase10_as_candidate"],

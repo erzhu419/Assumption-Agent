@@ -750,11 +750,13 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["negative_transfer_reduction"], 0.50)
         self.assertGreaterEqual(metrics["last_half_selection_accuracy"], metrics["first_half_selection_accuracy"])
         self.assertEqual(metrics["live_profile_source_artifact_count"], 6)
-        self.assertGreaterEqual(metrics["live_profile_count"], 7)
-        self.assertEqual(metrics["live_selected_production_profile"], "phase9_hybrid_guard")
+        self.assertGreaterEqual(metrics["live_profile_count"], 9)
+        self.assertEqual(metrics["live_selected_production_profile"], "phase10_calibrated_residual_guard")
         self.assertEqual(metrics["live_selected_exploration_profile"], "phase10_discrete_world_model_candidate")
-        self.assertGreaterEqual(metrics["live_scheduler_lift_over_v3"], 0.05)
-        self.assertGreaterEqual(metrics["live_scheduler_vs_original_v3_utility"], 0.50)
+        self.assertGreaterEqual(metrics["live_scheduler_lift_over_v3"], 0.07)
+        self.assertGreaterEqual(metrics["live_scheduler_vs_original_v3_utility"], 0.62)
+        self.assertGreater(metrics["live_scheduler_calibrated_guard_lift_over_hybrid"], 0.0)
+        self.assertGreater(metrics["live_scheduler_calibrated_guard_vs_original_v3_lift_over_hybrid"], 0.0)
         self.assertTrue(metrics["live_scheduler_blocks_compact_default"])
         self.assertTrue(metrics["live_scheduler_keeps_phase10_as_candidate"])
         self.assertFalse(metrics["live_scheduler_uses_raw_prompts_or_answers"])
@@ -891,9 +893,11 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["live_residual_largest_cluster_status"], "resolved_by_phase9_hybrid_guard")
         self.assertGreaterEqual(metrics["live_residual_next_generation_seed_count"], 15)
         self.assertFalse(metrics["live_residual_uses_raw_prompts_or_answers"])
-        self.assertEqual(metrics["phase5_live_selected_production_profile"], "phase9_hybrid_guard")
+        self.assertEqual(metrics["phase5_live_selected_production_profile"], "phase10_calibrated_residual_guard")
         self.assertEqual(metrics["phase5_live_selected_exploration_profile"], "phase10_discrete_world_model_candidate")
-        self.assertGreaterEqual(metrics["phase5_live_scheduler_lift_over_v3"], 0.05)
+        self.assertGreaterEqual(metrics["phase5_live_scheduler_lift_over_v3"], 0.07)
+        self.assertGreater(metrics["phase5_live_calibrated_guard_lift_over_hybrid"], 0.0)
+        self.assertGreater(metrics["phase5_live_calibrated_guard_vs_original_v3_lift_over_hybrid"], 0.0)
         self.assertTrue(metrics["phase5_live_blocks_compact_default"])
         self.assertTrue(metrics["phase5_live_keeps_phase10_candidate"])
         self.assertFalse(metrics["phase5_live_uses_raw_prompts_or_answers"])
@@ -908,9 +912,12 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["phase10_world_model_candidate_count"], 17)
         self.assertGreater(metrics["phase10_world_model_candidate_v1_lift_over_v3"], 0.04)
         self.assertGreaterEqual(metrics["phase10_world_model_all_lift_over_v3"], 0.015)
-        self.assertEqual(metrics["phase10_world_model_recommended_promotion"], "keep_as_world_model_candidate")
-        self.assertEqual(metrics["world_model_calibration_surface_count"], 4)
-        self.assertGreaterEqual(metrics["world_model_calibrated_surface_count"], 2)
+        self.assertEqual(metrics["phase10_world_model_recommended_promotion"], "promote_calibrated_residual_guard")
+        self.assertGreater(metrics["phase10_world_model_calibrated_lift_over_hybrid"], 0.0)
+        self.assertGreater(metrics["phase10_world_model_calibrated_vs_original_v3_lift_over_hybrid"], 0.0)
+        self.assertEqual(metrics["phase10_world_model_calibrated_harm_vs_hybrid_count"], 0)
+        self.assertEqual(metrics["world_model_calibration_surface_count"], 5)
+        self.assertGreaterEqual(metrics["world_model_calibrated_surface_count"], 3)
         self.assertEqual(metrics["world_model_leave_domain_out_domain_count"], 3)
         self.assertLess(
             metrics["world_model_leave_domain_out_nonnegative_domain_count"],
@@ -919,13 +926,15 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["world_model_uncalibrated_promotion_count"], 0)
         self.assertFalse(metrics["world_model_phase10_calibration_beats_base_rate"])
         self.assertGreaterEqual(metrics["world_model_phase10_all_lift_over_v3"], 0.015)
+        self.assertGreater(metrics["world_model_phase10_calibrated_lift_over_hybrid"], 0.0)
+        self.assertEqual(metrics["world_model_phase10_calibrated_harm_vs_hybrid_count"], 0)
         self.assertTrue(metrics["world_model_phase5_keeps_phase10_candidate"])
         self.assertFalse(metrics["world_model_uses_raw_prompts_or_answers"])
         self.assertEqual(metrics["phase11_outer_shell_production_claim_count"], 0)
         self.assertGreaterEqual(metrics["phase11_blocked_claim_count"], 10)
         self.assertEqual(
             metrics["phase11_phase10_calibration_status"],
-            "calibration_audit_blocks_uncalibrated_world_model",
+            "calibration_audit_promotes_guard_blocks_raw_predictor",
         )
         self.assertFalse(metrics["prompt_answer_payload_stored"])
         self.assertFalse(metrics["secret_leak_detected"])
@@ -964,7 +973,10 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["loo_selected_vs_v3_utility"], 0.52)
         self.assertGreaterEqual(metrics["all_heldout_policy_lift_over_v3"], 0.015)
         self.assertLess(metrics["all_heldout_policy_vs_v1_utility"], metrics["retained_hybrid_vs_v1_utility"])
-        self.assertEqual(metrics["recommended_promotion"], "keep_as_world_model_candidate")
+        self.assertGreater(metrics["calibrated_policy_lift_over_retained_hybrid"], 0.0)
+        self.assertGreater(metrics["calibrated_policy_vs_original_v3_lift_over_hybrid"], 0.0)
+        self.assertEqual(metrics["calibrated_policy_harm_vs_hybrid_count"], 0)
+        self.assertEqual(metrics["recommended_promotion"], "promote_calibrated_residual_guard")
         self.assertFalse(metrics["uses_raw_prompts_or_answers"])
         self.assertTrue(payload["teacher_distillation_bootstrap"]["not_counted_as_independent_validation"])
 
@@ -978,8 +990,8 @@ class AssumptionOSTest(unittest.TestCase):
 
         self.assertTrue(payload["pass"], payload["failed_gates"])
         self.assertEqual(metrics["source_artifact_count"], 4)
-        self.assertEqual(metrics["calibration_surface_count"], 4)
-        self.assertGreaterEqual(metrics["calibrated_surface_count"], 2)
+        self.assertEqual(metrics["calibration_surface_count"], 5)
+        self.assertGreaterEqual(metrics["calibrated_surface_count"], 3)
         self.assertGreater(metrics["phase8_quality_brier_improvement"], 0.05)
         self.assertTrue(metrics["phase9_leave_domain_out_available"])
         self.assertEqual(metrics["phase9_leave_domain_out_domain_count"], 3)
@@ -988,6 +1000,8 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["phase10_all_lift_over_v3"], 0.015)
         self.assertFalse(metrics["phase10_calibration_beats_base_rate"])
         self.assertGreater(metrics["phase10_selected_arm_mae_minus_base_rate"], 0.0)
+        self.assertGreater(metrics["phase10_calibrated_policy_lift_over_retained_hybrid"], 0.0)
+        self.assertEqual(metrics["phase10_calibrated_policy_harm_vs_hybrid_count"], 0)
         self.assertEqual(metrics["uncalibrated_promotion_count"], 0)
         self.assertTrue(metrics["phase5_keeps_phase10_candidate"])
         self.assertFalse(metrics["uses_raw_prompts_or_answers"])
@@ -996,9 +1010,14 @@ class AssumptionOSTest(unittest.TestCase):
             "positive_uncalibrated_candidate",
         )
         self.assertFalse(by_id["phase10_discrete_graph_action_world_model"]["promotion_allowed"])
+        self.assertTrue(by_id["phase10_calibrated_residual_guard"]["promotion_allowed"])
         self.assertEqual(
-            payload["promotion_policy"]["phase10_current_decision"],
+            payload["promotion_policy"]["phase10_raw_predictor_decision"],
             "keep_as_candidate_until_calibrated",
+        )
+        self.assertEqual(
+            payload["promotion_policy"]["phase10_guarded_policy_decision"],
+            "promote_calibrated_residual_guard",
         )
 
     def test_full_v3_phase11_capability_audit_separates_fixture_from_production(self):
@@ -1017,16 +1036,16 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["phase4_status"], "validated_live_residual_clusterer_not_full_generator")
         self.assertEqual(metrics["phase5_status"], "validated_scheduler_not_unconditional_default")
         self.assertEqual(metrics["phase7_status"], "bounded_production_queue_daemon_not_unbounded_background")
-        self.assertEqual(metrics["phase10_status"], "learned_candidate_not_promoted")
+        self.assertEqual(metrics["phase10_status"], "calibrated_guard_promoted_raw_predictor_candidate")
         self.assertEqual(
             metrics["phase10_calibration_status"],
-            "calibration_audit_blocks_uncalibrated_world_model",
+            "calibration_audit_promotes_guard_blocks_raw_predictor",
         )
         self.assertIn("production_contract_gate_available", by_id["phase0_contract_checker"]["implementation_level"])
         self.assertEqual(by_id["phase9_hybrid_guard"]["production_default_status"], "retained_gated_profile")
         self.assertEqual(
             by_id["phase10_world_model_calibration"]["production_default_status"],
-            "calibration_audit_blocks_uncalibrated_world_model",
+            "calibration_audit_promotes_guard_blocks_raw_predictor",
         )
         self.assertIn("jsonl_memory_sleep_job_available", by_id["phase1_memory_consolidation"]["implementation_level"])
         self.assertIn(

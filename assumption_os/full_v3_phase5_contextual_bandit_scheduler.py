@@ -66,7 +66,9 @@ def build_full_v3_phase5_contextual_bandit_scheduler_payload(
         "fixture_regression_no_graph_mutation": True,
         "live_artifacts_loaded": metrics["live_profile_source_artifact_count"] == len(LIVE_SCHEDULER_ARTIFACTS),
         "live_profile_count_high": metrics["live_profile_count"] >= 7,
-        "live_scheduler_selects_retained_hybrid": metrics["live_selected_production_profile"] == "phase9_hybrid_guard",
+        "live_scheduler_selects_best_safe_profile": (
+            metrics["live_selected_production_profile"] == "phase10_calibrated_residual_guard"
+        ),
         "live_scheduler_improves_v3": metrics["live_scheduler_lift_over_v3"] >= 0.05,
         "live_scheduler_nonregresses_original_v3": metrics["live_scheduler_vs_original_v3_utility"] >= 0.50,
         "live_scheduler_blocks_overstructured_compact_default": metrics[
@@ -87,8 +89,8 @@ def build_full_v3_phase5_contextual_bandit_scheduler_payload(
         "validation_scope": (
             "Contextual bandit / Bayesian scheduler over strategy family, verifier, world model, and budget. "
             "The fixture rows remain as a contract regression, while the production-facing scheduler now reads "
-            "committed live-derived heldout artifacts, scores real profiles, selects the retained hybrid guard "
-            "as the default profile, and keeps the discrete world model as an exploration candidate."
+            "committed live-derived heldout artifacts, scores real profiles, selects the calibrated residual "
+            "world-model guard as the default profile, and keeps the raw discrete world model as an exploration candidate."
         ),
         "live_scheduler_source_artifacts": {
             name: {
@@ -110,8 +112,9 @@ def build_full_v3_phase5_contextual_bandit_scheduler_payload(
         "interpretation": (
             "Full-v3 Phase 5 now has a live-derived policy surface instead of only a synthetic demonstration: "
             "the scheduler ranks retained, rejected, scoped, and world-model candidate profiles from the same "
-            "heldout artifacts used elsewhere in the V3 evidence table.  It selects Phase9 hybrid as the "
-            "production profile, blocks compact over-structure as a default, and keeps Phase10 for exploration."
+            "heldout artifacts used elsewhere in the V3 evidence table.  It selects the Phase10 calibrated "
+            "residual guard as the production profile, blocks compact over-structure as a default, and keeps "
+            "the raw Phase10 predictor for exploration."
         ),
     }
 
@@ -129,6 +132,8 @@ def _live_artifact_scheduler(*, root: Path) -> dict[str, Any]:
     original = _by_profile(profiles, "original_v3_default")
     compact = _by_profile(profiles, "phase9_selective_compact_guard")
     phase10 = _by_profile(profiles, "phase10_discrete_world_model_candidate")
+    phase10_calibrated = _by_profile(profiles, "phase10_calibrated_residual_guard")
+    hybrid = _by_profile(profiles, "phase9_hybrid_guard")
     metrics = {
         "live_profile_source_artifact_count": len(artifacts),
         "live_profile_count": len(profiles),
@@ -154,7 +159,15 @@ def _live_artifact_scheduler(*, root: Path) -> dict[str, Any]:
             or artifacts["phase9_hybrid_guard"].get("metrics", {}).get("compact_payload_contains_prompts_answers", False)
         ),
         "live_scheduler_candidate_gap_to_hybrid": round(
-            phase10["utility_vs_v1"] - production["utility_vs_v1"], 4
+            phase10["utility_vs_v1"] - hybrid["utility_vs_v1"], 4
+        ),
+        "live_scheduler_calibrated_guard_lift_over_hybrid": round(
+            phase10_calibrated["utility_vs_v1"] - hybrid["utility_vs_v1"],
+            4,
+        ),
+        "live_scheduler_calibrated_guard_vs_original_v3_lift_over_hybrid": round(
+            phase10_calibrated["utility_vs_original_v3"] - hybrid["utility_vs_original_v3"],
+            4,
         ),
     }
     return {
@@ -228,6 +241,28 @@ def _live_profiles(artifacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]
             scope_penalty=0.02,
             risk_penalty=0.03,
             reason="Positive learned arm selector, but weaker than retained hybrid and not calibrated beyond base rate.",
+        ),
+        _profile_row(
+            profile_id="phase10_calibrated_residual_guard",
+            source_artifact="phase10_discrete_world_model",
+            profile_type="world_model_calibrated_residual_guard",
+            utility_vs_v1=float(phase10["calibrated_policy_vs_v1_utility"]),
+            utility_vs_original_v3=float(phase10["calibrated_policy_vs_original_v3_utility"]),
+            heldout_n=int(phase10["heldout_transition_row_count"]),
+            active_n=int(phase10["candidate_transition_count"]),
+            lift_over_default=float(phase10["calibrated_policy_lift_over_v3"]),
+            production_eligible=(
+                phase10["recommended_promotion"] == "promote_calibrated_residual_guard"
+                and int(phase10["calibrated_policy_harm_vs_hybrid_count"]) == 0
+            ),
+            exploration_eligible=False,
+            calibrated=True,
+            scope_penalty=0.0,
+            risk_penalty=0.0,
+            reason=(
+                "Guarded Phase10 policy: raw predictor plus redacted residual boundary rules.  It beats the "
+                "retained hybrid on the same heldout slice without V1 harm against hybrid."
+            ),
         ),
         _profile_row(
             profile_id="phase9_micro_guard",

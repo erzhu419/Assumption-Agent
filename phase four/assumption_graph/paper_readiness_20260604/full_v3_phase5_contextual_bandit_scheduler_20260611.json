@@ -5,7 +5,7 @@
   "implementation_level": "live_artifact_contextual_scheduler_with_fixture_regression",
   "performance_validation": true,
   "synthetic_fixture_regression": true,
-  "validation_scope": "Contextual bandit / Bayesian scheduler over strategy family, verifier, world model, and budget. The fixture rows remain as a contract regression, while the production-facing scheduler now reads committed live-derived heldout artifacts, scores real profiles, selects the retained hybrid guard as the default profile, and keeps the discrete world model as an exploration candidate.",
+  "validation_scope": "Contextual bandit / Bayesian scheduler over strategy family, verifier, world model, and budget. The fixture rows remain as a contract regression, while the production-facing scheduler now reads committed live-derived heldout artifacts, scores real profiles, selects the calibrated residual world-model guard as the default profile, and keeps the raw discrete world model as an exploration candidate.",
   "live_scheduler_source_artifacts": {
     "phase8_creativity_world_coverage": {
       "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_phase8_creativity_world_coverage_20260611.json",
@@ -107,6 +107,27 @@
       "scope_penalty": 0.02,
       "risk_penalty": 0.03,
       "reason": "Positive learned arm selector, but weaker than retained hybrid and not calibrated beyond base rate."
+    },
+    {
+      "profile_id": "phase10_calibrated_residual_guard",
+      "source_artifact": "phase10_discrete_world_model",
+      "profile_type": "world_model_calibrated_residual_guard",
+      "utility_vs_v1": 0.6667,
+      "utility_vs_original_v3": 0.6204,
+      "heldout_n": 54,
+      "active_n": 17,
+      "lift_over_default": 0.0741,
+      "posterior_alpha": 37.0018,
+      "posterior_beta": 18.9982,
+      "posterior_mean": 0.6607,
+      "production_score": 0.5912,
+      "exploration_score": 0.532,
+      "production_eligible": true,
+      "exploration_eligible": false,
+      "calibrated": true,
+      "scope_penalty": 0.0,
+      "risk_penalty": 0.0,
+      "reason": "Guarded Phase10 policy: raw predictor plus redacted residual boundary rules.  It beats the retained hybrid on the same heldout slice without V1 harm against hybrid."
     },
     {
       "profile_id": "phase9_micro_guard",
@@ -216,25 +237,25 @@
   ],
   "live_scheduler_selection": {
     "production_profile": {
-      "profile_id": "phase9_hybrid_guard",
-      "source_artifact": "phase9_hybrid_guard",
-      "profile_type": "retained_gated_profile",
-      "utility_vs_v1": 0.6481,
-      "utility_vs_original_v3": 0.6111,
+      "profile_id": "phase10_calibrated_residual_guard",
+      "source_artifact": "phase10_discrete_world_model",
+      "profile_type": "world_model_calibrated_residual_guard",
+      "utility_vs_v1": 0.6667,
+      "utility_vs_original_v3": 0.6204,
       "heldout_n": 54,
       "active_n": 17,
-      "lift_over_default": 0.0555,
-      "posterior_alpha": 35.9974,
-      "posterior_beta": 20.0026,
-      "posterior_mean": 0.6428,
-      "production_score": 0.5759,
-      "exploration_score": 0.5166,
+      "lift_over_default": 0.0741,
+      "posterior_alpha": 37.0018,
+      "posterior_beta": 18.9982,
+      "posterior_mean": 0.6607,
+      "production_score": 0.5912,
+      "exploration_score": 0.532,
       "production_eligible": true,
       "exploration_eligible": false,
       "calibrated": true,
       "scope_penalty": 0.0,
       "risk_penalty": 0.0,
-      "reason": "Retained heldout-wide hybrid guard: improves V1 margin and does not regress against original V3."
+      "reason": "Guarded Phase10 policy: raw predictor plus redacted residual boundary rules.  It beats the retained hybrid on the same heldout slice without V1 harm against hybrid."
     },
     "exploration_profile": {
       "profile_id": "phase10_discrete_world_model_candidate",
@@ -537,12 +558,12 @@
           "alpha": 3.0,
           "beta": 1.0
         },
-        "analogy": {
-          "alpha": 2.0,
-          "beta": 1.0
-        },
         "negative_control": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "analogy": {
+          "alpha": 2.0,
           "beta": 1.0
         }
       }
@@ -590,12 +611,12 @@
           "alpha": 3.0,
           "beta": 1.0
         },
-        "analogy": {
-          "alpha": 2.0,
-          "beta": 1.0
-        },
         "negative_control": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "analogy": {
+          "alpha": 2.0,
           "beta": 1.0
         },
         "boundary_case_analysis": {
@@ -651,12 +672,12 @@
           "alpha": 3.0,
           "beta": 1.0
         },
-        "analogy": {
-          "alpha": 2.0,
-          "beta": 1.0
-        },
         "negative_control": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "analogy": {
+          "alpha": 2.0,
           "beta": 1.0
         },
         "boundary_case_analysis": {
@@ -667,12 +688,12 @@
           "alpha": 2.0,
           "beta": 1.0
         },
-        "error_decomposition": {
-          "alpha": 3.0,
-          "beta": 1.0
-        },
         "abduction": {
           "alpha": 2.0,
+          "beta": 1.0
+        },
+        "error_decomposition": {
+          "alpha": 3.0,
           "beta": 1.0
         }
       }
@@ -720,12 +741,12 @@
           "alpha": 3.0,
           "beta": 1.0
         },
-        "analogy": {
-          "alpha": 2.0,
-          "beta": 1.0
-        },
         "negative_control": {
           "alpha": 3.0,
+          "beta": 1.0
+        },
+        "analogy": {
+          "alpha": 2.0,
           "beta": 1.0
         },
         "boundary_case_analysis": {
@@ -736,12 +757,12 @@
           "alpha": 2.0,
           "beta": 1.0
         },
-        "error_decomposition": {
-          "alpha": 3.0,
-          "beta": 1.0
-        },
         "abduction": {
           "alpha": 2.0,
+          "beta": 1.0
+        },
+        "error_decomposition": {
+          "alpha": 3.0,
           "beta": 1.0
         },
         "deduction": {
@@ -793,11 +814,11 @@
           "alpha": 3.0,
           "beta": 1.0
         },
-        "analogy": {
+        "negative_control": {
           "alpha": 3.0,
           "beta": 1.0
         },
-        "negative_control": {
+        "analogy": {
           "alpha": 3.0,
           "beta": 1.0
         },
@@ -809,12 +830,12 @@
           "alpha": 2.0,
           "beta": 1.0
         },
-        "error_decomposition": {
-          "alpha": 3.0,
-          "beta": 1.0
-        },
         "abduction": {
           "alpha": 2.0,
+          "beta": 1.0
+        },
+        "error_decomposition": {
+          "alpha": 3.0,
           "beta": 1.0
         },
         "deduction": {
@@ -866,11 +887,11 @@
           "alpha": 3.0,
           "beta": 1.0
         },
-        "analogy": {
+        "negative_control": {
           "alpha": 3.0,
           "beta": 1.0
         },
-        "negative_control": {
+        "analogy": {
           "alpha": 3.0,
           "beta": 1.0
         },
@@ -882,12 +903,12 @@
           "alpha": 2.0,
           "beta": 1.0
         },
-        "error_decomposition": {
-          "alpha": 3.0,
-          "beta": 1.0
-        },
         "abduction": {
           "alpha": 2.0,
+          "beta": 1.0
+        },
+        "error_decomposition": {
+          "alpha": 3.0,
           "beta": 1.0
         },
         "deduction": {
@@ -943,11 +964,11 @@
           "alpha": 3.0,
           "beta": 1.0
         },
-        "analogy": {
+        "negative_control": {
           "alpha": 3.0,
           "beta": 1.0
         },
-        "negative_control": {
+        "analogy": {
           "alpha": 3.0,
           "beta": 1.0
         },
@@ -959,12 +980,12 @@
           "alpha": 2.0,
           "beta": 1.0
         },
-        "error_decomposition": {
-          "alpha": 3.0,
-          "beta": 1.0
-        },
         "abduction": {
           "alpha": 2.0,
+          "beta": 1.0
+        },
+        "error_decomposition": {
+          "alpha": 3.0,
           "beta": 1.0
         },
         "deduction": {
@@ -1024,11 +1045,11 @@
           "alpha": 3.0,
           "beta": 1.0
         },
-        "analogy": {
+        "negative_control": {
           "alpha": 3.0,
           "beta": 1.0
         },
-        "negative_control": {
+        "analogy": {
           "alpha": 3.0,
           "beta": 1.0
         },
@@ -1040,12 +1061,12 @@
           "alpha": 2.0,
           "beta": 1.0
         },
-        "error_decomposition": {
-          "alpha": 3.0,
-          "beta": 1.0
-        },
         "abduction": {
           "alpha": 2.0,
+          "beta": 1.0
+        },
+        "error_decomposition": {
+          "alpha": 3.0,
           "beta": 1.0
         },
         "deduction": {
@@ -1084,18 +1105,20 @@
     "baseline_negative_transfer_count": 2,
     "negative_transfer_reduction": 1.0,
     "live_profile_source_artifact_count": 6,
-    "live_profile_count": 8,
+    "live_profile_count": 9,
     "live_profile_pass_count": 4,
-    "live_selected_production_profile": "phase9_hybrid_guard",
+    "live_selected_production_profile": "phase10_calibrated_residual_guard",
     "live_selected_exploration_profile": "phase10_discrete_world_model_candidate",
-    "live_scheduler_vs_v1_utility": 0.6481,
-    "live_scheduler_vs_original_v3_utility": 0.6111,
-    "live_scheduler_lift_over_v3": 0.0555,
-    "live_scheduler_reward_lift_over_default": 0.0555,
+    "live_scheduler_vs_v1_utility": 0.6667,
+    "live_scheduler_vs_original_v3_utility": 0.6204,
+    "live_scheduler_lift_over_v3": 0.0741,
+    "live_scheduler_reward_lift_over_default": 0.0741,
     "live_scheduler_blocks_compact_default": true,
     "live_scheduler_keeps_phase10_as_candidate": true,
     "live_scheduler_uses_raw_prompts_or_answers": false,
-    "live_scheduler_candidate_gap_to_hybrid": -0.037
+    "live_scheduler_candidate_gap_to_hybrid": -0.037,
+    "live_scheduler_calibrated_guard_lift_over_hybrid": 0.0186,
+    "live_scheduler_calibrated_guard_vs_original_v3_lift_over_hybrid": 0.0093
   },
   "gates": {
     "fixture_selection_accuracy_high": true,
@@ -1111,7 +1134,7 @@
     "fixture_regression_no_graph_mutation": true,
     "live_artifacts_loaded": true,
     "live_profile_count_high": true,
-    "live_scheduler_selects_retained_hybrid": true,
+    "live_scheduler_selects_best_safe_profile": true,
     "live_scheduler_improves_v3": true,
     "live_scheduler_nonregresses_original_v3": true,
     "live_scheduler_blocks_overstructured_compact_default": true,
@@ -1120,5 +1143,5 @@
   },
   "failed_gates": [],
   "pass": true,
-  "interpretation": "Full-v3 Phase 5 now has a live-derived policy surface instead of only a synthetic demonstration: the scheduler ranks retained, rejected, scoped, and world-model candidate profiles from the same heldout artifacts used elsewhere in the V3 evidence table.  It selects Phase9 hybrid as the production profile, blocks compact over-structure as a default, and keeps Phase10 for exploration."
+  "interpretation": "Full-v3 Phase 5 now has a live-derived policy surface instead of only a synthetic demonstration: the scheduler ranks retained, rejected, scoped, and world-model candidate profiles from the same heldout artifacts used elsewhere in the V3 evidence table.  It selects the Phase10 calibrated residual guard as the production profile, blocks compact over-structure as a default, and keeps the raw Phase10 predictor for exploration."
 }
