@@ -53,7 +53,9 @@ REQUIRED_ARTIFACTS = {
     "v3_main_graph_memory_shadow": PAPER_DIR / "full_v3_main_graph_memory_shadow_20260611.json",
     "v3_main_graph_memory_controlled_apply": PAPER_DIR / "full_v3_main_graph_memory_controlled_apply_20260611.json",
     "v3_residual_fresh_live_loop": PAPER_DIR / "full_v3_residual_fresh_live_loop_20260611.json",
+    "v3_live_multigeneration_expansion": PAPER_DIR / "full_v3_live_multigeneration_expansion_20260612.json",
     "v3_continuous_daemon_scheduler": PAPER_DIR / "full_v3_continuous_daemon_scheduler_20260611.json",
+    "v3_supervised_daemon_background_smoke": PAPER_DIR / "full_v3_supervised_daemon_background_smoke_20260612.json",
     "v3_world_model_calibration": PAPER_DIR / "full_v3_world_model_calibration_20260611.json",
     "v3_same_batch_ablation_suite": PAPER_DIR / "full_v3_same_batch_ablation_suite_20260611.json",
     "v3_phase11_capability_audit": PAPER_DIR / "full_v3_phase11_capability_audit_20260611.json",
@@ -156,6 +158,28 @@ def build_full_v3_paper_scale_evidence_payload(
                 "accepted_count",
                 "applied_count",
                 "graph_copy_node_delta",
+                "main_graph_mutation_count",
+                "secret_value_exposed",
+            ],
+        ),
+        "live_multigeneration_expansion": _metric_subset(
+            artifacts["v3_live_multigeneration_expansion"].get("metrics", {}),
+            [
+                "execution_mode",
+                "source_generation_count",
+                "generation_count",
+                "selected_candidate_count",
+                "contract_ready_count",
+                "preflight_ready_count",
+                "fresh_api_call_count",
+                "planned_fresh_api_call_count",
+                "live_error_count",
+                "acceptance_decision_count",
+                "acceptance_decision_counts",
+                "accepted_count",
+                "rejected_count",
+                "applied_count",
+                "applied_node_delta",
                 "main_graph_mutation_count",
                 "secret_value_exposed",
             ],
@@ -452,6 +476,22 @@ def build_full_v3_paper_scale_evidence_payload(
                 "background_process_started",
             ],
         ),
+        "supervised_daemon_background_smoke": _metric_subset(
+            artifacts["v3_supervised_daemon_background_smoke"].get("metrics", {}),
+            [
+                "source_scheduler_pass",
+                "background_process_started",
+                "background_process_exit_code",
+                "heartbeat_count",
+                "checkpoint_count",
+                "planned_cycle_count",
+                "completed_cycle_count",
+                "rate_limit_violation_count",
+                "ungated_graph_mutation_count",
+                "stop_condition",
+                "stderr_size",
+            ],
+        ),
         "same_batch_ablation_suite": _metric_subset(
             artifacts["v3_same_batch_ablation_suite"].get("metrics", {}),
             [
@@ -509,8 +549,11 @@ def build_full_v3_paper_scale_evidence_payload(
                 "shadow_or_fixture_count",
                 "blocked_claim_count",
                 "promotion_requirement_count",
+                "phase1_main_apply_status",
                 "phase4_status",
+                "phase4_live_multigen_status",
                 "phase7_status",
+                "phase7_background_status",
                 "phase10_status",
                 "phase10_calibration_status",
             ],
@@ -631,6 +674,25 @@ def build_full_v3_paper_scale_evidence_payload(
             and metrics["residual_fresh_main_graph_mutation_count"] == 0
             and metrics["residual_fresh_secret_value_exposed"] is False
         ),
+        "live_multigeneration_expansion_is_prospective": (
+            metrics["live_multigen_execution_mode"] == "execute_live"
+            and metrics["live_multigen_generation_count"] >= 3
+            and metrics["live_multigen_selected_candidate_count"] >= 6
+            and metrics["live_multigen_contract_ready_count"] == metrics["live_multigen_selected_candidate_count"]
+            and metrics["live_multigen_preflight_ready_count"] == metrics["live_multigen_selected_candidate_count"]
+            and metrics["live_multigen_api_call_count"] == metrics["live_multigen_planned_api_call_count"]
+            and metrics["live_multigen_api_call_count"] >= 36
+            and metrics["live_multigen_live_error_count"] == 0
+        ),
+        "live_multigeneration_expansion_selectively_retains": (
+            metrics["live_multigen_accepted_count"] >= 1
+            and metrics["live_multigen_rejected_count"] >= 1
+            and metrics["live_multigen_reject_harm_count"] >= 1
+            and metrics["live_multigen_applied_count"] == metrics["live_multigen_accepted_count"]
+            and metrics["live_multigen_applied_node_delta"] == metrics["live_multigen_accepted_count"]
+            and metrics["live_multigen_main_graph_mutation_count"] == 0
+            and metrics["live_multigen_secret_value_exposed"] is False
+        ),
         "phase5_live_scheduler_realified": metrics["phase5_live_profile_count"] >= 7,
         "phase5_live_scheduler_selects_calibrated_guard": (
             metrics["phase5_live_selected_production_profile"] == "phase10_calibrated_residual_guard"
@@ -727,14 +789,14 @@ def build_full_v3_paper_scale_evidence_payload(
             and metrics["main_graph_memory_shadow_context_efficiency_delta"] > 0.02
             and metrics["main_graph_memory_shadow_main_graph_mutated"] is False
         ),
-        "main_graph_memory_controlled_apply_ready": (
+        "main_graph_memory_controlled_apply_committed": (
             metrics["main_graph_memory_controlled_apply_rollback_entry_count"]
             >= metrics["main_graph_memory_controlled_apply_planned_archive_count"]
             and metrics["main_graph_memory_controlled_apply_consolidated_count"] >= 4
             and metrics["main_graph_memory_controlled_apply_precision_delta"] > 0.10
             and metrics["main_graph_memory_controlled_apply_archive_exposure_after"] == 0
             and metrics["main_graph_memory_controlled_apply_context_efficiency_delta"] > 0.02
-            and metrics["main_graph_memory_controlled_apply_main_graph_mutated"] is False
+            and metrics["main_graph_memory_controlled_apply_main_graph_mutated"] is True
         ),
         "continuous_daemon_scheduler_ready": (
             metrics["continuous_daemon_scheduled_cycle_count"] >= 10
@@ -747,10 +809,29 @@ def build_full_v3_paper_scale_evidence_payload(
             and metrics["continuous_daemon_background_ready"] is True
             and metrics["continuous_daemon_background_process_started"] is False
         ),
+        "supervised_daemon_background_smoke_passes": (
+            metrics["supervised_daemon_background_started"] is True
+            and metrics["supervised_daemon_exit_code"] == 0
+            and metrics["supervised_daemon_heartbeat_count"] == metrics["supervised_daemon_planned_cycle_count"]
+            and metrics["supervised_daemon_checkpoint_count"] == metrics["supervised_daemon_planned_cycle_count"]
+            and metrics["supervised_daemon_rate_limit_violation_count"] == 0
+            and metrics["supervised_daemon_ungated_graph_mutation_count"] == 0
+            and metrics["supervised_daemon_stop_condition"] == "cycle_limit_reached"
+            and metrics["supervised_daemon_stderr_size"] == 0
+        ),
         "phase11_capability_audit_passes": metrics["phase11_artifact_pass_rate"] == 1.0,
         "phase11_outer_shells_not_overclaimed": metrics["phase11_outer_shell_production_claim_count"] == 0,
         "phase11_phase7_bounded_daemon_recorded": (
             metrics["phase11_phase7_status"] == "bounded_production_queue_daemon_not_unbounded_background"
+        ),
+        "phase11_phase7_background_smoke_recorded": (
+            metrics["phase11_phase7_background_status"] == "supervised_background_worker_validated_bounded"
+        ),
+        "phase11_live_multigen_recorded": (
+            metrics["phase11_phase4_live_multigen_status"] == "prospective_live_multigeneration_validated"
+        ),
+        "phase11_main_graph_apply_recorded": (
+            metrics["phase11_phase1_main_apply_status"] == "committed_main_graph_memory_apply_with_rollback"
         ),
         "phase11_phase10_guard_promoted_raw_candidate": (
             metrics["phase11_phase10_status"] == "calibrated_guard_promoted_raw_predictor_candidate"
@@ -927,7 +1008,9 @@ def _v3_mechanism_summary(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any
         "v3_main_graph_memory_shadow",
         "v3_main_graph_memory_controlled_apply",
         "v3_residual_fresh_live_loop",
+        "v3_live_multigeneration_expansion",
         "v3_continuous_daemon_scheduler",
+        "v3_supervised_daemon_background_smoke",
         "v3_world_model_calibration",
         "v3_same_batch_ablation_suite",
         "v3_phase11_capability_audit",
@@ -1359,6 +1442,61 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         ),
         "residual_fresh_secret_value_exposed": bool(
             artifacts["v3_residual_fresh_live_loop"]["metrics"]["secret_value_exposed"]
+        ),
+        "live_multigen_execution_mode": artifacts["v3_live_multigeneration_expansion"]["metrics"]["execution_mode"],
+        "live_multigen_source_generation_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["source_generation_count"]
+        ),
+        "live_multigen_generation_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["generation_count"]
+        ),
+        "live_multigen_selected_candidate_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["selected_candidate_count"]
+        ),
+        "live_multigen_contract_ready_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["contract_ready_count"]
+        ),
+        "live_multigen_preflight_ready_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["preflight_ready_count"]
+        ),
+        "live_multigen_api_call_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["fresh_api_call_count"]
+        ),
+        "live_multigen_planned_api_call_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["planned_fresh_api_call_count"]
+        ),
+        "live_multigen_live_error_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["live_error_count"]
+        ),
+        "live_multigen_acceptance_decision_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["acceptance_decision_count"]
+        ),
+        "live_multigen_accepted_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["accepted_count"]
+        ),
+        "live_multigen_rejected_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["rejected_count"]
+        ),
+        "live_multigen_reject_harm_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["acceptance_decision_counts"].get("reject_harm", 0)
+        ),
+        "live_multigen_reject_benefit_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["acceptance_decision_counts"].get(
+                "reject_benefit",
+                0,
+            )
+        ),
+        "live_multigen_applied_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["applied_count"]
+        ),
+        "live_multigen_applied_node_delta": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["applied_node_delta"]
+        ),
+        "live_multigen_main_graph_mutation_count": int(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["main_graph_mutation_count"]
+        ),
+        "live_multigen_secret_value_exposed": bool(
+            artifacts["v3_live_multigeneration_expansion"]["metrics"]["secret_value_exposed"]
         ),
         "phase5_live_profile_source_artifact_count": int(
             artifacts["v3_phase5_bandit"]["metrics"]["live_profile_source_artifact_count"]
@@ -1797,6 +1935,33 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "continuous_daemon_background_process_started": bool(
             artifacts["v3_continuous_daemon_scheduler"]["metrics"]["background_process_started"]
         ),
+        "supervised_daemon_background_started": bool(
+            artifacts["v3_supervised_daemon_background_smoke"]["metrics"]["background_process_started"]
+        ),
+        "supervised_daemon_exit_code": int(
+            artifacts["v3_supervised_daemon_background_smoke"]["metrics"]["background_process_exit_code"]
+        ),
+        "supervised_daemon_heartbeat_count": int(
+            artifacts["v3_supervised_daemon_background_smoke"]["metrics"]["heartbeat_count"]
+        ),
+        "supervised_daemon_checkpoint_count": int(
+            artifacts["v3_supervised_daemon_background_smoke"]["metrics"]["checkpoint_count"]
+        ),
+        "supervised_daemon_planned_cycle_count": int(
+            artifacts["v3_supervised_daemon_background_smoke"]["metrics"]["planned_cycle_count"]
+        ),
+        "supervised_daemon_rate_limit_violation_count": int(
+            artifacts["v3_supervised_daemon_background_smoke"]["metrics"]["rate_limit_violation_count"]
+        ),
+        "supervised_daemon_ungated_graph_mutation_count": int(
+            artifacts["v3_supervised_daemon_background_smoke"]["metrics"]["ungated_graph_mutation_count"]
+        ),
+        "supervised_daemon_stop_condition": artifacts["v3_supervised_daemon_background_smoke"]["metrics"][
+            "stop_condition"
+        ],
+        "supervised_daemon_stderr_size": int(
+            artifacts["v3_supervised_daemon_background_smoke"]["metrics"]["stderr_size"]
+        ),
         "phase11_capability_count": int(
             artifacts["v3_phase11_capability_audit"]["metrics"]["capability_count"]
         ),
@@ -1812,8 +1977,17 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "phase11_blocked_claim_count": int(
             artifacts["v3_phase11_capability_audit"]["metrics"]["blocked_claim_count"]
         ),
+        "phase11_phase1_main_apply_status": artifacts["v3_phase11_capability_audit"]["metrics"][
+            "phase1_main_apply_status"
+        ],
         "phase11_phase4_status": artifacts["v3_phase11_capability_audit"]["metrics"]["phase4_status"],
+        "phase11_phase4_live_multigen_status": artifacts["v3_phase11_capability_audit"]["metrics"][
+            "phase4_live_multigen_status"
+        ],
         "phase11_phase7_status": artifacts["v3_phase11_capability_audit"]["metrics"]["phase7_status"],
+        "phase11_phase7_background_status": artifacts["v3_phase11_capability_audit"]["metrics"][
+            "phase7_background_status"
+        ],
         "phase11_phase10_status": artifacts["v3_phase11_capability_audit"]["metrics"]["phase10_status"],
         "phase11_phase10_calibration_status": artifacts["v3_phase11_capability_audit"]["metrics"][
             "phase10_calibration_status"

@@ -24,13 +24,16 @@ PHASE_ARTIFACTS = {
     "phase2_verifier_synthesis": PAPER_DIR / "full_v3_phase2_verifier_synthesis_20260611.json",
     "phase3_rollout_search_control": PAPER_DIR / "full_v3_phase3_rollout_search_control_20260611.json",
     "phase4_hypothesis_generator": PAPER_DIR / "full_v3_phase4_hypothesis_generator_20260611.json",
+    "phase4_live_multigeneration_expansion": PAPER_DIR / "full_v3_live_multigeneration_expansion_20260612.json",
     "phase5_contextual_bandit_scheduler": PAPER_DIR / "full_v3_phase5_contextual_bandit_scheduler_20260611.json",
     "phase6_formal_transfer_engine": PAPER_DIR / "full_v3_phase6_formal_transfer_engine_20260611.json",
     "phase7_long_run_benchmark": PAPER_DIR / "full_v3_phase7_long_run_benchmark_20260611.json",
+    "phase7_supervised_daemon_background_smoke": PAPER_DIR / "full_v3_supervised_daemon_background_smoke_20260612.json",
     "phase8_creativity_world_coverage": PAPER_DIR / "full_v3_phase8_creativity_world_coverage_20260611.json",
     "phase9_hybrid_guard": PAPER_DIR / "full_v3_phase9_hybrid_guard_heldout_20260611.json",
     "phase10_discrete_world_model": PAPER_DIR / "full_v3_phase10_discrete_world_model_selector_20260611.json",
     "phase10_world_model_calibration": PAPER_DIR / "full_v3_world_model_calibration_20260611.json",
+    "phase1_main_graph_controlled_apply": PAPER_DIR / "full_v3_main_graph_memory_controlled_apply_20260611.json",
 }
 
 OUTER_SHELL_PHASES = {
@@ -77,9 +80,18 @@ def build_full_v3_phase11_capability_audit_payload(
         "phase4_live_residual_clusterer_recorded": (
             metrics["phase4_status"] == "validated_live_residual_clusterer_not_full_generator"
         ),
+        "phase4_live_multigeneration_recorded": (
+            metrics["phase4_live_multigen_status"] == "prospective_live_multigeneration_validated"
+        ),
         "phase5_scheduler_live_realified": metrics["phase5_status"] == "validated_scheduler_not_unconditional_default",
         "phase7_bounded_daemon_productionized": (
             metrics["phase7_status"] == "bounded_production_queue_daemon_not_unbounded_background"
+        ),
+        "phase7_supervised_background_worker_validated": (
+            metrics["phase7_background_status"] == "supervised_background_worker_validated_bounded"
+        ),
+        "phase1_main_graph_apply_recorded": (
+            metrics["phase1_main_apply_status"] == "committed_main_graph_memory_apply_with_rollback"
         ),
         "phase10_guard_promoted_raw_predictor_not_promoted": (
             metrics["phase10_status"] == "calibrated_guard_promoted_raw_predictor_candidate"
@@ -149,6 +161,12 @@ def _validation_mode(*, name: str, artifact: dict[str, Any]) -> str:
         return "live_or_live_derived_validation"
     if artifact.get("implementation_level") == "live_artifact_contextual_scheduler_with_fixture_regression":
         return "live_or_live_derived_validation"
+    if artifact.get("implementation_level") == "prospective_live_multigeneration_execute_path":
+        return "live_or_live_derived_validation"
+    if artifact.get("implementation_level") == "explicit_main_graph_apply_with_rollback":
+        return "live_or_live_derived_validation"
+    if artifact.get("implementation_level") == "bounded_background_worker_spawn_checkpoint_stop_readback":
+        return "live_or_live_derived_validation"
     if artifact.get("implementation_level") == "live_artifact_learned_candidate":
         return "live_derived_learned_candidate"
     if name == "phase7_long_run_benchmark":
@@ -170,6 +188,12 @@ def _implementation_level(*, name: str, artifact: dict[str, Any], validation_mod
         return "discrete_graph_action_world_model_candidate"
     if name == "phase10_world_model_calibration":
         return "world_model_calibration_and_leave_domain_out_audit"
+    if name == "phase4_live_multigeneration_expansion":
+        return "prospective_live_multigeneration_with_fresh_judgments"
+    if name == "phase1_main_graph_controlled_apply":
+        return "committed_memory_apply_with_rollback_readback"
+    if name == "phase7_supervised_daemon_background_smoke":
+        return "supervised_background_worker_with_bounded_stop"
     explicit = artifact.get("implementation_level")
     if explicit:
         return str(explicit)
@@ -187,10 +211,16 @@ def _production_default_status(*, name: str, artifact: dict[str, Any], validatio
         return "retained_gated_profile"
     if name == "phase4_hypothesis_generator":
         return "validated_live_residual_clusterer_not_full_generator"
+    if name == "phase4_live_multigeneration_expansion":
+        return "prospective_live_multigeneration_validated"
+    if name == "phase1_main_graph_controlled_apply":
+        return "committed_main_graph_memory_apply_with_rollback"
     if name == "phase5_contextual_bandit_scheduler":
         return "validated_scheduler_not_unconditional_default"
     if name == "phase7_long_run_benchmark":
         return "bounded_production_queue_daemon_not_unbounded_background"
+    if name == "phase7_supervised_daemon_background_smoke":
+        return "supervised_background_worker_validated_bounded"
     if name == "phase10_discrete_world_model":
         if artifact.get("metrics", {}).get("recommended_promotion") == "promote_calibrated_residual_guard":
             return "calibrated_guard_promoted_raw_predictor_candidate"
@@ -241,6 +271,12 @@ def _claim_policy(
             ["fully creative autonomous generator", "production graph mutation without recursive validation"],
             "Show multi-generation fresh-live descendants from the emitted residual proposal seeds.",
         )
+    if name == "phase4_live_multigeneration_expansion":
+        return (
+            "Prospective 3-generation live residual evolution validates variation, live evaluation, selective retention, and graph-copy apply.",
+            ["large-scale continuous autonomous discovery", "unconditional main-graph mutation from live descendants"],
+            "Scale the prospective line beyond 3 generations and connect accepted descendants to long-run downstream tasks.",
+        )
     if name == "phase5_contextual_bandit_scheduler":
         return (
             "Live-derived contextual scheduler selects retained hybrid and keeps weaker candidates in exploration.",
@@ -252,6 +288,18 @@ def _claim_policy(
             "Bounded production queue daemon consumes committed preflight queues with manifests and gated mutation.",
             ["unbounded background autonomy", "automatic graph mutation without acceptance/apply gates"],
             "Add scheduler/rate-limit service supervision before claiming continuous unattended daemon operation.",
+        )
+    if name == "phase7_supervised_daemon_background_smoke":
+        return (
+            "A supervised background worker can start, checkpoint, heartbeat, and stop cleanly under bounded policy.",
+            ["24/7 unattended production daemon", "permission for ungated graph mutation"],
+            "Run a long soak with real queues, restart recovery, and external stop/rate-limit controls before 24/7 claims.",
+        )
+    if name == "phase1_main_graph_controlled_apply":
+        return (
+            "Main graph memory consolidation has been explicitly applied with rollback and retrieval readback.",
+            ["unreviewed destructive graph rewrite", "memory consolidation without rollback"],
+            "Monitor long-run retrieval/regression after the committed apply before making default sleep-job claims.",
         )
     if validation_mode == "shadow_validation_harness":
         return (
@@ -296,11 +344,22 @@ def _metrics(rows: list[CapabilityRow]) -> dict[str, Any]:
         "phase4_status": next(
             row.production_default_status for row in rows if row.capability_id == "phase4_hypothesis_generator"
         ),
+        "phase4_live_multigen_status": next(
+            row.production_default_status for row in rows if row.capability_id == "phase4_live_multigeneration_expansion"
+        ),
+        "phase1_main_apply_status": next(
+            row.production_default_status for row in rows if row.capability_id == "phase1_main_graph_controlled_apply"
+        ),
         "phase5_status": next(
             row.production_default_status for row in rows if row.capability_id == "phase5_contextual_bandit_scheduler"
         ),
         "phase7_status": next(
             row.production_default_status for row in rows if row.capability_id == "phase7_long_run_benchmark"
+        ),
+        "phase7_background_status": next(
+            row.production_default_status
+            for row in rows
+            if row.capability_id == "phase7_supervised_daemon_background_smoke"
         ),
         "phase10_status": next(
             row.production_default_status for row in rows if row.capability_id == "phase10_discrete_world_model"

@@ -1,0 +1,59 @@
+{
+  "eval_id": "full_v3_supervised_daemon_background_smoke_20260612",
+  "eval_kind": "full_v3_supervised_daemon_background_smoke",
+  "reconstruction_v2_full_phase": "supervised_background_daemon_process_boundary",
+  "implementation_level": "bounded_background_worker_spawn_checkpoint_stop_readback",
+  "performance_validation": true,
+  "validation_scope": "Starts a real background worker process under supervision, writes heartbeat/checkpoint records, and exits on a bounded cycle limit.  This validates the process boundary without leaving a long-running daemon active after tests.",
+  "source_scheduler": {
+    "path": "phase four/assumption_graph/paper_readiness_20260604/full_v3_continuous_daemon_scheduler_20260611.json",
+    "pass": true,
+    "metrics": {
+      "configured_max_cycles": 12,
+      "configured_budget_tokens": 120,
+      "scheduled_cycle_count": 12,
+      "checkpoint_write_count": 24,
+      "checkpoint_pair_count": 12,
+      "rate_limit_violation_count": 0,
+      "recovery_action_count": 2,
+      "fresh_loop_queue_integrated": true,
+      "memory_apply_queue_integrated": true,
+      "daemon_readback_queue_integrated": true,
+      "ungated_graph_mutation_count": 0,
+      "graph_apply_enabled_count": 0,
+      "continuous_background_ready": true,
+      "background_process_started": false,
+      "phase7_soak_cycle_count": 3,
+      "residual_fresh_loop_execution_mode": "execute_live",
+      "memory_controlled_apply_main_graph_mutated": true
+    }
+  },
+  "metrics": {
+    "source_scheduler_pass": true,
+    "background_process_started": true,
+    "background_process_exit_code": 0,
+    "heartbeat_count": 3,
+    "checkpoint_count": 3,
+    "planned_cycle_count": 3,
+    "completed_cycle_count": 3,
+    "rate_limit_violation_count": 0,
+    "ungated_graph_mutation_count": 0,
+    "stop_condition": "cycle_limit_reached",
+    "stdout_size": 0,
+    "stderr_size": 0
+  },
+  "gates": {
+    "source_scheduler_passes": true,
+    "background_process_started": true,
+    "background_process_exits_cleanly": true,
+    "heartbeats_cover_cycles": true,
+    "checkpoints_cover_cycles": true,
+    "rate_limit_clean": true,
+    "no_ungated_graph_mutation": true,
+    "bounded_stop_condition": true,
+    "stderr_clean": true
+  },
+  "failed_gates": [],
+  "pass": true,
+  "interpretation": "The daemon now has a validated supervised background process boundary.  The production policy remains bounded and gated: the validation worker stops after its cycle budget and performs no ungated graph mutation."
+}

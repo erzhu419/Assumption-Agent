@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import time
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -241,18 +242,30 @@ class _Client:
         self.alias = alias
 
     def judge(self, prompt: str) -> dict[str, Any]:
-        response = requests.post(
-            f"{self.base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {self.key}", "Content-Type": "application/json"},
-            json={
-                "model": self.model,
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 120,
-                "temperature": 0,
-            },
-            timeout=float(os.environ.get("MODEL_ROUTER_TIMEOUT", "45")),
-        )
-        response.raise_for_status()
+        attempts = max(1, int(os.environ.get("MODEL_ROUTER_ATTEMPTS", "3")))
+        last_exc: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                response = requests.post(
+                    f"{self.base_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {self.key}", "Content-Type": "application/json"},
+                    json={
+                        "model": self.model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "max_tokens": 120,
+                        "temperature": 0,
+                    },
+                    timeout=float(os.environ.get("MODEL_ROUTER_TIMEOUT", "45")),
+                )
+                response.raise_for_status()
+                break
+            except requests.RequestException as exc:
+                last_exc = exc
+                if attempt + 1 >= attempts:
+                    raise
+                time.sleep(0.5 * (attempt + 1))
+        else:  # pragma: no cover - defensive; loop always raises or breaks.
+            raise RuntimeError(f"model request failed: {last_exc}")
         text = (response.json().get("choices") or [{}])[0].get("message", {}).get("content", "")
         try:
             payload = json.loads(text)
