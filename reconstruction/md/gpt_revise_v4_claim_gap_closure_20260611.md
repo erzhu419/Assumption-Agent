@@ -68,7 +68,7 @@ Artifact:
 
 `phase four/assumption_graph/paper_readiness_20260604/full_v3_residual_fresh_live_loop_20260611.json`
 
-Key metrics:
+Original dry-run metrics:
 
 - `execution_mode`: dry_run
 - `selected_candidate_count`: 3
@@ -84,6 +84,27 @@ Key metrics:
 Interpretation:
 
 The fresh API execution path is implemented and preflighted. The committed validation run is dry-run because the local GPT keyfile currently returns an invalid-token response when probed. Therefore this closes the engineering path, but it is not counted as fresh API evidence.
+
+Fresh API update:
+
+After receiving a valid GPT API key, the same artifact was rerun in `execute_live` mode with `gpt-5.4-mini`.
+
+```text
+fresh_api_call_count: 18
+planned_fresh_api_call_count: 18
+selected_candidate_count: 3
+accepted_count: 1
+acceptance_decision_counts: {reject_harm: 1, accept: 1, reject_benefit: 1}
+applied_count: 1
+graph_copy_node_delta: 1
+main_graph_mutation_count: 0
+secret_value_exposed: false
+failed_gates: []
+```
+
+Interpretation:
+
+This now counts as fresh API evidence for the residual multi-generation loop. The live path generated trigger/control judgments, rejected one harmful candidate, rejected one low-benefit candidate, accepted one candidate, and applied it only to a graph copy. Main graph mutation remains gated.
 
 ## 4. Main-Graph Memory Controlled Apply
 
@@ -194,8 +215,7 @@ failed_sections: []
 
 ## Remaining Boundary
 
-The main remaining boundary is not an unimplemented code path. It is evidence:
+The main remaining boundary is no longer fresh API execution for the residual loop. It is controlled autonomy:
 
-- The fresh-live residual loop needs a valid API key and an `execute_live` run before it can count as fresh API evidence.
 - Main graph memory apply is controlled and rollback-ready, but the committed graph has not been mutated in validation.
 - The daemon is long-horizon schedulable, but validation does not leave a persistent background process running.
