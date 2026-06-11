@@ -2,6 +2,7 @@
   "eval_id": "full_v3_phase0_contract_checker_20260611",
   "eval_kind": "full_v3_phase0_schema_contract_checker",
   "reconstruction_v2_full_phase": "phase0_v3_schema_contract_checker",
+  "implementation_level": "production_contract_gate_available_with_shadow_fixture_validation",
   "performance_validation": true,
   "shadow_bypass": true,
   "validation_scope": "Explicit v3 Phase 0 contract checker over candidate manifests.  This is a governance layer, not an answer-quality benchmark: unsafe drafts are quarantined before candidate-overlay entry.",
@@ -9,6 +10,117 @@
     "eval_id": "full_v3_phase0_contract_checker_20260611_source",
     "eval_kind": "full_v2_phase0_shadow_contract_bypass",
     "pass": true
+  },
+  "production_contract_probe": {
+    "contract": {
+      "eval_id": "phase0_contract_probe",
+      "eval_kind": "proposal_contract_pre_overlay_gate",
+      "performance_validation": true,
+      "validation_scope": "Production proposal contract gate.  It can be called before proposal overlay to admit only candidate proposals with scope, measurable effect, risk prediction, verifier, rollback, negative controls, and duplicate/conflict checks.",
+      "source_eval_id": "phase0_contract_probe_payload",
+      "results": [
+        {
+          "proposal_id": "prop_987c1e91025d",
+          "proposal_type": "retrieval_policy",
+          "admission": "candidate_overlay",
+          "admitted": true,
+          "issues": [],
+          "warnings": [],
+          "checked_items": {
+            "proposal_id_present": true,
+            "proposal_type_known": true,
+            "parent_ref_present": true,
+            "candidate_required_when_overlay": true,
+            "candidate_schema_valid": true,
+            "candidate_status_is_candidate": true,
+            "scope_present": true,
+            "measurable_effect_present": true,
+            "risk_prediction_present": true,
+            "verifier_present": true,
+            "rollback_present": true,
+            "negative_control_present": true,
+            "edges_parse": true,
+            "connects_parent_or_source": true,
+            "duplicate_free": true,
+            "conflict_free": true
+          }
+        },
+        {
+          "proposal_id": "phase0_contract_invalid",
+          "proposal_type": "retrieval_policy",
+          "admission": "draft_pool",
+          "admitted": false,
+          "issues": [
+            "missing_negative_control",
+            "missing_rollback"
+          ],
+          "warnings": [],
+          "checked_items": {
+            "proposal_id_present": true,
+            "proposal_type_known": true,
+            "parent_ref_present": true,
+            "candidate_required_when_overlay": true,
+            "candidate_schema_valid": true,
+            "candidate_status_is_candidate": true,
+            "scope_present": true,
+            "measurable_effect_present": true,
+            "risk_prediction_present": true,
+            "verifier_present": true,
+            "rollback_present": false,
+            "negative_control_present": false,
+            "edges_parse": true,
+            "connects_parent_or_source": true,
+            "duplicate_free": true,
+            "conflict_free": true
+          }
+        }
+      ],
+      "admitted_proposal_ids": [
+        "prop_987c1e91025d"
+      ],
+      "quarantined_proposal_ids": [
+        "phase0_contract_invalid"
+      ],
+      "metrics": {
+        "proposal_count": 2,
+        "admitted_count": 1,
+        "quarantined_count": 1,
+        "invalid_admitted_count": 0,
+        "admitted_verifier_coverage": 1.0,
+        "admitted_rollback_coverage": 1.0,
+        "admitted_negative_control_coverage": 1.0,
+        "issue_counts": {
+          "missing_negative_control": 1,
+          "missing_rollback": 1
+        }
+      },
+      "gates": {
+        "all_candidates_have_contract_result": true,
+        "invalid_candidates_quarantined": true,
+        "admitted_candidates_have_verifier": true,
+        "admitted_candidates_have_rollback": true,
+        "admitted_candidates_have_negative_control": true
+      },
+      "failed_gates": [],
+      "pass": true
+    },
+    "readback_contract": {
+      "pass": true,
+      "admitted_proposal_ids": [
+        "prop_987c1e91025d"
+      ],
+      "quarantined_proposal_ids": [
+        "phase0_contract_invalid"
+      ]
+    },
+    "applied_candidate_ids": [
+      "cand_8fc104b78947"
+    ],
+    "valid_candidate_id": "cand_8fc104b78947",
+    "invalid_candidate_id": "phase0_contract_invalid_candidate",
+    "invalid_quarantined": true,
+    "valid_applied_only": true,
+    "main_graph_mutated": false
   },
   "contract_items": [
     "scope",
@@ -127,7 +239,12 @@
     "verifier_presence": 1.0,
     "negative_control_presence": 1.0,
     "main_graph_mutation_count": 0,
-    "avg_contract_check_ms": 0.0727
+    "avg_contract_check_ms": 0.0666,
+    "production_contract_proposal_count": 2,
+    "production_contract_admitted_count": 1,
+    "production_contract_quarantined_count": 1,
+    "production_contract_invalid_admitted_count": 0,
+    "production_contract_applied_count": 1
   },
   "gates": {
     "source_contract_bypass_passes": true,
@@ -141,9 +258,12 @@
     "verifier_complete": true,
     "negative_controls_complete": true,
     "no_main_graph_pollution": true,
-    "contract_check_under_budget": true
+    "contract_check_under_budget": true,
+    "production_contract_probe_passes": true,
+    "production_invalid_candidate_quarantined": true,
+    "production_valid_candidate_applied_only": true
   },
   "failed_gates": [],
   "pass": true,
-  "interpretation": "Phase 0 is now represented as an explicit v3 contract checker instead of only a v2 bypass name. It preserves the v1 schema/kernel while adding admission governance and draft quarantine."
+  "interpretation": "Phase 0 is now represented as an explicit v3 contract checker instead of only a v2 bypass name. It preserves the v1 schema/kernel while adding admission governance, draft quarantine, and a production pre-overlay contract path for candidate proposals."
 }

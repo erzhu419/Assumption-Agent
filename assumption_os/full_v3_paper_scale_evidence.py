@@ -198,6 +198,10 @@ def build_full_v3_paper_scale_evidence_payload(
         "retrieval_baseline_margin_large": metrics["retrieval_margin_over_best_baseline"] >= 0.70,
         "key_toggle_margin_positive": metrics["key_toggle_min_margin"] >= 0.05,
         "v3_mechanism_artifacts_all_pass": metrics["v3_mechanism_pass_rate"] == 1.0,
+        "phase0_production_contract_blocks_invalid_overlay": (
+            metrics["phase0_production_contract_invalid_admitted_count"] == 0
+            and metrics["phase0_production_contract_applied_count"] == 1
+        ),
         "vertical_slice_compose_passes": bool(artifacts["vertical_slice"].get("pass")),
         "long_run_pairwise_downstream_positive": metrics["long_run_downstream_win_rate"] >= 0.65,
         "frozen_v3_beats_v1_kernel": metrics["full_v3_margin_vs_v1_kernel"] >= 0.10,
@@ -437,6 +441,21 @@ def _metrics(*, artifacts: dict[str, dict[str, Any]], evidence: dict[str, Any]) 
         "key_toggle_min_margin": round(min(key_margins), 4) if key_margins else None,
         "key_toggle_mean_margin": round(sum(key_margins) / max(1, len(key_margins)), 4) if key_margins else None,
         "boundary_case_count": len(baseline_summary["boundary_rows"]),
+        "phase0_production_contract_proposal_count": int(
+            artifacts["v3_phase0_contract"]["metrics"]["production_contract_proposal_count"]
+        ),
+        "phase0_production_contract_admitted_count": int(
+            artifacts["v3_phase0_contract"]["metrics"]["production_contract_admitted_count"]
+        ),
+        "phase0_production_contract_quarantined_count": int(
+            artifacts["v3_phase0_contract"]["metrics"]["production_contract_quarantined_count"]
+        ),
+        "phase0_production_contract_invalid_admitted_count": int(
+            artifacts["v3_phase0_contract"]["metrics"]["production_contract_invalid_admitted_count"]
+        ),
+        "phase0_production_contract_applied_count": int(
+            artifacts["v3_phase0_contract"]["metrics"]["production_contract_applied_count"]
+        ),
         "vertical_slice_downstream_delta": artifacts["vertical_slice"]["metrics"]["downstream_score_delta"],
         "vertical_slice_brier_improvement": artifacts["vertical_slice"]["metrics"]["world_model_brier_improvement"],
         "long_run_downstream_win_rate": artifacts["v3_phase7_long_run"]["metrics"]["downstream_win_rate_on_unseen"],

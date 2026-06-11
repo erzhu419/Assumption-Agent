@@ -118,6 +118,10 @@ from assumption_os.paper_repro_pack import build_paper_repro_pack_payload
 from assumption_os.paper_retrieval_baselines import build_paper_retrieval_baselines_payload
 from assumption_os.pre_live_tie_screen import build_pre_live_tie_screen_payload
 from assumption_os.process_model_zoo_v2 import build_process_model_zoo_v2_payload
+from assumption_os.proposal_contract import (
+    apply_contract_checked_proposal_overlay,
+    build_proposal_contract_payload,
+)
 from assumption_os.proposal_overlay import apply_proposal_overlay, proposal_candidate_ids
 from assumption_os.proposals import ProposalType, build_candidate_proposals
 from assumption_os.queue_artifact_eval import build_queue_artifact_eval_payload, judgment_sets_from_artifact_eval
@@ -543,6 +547,11 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["duplicate_detection_recall"], 1.0)
         self.assertEqual(metrics["conflict_detection_recall"], 1.0)
         self.assertEqual(metrics["main_graph_mutation_count"], 0)
+        self.assertEqual(metrics["production_contract_proposal_count"], 2)
+        self.assertEqual(metrics["production_contract_admitted_count"], 1)
+        self.assertEqual(metrics["production_contract_quarantined_count"], 1)
+        self.assertEqual(metrics["production_contract_invalid_admitted_count"], 0)
+        self.assertEqual(metrics["production_contract_applied_count"], 1)
 
     def test_full_v3_phase1_memory_consolidation_prunes_and_compresses_graph(self):
         payload = build_full_v3_phase1_memory_consolidation_payload(
@@ -702,6 +711,9 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["retrieval_margin_over_best_baseline"], 0.70)
         self.assertGreaterEqual(metrics["key_toggle_min_margin"], 0.05)
         self.assertEqual(metrics["v3_mechanism_pass_rate"], 1.0)
+        self.assertEqual(metrics["phase0_production_contract_proposal_count"], 2)
+        self.assertEqual(metrics["phase0_production_contract_invalid_admitted_count"], 0)
+        self.assertEqual(metrics["phase0_production_contract_applied_count"], 1)
         self.assertGreaterEqual(metrics["long_run_downstream_win_rate"], 0.65)
         self.assertGreaterEqual(metrics["full_v3_margin_vs_v1_kernel"], 0.10)
         self.assertGreaterEqual(metrics["full_v3_margin_vs_best_nonfull"], 0.08)
@@ -801,6 +813,7 @@ class AssumptionOSTest(unittest.TestCase):
         self.assertEqual(metrics["outer_shell_count"], 5)
         self.assertEqual(metrics["outer_shell_production_claim_count"], 0)
         self.assertEqual(metrics["phase10_status"], "learned_candidate_not_promoted")
+        self.assertIn("production_contract_gate_available", by_id["phase0_contract_checker"]["implementation_level"])
         self.assertEqual(by_id["phase9_hybrid_guard"]["production_default_status"], "retained_gated_profile")
         self.assertIn("not_main_loop", by_id["phase1_memory_consolidation"]["implementation_level"])
         self.assertIn("not_long_running_production", by_id["phase7_long_run_benchmark"]["implementation_level"])
@@ -5278,6 +5291,75 @@ class AssumptionOSTest(unittest.TestCase):
             self.assertEqual(proposal_candidate_ids(payload), applied)
             self.assertIn(applied[0], overlay_store.nodes)
             self.assertNotIn(applied[0], JsonlGraphStore(td).nodes)
+
+    def test_proposal_contract_checked_overlay_quarantines_invalid_candidates(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = JsonlGraphStore(td)
+            store.upsert_node(AssumptionNode(
+                id="strategy_contract",
+                type=AssumptionType.METHOD,
+                claim="contract checked proposal parent",
+                tags=["contract"],
+            ))
+            store.flush()
+            graph = SimpleAssumptionGraph(JsonlGraphStore(td))
+            lifecycle_payload = {
+                "actions": [{
+                    "node_id": "strategy_contract",
+                    "action_type": "expand_retrieval",
+                    "priority": 0.8,
+                    "rationale": "valid contract candidate",
+                    "proposed_updates": {"expected_effect": "increase trigger coverage"},
+                    "verification_plan": "retrieval audit with outside negative control",
+                    "rollback_condition": "rollback if outside harm appears",
+                    "source": {
+                        "decision": "expand_retrieval",
+                        "utility_lcb90": 1.0,
+                        "route_counts": {"should_fire": 4},
+                        "active_counts": {"should_fire": 1},
+                    },
+                }]
+            }
+            proposals = build_candidate_proposals(
+                graph=graph,
+                lifecycle_payload=lifecycle_payload,
+                eval_id="unit_contract",
+            )
+            valid = proposals[0].to_dict()
+            invalid = json.loads(json.dumps(valid))
+            invalid["proposal_id"] = "prop_contract_invalid"
+            invalid["candidate_node"]["id"] = "cand_contract_invalid"
+            invalid["candidate_node"]["verifiers"] = ["conditioned_eval_gate"]
+            invalid["candidate_node"]["risk_predictions"] = ["may overreach"]
+            invalid["edges"][0]["target"] = "cand_contract_invalid"
+            invalid["manifest"]["rollback_condition"] = ""
+            invalid["manifest"]["verification_plan"] = "retrieval audit"
+            payload = {"eval_id": "unit_contract_payload", "proposals": [valid, invalid]}
+
+            contract = build_proposal_contract_payload(
+                proposal_payload=payload,
+                eval_id="unit_contract_gate",
+                store=JsonlGraphStore(td),
+            )
+            self.assertTrue(contract["pass"], contract["failed_gates"])
+            self.assertEqual(contract["metrics"]["proposal_count"], 2)
+            self.assertEqual(contract["metrics"]["admitted_count"], 1)
+            self.assertEqual(contract["metrics"]["quarantined_count"], 1)
+            self.assertEqual(contract["admitted_proposal_ids"], [valid["proposal_id"]])
+            self.assertEqual(contract["quarantined_proposal_ids"], ["prop_contract_invalid"])
+            invalid_result = {
+                row["proposal_id"]: row for row in contract["results"]
+            }["prop_contract_invalid"]
+            self.assertIn("missing_rollback", invalid_result["issues"])
+            self.assertIn("missing_negative_control", invalid_result["issues"])
+
+            overlay_store = JsonlGraphStore(td)
+            applied, applied_contract = apply_contract_checked_proposal_overlay(overlay_store, payload)
+            self.assertEqual(applied, [valid["candidate_node"]["id"]])
+            self.assertEqual(applied_contract["quarantined_proposal_ids"], ["prop_contract_invalid"])
+            self.assertIn(valid["candidate_node"]["id"], overlay_store.nodes)
+            self.assertNotIn("cand_contract_invalid", overlay_store.nodes)
+            self.assertNotIn(valid["candidate_node"]["id"], JsonlGraphStore(td).nodes)
 
     def test_candidate_eval_preflight_marks_ready_overlay(self):
         with tempfile.TemporaryDirectory() as td:
