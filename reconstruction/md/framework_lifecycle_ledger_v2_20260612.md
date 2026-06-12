@@ -1,0 +1,23 @@
+# Framework Lifecycle Ledger V2
+
+- pass: True
+- failed_gates: []
+- source evaluations: 26
+- ledger entries: 25
+- status counts: {'active_scoped_framework': 15, 'branch_only': 1, 'candidate_framework': 5, 'demoted_to_branch': 2, 'rejected_boundary_only': 2}
+- promoted ledger coverage: 1.0
+- rejected reason coverage: 1.0
+- source active frameworks: 17
+- current active frameworks: 15
+- raw active survival rate: 0.8824
+- current active survival rate: 1.0
+- demoted after recheck: 2
+- limiting case survival rate: 1.0
+- branch->framework transitions: 17
+- explicit branch->active transitions: 1
+- demotion events: 3
+- rollback final status: active_scoped_framework
+- negative evidence retained: 4
+- prompt trick retained: 0
+- core prior promotions: 0
+- main graph mutations: 0

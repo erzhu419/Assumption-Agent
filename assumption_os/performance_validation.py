@@ -57,6 +57,7 @@ from .formal_mapping import (
 from .framework_growth_ablation_suite import build_framework_growth_ablation_suite_payload
 from .framework_evolution_graph_episode import build_framework_evolution_graph_episode_payload
 from .framework_branch_ledger import build_framework_branch_ledger_payload
+from .framework_lifecycle_ledger_v2 import build_framework_lifecycle_ledger_v2_payload
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .harness_observer import build_harness_observer_payload
 from .last_three_part_coverage_audit import build_last_three_part_coverage_audit_payload
@@ -237,6 +238,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["framework_branch_ledger"] = _validate_framework_branch_ledger(root=root)
     timings["framework_branch_ledger_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["framework_lifecycle_ledger_v2"] = _validate_framework_lifecycle_ledger_v2(root=root)
+    timings["framework_lifecycle_ledger_v2_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["philosophy_growth_benchmark"] = _validate_philosophy_growth_benchmark(root=root)
     timings["philosophy_growth_benchmark_sec"] = _elapsed(start)
@@ -1440,6 +1444,40 @@ def _validate_framework_branch_ledger(*, root: Path) -> dict:
         "core_promotion_count": metrics["core_promotion_count"],
         "max_promotion_rank": metrics["max_promotion_rank"],
         "active_required_relation_coverage": metrics["active_required_relation_coverage"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_framework_lifecycle_ledger_v2(*, root: Path) -> dict:
+    payload = build_framework_lifecycle_ledger_v2_payload(
+        root=root,
+        eval_id="perf_framework_lifecycle_ledger_v2",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "source_evaluation_count": metrics["source_evaluation_count"],
+        "ledger_entry_count": metrics["ledger_entry_count"],
+        "status_counts": metrics["status_counts"],
+        "promoted_framework_ledger_coverage": metrics["promoted_framework_ledger_coverage"],
+        "rejected_framework_rejection_reason_coverage": metrics["rejected_framework_rejection_reason_coverage"],
+        "negative_evidence_retained_count": metrics["negative_evidence_retained_count"],
+        "source_active_framework_count": metrics["source_active_framework_count"],
+        "active_framework_count": metrics["active_framework_count"],
+        "active_recheck_count": metrics["active_recheck_count"],
+        "active_framework_survival_rate": metrics["active_framework_survival_rate"],
+        "current_active_survival_rate": metrics["current_active_survival_rate"],
+        "demoted_after_recheck_count": metrics["demoted_after_recheck_count"],
+        "limiting_case_survival_rate": metrics["limiting_case_survival_rate"],
+        "branch_to_framework_transition_count": metrics["branch_to_framework_transition_count"],
+        "explicit_branch_to_active_transition_count": metrics["explicit_branch_to_active_transition_count"],
+        "demotion_event_count": metrics["demotion_event_count"],
+        "rollback_replay_count": metrics["rollback_replay_count"],
+        "rollback_final_status": metrics["rollback_final_status"],
+        "prompt_trick_retained_count": metrics["prompt_trick_retained_count"],
+        "core_prior_promotion_count": metrics["core_prior_promotion_count"],
+        "deleted_branch_count": metrics["deleted_branch_count"],
         "main_graph_mutation_count": metrics["main_graph_mutation_count"],
         "failed_gates": payload["failed_gates"],
     }
@@ -2849,6 +2887,13 @@ def _key_metric(name: str, section: dict) -> str:
             f"entries={section['ledger_entry_count']}, "
             f"status={section['status_counts']}, "
             f"core={section['core_promotion_count']}"
+        )
+    if name == "framework_lifecycle_ledger_v2":
+        return (
+            f"entries={section['ledger_entry_count']}, "
+            f"active={section['active_framework_count']}/{section['source_active_framework_count']}, "
+            f"survival={section['current_active_survival_rate']} raw={section['active_framework_survival_rate']}, "
+            f"rollback={section['rollback_final_status']}"
         )
     if name == "philosophy_growth_benchmark":
         return (
