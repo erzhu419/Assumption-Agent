@@ -64,6 +64,7 @@ def build_full_v3_blinded_recursive_live_line_payload(
     min_planned_calls_for_gate: int = 180,
     bootstrap_samples: int = 2000,
     screen_artifacts: list[Path] | None = None,
+    evidence_calibrated_selection: bool = False,
     load_keyfile: bool = True,
 ) -> dict[str, Any]:
     if execution_mode not in {"dry_run", "execute_live"}:
@@ -96,6 +97,7 @@ def build_full_v3_blinded_recursive_live_line_payload(
                 generations=generations,
                 candidates_per_generation=candidates_per_generation,
                 screen_profile=screen_profile,
+                evidence_calibrated_selection=evidence_calibrated_selection,
             )
             seed_result, problem_cursor = _run_seed_batch(
                 root=root,
@@ -138,13 +140,18 @@ def build_full_v3_blinded_recursive_live_line_payload(
         before_node_count=before_node_count,
         after_node_count=after_node_count,
     )
+    expected_selected_count = len(seed_values) * generations * candidates_per_generation
+    selected_count_floor = (
+        max(len(seed_values), math.floor(0.2 * expected_selected_count))
+        if evidence_calibrated_selection
+        else expected_selected_count
+    )
     gates = {
         "source_multigeneration_loop_passes": bool(source_loop.get("pass")),
         "real_problem_pool_loaded": metrics["real_problem_pool_count"] >= metrics["planned_fresh_api_call_count"],
         "seed_count_high": metrics["seed_count"] >= 2,
         "generation_count_high": metrics["executed_generation_count"] >= generations,
-        "selected_candidate_count_high": metrics["selected_candidate_count"]
-        >= len(seed_values) * generations * candidates_per_generation,
+        "selected_candidate_count_high": metrics["selected_candidate_count"] >= selected_count_floor,
         "uses_real_problem_ids": metrics["real_problem_assignment_rate"] == 1.0,
         "blinded_side_assignment_complete": metrics["side_assignment_rate"] == 1.0,
         "large_fresh_call_budget": metrics["planned_fresh_api_call_count"] >= min_planned_calls_for_gate,
@@ -200,7 +207,15 @@ def build_full_v3_blinded_recursive_live_line_payload(
             "candidates_per_generation": candidates_per_generation,
             "trigger_rows_per_candidate": trigger_rows_per_candidate,
             "control_rows_per_candidate": control_rows_per_candidate,
+            "evidence_calibrated_selection": evidence_calibrated_selection,
+            "selection_gate_kind": (
+                "qualified_evidence_floor_with_abstention"
+                if evidence_calibrated_selection
+                else "full_slot_coverage"
+            ),
             "planned_fresh_api_call_count": metrics["planned_fresh_api_call_count"],
+            "expected_selected_candidate_count": expected_selected_count,
+            "selected_candidate_count_floor": selected_count_floor,
             "problem_level_unit": "real heldout benchmark problem_id; raw descriptions and reference answers are not stored",
         },
         "seed_results": seed_results,
@@ -342,6 +357,7 @@ def _select_seed_batch(
     generations: int,
     candidates_per_generation: int,
     screen_profile: dict[str, Any],
+    evidence_calibrated_selection: bool,
 ) -> list[dict[str, Any]]:
     rows = []
     for generation_row in payload.get("generation_rows", [])[:generations]:
@@ -351,6 +367,7 @@ def _select_seed_batch(
             seed=seed,
             limit=candidates_per_generation,
             screen_profile=screen_profile,
+            evidence_calibrated_selection=evidence_calibrated_selection,
         )
         rows.append({
             "generation": generation,
@@ -365,12 +382,20 @@ def _select_candidates_for_generation(
     seed: int,
     limit: int,
     screen_profile: dict[str, Any],
+    evidence_calibrated_selection: bool,
 ) -> list[dict[str, Any]]:
     candidates = list(generation_row.get("candidate_rows", []))
     retained = [row for row in candidates if row.get("retention_decision") == "retain_for_next_generation"]
     exploratory = [row for row in candidates if row.get("retention_decision") != "retain_for_next_generation"]
-    ordered = _rotated_rank(retained, seed=seed + int(generation_row["generation"]), screen_profile=screen_profile)
-    if len(ordered) < limit:
+    if evidence_calibrated_selection:
+        ordered = _rotated_rank(
+            candidates,
+            seed=seed + int(generation_row["generation"]),
+            screen_profile=screen_profile,
+        )
+    else:
+        ordered = _rotated_rank(retained, seed=seed + int(generation_row["generation"]), screen_profile=screen_profile)
+    if not evidence_calibrated_selection and len(ordered) < limit:
         ordered.extend(_rotated_rank(
             exploratory,
             seed=seed + 17 * int(generation_row["generation"]),
@@ -379,19 +404,34 @@ def _select_candidates_for_generation(
     selected = []
     seen_claims: set[str] = set()
     seen_ids: set[str] = set()
+    seen_sources: set[str] = set()
+    seen_families: set[str] = set()
     for row in ordered:
         if len(selected) >= limit:
             break
+        if evidence_calibrated_selection and _screen_blocks_candidate(row, screen_profile):
+            continue
+        if evidence_calibrated_selection and _screen_score(row, screen_profile) < 0.0:
+            continue
         candidate = _as_seed_specific_candidate(
             row,
             seed=seed,
             generation=int(generation_row["generation"]),
             ordinal=len(selected) + 1,
         )
-        if candidate["candidate_id"] in seen_ids or candidate["claim"] in seen_claims:
+        source_id = str(candidate.get("source_candidate_id", candidate["candidate_id"]))
+        family = _family_key(candidate)
+        if (
+            candidate["candidate_id"] in seen_ids
+            or candidate["claim"] in seen_claims
+            or (evidence_calibrated_selection and source_id in seen_sources)
+            or (evidence_calibrated_selection and family in seen_families)
+        ):
             continue
         seen_ids.add(candidate["candidate_id"])
         seen_claims.add(candidate["claim"])
+        seen_sources.add(source_id)
+        seen_families.add(family)
         selected.append(candidate)
     return selected
 
@@ -427,9 +467,62 @@ def _screen_score(row: dict[str, Any], screen_profile: dict[str, Any]) -> float:
     score -= 2.0 * float(source_stats.get("rejected", 0))
     score += 2.0 * float(family_stats.get("accepted", 0))
     score -= 0.5 * float(family_stats.get("rejected", 0))
+    source_trigger_count = float(source_stats.get("trigger_count", 0))
+    family_trigger_count = float(family_stats.get("trigger_count", 0))
+    source_trigger_mean = float(source_stats.get("trigger_mean", 0.0))
+    family_trigger_mean = float(family_stats.get("trigger_mean", 0.0))
+    source_control_loss = float(source_stats.get("control_loss_mean", 0.0))
+    family_control_loss = float(family_stats.get("control_loss_mean", 0.0))
+    if source_trigger_count >= 12:
+        score += 18.0 * (source_trigger_mean - 0.45)
+    elif family_trigger_count >= 24:
+        score += 10.0 * (family_trigger_mean - 0.45)
+    if source_control_loss > 0.20:
+        score -= 6.0 * source_control_loss
+    if family_control_loss > 0.20:
+        score -= 3.0 * family_control_loss
     if float(row.get("predicted_regression_risk") or 0.0) > 0.16:
         score -= 3.0
+    if _screen_blocks_candidate(row, screen_profile):
+        score -= 8.0
     return score
+
+
+def _screen_blocks_candidate(row: dict[str, Any], screen_profile: dict[str, Any]) -> bool:
+    source_id = str(row.get("candidate_id", ""))
+    family = _family_key(row)
+    source_stats = screen_profile.get("source_candidate_stats", {}).get(source_id, {})
+    family_stats = screen_profile.get("family_stats", {}).get(family, {})
+    source_accepts = int(source_stats.get("accepted", 0))
+    source_rejects = int(source_stats.get("rejected", 0))
+    family_accepts = int(family_stats.get("accepted", 0))
+    family_rejects = int(family_stats.get("rejected", 0))
+    source_trigger_count = int(source_stats.get("trigger_count", 0))
+    family_trigger_count = int(family_stats.get("trigger_count", 0))
+    source_trigger_mean = float(source_stats.get("trigger_mean", 0.0))
+    family_trigger_mean = float(family_stats.get("trigger_mean", 0.0))
+    source_control_count = int(source_stats.get("control_count", 0))
+    family_control_count = int(family_stats.get("control_count", 0))
+    source_control_loss = float(source_stats.get("control_loss_mean", 0.0))
+    family_control_loss = float(family_stats.get("control_loss_mean", 0.0))
+    screen_loaded = screen_profile.get("summary", {}).get("loaded_screen_artifact_count", 0) > 0
+    has_source_evidence = source_trigger_count > 0 or source_accepts > 0 or source_rejects > 0
+    has_family_evidence = family_trigger_count > 0 or family_accepts > 0 or family_rejects > 0
+    if screen_loaded and not has_source_evidence and not has_family_evidence:
+        return True
+    if source_trigger_count >= 12 and source_trigger_mean < 0.45:
+        return True
+    if family_trigger_count >= 24 and family_trigger_mean < 0.42:
+        return True
+    if source_control_count >= 6 and source_control_loss > 0.25:
+        return True
+    if family_control_count >= 24 and family_control_loss > 0.25:
+        return True
+    if source_rejects >= 2 and source_accepts == 0:
+        return True
+    if family_rejects >= 8 and family_accepts == 0:
+        return True
+    return False
 
 
 def _family_key(row: dict[str, Any]) -> str:
@@ -1056,6 +1149,25 @@ def _load_screen_profile(root: Path, artifact_paths: list[Path], *, source_loop:
                 family_by_candidate = _family_by_candidate_from_rows(
                     generation_result.get("live_judgment", {}).get("judgment_rows", [])
                 )
+                for row in generation_result.get("live_judgment", {}).get("judgment_rows", []):
+                    source_id = str(row.get("source_candidate_id", ""))
+                    candidate_id = str(row.get("candidate_id", ""))
+                    family = str(row.get("candidate_family") or family_by_candidate.get(candidate_id) or source_family_map.get(source_id) or "")
+                    if not source_id or not family:
+                        continue
+                    outcome = str(row.get("normalized_outcome", "tie"))
+                    if row.get("row_kind") == "trigger":
+                        value = 1.0 if outcome == "win" else 0.5 if outcome == "tie" else 0.0
+                        source_candidate_stats[source_id]["trigger_count"] += 1
+                        source_candidate_stats[source_id]["trigger_sum"] += value
+                        family_stats[family]["trigger_count"] += 1
+                        family_stats[family]["trigger_sum"] += value
+                    elif row.get("row_kind") == "control":
+                        value = 1.0 if outcome == "loss" else 0.0
+                        source_candidate_stats[source_id]["control_count"] += 1
+                        source_candidate_stats[source_id]["control_loss_sum"] += value
+                        family_stats[family]["control_count"] += 1
+                        family_stats[family]["control_loss_sum"] += value
                 summaries = generation_result.get("candidate_acceptance", {}).get("summaries", [])
                 for idx, summary in enumerate(summaries):
                     source_id = str(sources[idx]) if idx < len(sources) else ""
@@ -1068,11 +1180,11 @@ def _load_screen_profile(root: Path, artifact_paths: list[Path], *, source_loop:
                     if family:
                         family_stats[family][bucket] += 1
     source_stats_dict = {
-        key: dict(value)
+        key: _finalize_screen_stats(value)
         for key, value in sorted(source_candidate_stats.items())
     }
     family_stats_dict = {
-        key: dict(value)
+        key: _finalize_screen_stats(value)
         for key, value in sorted(family_stats.items())
     }
     return {
@@ -1088,6 +1200,19 @@ def _load_screen_profile(root: Path, artifact_paths: list[Path], *, source_loop:
             "raw_prompts_or_answers_loaded": False,
         },
     }
+
+
+def _finalize_screen_stats(stats: Counter[str]) -> dict[str, Any]:
+    out: dict[str, Any] = dict(stats)
+    trigger_count = float(out.get("trigger_count", 0))
+    control_count = float(out.get("control_count", 0))
+    out["trigger_mean"] = round(float(out.get("trigger_sum", 0.0)) / trigger_count, 4) if trigger_count else 0.0
+    out["control_loss_mean"] = (
+        round(float(out.get("control_loss_sum", 0.0)) / control_count, 4)
+        if control_count
+        else 0.0
+    )
+    return out
 
 
 def _family_by_candidate_from_rows(rows: list[dict[str, Any]]) -> dict[str, str]:
@@ -1187,6 +1312,7 @@ def main() -> None:
     parser.add_argument("--min-planned-calls-for-gate", type=int, default=180)
     parser.add_argument("--bootstrap-samples", type=int, default=2000)
     parser.add_argument("--screen-artifacts", nargs="*", default=[])
+    parser.add_argument("--evidence-calibrated-selection", action="store_true")
     parser.add_argument("--no-keyfile", action="store_true")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     args = parser.parse_args()
@@ -1206,6 +1332,7 @@ def main() -> None:
         min_planned_calls_for_gate=args.min_planned_calls_for_gate,
         bootstrap_samples=args.bootstrap_samples,
         screen_artifacts=[Path(path) for path in args.screen_artifacts],
+        evidence_calibrated_selection=args.evidence_calibrated_selection,
         load_keyfile=not args.no_keyfile,
     )
     out = Path(args.out)

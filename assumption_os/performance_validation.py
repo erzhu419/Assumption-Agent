@@ -64,6 +64,7 @@ from .objective_bench import build_objective_benchmark_payload
 from .open_ended_framework_evolution_run import build_open_ended_framework_evolution_run_payload
 from .paper_fresh_frozen_rerun_protocol import build_paper_fresh_frozen_rerun_protocol_payload
 from .paper_fresh_rerun_result_integration import build_paper_fresh_rerun_result_integration_payload
+from .paper_broad_generator_repair_integration import build_paper_broad_generator_repair_integration_payload
 from .recursive_audit import build_recursive_audit_payload
 from .recursive_daemon import build_preflight_queue_daemon_payload, build_recursive_daemon_payload
 from .recursive_executor import JudgmentSet
@@ -207,6 +208,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["paper_fresh_rerun_result_integration"] = _validate_paper_fresh_rerun_result_integration(root=root)
     timings["paper_fresh_rerun_result_integration_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["paper_broad_generator_repair_integration"] = _validate_paper_broad_generator_repair_integration(root=root)
+    timings["paper_broad_generator_repair_integration_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["simulator_no_leakage_audit"] = _validate_simulator_no_leakage_audit(root=root)
     timings["simulator_no_leakage_audit_sec"] = _elapsed(start)
@@ -1220,6 +1224,45 @@ def _validate_paper_fresh_rerun_result_integration(*, root: Path) -> dict:
         "fresh_live_failed_gates": metrics["fresh_live_failed_gates"],
         "paper_selective_retention_claim_allowed": metrics["paper_selective_retention_claim_allowed"],
         "paper_unfiltered_generator_claim_allowed": metrics["paper_unfiltered_generator_claim_allowed"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_paper_broad_generator_repair_integration(*, root: Path) -> dict:
+    payload = build_paper_broad_generator_repair_integration_payload(
+        root=root,
+        eval_id="perf_paper_broad_generator_repair_integration",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "original_trigger_problem_level_mean_utility": metrics[
+            "original_trigger_problem_level_mean_utility"
+        ],
+        "original_trigger_problem_level_ci95": metrics["original_trigger_problem_level_ci95"],
+        "repair_v1_trigger_problem_level_mean_utility": metrics[
+            "repair_v1_trigger_problem_level_mean_utility"
+        ],
+        "repair_v2_fresh_api_call_count": metrics["repair_v2_fresh_api_call_count"],
+        "repair_v2_planned_fresh_api_call_count": metrics["repair_v2_planned_fresh_api_call_count"],
+        "repair_v2_selected_candidate_count": metrics["repair_v2_selected_candidate_count"],
+        "repair_v2_trigger_problem_level_mean_utility": metrics[
+            "repair_v2_trigger_problem_level_mean_utility"
+        ],
+        "repair_v2_trigger_problem_level_ci95": metrics["repair_v2_trigger_problem_level_ci95"],
+        "trigger_utility_delta_vs_original": metrics["trigger_utility_delta_vs_original"],
+        "trigger_ci_lower_minus_original_ci_upper": metrics[
+            "trigger_ci_lower_minus_original_ci_upper"
+        ],
+        "repair_v2_control_problem_level_mean_loss_rate": metrics[
+            "repair_v2_control_problem_level_mean_loss_rate"
+        ],
+        "repair_v2_control_problem_level_ci95": metrics["repair_v2_control_problem_level_ci95"],
+        "repair_v2_live_pass": metrics["repair_v2_live_pass"],
+        "repair_v2_failed_gates": metrics["repair_v2_failed_gates"],
+        "selected_candidate_count_delta_vs_original": metrics[
+            "selected_candidate_count_delta_vs_original"
+        ],
         "failed_gates": payload["failed_gates"],
     }
 
@@ -2581,6 +2624,14 @@ def _key_metric(name: str, section: dict) -> str:
             f"accepted={section['accepted_count']}, "
             f"acc_util={section['accepted_trigger_problem_level_mean_utility']}, "
             f"raw_pass={section['fresh_live_raw_pass']}"
+        )
+    if name == "paper_broad_generator_repair_integration":
+        return (
+            f"orig={section['original_trigger_problem_level_mean_utility']}, "
+            f"v2={section['repair_v2_trigger_problem_level_mean_utility']}, "
+            f"delta={section['trigger_utility_delta_vs_original']}, "
+            f"fresh={section['repair_v2_fresh_api_call_count']}/"
+            f"{section['repair_v2_planned_fresh_api_call_count']}"
         )
     if name == "conservative_generalization_gate":
         return (
