@@ -25,7 +25,7 @@ Current target is L2 -> L3, not L4.
 | A1 | `assumption_os/autonomy_journal.py` | implemented | `tests/test_autonomy_journal.py`, `autonomy_journal_replay_20260612.json` |
 | A2 | `assumption_os/autonomy_queue.py` | implemented | `tests/test_autonomy_queue.py`, `autonomy_queue_lease_20260612.json` |
 | B1 | `assumption_os/simulator_transition_schema.py` | implemented | `tests/test_simulator_transition_schema.py`, `simulator_transition_schema_validation_20260612.json` |
-| B2 | `simulator_eval_splits.py` | pending | leave-domain/pattern/artifact splits |
+| B2 | `assumption_os/simulator_eval_splits.py` | implemented | `tests/test_simulator_eval_splits.py`, `simulator_eval_splits_20260612.json` |
 | C1 | `finite_category_certificate.py` | pending | certificate schema + obligation checks |
 | I1 | `integrated_recursive_episode.py` | pending | residual -> proposal -> simulator -> formal gate -> ablation -> replay |
 
@@ -52,7 +52,7 @@ Metrics:
 
 ## Next Step
 
-Implement B2 leave-pattern/domain/artifact split evaluation after the transition dataset is frozen.
+Implement C1 finite category certificate schema after simulator split discipline is in place.
 
 ## A2 Completion Snapshot
 
@@ -116,3 +116,42 @@ Metrics:
 - `split_counts={"train":255,"validation":37,"test":53}`
 - `provenance_hash_unique=true`
 - `secret_or_prompt_payload_detected=false`
+
+## B2 Completion Snapshot
+
+- Evaluates the frozen 345-row transition dataset under:
+  - leave-one-out
+  - leave-domain-out
+  - leave-pattern-out
+  - leave-artifact-out
+  - leave-residual-family-out
+- Reports Brier, ECE, abstention rate, true-positive block rate, and false-positive block rate.
+- Baselines:
+  - feature-similarity simulator candidate
+  - base-rate per arm
+  - current cheap heuristic world model
+  - handwritten hybrid guard
+  - random-with-abstain
+  - always-original-v3
+  - always-run-ablation
+- Decision-derived features are explicitly excluded from the feature model.
+- Promotion rule blocks raw/current heuristic promotion if heldout false-positive block or ECE is unsafe.
+
+Artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/simulator_eval_splits_20260612.json`
+
+Metrics:
+
+- `leave_one_out_group_count=345`
+- `leave_domain_out_group_count=9`
+- `leave_pattern_out_group_count=8`
+- `leave_artifact_out_group_count=4`
+- `leave_residual_family_out_group_count=16`
+- `feature_model_loo_brier=0.2022`
+- `base_rate_loo_brier=0.2157`
+- `current_heuristic_loo_brier=0.1834`
+- `current_heuristic_false_positive_block_rate=0.2822`
+- `raw_predictor_promotion_allowed=false`
+- `feature_model_promotion_allowed=true`
+- `production_simulator_replacement_allowed=false`
