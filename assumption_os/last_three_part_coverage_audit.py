@@ -42,6 +42,7 @@ ARTIFACTS = {
     "integrated_episode": PAPER_DIR / "integrated_recursive_episode_20260612.json",
     "integrated_episode_b3_c2": PAPER_DIR / "integrated_recursive_episode_b3_c2_20260612.json",
     "paper_main": PAPER_DIR / "paper_frozen_main_experiment_v2_20260612.json",
+    "paper_fresh_protocol": PAPER_DIR / "paper_fresh_frozen_rerun_protocol_20260612.json",
     "creative_generator": PAPER_DIR / "creative_hypothesis_trajectory_search_20260612.json",
     "main_graph_monitor": PAPER_DIR / "main_graph_controlled_apply_monitor_20260612.json",
     "final_closure": PAPER_DIR / "last_three_part_final_closure_20260612.json",
@@ -195,6 +196,7 @@ def _ticket_rows(*, artifacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]
     integrated = _metrics(a["integrated_episode"])
     integrated_b3_c2 = _metrics(a["integrated_episode_b3_c2"])
     paper = _metrics(a["paper_main"])
+    paper_fresh = _metrics(a["paper_fresh_protocol"])
     generator = _metrics(a["creative_generator"])
     main_graph = _metrics(a["main_graph_monitor"])
     final = _metrics(a["final_closure"])
@@ -671,6 +673,28 @@ def _ticket_rows(*, artifacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]
             },
             "canary-scope committed main-graph apply monitor",
         ),
+        ticket(
+            "P4_fresh_frozen_rerun_protocol",
+            "Fresh frozen rerun protocol readiness",
+            "P",
+            [
+                "paper_fresh_frozen_rerun_protocol_20260612.json",
+                "full_v3_blinded_recursive_live_line_20260612.json",
+            ],
+            bool(a["paper_fresh_protocol"].get("pass"))
+            and paper_fresh["target_fresh_api_call_count"] >= 720
+            and paper_fresh["fresh_pilot_api_call_count"] >= 180
+            and paper_fresh["dry_run_planned_fresh_api_call_count"]
+            == paper_fresh["target_fresh_api_call_count"]
+            and paper_fresh["command_secret_hit_count"] == 0
+            and paper_fresh["target_fresh_result_claim_allowed"] is False,
+            {
+                "target_calls": paper_fresh["target_fresh_api_call_count"],
+                "pilot_calls": paper_fresh["fresh_pilot_api_call_count"],
+                "dry_run_calls": paper_fresh["dry_run_planned_fresh_api_call_count"],
+            },
+            "fresh protocol ready; target live result not overclaimed",
+        ),
     ]
 
 
@@ -681,6 +705,7 @@ def _claim_boundary_rows(*, artifacts: dict[str, dict[str, Any]]) -> list[dict[s
     sim_leakage = _metrics(artifacts["sim_leakage_audit"])
     final = _metrics(artifacts["final_closure"])
     paper = _metrics(artifacts["paper_main"])
+    paper_fresh = _metrics(artifacts["paper_fresh_protocol"])
     supervised = _metrics(artifacts["autonomy_supervised"])
     return [
         {
@@ -703,8 +728,12 @@ def _claim_boundary_rows(*, artifacts: dict[str, dict[str, Any]]) -> list[dict[s
         },
         {
             "claim_id": "brand_new_live_api_main_paper_experiment",
-            "blocked": paper["new_api_call_count"] == 0,
-            "reason": "Paper line is a frozen same-batch artifact aggregation, not a new live API main run.",
+            "blocked": paper["new_api_call_count"] == 0
+            and paper_fresh["target_fresh_result_claim_allowed"] is False,
+            "reason": (
+                "Paper line is a frozen same-batch artifact aggregation.  The fresh rerun protocol is ready, "
+                "but the target live result remains unclaimed until execute_live produces the 720-call artifact."
+            ),
         },
         {
             "claim_id": "ungated_default_policy_or_main_graph_mutation",

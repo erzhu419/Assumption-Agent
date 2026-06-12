@@ -1,7 +1,7 @@
 # last_three_part.md Coverage Audit
 
 - pass: `True`
-- engineering tickets: `31/31`
+- engineering tickets: `32/32`
 - open engineering gaps: `0`
 - blocked claim boundaries: `5/5`
 - source artifact pass rate: `1.0`
@@ -41,6 +41,7 @@
 | `P1_paper_main_line` | `pass` | paper_frozen_main_experiment_v2_20260612.json | problem_count=1768; baseline_count=8; margin=0.0417 |
 | `P2_creative_generator` | `pass` | creative_hypothesis_trajectory_search_20260612.json | candidate_count=372; retained_count=201 |
 | `P3_main_graph_controlled_apply` | `pass` | main_graph_controlled_apply_monitor_20260612.json | monitor_day_count=30; min_precision_delta_vs_before=0.1695 |
+| `P4_fresh_frozen_rerun_protocol` | `pass` | paper_fresh_frozen_rerun_protocol_20260612.json, full_v3_blinded_recursive_live_line_20260612.json | target_calls=720; pilot_calls=240; dry_run_calls=720 |
 
 ## Blocked Claim Boundaries
 
@@ -49,5 +50,5 @@
 | `unbounded_24_7_general_autonomous_os` | `True` | Evidence supports supervised bounded autonomy, not unrestricted 24/7 general OS. |
 | `raw_world_simulator_replaces_live_validation` | `True` | Simulator is promoted only for triage/routing; raw replacement remains blocked. |
 | `complete_category_theory_theorem_prover` | `True` | Lean-verified finite fragment is allowed; arbitrary theorem proving is not. |
-| `brand_new_live_api_main_paper_experiment` | `True` | Paper line is a frozen same-batch artifact aggregation, not a new live API main run. |
+| `brand_new_live_api_main_paper_experiment` | `True` | Paper line is a frozen same-batch artifact aggregation.  The fresh rerun protocol is ready, but the target live result remains unclaimed until execute_live produces the 720-call artifact. |
 | `ungated_default_policy_or_main_graph_mutation` | `True` | Graph and policy mutations remain gated or canary-scoped. |

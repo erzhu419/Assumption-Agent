@@ -62,6 +62,7 @@ from .manifest_logger import build_component_manifest_payload, events_from_run_l
 from .memory_surfaces import build_memory_surface_payload
 from .objective_bench import build_objective_benchmark_payload
 from .open_ended_framework_evolution_run import build_open_ended_framework_evolution_run_payload
+from .paper_fresh_frozen_rerun_protocol import build_paper_fresh_frozen_rerun_protocol_payload
 from .recursive_audit import build_recursive_audit_payload
 from .recursive_daemon import build_preflight_queue_daemon_payload, build_recursive_daemon_payload
 from .recursive_executor import JudgmentSet
@@ -199,6 +200,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["last_three_part_coverage_audit"] = _validate_last_three_part_coverage(root=root)
     timings["last_three_part_coverage_audit_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["paper_fresh_frozen_rerun_protocol"] = _validate_paper_fresh_frozen_rerun_protocol(root=root)
+    timings["paper_fresh_frozen_rerun_protocol_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["simulator_no_leakage_audit"] = _validate_simulator_no_leakage_audit(root=root)
     timings["simulator_no_leakage_audit_sec"] = _elapsed(start)
@@ -1156,6 +1160,30 @@ def _validate_simulator_no_leakage_audit(*, root: Path) -> dict:
         "base_rate_loo_brier": metrics["base_rate_loo_brier"],
         "raw_simulator_promoted": metrics["raw_simulator_promoted"],
         "gate_router_promoted": metrics["gate_router_promoted"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_paper_fresh_frozen_rerun_protocol(*, root: Path) -> dict:
+    payload = build_paper_fresh_frozen_rerun_protocol_payload(
+        root=root,
+        eval_id="perf_paper_fresh_frozen_rerun_protocol",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "target_fresh_api_call_count": metrics["target_fresh_api_call_count"],
+        "fresh_pilot_api_call_count": metrics["fresh_pilot_api_call_count"],
+        "dry_run_planned_fresh_api_call_count": metrics["dry_run_planned_fresh_api_call_count"],
+        "dry_run_selected_candidate_count": metrics["dry_run_selected_candidate_count"],
+        "available_problem_count": metrics["available_problem_count"],
+        "available_problem_domain_count": metrics["available_problem_domain_count"],
+        "frozen_problem_count": metrics["frozen_problem_count"],
+        "baseline_count": metrics["baseline_count"],
+        "frozen_margin_over_best_baseline": metrics["frozen_margin_over_best_baseline"],
+        "command_secret_hit_count": metrics["command_secret_hit_count"],
+        "fresh_protocol_ready_claim_allowed": metrics["fresh_protocol_ready_claim_allowed"],
+        "target_fresh_result_claim_allowed": metrics["target_fresh_result_claim_allowed"],
         "failed_gates": payload["failed_gates"],
     }
 
@@ -2502,6 +2530,14 @@ def _key_metric(name: str, section: dict) -> str:
             f"leaks={section['state_feature_leak_count']}/{section['provenance_leak_count']}, "
             f"identity={section['prediction_outcome_exact_identity_count']}, "
             f"best={section['best_arm_agreement_rate']}"
+        )
+    if name == "paper_fresh_frozen_rerun_protocol":
+        return (
+            f"target={section['target_fresh_api_call_count']}, "
+            f"pilot={section['fresh_pilot_api_call_count']}, "
+            f"dry={section['dry_run_planned_fresh_api_call_count']}, "
+            f"claim={section['fresh_protocol_ready_claim_allowed']}/"
+            f"{section['target_fresh_result_claim_allowed']}"
         )
     if name == "conservative_generalization_gate":
         return (
