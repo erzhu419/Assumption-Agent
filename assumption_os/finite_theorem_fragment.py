@@ -461,7 +461,25 @@ def build_finite_theorem_fragment_payload(
 
 def extract_natural_language_diagram(text: str) -> dict[str, Any]:
     lower = text.lower()
-    if _has_any(lower, ["le chatelier", "lenz", "oppose", "counteract", "equilibrium", "抵消", "平衡"]):
+    if _has_any(lower, [
+        "not automatically",
+        "not the same as",
+        "does not imply",
+        " is not a randomized",
+        " is not an incremental",
+        " is not an error",
+        " is not a mass",
+        " is not branch",
+        " is not a phase",
+        " is not failover",
+    ]):
+        return {
+            "text_hash": stable_hash(text),
+            "status": "not_applicable",
+            "reason": "explicit negated analogy or unsupported near-neighbor pattern",
+            "certificate": None,
+        }
+    if _has_any(lower, ["le chatelier", "lenz", "oppose", "opposing response", "counteract", "equilibrium", "negative feedback", "opposite response", "stabilizing", "抵消", "平衡"]):
         return _nl_certificate(
             family="negative_feedback_regulation",
             text=text,
@@ -477,13 +495,109 @@ def extract_natural_language_diagram(text: str) -> dict[str, Any]:
             arrows=(("transform", "input_state", "transformed_state"), ("identity_carry", "input_state", "output_state")),
             invariants=("gradient_transport", "information_preservation"),
         )
-    if _has_any(lower, ["autocorrelation", "random noise", "denoise", "signal", "jepa", "gaussian"]):
+    if _has_any(lower, ["error correction", "checksum", "parity", "redundancy check", "syndrome", "recovered message", "targeted correction"]):
+        return _nl_certificate(
+            family="error_correction_feedback",
+            text=text,
+            objects=("noisy_message", "redundancy_signal", "corrected_message"),
+            arrows=(("detect_error", "noisy_message", "redundancy_signal"), ("repair_state", "redundancy_signal", "corrected_message")),
+            invariants=("message_identity_recovered", "noise_not_reinforced"),
+        )
+    if _has_any(lower, ["regularization", "smoothness penalty", "overfit", "weight decay", "implicit bias", "penalty term", "reducing variance", "reduces variance", "complexity penalty"]):
+        return _nl_certificate(
+            family="regularization_smoothing",
+            text=text,
+            objects=("flexible_model", "complexity_penalty", "generalized_solution"),
+            arrows=(("penalize_complexity", "flexible_model", "complexity_penalty"), ("select_smoother", "complexity_penalty", "generalized_solution")),
+            invariants=("variance_reduced", "signal_structure_preserved"),
+        )
+    if _has_any(lower, ["autocorrelation", "random noise", "denoise", "jepa", "gaussian", "latent structure", "stable feature", "stable signal", "independent noise", "persistent signal", "random fluctuations", "signal extraction", "raw measurement", "correlation filter"]):
         return _nl_certificate(
             family="noise_invariant_signal_extraction",
             text=text,
             objects=("raw_measurement", "correlation_filter", "stable_signal"),
             arrows=(("filter_noise", "raw_measurement", "correlation_filter"), ("extract_signal", "correlation_filter", "stable_signal")),
             invariants=("random_noise_cancels", "stable_feature_persists"),
+        )
+    if _has_any(lower, ["bottleneck", "saturation", "enzyme", "queue capacity", "throughput ceiling", "rate limiting", "limiting step"]):
+        return _nl_certificate(
+            family="bottleneck_capacity_limit",
+            text=text,
+            objects=("input_flow", "capacity_limiter", "bounded_output"),
+            arrows=(("load_limiter", "input_flow", "capacity_limiter"), ("cap_throughput", "capacity_limiter", "bounded_output")),
+            invariants=("limiting_step_controls_rate", "extra_input_has_diminishing_return"),
+        )
+    if _has_any(lower, ["strangler", "bridge retrofit", "adapter layer", "incremental migration", "compatibility bridge", "old api", "legacy behavior", "legacy state", "controlled transfer"]):
+        return _nl_certificate(
+            family="bridge_decomposition",
+            text=text,
+            objects=("legacy_state", "bridge_interface", "target_state"),
+            arrows=(("wrap_legacy", "legacy_state", "bridge_interface"), ("gradually_transfer", "bridge_interface", "target_state")),
+            invariants=("interface_continuity", "blast_radius_reduction"),
+        )
+    if _has_any(lower, ["randomized", "clinical trial", "a/b test", "control group", "treatment group", "effect estimate", "causal comparison", "measured lift"]):
+        return _nl_certificate(
+            family="randomized_counterfactual_evaluation",
+            text=text,
+            objects=("population", "random_assignment", "causal_comparison"),
+            arrows=(("split_units", "population", "random_assignment"), ("estimate_effect", "random_assignment", "causal_comparison")),
+            invariants=("exchangeability", "counterfactual_contrast"),
+        )
+    if _has_any(lower, ["mass balance", "budget balance", "conservation", "flow conservation", "stock and flow", "cash runway", "no free creation", "input-output"]):
+        return _nl_certificate(
+            family="conservation_balance",
+            text=text,
+            objects=("inflow", "conserved_stock", "outflow_accounting"),
+            arrows=(("accumulate_stock", "inflow", "conserved_stock"), ("balance_outflow", "conserved_stock", "outflow_accounting")),
+            invariants=("input_output_accounting", "no_free_creation"),
+        )
+    if _has_any(lower, ["error correction", "checksum", "parity", "redundancy check", "syndrome", "recovered message", "targeted correction"]):
+        return _nl_certificate(
+            family="error_correction_feedback",
+            text=text,
+            objects=("noisy_message", "redundancy_signal", "corrected_message"),
+            arrows=(("detect_error", "noisy_message", "redundancy_signal"), ("repair_state", "redundancy_signal", "corrected_message")),
+            invariants=("message_identity_recovered", "noise_not_reinforced"),
+        )
+    if _has_any(lower, ["branch and bound", "beam search", "pruning", "search space", "dominance bound", "smaller frontier", "optimal paths", "bound evidence"]):
+        return _nl_certificate(
+            family="search_pruning_by_bounds",
+            text=text,
+            objects=("candidate_space", "bound_evidence", "reduced_frontier"),
+            arrows=(("score_bound", "candidate_space", "bound_evidence"), ("prune_dominated", "bound_evidence", "reduced_frontier")),
+            invariants=("optimal_candidate_preserved", "dominated_paths_removed"),
+        )
+    if _has_any(lower, ["phase transition", "critical threshold", "tipping point", "percolation", "threshold effect", "locally linear", "regime boundary", "structural boundary", "control parameter"]):
+        return _nl_certificate(
+            family="threshold_phase_transition",
+            text=text,
+            objects=("control_parameter", "critical_boundary", "new_regime"),
+            arrows=(("approach_threshold", "control_parameter", "critical_boundary"), ("switch_regime", "critical_boundary", "new_regime")),
+            invariants=("local_change_not_linear_near_threshold", "regime_boundary_matters"),
+        )
+    if _has_any(lower, ["compiler", "subassembly", "modular composition", "interface contract", "assembly line", "local contract", "manufacturing"]):
+        return _nl_certificate(
+            family="modular_composition",
+            text=text,
+            objects=("component_spec", "interface_contract", "assembled_system"),
+            arrows=(("compile_component", "component_spec", "interface_contract"), ("compose_module", "interface_contract", "assembled_system")),
+            invariants=("local_contract_preserved", "composition_enables_scaling"),
+        )
+    if _has_any(lower, ["failover", "replication", "fault tolerance", "backup path", "redundant channel", "recover the service", "single failure", "continuity"]):
+        return _nl_certificate(
+            family="redundant_fault_tolerance",
+            text=text,
+            objects=("primary_path", "redundant_path", "service_continuity"),
+            arrows=(("mirror_state", "primary_path", "redundant_path"), ("recover_service", "redundant_path", "service_continuity")),
+            invariants=("single_failure_masked", "continuity_preserved"),
+        )
+    if _has_any(lower, ["regularization", "smoothness penalty", "overfit", "weight decay", "implicit bias", "penalty term", "reducing variance", "reduces variance", "complexity penalty"]):
+        return _nl_certificate(
+            family="regularization_smoothing",
+            text=text,
+            objects=("flexible_model", "complexity_penalty", "generalized_solution"),
+            arrows=(("penalize_complexity", "flexible_model", "complexity_penalty"), ("select_smoother", "complexity_penalty", "generalized_solution")),
+            invariants=("variance_reduced", "signal_structure_preserved"),
         )
     return {
         "text_hash": stable_hash(text),

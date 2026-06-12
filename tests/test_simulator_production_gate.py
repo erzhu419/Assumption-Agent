@@ -5,9 +5,27 @@ from assumption_os.simulator_production_gate import build_simulator_production_g
 
 
 class SimulatorProductionGateTest(unittest.TestCase):
-    def test_production_gate_passes_as_audit_and_blocks_overclaim(self):
+    def test_production_gate_promotes_with_production_evidence(self):
         root = Path(__file__).resolve().parents[1]
         payload = build_simulator_production_gate_payload(root=root, eval_id="unit_simulator_production_gate")
+        metrics = payload["metrics"]
+        blockers = set(payload["promotion_decision"]["blockers"])
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertGreaterEqual(metrics["transition_row_count"], 2000)
+        self.assertTrue(metrics["production_simulator_candidate_allowed"])
+        self.assertEqual(blockers, set())
+        self.assertFalse(metrics["raw_simulator_promoted"])
+        self.assertTrue(metrics["gate_router_promoted"])
+
+    def test_legacy_gate_still_blocks_without_production_evidence(self):
+        root = Path(__file__).resolve().parents[1]
+        missing = Path("phase four/assumption_graph/paper_readiness_20260604/missing_production_evidence.json")
+        payload = build_simulator_production_gate_payload(
+            root=root,
+            eval_id="unit_simulator_production_gate_legacy",
+            production_evidence_path=missing,
+        )
         metrics = payload["metrics"]
         blockers = set(payload["promotion_decision"]["blockers"])
 
@@ -17,8 +35,6 @@ class SimulatorProductionGateTest(unittest.TestCase):
         self.assertIn("transition_rows_minimum", blockers)
         self.assertIn("pattern_count_minimum", blockers)
         self.assertIn("counterfactual_gate_allowed", blockers)
-        self.assertFalse(metrics["raw_simulator_promoted"])
-        self.assertTrue(metrics["gate_router_promoted"])
 
     def test_split_and_calibration_requirements_are_reported(self):
         root = Path(__file__).resolve().parents[1]

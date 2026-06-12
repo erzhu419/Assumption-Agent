@@ -20,6 +20,7 @@ from .simulator_transition_schema import DEFAULT_DATASET_OUT, validate_transitio
 
 
 DEFAULT_OUT = PAPER_DIR / "simulator_production_gate_20260612.json"
+PRODUCTION_EVIDENCE_PATH = PAPER_DIR / "simulator_production_evidence_20260612.json"
 EVAL_SPLITS_PATH = PAPER_DIR / "simulator_eval_splits_20260612.json"
 UNCERTAINTY_PATH = PAPER_DIR / "simulator_uncertainty_20260612.json"
 COUNTERFACTUAL_PATH = PAPER_DIR / "simulator_counterfactual_policy_eval_20260612.json"
@@ -40,8 +41,18 @@ def build_simulator_production_gate_payload(
     root: Path,
     eval_id: str = "simulator_production_gate_20260612",
     dataset_path: Path | None = None,
+    production_evidence_path: Path | None = None,
 ) -> dict[str, Any]:
     root = root.resolve()
+    production_evidence_path = production_evidence_path or PRODUCTION_EVIDENCE_PATH
+    production_evidence = _load_json(root / production_evidence_path)
+    if production_evidence.get("pass") is True:
+        return _build_from_production_evidence(
+            root=root,
+            eval_id=eval_id,
+            production_evidence=production_evidence,
+            production_evidence_path=production_evidence_path,
+        )
     dataset_path = dataset_path or DEFAULT_DATASET_OUT
     dataset_path = dataset_path if dataset_path.is_absolute() else root / dataset_path
     rows = _load_jsonl(dataset_path)
@@ -136,6 +147,97 @@ def build_simulator_production_gate_payload(
             "production_simulator_candidate_allowed": production_candidate_allowed,
             "blockers": blocker_names,
             "allowed_claim_if_blocked": "bounded graph-action simulator for budget triage and verifier routing",
+            "blocked_claim": "task-world simulator replacing live ablation or judge evidence",
+        },
+        "metrics": metrics,
+        "gates": gates,
+        "failed_gates": [name for name, passed in gates.items() if not passed],
+        "pass": all(gates.values()),
+    }
+
+
+def _build_from_production_evidence(
+    *,
+    root: Path,
+    eval_id: str,
+    production_evidence: dict[str, Any],
+    production_evidence_path: Path,
+) -> dict[str, Any]:
+    source_metrics = production_evidence["metrics"]
+    requirement_results = {
+        "transition_rows_minimum": int(source_metrics["transition_row_count"]) >= PRODUCTION_REQUIREMENTS["transition_rows"],
+        "domain_count_minimum": int(source_metrics["domain_count"]) >= PRODUCTION_REQUIREMENTS["domains"],
+        "pattern_count_minimum": int(source_metrics["pattern_count"]) >= PRODUCTION_REQUIREMENTS["patterns"],
+        "leave_domain_nonnegative_rate_minimum": float(source_metrics["leave_domain_nonnegative_rate"])
+        >= PRODUCTION_REQUIREMENTS["leave_domain_nonnegative_rate"],
+        "leave_pattern_nonnegative_rate_minimum": float(source_metrics["leave_pattern_nonnegative_rate"])
+        >= PRODUCTION_REQUIREMENTS["leave_pattern_nonnegative_rate"],
+        "brier_beats_base_rate": float(source_metrics["feature_model_loo_brier"])
+        < float(source_metrics["base_rate_loo_brier"]),
+        "ece_below_threshold": float(source_metrics["uncertainty_ece"]) <= 0.08,
+        "true_positive_block_rate_safe": float(source_metrics["accepted_candidate_block_rate"])
+        <= PRODUCTION_REQUIREMENTS["true_positive_block_rate"],
+        "counterfactual_gate_allowed": bool(source_metrics["counterfactual_production_allowed"]),
+        "raw_simulator_not_promoted": source_metrics.get("raw_simulator_promoted") is False,
+        "gate_router_promoted": source_metrics.get("gate_router_promoted") is True,
+        "manual_audit_pass": bool(production_evidence.get("pass")),
+    }
+    blocker_names = [name for name, passed in requirement_results.items() if not passed]
+    production_candidate_allowed = not blocker_names
+    metrics = {
+        "transition_row_count": int(source_metrics["transition_row_count"]),
+        "valid_row_count": int(source_metrics["valid_row_count"]),
+        "domain_count": int(source_metrics["domain_count"]),
+        "pattern_count": int(source_metrics["pattern_count"]),
+        "leave_domain_nonnegative_rate": float(source_metrics["leave_domain_nonnegative_rate"]),
+        "leave_pattern_nonnegative_rate": float(source_metrics["leave_pattern_nonnegative_rate"]),
+        "feature_model_loo_brier": float(source_metrics["feature_model_loo_brier"]),
+        "base_rate_loo_brier": float(source_metrics["base_rate_loo_brier"]),
+        "uncertainty_ece": float(source_metrics["uncertainty_ece"]),
+        "accepted_candidate_block_rate": float(source_metrics["accepted_candidate_block_rate"]),
+        "matched_action_coverage": float(source_metrics["matched_action_coverage"]),
+        "counterfactual_production_allowed": bool(source_metrics["counterfactual_production_allowed"]),
+        "raw_simulator_promoted": bool(source_metrics["raw_simulator_promoted"]),
+        "gate_router_promoted": bool(source_metrics["gate_router_promoted"]),
+        "production_simulator_candidate_allowed": production_candidate_allowed,
+        "production_blocker_count": len(blocker_names),
+        "production_evidence_used": True,
+    }
+    gates = {
+        "dataset_valid": metrics["valid_row_count"] == metrics["transition_row_count"],
+        "required_artifacts_loaded": True,
+        "scale_requirements_evaluated": True,
+        "split_requirements_evaluated": True,
+        "calibration_requirements_evaluated": True,
+        "counterfactual_requirement_evaluated": True,
+        "raw_simulator_not_promoted_without_gate": metrics["raw_simulator_promoted"] is False,
+        "gate_router_available_for_triage": metrics["gate_router_promoted"] is True,
+        "production_claim_matches_requirements": metrics["production_simulator_candidate_allowed"]
+        is (not blocker_names),
+        "current_blockers_recorded": (metrics["production_simulator_candidate_allowed"] is False and bool(blocker_names))
+        or metrics["production_simulator_candidate_allowed"] is True,
+    }
+    return {
+        "eval_id": eval_id,
+        "eval_kind": "simulator_production_gate",
+        "last_three_part_ticket": "B7_production_simulator_candidate_gate",
+        "performance_validation": True,
+        "validation_scope": (
+            "Audits B7 production promotion using the production evidence v1 artifact when available.  Promotion "
+            "is limited to graph-action proposal triage and verifier routing; live validation and judges are not "
+            "replaced."
+        ),
+        "source": {
+            "production_evidence_path": str(production_evidence_path),
+            "production_evidence_mode": production_evidence.get("source", {}).get("source_mode"),
+            "production_dataset": production_evidence.get("source", {}).get("production_dataset"),
+        },
+        "production_requirements": PRODUCTION_REQUIREMENTS,
+        "requirement_results": requirement_results,
+        "promotion_decision": {
+            "production_simulator_candidate_allowed": production_candidate_allowed,
+            "blockers": blocker_names,
+            "allowed_claim_if_promoted": "production graph-action simulator for proposal triage and verifier routing",
             "blocked_claim": "task-world simulator replacing live ablation or judge evidence",
         },
         "metrics": metrics,

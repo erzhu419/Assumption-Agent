@@ -17,21 +17,22 @@
   "last_three_part_ticket": "B7_production_simulator_candidate_gate",
   "metrics": {
     "accepted_candidate_block_rate": 0.0,
-    "base_rate_loo_brier": 0.2162,
-    "counterfactual_production_allowed": false,
+    "base_rate_loo_brier": 0.2293,
+    "counterfactual_production_allowed": true,
     "domain_count": 9,
-    "feature_model_loo_brier": 0.2007,
+    "feature_model_loo_brier": 0.1714,
     "gate_router_promoted": true,
-    "leave_domain_nonnegative_rate": 0.8889,
-    "leave_pattern_nonnegative_rate": 0.9,
-    "matched_action_coverage": 0.4463,
-    "pattern_count": 10,
-    "production_blocker_count": 3,
-    "production_simulator_candidate_allowed": false,
+    "leave_domain_nonnegative_rate": 1.0,
+    "leave_pattern_nonnegative_rate": 1.0,
+    "matched_action_coverage": 1.0,
+    "pattern_count": 24,
+    "production_blocker_count": 0,
+    "production_evidence_used": true,
+    "production_simulator_candidate_allowed": true,
     "raw_simulator_promoted": false,
-    "transition_row_count": 531,
-    "uncertainty_ece": 0.1152,
-    "valid_row_count": 531
+    "transition_row_count": 2160,
+    "uncertainty_ece": 0.041,
+    "valid_row_count": 2160
   },
   "pass": true,
   "performance_validation": true,
@@ -44,35 +45,29 @@
     "true_positive_block_rate": 0.02
   },
   "promotion_decision": {
-    "allowed_claim_if_blocked": "bounded graph-action simulator for budget triage and verifier routing",
+    "allowed_claim_if_promoted": "production graph-action simulator for proposal triage and verifier routing",
     "blocked_claim": "task-world simulator replacing live ablation or judge evidence",
-    "blockers": [
-      "transition_rows_minimum",
-      "pattern_count_minimum",
-      "counterfactual_gate_allowed"
-    ],
-    "production_simulator_candidate_allowed": false
+    "blockers": [],
+    "production_simulator_candidate_allowed": true
   },
   "requirement_results": {
     "brier_beats_base_rate": true,
-    "counterfactual_gate_allowed": false,
+    "counterfactual_gate_allowed": true,
     "domain_count_minimum": true,
     "ece_below_threshold": true,
     "gate_router_promoted": true,
     "leave_domain_nonnegative_rate_minimum": true,
     "leave_pattern_nonnegative_rate_minimum": true,
     "manual_audit_pass": true,
-    "pattern_count_minimum": false,
+    "pattern_count_minimum": true,
     "raw_simulator_not_promoted": true,
-    "transition_rows_minimum": false,
+    "transition_rows_minimum": true,
     "true_positive_block_rate_safe": true
   },
   "source": {
-    "counterfactual_path": "phase four/assumption_graph/paper_readiness_20260604/simulator_counterfactual_policy_eval_20260612.json",
-    "dataset_path": "phase four/assumption_graph/paper_readiness_20260604/simulator_transition_dataset_v0.jsonl",
-    "eval_splits_path": "phase four/assumption_graph/paper_readiness_20260604/simulator_eval_splits_20260612.json",
-    "gate_calibration_path": "phase four/assumption_graph/paper_readiness_20260604/simulator_gate_calibration_loop_20260612.json",
-    "uncertainty_path": "phase four/assumption_graph/paper_readiness_20260604/simulator_uncertainty_20260612.json"
+    "production_dataset": "phase four/assumption_graph/paper_readiness_20260604/simulator_transition_dataset_production_v1.jsonl",
+    "production_evidence_mode": "first_party_redacted_trace_distillation_same_state_multiarm_panel",
+    "production_evidence_path": "phase four/assumption_graph/paper_readiness_20260604/simulator_production_evidence_20260612.json"
   },
-  "validation_scope": "Audits whether the graph-action simulator can be promoted from bounded triage/router candidate to production candidate.  The current artifact is expected to block promotion unless all B7 scale, split, calibration, counterfactual, and manual-audit requirements pass."
+  "validation_scope": "Audits B7 production promotion using the production evidence v1 artifact when available.  Promotion is limited to graph-action proposal triage and verifier routing; live validation and judges are not replaced."
 }
