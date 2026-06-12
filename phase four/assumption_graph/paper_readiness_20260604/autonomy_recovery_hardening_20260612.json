@@ -1,0 +1,148 @@
+{
+  "allowed_resolutions": [
+    "defer",
+    "manual_review_required",
+    "recover",
+    "rollback"
+  ],
+  "claim_boundaries": [
+    "This validates crash-safe bounded recovery semantics, not a 24/7 autonomous daemon.",
+    "Manual review remains a valid terminal safety state for corrupted or missing evidence.",
+    "Graph mutation remains gated/copy-only during fault handling."
+  ],
+  "eval_id": "autonomy_recovery_hardening_20260612",
+  "eval_kind": "autonomy_recovery_hardening",
+  "failed_gates": [],
+  "fault_results": [
+    {
+      "dangling_candidate_count": 0,
+      "fault": "kill_after_queue_read",
+      "graph_after_hash": "ee85b38f01208ecb",
+      "graph_before_hash": "ee85b38f01208ecb",
+      "manual_review_required": false,
+      "orphan_manifest_count": 0,
+      "queue_status_after_recovery": "completed",
+      "replay_divergence_detected": false,
+      "resolution": "recover",
+      "rollback_applied": false,
+      "ungated_mutation_count": 0
+    },
+    {
+      "dangling_candidate_count": 0,
+      "fault": "kill_after_candidate_preflight",
+      "graph_after_hash": "45ae1941c03c329b",
+      "graph_before_hash": "45ae1941c03c329b",
+      "manual_review_required": false,
+      "orphan_manifest_count": 0,
+      "queue_status_after_recovery": "completed",
+      "replay_divergence_detected": false,
+      "resolution": "recover",
+      "rollback_applied": false,
+      "ungated_mutation_count": 0
+    },
+    {
+      "dangling_candidate_count": 0,
+      "fault": "kill_after_acceptance",
+      "graph_after_hash": "3e7f317a3954ca1c",
+      "graph_before_hash": "3e7f317a3954ca1c",
+      "manual_review_required": false,
+      "orphan_manifest_count": 0,
+      "queue_status_after_recovery": "completed",
+      "replay_divergence_detected": false,
+      "resolution": "rollback",
+      "rollback_applied": true,
+      "ungated_mutation_count": 0
+    },
+    {
+      "dangling_candidate_count": 0,
+      "fault": "kill_during_apply",
+      "graph_after_hash": "b4c34b4b6b81a5da",
+      "graph_before_hash": "b4c34b4b6b81a5da",
+      "manual_review_required": false,
+      "orphan_manifest_count": 0,
+      "queue_status_after_recovery": "completed",
+      "replay_divergence_detected": false,
+      "resolution": "rollback",
+      "rollback_applied": true,
+      "ungated_mutation_count": 0
+    },
+    {
+      "dangling_candidate_count": 0,
+      "fault": "corrupt_one_artifact",
+      "graph_after_hash": "be84832ed1e3fa40",
+      "graph_before_hash": "be84832ed1e3fa40",
+      "manual_review_required": true,
+      "orphan_manifest_count": 0,
+      "queue_status_after_recovery": "blocked",
+      "replay_divergence_detected": false,
+      "resolution": "manual_review_required",
+      "rollback_applied": false,
+      "ungated_mutation_count": 0
+    },
+    {
+      "dangling_candidate_count": 0,
+      "fault": "missing_judgment_bundle",
+      "graph_after_hash": "0c7e93afb126ae4d",
+      "graph_before_hash": "0c7e93afb126ae4d",
+      "manual_review_required": false,
+      "orphan_manifest_count": 0,
+      "queue_status_after_recovery": "deferred",
+      "replay_divergence_detected": false,
+      "resolution": "defer",
+      "rollback_applied": false,
+      "ungated_mutation_count": 0
+    },
+    {
+      "dangling_candidate_count": 0,
+      "fault": "world_model_returns_nan",
+      "graph_after_hash": "ad1644f584af3a8a",
+      "graph_before_hash": "ad1644f584af3a8a",
+      "manual_review_required": true,
+      "orphan_manifest_count": 0,
+      "queue_status_after_recovery": "blocked",
+      "replay_divergence_detected": false,
+      "resolution": "manual_review_required",
+      "rollback_applied": false,
+      "ungated_mutation_count": 0
+    }
+  ],
+  "faults": [
+    "kill_after_queue_read",
+    "kill_after_candidate_preflight",
+    "kill_after_acceptance",
+    "kill_during_apply",
+    "corrupt_one_artifact",
+    "missing_judgment_bundle",
+    "world_model_returns_nan"
+  ],
+  "gates": {
+    "all_faults_exercised": true,
+    "all_faults_resolved_to_allowed_state": true,
+    "dangling_candidate_zero": true,
+    "defer_path_exercised": true,
+    "journal_replay_no_divergence": true,
+    "manual_review_path_exercised": true,
+    "orphan_manifest_zero": true,
+    "rollback_path_exercised": true,
+    "rollback_success_rate_safe": true,
+    "ungated_mutation_zero": true
+  },
+  "last_three_part_ticket": "A3_recovery_rollback_hardening",
+  "metrics": {
+    "allowed_resolution_coverage": 1.0,
+    "dangling_candidate_count": 0,
+    "defer_count": 1,
+    "fault_count": 7,
+    "manual_review_required_count": 2,
+    "orphan_manifest_count": 0,
+    "recover_count": 2,
+    "replay_divergence_count": 0,
+    "resolved_fault_count": 7,
+    "rollback_count": 2,
+    "rollback_success_rate": 1.0,
+    "ungated_mutation_count": 0
+  },
+  "pass": true,
+  "performance_validation": true,
+  "validation_scope": "Fault-injects bounded autonomy queue/journal cycles and verifies that crashes, corrupted artifacts, missing judgments, and invalid world-model outputs resolve to recover/defer/rollback/manual-review without ungated graph mutation or replay divergence."
+}

@@ -24,6 +24,7 @@ Current target is L2 -> L3, not L4.
 | --- | --- | --- | --- |
 | A1 | `assumption_os/autonomy_journal.py` | implemented | `tests/test_autonomy_journal.py`, `autonomy_journal_replay_20260612.json` |
 | A2 | `assumption_os/autonomy_queue.py` | implemented | `tests/test_autonomy_queue.py`, `autonomy_queue_lease_20260612.json` |
+| A3 | `assumption_os/autonomy_recovery_hardening.py` | implemented | `tests/test_autonomy_recovery_hardening.py`, `autonomy_recovery_hardening_20260612.json` |
 | B1 | `assumption_os/simulator_transition_schema.py` | implemented | `tests/test_simulator_transition_schema.py`, `simulator_transition_schema_validation_20260612.json` |
 | B2 | `assumption_os/simulator_eval_splits.py` | implemented | `tests/test_simulator_eval_splits.py`, `simulator_eval_splits_20260612.json` |
 | B3 | `assumption_os/simulator_uncertainty.py` | implemented | `tests/test_simulator_uncertainty.py`, `simulator_uncertainty_20260612.json` |
@@ -55,7 +56,7 @@ Metrics:
 
 ## Next Step
 
-Next step is A3 recovery/rollback hardening or B4 counterfactual policy evaluation, depending on whether the next priority is production safety or simulator causal evidence.
+Next step is B4 counterfactual policy evaluation, now that A3 recovery/rollback hardening is in place.
 
 ## A2 Completion Snapshot
 
@@ -83,6 +84,43 @@ Metrics:
 - `blocked_task_not_auto_unblocked=true`
 - `checkpoint_reload_same_state=true`
 - `journal_replay_divergence_detected=false`
+
+## A3 Completion Snapshot
+
+- Fault-injects the bounded autonomy queue/journal substrate.
+- Faults covered:
+  - `kill_after_queue_read`
+  - `kill_after_candidate_preflight`
+  - `kill_after_acceptance`
+  - `kill_during_apply`
+  - `corrupt_one_artifact`
+  - `missing_judgment_bundle`
+  - `world_model_returns_nan`
+- Allowed resolutions:
+  - `recover`
+  - `defer`
+  - `rollback`
+  - `manual_review_required`
+- Validates that failure handling does not create ungated graph mutation, orphan manifests, dangling candidates, or replay divergence.
+
+Artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/autonomy_recovery_hardening_20260612.json`
+
+Metrics:
+
+- `fault_count=7`
+- `resolved_fault_count=7`
+- `recover_count=2`
+- `defer_count=1`
+- `rollback_count=2`
+- `manual_review_required_count=2`
+- `rollback_success_rate=1.0`
+- `ungated_mutation_count=0`
+- `orphan_manifest_count=0`
+- `dangling_candidate_count=0`
+- `replay_divergence_count=0`
+- `allowed_resolution_coverage=1.0`
 
 ## B1 Completion Snapshot
 
