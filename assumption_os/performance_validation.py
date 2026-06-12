@@ -52,6 +52,7 @@ from .formal_mapping import (
     build_formal_search_eval_payload,
     build_formal_transfer_eval_payload,
 )
+from .framework_growth_ablation_suite import build_framework_growth_ablation_suite_payload
 from .framework_evolution_graph_episode import build_framework_evolution_graph_episode_payload
 from .framework_branch_ledger import build_framework_branch_ledger_payload
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
@@ -211,6 +212,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["framework_evolution_graph_episode"] = _validate_framework_evolution_graph_episode(root=root)
     timings["framework_evolution_graph_episode_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["framework_growth_ablation_suite"] = _validate_framework_growth_ablation_suite(root=root)
+    timings["framework_growth_ablation_suite_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["self_evo_roadmap_coverage_audit"] = _validate_self_evo_roadmap_coverage(root=root)
     timings["self_evo_roadmap_coverage_audit_sec"] = _elapsed(start)
@@ -1229,6 +1233,31 @@ def _validate_framework_evolution_graph_episode(*, root: Path) -> dict:
         "journal_replay_exact": metrics["journal_replay_exact"],
         "main_graph_mutation_count": metrics["main_graph_mutation_count"],
         "core_philosophy_prior_promotion_count": metrics["core_philosophy_prior_promotion_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_framework_growth_ablation_suite(*, root: Path) -> dict:
+    payload = build_framework_growth_ablation_suite_payload(
+        root=root,
+        eval_id="perf_framework_growth_ablation_suite",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "ablation_count": metrics["ablation_count"],
+        "full_score": metrics["full_score"],
+        "best_toggle_off_variant": metrics["best_toggle_off_variant"],
+        "best_toggle_off_score": metrics["best_toggle_off_score"],
+        "full_margin_vs_best_toggle_off": metrics["full_margin_vs_best_toggle_off"],
+        "full_margin_vs_local_patch": metrics["full_margin_vs_local_patch"],
+        "full_margin_vs_raw_wisdom": metrics["full_margin_vs_raw_wisdom"],
+        "max_old_success_drop_vs_full": metrics["max_old_success_drop_vs_full"],
+        "max_regression_increase_vs_full": metrics["max_regression_increase_vs_full"],
+        "no_ledger_unsafe_promotion_count": metrics["no_ledger_unsafe_promotion_count"],
+        "no_graph_lifecycle_readback_penalty": metrics["no_graph_lifecycle_readback_penalty"],
+        "full_prompt_trick_retained": metrics["full_prompt_trick_retained"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
         "failed_gates": payload["failed_gates"],
     }
 
@@ -2428,6 +2457,12 @@ def _key_metric(name: str, section: dict) -> str:
             f"contract={section['contract_admitted_count']}/{section['contract_quarantined_count']}, "
             f"rank={section['readback_active_rank']}, "
             f"seeds={section['descendant_seed_count']}"
+        )
+    if name == "framework_growth_ablation_suite":
+        return (
+            f"full={section['full_score']}, "
+            f"best_off={section['best_toggle_off_variant']}:{section['best_toggle_off_score']}, "
+            f"margin={section['full_margin_vs_best_toggle_off']}"
         )
     if name == "self_evo_roadmap_coverage_audit":
         return (

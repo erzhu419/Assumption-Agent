@@ -9,6 +9,7 @@ from typing import Any
 
 from .autonomy_journal import PAPER_DIR
 from .conservative_generalization_gate import build_conservative_generalization_gate_payload
+from .framework_growth_ablation_suite import build_framework_growth_ablation_suite_payload
 from .framework_evolution_graph_episode import build_framework_evolution_graph_episode_payload
 from .framework_branch_ledger import build_framework_branch_ledger_payload
 from .philosophy_growth_benchmark import build_philosophy_growth_benchmark_payload
@@ -39,6 +40,7 @@ def build_self_evo_roadmap_coverage_audit_payload(
     ledger = build_framework_branch_ledger_payload(root=root, eval_id=f"{eval_id}_ledger")
     bench = build_philosophy_growth_benchmark_payload(root=root, eval_id=f"{eval_id}_bench")
     graph_episode = build_framework_evolution_graph_episode_payload(root=root, eval_id=f"{eval_id}_graph_episode")
+    ablation = build_framework_growth_ablation_suite_payload(root=root, eval_id=f"{eval_id}_ablation")
     supporting = {name: _load_json(root / path) for name, path in SUPPORTING_ARTIFACTS.items()}
     roadmap_items = _roadmap_items(
         generator=generator,
@@ -46,6 +48,7 @@ def build_self_evo_roadmap_coverage_audit_payload(
         ledger=ledger,
         bench=bench,
         graph_episode=graph_episode,
+        ablation=ablation,
         supporting=supporting,
     )
     ugse = _bounded_ugse_score(
@@ -54,6 +57,7 @@ def build_self_evo_roadmap_coverage_audit_payload(
         ledger=ledger,
         bench=bench,
         graph_episode=graph_episode,
+        ablation=ablation,
         supporting=supporting,
     )
     open_items = [row for row in roadmap_items if row["status"] != "pass"]
@@ -65,15 +69,18 @@ def build_self_evo_roadmap_coverage_audit_payload(
         "r7_item_count": sum(1 for row in roadmap_items if row["item_id"].startswith("R7")),
         "bounded_ugse_score": ugse["bounded_ugse_score"],
         "framework_growth_component": ugse["components"]["framework_growth_score"],
+        "framework_ablation_margin_vs_best_toggle_off": ablation["metrics"]["full_margin_vs_best_toggle_off"],
+        "framework_ablation_margin_vs_raw_wisdom": ablation["metrics"]["full_margin_vs_raw_wisdom"],
         "unbounded_self_evolution_os_claim_allowed": False,
         "main_graph_mutation_count": 0,
     }
     gates = {
-        "all_core_modules_pass": all(item.get("pass") for item in [generator, gate, ledger, bench]),
+        "all_core_modules_pass": all(item.get("pass") for item in [generator, gate, ledger, bench, graph_episode, ablation]),
         "all_roadmap_items_pass": metrics["open_roadmap_item_count"] == 0,
         "r7_complete": metrics["r7_item_pass_count"] == metrics["r7_item_count"],
         "bounded_ugse_score_high": metrics["bounded_ugse_score"] >= 0.90,
         "framework_growth_component_present": metrics["framework_growth_component"] >= 0.80,
+        "framework_ablation_margin_present": metrics["framework_ablation_margin_vs_best_toggle_off"] >= 0.12,
         "unbounded_claim_blocked": metrics["unbounded_self_evolution_os_claim_allowed"] is False,
         "main_graph_not_mutated": metrics["main_graph_mutation_count"] == 0,
     }
@@ -94,6 +101,7 @@ def build_self_evo_roadmap_coverage_audit_payload(
             "framework_branch_ledger": {"pass": ledger["pass"], "metrics": ledger["metrics"]},
             "philosophy_growth_benchmark": {"pass": bench["pass"], "metrics": bench["metrics"]},
             "framework_evolution_graph_episode": {"pass": graph_episode["pass"], "metrics": graph_episode["metrics"]},
+            "framework_growth_ablation_suite": {"pass": ablation["pass"], "metrics": ablation["metrics"]},
         },
         "supporting_artifacts": {
             name: {
@@ -150,6 +158,7 @@ def _roadmap_items(
     ledger: dict[str, Any],
     bench: dict[str, Any],
     graph_episode: dict[str, Any],
+    ablation: dict[str, Any],
     supporting: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     g = generator["metrics"]
@@ -157,6 +166,7 @@ def _roadmap_items(
     l = ledger["metrics"]
     b = bench["metrics"]
     ge = graph_episode["metrics"]
+    a = ablation["metrics"]
     return [
         _item("BranchLedger", ledger["pass"], "framework_branch_ledger_20260612.json", f"entries={l['ledger_entry_count']}"),
         _item(
@@ -224,6 +234,18 @@ def _roadmap_items(
             f"relations={ge['readback_relation_coverage']}, rollback={ge['rollback_success']}",
         ),
         _item(
+            "R7.6 Framework Growth Ablation Suite",
+            ablation["pass"] and a["full_margin_vs_best_toggle_off"] >= 0.12,
+            "framework_growth_ablation_suite_20260612.json",
+            f"margin_best_off={a['full_margin_vs_best_toggle_off']}, best_off={a['best_toggle_off_variant']}",
+        ),
+        _item(
+            "Prompt Trick / Raw Wisdom Rejection",
+            a["full_prompt_trick_retained"] is False and a["full_margin_vs_raw_wisdom"] >= 0.30,
+            "framework_growth_ablation_suite_20260612.json",
+            f"raw_margin={a['full_margin_vs_raw_wisdom']}, prompt_trick={a['full_prompt_trick_retained']}",
+        ),
+        _item(
             "No Raw Wisdom Promotion",
             g["raw_wisdom_candidate_count"] == 0,
             "residual_to_framework_generator_20260612.json",
@@ -251,9 +273,16 @@ def _bounded_ugse_score(
     ledger: dict[str, Any],
     bench: dict[str, Any],
     graph_episode: dict[str, Any],
+    ablation: dict[str, Any],
     supporting: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     # This is a bounded-research maturity score, not an unbounded AGI claim.
+    ablation_m = ablation["metrics"]
+    ablation_contribution = min(0.96, 0.80 + ablation_m["full_margin_vs_best_toggle_off"])
+    framework_growth_score = round(
+        0.5 * bench["metrics"]["framework_growth_score"] + 0.5 * ablation_contribution,
+        4,
+    )
     components = {
         "wall_clock_autonomy": 0.93 if supporting["last_three_part"].get("pass") else 0.0,
         "open_task_ingestion": min(0.96, 0.72 + 0.03 * generator["metrics"]["anomaly_family_count"]),
@@ -270,7 +299,7 @@ def _bounded_ugse_score(
         "world_model_search_control": 0.92 if supporting["simulator_production"].get("pass") else 0.0,
         "cross_domain_method_scheduler": 0.90 if generator["metrics"]["multi_parent_candidate_rate"] == 1.0 else 0.0,
         "formal_verifier_reliability": 0.93 if supporting["finite_formal_stack"].get("pass") else 0.0,
-        "framework_growth_score": bench["metrics"]["framework_growth_score"],
+        "framework_growth_score": framework_growth_score,
         "external_evidence": 0.88 if supporting["paper_main"].get("pass") else 0.0,
     }
     weights = {

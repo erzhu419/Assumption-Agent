@@ -1,10 +1,10 @@
 # self_evo_roadmap.md Coverage Audit
 
 - pass: `True`
-- roadmap items: `14/14`
-- R7 items: `5/5`
-- bounded UGSE score: `0.9097`
-- framework growth component: `0.8361`
+- roadmap items: `16/16`
+- R7 items: `6/6`
+- bounded UGSE score: `0.9172`
+- framework growth component: `0.8981`
 
 ## Roadmap Items
 
@@ -21,6 +21,8 @@
 | `R7.5 Framework Pruning` | `pass` | framework_branch_ledger_20260612.json | negative_retained=1 |
 | `Framework Growth Score` | `pass` | philosophy_growth_benchmark_20260612.json | score=0.8361 |
 | `Framework Graph Graft Readback` | `pass` | framework_evolution_graph_episode_20260612.json | relations=1.0, rollback=True |
+| `R7.6 Framework Growth Ablation Suite` | `pass` | framework_growth_ablation_suite_20260612.json | margin_best_off=0.1604, best_off=no_graph_lifecycle_score_only |
+| `Prompt Trick / Raw Wisdom Rejection` | `pass` | framework_growth_ablation_suite_20260612.json | raw_margin=0.6383, prompt_trick=False |
 | `No Raw Wisdom Promotion` | `pass` | residual_to_framework_generator_20260612.json | raw_wisdom=0 |
 | `Unbounded Claim Boundary` | `pass` | last_three_part_coverage_audit_20260612.json | overclaim_leak=0 |
 | `Bounded Integrated Closure` | `pass` | integrated_recursive_episode_b3_c2_20260612.json + main_graph_controlled_apply_monitor_20260612.json | integrated+monitor pass |
@@ -34,5 +36,5 @@
 - `world_model_search_control`: `0.92`
 - `cross_domain_method_scheduler`: `0.9`
 - `formal_verifier_reliability`: `0.93`
-- `framework_growth_score`: `0.8361`
+- `framework_growth_score`: `0.8981`
 - `external_evidence`: `0.88`
