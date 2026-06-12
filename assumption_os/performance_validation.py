@@ -52,6 +52,7 @@ from .formal_mapping import (
     build_formal_search_eval_payload,
     build_formal_transfer_eval_payload,
 )
+from .framework_evolution_graph_episode import build_framework_evolution_graph_episode_payload
 from .framework_branch_ledger import build_framework_branch_ledger_payload
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .harness_observer import build_harness_observer_payload
@@ -207,6 +208,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["philosophy_growth_benchmark"] = _validate_philosophy_growth_benchmark(root=root)
     timings["philosophy_growth_benchmark_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["framework_evolution_graph_episode"] = _validate_framework_evolution_graph_episode(root=root)
+    timings["framework_evolution_graph_episode_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["self_evo_roadmap_coverage_audit"] = _validate_self_evo_roadmap_coverage(root=root)
     timings["self_evo_roadmap_coverage_audit_sec"] = _elapsed(start)
@@ -1200,6 +1204,31 @@ def _validate_philosophy_growth_benchmark(*, root: Path) -> dict:
         "local_patch_regression_cost": metrics["local_patch_regression_cost"],
         "core_philosophy_prior_promotion_count": metrics["core_philosophy_prior_promotion_count"],
         "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_framework_evolution_graph_episode(*, root: Path) -> dict:
+    payload = build_framework_evolution_graph_episode_payload(
+        root=root,
+        eval_id="perf_framework_evolution_graph_episode",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "contract_admitted_count": metrics["contract_admitted_count"],
+        "contract_quarantined_count": metrics["contract_quarantined_count"],
+        "graft_added_node_count": metrics["graft_added_node_count"],
+        "graft_added_edge_count": metrics["graft_added_edge_count"],
+        "required_relation_coverage": metrics["required_relation_coverage"],
+        "readback_active_rank": metrics["readback_active_rank"],
+        "readback_relation_coverage": metrics["readback_relation_coverage"],
+        "descendant_seed_count": metrics["descendant_seed_count"],
+        "negative_evidence_retained_count": metrics["negative_evidence_retained_count"],
+        "rollback_success": metrics["rollback_success"],
+        "journal_replay_exact": metrics["journal_replay_exact"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "core_philosophy_prior_promotion_count": metrics["core_philosophy_prior_promotion_count"],
         "failed_gates": payload["failed_gates"],
     }
 
@@ -2393,6 +2422,12 @@ def _key_metric(name: str, section: dict) -> str:
             f"gens={section['generation_count']}, "
             f"growth={section['framework_growth_score']}, "
             f"base={section['local_patch_growth_score']}/{section['raw_wisdom_growth_score']}"
+        )
+    if name == "framework_evolution_graph_episode":
+        return (
+            f"contract={section['contract_admitted_count']}/{section['contract_quarantined_count']}, "
+            f"rank={section['readback_active_rank']}, "
+            f"seeds={section['descendant_seed_count']}"
         )
     if name == "self_evo_roadmap_coverage_audit":
         return (

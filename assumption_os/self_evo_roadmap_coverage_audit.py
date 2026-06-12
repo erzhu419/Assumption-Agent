@@ -9,6 +9,7 @@ from typing import Any
 
 from .autonomy_journal import PAPER_DIR
 from .conservative_generalization_gate import build_conservative_generalization_gate_payload
+from .framework_evolution_graph_episode import build_framework_evolution_graph_episode_payload
 from .framework_branch_ledger import build_framework_branch_ledger_payload
 from .philosophy_growth_benchmark import build_philosophy_growth_benchmark_payload
 from .residual_to_framework_generator import build_residual_to_framework_generator_payload
@@ -37,9 +38,24 @@ def build_self_evo_roadmap_coverage_audit_payload(
     gate = build_conservative_generalization_gate_payload(root=root, eval_id=f"{eval_id}_gate")
     ledger = build_framework_branch_ledger_payload(root=root, eval_id=f"{eval_id}_ledger")
     bench = build_philosophy_growth_benchmark_payload(root=root, eval_id=f"{eval_id}_bench")
+    graph_episode = build_framework_evolution_graph_episode_payload(root=root, eval_id=f"{eval_id}_graph_episode")
     supporting = {name: _load_json(root / path) for name, path in SUPPORTING_ARTIFACTS.items()}
-    roadmap_items = _roadmap_items(generator=generator, gate=gate, ledger=ledger, bench=bench, supporting=supporting)
-    ugse = _bounded_ugse_score(generator=generator, gate=gate, ledger=ledger, bench=bench, supporting=supporting)
+    roadmap_items = _roadmap_items(
+        generator=generator,
+        gate=gate,
+        ledger=ledger,
+        bench=bench,
+        graph_episode=graph_episode,
+        supporting=supporting,
+    )
+    ugse = _bounded_ugse_score(
+        generator=generator,
+        gate=gate,
+        ledger=ledger,
+        bench=bench,
+        graph_episode=graph_episode,
+        supporting=supporting,
+    )
     open_items = [row for row in roadmap_items if row["status"] != "pass"]
     metrics = {
         "roadmap_item_count": len(roadmap_items),
@@ -77,6 +93,7 @@ def build_self_evo_roadmap_coverage_audit_payload(
             "conservative_generalization_gate": {"pass": gate["pass"], "metrics": gate["metrics"]},
             "framework_branch_ledger": {"pass": ledger["pass"], "metrics": ledger["metrics"]},
             "philosophy_growth_benchmark": {"pass": bench["pass"], "metrics": bench["metrics"]},
+            "framework_evolution_graph_episode": {"pass": graph_episode["pass"], "metrics": graph_episode["metrics"]},
         },
         "supporting_artifacts": {
             name: {
@@ -132,12 +149,14 @@ def _roadmap_items(
     gate: dict[str, Any],
     ledger: dict[str, Any],
     bench: dict[str, Any],
+    graph_episode: dict[str, Any],
     supporting: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     g = generator["metrics"]
     gate_m = gate["metrics"]
     l = ledger["metrics"]
     b = bench["metrics"]
+    ge = graph_episode["metrics"]
     return [
         _item("BranchLedger", ledger["pass"], "framework_branch_ledger_20260612.json", f"entries={l['ledger_entry_count']}"),
         _item(
@@ -151,6 +170,12 @@ def _roadmap_items(
             bench["pass"],
             "philosophy_growth_benchmark_20260612.json",
             f"growth={b['framework_growth_score']}",
+        ),
+        _item(
+            "Framework Graph Lifecycle Episode",
+            graph_episode["pass"],
+            "framework_evolution_graph_episode_20260612.json",
+            f"contract={ge['contract_admitted_count']}, rank={ge['readback_active_rank']}, seeds={ge['descendant_seed_count']}",
         ),
         _item(
             "R7.1 Framework Candidate Generation",
@@ -190,6 +215,15 @@ def _roadmap_items(
             f"score={b['framework_growth_score']}",
         ),
         _item(
+            "Framework Graph Graft Readback",
+            ge["readback_relation_coverage"] == 1.0
+            and ge["rollback_success"]
+            and ge["journal_replay_exact"]
+            and ge["main_graph_mutation_count"] == 0,
+            "framework_evolution_graph_episode_20260612.json",
+            f"relations={ge['readback_relation_coverage']}, rollback={ge['rollback_success']}",
+        ),
+        _item(
             "No Raw Wisdom Promotion",
             g["raw_wisdom_candidate_count"] == 0,
             "residual_to_framework_generator_20260612.json",
@@ -216,14 +250,23 @@ def _bounded_ugse_score(
     gate: dict[str, Any],
     ledger: dict[str, Any],
     bench: dict[str, Any],
+    graph_episode: dict[str, Any],
     supporting: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     # This is a bounded-research maturity score, not an unbounded AGI claim.
     components = {
         "wall_clock_autonomy": 0.93 if supporting["last_three_part"].get("pass") else 0.0,
         "open_task_ingestion": min(0.96, 0.72 + 0.03 * generator["metrics"]["anomaly_family_count"]),
-        "recursive_learning_closure": 0.93 if supporting["integrated_episode"].get("pass") else 0.0,
-        "safe_mutation_autonomy": 0.94 if supporting["main_graph_monitor"].get("pass") else 0.0,
+        "recursive_learning_closure": (
+            0.94 if supporting["integrated_episode"].get("pass") and graph_episode.get("pass") else 0.0
+        ),
+        "safe_mutation_autonomy": (
+            0.95
+            if supporting["main_graph_monitor"].get("pass")
+            and graph_episode["metrics"]["main_graph_mutation_count"] == 0
+            and graph_episode["metrics"]["rollback_success"]
+            else 0.0
+        ),
         "world_model_search_control": 0.92 if supporting["simulator_production"].get("pass") else 0.0,
         "cross_domain_method_scheduler": 0.90 if generator["metrics"]["multi_parent_candidate_rate"] == 1.0 else 0.0,
         "formal_verifier_reliability": 0.93 if supporting["finite_formal_stack"].get("pass") else 0.0,
