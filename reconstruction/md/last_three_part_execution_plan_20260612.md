@@ -30,6 +30,7 @@ Current target is L2 -> L3, not L4.
 | C1 | `assumption_os/finite_category_certificate.py` | implemented | `tests/test_finite_category_certificate.py`, `finite_category_certificate_20260612.json` |
 | C2 | `assumption_os/finite_category_lean_export.py` | implemented | `tests/test_finite_category_lean_export.py`, `finite_category_lean_export_20260612.json` |
 | I1 | `assumption_os/integrated_recursive_episode.py` | implemented | `tests/test_integrated_recursive_episode.py`, `integrated_recursive_episode_20260612.json` |
+| I2 | `assumption_os/integrated_recursive_episode_b3_c2.py` | implemented | `tests/test_integrated_recursive_episode_b3_c2.py`, `integrated_recursive_episode_b3_c2_20260612.json` |
 
 ## A1 Completion Snapshot
 
@@ -54,7 +55,7 @@ Metrics:
 
 ## Next Step
 
-Next step is I2: wire B3 uncertainty routing and C2 external-checkable formal certificates into the integrated episode.
+Next step is A3 recovery/rollback hardening or B4 counterfactual policy evaluation, depending on whether the next priority is production safety or simulator causal evidence.
 
 ## A2 Completion Snapshot
 
@@ -320,3 +321,47 @@ Metrics:
 - `graph_copy_mutation_count=2`
 - `main_graph_mutation_count=0`
 - `world_model_calibration_row_count_delta=4`
+
+## I2 Completion Snapshot
+
+- Integrates B3 uncertainty/abstention routing and C2 Lean-checkable formal certificates into a bounded recursive episode.
+- Uses the real B3 artifact rather than hand-written route decisions.
+- Uses the real C2 artifact and requires external Lean check pass in this environment.
+- Episode branches:
+  - B3 `recommend_run_ablation`
+  - B3 `abstain_to_live_validation`
+  - C2 checked `allow`
+  - C2 checked `block_unsafe_mapping`
+  - `not_applicable`
+  - fresh readback accept/reject
+  - accepted candidate recheck
+- Abstained candidates are deferred to live validation and are not auto-executed.
+- Retention remains copy-only; main graph is not mutated.
+
+Artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/integrated_recursive_episode_b3_c2_20260612.json`
+
+Metrics:
+
+- `candidate_count=9`
+- `b3_pass=true`
+- `b3_allowed_action_coverage=1.0`
+- `b3_forbidden_action_recommended_count=0`
+- `b3_uncertainty_brier_beats_base_rate=true`
+- `b3_run_ablation_selected_count=7`
+- `b3_abstain_selected_count=2`
+- `abstained_candidate_auto_execute_count=0`
+- `c2_pass=true`
+- `c2_external_lean_check_passed=true`
+- `c2_forbidden_generator_output_count=0`
+- `formal_gate_block_count=1`
+- `formal_gate_lean_checked_count=6`
+- `fresh_ablation_accept_count=4`
+- `fresh_ablation_reject_count=2`
+- `accepted_candidate_survival_on_recheck=true`
+- `queue_cycle_count=10`
+- `autonomy_replay_exact=true`
+- `graph_copy_mutation_count=4`
+- `main_graph_mutation_count=0`
+- `calibration_row_count_delta=7`
