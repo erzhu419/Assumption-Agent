@@ -79,6 +79,7 @@ from .simulator_no_leakage_audit import build_simulator_no_leakage_audit_payload
 from .philosophy_growth_benchmark import build_philosophy_growth_benchmark_payload
 from .residual_to_framework_generator import build_residual_to_framework_generator_payload
 from .self_evo_roadmap_coverage_audit import build_self_evo_roadmap_coverage_audit_payload
+from .self_evo_paper_evidence_pack import build_self_evo_paper_evidence_pack_payload
 from .trajectory_search import build_trajectory_search_payload
 from .trace_dataset import build_trace_dataset_collection_payload, build_trace_dataset_payload
 from .trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
@@ -238,6 +239,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["self_evo_roadmap_coverage_audit"] = _validate_self_evo_roadmap_coverage(root=root)
     timings["self_evo_roadmap_coverage_audit_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["self_evo_paper_evidence_pack"] = _validate_self_evo_paper_evidence_pack(root=root)
+    timings["self_evo_paper_evidence_pack_sec"] = _elapsed(start)
     return {
         "eval_id": eval_id,
         "source": {
@@ -1453,10 +1457,45 @@ def _validate_self_evo_roadmap_coverage(*, root: Path) -> dict:
         "r7_item_count": metrics["r7_item_count"],
         "bounded_ugse_score": metrics["bounded_ugse_score"],
         "framework_growth_component": metrics["framework_growth_component"],
+        "fresh_broad_generator_repair_passed": metrics["fresh_broad_generator_repair_passed"],
+        "fresh_broad_generator_repair_calls": metrics["fresh_broad_generator_repair_calls"],
+        "fresh_broad_generator_repair_delta": metrics["fresh_broad_generator_repair_delta"],
         "unbounded_self_evolution_os_claim_allowed": metrics[
             "unbounded_self_evolution_os_claim_allowed"
         ],
         "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_self_evo_paper_evidence_pack(*, root: Path) -> dict:
+    payload = build_self_evo_paper_evidence_pack_payload(
+        root=root,
+        eval_id="perf_self_evo_paper_evidence_pack",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "source_artifact_pass_rate": metrics["source_artifact_pass_rate"],
+        "roadmap_pass_count": metrics["roadmap_pass_count"],
+        "roadmap_item_count": metrics["roadmap_item_count"],
+        "roadmap_bounded_ugse_score": metrics["roadmap_bounded_ugse_score"],
+        "frozen_problem_count": metrics["frozen_problem_count"],
+        "frozen_margin_over_best_baseline": metrics["frozen_margin_over_best_baseline"],
+        "fresh_repair_fresh_api_call_count": metrics["fresh_repair_fresh_api_call_count"],
+        "fresh_repair_trigger_utility": metrics["fresh_repair_trigger_utility"],
+        "fresh_repair_delta_vs_original": metrics["fresh_repair_delta_vs_original"],
+        "fresh_repair_ci_lower_minus_original_ci_upper": metrics[
+            "fresh_repair_ci_lower_minus_original_ci_upper"
+        ],
+        "production_simulator_candidate_allowed": metrics["production_simulator_candidate_allowed"],
+        "production_autonomy_candidate_allowed": metrics["production_autonomy_candidate_allowed"],
+        "autonomy_downstream_regression_rate": metrics["autonomy_downstream_regression_rate"],
+        "bounded_formal_stack_claim_allowed": metrics["bounded_formal_stack_claim_allowed"],
+        "full_theorem_prover_claim_allowed": metrics["full_theorem_prover_claim_allowed"],
+        "main_graph_regression_alert_count": metrics["main_graph_regression_alert_count"],
+        "paper_skeleton_section_count": metrics["paper_skeleton_section_count"],
+        "blocked_claim_count": metrics["blocked_claim_count"],
         "failed_gates": payload["failed_gates"],
     }
 
@@ -2680,7 +2719,16 @@ def _key_metric(name: str, section: dict) -> str:
         return (
             f"items={section['roadmap_item_pass_count']}/{section['roadmap_item_count']}, "
             f"r7={section['r7_item_pass_count']}/{section['r7_item_count']}, "
-            f"ugse={section['bounded_ugse_score']}"
+            f"ugse={section['bounded_ugse_score']}, "
+            f"fresh={section['fresh_broad_generator_repair_delta']}"
+        )
+    if name == "self_evo_paper_evidence_pack":
+        return (
+            f"items={section['roadmap_pass_count']}/{section['roadmap_item_count']}, "
+            f"ugse={section['roadmap_bounded_ugse_score']}, "
+            f"frozen={section['frozen_problem_count']}:{section['frozen_margin_over_best_baseline']}, "
+            f"fresh={section['fresh_repair_fresh_api_call_count']}:{section['fresh_repair_delta_vs_original']}, "
+            f"sections={section['paper_skeleton_section_count']}"
         )
     if name == "memory_surfaces":
         return f"types={section['before_node_type_count']}->{section['after_node_type_count']}, edges={section['before_edge_type_count']}->{section['after_edge_type_count']}"

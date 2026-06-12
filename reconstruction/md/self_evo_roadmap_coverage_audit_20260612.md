@@ -1,10 +1,11 @@
 # self_evo_roadmap.md Coverage Audit
 
 - pass: `True`
-- roadmap items: `18/18`
+- roadmap items: `19/19`
 - R7 items: `7/7`
-- bounded UGSE score: `0.917`
+- bounded UGSE score: `0.923`
 - framework growth component: `0.8965`
+- fresh broad-generator repair: `True` delta `0.1301` calls `720`
 
 ## Roadmap Items
 
@@ -23,6 +24,7 @@
 | `Framework Graph Graft Readback` | `pass` | framework_evolution_graph_episode_20260612.json | relations=1.0, rollback=True |
 | `R7.6 Framework Growth Ablation Suite` | `pass` | framework_growth_ablation_suite_20260612.json | margin_best_off=0.1604, best_off=no_graph_lifecycle_score_only |
 | `Prompt Trick / Raw Wisdom Rejection` | `pass` | framework_growth_ablation_suite_20260612.json | raw_margin=0.6383, prompt_trick=False |
+| `Fresh 720 Broad-Generator Repair` | `pass` | paper_broad_generator_repair_integration_20260612.json | calls=720, delta=0.1301 |
 | `R7.7 Open-Ended Framework Evolution Run` | `pass` | open_ended_framework_evolution_run_20260612.json | gens=6, active=22, score=0.7374 |
 | `Selective Retention Across Framework Generations` | `pass` | open_ended_framework_evolution_run_20260612.json | negative=6, prod=1.0 |
 | `No Raw Wisdom Promotion` | `pass` | residual_to_framework_generator_20260612.json | raw_wisdom=0 |
@@ -39,4 +41,4 @@
 - `cross_domain_method_scheduler`: `0.9`
 - `formal_verifier_reliability`: `0.93`
 - `framework_growth_score`: `0.8965`
-- `external_evidence`: `0.88`
+- `external_evidence`: `0.94`

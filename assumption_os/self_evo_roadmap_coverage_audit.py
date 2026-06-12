@@ -27,6 +27,7 @@ SUPPORTING_ARTIFACTS = {
     "integrated_episode": PAPER_DIR / "integrated_recursive_episode_b3_c2_20260612.json",
     "main_graph_monitor": PAPER_DIR / "main_graph_controlled_apply_monitor_20260612.json",
     "paper_main": PAPER_DIR / "paper_frozen_main_experiment_v2_20260612.json",
+    "fresh_broad_generator_repair": PAPER_DIR / "paper_broad_generator_repair_integration_20260612.json",
 }
 
 
@@ -77,6 +78,15 @@ def build_self_evo_roadmap_coverage_audit_payload(
         "framework_ablation_margin_vs_raw_wisdom": ablation["metrics"]["full_margin_vs_raw_wisdom"],
         "open_ended_framework_growth_score": open_run["metrics"]["open_ended_framework_growth_score"],
         "open_ended_framework_generation_count": open_run["metrics"]["generation_count"],
+        "fresh_broad_generator_repair_passed": bool(supporting["fresh_broad_generator_repair"].get("pass")),
+        "fresh_broad_generator_repair_delta": float(
+            supporting["fresh_broad_generator_repair"].get("metrics", {}).get("trigger_utility_delta_vs_original")
+            or 0.0
+        ),
+        "fresh_broad_generator_repair_calls": int(
+            supporting["fresh_broad_generator_repair"].get("metrics", {}).get("repair_v2_fresh_api_call_count")
+            or 0
+        ),
         "unbounded_self_evolution_os_claim_allowed": False,
         "main_graph_mutation_count": 0,
     }
@@ -91,6 +101,9 @@ def build_self_evo_roadmap_coverage_audit_payload(
         "framework_growth_component_present": metrics["framework_growth_component"] >= 0.80,
         "framework_ablation_margin_present": metrics["framework_ablation_margin_vs_best_toggle_off"] >= 0.12,
         "open_ended_framework_run_present": metrics["open_ended_framework_generation_count"] >= 6,
+        "fresh_broad_generator_repair_present": metrics["fresh_broad_generator_repair_passed"] is True
+        and metrics["fresh_broad_generator_repair_calls"] == 720
+        and metrics["fresh_broad_generator_repair_delta"] >= 0.10,
         "unbounded_claim_blocked": metrics["unbounded_self_evolution_os_claim_allowed"] is False,
         "main_graph_not_mutated": metrics["main_graph_mutation_count"] == 0,
     }
@@ -148,6 +161,8 @@ def format_markdown(payload: dict[str, Any]) -> str:
         f"- R7 items: `{m['r7_item_pass_count']}/{m['r7_item_count']}`",
         f"- bounded UGSE score: `{m['bounded_ugse_score']}`",
         f"- framework growth component: `{m['framework_growth_component']}`",
+        f"- fresh broad-generator repair: `{m['fresh_broad_generator_repair_passed']}` "
+        f"delta `{m['fresh_broad_generator_repair_delta']}` calls `{m['fresh_broad_generator_repair_calls']}`",
         "",
         "## Roadmap Items",
         "",
@@ -259,6 +274,19 @@ def _roadmap_items(
             f"raw_margin={a['full_margin_vs_raw_wisdom']}, prompt_trick={a['full_prompt_trick_retained']}",
         ),
         _item(
+            "Fresh 720 Broad-Generator Repair",
+            supporting["fresh_broad_generator_repair"].get("pass")
+            and supporting["fresh_broad_generator_repair"].get("metrics", {}).get("repair_v2_fresh_api_call_count") == 720
+            and supporting["fresh_broad_generator_repair"].get("metrics", {}).get("trigger_utility_delta_vs_original", 0.0) >= 0.10,
+            "paper_broad_generator_repair_integration_20260612.json",
+            (
+                "calls="
+                f"{supporting['fresh_broad_generator_repair'].get('metrics', {}).get('repair_v2_fresh_api_call_count')}, "
+                "delta="
+                f"{supporting['fresh_broad_generator_repair'].get('metrics', {}).get('trigger_utility_delta_vs_original')}"
+            ),
+        ),
+        _item(
             "R7.7 Open-Ended Framework Evolution Run",
             open_run["pass"] and o["generation_count"] >= 6 and o["active_framework_count"] >= 12,
             "open_ended_framework_evolution_run_20260612.json",
@@ -331,7 +359,13 @@ def _bounded_ugse_score(
         "cross_domain_method_scheduler": 0.90 if generator["metrics"]["multi_parent_candidate_rate"] == 1.0 else 0.0,
         "formal_verifier_reliability": 0.93 if supporting["finite_formal_stack"].get("pass") else 0.0,
         "framework_growth_score": framework_growth_score,
-        "external_evidence": 0.88 if supporting["paper_main"].get("pass") else 0.0,
+        "external_evidence": (
+            0.94
+            if supporting["paper_main"].get("pass") and supporting["fresh_broad_generator_repair"].get("pass")
+            else 0.88
+            if supporting["paper_main"].get("pass")
+            else 0.0
+        ),
     }
     weights = {
         "wall_clock_autonomy": 0.12,

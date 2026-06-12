@@ -5,6 +5,7 @@ from assumption_os.framework_branch_ledger import build_framework_branch_ledger_
 from assumption_os.philosophy_growth_benchmark import build_philosophy_growth_benchmark_payload
 from assumption_os.residual_to_framework_generator import build_residual_to_framework_generator_payload
 from assumption_os.self_evo_roadmap_coverage_audit import build_self_evo_roadmap_coverage_audit_payload
+from assumption_os.self_evo_paper_evidence_pack import build_self_evo_paper_evidence_pack_payload
 
 
 class SelfEvoFrameworkGrowthTest(unittest.TestCase):
@@ -61,7 +62,26 @@ class SelfEvoFrameworkGrowthTest(unittest.TestCase):
         self.assertEqual(metrics["open_roadmap_item_count"], 0)
         self.assertEqual(metrics["r7_item_pass_count"], metrics["r7_item_count"])
         self.assertGreaterEqual(metrics["bounded_ugse_score"], 0.90)
+        self.assertTrue(metrics["fresh_broad_generator_repair_passed"])
+        self.assertEqual(metrics["fresh_broad_generator_repair_calls"], 720)
+        self.assertGreaterEqual(metrics["fresh_broad_generator_repair_delta"], 0.10)
         self.assertFalse(metrics["unbounded_self_evolution_os_claim_allowed"])
+
+    def test_self_evo_paper_evidence_pack_closes_reviewer_facing_artifact(self):
+        payload = build_self_evo_paper_evidence_pack_payload(
+            root=Path("."),
+            eval_id="unit_self_evo_paper_evidence_pack",
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(metrics["source_artifact_pass_rate"], 1.0)
+        self.assertGreaterEqual(metrics["roadmap_bounded_ugse_score"], 0.90)
+        self.assertEqual(metrics["fresh_repair_fresh_api_call_count"], 720)
+        self.assertGreaterEqual(metrics["fresh_repair_delta_vs_original"], 0.10)
+        self.assertGreater(metrics["fresh_repair_ci_lower_minus_original_ci_upper"], 0.0)
+        self.assertGreaterEqual(metrics["paper_skeleton_section_count"], 10)
+        self.assertFalse(metrics["full_theorem_prover_claim_allowed"])
 
 
 if __name__ == "__main__":
