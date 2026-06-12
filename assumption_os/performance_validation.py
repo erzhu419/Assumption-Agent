@@ -52,6 +52,7 @@ from .formal_mapping import (
     build_formal_search_eval_payload,
     build_formal_transfer_eval_payload,
 )
+from .framework_branch_ledger import build_framework_branch_ledger_payload
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .harness_observer import build_harness_observer_payload
 from .last_three_part_coverage_audit import build_last_three_part_coverage_audit_payload
@@ -68,6 +69,9 @@ from .residual_diagnostics import build_residual_label_agreement_payload, build_
 from .runtime_trace import RuntimeTraceRecorder
 from .surface_hypotheses import build_surface_hypothesis_payload
 from .selector import build_acp_learning_payload, build_metaproductivity_benchmark_payload
+from .philosophy_growth_benchmark import build_philosophy_growth_benchmark_payload
+from .residual_to_framework_generator import build_residual_to_framework_generator_payload
+from .self_evo_roadmap_coverage_audit import build_self_evo_roadmap_coverage_audit_payload
 from .trajectory_search import build_trajectory_search_payload
 from .trace_dataset import build_trace_dataset_collection_payload, build_trace_dataset_payload
 from .trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
@@ -194,6 +198,18 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["conservative_generalization_gate"] = _validate_conservative_generalization_gate(root=root)
     timings["conservative_generalization_gate_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["residual_to_framework_generator"] = _validate_residual_to_framework_generator(root=root)
+    timings["residual_to_framework_generator_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["framework_branch_ledger"] = _validate_framework_branch_ledger(root=root)
+    timings["framework_branch_ledger_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["philosophy_growth_benchmark"] = _validate_philosophy_growth_benchmark(root=root)
+    timings["philosophy_growth_benchmark_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["self_evo_roadmap_coverage_audit"] = _validate_self_evo_roadmap_coverage(root=root)
+    timings["self_evo_roadmap_coverage_audit_sec"] = _elapsed(start)
     return {
         "eval_id": eval_id,
         "source": {
@@ -1124,6 +1140,89 @@ def _validate_conservative_generalization_gate(*, root: Path) -> dict:
         "unbounded_philosophy_generator_claim_allowed": metrics[
             "unbounded_philosophy_generator_claim_allowed"
         ],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_residual_to_framework_generator(*, root: Path) -> dict:
+    payload = build_residual_to_framework_generator_payload(
+        root=root,
+        eval_id="perf_residual_to_framework_generator",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "anomaly_family_count": metrics["anomaly_family_count"],
+        "candidate_framework_count": metrics["candidate_framework_count"],
+        "conservative_gate_ready_count": metrics["conservative_gate_ready_count"],
+        "structured_candidate_coverage": metrics["structured_candidate_coverage"],
+        "raw_wisdom_candidate_count": metrics["raw_wisdom_candidate_count"],
+        "mean_generator_quality_score": metrics["mean_generator_quality_score"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_framework_branch_ledger(*, root: Path) -> dict:
+    payload = build_framework_branch_ledger_payload(
+        root=root,
+        eval_id="perf_framework_branch_ledger",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "ledger_entry_count": metrics["ledger_entry_count"],
+        "status_counts": metrics["status_counts"],
+        "negative_evidence_retained_count": metrics["negative_evidence_retained_count"],
+        "core_promotion_count": metrics["core_promotion_count"],
+        "max_promotion_rank": metrics["max_promotion_rank"],
+        "active_required_relation_coverage": metrics["active_required_relation_coverage"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_philosophy_growth_benchmark(*, root: Path) -> dict:
+    payload = build_philosophy_growth_benchmark_payload(
+        root=root,
+        eval_id="perf_philosophy_growth_benchmark",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "generation_count": metrics["generation_count"],
+        "active_framework_survival_count": metrics["active_framework_survival_count"],
+        "framework_growth_score": metrics["framework_growth_score"],
+        "conservative_growth_score": metrics["conservative_growth_score"],
+        "local_patch_growth_score": metrics["local_patch_growth_score"],
+        "raw_wisdom_growth_score": metrics["raw_wisdom_growth_score"],
+        "conservative_regression_cost": metrics["conservative_regression_cost"],
+        "local_patch_regression_cost": metrics["local_patch_regression_cost"],
+        "core_philosophy_prior_promotion_count": metrics["core_philosophy_prior_promotion_count"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_self_evo_roadmap_coverage(*, root: Path) -> dict:
+    payload = build_self_evo_roadmap_coverage_audit_payload(
+        root=root,
+        eval_id="perf_self_evo_roadmap_coverage",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "roadmap_item_count": metrics["roadmap_item_count"],
+        "roadmap_item_pass_count": metrics["roadmap_item_pass_count"],
+        "open_roadmap_item_count": metrics["open_roadmap_item_count"],
+        "r7_item_pass_count": metrics["r7_item_pass_count"],
+        "r7_item_count": metrics["r7_item_count"],
+        "bounded_ugse_score": metrics["bounded_ugse_score"],
+        "framework_growth_component": metrics["framework_growth_component"],
+        "unbounded_self_evolution_os_claim_allowed": metrics[
+            "unbounded_self_evolution_os_claim_allowed"
+        ],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
         "failed_gates": payload["failed_gates"],
     }
 
@@ -2276,6 +2375,30 @@ def _key_metric(name: str, section: dict) -> str:
             f"decisions={section['decision_counts']}, "
             f"growth={section['top_framework_growth_score']}, "
             f"relations={section['active_required_relation_coverage']}"
+        )
+    if name == "residual_to_framework_generator":
+        return (
+            f"candidates={section['candidate_framework_count']}, "
+            f"ready={section['conservative_gate_ready_count']}, "
+            f"raw={section['raw_wisdom_candidate_count']}"
+        )
+    if name == "framework_branch_ledger":
+        return (
+            f"entries={section['ledger_entry_count']}, "
+            f"status={section['status_counts']}, "
+            f"core={section['core_promotion_count']}"
+        )
+    if name == "philosophy_growth_benchmark":
+        return (
+            f"gens={section['generation_count']}, "
+            f"growth={section['framework_growth_score']}, "
+            f"base={section['local_patch_growth_score']}/{section['raw_wisdom_growth_score']}"
+        )
+    if name == "self_evo_roadmap_coverage_audit":
+        return (
+            f"items={section['roadmap_item_pass_count']}/{section['roadmap_item_count']}, "
+            f"r7={section['r7_item_pass_count']}/{section['r7_item_count']}, "
+            f"ugse={section['bounded_ugse_score']}"
         )
     if name == "memory_surfaces":
         return f"types={section['before_node_type_count']}->{section['after_node_type_count']}, edges={section['before_edge_type_count']}->{section['after_edge_type_count']}"
