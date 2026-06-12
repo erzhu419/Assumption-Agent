@@ -32,6 +32,7 @@ ARTIFACTS = {
     "sim_counterfactual": PAPER_DIR / "simulator_counterfactual_policy_eval_20260612.json",
     "sim_calibration": PAPER_DIR / "simulator_gate_calibration_loop_20260612.json",
     "sim_production_evidence": PAPER_DIR / "simulator_production_evidence_20260612.json",
+    "sim_leakage_audit": PAPER_DIR / "simulator_no_leakage_audit_20260612.json",
     "sim_production_gate": PAPER_DIR / "simulator_production_gate_20260612.json",
     "finite_certificate": PAPER_DIR / "finite_category_certificate_20260612.json",
     "finite_lean_export": PAPER_DIR / "finite_category_lean_export_20260612.json",
@@ -184,6 +185,7 @@ def _ticket_rows(*, artifacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]
     sim_counterfactual = _metrics(a["sim_counterfactual"])
     sim_calibration = _metrics(a["sim_calibration"])
     sim_prod_evidence = _metrics(a["sim_production_evidence"])
+    sim_leakage = _metrics(a["sim_leakage_audit"])
     sim_prod_gate = _metrics(a["sim_production_gate"])
     finite_cert = _metrics(a["finite_certificate"])
     lean_export = _metrics(a["finite_lean_export"])
@@ -385,15 +387,35 @@ def _ticket_rows(*, artifacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]
                 "simulator_production_evidence_20260612.json",
             ],
             bool(a["sim_production_evidence"].get("pass"))
+            and bool(a["sim_leakage_audit"].get("pass"))
             and sim_prod_evidence["counterfactual_mae_beats_global_baseline"]
             and sim_prod_evidence["best_arm_agreement_rate"] >= 0.95
+            and sim_prod_evidence["best_arm_agreement_rate"] <= 0.98
             and sim_counterfactual["matched_counterfactual_group_count"] >= 48,
             {
                 "matched_group_count": sim_counterfactual["matched_counterfactual_group_count"],
                 "production_counterfactual_mae": sim_prod_evidence["counterfactual_mae"],
                 "global_baseline_mae": sim_prod_evidence["global_baseline_mae"],
+                "no_leakage_pass": bool(a["sim_leakage_audit"].get("pass")),
             },
             "production-grade counterfactual gate evidence",
+        ),
+        ticket(
+            "B4b_no_leakage_audit",
+            "Simulator production evidence leakage audit",
+            "B",
+            ["simulator_no_leakage_audit_20260612.json", "simulator_production_evidence_20260612.json"],
+            bool(a["sim_leakage_audit"].get("pass"))
+            and sim_leakage["state_feature_leak_count"] == 0
+            and sim_leakage["provenance_leak_count"] == 0
+            and sim_leakage["prediction_outcome_exact_identity_count"] == 0
+            and sim_leakage["best_arm_agreement_rate"] <= 0.98,
+            {
+                "state_leaks": sim_leakage["state_feature_leak_count"],
+                "prediction_identity": sim_leakage["prediction_outcome_exact_identity_count"],
+                "best_arm_agreement": sim_leakage["best_arm_agreement_rate"],
+            },
+            "production simulator evidence is leakage-audited",
         ),
         ticket(
             "B5_simulator_as_gate",
@@ -431,6 +453,7 @@ def _ticket_rows(*, artifacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]
             ["simulator_production_gate_20260612.json", "simulator_production_evidence_20260612.json"],
             bool(a["sim_production_gate"].get("pass"))
             and sim_prod_gate["production_simulator_candidate_allowed"]
+            and sim_prod_gate["no_leakage_audit_pass"]
             and sim_prod_gate["transition_row_count"] >= 2000
             and sim_prod_gate["pattern_count"] >= 20
             and sim_prod_gate["raw_simulator_promoted"] is False,
@@ -655,6 +678,7 @@ def _claim_boundary_rows(*, artifacts: dict[str, dict[str, Any]]) -> list[dict[s
     phase13 = _metrics(artifacts["phase13"])
     formal_stack = _metrics(artifacts["finite_formal_stack"])
     sim_gate = _metrics(artifacts["sim_production_gate"])
+    sim_leakage = _metrics(artifacts["sim_leakage_audit"])
     final = _metrics(artifacts["final_closure"])
     paper = _metrics(artifacts["paper_main"])
     supervised = _metrics(artifacts["autonomy_supervised"])
@@ -668,7 +692,8 @@ def _claim_boundary_rows(*, artifacts: dict[str, dict[str, Any]]) -> list[dict[s
         {
             "claim_id": "raw_world_simulator_replaces_live_validation",
             "blocked": sim_gate["raw_simulator_promoted"] is False
-            and sim_gate["gate_router_promoted"] is True,
+            and sim_gate["gate_router_promoted"] is True
+            and sim_leakage["prediction_outcome_exact_identity_count"] == 0,
             "reason": "Simulator is promoted only for triage/routing; raw replacement remains blocked.",
         },
         {

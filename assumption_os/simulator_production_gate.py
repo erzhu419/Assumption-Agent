@@ -25,6 +25,7 @@ EVAL_SPLITS_PATH = PAPER_DIR / "simulator_eval_splits_20260612.json"
 UNCERTAINTY_PATH = PAPER_DIR / "simulator_uncertainty_20260612.json"
 COUNTERFACTUAL_PATH = PAPER_DIR / "simulator_counterfactual_policy_eval_20260612.json"
 GATE_CALIBRATION_PATH = PAPER_DIR / "simulator_gate_calibration_loop_20260612.json"
+LEAKAGE_AUDIT_PATH = PAPER_DIR / "simulator_no_leakage_audit_20260612.json"
 
 PRODUCTION_REQUIREMENTS = {
     "transition_rows": 2000,
@@ -164,6 +165,7 @@ def _build_from_production_evidence(
     production_evidence_path: Path,
 ) -> dict[str, Any]:
     source_metrics = production_evidence["metrics"]
+    leakage_audit = _load_json(root / LEAKAGE_AUDIT_PATH)
     requirement_results = {
         "transition_rows_minimum": int(source_metrics["transition_row_count"]) >= PRODUCTION_REQUIREMENTS["transition_rows"],
         "domain_count_minimum": int(source_metrics["domain_count"]) >= PRODUCTION_REQUIREMENTS["domains"],
@@ -181,6 +183,7 @@ def _build_from_production_evidence(
         "raw_simulator_not_promoted": source_metrics.get("raw_simulator_promoted") is False,
         "gate_router_promoted": source_metrics.get("gate_router_promoted") is True,
         "manual_audit_pass": bool(production_evidence.get("pass")),
+        "no_leakage_audit_pass": bool(leakage_audit.get("pass")),
     }
     blocker_names = [name for name, passed in requirement_results.items() if not passed]
     production_candidate_allowed = not blocker_names
@@ -202,6 +205,11 @@ def _build_from_production_evidence(
         "production_simulator_candidate_allowed": production_candidate_allowed,
         "production_blocker_count": len(blocker_names),
         "production_evidence_used": True,
+        "no_leakage_audit_pass": bool(leakage_audit.get("pass")),
+        "state_feature_leak_count": int(leakage_audit.get("metrics", {}).get("state_feature_leak_count", 0)),
+        "prediction_outcome_exact_identity_count": int(
+            leakage_audit.get("metrics", {}).get("prediction_outcome_exact_identity_count", 0)
+        ),
     }
     gates = {
         "dataset_valid": metrics["valid_row_count"] == metrics["transition_row_count"],
@@ -212,6 +220,9 @@ def _build_from_production_evidence(
         "counterfactual_requirement_evaluated": True,
         "raw_simulator_not_promoted_without_gate": metrics["raw_simulator_promoted"] is False,
         "gate_router_available_for_triage": metrics["gate_router_promoted"] is True,
+        "no_leakage_audit_available": metrics["no_leakage_audit_pass"] is True,
+        "no_state_feature_leak": metrics["state_feature_leak_count"] == 0,
+        "no_prediction_outcome_identity": metrics["prediction_outcome_exact_identity_count"] == 0,
         "production_claim_matches_requirements": metrics["production_simulator_candidate_allowed"]
         is (not blocker_names),
         "current_blockers_recorded": (metrics["production_simulator_candidate_allowed"] is False and bool(blocker_names))

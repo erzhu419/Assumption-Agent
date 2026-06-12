@@ -144,6 +144,8 @@ def _build_production_panel_rows(base_rows: list[dict[str, Any]]) -> list[dict[s
         for replicate in range(replicates):
             for arm in ARMS:
                 utility = _utility_for(group_index=group_index, replicate=replicate, arm=arm)
+                prediction = _prediction_for(group_index=group_index, arm=arm)
+                accept_prob = _accept_probability_for(group_index=group_index, arm=arm)
                 row_id = f"simprod_{stable_hash([state_id, replicate, arm])}"
                 rows.append(
                     make_transition_row(
@@ -169,9 +171,9 @@ def _build_production_panel_rows(base_rows: list[dict[str, Any]]) -> list[dict[s
                         },
                         action={"type": "select_profile", "arm": arm},
                         prediction={
-                            "p_accept": utility,
-                            "p_regress": max(0.0, 1.0 - utility),
-                            "expected_utility": utility,
+                            "p_accept": accept_prob,
+                            "p_regress": max(0.0, 1.0 - accept_prob),
+                            "expected_utility": prediction,
                             "uncertainty": 0.04 + (0.01 * (replicate % 3)),
                         },
                         outcome={
@@ -202,11 +204,41 @@ def _utility_for(*, group_index: int, replicate: int, arm: str) -> float:
         "micro_guard": 0.6,
         "calibrated_guard": 0.82,
     }[arm]
-    if group_index % 11 == 0 and arm == "compact_guard":
-        base = 0.74
+    if group_index % 29 == 0 and arm == "compact_guard":
+        base = 0.86
     if group_index % 17 == 0 and arm == "v3_full":
         base = 0.62
     return round(min(0.96, max(0.02, base + group_offset + replicate_offset)), 4)
+
+
+def _prediction_for(*, group_index: int, arm: str) -> float:
+    group_offset = ((group_index % 5) - 2) * 0.011
+    base = {
+        "v3_full": 0.505,
+        "compact_guard": 0.705,
+        "micro_guard": 0.645,
+        "calibrated_guard": 0.765,
+    }[arm]
+    if group_index % 29 == 0 and arm == "compact_guard":
+        base = 0.755
+    if group_index % 17 == 0 and arm == "v3_full":
+        base = 0.565
+    return round(min(0.94, max(0.04, base + group_offset)), 4)
+
+
+def _accept_probability_for(*, group_index: int, arm: str) -> float:
+    group_offset = ((group_index % 6) - 2.5) * 0.006
+    base = {
+        "v3_full": 0.28,
+        "compact_guard": 0.82,
+        "micro_guard": 0.58,
+        "calibrated_guard": 0.90,
+    }[arm]
+    if group_index % 29 == 0 and arm == "compact_guard":
+        base = 0.88
+    if group_index % 17 == 0 and arm == "v3_full":
+        base = 0.54
+    return round(min(0.97, max(0.03, base + group_offset)), 4)
 
 
 def _evaluate_policy(rows: list[dict[str, Any]]) -> dict[str, Any]:

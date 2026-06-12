@@ -72,6 +72,7 @@ from .residual_diagnostics import build_residual_label_agreement_payload, build_
 from .runtime_trace import RuntimeTraceRecorder
 from .surface_hypotheses import build_surface_hypothesis_payload
 from .selector import build_acp_learning_payload, build_metaproductivity_benchmark_payload
+from .simulator_no_leakage_audit import build_simulator_no_leakage_audit_payload
 from .philosophy_growth_benchmark import build_philosophy_growth_benchmark_payload
 from .residual_to_framework_generator import build_residual_to_framework_generator_payload
 from .self_evo_roadmap_coverage_audit import build_self_evo_roadmap_coverage_audit_payload
@@ -198,6 +199,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["last_three_part_coverage_audit"] = _validate_last_three_part_coverage(root=root)
     timings["last_three_part_coverage_audit_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["simulator_no_leakage_audit"] = _validate_simulator_no_leakage_audit(root=root)
+    timings["simulator_no_leakage_audit_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["conservative_generalization_gate"] = _validate_conservative_generalization_gate(root=root)
     timings["conservative_generalization_gate_sec"] = _elapsed(start)
@@ -1126,6 +1130,33 @@ def _validate_last_three_part_coverage(*, root: Path) -> dict:
             for row in payload["claim_boundaries"]
             if row["blocked"]
         ],
+    }
+
+
+def _validate_simulator_no_leakage_audit(*, root: Path) -> dict:
+    payload = build_simulator_no_leakage_audit_payload(
+        root=root,
+        eval_id="perf_simulator_no_leakage_audit",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "row_count": metrics["row_count"],
+        "valid_row_count": metrics["valid_row_count"],
+        "state_feature_leak_count": metrics["state_feature_leak_count"],
+        "provenance_leak_count": metrics["provenance_leak_count"],
+        "row_id_leak_count": metrics["row_id_leak_count"],
+        "prediction_outcome_exact_identity_count": metrics["prediction_outcome_exact_identity_count"],
+        "prediction_outcome_near_identity_rate": metrics["prediction_outcome_near_identity_rate"],
+        "mean_abs_prediction_outcome_gap": metrics["mean_abs_prediction_outcome_gap"],
+        "best_arm_agreement_rate": metrics["best_arm_agreement_rate"],
+        "counterfactual_mae": metrics["counterfactual_mae"],
+        "global_baseline_mae": metrics["global_baseline_mae"],
+        "feature_model_loo_brier": metrics["feature_model_loo_brier"],
+        "base_rate_loo_brier": metrics["base_rate_loo_brier"],
+        "raw_simulator_promoted": metrics["raw_simulator_promoted"],
+        "gate_router_promoted": metrics["gate_router_promoted"],
+        "failed_gates": payload["failed_gates"],
     }
 
 
@@ -2465,6 +2496,12 @@ def _key_metric(name: str, section: dict) -> str:
             f"tickets={section['engineering_ticket_pass_count']}/{section['engineering_ticket_count']}, "
             f"open={section['engineering_open_gap_count']}, "
             f"blocked={section['blocked_claim_boundary_count']}/{section['claim_boundary_count']}"
+        )
+    if name == "simulator_no_leakage_audit":
+        return (
+            f"leaks={section['state_feature_leak_count']}/{section['provenance_leak_count']}, "
+            f"identity={section['prediction_outcome_exact_identity_count']}, "
+            f"best={section['best_arm_agreement_rate']}"
         )
     if name == "conservative_generalization_gate":
         return (

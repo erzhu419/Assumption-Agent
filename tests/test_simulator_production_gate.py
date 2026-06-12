@@ -17,6 +17,9 @@ class SimulatorProductionGateTest(unittest.TestCase):
         self.assertEqual(blockers, set())
         self.assertFalse(metrics["raw_simulator_promoted"])
         self.assertTrue(metrics["gate_router_promoted"])
+        self.assertTrue(metrics["no_leakage_audit_pass"])
+        self.assertEqual(metrics["state_feature_leak_count"], 0)
+        self.assertEqual(metrics["prediction_outcome_exact_identity_count"], 0)
 
     def test_legacy_gate_still_blocks_without_production_evidence(self):
         root = Path(__file__).resolve().parents[1]
@@ -48,6 +51,7 @@ class SimulatorProductionGateTest(unittest.TestCase):
         self.assertTrue(requirements["ece_below_threshold"])
         self.assertTrue(requirements["true_positive_block_rate_safe"])
         self.assertTrue(requirements["raw_simulator_not_promoted"])
+        self.assertTrue(requirements["no_leakage_audit_pass"])
 
 
 if __name__ == "__main__":

@@ -23,6 +23,8 @@ class SimulatorProductionEvidenceExpansionTest(unittest.TestCase):
         self.assertTrue(metrics["counterfactual_production_allowed"])
         self.assertTrue(metrics["counterfactual_mae_beats_global_baseline"])
         self.assertGreaterEqual(metrics["best_arm_agreement_rate"], 0.8)
+        self.assertLessEqual(metrics["best_arm_agreement_rate"], 0.98)
+        self.assertLess(metrics["feature_model_loo_brier"], metrics["base_rate_loo_brier"])
         self.assertTrue(metrics["production_simulator_candidate_allowed"])
         self.assertEqual(payload["claim_boundary"]["blocked_claim"], "task-world simulator replacing live validation or judges")
 

@@ -1,7 +1,7 @@
 # last_three_part.md Coverage Audit
 
 - pass: `True`
-- engineering tickets: `30/30`
+- engineering tickets: `31/31`
 - open engineering gaps: `0`
 - blocked claim boundaries: `5/5`
 - source artifact pass rate: `1.0`
@@ -22,7 +22,8 @@
 | `B1_split_discipline` | `pass` | simulator_eval_splits_20260612.json | split_eval_count=5; leave_pattern_groups=10 |
 | `B2_simulator_baselines` | `pass` | simulator_eval_splits_20260612.json | leave_pattern_brier=0.201; base_rate_leave_pattern_brier=0.2186 |
 | `B3_uncertainty_abstain` | `pass` | simulator_uncertainty_20260612.json | abstention_rate=0.1695; ece=0.1152 |
-| `B4_counterfactual_policy` | `pass` | simulator_counterfactual_policy_eval_20260612.json, simulator_production_evidence_20260612.json | matched_group_count=48; production_counterfactual_mae=0.004; global_baseline_mae=0.0876 |
+| `B4_counterfactual_policy` | `pass` | simulator_counterfactual_policy_eval_20260612.json, simulator_production_evidence_20260612.json | matched_group_count=48; production_counterfactual_mae=0.004; global_baseline_mae=0.0877; no_leakage_pass=True |
+| `B4b_no_leakage_audit` | `pass` | simulator_no_leakage_audit_20260612.json, simulator_production_evidence_20260612.json | state_leaks=0; prediction_identity=0; best_arm_agreement=0.9611 |
 | `B5_simulator_as_gate` | `pass` | simulator_gate_calibration_loop_20260612.json | routing_policy_count=5; allowed_routing_level_count=2 |
 | `B6_closed_loop_calibration` | `pass` | simulator_gate_calibration_loop_20260612.json | writeback_row_count=8; simulator_defect_residual_count=2 |
 | `B7_production_simulator_candidate` | `pass` | simulator_production_gate_20260612.json, simulator_production_evidence_20260612.json | transition_row_count=2160; pattern_count=24 |
