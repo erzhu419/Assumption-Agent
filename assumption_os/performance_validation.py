@@ -58,6 +58,7 @@ from .framework_growth_ablation_suite import build_framework_growth_ablation_sui
 from .framework_evolution_graph_episode import build_framework_evolution_graph_episode_payload
 from .framework_branch_ledger import build_framework_branch_ledger_payload
 from .framework_lifecycle_ledger_v2 import build_framework_lifecycle_ledger_v2_payload
+from .framework_simulator_guided_search import build_framework_simulator_guided_search_payload
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .harness_observer import build_harness_observer_payload
 from .last_three_part_coverage_audit import build_last_three_part_coverage_audit_payload
@@ -241,6 +242,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["framework_lifecycle_ledger_v2"] = _validate_framework_lifecycle_ledger_v2(root=root)
     timings["framework_lifecycle_ledger_v2_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["framework_simulator_guided_search"] = _validate_framework_simulator_guided_search(root=root)
+    timings["framework_simulator_guided_search_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["philosophy_growth_benchmark"] = _validate_philosophy_growth_benchmark(root=root)
     timings["philosophy_growth_benchmark_sec"] = _elapsed(start)
@@ -1478,6 +1482,36 @@ def _validate_framework_lifecycle_ledger_v2(*, root: Path) -> dict:
         "prompt_trick_retained_count": metrics["prompt_trick_retained_count"],
         "core_prior_promotion_count": metrics["core_prior_promotion_count"],
         "deleted_branch_count": metrics["deleted_branch_count"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_framework_simulator_guided_search(*, root: Path) -> dict:
+    payload = build_framework_simulator_guided_search_payload(
+        root=root,
+        eval_id="perf_framework_simulator_guided_search",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "candidate_plan_count": metrics["candidate_plan_count"],
+        "baseline_fresh_test_count": metrics["baseline_fresh_test_count"],
+        "selected_fresh_test_count": metrics["selected_fresh_test_count"],
+        "fresh_test_reduction_rate": metrics["fresh_test_reduction_rate"],
+        "true_positive_framework_count": metrics["true_positive_framework_count"],
+        "true_positive_block_count": metrics["true_positive_block_count"],
+        "rejected_high_risk_recall": metrics["rejected_high_risk_recall"],
+        "rejected_vs_retained_risk_margin": metrics["rejected_vs_retained_risk_margin"],
+        "verifier_tier_counts": metrics["verifier_tier_counts"],
+        "direct_promotion_count": metrics["direct_promotion_count"],
+        "live_replacement_count": metrics["live_replacement_count"],
+        "review_replacement_count": metrics["review_replacement_count"],
+        "simulator_defect_residual_count": metrics["simulator_defect_residual_count"],
+        "simulator_defect_next_round_intake_rate": metrics["simulator_defect_next_round_intake_rate"],
+        "production_router_claim_allowed": metrics["production_router_claim_allowed"],
+        "simulator_replacement_claim_allowed": metrics["simulator_replacement_claim_allowed"],
+        "simulator_no_leakage_pass": metrics["simulator_no_leakage_pass"],
         "main_graph_mutation_count": metrics["main_graph_mutation_count"],
         "failed_gates": payload["failed_gates"],
     }
@@ -2894,6 +2928,13 @@ def _key_metric(name: str, section: dict) -> str:
             f"active={section['active_framework_count']}/{section['source_active_framework_count']}, "
             f"survival={section['current_active_survival_rate']} raw={section['active_framework_survival_rate']}, "
             f"rollback={section['rollback_final_status']}"
+        )
+    if name == "framework_simulator_guided_search":
+        return (
+            f"reduction={section['fresh_test_reduction_rate']}, "
+            f"tp_block={section['true_positive_block_count']}, "
+            f"risk={section['rejected_high_risk_recall']}, "
+            f"defects={section['simulator_defect_residual_count']}"
         )
     if name == "philosophy_growth_benchmark":
         return (
