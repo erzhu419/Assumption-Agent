@@ -26,7 +26,7 @@ Current target is L2 -> L3, not L4.
 | A2 | `assumption_os/autonomy_queue.py` | implemented | `tests/test_autonomy_queue.py`, `autonomy_queue_lease_20260612.json` |
 | B1 | `assumption_os/simulator_transition_schema.py` | implemented | `tests/test_simulator_transition_schema.py`, `simulator_transition_schema_validation_20260612.json` |
 | B2 | `assumption_os/simulator_eval_splits.py` | implemented | `tests/test_simulator_eval_splits.py`, `simulator_eval_splits_20260612.json` |
-| C1 | `finite_category_certificate.py` | pending | certificate schema + obligation checks |
+| C1 | `assumption_os/finite_category_certificate.py` | implemented | `tests/test_finite_category_certificate.py`, `finite_category_certificate_20260612.json` |
 | I1 | `integrated_recursive_episode.py` | pending | residual -> proposal -> simulator -> formal gate -> ablation -> replay |
 
 ## A1 Completion Snapshot
@@ -52,7 +52,7 @@ Metrics:
 
 ## Next Step
 
-Implement C1 finite category certificate schema after simulator split discipline is in place.
+Implement I1 integrated recursive episode after autonomy, simulator, and finite-category substrates are all replayable.
 
 ## A2 Completion Snapshot
 
@@ -155,3 +155,49 @@ Metrics:
 - `raw_predictor_promotion_allowed=false`
 - `feature_model_promotion_allowed=true`
 - `production_simulator_replacement_allowed=false`
+
+## C1 Completion Snapshot
+
+- Converts 16 proof-lite formal mappings into finite category certificates.
+- Accepted mappings output `allow`; rejected mappings output `block_unsafe_mapping`.
+- Each certificate records:
+  - objects
+  - morphisms
+  - explicit composition table
+  - functor object/morphism maps
+  - naturality square
+  - proof obligations
+  - negative controls
+  - scope conditions
+  - not-claimed boundaries
+- Validated obligations:
+  - identity
+  - composition closure
+  - associativity
+  - functor preserves identity
+  - functor preserves composition
+  - naturality square
+  - diagram commutativity
+  - negative-control rejection
+
+Artifacts:
+
+`phase four/assumption_graph/paper_readiness_20260604/finite_category_certificate_20260612.json`
+
+`phase four/assumption_graph/paper_readiness_20260604/finite_category_proof_engine_v0.json`
+
+Metrics:
+
+- `certificate_count=16`
+- `valid_certificate_count=16`
+- `accepted_certificate_count=9`
+- `blocked_certificate_count=7`
+- `proof_obligation_pass_rate=1.0`
+- `identity_law_pass_rate=1.0`
+- `composition_closure_pass_rate=1.0`
+- `associativity_pass_rate=1.0`
+- `functor_identity_pass_rate=1.0`
+- `functor_composition_pass_rate=1.0`
+- `naturality_square_pass_rate=1.0`
+- `negative_control_pass_rate=1.0`
+- `unbounded_theorem_prover_claim_allowed=false`
