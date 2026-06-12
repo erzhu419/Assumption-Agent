@@ -65,6 +65,9 @@ from .harness_observer import build_harness_observer_payload
 from .last_three_part_coverage_audit import build_last_three_part_coverage_audit_payload
 from .manifest_logger import build_component_manifest_payload, events_from_run_logs
 from .memory_surfaces import build_memory_surface_payload
+from .multigeneration_framework_evolution_benchmark import (
+    build_multigeneration_framework_evolution_benchmark_payload,
+)
 from .objective_bench import build_objective_benchmark_payload
 from .open_ended_framework_evolution_run import build_open_ended_framework_evolution_run_payload
 from .paper_fresh_frozen_rerun_protocol import build_paper_fresh_frozen_rerun_protocol_payload
@@ -249,6 +252,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["framework_formal_certificate_integration"] = _validate_framework_formal_certificate_integration(root=root)
     timings["framework_formal_certificate_integration_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["multigeneration_framework_evolution_benchmark"] = _validate_multigeneration_framework_evolution_benchmark(root=root)
+    timings["multigeneration_framework_evolution_benchmark_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["philosophy_growth_benchmark"] = _validate_philosophy_growth_benchmark(root=root)
     timings["philosophy_growth_benchmark_sec"] = _elapsed(start)
@@ -1545,6 +1551,45 @@ def _validate_framework_formal_certificate_integration(*, root: Path) -> dict:
         "negative_control_blocked_count": metrics["negative_control_blocked_count"],
         "bounded_formal_stack_claim_allowed": metrics["bounded_formal_stack_claim_allowed"],
         "full_theorem_prover_claim_allowed": metrics["full_theorem_prover_claim_allowed"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_multigeneration_framework_evolution_benchmark(*, root: Path) -> dict:
+    payload = build_multigeneration_framework_evolution_benchmark_payload(
+        root=root,
+        eval_id="perf_multigeneration_framework_evolution_benchmark",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "input_residual_cluster_count": metrics["input_residual_cluster_count"],
+        "input_parent_framework_count": metrics["input_parent_framework_count"],
+        "generation_count": metrics["generation_count"],
+        "candidate_count": metrics["candidate_count"],
+        "fresh_validation_accepted_count": metrics["fresh_validation_accepted_count"],
+        "fresh_validation_rejected_count": metrics["fresh_validation_rejected_count"],
+        "framework_growth_score": metrics["framework_growth_score"],
+        "old_success_preservation": metrics["old_success_preservation"],
+        "residual_explanation": metrics["residual_explanation"],
+        "limiting_case_reduction": metrics["limiting_case_reduction"],
+        "generality_gain": metrics["generality_gain"],
+        "new_prediction_success": metrics["new_prediction_success"],
+        "regression_cost": metrics["regression_cost"],
+        "active_framework_survival_rate": metrics["active_framework_survival_rate"],
+        "cross_generation_active_survival_count": metrics["cross_generation_active_survival_count"],
+        "negative_evidence_retention_count": metrics["negative_evidence_retention_count"],
+        "branch_to_framework_transition_count": metrics["branch_to_framework_transition_count"],
+        "prompt_trick_retained_count": metrics["prompt_trick_retained_count"],
+        "core_philosophy_prior_promotion_count": metrics["core_philosophy_prior_promotion_count"],
+        "full_margin_vs_local_patch": metrics["full_margin_vs_local_patch"],
+        "full_margin_vs_raw_wisdom": metrics["full_margin_vs_raw_wisdom"],
+        "full_margin_vs_best_ablation": metrics["full_margin_vs_best_ablation"],
+        "full_vs_best_ablation_ci_lower": metrics["full_vs_best_ablation_ci_lower"],
+        "simulator_fresh_test_reduction_rate": metrics["simulator_fresh_test_reduction_rate"],
+        "simulator_true_positive_block_count": metrics["simulator_true_positive_block_count"],
+        "formal_applicable_certificate_coverage": metrics["formal_applicable_certificate_coverage"],
         "main_graph_mutation_count": metrics["main_graph_mutation_count"],
         "failed_gates": payload["failed_gates"],
     }
@@ -2975,6 +3020,13 @@ def _key_metric(name: str, section: dict) -> str:
             f"cert={section['formal_applicable_certificate_coverage']}, "
             f"unsafe={section['unsafe_mapping_block_count']}, "
             f"lean={section['external_lean_theorem_count']}"
+        )
+    if name == "multigeneration_framework_evolution_benchmark":
+        return (
+            f"gens={section['generation_count']}, "
+            f"acc/rej={section['fresh_validation_accepted_count']}/{section['fresh_validation_rejected_count']}, "
+            f"margin={section['full_margin_vs_best_ablation']}, "
+            f"survive={section['cross_generation_active_survival_count']}"
         )
     if name == "philosophy_growth_benchmark":
         return (
