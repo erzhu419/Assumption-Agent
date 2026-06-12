@@ -28,6 +28,7 @@ Current target is L2 -> L3, not L4.
 | B1 | `assumption_os/simulator_transition_schema.py` | implemented | `tests/test_simulator_transition_schema.py`, `simulator_transition_schema_validation_20260612.json` |
 | B2 | `assumption_os/simulator_eval_splits.py` | implemented | `tests/test_simulator_eval_splits.py`, `simulator_eval_splits_20260612.json` |
 | B3 | `assumption_os/simulator_uncertainty.py` | implemented | `tests/test_simulator_uncertainty.py`, `simulator_uncertainty_20260612.json` |
+| B4 | `assumption_os/simulator_counterfactual_policy_eval.py` | implemented | `tests/test_simulator_counterfactual_policy_eval.py`, `simulator_counterfactual_policy_eval_20260612.json` |
 | C1 | `assumption_os/finite_category_certificate.py` | implemented | `tests/test_finite_category_certificate.py`, `finite_category_certificate_20260612.json` |
 | C2 | `assumption_os/finite_category_lean_export.py` | implemented | `tests/test_finite_category_lean_export.py`, `finite_category_lean_export_20260612.json` |
 | I1 | `assumption_os/integrated_recursive_episode.py` | implemented | `tests/test_integrated_recursive_episode.py`, `integrated_recursive_episode_20260612.json` |
@@ -56,7 +57,7 @@ Metrics:
 
 ## Next Step
 
-Next step is B4 counterfactual policy evaluation, now that A3 recovery/rollback hardening is in place.
+Next step is B5/B6 simulator-as-gate closed-loop calibration, or generate more same-state multi-arm rows before attempting B4 production promotion.
 
 ## A2 Completion Snapshot
 
@@ -235,6 +236,43 @@ Metrics:
 - `allowed_action_coverage=1.0`
 - `low_support_probe_abstained=true`
 - `production_simulator_replacement_allowed=false`
+
+## B4 Completion Snapshot
+
+- Adds matched counterfactual policy evaluation over current same-state multi-arm transition rows.
+- Groups by:
+  - domain
+  - pattern
+  - residual cluster
+- Requires at least 3 observed arms per matched group.
+- Reports:
+  - empirical best-arm utility
+  - B3 selected-arm utility
+  - always-v3-full utility
+  - leave-one-replicate MAE
+  - global baseline MAE
+  - promotion block reasons
+- Result is intentionally conservative: audit passes, but production counterfactual promotion is blocked because coverage and LOO predictive quality are insufficient.
+
+Artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/simulator_counterfactual_policy_eval_20260612.json`
+
+Metrics:
+
+- `matched_counterfactual_group_count=2`
+- `matched_counterfactual_row_count=51`
+- `matched_action_coverage=0.1478`
+- `min_arm_count_per_matched_group=3`
+- `leave_one_replicate_mae=0.3332`
+- `global_baseline_mae=0.2873`
+- `counterfactual_mae_beats_global_baseline=false`
+- `b3_best_arm_agreement_rate=0.0`
+- `empirical_best_policy_mean_utility=0.6209`
+- `b3_selected_policy_mean_utility=0.531`
+- `always_v3_full_policy_mean_utility=0.5852`
+- `production_counterfactual_gate_allowed=false`
+- `exploration_counterfactual_audit_passed=true`
 
 ## C1 Completion Snapshot
 
