@@ -40,6 +40,7 @@ from typing import Any
 from .assumption_bench import build_assumption_bench_payload
 from .candidate_eval import CandidateReadiness, build_candidate_eval_payload
 from .conservative_generalization_gate import build_conservative_generalization_gate_payload
+from .conservative_generalization_gate_v2 import build_conservative_generalization_gate_v2_payload
 from .framework_object_model import build_framework_object_model_payload
 from .falsification import build_falsification_payload
 from .evolution_context import build_evolution_context_payload
@@ -221,6 +222,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["conservative_generalization_gate"] = _validate_conservative_generalization_gate(root=root)
     timings["conservative_generalization_gate_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["conservative_generalization_gate_v2"] = _validate_conservative_generalization_gate_v2(root=root)
+    timings["conservative_generalization_gate_v2_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["framework_object_model"] = _validate_framework_object_model(root=root)
     timings["framework_object_model_sec"] = _elapsed(start)
@@ -1306,6 +1310,33 @@ def _validate_conservative_generalization_gate(*, root: Path) -> dict:
         "unbounded_philosophy_generator_claim_allowed": metrics[
             "unbounded_philosophy_generator_claim_allowed"
         ],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_conservative_generalization_gate_v2(*, root: Path) -> dict:
+    payload = build_conservative_generalization_gate_v2_payload(
+        root=root,
+        eval_id="perf_conservative_generalization_gate_v2",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "source_generator_candidate_count": metrics["source_generator_candidate_count"],
+        "evaluated_candidate_count": metrics["evaluated_candidate_count"],
+        "real_residual_candidate_rate": metrics["real_residual_candidate_rate"],
+        "decision_counts": metrics["decision_counts"],
+        "old_success_test_count": metrics["old_success_test_count"],
+        "residual_test_count": metrics["residual_test_count"],
+        "limiting_case_test_count": metrics["limiting_case_test_count"],
+        "unseen_domain_test_count": metrics["unseen_domain_test_count"],
+        "negative_control_test_count": metrics["negative_control_test_count"],
+        "promoted_certificate_coverage": metrics["promoted_certificate_coverage"],
+        "old_success_reject_count": metrics["old_success_reject_count"],
+        "branch_to_active_transition_count": metrics["branch_to_active_transition_count"],
+        "rejected_negative_evidence_count": metrics["rejected_negative_evidence_count"],
+        "required_relation_coverage": metrics["required_relation_coverage"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
         "failed_gates": payload["failed_gates"],
     }
 
@@ -2780,6 +2811,14 @@ def _key_metric(name: str, section: dict) -> str:
             f"decisions={section['decision_counts']}, "
             f"growth={section['top_framework_growth_score']}, "
             f"relations={section['active_required_relation_coverage']}"
+        )
+    if name == "conservative_generalization_gate_v2":
+        return (
+            f"eval={section['evaluated_candidate_count']}, "
+            f"real={section['real_residual_candidate_rate']}, "
+            f"decisions={section['decision_counts']}, "
+            f"cert={section['promoted_certificate_coverage']}, "
+            f"transition={section['branch_to_active_transition_count']}"
         )
     if name == "framework_object_model":
         return (
