@@ -64,6 +64,7 @@ from .framework_external_eval_pack import build_framework_external_eval_pack_pay
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .harness_observer import build_harness_observer_payload
 from .last_three_part_coverage_audit import build_last_three_part_coverage_audit_payload
+from .hegel_assumption_coverage_audit import build_hegel_assumption_coverage_audit_payload
 from .manifest_logger import build_component_manifest_payload, events_from_run_logs
 from .memory_surfaces import build_memory_surface_payload
 from .multigeneration_framework_evolution_benchmark import (
@@ -74,6 +75,7 @@ from .open_ended_framework_evolution_run import build_open_ended_framework_evolu
 from .paper_fresh_frozen_rerun_protocol import build_paper_fresh_frozen_rerun_protocol_payload
 from .paper_fresh_rerun_result_integration import build_paper_fresh_rerun_result_integration_payload
 from .paper_broad_generator_repair_integration import build_paper_broad_generator_repair_integration_payload
+from .llm_framework_candidate_experiment import build_llm_framework_candidate_experiment_payload
 from .recursive_audit import build_recursive_audit_payload
 from .recursive_daemon import build_preflight_queue_daemon_payload, build_recursive_daemon_payload
 from .recursive_executor import JudgmentSet
@@ -280,6 +282,12 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["claim_frontier_advancement"] = _validate_claim_frontier_advancement(root=root)
     timings["claim_frontier_advancement_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["llm_framework_candidate_experiment"] = _validate_llm_framework_candidate_experiment(root=root)
+    timings["llm_framework_candidate_experiment_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["hegel_assumption_coverage_audit"] = _validate_hegel_assumption_coverage(root=root)
+    timings["hegel_assumption_coverage_audit_sec"] = _elapsed(start)
     return {
         "eval_id": eval_id,
         "source": {
@@ -1815,6 +1823,67 @@ def _validate_claim_frontier_advancement(*, root: Path) -> dict:
     }
 
 
+def _validate_llm_framework_candidate_experiment(*, root: Path) -> dict:
+    payload = build_llm_framework_candidate_experiment_payload(
+        root=root,
+        eval_id="perf_llm_framework_candidate_experiment",
+        execute_live=False,
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "llm_candidate_count": metrics["llm_candidate_count"],
+        "real_residual_source_count": metrics["real_residual_source_count"],
+        "llm_contract_field_coverage": metrics["llm_contract_field_coverage"],
+        "non_scope_narrowing_candidate_count": metrics["non_scope_narrowing_candidate_count"],
+        "framework_combination_or_generalization_count": metrics[
+            "framework_combination_or_generalization_count"
+        ],
+        "top2_validation_count": metrics["top2_validation_count"],
+        "top2_min_old_success_preservation": metrics["top2_min_old_success_preservation"],
+        "top2_min_residual_explanation": metrics["top2_min_residual_explanation"],
+        "accepted_or_candidate_validation_count": metrics["accepted_or_candidate_validation_count"],
+        "negative_control_validation_count": metrics["negative_control_validation_count"],
+        "live_llm_api_executed": metrics["live_llm_api_executed"],
+        "strong_live_llm_claim_allowed": metrics["strong_live_llm_claim_allowed"],
+        "paper_preflight_claim_allowed": metrics["paper_preflight_claim_allowed"],
+        "blocked_claim_boundary_count": metrics["blocked_claim_boundary_count"],
+        "secret_scan_match_count": metrics["secret_scan_match_count"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_hegel_assumption_coverage(*, root: Path) -> dict:
+    payload = build_hegel_assumption_coverage_audit_payload(
+        root=root,
+        eval_id="perf_hegel_assumption_coverage_audit",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "review_item_count": metrics["review_item_count"],
+        "review_item_pass_count": metrics["review_item_pass_count"],
+        "review_open_gap_count": metrics["review_open_gap_count"],
+        "deep_item_count": metrics["deep_item_count"],
+        "deep_item_pass_count": metrics["deep_item_pass_count"],
+        "deep_open_gap_count": metrics["deep_open_gap_count"],
+        "paper_delivery_file_count": metrics["paper_delivery_file_count"],
+        "claim_boundary_count": metrics["claim_boundary_count"],
+        "blocked_claim_boundary_count": metrics["blocked_claim_boundary_count"],
+        "overclaim_leak_count": metrics["overclaim_leak_count"],
+        "llm_live_api_executed": payload["llm_candidate_experiment_summary"]["live_llm_api_executed"],
+        "llm_paper_preflight_claim_allowed": payload["llm_candidate_experiment_summary"][
+            "paper_preflight_claim_allowed"
+        ],
+        "llm_strong_live_claim_allowed": payload["llm_candidate_experiment_summary"][
+            "strong_live_llm_claim_allowed"
+        ],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
 def _validate_memory_surfaces(*, root: Path, graph_dir: Path, sections: dict[str, dict]) -> dict:
     with tempfile.TemporaryDirectory() as td:
         tmp_graph = Path(td) / "graph"
@@ -3113,6 +3182,24 @@ def _key_metric(name: str, section: dict) -> str:
             f"A/B/C={section['autonomy_frontier_score']}/{section['simulator_frontier_score']}/"
             f"{section['formal_frontier_score']}, "
             f"blocked={section['blocked_overclaim_count']}"
+        )
+    if name == "llm_framework_candidate_experiment":
+        return (
+            f"candidates={section['llm_candidate_count']}, "
+            f"top2={section['top2_validation_count']}, "
+            f"old={section['top2_min_old_success_preservation']}, "
+            f"residual={section['top2_min_residual_explanation']}, "
+            f"live={section['live_llm_api_executed']}, "
+            f"claim={section['paper_preflight_claim_allowed']}/"
+            f"{section['strong_live_llm_claim_allowed']}"
+        )
+    if name == "hegel_assumption_coverage_audit":
+        return (
+            f"review={section['review_item_pass_count']}/{section['review_item_count']}, "
+            f"deep={section['deep_item_pass_count']}/{section['deep_item_count']}, "
+            f"claims={section['blocked_claim_boundary_count']}/{section['claim_boundary_count']}, "
+            f"paper={section['paper_delivery_file_count']}, "
+            f"llm_live={section['llm_live_api_executed']}"
         )
     if name == "memory_surfaces":
         return f"types={section['before_node_type_count']}->{section['after_node_type_count']}, edges={section['before_edge_type_count']}->{section['after_edge_type_count']}"
