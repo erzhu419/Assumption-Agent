@@ -35,6 +35,7 @@ Current target is L2 -> L3, not L4.
 | C1 | `assumption_os/finite_category_certificate.py` | implemented | `tests/test_finite_category_certificate.py`, `finite_category_certificate_20260612.json` |
 | C2 | `assumption_os/finite_category_lean_export.py` | implemented | `tests/test_finite_category_lean_export.py`, `finite_category_lean_export_20260612.json` |
 | C3-C8 | `assumption_os/finite_formal_reasoning_stack.py` | implemented | `tests/test_finite_formal_reasoning_stack.py`, `finite_formal_reasoning_stack_20260612.json` |
+| C9 | `assumption_os/finite_theorem_fragment.py` | implemented | `tests/test_finite_theorem_fragment.py`, `finite_theorem_fragment_20260612.json` |
 | I1 | `assumption_os/integrated_recursive_episode.py` | implemented | `tests/test_integrated_recursive_episode.py`, `integrated_recursive_episode_20260612.json` |
 | I2 | `assumption_os/integrated_recursive_episode_b3_c2.py` | implemented | `tests/test_integrated_recursive_episode_b3_c2.py`, `integrated_recursive_episode_b3_c2_20260612.json` |
 
@@ -657,3 +658,92 @@ Metrics:
 - `formal_transfer_overreach_residual_count=1`
 - `bounded_formal_stack_claim_allowed=true`
 - `full_theorem_prover_claim_allowed=false`
+
+## C9 Finite Theorem Fragment Snapshot
+
+This is the systematic extension requested after the C3-C8 bounded formal stack.
+It does not claim a full Lean/Coq-level theorem prover.  It adds a stronger
+finite, machine-checkable theorem fragment for the constructions that matter to
+the morphism layer.
+
+Implemented checks:
+
+- explicit finite category laws:
+  - identity
+  - total composition for composable pairs
+  - associativity
+- finite functor laws:
+  - object/morphism typing
+  - identity preservation
+  - composition preservation
+- finite natural transformation:
+  - component typing
+  - naturality-square commutativity
+  - negative control rejected
+- finite limits/colimits over a diamond poset category:
+  - terminal object
+  - initial object
+  - product
+  - coproduct
+  - pullback
+  - pushout
+- finite adjunction as a Galois connection over finite posets, with bad-right-adjoint negative control.
+- strict one-object monoidal category:
+  - associativity
+  - unit
+  - interchange law
+- finite stochastic-kernel fragment:
+  - row-stochastic kernels
+  - identity composition
+  - copy/delete deterministic kernels
+  - exact 2x2 Blackwell post-processing witness
+  - inverse Blackwell negative control rejected
+- information-geometry measurement fragment:
+  - Bernoulli Fisher-Rao distance
+  - nonnegativity
+  - symmetry
+  - zero self-distance
+  - sample triangle check
+  - KL recorded as asymmetric diagnostic, not truth oracle
+- bounded natural-language-to-diagram extractor:
+  - negative feedback / Le Chatelier / Lenz-style pattern
+  - residual transport / ResNet-style pattern
+  - noise-invariant signal extraction / autocorrelation-JEPA-style pattern
+  - unrelated natural-language negative control abstains
+
+Artifacts:
+
+`phase four/assumption_graph/paper_readiness_20260604/finite_theorem_fragment_20260612.json`
+
+The C3-C8 aggregate artifact was also regenerated:
+
+`phase four/assumption_graph/paper_readiness_20260604/finite_formal_reasoning_stack_20260612.json`
+
+Metrics:
+
+- `identity_law_pass=true`
+- `associativity_pass=true`
+- `functor_identity_pass=true`
+- `functor_composition_pass=true`
+- `naturality_pass=true`
+- `naturality_negative_control_rejected=true`
+- `finite_limit_count=6`
+- `finite_limit_colimit_pass=true`
+- `adjunction_pass=true`
+- `adjunction_negative_control_rejected=true`
+- `monoidal_pass=true`
+- `markov_category_fragment_pass=true`
+- `blackwell_exact_witness_pass=true`
+- `blackwell_negative_control_rejected=true`
+- `fisher_geometry_metric_laws_pass=true`
+- `nl_diagram_extraction_count=3`
+- `nl_diagram_certificate_pass_rate=1.0`
+- `nl_negative_control_abstained=true`
+- `finite_theorem_fragment_claim_allowed=true`
+- `external_proof_assistant_integrated=false`
+- `full_theorem_prover_claim_allowed=false`
+
+Claim boundary:
+
+- Allowed: finite theorem fragment over explicit finite categories, selected finite categorical constructions, finite stochastic kernels, and bounded NL diagram certificates.
+- Still blocked: full theorem prover, arbitrary infinite categories, higher-category coherence, dependent-type proof development, unbounded Markov categories, and arbitrary natural-language semantic equivalence.

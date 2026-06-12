@@ -18,6 +18,7 @@ from typing import Any
 from .autonomy_journal import PAPER_DIR, stable_hash
 from .finite_category_certificate import build_finite_category_certificate_payload
 from .finite_category_lean_export import build_finite_category_lean_export_payload
+from .finite_theorem_fragment import build_finite_theorem_fragment_payload
 
 
 DEFAULT_OUT = PAPER_DIR / "finite_formal_reasoning_stack_20260612.json"
@@ -88,12 +89,18 @@ def build_finite_formal_reasoning_stack_payload(
     markov = _markov_kernel_suite()
     geometry = _information_geometry_suite(markov)
     transfer = _formal_transfer_benchmark(certificates["certificates"])
+    theorem_fragment = build_finite_theorem_fragment_payload(
+        root=root,
+        eval_id=f"{eval_id}_finite_theorem_fragment",
+        write_artifact=False,
+    )
     claim_gate = _claim_gate(
         dsl_validation=dsl_validation,
         markov=markov,
         geometry=geometry,
         transfer=transfer,
         lean_export=lean_export,
+        theorem_fragment=theorem_fragment,
     )
     metrics = {
         "certificate_count": certificates["metrics"]["certificate_count"],
@@ -112,6 +119,22 @@ def build_finite_formal_reasoning_stack_payload(
         "formal_transfer_pairwise_auc": transfer["pairwise_auc"],
         "formal_transfer_negative_control_rejection_rate": transfer["negative_control_rejection_rate"],
         "formal_transfer_overreach_residual_count": transfer["overreach_residual_count"],
+        "finite_theorem_fragment_pass": theorem_fragment["pass"],
+        "finite_theorem_fragment_claim_allowed": theorem_fragment["metrics"][
+            "finite_theorem_fragment_claim_allowed"
+        ],
+        "finite_theorem_fragment_category_laws_pass": theorem_fragment["metrics"]["identity_law_pass"]
+        and theorem_fragment["metrics"]["associativity_pass"],
+        "finite_theorem_fragment_functor_laws_pass": theorem_fragment["metrics"]["functor_identity_pass"]
+        and theorem_fragment["metrics"]["functor_composition_pass"],
+        "finite_theorem_fragment_naturality_pass": theorem_fragment["metrics"]["naturality_pass"],
+        "finite_theorem_fragment_limits_colimits_pass": theorem_fragment["metrics"]["finite_limit_colimit_pass"],
+        "finite_theorem_fragment_adjunction_pass": theorem_fragment["metrics"]["adjunction_pass"],
+        "finite_theorem_fragment_monoidal_pass": theorem_fragment["metrics"]["monoidal_pass"],
+        "finite_theorem_fragment_blackwell_pass": theorem_fragment["metrics"]["blackwell_exact_witness_pass"],
+        "finite_theorem_fragment_nl_certificate_pass_rate": theorem_fragment["metrics"][
+            "nl_diagram_certificate_pass_rate"
+        ],
         "bounded_formal_stack_claim_allowed": claim_gate["bounded_formal_stack_claim_allowed"],
         "full_theorem_prover_claim_allowed": claim_gate["full_theorem_prover_claim_allowed"],
     }
@@ -127,6 +150,21 @@ def build_finite_formal_reasoning_stack_payload(
         "formal_transfer_benchmark_predictive": metrics["formal_transfer_pairwise_auc"] >= 0.95,
         "negative_controls_rejected": metrics["formal_transfer_negative_control_rejection_rate"] == 1.0,
         "overreach_residuals_recorded": metrics["formal_transfer_overreach_residual_count"] >= 1,
+        "finite_theorem_fragment_passes": metrics["finite_theorem_fragment_pass"] is True,
+        "finite_category_theorem_laws_checked": (
+            metrics["finite_theorem_fragment_category_laws_pass"] is True
+            and metrics["finite_theorem_fragment_functor_laws_pass"] is True
+            and metrics["finite_theorem_fragment_naturality_pass"] is True
+        ),
+        "finite_advanced_constructions_checked": (
+            metrics["finite_theorem_fragment_limits_colimits_pass"] is True
+            and metrics["finite_theorem_fragment_adjunction_pass"] is True
+            and metrics["finite_theorem_fragment_monoidal_pass"] is True
+        ),
+        "finite_markov_blackwell_fragment_checked": metrics["finite_theorem_fragment_blackwell_pass"] is True,
+        "nl_to_diagram_certificate_fragment_checked": (
+            metrics["finite_theorem_fragment_nl_certificate_pass_rate"] == 1.0
+        ),
         "bounded_claim_allowed": metrics["bounded_formal_stack_claim_allowed"] is True,
         "full_theorem_prover_claim_blocked": metrics["full_theorem_prover_claim_allowed"] is False,
     }
@@ -149,6 +187,7 @@ def build_finite_formal_reasoning_stack_payload(
         "finite_markov_kernels": markov,
         "information_geometry": geometry,
         "formal_transfer_benchmark": transfer,
+        "finite_theorem_fragment": theorem_fragment,
         "claim_gate": claim_gate,
         "metrics": metrics,
         "gates": gates,
@@ -289,6 +328,7 @@ def _claim_gate(
     geometry: dict[str, Any],
     transfer: dict[str, Any],
     lean_export: dict[str, Any],
+    theorem_fragment: dict[str, Any],
 ) -> dict[str, Any]:
     bounded = (
         dsl_validation["valid"]
@@ -296,10 +336,14 @@ def _claim_gate(
         and geometry["not_truth_oracle"]
         and transfer["pairwise_auc"] >= 0.95
         and lean_export["pass"]
+        and theorem_fragment["pass"]
     )
     return {
         "bounded_formal_stack_claim_allowed": bounded,
-        "allowed_claim": "finite category proof engine with external-checkable certificates for bounded formal mappings",
+        "allowed_claim": (
+            "finite category proof engine plus finite theorem fragment with external-checkable certificates "
+            "for bounded formal mappings"
+        ),
         "full_theorem_prover_claim_allowed": False,
         "blocked_claims": [
             "full category-theory theorem prover",
