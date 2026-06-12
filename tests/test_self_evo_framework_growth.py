@@ -17,11 +17,22 @@ class SelfEvoFrameworkGrowthTest(unittest.TestCase):
         metrics = payload["metrics"]
 
         self.assertTrue(payload["pass"], payload["failed_gates"])
-        self.assertGreaterEqual(metrics["anomaly_family_count"], 6)
-        self.assertGreaterEqual(metrics["candidate_framework_count"], 6)
+        self.assertGreaterEqual(metrics["anomaly_family_count"], 20)
+        self.assertGreaterEqual(metrics["real_residual_cluster_count"], 20)
+        self.assertGreaterEqual(metrics["candidate_framework_count"], 50)
+        self.assertGreaterEqual(metrics["trajectory_type_count"], 6)
+        self.assertGreaterEqual(metrics["non_scope_narrowing_candidate_rate"], 0.2)
+        self.assertGreaterEqual(metrics["framework_combination_or_generalization_rate"], 0.2)
+        self.assertGreaterEqual(metrics["negative_evidence_candidate_count"], 10)
+        self.assertGreaterEqual(metrics["live_feedback_candidate_count"], 10)
         self.assertEqual(metrics["structured_candidate_coverage"], 1.0)
         self.assertEqual(metrics["raw_wisdom_candidate_count"], 0)
         self.assertEqual(metrics["main_graph_mutation_count"], 0)
+        sample = payload["candidate_frameworks"][0]
+        self.assertIn("candidate_framework_id", sample)
+        self.assertIn("generation_trace", sample)
+        self.assertIn("risk_predictions", sample)
+        self.assertIn("required_tests", sample)
 
     def test_branch_ledger_records_promotions_and_negative_evidence(self):
         payload = build_framework_branch_ledger_payload(

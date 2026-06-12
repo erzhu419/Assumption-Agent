@@ -1376,9 +1376,18 @@ def _validate_residual_to_framework_generator(*, root: Path) -> dict:
     return {
         "pass": payload["pass"],
         "anomaly_family_count": metrics["anomaly_family_count"],
+        "real_residual_cluster_count": metrics.get("real_residual_cluster_count"),
         "candidate_framework_count": metrics["candidate_framework_count"],
+        "trajectory_type_count": metrics.get("trajectory_type_count"),
+        "trajectory_type_counts": metrics.get("trajectory_type_counts"),
+        "non_scope_narrowing_candidate_rate": metrics.get("non_scope_narrowing_candidate_rate"),
+        "framework_combination_or_generalization_rate": metrics.get(
+            "framework_combination_or_generalization_rate"
+        ),
         "conservative_gate_ready_count": metrics["conservative_gate_ready_count"],
         "structured_candidate_coverage": metrics["structured_candidate_coverage"],
+        "negative_evidence_candidate_count": metrics.get("negative_evidence_candidate_count"),
+        "live_feedback_candidate_count": metrics.get("live_feedback_candidate_count"),
         "raw_wisdom_candidate_count": metrics["raw_wisdom_candidate_count"],
         "mean_generator_quality_score": metrics["mean_generator_quality_score"],
         "main_graph_mutation_count": metrics["main_graph_mutation_count"],
@@ -2791,6 +2800,8 @@ def _key_metric(name: str, section: dict) -> str:
     if name == "residual_to_framework_generator":
         return (
             f"candidates={section['candidate_framework_count']}, "
+            f"real={section.get('real_residual_cluster_count')}, "
+            f"traj={section.get('trajectory_type_count')}, "
             f"ready={section['conservative_gate_ready_count']}, "
             f"raw={section['raw_wisdom_candidate_count']}"
         )
