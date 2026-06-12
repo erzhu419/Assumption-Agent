@@ -61,6 +61,7 @@ from .last_three_part_coverage_audit import build_last_three_part_coverage_audit
 from .manifest_logger import build_component_manifest_payload, events_from_run_logs
 from .memory_surfaces import build_memory_surface_payload
 from .objective_bench import build_objective_benchmark_payload
+from .open_ended_framework_evolution_run import build_open_ended_framework_evolution_run_payload
 from .recursive_audit import build_recursive_audit_payload
 from .recursive_daemon import build_preflight_queue_daemon_payload, build_recursive_daemon_payload
 from .recursive_executor import JudgmentSet
@@ -215,6 +216,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["framework_growth_ablation_suite"] = _validate_framework_growth_ablation_suite(root=root)
     timings["framework_growth_ablation_suite_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["open_ended_framework_evolution_run"] = _validate_open_ended_framework_evolution_run(root=root)
+    timings["open_ended_framework_evolution_run_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["self_evo_roadmap_coverage_audit"] = _validate_self_evo_roadmap_coverage(root=root)
     timings["self_evo_roadmap_coverage_audit_sec"] = _elapsed(start)
@@ -1258,6 +1262,40 @@ def _validate_framework_growth_ablation_suite(*, root: Path) -> dict:
         "no_graph_lifecycle_readback_penalty": metrics["no_graph_lifecycle_readback_penalty"],
         "full_prompt_trick_retained": metrics["full_prompt_trick_retained"],
         "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_open_ended_framework_evolution_run(*, root: Path) -> dict:
+    payload = build_open_ended_framework_evolution_run_payload(
+        root=root,
+        eval_id="perf_open_ended_framework_evolution_run",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "generation_count": metrics["generation_count"],
+        "candidate_count": metrics["candidate_count"],
+        "retained_count": metrics["retained_count"],
+        "active_framework_count": metrics["active_framework_count"],
+        "active_generation_coverage": metrics["active_generation_coverage"],
+        "negative_evidence_retained_count": metrics["negative_evidence_retained_count"],
+        "max_lineage_depth": metrics["max_lineage_depth"],
+        "branch_to_framework_transition_count": metrics["branch_to_framework_transition_count"],
+        "conservative_obligation_coverage": metrics["conservative_obligation_coverage"],
+        "parent_compatibility_relation_coverage": metrics["parent_compatibility_relation_coverage"],
+        "limiting_case_survival_rate": metrics["limiting_case_survival_rate"],
+        "generation_productivity_nonnegative_rate": metrics["generation_productivity_nonnegative_rate"],
+        "open_ended_framework_growth_score": metrics["open_ended_framework_growth_score"],
+        "margin_vs_best_toggle_off": metrics["margin_vs_best_toggle_off"],
+        "margin_vs_local_patch": metrics["margin_vs_local_patch"],
+        "margin_vs_raw_wisdom": metrics["margin_vs_raw_wisdom"],
+        "core_philosophy_prior_promotion_count": metrics["core_philosophy_prior_promotion_count"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "bounded_open_ended_framework_evolution_claim_allowed": metrics[
+            "bounded_open_ended_framework_evolution_claim_allowed"
+        ],
+        "unbounded_open_ended_os_claim_allowed": metrics["unbounded_open_ended_os_claim_allowed"],
         "failed_gates": payload["failed_gates"],
     }
 
@@ -2463,6 +2501,13 @@ def _key_metric(name: str, section: dict) -> str:
             f"full={section['full_score']}, "
             f"best_off={section['best_toggle_off_variant']}:{section['best_toggle_off_score']}, "
             f"margin={section['full_margin_vs_best_toggle_off']}"
+        )
+    if name == "open_ended_framework_evolution_run":
+        return (
+            f"gens={section['generation_count']}, "
+            f"active={section['active_framework_count']}, "
+            f"score={section['open_ended_framework_growth_score']}, "
+            f"margin={section['margin_vs_best_toggle_off']}"
         )
     if name == "self_evo_roadmap_coverage_audit":
         return (

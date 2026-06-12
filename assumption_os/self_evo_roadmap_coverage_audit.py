@@ -12,6 +12,7 @@ from .conservative_generalization_gate import build_conservative_generalization_
 from .framework_growth_ablation_suite import build_framework_growth_ablation_suite_payload
 from .framework_evolution_graph_episode import build_framework_evolution_graph_episode_payload
 from .framework_branch_ledger import build_framework_branch_ledger_payload
+from .open_ended_framework_evolution_run import build_open_ended_framework_evolution_run_payload
 from .philosophy_growth_benchmark import build_philosophy_growth_benchmark_payload
 from .residual_to_framework_generator import build_residual_to_framework_generator_payload
 
@@ -41,6 +42,7 @@ def build_self_evo_roadmap_coverage_audit_payload(
     bench = build_philosophy_growth_benchmark_payload(root=root, eval_id=f"{eval_id}_bench")
     graph_episode = build_framework_evolution_graph_episode_payload(root=root, eval_id=f"{eval_id}_graph_episode")
     ablation = build_framework_growth_ablation_suite_payload(root=root, eval_id=f"{eval_id}_ablation")
+    open_run = build_open_ended_framework_evolution_run_payload(root=root, eval_id=f"{eval_id}_open_run")
     supporting = {name: _load_json(root / path) for name, path in SUPPORTING_ARTIFACTS.items()}
     roadmap_items = _roadmap_items(
         generator=generator,
@@ -49,6 +51,7 @@ def build_self_evo_roadmap_coverage_audit_payload(
         bench=bench,
         graph_episode=graph_episode,
         ablation=ablation,
+        open_run=open_run,
         supporting=supporting,
     )
     ugse = _bounded_ugse_score(
@@ -58,6 +61,7 @@ def build_self_evo_roadmap_coverage_audit_payload(
         bench=bench,
         graph_episode=graph_episode,
         ablation=ablation,
+        open_run=open_run,
         supporting=supporting,
     )
     open_items = [row for row in roadmap_items if row["status"] != "pass"]
@@ -71,16 +75,22 @@ def build_self_evo_roadmap_coverage_audit_payload(
         "framework_growth_component": ugse["components"]["framework_growth_score"],
         "framework_ablation_margin_vs_best_toggle_off": ablation["metrics"]["full_margin_vs_best_toggle_off"],
         "framework_ablation_margin_vs_raw_wisdom": ablation["metrics"]["full_margin_vs_raw_wisdom"],
+        "open_ended_framework_growth_score": open_run["metrics"]["open_ended_framework_growth_score"],
+        "open_ended_framework_generation_count": open_run["metrics"]["generation_count"],
         "unbounded_self_evolution_os_claim_allowed": False,
         "main_graph_mutation_count": 0,
     }
     gates = {
-        "all_core_modules_pass": all(item.get("pass") for item in [generator, gate, ledger, bench, graph_episode, ablation]),
+        "all_core_modules_pass": all(
+            item.get("pass")
+            for item in [generator, gate, ledger, bench, graph_episode, ablation, open_run]
+        ),
         "all_roadmap_items_pass": metrics["open_roadmap_item_count"] == 0,
         "r7_complete": metrics["r7_item_pass_count"] == metrics["r7_item_count"],
         "bounded_ugse_score_high": metrics["bounded_ugse_score"] >= 0.90,
         "framework_growth_component_present": metrics["framework_growth_component"] >= 0.80,
         "framework_ablation_margin_present": metrics["framework_ablation_margin_vs_best_toggle_off"] >= 0.12,
+        "open_ended_framework_run_present": metrics["open_ended_framework_generation_count"] >= 6,
         "unbounded_claim_blocked": metrics["unbounded_self_evolution_os_claim_allowed"] is False,
         "main_graph_not_mutated": metrics["main_graph_mutation_count"] == 0,
     }
@@ -102,6 +112,7 @@ def build_self_evo_roadmap_coverage_audit_payload(
             "philosophy_growth_benchmark": {"pass": bench["pass"], "metrics": bench["metrics"]},
             "framework_evolution_graph_episode": {"pass": graph_episode["pass"], "metrics": graph_episode["metrics"]},
             "framework_growth_ablation_suite": {"pass": ablation["pass"], "metrics": ablation["metrics"]},
+            "open_ended_framework_evolution_run": {"pass": open_run["pass"], "metrics": open_run["metrics"]},
         },
         "supporting_artifacts": {
             name: {
@@ -159,6 +170,7 @@ def _roadmap_items(
     bench: dict[str, Any],
     graph_episode: dict[str, Any],
     ablation: dict[str, Any],
+    open_run: dict[str, Any],
     supporting: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     g = generator["metrics"]
@@ -167,6 +179,7 @@ def _roadmap_items(
     b = bench["metrics"]
     ge = graph_episode["metrics"]
     a = ablation["metrics"]
+    o = open_run["metrics"]
     return [
         _item("BranchLedger", ledger["pass"], "framework_branch_ledger_20260612.json", f"entries={l['ledger_entry_count']}"),
         _item(
@@ -246,6 +259,20 @@ def _roadmap_items(
             f"raw_margin={a['full_margin_vs_raw_wisdom']}, prompt_trick={a['full_prompt_trick_retained']}",
         ),
         _item(
+            "R7.7 Open-Ended Framework Evolution Run",
+            open_run["pass"] and o["generation_count"] >= 6 and o["active_framework_count"] >= 12,
+            "open_ended_framework_evolution_run_20260612.json",
+            f"gens={o['generation_count']}, active={o['active_framework_count']}, score={o['open_ended_framework_growth_score']}",
+        ),
+        _item(
+            "Selective Retention Across Framework Generations",
+            o["negative_evidence_retained_count"] >= 4
+            and o["generation_productivity_nonnegative_rate"] >= 0.80
+            and o["unbounded_open_ended_os_claim_allowed"] is False,
+            "open_ended_framework_evolution_run_20260612.json",
+            f"negative={o['negative_evidence_retained_count']}, prod={o['generation_productivity_nonnegative_rate']}",
+        ),
+        _item(
             "No Raw Wisdom Promotion",
             g["raw_wisdom_candidate_count"] == 0,
             "residual_to_framework_generator_20260612.json",
@@ -274,13 +301,17 @@ def _bounded_ugse_score(
     bench: dict[str, Any],
     graph_episode: dict[str, Any],
     ablation: dict[str, Any],
+    open_run: dict[str, Any],
     supporting: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     # This is a bounded-research maturity score, not an unbounded AGI claim.
     ablation_m = ablation["metrics"]
     ablation_contribution = min(0.96, 0.80 + ablation_m["full_margin_vs_best_toggle_off"])
+    open_run_contribution = min(0.95, 0.72 + open_run["metrics"]["open_ended_framework_growth_score"] * 0.25)
     framework_growth_score = round(
-        0.5 * bench["metrics"]["framework_growth_score"] + 0.5 * ablation_contribution,
+        0.40 * bench["metrics"]["framework_growth_score"]
+        + 0.35 * ablation_contribution
+        + 0.25 * open_run_contribution,
         4,
     )
     components = {
