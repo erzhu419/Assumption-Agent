@@ -59,6 +59,7 @@ from .framework_evolution_graph_episode import build_framework_evolution_graph_e
 from .framework_branch_ledger import build_framework_branch_ledger_payload
 from .framework_lifecycle_ledger_v2 import build_framework_lifecycle_ledger_v2_payload
 from .framework_simulator_guided_search import build_framework_simulator_guided_search_payload
+from .framework_formal_certificate_integration import build_framework_formal_certificate_integration_payload
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .harness_observer import build_harness_observer_payload
 from .last_three_part_coverage_audit import build_last_three_part_coverage_audit_payload
@@ -245,6 +246,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["framework_simulator_guided_search"] = _validate_framework_simulator_guided_search(root=root)
     timings["framework_simulator_guided_search_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["framework_formal_certificate_integration"] = _validate_framework_formal_certificate_integration(root=root)
+    timings["framework_formal_certificate_integration_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["philosophy_growth_benchmark"] = _validate_philosophy_growth_benchmark(root=root)
     timings["philosophy_growth_benchmark_sec"] = _elapsed(start)
@@ -1512,6 +1516,35 @@ def _validate_framework_simulator_guided_search(*, root: Path) -> dict:
         "production_router_claim_allowed": metrics["production_router_claim_allowed"],
         "simulator_replacement_claim_allowed": metrics["simulator_replacement_claim_allowed"],
         "simulator_no_leakage_pass": metrics["simulator_no_leakage_pass"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_framework_formal_certificate_integration(*, root: Path) -> dict:
+    payload = build_framework_formal_certificate_integration_payload(
+        root=root,
+        eval_id="perf_framework_formal_certificate_integration",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "framework_row_count": metrics["framework_row_count"],
+        "formal_applicable_count": metrics["formal_applicable_count"],
+        "formal_applicable_certificate_coverage": metrics["formal_applicable_certificate_coverage"],
+        "formal_applicable_proof_obligation_pass_rate": metrics["formal_applicable_proof_obligation_pass_rate"],
+        "semi_formal_count": metrics["semi_formal_count"],
+        "not_formalizable_control_count": metrics["not_formalizable_control_count"],
+        "unsafe_mapping_block_count": metrics["unsafe_mapping_block_count"],
+        "non_formalizable_theorem_prover_invocation_count": metrics[
+            "non_formalizable_theorem_prover_invocation_count"
+        ],
+        "semi_formal_theorem_prover_invocation_count": metrics["semi_formal_theorem_prover_invocation_count"],
+        "external_lean_check_passed": metrics["external_lean_check_passed"],
+        "external_lean_theorem_count": metrics["external_lean_theorem_count"],
+        "negative_control_blocked_count": metrics["negative_control_blocked_count"],
+        "bounded_formal_stack_claim_allowed": metrics["bounded_formal_stack_claim_allowed"],
+        "full_theorem_prover_claim_allowed": metrics["full_theorem_prover_claim_allowed"],
         "main_graph_mutation_count": metrics["main_graph_mutation_count"],
         "failed_gates": payload["failed_gates"],
     }
@@ -2935,6 +2968,13 @@ def _key_metric(name: str, section: dict) -> str:
             f"tp_block={section['true_positive_block_count']}, "
             f"risk={section['rejected_high_risk_recall']}, "
             f"defects={section['simulator_defect_residual_count']}"
+        )
+    if name == "framework_formal_certificate_integration":
+        return (
+            f"formal={section['formal_applicable_count']}, "
+            f"cert={section['formal_applicable_certificate_coverage']}, "
+            f"unsafe={section['unsafe_mapping_block_count']}, "
+            f"lean={section['external_lean_theorem_count']}"
         )
     if name == "philosophy_growth_benchmark":
         return (
