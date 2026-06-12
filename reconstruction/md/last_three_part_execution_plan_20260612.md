@@ -28,6 +28,7 @@ Current target is L2 -> L3, not L4.
 | B2 | `assumption_os/simulator_eval_splits.py` | implemented | `tests/test_simulator_eval_splits.py`, `simulator_eval_splits_20260612.json` |
 | B3 | `assumption_os/simulator_uncertainty.py` | implemented | `tests/test_simulator_uncertainty.py`, `simulator_uncertainty_20260612.json` |
 | C1 | `assumption_os/finite_category_certificate.py` | implemented | `tests/test_finite_category_certificate.py`, `finite_category_certificate_20260612.json` |
+| C2 | `assumption_os/finite_category_lean_export.py` | implemented | `tests/test_finite_category_lean_export.py`, `finite_category_lean_export_20260612.json` |
 | I1 | `assumption_os/integrated_recursive_episode.py` | implemented | `tests/test_integrated_recursive_episode.py`, `integrated_recursive_episode_20260612.json` |
 
 ## A1 Completion Snapshot
@@ -53,7 +54,7 @@ Metrics:
 
 ## Next Step
 
-Next step is C2 Lean-style export stub, then I2 can wire B3 uncertainty routing into the integrated episode.
+Next step is I2: wire B3 uncertainty routing and C2 external-checkable formal certificates into the integrated episode.
 
 ## A2 Completion Snapshot
 
@@ -241,6 +242,42 @@ Metrics:
 - `naturality_square_pass_rate=1.0`
 - `negative_control_pass_rate=1.0`
 - `unbounded_theorem_prover_claim_allowed=false`
+
+## C2 Completion Snapshot
+
+- Exports C1 finite category certificates into a Lean-readable text artifact.
+- Keeps the formal layer gate-only:
+  - `allow`
+  - `repair_before_promotion`
+  - `block_unsafe_mapping`
+  - `not_applicable`
+- Explicitly excludes generator / production mutation actions:
+  - `generate_new_hypothesis`
+  - `synthesize_philosophical_rule`
+  - `auto_accept_without_live`
+  - `auto_apply_policy_change`
+  - `replace_judge`
+- Includes expected proof obligations and not-claimed boundaries in the Lean text.
+- External Lean syntax check is available and passed in the current environment.
+
+Artifacts:
+
+`phase four/assumption_graph/paper_readiness_20260604/finite_category_certificate_20260612.lean`
+
+`phase four/assumption_graph/paper_readiness_20260604/finite_category_lean_export_20260612.json`
+
+Metrics:
+
+- `certificate_count=16`
+- `lean_definition_count=16`
+- `proof_obligation_name_count=9`
+- `supported_gate_output_count=4`
+- `forbidden_generator_output_count=0`
+- `not_claimed_boundary_count=6`
+- `lean_text_line_count=632`
+- `external_lean_available=true`
+- `external_lean_check_passed=true`
+- `full_theorem_prover_claim_allowed=false`
 
 ## I1 Completion Snapshot
 
