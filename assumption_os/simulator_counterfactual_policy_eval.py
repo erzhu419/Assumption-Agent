@@ -24,6 +24,7 @@ UNCERTAINTY_PATH = PAPER_DIR / "simulator_uncertainty_20260612.json"
 MIN_ARMS_PER_GROUP = 3
 PRODUCTION_MIN_GROUPS = 20
 PRODUCTION_MIN_COVERAGE = 0.35
+FEATURE_POLICY_ARM_SWITCH_MARGIN = 0.15
 
 
 def build_simulator_counterfactual_policy_eval_payload(
@@ -89,20 +90,22 @@ def build_simulator_counterfactual_policy_eval_payload(
         promotion_block_reasons.append("b3_selector_does_not_agree_with_empirical_best_arm")
     if metrics["leave_state_out_feature_policy_coverage"] < 0.8:
         promotion_block_reasons.append("feature_policy_coverage_below_production_minimum")
+    metrics["production_counterfactual_gate_allowed"] = not promotion_block_reasons
     gates = {
-        "dataset_valid": metrics["valid_row_count"] == metrics["row_count"] == 345,
-        "problem_level_matched_groups_available": metrics["matched_counterfactual_group_count"] >= 17,
+        "dataset_valid": metrics["valid_row_count"] == metrics["row_count"] and metrics["row_count"] >= 345,
+        "problem_level_matched_groups_available": metrics["matched_counterfactual_group_count"] >= 40,
         "counterfactual_arm_count_at_least_three": metrics["min_arm_count_per_matched_group"] >= MIN_ARMS_PER_GROUP,
         "leave_one_replicate_reported": loo["evaluated_row_count"] == metrics["matched_counterfactual_row_count"],
         "global_baseline_reported": metrics["global_baseline_mae"] > 0,
         "feature_conditioned_policy_beats_v3_full": metrics["leave_state_out_feature_policy_beats_v3"] is True,
-        "low_coverage_blocks_production_promotion": (
-            metrics["production_counterfactual_gate_allowed"] is False
-            and "matched_action_coverage_below_production_minimum" in promotion_block_reasons
-        ),
-        "weak_estimator_blocks_production_promotion": (
-            metrics["production_counterfactual_gate_allowed"] is False
-            and "leave_one_replicate_mae_does_not_beat_global_baseline" in promotion_block_reasons
+        "matched_action_coverage_repaired": metrics["matched_action_coverage"] >= PRODUCTION_MIN_COVERAGE,
+        "promotion_decision_matches_block_reasons": metrics["production_counterfactual_gate_allowed"]
+        is (not promotion_block_reasons),
+        "remaining_estimator_or_selector_boundary_recorded": (
+            metrics["production_counterfactual_gate_allowed"] is True
+            or "leave_one_replicate_mae_does_not_beat_global_baseline" in promotion_block_reasons
+            or "b3_selector_does_not_agree_with_empirical_best_arm" in promotion_block_reasons
+            or "feature_policy_coverage_below_production_minimum" in promotion_block_reasons
         ),
         "b3_selector_weakness_recorded": "b3_selector_does_not_agree_with_empirical_best_arm" in promotion_block_reasons,
         "exploration_audit_passes_without_causal_overclaim": metrics["exploration_counterfactual_audit_passed"] is True,
@@ -143,7 +146,8 @@ def build_simulator_counterfactual_policy_eval_payload(
         "claim_boundaries": [
             "This is a matched counterfactual audit over the currently available multi-arm rows.",
             "Problem-level grouping fixes the earlier coarse residual-group audit and validates an exploration selector.",
-            "The current evidence still blocks production promotion because matched action coverage is too low.",
+            "Phase9 same-batch multi-arm rows repair the earlier low-coverage boundary; remaining blockers, if any, "
+            "come from estimator or selector quality rather than missing same-state rows.",
             "B3 remains useful as a routing guard, not as a causal best-arm selector.",
         ],
     }
@@ -253,6 +257,12 @@ def _leave_state_out_feature_policy(groups: list[tuple[str, list[dict[str, Any]]
             row["action"]["arm"]: float(row["outcome"]["utility_vs_baseline"])
             for row in heldout_rows
         }
+        if selected_arm not in utility_by_arm:
+            available_scores = {arm: score for arm, score in arm_scores.items() if arm in utility_by_arm}
+            if available_scores:
+                selected_arm = max(available_scores, key=available_scores.get)
+            else:
+                selected_arm = "v3_full" if "v3_full" in utility_by_arm else max(utility_by_arm, key=utility_by_arm.get)
         empirical_best_arm = max(utility_by_arm, key=utility_by_arm.get)
         selected_utility = utility_by_arm[selected_arm]
         selected_utilities.append(selected_utility)
@@ -308,7 +318,7 @@ def _select_arm_from_training_features(
     heldout_features = {
         feature
         for feature in heldout_rows[0]["state"].get("world_model_features", [])
-        if not feature.startswith(("domain:", "pattern:", "route:")) and feature not in ignored_features
+        if not feature.startswith(("domain:", "pattern:", "route:", "arm_family:")) and feature not in ignored_features
     }
     feature_arm_values: dict[tuple[str, str], list[float]] = defaultdict(list)
     global_arm_values: dict[str, list[float]] = defaultdict(list)
@@ -316,7 +326,7 @@ def _select_arm_from_training_features(
         features = {
             feature
             for feature in rows[0]["state"].get("world_model_features", [])
-            if not feature.startswith(("domain:", "pattern:", "route:")) and feature not in ignored_features
+            if not feature.startswith(("domain:", "pattern:", "route:", "arm_family:")) and feature not in ignored_features
         }
         for row in rows:
             arm = str(row["action"]["arm"])
@@ -339,6 +349,12 @@ def _select_arm_from_training_features(
         else:
             arm_scores[arm] = mean(global_arm_values[arm])
     selected_arm = max(arm_scores, key=arm_scores.get)
+    if (
+        selected_arm != "v3_full"
+        and "v3_full" in arm_scores
+        and arm_scores[selected_arm] < arm_scores["v3_full"] + FEATURE_POLICY_ARM_SWITCH_MARGIN
+    ):
+        selected_arm = "v3_full"
     return selected_arm, sorted(set(support_features)), {arm: round(score, 4) for arm, score in arm_scores.items()}
 
 

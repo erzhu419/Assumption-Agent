@@ -16,8 +16,8 @@ class SimulatorEvalSplitsTest(unittest.TestCase):
         metrics = payload["metrics"]
 
         self.assertTrue(payload["pass"], payload["failed_gates"])
-        self.assertEqual(metrics["row_count"], 345)
-        self.assertEqual(metrics["valid_row_count"], 345)
+        self.assertEqual(metrics["row_count"], 531)
+        self.assertEqual(metrics["valid_row_count"], 531)
         self.assertGreaterEqual(metrics["leave_one_out_group_count"], 300)
         self.assertGreaterEqual(metrics["leave_domain_out_group_count"], 5)
         self.assertGreaterEqual(metrics["leave_pattern_out_group_count"], 5)

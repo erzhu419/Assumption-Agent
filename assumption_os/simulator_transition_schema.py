@@ -1,8 +1,9 @@
 """Frozen simulator transition schema and dataset validator.
 
-The Phase13 artifact reports 345 first-party transition-like rows, but it only
-stores the count.  This module materializes those rows into a fixed redacted
-JSONL dataset and validates the schema before any stronger simulator is trained.
+The Phase13 artifact reports a 345-row first-party transition-like floor, but
+it only stores the count.  This module materializes that floor plus newer
+same-state multi-arm rows into a fixed redacted JSONL dataset and validates the
+schema before any stronger simulator is trained.
 Invalid rows are written to quarantine instead of being silently dropped.
 """
 
@@ -26,6 +27,8 @@ DEFAULT_QUARANTINE_OUT = PAPER_DIR / "simulator_transition_quarantine_v0.jsonl"
 DEFAULT_VALIDATION_OUT = PAPER_DIR / "simulator_transition_schema_validation_20260612.json"
 
 SOURCE_ARTIFACTS = {
+    "phase9_v1_live_regression": PAPER_DIR / "full_v3_phase9_v1_live_regression_20260611.json",
+    "phase9_compact_frame_guard": PAPER_DIR / "full_v3_phase9_compact_frame_guard_20260611.json",
     "phase10_reliability": PAPER_DIR / "full_v3_phase10_reliability_calibration_20260611.json",
     "residual_fresh_live": PAPER_DIR / "full_v3_residual_fresh_live_loop_20260611.json",
     "live_multigeneration": PAPER_DIR / "full_v3_live_multigeneration_expansion_20260612.json",
@@ -133,6 +136,7 @@ def build_simulator_transition_schema_payload(
     metrics = {
         "expected_transition_row_count": expected_rows,
         "raw_row_count": report.raw_row_count,
+        "added_transition_row_count_over_phase13": max(0, report.raw_row_count - expected_rows),
         "valid_row_count": report.valid_row_count,
         "invalid_row_count": report.invalid_row_count,
         "quarantine_row_count": report.quarantine_row_count,
@@ -148,7 +152,7 @@ def build_simulator_transition_schema_payload(
     }
     gates = {
         "source_artifacts_loaded": all(bool(artifact) for artifact in artifacts.values()),
-        "row_count_matches_phase13": metrics["raw_row_count"] == expected_rows,
+        "row_count_at_least_phase13": metrics["raw_row_count"] >= expected_rows,
         "all_rows_valid": metrics["valid_row_count"] == metrics["raw_row_count"],
         "invalid_rows_quarantined": metrics["invalid_row_count"] == metrics["quarantine_row_count"],
         "no_invalid_rows_in_current_dataset": metrics["invalid_row_count"] == 0,
@@ -167,9 +171,10 @@ def build_simulator_transition_schema_payload(
         "schema_version": SCHEMA_VERSION,
         "performance_validation": True,
         "validation_scope": (
-            "Materializes the current 345 first-party transition-like rows into a fixed redacted graph-action "
-            "simulator transition schema.  Validates required fields, split labels, provenance hashes, redaction, "
-            "and quarantine handling before stronger simulator training."
+            "Materializes the current first-party transition-like rows into a fixed redacted graph-action "
+            "simulator transition schema.  The Phase13 345-row floor is preserved while Phase9 same-state "
+            "multi-arm rows are added for counterfactual policy evaluation.  Validates required fields, split "
+            "labels, provenance hashes, redaction, and quarantine handling before stronger simulator training."
         ),
         "source_artifacts": {
             name: {
@@ -237,6 +242,8 @@ def simulator_transition_schema() -> dict[str, Any]:
 
 def build_current_transition_rows(artifacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    rows.extend(_phase9_same_state_multiarm_rows(artifacts["phase9_v1_live_regression"]))
+    rows.extend(_phase9_compact_guard_multiarm_rows(artifacts["phase9_compact_frame_guard"]))
     rows.extend(_phase10_reliability_rows(artifacts["phase10_reliability"]))
     rows.extend(_residual_fresh_live_rows(artifacts["residual_fresh_live"]))
     rows.extend(_live_multigeneration_rows(artifacts["live_multigeneration"]))
@@ -387,6 +394,136 @@ def make_transition_row(
     }
     row["provenance"]["provenance_hash"] = _provenance_hash(row)
     return row
+
+
+def _phase9_same_state_multiarm_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Convert Phase9 same-batch toggle judgments into local multi-arm rows.
+
+    The local counterfactual baseline is `v3_full`; every alternative arm is
+    scored by its observed pairwise outcome against the same problem's V3 full
+    answer.  The V1 kernel is included as a historical comparison arm because
+    Phase9 judged it in the same batch and with the same case state.
+    """
+    pair_summaries = payload.get("pair_summaries") or {}
+    v3_vs_v1 = _outcome_index(pair_summaries, "v3_full_vs_v1_case_reflection_kernel")
+    toggle_pairs = {
+        "v1_case_reflection_kernel": v3_vs_v1,
+        "v3_no_morphism": _outcome_index(pair_summaries, "v3_full_vs_v3_no_morphism"),
+        "v3_no_recursive": _outcome_index(pair_summaries, "v3_full_vs_v3_no_recursive"),
+        "v3_no_world_model": _outcome_index(pair_summaries, "v3_full_vs_v3_no_world_model"),
+    }
+    rows: list[dict[str, Any]] = []
+    for problem_id, v3_row in sorted(v3_vs_v1.items()):
+        rows.append(
+            _same_state_profile_row(
+                artifact_id="full_v3_phase9_v1_live_regression_20260611",
+                problem_id=problem_id,
+                arm="v3_full",
+                local_utility=0.5,
+                row=v3_row,
+                residual_cluster="phase9_same_batch_toggle",
+                active_assumptions=["phase9_toggle_baseline", "v3_full"],
+                source_granularity="observed_phase9_same_batch_toggle_arm",
+                uncertainty=0.1,
+            )
+        )
+        for arm, rows_by_problem in toggle_pairs.items():
+            pair_row = rows_by_problem.get(problem_id)
+            if not pair_row:
+                continue
+            rows.append(
+                _same_state_profile_row(
+                    artifact_id="full_v3_phase9_v1_live_regression_20260611",
+                    problem_id=problem_id,
+                    arm=arm,
+                    local_utility=_invert_outcome_value(str(pair_row.get("outcome") or "tie")),
+                    row=pair_row,
+                    residual_cluster="phase9_same_batch_toggle",
+                    active_assumptions=["phase9_toggle_ablation", arm],
+                    source_granularity="observed_phase9_same_batch_toggle_arm",
+                    uncertainty=0.15,
+                )
+            )
+    return rows
+
+
+def _phase9_compact_guard_multiarm_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    pair_summaries = payload.get("pair_summaries") or {}
+    repair_vs_v3 = _outcome_index(pair_summaries, "v3_frame_morphism_repair_vs_v3_full")
+    rows: list[dict[str, Any]] = []
+    for problem_id, pair_row in sorted(repair_vs_v3.items()):
+        rows.append(
+            _same_state_profile_row(
+                artifact_id="full_v3_phase9_compact_frame_guard_20260611",
+                problem_id=problem_id,
+                arm="v3_compact_frame_guard",
+                local_utility=_outcome_value(str(pair_row.get("outcome") or "tie")),
+                row=pair_row,
+                residual_cluster="phase9_same_batch_toggle",
+                active_assumptions=["phase9_compact_frame_guard", "bounded_morphism_repair"],
+                source_granularity="observed_phase9_same_batch_compact_guard_arm",
+                uncertainty=0.15,
+            )
+        )
+    return rows
+
+
+def _same_state_profile_row(
+    *,
+    artifact_id: str,
+    problem_id: str,
+    arm: str,
+    local_utility: float,
+    row: dict[str, Any],
+    residual_cluster: str,
+    active_assumptions: list[str],
+    source_granularity: str,
+    uncertainty: float,
+) -> dict[str, Any]:
+    domain = str(row.get("domain") or _problem_domain(problem_id) or "unknown")
+    pattern = str(row.get("pattern_id") or "unknown")
+    route = str(row.get("route_strategy_tag") or "unknown")
+    utility = _unit(local_utility)
+    return make_transition_row(
+        row_id=f"simtr_{stable_hash([artifact_id, problem_id, arm])}",
+        state={
+            "domain": domain,
+            "pattern": pattern,
+            "active_assumptions": active_assumptions,
+            "residual_cluster": residual_cluster,
+            "formal_gate_state": "not_applicable",
+            "preflight_state": "observed_same_state_multiarm",
+            "world_model_features": [
+                f"domain:{domain}",
+                f"pattern:{pattern}",
+                f"route:{route}",
+                route.lower() if route != "unknown" else "route_unknown",
+                "phase9_same_state_multiarm",
+                f"arm_family:{_arm_family(arm)}",
+            ],
+        },
+        action={"type": "select_profile", "arm": arm},
+        prediction={
+            "p_accept": utility,
+            "p_regress": 1.0 - utility,
+            "expected_utility": utility,
+            "uncertainty": uncertainty,
+        },
+        outcome={
+            "accepted": utility >= 0.5,
+            "utility_vs_baseline": utility,
+            "control_harm": False,
+            "regression": utility < 0.5,
+            "cost": 1.0,
+        },
+        provenance={
+            "artifact_id": artifact_id,
+            "source_row_id": f"{problem_id}::{arm}",
+            "source_granularity": source_granularity,
+            "local_counterfactual_baseline": "v3_full",
+            "split": _split_for(f"{artifact_id}:{problem_id}:{arm}"),
+        },
+    )
 
 
 def _phase10_reliability_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -666,6 +803,38 @@ def _candidate_family_pattern(candidate_family: str, row_kind: str) -> str:
     if len(parts) >= 2:
         return parts[1]
     return row_kind
+
+
+def _outcome_index(pair_summaries: dict[str, Any], pair: str) -> dict[str, dict[str, Any]]:
+    summary = pair_summaries.get(pair) or {}
+    return {str(row["problem_id"]): row for row in summary.get("rows", []) if row.get("problem_id")}
+
+
+def _outcome_value(outcome: str) -> float:
+    normalized = str(outcome or "tie").lower()
+    if normalized == "win":
+        return 1.0
+    if normalized == "loss":
+        return 0.0
+    return 0.5
+
+
+def _invert_outcome_value(outcome: str) -> float:
+    return 1.0 - _outcome_value(outcome)
+
+
+def _problem_domain(problem_id: str) -> str:
+    return str(problem_id).split("_", 1)[0] if "_" in str(problem_id) else "unknown"
+
+
+def _arm_family(arm: str) -> str:
+    if arm.startswith("v3_no_"):
+        return "toggle_off"
+    if arm.startswith("v1_"):
+        return "historical_kernel"
+    if "compact" in arm:
+        return "compact_guard"
+    return "v3_full"
 
 
 def _bit_suffix(bits: list[str], prefix: str) -> str | None:

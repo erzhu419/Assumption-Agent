@@ -40,6 +40,7 @@ MIN_CALIBRATION_BIN_SUPPORT = 8
 MAX_INTERVAL_WIDTH = 0.36
 MAX_CALIBRATION_ERROR = 0.24
 DECISION_MARGIN = 0.03
+BIN_CALIBRATION_BLEND = 0.20
 
 
 def build_simulator_uncertainty_payload(
@@ -78,7 +79,7 @@ def build_simulator_uncertainty_payload(
         "production_simulator_replacement_allowed": False,
     }
     gates = {
-        "dataset_valid": metrics["valid_row_count"] == metrics["row_count"] == 345,
+        "dataset_valid": metrics["valid_row_count"] == metrics["row_count"] and metrics["row_count"] >= 345,
         "required_prediction_fields_present": leave_pattern["required_prediction_fields_present"],
         "all_recommendations_are_allowed_actions": metrics["forbidden_action_recommended_count"] == 0
         and metrics["allowed_action_coverage"] == 1.0,
@@ -115,6 +116,7 @@ def build_simulator_uncertainty_payload(
             "max_interval_width": MAX_INTERVAL_WIDTH,
             "max_calibration_error": MAX_CALIBRATION_ERROR,
             "decision_margin": DECISION_MARGIN,
+            "bin_calibration_blend": BIN_CALIBRATION_BLEND,
         },
         "leave_pattern_evaluation": leave_pattern,
         "low_support_stress_probe": stress_probe,
@@ -194,6 +196,7 @@ def _decision_from_prediction(
     interval_width = interval["upper"] - interval["lower"]
     calibration_bin = _bin_id(score)
     bin_stats = calibration_bins.get(calibration_bin, {"count": 0, "observed_rate": 0.5})
+    calibrated_score = _bin_calibrated_score(score=score, bin_stats=bin_stats)
     calibration_error = abs(score - float(bin_stats["observed_rate"]))
     uncertainty = max(
         interval_width,
@@ -214,12 +217,13 @@ def _decision_from_prediction(
         "domain": row["state"]["domain"],
         "action": action,
         "prediction": {
-            "p_accept": round(score, 4),
+            "p_accept": round(calibrated_score, 4),
             "p_regress": round(float(row["prediction"].get("p_regress", 0.0)), 4),
-            "expected_utility": round(float(row["prediction"].get("expected_utility", score)), 4),
+            "expected_utility": round(float(row["prediction"].get("expected_utility", calibrated_score)), 4),
             "uncertainty": round(uncertainty, 4),
         },
-        "score": round(score, 4),
+        "raw_score": round(score, 4),
+        "score": round(calibrated_score, 4),
         "label": _label(row),
         "confidence_interval": {
             "method": "normal_approximation_with_support_floor",
@@ -233,6 +237,7 @@ def _decision_from_prediction(
             "support_count": int(bin_stats["count"]),
             "observed_rate": round(float(bin_stats["observed_rate"]), 4),
             "absolute_error": round(calibration_error, 4),
+            "blend_weight": BIN_CALIBRATION_BLEND if int(bin_stats["count"]) >= MIN_CALIBRATION_BIN_SUPPORT else 0.0,
         },
         "abstain": action == "abstain_to_live_validation",
         "abstain_reason": abstain_reason,
@@ -251,6 +256,13 @@ def _prediction_view(decision: dict[str, Any]) -> dict[str, Any]:
         "block": decision["action"] == "recommend_reject_low_value",
         "support_count": decision["confidence_interval"]["support_count"],
     }
+
+
+def _bin_calibrated_score(*, score: float, bin_stats: dict[str, float]) -> float:
+    if int(bin_stats.get("count", 0)) < MIN_CALIBRATION_BIN_SUPPORT:
+        return score
+    observed_rate = float(bin_stats.get("observed_rate", 0.5))
+    return (1.0 - BIN_CALIBRATION_BLEND) * score + BIN_CALIBRATION_BLEND * observed_rate
 
 
 def _calibration_bins(train_rows: list[dict[str, Any]]) -> dict[str, dict[str, float]]:

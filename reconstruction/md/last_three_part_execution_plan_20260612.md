@@ -127,8 +127,10 @@ Metrics:
 ## B1 Completion Snapshot
 
 - Frozen simulator transition schema `simulator_transition_schema_v0`.
-- Materialized current Phase13 345 first-party transition-like rows into JSONL.
+- Materialized the current first-party transition-like rows into JSONL while preserving the Phase13 345-row floor.
 - Sources:
+  - Phase9 V1 same-batch toggle multi-arm rows: 155
+  - Phase9 compact-frame same-batch arm rows: 31
   - Phase10 reliability observed-arm rows: 51
   - residual fresh live judgments: 18
   - live multigeneration transition-like rows: 36
@@ -151,18 +153,20 @@ Artifacts:
 
 Metrics:
 
-- `raw_row_count=345`
-- `valid_row_count=345`
+- `expected_transition_row_count=345`
+- `raw_row_count=531`
+- `added_transition_row_count_over_phase13=186`
+- `valid_row_count=531`
 - `invalid_row_count=0`
 - `quarantine_row_count=0`
-- `redacted_row_count=345`
-- `split_counts={"train":255,"validation":37,"test":53}`
+- `redacted_row_count=531`
+- `split_counts={"train":393,"validation":60,"test":78}`
 - `provenance_hash_unique=true`
 - `secret_or_prompt_payload_detected=false`
 
 ## B2 Completion Snapshot
 
-- Evaluates the frozen 345-row transition dataset under:
+- Evaluates the frozen 531-row transition dataset under:
   - leave-one-out
   - leave-domain-out
   - leave-pattern-out
@@ -186,15 +190,17 @@ Artifact:
 
 Metrics:
 
-- `leave_one_out_group_count=345`
+- `row_count=531`
+- `leave_one_out_group_count=531`
 - `leave_domain_out_group_count=9`
-- `leave_pattern_out_group_count=8`
-- `leave_artifact_out_group_count=4`
-- `leave_residual_family_out_group_count=16`
-- `feature_model_loo_brier=0.2022`
-- `base_rate_loo_brier=0.2157`
-- `current_heuristic_loo_brier=0.1834`
-- `current_heuristic_false_positive_block_rate=0.2822`
+- `leave_pattern_out_group_count=10`
+- `leave_artifact_out_group_count=6`
+- `leave_residual_family_out_group_count=17`
+- `feature_model_loo_brier=0.2007`
+- `base_rate_loo_brier=0.2162`
+- `current_heuristic_loo_brier=0.142`
+- `feature_model_leave_pattern_brier=0.201`
+- `base_rate_leave_pattern_brier=0.2186`
 - `raw_predictor_promotion_allowed=false`
 - `feature_model_promotion_allowed=true`
 - `production_simulator_replacement_allowed=false`
@@ -226,12 +232,12 @@ Artifact:
 
 Metrics:
 
-- `row_count=345`
-- `decision_count=345`
-- `leave_pattern_base_rate_brier_with_abstain_as_half=0.2185`
-- `leave_pattern_uncertainty_brier_with_abstain_as_half=0.2036`
-- `leave_pattern_uncertainty_ece=0.1039`
-- `leave_pattern_abstention_rate=0.0406`
+- `row_count=531`
+- `decision_count=531`
+- `leave_pattern_base_rate_brier_with_abstain_as_half=0.2186`
+- `leave_pattern_uncertainty_brier_with_abstain_as_half=0.2066`
+- `leave_pattern_uncertainty_ece=0.1152`
+- `leave_pattern_abstention_rate=0.1695`
 - `accepted_candidate_block_rate=0.0`
 - `forbidden_action_recommended_count=0`
 - `allowed_action_coverage=1.0`
@@ -254,7 +260,8 @@ Metrics:
   - promotion block reasons
 - Result after repair:
   - exploration selector is positive versus always-v3-full
-  - production counterfactual promotion is still blocked because matched coverage remains too low
+  - same-state multi-arm coverage is now above the production coverage floor
+  - production counterfactual promotion is still blocked by estimator and B3 best-arm-selection quality
 
 Artifact:
 
@@ -262,22 +269,23 @@ Artifact:
 
 Metrics:
 
-- `matched_counterfactual_group_count=17`
-- `matched_counterfactual_row_count=51`
-- `matched_action_coverage=0.1478`
+- `matched_counterfactual_group_count=48`
+- `matched_counterfactual_row_count=237`
+- `matched_action_coverage=0.4463`
 - `min_arm_count_per_matched_group=3`
-- `leave_one_replicate_mae=0.2873`
-- `global_baseline_mae=0.2873`
+- `max_arm_count_per_matched_group=6`
+- `leave_one_replicate_mae=0.3949`
+- `global_baseline_mae=0.3949`
 - `counterfactual_mae_beats_global_baseline=false`
-- `leave_state_out_feature_policy_coverage=0.6471`
-- `leave_state_out_feature_policy_mean_utility=0.6603`
-- `leave_state_out_feature_policy_v3_full_utility=0.5809`
-- `leave_state_out_feature_policy_lift_over_v3=0.0794`
-- `leave_state_out_feature_policy_best_arm_agreement=0.4706`
-- `b3_best_arm_agreement_rate=0.2353`
-- `empirical_best_policy_mean_utility=0.8824`
-- `b3_selected_policy_mean_utility=0.5618`
-- `always_v3_full_policy_mean_utility=0.5809`
+- `leave_state_out_feature_policy_coverage=0.875`
+- `leave_state_out_feature_policy_mean_utility=0.5589`
+- `leave_state_out_feature_policy_v3_full_utility=0.5286`
+- `leave_state_out_feature_policy_lift_over_v3=0.0302`
+- `leave_state_out_feature_policy_best_arm_agreement=0.2292`
+- `b3_best_arm_agreement_rate=0.1875`
+- `empirical_best_policy_mean_utility=0.9062`
+- `b3_selected_policy_mean_utility=0.5286`
+- `always_v3_full_policy_mean_utility=0.5286`
 - `production_counterfactual_gate_allowed=false`
 - `exploration_counterfactual_audit_passed=true`
 
@@ -407,7 +415,7 @@ Metrics:
 
 - Bounded 10-cycle integrated recursive episode.
 - Inputs:
-  - frozen 345-row simulator transition dataset
+  - frozen 531-row simulator transition dataset
   - B2 simulator split report
   - C1 finite category certificates
   - A1 append-only journal
@@ -488,3 +496,44 @@ Metrics:
 - `graph_copy_mutation_count=4`
 - `main_graph_mutation_count=0`
 - `calibration_row_count_delta=7`
+
+## B4 Same-State Multi-Arm Coverage Repair Snapshot
+
+- Added first-party Phase9 same-state multi-arm rows to the frozen simulator transition dataset.
+- Source rows:
+  - Phase9 V1 live regression toggle-off same-batch judgments.
+  - Phase9 compact frame guard same-batch judgments.
+- Preserved the Phase13 345-row floor while expanding the current redacted transition dataset.
+- B3 now applies a light out-of-fold bin-calibrated score instead of only reporting calibration error.
+- B4 feature policy now excludes arm-specific features from state features and only switches away from `v3_full` when training evidence clears a conservative arm-switch margin.
+
+Artifacts:
+
+`phase four/assumption_graph/paper_readiness_20260604/simulator_transition_schema_validation_20260612.json`
+
+`phase four/assumption_graph/paper_readiness_20260604/simulator_eval_splits_20260612.json`
+
+`phase four/assumption_graph/paper_readiness_20260604/simulator_uncertainty_20260612.json`
+
+`phase four/assumption_graph/paper_readiness_20260604/simulator_counterfactual_policy_eval_20260612.json`
+
+Metrics:
+
+- `raw_row_count=531`
+- `added_transition_row_count_over_phase13=186`
+- `valid_row_count=531`
+- `matched_counterfactual_group_count=48`
+- `matched_counterfactual_row_count=237`
+- `matched_action_coverage=0.4463`
+- `leave_pattern_uncertainty_ece=0.1152`
+- `leave_pattern_uncertainty_brier_with_abstain_as_half=0.2066`
+- `leave_pattern_base_rate_brier_with_abstain_as_half=0.2186`
+- `leave_state_out_feature_policy_mean_utility=0.5589`
+- `leave_state_out_feature_policy_v3_full_utility=0.5286`
+- `leave_state_out_feature_policy_lift_over_v3=0.0302`
+- `production_counterfactual_gate_allowed=false`
+
+Remaining production blockers:
+
+- `leave_one_replicate_mae_does_not_beat_global_baseline`
+- `b3_selector_does_not_agree_with_empirical_best_arm`

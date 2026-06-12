@@ -92,7 +92,7 @@ def build_simulator_eval_splits_payload(
         "production_simulator_replacement_allowed": False,
     }
     gates = {
-        "dataset_valid": metrics["valid_row_count"] == metrics["row_count"] == 345,
+        "dataset_valid": metrics["valid_row_count"] == metrics["row_count"] and metrics["row_count"] >= 345,
         "all_required_split_evals_present": set(split_reports) == set(GROUP_EVALS),
         "leave_one_out_available": metrics["leave_one_out_group_count"] >= 300,
         "leave_domain_out_available": metrics["leave_domain_out_group_count"] >= 5,

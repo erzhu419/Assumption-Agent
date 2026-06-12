@@ -11,7 +11,7 @@ from assumption_os.simulator_transition_schema import (
 
 
 class SimulatorTransitionSchemaTest(unittest.TestCase):
-    def test_schema_payload_validates_current_345_rows(self):
+    def test_schema_payload_validates_current_transition_rows(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(__file__).resolve().parents[1]
             out_dir = Path(td)
@@ -26,14 +26,16 @@ class SimulatorTransitionSchemaTest(unittest.TestCase):
             metrics = payload["metrics"]
 
             self.assertTrue(payload["pass"], payload["failed_gates"])
-            self.assertEqual(metrics["raw_row_count"], 345)
-            self.assertEqual(metrics["valid_row_count"], 345)
+            self.assertEqual(metrics["expected_transition_row_count"], 345)
+            self.assertEqual(metrics["raw_row_count"], 531)
+            self.assertEqual(metrics["valid_row_count"], 531)
+            self.assertEqual(metrics["added_transition_row_count_over_phase13"], 186)
             self.assertEqual(metrics["invalid_row_count"], 0)
-            self.assertEqual(metrics["redacted_row_count"], 345)
+            self.assertEqual(metrics["redacted_row_count"], 531)
             self.assertTrue(metrics["provenance_hash_unique"])
             self.assertEqual(set(metrics["split_counts"]), {"train", "validation", "test"})
             self.assertTrue((out_dir / "schema.json").exists())
-            self.assertEqual(len((out_dir / "dataset.jsonl").read_text().splitlines()), 345)
+            self.assertEqual(len((out_dir / "dataset.jsonl").read_text().splitlines()), 531)
             self.assertEqual((out_dir / "quarantine.jsonl").read_text(), "")
 
     def test_redaction_violation_goes_to_quarantine_report(self):

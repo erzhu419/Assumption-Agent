@@ -18,8 +18,8 @@ class SimulatorUncertaintyTest(unittest.TestCase):
         metrics = payload["metrics"]
 
         self.assertTrue(payload["pass"], payload["failed_gates"])
-        self.assertEqual(metrics["row_count"], 345)
-        self.assertEqual(metrics["valid_row_count"], 345)
+        self.assertEqual(metrics["row_count"], 531)
+        self.assertEqual(metrics["valid_row_count"], 531)
         self.assertLess(
             metrics["leave_pattern_uncertainty_brier_with_abstain_as_half"],
             metrics["leave_pattern_base_rate_brier_with_abstain_as_half"],
