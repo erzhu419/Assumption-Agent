@@ -27,7 +27,7 @@ Current target is L2 -> L3, not L4.
 | B1 | `assumption_os/simulator_transition_schema.py` | implemented | `tests/test_simulator_transition_schema.py`, `simulator_transition_schema_validation_20260612.json` |
 | B2 | `assumption_os/simulator_eval_splits.py` | implemented | `tests/test_simulator_eval_splits.py`, `simulator_eval_splits_20260612.json` |
 | C1 | `assumption_os/finite_category_certificate.py` | implemented | `tests/test_finite_category_certificate.py`, `finite_category_certificate_20260612.json` |
-| I1 | `integrated_recursive_episode.py` | pending | residual -> proposal -> simulator -> formal gate -> ablation -> replay |
+| I1 | `assumption_os/integrated_recursive_episode.py` | implemented | `tests/test_integrated_recursive_episode.py`, `integrated_recursive_episode_20260612.json` |
 
 ## A1 Completion Snapshot
 
@@ -52,7 +52,7 @@ Metrics:
 
 ## Next Step
 
-Implement I1 integrated recursive episode after autonomy, simulator, and finite-category substrates are all replayable.
+Next step is C2 Lean-style export stub or B3 simulator abstention, depending on whether the priority is external formal verification or simulator production hardening.
 
 ## A2 Completion Snapshot
 
@@ -201,3 +201,45 @@ Metrics:
 - `naturality_square_pass_rate=1.0`
 - `negative_control_pass_rate=1.0`
 - `unbounded_theorem_prover_claim_allowed=false`
+
+## I1 Completion Snapshot
+
+- Bounded 10-cycle integrated recursive episode.
+- Inputs:
+  - frozen 345-row simulator transition dataset
+  - B2 simulator split report
+  - C1 finite category certificates
+  - A1 append-only journal
+  - A2 lease-based autonomy queue
+- Episode shape:
+  - 3 residual clusters
+  - 9 candidate proposals
+  - top 3 simulator-selected candidates
+  - finite formal gate allow/block/not-applicable handling
+  - fresh judgment readback from frozen evidence
+  - accepted/rejected retention split
+  - accepted candidate recheck
+  - queue lease execution
+  - journal replay
+  - simulator calibration row-count update
+- Graph mutation remains copy-only; main graph is not mutated.
+
+Artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/integrated_recursive_episode_20260612.json`
+
+Metrics:
+
+- `residual_cluster_count=3`
+- `candidate_proposal_count=9`
+- `contract_invalid_admitted_count=0`
+- `simulator_selected_count=3`
+- `simulator_true_positive_block_count=0`
+- `fresh_ablation_accept_count=2`
+- `fresh_ablation_reject_count=1`
+- `accepted_candidate_survival_on_recheck=true`
+- `queue_cycle_count=10`
+- `autonomy_replay_exact=true`
+- `graph_copy_mutation_count=2`
+- `main_graph_mutation_count=0`
+- `world_model_calibration_row_count_delta=4`
