@@ -80,6 +80,7 @@ from .philosophy_growth_benchmark import build_philosophy_growth_benchmark_paylo
 from .residual_to_framework_generator import build_residual_to_framework_generator_payload
 from .self_evo_roadmap_coverage_audit import build_self_evo_roadmap_coverage_audit_payload
 from .self_evo_paper_evidence_pack import build_self_evo_paper_evidence_pack_payload
+from .claim_frontier_advancement import build_claim_frontier_advancement_payload
 from .trajectory_search import build_trajectory_search_payload
 from .trace_dataset import build_trace_dataset_collection_payload, build_trace_dataset_payload
 from .trace_outcome_model import build_trace_outcome_model_payload, build_trace_policy_proposal_payload
@@ -242,6 +243,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["self_evo_paper_evidence_pack"] = _validate_self_evo_paper_evidence_pack(root=root)
     timings["self_evo_paper_evidence_pack_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["claim_frontier_advancement"] = _validate_claim_frontier_advancement(root=root)
+    timings["claim_frontier_advancement_sec"] = _elapsed(start)
     return {
         "eval_id": eval_id,
         "source": {
@@ -1500,6 +1504,31 @@ def _validate_self_evo_paper_evidence_pack(*, root: Path) -> dict:
     }
 
 
+def _validate_claim_frontier_advancement(*, root: Path) -> dict:
+    payload = build_claim_frontier_advancement_payload(
+        root=root,
+        eval_id="perf_claim_frontier_advancement",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "frontier_advancement_score": metrics["frontier_advancement_score"],
+        "frontier_track_pass_count": metrics["frontier_track_pass_count"],
+        "frontier_track_count": metrics["frontier_track_count"],
+        "autonomy_frontier_score": metrics["autonomy_frontier_score"],
+        "simulator_frontier_score": metrics["simulator_frontier_score"],
+        "formal_frontier_score": metrics["formal_frontier_score"],
+        "autonomy_downstream_regression_rate": metrics["autonomy_downstream_regression_rate"],
+        "simulator_counterfactual_mae": metrics["simulator_counterfactual_mae"],
+        "simulator_best_arm_agreement_rate": metrics["simulator_best_arm_agreement_rate"],
+        "formal_lean_theorem_count": metrics["formal_lean_theorem_count"],
+        "blocked_overclaim_count": metrics["blocked_overclaim_count"],
+        "allowed_bounded_next_claim_count": len(payload["allowed_bounded_next_claims"]),
+        "blocked_claims": payload["blocked_claims"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
 def _validate_memory_surfaces(*, root: Path, graph_dir: Path, sections: dict[str, dict]) -> dict:
     with tempfile.TemporaryDirectory() as td:
         tmp_graph = Path(td) / "graph"
@@ -2729,6 +2758,14 @@ def _key_metric(name: str, section: dict) -> str:
             f"frozen={section['frozen_problem_count']}:{section['frozen_margin_over_best_baseline']}, "
             f"fresh={section['fresh_repair_fresh_api_call_count']}:{section['fresh_repair_delta_vs_original']}, "
             f"sections={section['paper_skeleton_section_count']}"
+        )
+    if name == "claim_frontier_advancement":
+        return (
+            f"tracks={section['frontier_track_pass_count']}/{section['frontier_track_count']}, "
+            f"score={section['frontier_advancement_score']}, "
+            f"A/B/C={section['autonomy_frontier_score']}/{section['simulator_frontier_score']}/"
+            f"{section['formal_frontier_score']}, "
+            f"blocked={section['blocked_overclaim_count']}"
         )
     if name == "memory_surfaces":
         return f"types={section['before_node_type_count']}->{section['after_node_type_count']}, edges={section['before_edge_type_count']}->{section['after_edge_type_count']}"
