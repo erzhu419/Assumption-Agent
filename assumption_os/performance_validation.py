@@ -60,6 +60,7 @@ from .framework_branch_ledger import build_framework_branch_ledger_payload
 from .framework_lifecycle_ledger_v2 import build_framework_lifecycle_ledger_v2_payload
 from .framework_simulator_guided_search import build_framework_simulator_guided_search_payload
 from .framework_formal_certificate_integration import build_framework_formal_certificate_integration_payload
+from .framework_external_eval_pack import build_framework_external_eval_pack_payload
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .harness_observer import build_harness_observer_payload
 from .last_three_part_coverage_audit import build_last_three_part_coverage_audit_payload
@@ -255,6 +256,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["multigeneration_framework_evolution_benchmark"] = _validate_multigeneration_framework_evolution_benchmark(root=root)
     timings["multigeneration_framework_evolution_benchmark_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["framework_external_eval_pack"] = _validate_framework_external_eval_pack(root=root)
+    timings["framework_external_eval_pack_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["philosophy_growth_benchmark"] = _validate_philosophy_growth_benchmark(root=root)
     timings["philosophy_growth_benchmark_sec"] = _elapsed(start)
@@ -1590,6 +1594,33 @@ def _validate_multigeneration_framework_evolution_benchmark(*, root: Path) -> di
         "simulator_fresh_test_reduction_rate": metrics["simulator_fresh_test_reduction_rate"],
         "simulator_true_positive_block_count": metrics["simulator_true_positive_block_count"],
         "formal_applicable_certificate_coverage": metrics["formal_applicable_certificate_coverage"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_framework_external_eval_pack(*, root: Path) -> dict:
+    payload = build_framework_external_eval_pack_payload(
+        root=root,
+        eval_id="perf_framework_external_eval_pack",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "expert_annotation_packet_row_count": metrics["expert_annotation_packet_row_count"],
+        "expert_proxy_agreement_with_system": metrics["expert_proxy_agreement_with_system"],
+        "human_panel_completed": metrics["human_panel_completed"],
+        "human_panel_status_recorded": metrics["human_panel_status_recorded"],
+        "framework_specific_fresh_rerun_protocol_ready": metrics["framework_specific_fresh_rerun_protocol_ready"],
+        "old_evidence_reuse_blocked_in_protocol": metrics["old_evidence_reuse_blocked_in_protocol"],
+        "artifact_hash_coverage": metrics["artifact_hash_coverage"],
+        "exact_command_count": metrics["exact_command_count"],
+        "redaction_policy_present": metrics["redaction_policy_present"],
+        "secret_scan_match_count": metrics["secret_scan_match_count"],
+        "claim_ledger_entry_count": metrics["claim_ledger_entry_count"],
+        "overclaim_blocked_count": metrics["overclaim_blocked_count"],
+        "framework_growth_formula_term_count": metrics["framework_growth_formula_term_count"],
+        "bounded_90_definition_item_count": metrics["bounded_90_definition_item_count"],
         "main_graph_mutation_count": metrics["main_graph_mutation_count"],
         "failed_gates": payload["failed_gates"],
     }
@@ -3027,6 +3058,13 @@ def _key_metric(name: str, section: dict) -> str:
             f"acc/rej={section['fresh_validation_accepted_count']}/{section['fresh_validation_rejected_count']}, "
             f"margin={section['full_margin_vs_best_ablation']}, "
             f"survive={section['cross_generation_active_survival_count']}"
+        )
+    if name == "framework_external_eval_pack":
+        return (
+            f"anno={section['expert_annotation_packet_row_count']}, "
+            f"agree={section['expert_proxy_agreement_with_system']}, "
+            f"hash={section['artifact_hash_coverage']}, "
+            f"claims={section['claim_ledger_entry_count']}"
         )
     if name == "philosophy_growth_benchmark":
         return (
