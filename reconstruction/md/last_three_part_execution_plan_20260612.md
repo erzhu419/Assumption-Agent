@@ -24,7 +24,7 @@ Current target is L2 -> L3, not L4.
 | --- | --- | --- | --- |
 | A1 | `assumption_os/autonomy_journal.py` | implemented | `tests/test_autonomy_journal.py`, `autonomy_journal_replay_20260612.json` |
 | A2 | `assumption_os/autonomy_queue.py` | implemented | `tests/test_autonomy_queue.py`, `autonomy_queue_lease_20260612.json` |
-| B1 | `simulator_transition_schema.py` | pending | validate 345 redacted transition-like rows |
+| B1 | `assumption_os/simulator_transition_schema.py` | implemented | `tests/test_simulator_transition_schema.py`, `simulator_transition_schema_validation_20260612.json` |
 | B2 | `simulator_eval_splits.py` | pending | leave-domain/pattern/artifact splits |
 | C1 | `finite_category_certificate.py` | pending | certificate schema + obligation checks |
 | I1 | `integrated_recursive_episode.py` | pending | residual -> proposal -> simulator -> formal gate -> ablation -> replay |
@@ -52,7 +52,7 @@ Metrics:
 
 ## Next Step
 
-Implement B1 simulator transition schema after the autonomy substrate is replayable and crash-safe.
+Implement B2 leave-pattern/domain/artifact split evaluation after the transition dataset is frozen.
 
 ## A2 Completion Snapshot
 
@@ -80,3 +80,39 @@ Metrics:
 - `blocked_task_not_auto_unblocked=true`
 - `checkpoint_reload_same_state=true`
 - `journal_replay_divergence_detected=false`
+
+## B1 Completion Snapshot
+
+- Frozen simulator transition schema `simulator_transition_schema_v0`.
+- Materialized current Phase13 345 first-party transition-like rows into JSONL.
+- Sources:
+  - Phase10 reliability observed-arm rows: 51
+  - residual fresh live judgments: 18
+  - live multigeneration transition-like rows: 36
+  - blinded recursive live judgments: 240
+- Required row sections: `state`, `action`, `prediction`, `outcome`, `provenance`.
+- Split labels: `train`, `validation`, `test`.
+- Provenance hash on every row.
+- Redaction check blocks prompt/answer/secret payloads.
+- Invalid rows are written to quarantine.
+
+Artifacts:
+
+`phase four/assumption_graph/paper_readiness_20260604/simulator_transition_schema_v0.json`
+
+`phase four/assumption_graph/paper_readiness_20260604/simulator_transition_dataset_v0.jsonl`
+
+`phase four/assumption_graph/paper_readiness_20260604/simulator_transition_quarantine_v0.jsonl`
+
+`phase four/assumption_graph/paper_readiness_20260604/simulator_transition_schema_validation_20260612.json`
+
+Metrics:
+
+- `raw_row_count=345`
+- `valid_row_count=345`
+- `invalid_row_count=0`
+- `quarantine_row_count=0`
+- `redacted_row_count=345`
+- `split_counts={"train":255,"validation":37,"test":53}`
+- `provenance_hash_unique=true`
+- `secret_or_prompt_payload_detected=false`
