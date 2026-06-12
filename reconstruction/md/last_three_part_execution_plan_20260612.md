@@ -23,7 +23,7 @@ Current target is L2 -> L3, not L4.
 | Ticket | Module | Status | Validation |
 | --- | --- | --- | --- |
 | A1 | `assumption_os/autonomy_journal.py` | implemented | `tests/test_autonomy_journal.py`, `autonomy_journal_replay_20260612.json` |
-| A2 | `assumption_os/autonomy_queue.py` | next | lease/retry/no-double-execute tests |
+| A2 | `assumption_os/autonomy_queue.py` | implemented | `tests/test_autonomy_queue.py`, `autonomy_queue_lease_20260612.json` |
 | B1 | `simulator_transition_schema.py` | pending | validate 345 redacted transition-like rows |
 | B2 | `simulator_eval_splits.py` | pending | leave-domain/pattern/artifact splits |
 | C1 | `finite_category_certificate.py` | pending | certificate schema + obligation checks |
@@ -52,4 +52,31 @@ Metrics:
 
 ## Next Step
 
-Implement A2 lease-based queue semantics before touching simulator policy. This keeps the autonomy substrate replayable and crash-safe before new decision logic is added.
+Implement B1 simulator transition schema after the autonomy substrate is replayable and crash-safe.
+
+## A2 Completion Snapshot
+
+- Lease-based checkpoint queue.
+- Task states: `pending`, `leased`, `completed`, `failed`, `deferred`, `blocked`, `expired`.
+- Worker lease ownership and TTL.
+- Retry-bounded requeue after crash/timeout.
+- Terminal expiry after retry budget is exhausted.
+- Completed task idempotency.
+- Blocked task isolation: timeout processing cannot auto-unblock it.
+- Atomic JSON checkpoint reload.
+- Optional A1 journal writeback for every mutating queue operation.
+
+Artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/autonomy_queue_lease_20260612.json`
+
+Metrics:
+
+- `double_lease_blocked_for_original_task=true`
+- `worker_crash_releases_lease=true`
+- `expired_task_requeues=true`
+- `same_task_not_executed_twice=true`
+- `retry_limit_expires_terminal=true`
+- `blocked_task_not_auto_unblocked=true`
+- `checkpoint_reload_same_state=true`
+- `journal_replay_divergence_detected=false`
