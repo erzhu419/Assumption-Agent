@@ -26,6 +26,7 @@ Current target is L2 -> L3, not L4.
 | A2 | `assumption_os/autonomy_queue.py` | implemented | `tests/test_autonomy_queue.py`, `autonomy_queue_lease_20260612.json` |
 | B1 | `assumption_os/simulator_transition_schema.py` | implemented | `tests/test_simulator_transition_schema.py`, `simulator_transition_schema_validation_20260612.json` |
 | B2 | `assumption_os/simulator_eval_splits.py` | implemented | `tests/test_simulator_eval_splits.py`, `simulator_eval_splits_20260612.json` |
+| B3 | `assumption_os/simulator_uncertainty.py` | implemented | `tests/test_simulator_uncertainty.py`, `simulator_uncertainty_20260612.json` |
 | C1 | `assumption_os/finite_category_certificate.py` | implemented | `tests/test_finite_category_certificate.py`, `finite_category_certificate_20260612.json` |
 | I1 | `assumption_os/integrated_recursive_episode.py` | implemented | `tests/test_integrated_recursive_episode.py`, `integrated_recursive_episode_20260612.json` |
 
@@ -52,7 +53,7 @@ Metrics:
 
 ## Next Step
 
-Next step is C2 Lean-style export stub or B3 simulator abstention, depending on whether the priority is external formal verification or simulator production hardening.
+Next step is C2 Lean-style export stub, then I2 can wire B3 uncertainty routing into the integrated episode.
 
 ## A2 Completion Snapshot
 
@@ -154,6 +155,45 @@ Metrics:
 - `current_heuristic_false_positive_block_rate=0.2822`
 - `raw_predictor_promotion_allowed=false`
 - `feature_model_promotion_allowed=true`
+- `production_simulator_replacement_allowed=false`
+
+## B3 Completion Snapshot
+
+- Adds uncertainty and abstention routing on top of the B2 feature simulator.
+- Simulator outputs now include:
+  - prediction
+  - confidence interval
+  - calibration bin
+  - abstain reason
+  - required verifier tier
+- Allowed recommendations:
+  - `recommend_run_ablation`
+  - `recommend_collect_more_evidence`
+  - `recommend_repair_scope`
+  - `recommend_reject_low_value`
+  - `abstain_to_live_validation`
+- Forbidden recommendations are structurally blocked:
+  - `auto_accept_without_live`
+  - `auto_apply_policy_change`
+  - `replace_judge`
+- Low-support stress probe abstains to live validation.
+
+Artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/simulator_uncertainty_20260612.json`
+
+Metrics:
+
+- `row_count=345`
+- `decision_count=345`
+- `leave_pattern_base_rate_brier_with_abstain_as_half=0.2185`
+- `leave_pattern_uncertainty_brier_with_abstain_as_half=0.2036`
+- `leave_pattern_uncertainty_ece=0.1039`
+- `leave_pattern_abstention_rate=0.0406`
+- `accepted_candidate_block_rate=0.0`
+- `forbidden_action_recommended_count=0`
+- `allowed_action_coverage=1.0`
+- `low_support_probe_abstained=true`
 - `production_simulator_replacement_allowed=false`
 
 ## C1 Completion Snapshot
