@@ -39,6 +39,7 @@ from typing import Any
 
 from .assumption_bench import build_assumption_bench_payload
 from .candidate_eval import CandidateReadiness, build_candidate_eval_payload
+from .conservative_generalization_gate import build_conservative_generalization_gate_payload
 from .falsification import build_falsification_payload
 from .evolution_context import build_evolution_context_payload
 from .formal_mapping import (
@@ -190,6 +191,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["last_three_part_coverage_audit"] = _validate_last_three_part_coverage(root=root)
     timings["last_three_part_coverage_audit_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["conservative_generalization_gate"] = _validate_conservative_generalization_gate(root=root)
+    timings["conservative_generalization_gate_sec"] = _elapsed(start)
     return {
         "eval_id": eval_id,
         "source": {
@@ -1094,6 +1098,33 @@ def _validate_last_three_part_coverage(*, root: Path) -> dict:
             for row in payload["claim_boundaries"]
             if row["blocked"]
         ],
+    }
+
+
+def _validate_conservative_generalization_gate(*, root: Path) -> dict:
+    payload = build_conservative_generalization_gate_payload(
+        root=root,
+        eval_id="perf_conservative_generalization_gate",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "candidate_count": metrics["candidate_count"],
+        "decision_counts": metrics["decision_counts"],
+        "active_min_old_success_preservation": metrics["active_min_old_success_preservation"],
+        "active_min_residual_explanation": metrics["active_min_residual_explanation"],
+        "active_min_limiting_case_reduction": metrics["active_min_limiting_case_reduction"],
+        "active_min_generality_gain": metrics["active_min_generality_gain"],
+        "active_min_new_prediction_success": metrics["active_min_new_prediction_success"],
+        "active_max_regression_cost": metrics["active_max_regression_cost"],
+        "active_required_relation_coverage": metrics["active_required_relation_coverage"],
+        "top_framework_growth_score": metrics["top_framework_growth_score"],
+        "non_promoted_next_test_coverage": metrics["non_promoted_next_test_coverage"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "unbounded_philosophy_generator_claim_allowed": metrics[
+            "unbounded_philosophy_generator_claim_allowed"
+        ],
+        "failed_gates": payload["failed_gates"],
     }
 
 
@@ -2239,6 +2270,12 @@ def _key_metric(name: str, section: dict) -> str:
             f"tickets={section['engineering_ticket_pass_count']}/{section['engineering_ticket_count']}, "
             f"open={section['engineering_open_gap_count']}, "
             f"blocked={section['blocked_claim_boundary_count']}/{section['claim_boundary_count']}"
+        )
+    if name == "conservative_generalization_gate":
+        return (
+            f"decisions={section['decision_counts']}, "
+            f"growth={section['top_framework_growth_score']}, "
+            f"relations={section['active_required_relation_coverage']}"
         )
     if name == "memory_surfaces":
         return f"types={section['before_node_type_count']}->{section['after_node_type_count']}, edges={section['before_edge_type_count']}->{section['after_edge_type_count']}"
