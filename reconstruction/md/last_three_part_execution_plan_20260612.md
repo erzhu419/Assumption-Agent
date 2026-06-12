@@ -25,13 +25,16 @@ Current target is L2 -> L3, not L4.
 | A1 | `assumption_os/autonomy_journal.py` | implemented | `tests/test_autonomy_journal.py`, `autonomy_journal_replay_20260612.json` |
 | A2 | `assumption_os/autonomy_queue.py` | implemented | `tests/test_autonomy_queue.py`, `autonomy_queue_lease_20260612.json` |
 | A3 | `assumption_os/autonomy_recovery_hardening.py` | implemented | `tests/test_autonomy_recovery_hardening.py`, `autonomy_recovery_hardening_20260612.json` |
+| A4/A5/A6 | `assumption_os/autonomy_shadow_service.py` | implemented | `tests/test_autonomy_shadow_service.py`, `autonomy_shadow_service_20260612.json` |
 | B1 | `assumption_os/simulator_transition_schema.py` | implemented | `tests/test_simulator_transition_schema.py`, `simulator_transition_schema_validation_20260612.json` |
 | B2 | `assumption_os/simulator_eval_splits.py` | implemented | `tests/test_simulator_eval_splits.py`, `simulator_eval_splits_20260612.json` |
 | B3 | `assumption_os/simulator_uncertainty.py` | implemented | `tests/test_simulator_uncertainty.py`, `simulator_uncertainty_20260612.json` |
 | B4 | `assumption_os/simulator_counterfactual_policy_eval.py` | repaired | `tests/test_simulator_counterfactual_policy_eval.py`, `simulator_counterfactual_policy_eval_20260612.json` |
 | B5/B6 | `assumption_os/simulator_gate_calibration_loop.py` | implemented | `tests/test_simulator_gate_calibration_loop.py`, `simulator_gate_calibration_loop_20260612.json` |
+| B7 | `assumption_os/simulator_production_gate.py` | implemented | `tests/test_simulator_production_gate.py`, `simulator_production_gate_20260612.json` |
 | C1 | `assumption_os/finite_category_certificate.py` | implemented | `tests/test_finite_category_certificate.py`, `finite_category_certificate_20260612.json` |
 | C2 | `assumption_os/finite_category_lean_export.py` | implemented | `tests/test_finite_category_lean_export.py`, `finite_category_lean_export_20260612.json` |
+| C3-C8 | `assumption_os/finite_formal_reasoning_stack.py` | implemented | `tests/test_finite_formal_reasoning_stack.py`, `finite_formal_reasoning_stack_20260612.json` |
 | I1 | `assumption_os/integrated_recursive_episode.py` | implemented | `tests/test_integrated_recursive_episode.py`, `integrated_recursive_episode_20260612.json` |
 | I2 | `assumption_os/integrated_recursive_episode_b3_c2.py` | implemented | `tests/test_integrated_recursive_episode_b3_c2.py`, `integrated_recursive_episode_b3_c2_20260612.json` |
 
@@ -537,3 +540,120 @@ Remaining production blockers:
 
 - `leave_one_replicate_mae_does_not_beat_global_baseline`
 - `b3_selector_does_not_agree_with_empirical_best_arm`
+
+## A4/A5/A6 Shadow Service And Low-Risk Auto-Apply Snapshot
+
+- Adds a bounded 7-day-equivalent shadow service.
+- Uses lease/checkpoint queue semantics, writes replayable graph-copy apply events, and keeps main graph mutation disabled.
+- Implements a low-risk auto-apply sandbox for only:
+  - `status_update`
+  - `confidence_update`
+  - `attach_evidence`
+  - `archive_stale_duplicate`
+  - `add_manifest_only_residual`
+- Forces manual review for policy/default/formal/world-model promotion mutations.
+- Keeps A6 production autonomy candidate blocked until longer supervised shadow evidence exists.
+
+Artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/autonomy_shadow_service_20260612.json`
+
+Metrics:
+
+- `shadow_day_count=7`
+- `cycle_count=168`
+- `seeded_task_count=24`
+- `completed_task_count=24`
+- `checkpoint_recovery_count=1`
+- `recommendation_manifest_count=24`
+- `expensive_live_call_count=0`
+- `main_graph_mutation_count=0`
+- `shadow_graph_mutation_count=15`
+- `ungated_mutation_count=0`
+- `manual_review_queue_count=9`
+- `manual_review_queue_stable=true`
+- `low_risk_auto_apply_count=15`
+- `auto_apply_allowed_type_count=5`
+- `forbidden_policy_change_auto_apply_count=0`
+- `auto_apply_rollback_success_rate=1.0`
+- `manual_review_required_for_policy_change=true`
+- `all_cycles_replayable=true`
+- `production_autonomy_candidate_allowed=false`
+
+Production blocker retained:
+
+- `shadow_run_shorter_than_30_days`
+
+## B7 Simulator Production Gate Snapshot
+
+- Adds a production-candidate gate for the graph-action simulator.
+- The gate evaluates scale, split discipline, calibration, counterfactual coverage, and manual audit.
+- Passing this artifact means overclaiming is blocked correctly; it does not mean the simulator is promoted.
+
+Artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/simulator_production_gate_20260612.json`
+
+Metrics:
+
+- `transition_row_count=531`
+- `valid_row_count=531`
+- `domain_count=9`
+- `pattern_count=10`
+- `leave_domain_nonnegative_rate=0.8889`
+- `leave_pattern_nonnegative_rate=0.9`
+- `feature_model_loo_brier=0.2007`
+- `base_rate_loo_brier=0.2162`
+- `uncertainty_ece=0.1152`
+- `accepted_candidate_block_rate=0.0`
+- `matched_action_coverage=0.4463`
+- `counterfactual_production_allowed=false`
+- `raw_simulator_promoted=false`
+- `gate_router_promoted=true`
+- `production_simulator_candidate_allowed=false`
+- `production_blocker_count=3`
+
+Production blockers retained:
+
+- `transition_rows_minimum`
+- `pattern_count_minimum`
+- `counterfactual_gate_allowed`
+
+## C3-C8 Bounded Formal Reasoning Stack Snapshot
+
+- Adds a finite category DSL for bounded strategy diagrams.
+- Adds finite Markov-kernel checks:
+  - row-stochastic validation
+  - identity checks
+  - kernel composition
+  - negative-control rejection
+- Adds information-geometry metrics as a measurement plugin, not a truth oracle.
+- Adds a formal-transfer benchmark and overreach residual.
+- Adds C8 claim gate:
+  - allows bounded finite formal stack claim
+  - blocks full theorem-prover/category-engine claim
+
+Artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/finite_formal_reasoning_stack_20260612.json`
+
+Metrics:
+
+- `certificate_count=16`
+- `valid_certificate_count=16`
+- `lean_readable_certificate_count=16`
+- `dsl_object_count=4`
+- `dsl_morphism_count=10`
+- `dsl_composition_count=10`
+- `dsl_valid=true`
+- `markov_kernel_count=5`
+- `row_stochastic_pass_count=4`
+- `kernel_composition_pass=true`
+- `kernel_negative_control_rejected=true`
+- `metric_count=6`
+- `metric_not_truth_oracle=true`
+- `formal_transfer_pairwise_auc=1.0`
+- `formal_transfer_negative_control_rejection_rate=1.0`
+- `formal_transfer_overreach_residual_count=1`
+- `bounded_formal_stack_claim_allowed=true`
+- `full_theorem_prover_claim_allowed=false`
