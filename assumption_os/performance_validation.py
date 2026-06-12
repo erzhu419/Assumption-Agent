@@ -63,6 +63,7 @@ from .memory_surfaces import build_memory_surface_payload
 from .objective_bench import build_objective_benchmark_payload
 from .open_ended_framework_evolution_run import build_open_ended_framework_evolution_run_payload
 from .paper_fresh_frozen_rerun_protocol import build_paper_fresh_frozen_rerun_protocol_payload
+from .paper_fresh_rerun_result_integration import build_paper_fresh_rerun_result_integration_payload
 from .recursive_audit import build_recursive_audit_payload
 from .recursive_daemon import build_preflight_queue_daemon_payload, build_recursive_daemon_payload
 from .recursive_executor import JudgmentSet
@@ -203,6 +204,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["paper_fresh_frozen_rerun_protocol"] = _validate_paper_fresh_frozen_rerun_protocol(root=root)
     timings["paper_fresh_frozen_rerun_protocol_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["paper_fresh_rerun_result_integration"] = _validate_paper_fresh_rerun_result_integration(root=root)
+    timings["paper_fresh_rerun_result_integration_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["simulator_no_leakage_audit"] = _validate_simulator_no_leakage_audit(root=root)
     timings["simulator_no_leakage_audit_sec"] = _elapsed(start)
@@ -1184,6 +1188,38 @@ def _validate_paper_fresh_frozen_rerun_protocol(*, root: Path) -> dict:
         "command_secret_hit_count": metrics["command_secret_hit_count"],
         "fresh_protocol_ready_claim_allowed": metrics["fresh_protocol_ready_claim_allowed"],
         "target_fresh_result_claim_allowed": metrics["target_fresh_result_claim_allowed"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_paper_fresh_rerun_result_integration(*, root: Path) -> dict:
+    payload = build_paper_fresh_rerun_result_integration_payload(
+        root=root,
+        eval_id="perf_paper_fresh_rerun_result_integration",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "fresh_api_call_count": metrics["fresh_api_call_count"],
+        "planned_fresh_api_call_count": metrics["planned_fresh_api_call_count"],
+        "live_error_count": metrics["live_error_count"],
+        "selected_candidate_count": metrics["selected_candidate_count"],
+        "accepted_count": metrics["accepted_count"],
+        "rejected_count": metrics["rejected_count"],
+        "trigger_problem_level_mean_utility": metrics["trigger_problem_level_mean_utility"],
+        "trigger_problem_level_ci95": metrics["trigger_problem_level_ci95"],
+        "accepted_trigger_problem_level_mean_utility": metrics[
+            "accepted_trigger_problem_level_mean_utility"
+        ],
+        "accepted_trigger_problem_level_ci95": metrics["accepted_trigger_problem_level_ci95"],
+        "accepted_control_problem_level_mean_loss_rate": metrics[
+            "accepted_control_problem_level_mean_loss_rate"
+        ],
+        "accepted_control_problem_level_ci95": metrics["accepted_control_problem_level_ci95"],
+        "fresh_live_raw_pass": metrics["fresh_live_raw_pass"],
+        "fresh_live_failed_gates": metrics["fresh_live_failed_gates"],
+        "paper_selective_retention_claim_allowed": metrics["paper_selective_retention_claim_allowed"],
+        "paper_unfiltered_generator_claim_allowed": metrics["paper_unfiltered_generator_claim_allowed"],
         "failed_gates": payload["failed_gates"],
     }
 
@@ -2538,6 +2574,13 @@ def _key_metric(name: str, section: dict) -> str:
             f"dry={section['dry_run_planned_fresh_api_call_count']}, "
             f"claim={section['fresh_protocol_ready_claim_allowed']}/"
             f"{section['target_fresh_result_claim_allowed']}"
+        )
+    if name == "paper_fresh_rerun_result_integration":
+        return (
+            f"fresh={section['fresh_api_call_count']}/{section['planned_fresh_api_call_count']}, "
+            f"accepted={section['accepted_count']}, "
+            f"acc_util={section['accepted_trigger_problem_level_mean_utility']}, "
+            f"raw_pass={section['fresh_live_raw_pass']}"
         )
     if name == "conservative_generalization_gate":
         return (

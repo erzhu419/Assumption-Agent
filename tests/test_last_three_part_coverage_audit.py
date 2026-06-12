@@ -40,6 +40,20 @@ class LastThreePartCoverageAuditTest(unittest.TestCase):
         self.assertTrue(rows["C6_information_geometry_plugin"]["key_metrics"]["not_truth_oracle"])
         self.assertGreaterEqual(rows["C7_formal_transfer_benchmark"]["key_metrics"]["pairwise_auc"], 0.95)
 
+    def test_fresh_live_720_result_is_integrated_without_overclaim(self):
+        payload = build_last_three_part_coverage_audit_payload(
+            root=Path("."),
+            eval_id="unit_last_three_part_coverage_audit_fresh_result",
+        )
+        rows = {row["ticket_id"]: row for row in payload["tickets"]}
+
+        self.assertIn("P5_fresh_live_720_selective_retention_result", rows)
+        self.assertEqual(rows["P5_fresh_live_720_selective_retention_result"]["status"], "pass")
+        self.assertEqual(
+            rows["P5_fresh_live_720_selective_retention_result"]["key_metrics"]["fresh_calls"],
+            720,
+        )
+
     def test_unbounded_claims_remain_boundaries_not_gaps(self):
         payload = build_last_three_part_coverage_audit_payload(
             root=Path("."),

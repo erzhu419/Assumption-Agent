@@ -1,7 +1,7 @@
 # last_three_part.md Coverage Audit
 
 - pass: `True`
-- engineering tickets: `32/32`
+- engineering tickets: `33/33`
 - open engineering gaps: `0`
 - blocked claim boundaries: `5/5`
 - source artifact pass rate: `1.0`
@@ -42,6 +42,7 @@
 | `P2_creative_generator` | `pass` | creative_hypothesis_trajectory_search_20260612.json | candidate_count=372; retained_count=201 |
 | `P3_main_graph_controlled_apply` | `pass` | main_graph_controlled_apply_monitor_20260612.json | monitor_day_count=30; min_precision_delta_vs_before=0.1695 |
 | `P4_fresh_frozen_rerun_protocol` | `pass` | paper_fresh_frozen_rerun_protocol_20260612.json, full_v3_blinded_recursive_live_line_20260612.json | target_calls=720; pilot_calls=240; dry_run_calls=720 |
+| `P5_fresh_live_720_selective_retention_result` | `pass` | paper_fresh_rerun_result_integration_20260612.json, paper_fresh_frozen_rerun_live_720_20260612.json | fresh_calls=720; accepted_count=4; accepted_trigger_ci95=[0.6667, 0.9583]; accepted_control_ci95=[0.0, 0.0] |
 
 ## Blocked Claim Boundaries
 
@@ -50,5 +51,5 @@
 | `unbounded_24_7_general_autonomous_os` | `True` | Evidence supports supervised bounded autonomy, not unrestricted 24/7 general OS. |
 | `raw_world_simulator_replaces_live_validation` | `True` | Simulator is promoted only for triage/routing; raw replacement remains blocked. |
 | `complete_category_theory_theorem_prover` | `True` | Lean-verified finite fragment is allowed; arbitrary theorem proving is not. |
-| `brand_new_live_api_main_paper_experiment` | `True` | Paper line is a frozen same-batch artifact aggregation.  The fresh rerun protocol is ready, but the target live result remains unclaimed until execute_live produces the 720-call artifact. |
+| `brand_new_live_api_main_paper_experiment` | `True` | The fresh rerun is now completed, but the raw unfiltered generator did not clear the broad all-candidate trigger gate.  The allowed claim is selective-retention fresh support, not an unqualified live main-paper win. |
 | `ungated_default_policy_or_main_graph_mutation` | `True` | Graph and policy mutations remain gated or canary-scoped. |

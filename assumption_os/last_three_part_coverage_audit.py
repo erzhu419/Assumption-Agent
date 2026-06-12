@@ -43,6 +43,7 @@ ARTIFACTS = {
     "integrated_episode_b3_c2": PAPER_DIR / "integrated_recursive_episode_b3_c2_20260612.json",
     "paper_main": PAPER_DIR / "paper_frozen_main_experiment_v2_20260612.json",
     "paper_fresh_protocol": PAPER_DIR / "paper_fresh_frozen_rerun_protocol_20260612.json",
+    "paper_fresh_result": PAPER_DIR / "paper_fresh_rerun_result_integration_20260612.json",
     "creative_generator": PAPER_DIR / "creative_hypothesis_trajectory_search_20260612.json",
     "main_graph_monitor": PAPER_DIR / "main_graph_controlled_apply_monitor_20260612.json",
     "final_closure": PAPER_DIR / "last_three_part_final_closure_20260612.json",
@@ -197,6 +198,7 @@ def _ticket_rows(*, artifacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]
     integrated_b3_c2 = _metrics(a["integrated_episode_b3_c2"])
     paper = _metrics(a["paper_main"])
     paper_fresh = _metrics(a["paper_fresh_protocol"])
+    paper_fresh_result = _metrics(a["paper_fresh_result"])
     generator = _metrics(a["creative_generator"])
     main_graph = _metrics(a["main_graph_monitor"])
     final = _metrics(a["final_closure"])
@@ -695,6 +697,29 @@ def _ticket_rows(*, artifacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]
             },
             "fresh protocol ready; target live result not overclaimed",
         ),
+        ticket(
+            "P5_fresh_live_720_selective_retention_result",
+            "Fresh 720-call live rerun result integration",
+            "P",
+            [
+                "paper_fresh_rerun_result_integration_20260612.json",
+                "paper_fresh_frozen_rerun_live_720_20260612.json",
+            ],
+            bool(a["paper_fresh_result"].get("pass"))
+            and paper_fresh_result["fresh_api_call_count"] >= 720
+            and paper_fresh_result["live_error_count"] == 0
+            and paper_fresh_result["accepted_count"] >= 1
+            and paper_fresh_result["accepted_trigger_ci95_lower"] > 0.5
+            and paper_fresh_result["accepted_control_loss_ci95_upper"] <= 0.1
+            and paper_fresh_result["paper_unfiltered_generator_claim_allowed"] is False,
+            {
+                "fresh_calls": paper_fresh_result["fresh_api_call_count"],
+                "accepted_count": paper_fresh_result["accepted_count"],
+                "accepted_trigger_ci95": paper_fresh_result["accepted_trigger_problem_level_ci95"],
+                "accepted_control_ci95": paper_fresh_result["accepted_control_problem_level_ci95"],
+            },
+            "fresh live selective-retention support; unfiltered generator overclaim blocked",
+        ),
     ]
 
 
@@ -706,6 +731,7 @@ def _claim_boundary_rows(*, artifacts: dict[str, dict[str, Any]]) -> list[dict[s
     final = _metrics(artifacts["final_closure"])
     paper = _metrics(artifacts["paper_main"])
     paper_fresh = _metrics(artifacts["paper_fresh_protocol"])
+    paper_fresh_result = _metrics(artifacts["paper_fresh_result"])
     supervised = _metrics(artifacts["autonomy_supervised"])
     return [
         {
@@ -728,11 +754,15 @@ def _claim_boundary_rows(*, artifacts: dict[str, dict[str, Any]]) -> list[dict[s
         },
         {
             "claim_id": "brand_new_live_api_main_paper_experiment",
-            "blocked": paper["new_api_call_count"] == 0
-            and paper_fresh["target_fresh_result_claim_allowed"] is False,
+            "blocked": (
+                paper["new_api_call_count"] == 0
+                and paper_fresh["target_fresh_result_claim_allowed"] is False
+            )
+            or paper_fresh_result["paper_unfiltered_generator_claim_allowed"] is False,
             "reason": (
-                "Paper line is a frozen same-batch artifact aggregation.  The fresh rerun protocol is ready, "
-                "but the target live result remains unclaimed until execute_live produces the 720-call artifact."
+                "The fresh rerun is now completed, but the raw unfiltered generator did not clear the broad "
+                "all-candidate trigger gate.  The allowed claim is selective-retention fresh support, not an "
+                "unqualified live main-paper win."
             ),
         },
         {
