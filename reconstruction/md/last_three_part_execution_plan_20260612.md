@@ -29,6 +29,7 @@ Current target is L2 -> L3, not L4.
 | B2 | `assumption_os/simulator_eval_splits.py` | implemented | `tests/test_simulator_eval_splits.py`, `simulator_eval_splits_20260612.json` |
 | B3 | `assumption_os/simulator_uncertainty.py` | implemented | `tests/test_simulator_uncertainty.py`, `simulator_uncertainty_20260612.json` |
 | B4 | `assumption_os/simulator_counterfactual_policy_eval.py` | implemented | `tests/test_simulator_counterfactual_policy_eval.py`, `simulator_counterfactual_policy_eval_20260612.json` |
+| B5/B6 | `assumption_os/simulator_gate_calibration_loop.py` | implemented | `tests/test_simulator_gate_calibration_loop.py`, `simulator_gate_calibration_loop_20260612.json` |
 | C1 | `assumption_os/finite_category_certificate.py` | implemented | `tests/test_finite_category_certificate.py`, `finite_category_certificate_20260612.json` |
 | C2 | `assumption_os/finite_category_lean_export.py` | implemented | `tests/test_finite_category_lean_export.py`, `finite_category_lean_export_20260612.json` |
 | I1 | `assumption_os/integrated_recursive_episode.py` | implemented | `tests/test_integrated_recursive_episode.py`, `integrated_recursive_episode_20260612.json` |
@@ -57,7 +58,7 @@ Metrics:
 
 ## Next Step
 
-Next step is B5/B6 simulator-as-gate closed-loop calibration, or generate more same-state multi-arm rows before attempting B4 production promotion.
+Next step is B4 repair: use problem-level same-state grouping from `provenance.source_row_id` and add a leave-state-out feature-conditioned selector.
 
 ## A2 Completion Snapshot
 
@@ -273,6 +274,46 @@ Metrics:
 - `always_v3_full_policy_mean_utility=0.5852`
 - `production_counterfactual_gate_allowed=false`
 - `exploration_counterfactual_audit_passed=true`
+
+## B5/B6 Completion Snapshot
+
+- Limits simulator output to gate/router roles:
+  - `S1_budget_triage`
+  - `S2_verifier_routing`
+  - `S3_policy_selection`
+- Explicitly blocks oracle roles:
+  - `S4_replace_fresh_ablation`
+  - `S5_replace_judge`
+  - `S6_simulate_arbitrary_real_world_outcome`
+- Consumes I2 fresh readback and writes calibration rows.
+- Emits `SIMULATOR_DEFECT` residuals for high-confidence wrong routing predictions.
+- Promotion event:
+  - raw simulator remains unpromoted
+  - gate/router profile can be promoted within S1/S2 scope
+  - no main graph mutation
+
+Artifacts:
+
+`phase four/assumption_graph/paper_readiness_20260604/simulator_gate_calibration_loop_20260612.json`
+
+`phase four/assumption_graph/paper_readiness_20260604/simulator_gate_calibration_writeback_20260612.jsonl`
+
+Metrics:
+
+- `routing_policy_count=5`
+- `allowed_routing_level_count=2`
+- `forbidden_oracle_level_count=0`
+- `forbidden_action_count=0`
+- `writeback_row_count=8`
+- `fresh_writeback_row_count=6`
+- `deferred_writeback_row_count=2`
+- `accepted_writeback_row_count=4`
+- `rejected_writeback_row_count=2`
+- `high_confidence_wrong_count=2`
+- `simulator_defect_residual_count=2`
+- `raw_simulator_promoted=false`
+- `gate_router_promoted=true`
+- `main_graph_mutation_count=0`
 
 ## C1 Completion Snapshot
 
