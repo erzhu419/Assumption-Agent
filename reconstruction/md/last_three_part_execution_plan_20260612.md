@@ -28,7 +28,7 @@ Current target is L2 -> L3, not L4.
 | B1 | `assumption_os/simulator_transition_schema.py` | implemented | `tests/test_simulator_transition_schema.py`, `simulator_transition_schema_validation_20260612.json` |
 | B2 | `assumption_os/simulator_eval_splits.py` | implemented | `tests/test_simulator_eval_splits.py`, `simulator_eval_splits_20260612.json` |
 | B3 | `assumption_os/simulator_uncertainty.py` | implemented | `tests/test_simulator_uncertainty.py`, `simulator_uncertainty_20260612.json` |
-| B4 | `assumption_os/simulator_counterfactual_policy_eval.py` | implemented | `tests/test_simulator_counterfactual_policy_eval.py`, `simulator_counterfactual_policy_eval_20260612.json` |
+| B4 | `assumption_os/simulator_counterfactual_policy_eval.py` | repaired | `tests/test_simulator_counterfactual_policy_eval.py`, `simulator_counterfactual_policy_eval_20260612.json` |
 | B5/B6 | `assumption_os/simulator_gate_calibration_loop.py` | implemented | `tests/test_simulator_gate_calibration_loop.py`, `simulator_gate_calibration_loop_20260612.json` |
 | C1 | `assumption_os/finite_category_certificate.py` | implemented | `tests/test_finite_category_certificate.py`, `finite_category_certificate_20260612.json` |
 | C2 | `assumption_os/finite_category_lean_export.py` | implemented | `tests/test_finite_category_lean_export.py`, `finite_category_lean_export_20260612.json` |
@@ -58,7 +58,7 @@ Metrics:
 
 ## Next Step
 
-Next step is B4 repair: use problem-level same-state grouping from `provenance.source_row_id` and add a leave-state-out feature-conditioned selector.
+Next step is to collect more true same-state multi-arm rows, then rerun B4 until coverage is high enough for production promotion consideration.
 
 ## A2 Completion Snapshot
 
@@ -238,13 +238,11 @@ Metrics:
 - `low_support_probe_abstained=true`
 - `production_simulator_replacement_allowed=false`
 
-## B4 Completion Snapshot
+## B4 Completion Snapshot / Repair
 
 - Adds matched counterfactual policy evaluation over current same-state multi-arm transition rows.
-- Groups by:
-  - domain
-  - pattern
-  - residual cluster
+- Initial coarse grouping by domain/pattern/residual gave only 2 groups and a weak selector.
+- Repaired grouping now uses problem-level state IDs from `provenance.source_row_id` before `::`.
 - Requires at least 3 observed arms per matched group.
 - Reports:
   - empirical best-arm utility
@@ -252,8 +250,11 @@ Metrics:
   - always-v3-full utility
   - leave-one-replicate MAE
   - global baseline MAE
+  - leave-state-out feature-conditioned selector utility
   - promotion block reasons
-- Result is intentionally conservative: audit passes, but production counterfactual promotion is blocked because coverage and LOO predictive quality are insufficient.
+- Result after repair:
+  - exploration selector is positive versus always-v3-full
+  - production counterfactual promotion is still blocked because matched coverage remains too low
 
 Artifact:
 
@@ -261,17 +262,22 @@ Artifact:
 
 Metrics:
 
-- `matched_counterfactual_group_count=2`
+- `matched_counterfactual_group_count=17`
 - `matched_counterfactual_row_count=51`
 - `matched_action_coverage=0.1478`
 - `min_arm_count_per_matched_group=3`
-- `leave_one_replicate_mae=0.3332`
+- `leave_one_replicate_mae=0.2873`
 - `global_baseline_mae=0.2873`
 - `counterfactual_mae_beats_global_baseline=false`
-- `b3_best_arm_agreement_rate=0.0`
-- `empirical_best_policy_mean_utility=0.6209`
-- `b3_selected_policy_mean_utility=0.531`
-- `always_v3_full_policy_mean_utility=0.5852`
+- `leave_state_out_feature_policy_coverage=0.6471`
+- `leave_state_out_feature_policy_mean_utility=0.6603`
+- `leave_state_out_feature_policy_v3_full_utility=0.5809`
+- `leave_state_out_feature_policy_lift_over_v3=0.0794`
+- `leave_state_out_feature_policy_best_arm_agreement=0.4706`
+- `b3_best_arm_agreement_rate=0.2353`
+- `empirical_best_policy_mean_utility=0.8824`
+- `b3_selected_policy_mean_utility=0.5618`
+- `always_v3_full_policy_mean_utility=0.5809`
 - `production_counterfactual_gate_allowed=false`
 - `exploration_counterfactual_audit_passed=true`
 

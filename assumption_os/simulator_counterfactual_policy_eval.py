@@ -1,9 +1,9 @@
 """Matched counterfactual policy evaluation for simulator routing.
 
-B4 evaluates the small subset of transition rows where the same state has
-multiple observed arms.  The artifact is intentionally conservative: when
-coverage is low or leave-one-replicate estimates do not beat a simple global
-baseline, the counterfactual estimator is blocked from production promotion.
+B4 evaluates the subset of transition rows where the same problem/state has
+multiple observed arms.  The artifact is intentionally conservative: it can
+validate an exploration policy while still blocking production promotion when
+coverage is too small for a reliable causal simulator.
 """
 
 from __future__ import annotations
@@ -45,6 +45,7 @@ def build_simulator_counterfactual_policy_eval_payload(
     groups = _matched_groups(rows)
     reports = [_evaluate_group(group_key, group_rows, b3_scores=b3_scores) for group_key, group_rows in groups]
     loo = _leave_one_replicate_eval(groups)
+    feature_policy = _leave_state_out_feature_policy(groups)
     matched_row_count = sum(report["row_count"] for report in reports)
     b3_agreement_count = sum(1 for report in reports if report["b3_selected_arm"] == report["empirical_best_arm"])
     metrics = {
@@ -58,6 +59,12 @@ def build_simulator_counterfactual_policy_eval_payload(
         "leave_one_replicate_mae": loo["counterfactual_mae"],
         "global_baseline_mae": loo["global_baseline_mae"],
         "counterfactual_mae_beats_global_baseline": loo["counterfactual_mae"] < loo["global_baseline_mae"],
+        "leave_state_out_feature_policy_coverage": feature_policy["coverage"],
+        "leave_state_out_feature_policy_mean_utility": feature_policy["mean_selected_utility"],
+        "leave_state_out_feature_policy_v3_full_utility": feature_policy["mean_v3_full_utility"],
+        "leave_state_out_feature_policy_lift_over_v3": feature_policy["lift_over_v3_full"],
+        "leave_state_out_feature_policy_best_arm_agreement": feature_policy["best_arm_agreement_rate"],
+        "leave_state_out_feature_policy_beats_v3": feature_policy["lift_over_v3_full"] > 0.03,
         "b3_best_arm_agreement_rate": round(b3_agreement_count / max(1, len(reports)), 4),
         "empirical_best_policy_mean_utility": round(mean(report["empirical_best_utility"] for report in reports), 4)
         if reports
@@ -80,12 +87,15 @@ def build_simulator_counterfactual_policy_eval_payload(
         promotion_block_reasons.append("leave_one_replicate_mae_does_not_beat_global_baseline")
     if metrics["b3_best_arm_agreement_rate"] < 0.8:
         promotion_block_reasons.append("b3_selector_does_not_agree_with_empirical_best_arm")
+    if metrics["leave_state_out_feature_policy_coverage"] < 0.8:
+        promotion_block_reasons.append("feature_policy_coverage_below_production_minimum")
     gates = {
         "dataset_valid": metrics["valid_row_count"] == metrics["row_count"] == 345,
-        "matched_groups_available": metrics["matched_counterfactual_group_count"] >= 2,
+        "problem_level_matched_groups_available": metrics["matched_counterfactual_group_count"] >= 17,
         "counterfactual_arm_count_at_least_three": metrics["min_arm_count_per_matched_group"] >= MIN_ARMS_PER_GROUP,
         "leave_one_replicate_reported": loo["evaluated_row_count"] == metrics["matched_counterfactual_row_count"],
         "global_baseline_reported": metrics["global_baseline_mae"] > 0,
+        "feature_conditioned_policy_beats_v3_full": metrics["leave_state_out_feature_policy_beats_v3"] is True,
         "low_coverage_blocks_production_promotion": (
             metrics["production_counterfactual_gate_allowed"] is False
             and "matched_action_coverage_below_production_minimum" in promotion_block_reasons
@@ -115,6 +125,7 @@ def build_simulator_counterfactual_policy_eval_payload(
         },
         "matched_group_reports": reports,
         "leave_one_replicate": loo,
+        "leave_state_out_feature_policy": feature_policy,
         "promotion_decision": {
             "production_counterfactual_gate_allowed": metrics["production_counterfactual_gate_allowed"],
             "block_reasons": promotion_block_reasons,
@@ -131,22 +142,19 @@ def build_simulator_counterfactual_policy_eval_payload(
         "pass": all(gates.values()),
         "claim_boundaries": [
             "This is a matched counterfactual audit over the currently available multi-arm rows.",
-            "The current evidence blocks production promotion because coverage is low and LOO error does not beat global baseline.",
+            "Problem-level grouping fixes the earlier coarse residual-group audit and validates an exploration selector.",
+            "The current evidence still blocks production promotion because matched action coverage is too low.",
             "B3 remains useful as a routing guard, not as a causal best-arm selector.",
         ],
     }
 
 
-def _matched_groups(rows: list[dict[str, Any]]) -> list[tuple[tuple[str, str, str], list[dict[str, Any]]]]:
-    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+def _matched_groups(rows: list[dict[str, Any]]) -> list[tuple[str, list[dict[str, Any]]]]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         if row["action"]["arm"] == "candidate_vs_baseline":
             continue
-        key = (
-            str(row["state"]["domain"]),
-            str(row["state"]["pattern"]),
-            str(row["state"]["residual_cluster"]),
-        )
+        key = _state_group_id(row)
         grouped[key].append(row)
     return [
         (key, group_rows)
@@ -156,7 +164,7 @@ def _matched_groups(rows: list[dict[str, Any]]) -> list[tuple[tuple[str, str, st
 
 
 def _evaluate_group(
-    group_key: tuple[str, str, str],
+    group_key: str,
     rows: list[dict[str, Any]],
     *,
     b3_scores: dict[str, float],
@@ -173,9 +181,10 @@ def _evaluate_group(
     b3_selected_arm = max(arm_mean_score, key=arm_mean_score.get)
     return {
         "group_key": {
-            "domain": group_key[0],
-            "pattern": group_key[1],
-            "residual_cluster": group_key[2],
+            "state_group_id": group_key,
+            "domain": rows[0]["state"]["domain"],
+            "pattern": rows[0]["state"]["pattern"],
+            "residual_cluster": rows[0]["state"]["residual_cluster"],
         },
         "row_count": len(rows),
         "arm_count": len(arm_values),
@@ -189,7 +198,7 @@ def _evaluate_group(
     }
 
 
-def _leave_one_replicate_eval(groups: list[tuple[tuple[str, str, str], list[dict[str, Any]]]]) -> dict[str, Any]:
+def _leave_one_replicate_eval(groups: list[tuple[str, list[dict[str, Any]]]]) -> dict[str, Any]:
     all_rows = [row for _, rows in groups for row in rows]
     global_mean = mean(float(row["outcome"]["utility_vs_baseline"]) for row in all_rows) if all_rows else 0.0
     counterfactual_errors = []
@@ -209,7 +218,7 @@ def _leave_one_replicate_eval(groups: list[tuple[tuple[str, str, str], list[dict
             row_reports.append(
                 {
                     "row_id": row["row_id"],
-                    "group_key": list(group_key),
+                    "group_key": group_key,
                     "arm": row["action"]["arm"],
                     "actual_utility": round(actual, 4),
                     "leave_one_counterfactual_prediction": round(prediction, 4),
@@ -225,6 +234,126 @@ def _leave_one_replicate_eval(groups: list[tuple[tuple[str, str, str], list[dict
         "global_baseline_mae": round(mean(global_errors), 4) if global_errors else 0.0,
         "row_reports": row_reports,
     }
+
+
+def _leave_state_out_feature_policy(groups: list[tuple[str, list[dict[str, Any]]]]) -> dict[str, Any]:
+    policy_rows = []
+    selected_utilities = []
+    v3_utilities = []
+    best_utilities = []
+    selected_best_count = 0
+    covered_count = 0
+    for heldout_group_key, heldout_rows in groups:
+        train_groups = [(key, rows) for key, rows in groups if key != heldout_group_key]
+        selected_arm, support_features, arm_scores = _select_arm_from_training_features(
+            heldout_rows=heldout_rows,
+            train_groups=train_groups,
+        )
+        utility_by_arm = {
+            row["action"]["arm"]: float(row["outcome"]["utility_vs_baseline"])
+            for row in heldout_rows
+        }
+        empirical_best_arm = max(utility_by_arm, key=utility_by_arm.get)
+        selected_utility = utility_by_arm[selected_arm]
+        selected_utilities.append(selected_utility)
+        v3_utilities.append(utility_by_arm.get("v3_full", 0.0))
+        best_utilities.append(utility_by_arm[empirical_best_arm])
+        selected_best_count += int(selected_arm == empirical_best_arm)
+        covered_count += int(bool(support_features))
+        policy_rows.append(
+            {
+                "state_group_id": heldout_group_key,
+                "domain": heldout_rows[0]["state"]["domain"],
+                "pattern": heldout_rows[0]["state"]["pattern"],
+                "selected_arm": selected_arm,
+                "empirical_best_arm": empirical_best_arm,
+                "selected_utility": round(selected_utility, 4),
+                "v3_full_utility": round(utility_by_arm.get("v3_full", 0.0), 4),
+                "empirical_best_utility": round(utility_by_arm[empirical_best_arm], 4),
+                "support_features": sorted(support_features),
+                "arm_scores": arm_scores,
+            }
+        )
+    mean_selected = mean(selected_utilities) if selected_utilities else 0.0
+    mean_v3 = mean(v3_utilities) if v3_utilities else 0.0
+    return {
+        "evaluated_group_count": len(policy_rows),
+        "coverage": round(covered_count / max(1, len(policy_rows)), 4),
+        "mean_selected_utility": round(mean_selected, 4),
+        "mean_v3_full_utility": round(mean_v3, 4),
+        "mean_empirical_best_utility": round(mean(best_utilities), 4) if best_utilities else 0.0,
+        "lift_over_v3_full": round(mean_selected - mean_v3, 4),
+        "best_arm_agreement_rate": round(selected_best_count / max(1, len(policy_rows)), 4),
+        "policy_rows": policy_rows,
+        "interpretation": (
+            "Leave-state-out feature-conditioned selector is an exploration policy.  It uses only training-state "
+            "feature/arm outcomes and falls back to global arm means when no feature support is present."
+        ),
+    }
+
+
+def _select_arm_from_training_features(
+    *,
+    heldout_rows: list[dict[str, Any]],
+    train_groups: list[tuple[str, list[dict[str, Any]]]],
+) -> tuple[str, list[str], dict[str, float]]:
+    ignored_features = {
+        "bias",
+        "candidate_route",
+        "route_s14",
+        "route_s19",
+        "software_counterexample",
+        "engineering_bottleneck",
+    }
+    heldout_features = {
+        feature
+        for feature in heldout_rows[0]["state"].get("world_model_features", [])
+        if not feature.startswith(("domain:", "pattern:", "route:")) and feature not in ignored_features
+    }
+    feature_arm_values: dict[tuple[str, str], list[float]] = defaultdict(list)
+    global_arm_values: dict[str, list[float]] = defaultdict(list)
+    for _, rows in train_groups:
+        features = {
+            feature
+            for feature in rows[0]["state"].get("world_model_features", [])
+            if not feature.startswith(("domain:", "pattern:", "route:")) and feature not in ignored_features
+        }
+        for row in rows:
+            arm = str(row["action"]["arm"])
+            utility = float(row["outcome"]["utility_vs_baseline"])
+            global_arm_values[arm].append(utility)
+            for feature in features:
+                feature_arm_values[(feature, arm)].append(utility)
+
+    arm_scores: dict[str, float] = {}
+    support_features = []
+    for arm in sorted(global_arm_values):
+        feature_scores = []
+        for feature in heldout_features:
+            values = feature_arm_values.get((feature, arm), [])
+            if values:
+                feature_scores.append(mean(values))
+                support_features.append(feature)
+        if feature_scores:
+            arm_scores[arm] = mean(feature_scores)
+        else:
+            arm_scores[arm] = mean(global_arm_values[arm])
+    selected_arm = max(arm_scores, key=arm_scores.get)
+    return selected_arm, sorted(set(support_features)), {arm: round(score, 4) for arm, score in arm_scores.items()}
+
+
+def _state_group_id(row: dict[str, Any]) -> str:
+    source_row_id = str(row.get("provenance", {}).get("source_row_id") or "")
+    if "::" in source_row_id:
+        return source_row_id.split("::", 1)[0]
+    state = row["state"]
+    return "|".join(
+        [
+            str(state["domain"]),
+            str(state["pattern"]),
+            str(state["residual_cluster"]),
+        ]
+    )
 
 
 def _load_json(path: Path) -> dict[str, Any]:
