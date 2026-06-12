@@ -53,6 +53,7 @@ from .formal_mapping import (
 )
 from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .harness_observer import build_harness_observer_payload
+from .last_three_part_coverage_audit import build_last_three_part_coverage_audit_payload
 from .manifest_logger import build_component_manifest_payload, events_from_run_logs
 from .memory_surfaces import build_memory_surface_payload
 from .objective_bench import build_objective_benchmark_payload
@@ -186,6 +187,9 @@ def build_performance_validation_payload(
         sections=sections,
     )
     timings["reconstruction_progress_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["last_three_part_coverage_audit"] = _validate_last_three_part_coverage(root=root)
+    timings["last_three_part_coverage_audit_sec"] = _elapsed(start)
     return {
         "eval_id": eval_id,
         "source": {
@@ -1065,6 +1069,31 @@ def _validate_reconstruction_progress(
             for row in sorted(payload["items"], key=lambda row: (row["behavior_score"], row["structure_score"]))[:3]
         ],
         "top_next_actions": payload["next_actions_ranked"][:5],
+    }
+
+
+def _validate_last_three_part_coverage(*, root: Path) -> dict:
+    payload = build_last_three_part_coverage_audit_payload(
+        root=root,
+        eval_id="perf_last_three_part_coverage_audit",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "ticket_count": metrics["ticket_count"],
+        "engineering_ticket_count": metrics["engineering_ticket_count"],
+        "engineering_ticket_pass_count": metrics["engineering_ticket_pass_count"],
+        "engineering_open_gap_count": metrics["engineering_open_gap_count"],
+        "claim_boundary_count": metrics["claim_boundary_count"],
+        "blocked_claim_boundary_count": metrics["blocked_claim_boundary_count"],
+        "overclaim_leak_count": metrics["overclaim_leak_count"],
+        "source_artifact_pass_rate": metrics["source_artifact_pass_rate"],
+        "failed_gates": payload["failed_gates"],
+        "blocked_claim_ids": [
+            row["claim_id"]
+            for row in payload["claim_boundaries"]
+            if row["blocked"]
+        ],
     }
 
 
@@ -2205,6 +2234,12 @@ def _key_metric(name: str, section: dict) -> str:
         return f"score={section['overall_score']}, passed={section['passed_capability_count']}/{section['capability_count']}"
     if name == "reconstruction_progress":
         return f"structure={section['structure_percent']}%, behavior={section['behavior_percent']}%, weighted={section['weighted_percent']}%"
+    if name == "last_three_part_coverage_audit":
+        return (
+            f"tickets={section['engineering_ticket_pass_count']}/{section['engineering_ticket_count']}, "
+            f"open={section['engineering_open_gap_count']}, "
+            f"blocked={section['blocked_claim_boundary_count']}/{section['claim_boundary_count']}"
+        )
     if name == "memory_surfaces":
         return f"types={section['before_node_type_count']}->{section['after_node_type_count']}, edges={section['before_edge_type_count']}->{section['after_edge_type_count']}"
     if name == "manifest_logger":
