@@ -1,0 +1,2395 @@
+{
+  "allowed_claim": "bounded philosophy/methodology prior library for framework evolution",
+  "blocked_claims": [
+    "complete_cyc_style_common_sense_library",
+    "human_priors_as_unquestioned_axioms",
+    "automatic_core_prior_promotion",
+    "retrieval_agreement_as_expert_proof"
+  ],
+  "eval_id": "philosophy_prior_library_20260612",
+  "eval_kind": "philosophy_prior_library",
+  "failed_gates": [],
+  "gates": {
+    "all_gate_ready": true,
+    "all_have_failure_cases": true,
+    "all_have_scope_and_failure_conditions": true,
+    "all_have_success_cases": true,
+    "all_have_verifier_protocols": true,
+    "all_priors_are_assumptions": true,
+    "core_prior_auto_promotion_blocked": true,
+    "graph_roundtrip_exact": true,
+    "principle_count_high": true,
+    "top1_expert_agreement_nontrivial": true,
+    "top3_expert_agreement_reasonable": true
+  },
+  "graph": {
+    "edge_count": 211,
+    "edge_type_counts": {
+      "conflicts_with": 30,
+      "explains_residual": 30,
+      "is_analogy_of": 61,
+      "predicts_new_case": 30,
+      "preserves_success_cases": 60
+    },
+    "node_count": 180
+  },
+  "metrics": {
+    "active_prior_count": 30,
+    "conservative_gate_ready_count": 30,
+    "conservative_gate_ready_coverage": 1.0,
+    "core_prior_auto_promotion_count": 0,
+    "failure_condition_coverage": 1.0,
+    "framework_prior_node_count": 30,
+    "graph_edge_count": 211,
+    "graph_edge_type_count": 5,
+    "graph_node_count": 180,
+    "main_graph_mutation_count": 0,
+    "min_negative_case_count": 1,
+    "min_success_case_count": 2,
+    "principle_count": 30,
+    "required_prior_edge_coverage": 1.0,
+    "retrieval_query_count": 10,
+    "roundtrip_edge_count": 211,
+    "roundtrip_exact": true,
+    "roundtrip_node_count": 180,
+    "scope_condition_coverage": 1.0,
+    "top1_expert_agreement": 1.0,
+    "top3_expert_agreement": 1.0,
+    "verifier_protocol_coverage": 1.0
+  },
+  "pass": true,
+  "performance_validation": true,
+  "priors": [
+    {
+      "canonical_examples": [
+        {
+          "case_id": "cv_science",
+          "description": "hold temperature constant while changing pressure to estimate a gas relation",
+          "domain": "science"
+        },
+        {
+          "case_id": "cv_prompt",
+          "description": "change one retrieval policy while keeping judge and task set fixed",
+          "domain": "agent"
+        }
+      ],
+      "claim": "When causal attribution is uncertain, vary one factor while holding other factors fixed.",
+      "failure_conditions": [
+        "strongly coupled variables make isolation misleading"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "cv_coupled",
+          "description": "changing learning rate also changes batch statistics, so attribution is confounded",
+          "domain": "systems"
+        }
+      ],
+      "node_id": "prior_control_variables",
+      "principle_id": "control_variables",
+      "related_principles": [
+        "ablation",
+        "negative_control",
+        "causal_intervention"
+      ],
+      "scope_conditions": [
+        "causal attribution",
+        "ablation",
+        "matched comparison"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "causal",
+        "ablation",
+        "variable",
+        "factor",
+        "controlled"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "dac_algorithm",
+          "description": "separate parsing, planning, and execution modules",
+          "domain": "software"
+        },
+        {
+          "case_id": "dac_math",
+          "description": "prove lemmas before proving the theorem",
+          "domain": "math"
+        }
+      ],
+      "claim": "Split a complex task into separable subproblems with explicit interfaces, then compose the results.",
+      "failure_conditions": [
+        "subtasks interact so strongly that local solutions fail globally"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "dac_entangled",
+          "description": "optimizing subgoals independently breaks a shared constraint",
+          "domain": "planning"
+        }
+      ],
+      "node_id": "prior_divide_and_conquer",
+      "principle_id": "divide_and_conquer",
+      "related_principles": [
+        "error_decomposition",
+        "general_to_special"
+      ],
+      "scope_conditions": [
+        "multi-step task",
+        "composable interface",
+        "large problem"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "decompose",
+        "split",
+        "subproblem",
+        "compose",
+        "interface"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "pbc_math",
+          "description": "prove irrationality by assuming a rational ratio",
+          "domain": "math"
+        },
+        {
+          "case_id": "pbc_static",
+          "description": "assume a dependency is absent and search for a required call path",
+          "domain": "software"
+        }
+      ],
+      "claim": "To test a claim, assume its negation and derive an impossible or inconsistent consequence.",
+      "failure_conditions": [
+        "empirical uncertainty has no crisp contradiction"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "pbc_noisy",
+          "description": "measurement noise prevents a strict contradiction",
+          "domain": "science"
+        }
+      ],
+      "node_id": "prior_proof_by_contradiction",
+      "principle_id": "proof_by_contradiction",
+      "related_principles": [
+        "reductio_ad_absurdum",
+        "falsifiability"
+      ],
+      "scope_conditions": [
+        "logical proof",
+        "necessary condition",
+        "invariant violation"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "contradiction",
+        "negation",
+        "inconsistent",
+        "impossible",
+        "proof"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "raa_policy",
+          "description": "extend an unlimited growth rule until resource exhaustion is visible",
+          "domain": "policy"
+        },
+        {
+          "case_id": "raa_prompt",
+          "description": "apply a style rule to every task and observe incoherent answers",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Stress an assumption by extending it to an absurd consequence that exposes its boundary.",
+      "failure_conditions": [
+        "satire-like extremes distract from measurable failure"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "raa_unmeasured",
+          "description": "absurd framing without a concrete verifier",
+          "domain": "discussion"
+        }
+      ],
+      "node_id": "prior_reductio_ad_absurdum",
+      "principle_id": "reductio_ad_absurdum",
+      "related_principles": [
+        "proof_by_contradiction",
+        "boundary_condition_analysis"
+      ],
+      "scope_conditions": [
+        "overbroad claim",
+        "edge case",
+        "policy boundary"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "absurd",
+        "extreme",
+        "overbroad",
+        "edge",
+        "boundary"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "occam_stats",
+          "description": "choose a linear model when it matches heldout error",
+          "domain": "statistics"
+        },
+        {
+          "case_id": "occam_design",
+          "description": "remove an unused abstraction when tests and users see no loss",
+          "domain": "software"
+        }
+      ],
+      "claim": "Prefer the simpler model when competing explanations have similar evidence and predictive power.",
+      "failure_conditions": [
+        "the simpler model underfits or misses required mechanisms"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "occam_underfit",
+          "description": "a simple model ignores a necessary interaction term",
+          "domain": "science"
+        }
+      ],
+      "node_id": "prior_occams_razor",
+      "principle_id": "occams_razor",
+      "related_principles": [
+        "model_comparison",
+        "minimum_viable_prototype"
+      ],
+      "scope_conditions": [
+        "model comparison",
+        "equal fit",
+        "parsimony"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "simple",
+        "parsimony",
+        "model",
+        "complexity",
+        "underfit"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "bayes_diagnosis",
+          "description": "update disease probability after a test result",
+          "domain": "medicine"
+        },
+        {
+          "case_id": "bayes_world_model",
+          "description": "calibrate proposal acceptance probability after judgments",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Update belief strength as new evidence arrives, weighting prior confidence by observed likelihood.",
+      "failure_conditions": [
+        "prior is misspecified or evidence is selected adversarially"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "bayes_bad_prior",
+          "description": "a biased prior dominates sparse contradictory evidence",
+          "domain": "forecasting"
+        }
+      ],
+      "node_id": "prior_bayesian_update",
+      "principle_id": "bayesian_update",
+      "related_principles": [
+        "prior_estimate_then_update",
+        "model_comparison"
+      ],
+      "scope_conditions": [
+        "uncertain belief",
+        "sequential evidence",
+        "calibration"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "bayesian",
+        "belief",
+        "prior",
+        "posterior",
+        "evidence",
+        "calibration"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "analog_lenz",
+          "description": "map negative feedback in Lenz law to stabilizing policy response",
+          "domain": "physics"
+        },
+        {
+          "case_id": "analog_resnet",
+          "description": "map identity residual paths to rollback-preserving software changes",
+          "domain": "ml"
+        }
+      ],
+      "claim": "Map a new problem to a structurally similar solved problem, then test which relations transfer.",
+      "failure_conditions": [
+        "surface similarity hides broken invariants"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "analog_name",
+          "description": "similar terms share words but not roles or invariants",
+          "domain": "retrieval"
+        }
+      ],
+      "node_id": "prior_analogical_reasoning",
+      "principle_id": "analogical_reasoning",
+      "related_principles": [
+        "cross_domain_transfer",
+        "invariant_search"
+      ],
+      "scope_conditions": [
+        "structural similarity",
+        "known source case",
+        "transfer hypothesis"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "analogy",
+        "similar",
+        "morphism",
+        "transfer",
+        "structure"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "boundary_math",
+          "description": "check zero, infinity, and equality cases",
+          "domain": "math"
+        },
+        {
+          "case_id": "boundary_ops",
+          "description": "test empty queue, max queue, and timeout cases",
+          "domain": "software"
+        }
+      ],
+      "claim": "Test the edges of the scope because assumptions often fail at extremes or transitions.",
+      "failure_conditions": [
+        "boundary cases are irrelevant to the actual operating range"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "boundary_irrelevant",
+          "description": "spending all effort on impossible user states",
+          "domain": "product"
+        }
+      ],
+      "node_id": "prior_boundary_condition_analysis",
+      "principle_id": "boundary_condition_analysis",
+      "related_principles": [
+        "limiting_case_analysis",
+        "robustness_testing"
+      ],
+      "scope_conditions": [
+        "edge case",
+        "extreme input",
+        "scope boundary"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "boundary",
+        "edge",
+        "extreme",
+        "scope",
+        "transition"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "neg_bio",
+          "description": "use a no-target sample in an assay",
+          "domain": "biology"
+        },
+        {
+          "case_id": "neg_agent",
+          "description": "run no-trigger tasks to ensure a prompt policy abstains",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Use a condition where the effect should not appear to detect leakage, confounding, or prompt artifacts.",
+      "failure_conditions": [
+        "negative control is not truly unaffected by the intervention"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "neg_bad",
+          "description": "control task secretly contains the same cue",
+          "domain": "evaluation"
+        }
+      ],
+      "node_id": "prior_negative_control",
+      "principle_id": "negative_control",
+      "related_principles": [
+        "placebo_control",
+        "control_variables"
+      ],
+      "scope_conditions": [
+        "causal test",
+        "leakage audit",
+        "placebo-like setting"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "negative",
+        "control",
+        "leakage",
+        "artifact",
+        "no trigger"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "mvp_startup",
+          "description": "test purchase intent with a narrow pilot",
+          "domain": "business"
+        },
+        {
+          "case_id": "mvp_agent",
+          "description": "run a smoke ablation before a full benchmark",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Build the smallest working version that can falsify the core uncertainty before scaling.",
+      "failure_conditions": [
+        "prototype omits the failure mode that determines real viability"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "mvp_toy",
+          "description": "toy demo ignores production latency constraints",
+          "domain": "engineering"
+        }
+      ],
+      "node_id": "prior_minimum_viable_prototype",
+      "principle_id": "minimum_viable_prototype",
+      "related_principles": [
+        "incremental_replacement",
+        "occams_razor"
+      ],
+      "scope_conditions": [
+        "uncertain feasibility",
+        "early validation",
+        "budget constraint"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "prototype",
+        "mvp",
+        "minimal",
+        "pilot",
+        "feasibility"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "inc_database",
+          "description": "migrate one service endpoint behind a feature flag",
+          "domain": "software"
+        },
+        {
+          "case_id": "inc_agent",
+          "description": "swap only the retrieval selector while keeping prompt and judge fixed",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Replace one bounded component behind an interface while preserving rollback to the working baseline.",
+      "failure_conditions": [
+        "component boundaries are false and hidden coupling dominates"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "inc_hidden",
+          "description": "a shared cache makes the isolated replacement unsafe",
+          "domain": "systems"
+        }
+      ],
+      "node_id": "prior_incremental_replacement",
+      "principle_id": "incremental_replacement",
+      "related_principles": [
+        "control_variables",
+        "minimum_viable_prototype"
+      ],
+      "scope_conditions": [
+        "working baseline",
+        "module boundary",
+        "safe migration"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "incremental",
+        "replace",
+        "rollback",
+        "baseline",
+        "adapter"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "mc_forecast",
+          "description": "compare ARIMA and state-space models on rolling windows",
+          "domain": "forecasting"
+        },
+        {
+          "case_id": "mc_agent",
+          "description": "compare no-morphism and full-morphism variants on same tasks",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Compare alternative models on matched evidence, heldout performance, and failure boundaries.",
+      "failure_conditions": [
+        "evaluation metric does not measure the target behavior"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "mc_bad_metric",
+          "description": "win rate rises while control loss also rises",
+          "domain": "evaluation"
+        }
+      ],
+      "node_id": "prior_model_comparison",
+      "principle_id": "model_comparison",
+      "related_principles": [
+        "occams_razor",
+        "bayesian_update"
+      ],
+      "scope_conditions": [
+        "multiple explanations",
+        "candidate models",
+        "heldout evidence"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "compare",
+        "model",
+        "baseline",
+        "heldout",
+        "alternative"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "err_ml",
+          "description": "separate bias, variance, and data leakage",
+          "domain": "ml"
+        },
+        {
+          "case_id": "err_agent",
+          "description": "separate retrieval miss, reasoning miss, and judge defect",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Decompose aggregate error into attributable components before choosing a repair.",
+      "failure_conditions": [
+        "component labels are unreliable or interactions dominate"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "err_interaction",
+          "description": "each component passes alone but fails together",
+          "domain": "systems"
+        }
+      ],
+      "node_id": "prior_error_decomposition",
+      "principle_id": "error_decomposition",
+      "related_principles": [
+        "divide_and_conquer",
+        "causal_intervention"
+      ],
+      "scope_conditions": [
+        "complex failure",
+        "multiple components",
+        "debugging"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "error",
+        "decompose",
+        "attribution",
+        "component",
+        "failure"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "inv_physics",
+          "description": "track energy or mass conservation",
+          "domain": "physics"
+        },
+        {
+          "case_id": "inv_agent",
+          "description": "preserve old success behavior while changing residual handling",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Identify quantities, roles, or relations that should remain unchanged across transformations.",
+      "failure_conditions": [
+        "no stable invariant exists or the invariant is wrongly chosen"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "inv_false",
+          "description": "assumed invariant breaks under domain transfer",
+          "domain": "analogy"
+        }
+      ],
+      "node_id": "prior_invariant_search",
+      "principle_id": "invariant_search",
+      "related_principles": [
+        "conservation_law",
+        "analogical_reasoning"
+      ],
+      "scope_conditions": [
+        "transformation",
+        "morphism",
+        "state change"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "invariant",
+        "preserve",
+        "relation",
+        "unchanged",
+        "morphism"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "ci_product",
+          "description": "randomize a feature launch to estimate impact",
+          "domain": "product"
+        },
+        {
+          "case_id": "ci_agent",
+          "description": "turn a candidate route on only for trigger rows",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Actively intervene on a suspected cause to distinguish causation from correlation.",
+      "failure_conditions": [
+        "intervention is unsafe, unethical, or changes multiple mechanisms"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "ci_unsafe",
+          "description": "intervention risk is too high without prior evidence",
+          "domain": "medicine"
+        }
+      ],
+      "node_id": "prior_causal_intervention",
+      "principle_id": "causal_intervention",
+      "related_principles": [
+        "control_variables",
+        "negative_control"
+      ],
+      "scope_conditions": [
+        "causal uncertainty",
+        "intervention possible",
+        "confounding risk"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "causal",
+        "intervention",
+        "experiment",
+        "confound",
+        "randomize"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "lin_control",
+          "description": "linearize dynamics near equilibrium",
+          "domain": "control"
+        },
+        {
+          "case_id": "lin_business",
+          "description": "estimate small price change impact before large repricing",
+          "domain": "business"
+        }
+      ],
+      "claim": "Approximate a nonlinear system locally when changes are small and verify the approximation boundary.",
+      "failure_conditions": [
+        "large moves or discontinuities invalidate the approximation"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "lin_jump",
+          "description": "threshold effects create discontinuous response",
+          "domain": "markets"
+        }
+      ],
+      "node_id": "prior_local_linearization",
+      "principle_id": "local_linearization",
+      "related_principles": [
+        "limiting_case_analysis",
+        "boundary_condition_analysis"
+      ],
+      "scope_conditions": [
+        "small perturbation",
+        "smooth response",
+        "local estimate"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "local",
+        "linear",
+        "perturbation",
+        "smooth",
+        "approximation"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "fb_lenz",
+          "description": "induced current opposes magnetic flux change",
+          "domain": "physics"
+        },
+        {
+          "case_id": "fb_ops",
+          "description": "autoscaling counters rising queue length",
+          "domain": "systems"
+        }
+      ],
+      "claim": "When a disturbance grows, look for feedback that amplifies, opposes, or stabilizes the change.",
+      "failure_conditions": [
+        "feedback delay or nonlinear saturation changes the sign"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "fb_delay",
+          "description": "delayed response overshoots and destabilizes",
+          "domain": "economics"
+        }
+      ],
+      "node_id": "prior_feedback_stability",
+      "principle_id": "feedback_stability",
+      "related_principles": [
+        "analogical_reasoning",
+        "conservation_law"
+      ],
+      "scope_conditions": [
+        "dynamic system",
+        "feedback loop",
+        "stability question"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "feedback",
+        "stability",
+        "opposes",
+        "amplify",
+        "equilibrium"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "s2g_math",
+          "description": "infer a theorem from cases then prove the invariant",
+          "domain": "math"
+        },
+        {
+          "case_id": "s2g_agent",
+          "description": "promote a branch after it survives multiple residual families",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Generalize from concrete successful cases only after identifying the invariant that explains them.",
+      "failure_conditions": [
+        "examples are selected or lack a shared invariant"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "s2g_bias",
+          "description": "cherry-picked wins create false generality",
+          "domain": "evaluation"
+        }
+      ],
+      "node_id": "prior_special_to_general",
+      "principle_id": "special_to_general",
+      "related_principles": [
+        "invariant_search",
+        "cross_domain_transfer"
+      ],
+      "scope_conditions": [
+        "multiple examples",
+        "pattern extraction",
+        "candidate law"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "generalize",
+        "examples",
+        "invariant",
+        "pattern",
+        "cases"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "g2s_law",
+          "description": "apply a statute after jurisdiction and facts match",
+          "domain": "law"
+        },
+        {
+          "case_id": "g2s_agent",
+          "description": "apply a prior only when trigger and negative controls match",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Apply a general principle to a specific case by checking scope, assumptions, and local constraints.",
+      "failure_conditions": [
+        "local constraints violate the general principle"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "g2s_scope",
+          "description": "generic advice ignores a hard local constraint",
+          "domain": "planning"
+        }
+      ],
+      "node_id": "prior_general_to_special",
+      "principle_id": "general_to_special",
+      "related_principles": [
+        "scope_narrowing",
+        "boundary_condition_analysis"
+      ],
+      "scope_conditions": [
+        "known rule",
+        "specific instance",
+        "scope check"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "specific",
+        "apply",
+        "scope",
+        "constraint",
+        "general"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "pe_forecast",
+          "description": "begin from base rate before local signals",
+          "domain": "forecasting"
+        },
+        {
+          "case_id": "pe_agent",
+          "description": "use world model score before fresh validation updates it",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Start with a calibrated prior estimate, then revise after observing task specific evidence.",
+      "failure_conditions": [
+        "prior anchors too strongly or evidence is too noisy"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "pe_anchor",
+          "description": "base rate dominates a clear contrary signal",
+          "domain": "decision"
+        }
+      ],
+      "node_id": "prior_prior_estimate_then_update",
+      "principle_id": "prior_estimate_then_update",
+      "related_principles": [
+        "bayesian_update",
+        "model_comparison"
+      ],
+      "scope_conditions": [
+        "cold start",
+        "uncertain estimate",
+        "sequential measurement"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "prior",
+        "estimate",
+        "update",
+        "base rate",
+        "revise"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "dual_opt",
+          "description": "move from primal constraints to Lagrange multipliers",
+          "domain": "optimization"
+        },
+        {
+          "case_id": "dual_agent",
+          "description": "view generation failure as verifier-routing failure",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Solve a problem by switching to a dual representation where constraints or objectives are easier.",
+      "failure_conditions": [
+        "dual loses necessary semantics or is harder than primal"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "dual_bad",
+          "description": "dual variables are not interpretable for the decision",
+          "domain": "modeling"
+        }
+      ],
+      "node_id": "prior_duality",
+      "principle_id": "duality",
+      "related_principles": [
+        "model_comparison",
+        "invariant_search"
+      ],
+      "scope_conditions": [
+        "paired formulation",
+        "constraint optimization",
+        "representation shift"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "dual",
+        "representation",
+        "constraint",
+        "objective",
+        "transform"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "cons_physics",
+          "description": "mass balance in a reaction",
+          "domain": "physics"
+        },
+        {
+          "case_id": "cons_budget",
+          "description": "cost savings must reappear as budget or capacity",
+          "domain": "operations"
+        }
+      ],
+      "claim": "Track conserved quantities through a transformation and reject explanations that leak or create mass, budget, or probability.",
+      "failure_conditions": [
+        "system is open or conservation assumption is false"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "cons_open",
+          "description": "external subsidy makes local budget non-conserved",
+          "domain": "economics"
+        }
+      ],
+      "node_id": "prior_conservation_law",
+      "principle_id": "conservation_law",
+      "related_principles": [
+        "invariant_search",
+        "dimensional_analysis"
+      ],
+      "scope_conditions": [
+        "closed accounting",
+        "state transition",
+        "resource balance"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "conservation",
+        "mass",
+        "budget",
+        "probability",
+        "balance"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "dim_physics",
+          "description": "derive possible period dependence from length and gravity",
+          "domain": "physics"
+        },
+        {
+          "case_id": "dim_agent",
+          "description": "detect incomparable metrics before combining scores",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Check whether quantities and formulas are meaningful by preserving units, scale, and dimension.",
+      "failure_conditions": [
+        "dimensionally valid formula can still be causally false"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "dim_false",
+          "description": "unit consistency hides a missing mechanism",
+          "domain": "science"
+        }
+      ],
+      "node_id": "prior_dimensional_analysis",
+      "principle_id": "dimensional_analysis",
+      "related_principles": [
+        "conservation_law",
+        "scale_analysis"
+      ],
+      "scope_conditions": [
+        "physical quantity",
+        "scale relation",
+        "formula check"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "dimension",
+        "unit",
+        "scale",
+        "quantity",
+        "formula"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "limit_physics",
+          "description": "relativity reduces to Newtonian mechanics at low velocity",
+          "domain": "physics"
+        },
+        {
+          "case_id": "limit_agent",
+          "description": "dependency-aware intervention reduces to control variables under low coupling",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Verify that a proposed framework reduces to a known result under a limiting scope condition.",
+      "failure_conditions": [
+        "limit is singular or not representative"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "limit_singular",
+          "description": "limit changes topology and breaks reduction",
+          "domain": "math"
+        }
+      ],
+      "node_id": "prior_limiting_case_analysis",
+      "principle_id": "limiting_case_analysis",
+      "related_principles": [
+        "boundary_condition_analysis",
+        "local_linearization"
+      ],
+      "scope_conditions": [
+        "candidate generalization",
+        "known parent case",
+        "scope reduction"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "limit",
+        "reduce",
+        "parent",
+        "scope",
+        "known case"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "fals_science",
+          "description": "define an observation that rules out a theory",
+          "domain": "science"
+        },
+        {
+          "case_id": "fals_agent",
+          "description": "write a rejection gate before live ablation",
+          "domain": "agent"
+        }
+      ],
+      "claim": "State what observation would make the claim fail before treating it as useful knowledge.",
+      "failure_conditions": [
+        "claim is normative or not directly testable"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "fals_norm",
+          "description": "pure value preference is not falsified by measurement alone",
+          "domain": "ethics"
+        }
+      ],
+      "node_id": "prior_falsifiability",
+      "principle_id": "falsifiability",
+      "related_principles": [
+        "proof_by_contradiction",
+        "negative_control"
+      ],
+      "scope_conditions": [
+        "hypothesis test",
+        "scientific claim",
+        "verifier design"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "falsify",
+        "testable",
+        "counterexample",
+        "hypothesis",
+        "fail"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "robust_ml",
+          "description": "evaluate under corrupted inputs",
+          "domain": "ml"
+        },
+        {
+          "case_id": "robust_agent",
+          "description": "rerun accepted policy across domains and seeds",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Test whether behavior survives noise, perturbation, distribution shift, and adversarial cases.",
+      "failure_conditions": [
+        "stress cases do not match realistic threats"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "robust_unreal",
+          "description": "contrived stress case blocks useful behavior",
+          "domain": "testing"
+        }
+      ],
+      "node_id": "prior_robustness_testing",
+      "principle_id": "robustness_testing",
+      "related_principles": [
+        "boundary_condition_analysis",
+        "ablation"
+      ],
+      "scope_conditions": [
+        "deployment risk",
+        "distribution shift",
+        "stress test"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "robust",
+        "stress",
+        "noise",
+        "shift",
+        "adversarial"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "abl_ml",
+          "description": "remove an attention block and measure heldout loss",
+          "domain": "ml"
+        },
+        {
+          "case_id": "abl_agent",
+          "description": "turn off morphism gate and compare same problems",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Remove or disable one component to measure whether it is necessary for the observed effect.",
+      "failure_conditions": [
+        "component removal changes multiple hidden factors"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "abl_hidden",
+          "description": "removing cache also changes latency and memory pressure",
+          "domain": "systems"
+        }
+      ],
+      "node_id": "prior_ablation",
+      "principle_id": "ablation",
+      "related_principles": [
+        "control_variables",
+        "model_comparison"
+      ],
+      "scope_conditions": [
+        "component attribution",
+        "model or system variant",
+        "same-task comparison"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "ablation",
+        "remove",
+        "disable",
+        "component",
+        "necessary"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "plac_med",
+          "description": "compare drug to sugar pill",
+          "domain": "medicine"
+        },
+        {
+          "case_id": "plac_agent",
+          "description": "compare a prompt label with no policy change",
+          "domain": "agent"
+        }
+      ],
+      "claim": "Use a sham or inert intervention to estimate expectation, style, or measurement artifacts.",
+      "failure_conditions": [
+        "placebo is distinguishable or has real effect"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "plac_active",
+          "description": "placebo changes answer length and affects judge preference",
+          "domain": "evaluation"
+        }
+      ],
+      "node_id": "prior_placebo_control",
+      "principle_id": "placebo_control",
+      "related_principles": [
+        "negative_control",
+        "control_variables"
+      ],
+      "scope_conditions": [
+        "treatment effect",
+        "style artifact",
+        "human or judge bias"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "placebo",
+        "sham",
+        "inert",
+        "artifact",
+        "bias"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "xfer_resnet",
+          "description": "use residual identity idea in different architectures",
+          "domain": "ml"
+        },
+        {
+          "case_id": "xfer_qa",
+          "description": "lift context edges into assumption edges when roles align",
+          "domain": "retrieval"
+        }
+      ],
+      "claim": "Transfer a method across domains only after matching structure, invariants, and failure boundaries.",
+      "failure_conditions": [
+        "surface similarity lacks structural match"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "xfer_surface",
+          "description": "same terminology but different causal roles",
+          "domain": "analogy"
+        }
+      ],
+      "node_id": "prior_cross_domain_transfer",
+      "principle_id": "cross_domain_transfer",
+      "related_principles": [
+        "analogical_reasoning",
+        "invariant_search"
+      ],
+      "scope_conditions": [
+        "source domain",
+        "target domain",
+        "shared structure"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "transfer",
+        "domain",
+        "structure",
+        "invariant",
+        "source",
+        "target"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    },
+    {
+      "canonical_examples": [
+        {
+          "case_id": "scope_law",
+          "description": "limit a rule to the jurisdiction where it applies",
+          "domain": "law"
+        },
+        {
+          "case_id": "scope_agent",
+          "description": "restrict a policy to trigger rows after control loss",
+          "domain": "agent"
+        }
+      ],
+      "claim": "When a broad claim fails, narrow its scope to the conditions where it remains true and useful.",
+      "failure_conditions": [
+        "narrowing makes the claim trivial or unusable"
+      ],
+      "formal_sketch": {
+        "invariants": [
+          "old_success_preserved",
+          "failure_boundary_recorded"
+        ],
+        "morphisms": [
+          "select_scope",
+          "apply_principle",
+          "verify_boundary"
+        ],
+        "objects": [
+          "task_state",
+          "intervention",
+          "outcome"
+        ]
+      },
+      "negative_examples": [
+        {
+          "case_id": "scope_trivial",
+          "description": "claim becomes so narrow it never activates",
+          "domain": "method"
+        }
+      ],
+      "node_id": "prior_scope_narrowing",
+      "principle_id": "scope_narrowing",
+      "related_principles": [
+        "general_to_special",
+        "boundary_condition_analysis"
+      ],
+      "scope_conditions": [
+        "overbroad assumption",
+        "boundary failure",
+        "repair"
+      ],
+      "status": "active_prior",
+      "tags": [
+        "scope",
+        "narrow",
+        "boundary",
+        "repair",
+        "overbroad"
+      ],
+      "verifier_protocol": {
+        "boundary_check": "test at least one negative or limiting case",
+        "new_prediction": "run one unseen task matching the principle scope",
+        "old_success_preservation": "replay prior success cases before promotion"
+      }
+    }
+  ],
+  "release_step": "R2_philosophy_methodology_prior_library",
+  "retrieval_benchmark": {
+    "query_count": 10,
+    "rows": [
+      {
+        "gold_principle_ids": [
+          "control_variables",
+          "causal_intervention"
+        ],
+        "query": "causal attribution is uncertain, change one variable or factor while holding others fixed",
+        "query_id": "q_causal_one_factor",
+        "retrieved": [
+          {
+            "claim": "When causal attribution is uncertain, vary one factor while holding other factors fixed.",
+            "node_id": "prior_control_variables",
+            "principle_id": "control_variables",
+            "score": 0.86853
+          },
+          {
+            "claim": "Actively intervene on a suspected cause to distinguish causation from correlation.",
+            "node_id": "prior_causal_intervention",
+            "principle_id": "causal_intervention",
+            "score": 0.310783
+          },
+          {
+            "claim": "Decompose aggregate error into attributable components before choosing a repair.",
+            "node_id": "prior_error_decomposition",
+            "principle_id": "error_decomposition",
+            "score": 0.081517
+          }
+        ],
+        "top1": "control_variables",
+        "top1_hit": true,
+        "top3": [
+          "control_variables",
+          "causal_intervention",
+          "error_decomposition"
+        ],
+        "top3_hit": true
+      },
+      {
+        "gold_principle_ids": [
+          "divide_and_conquer",
+          "error_decomposition"
+        ],
+        "query": "split a complex task into independent subproblems with explicit interface contracts and compose results",
+        "query_id": "q_decompose_interfaces",
+        "retrieved": [
+          {
+            "claim": "Split a complex task into separable subproblems with explicit interfaces, then compose the results.",
+            "node_id": "prior_divide_and_conquer",
+            "principle_id": "divide_and_conquer",
+            "score": 1.0
+          },
+          {
+            "claim": "Decompose aggregate error into attributable components before choosing a repair.",
+            "node_id": "prior_error_decomposition",
+            "principle_id": "error_decomposition",
+            "score": 0.228394
+          },
+          {
+            "claim": "Replace one bounded component behind an interface while preserving rollback to the working baseline.",
+            "node_id": "prior_incremental_replacement",
+            "principle_id": "incremental_replacement",
+            "score": 0.042108
+          }
+        ],
+        "top1": "divide_and_conquer",
+        "top1_hit": true,
+        "top3": [
+          "divide_and_conquer",
+          "error_decomposition",
+          "incremental_replacement"
+        ],
+        "top3_hit": true
+      },
+      {
+        "gold_principle_ids": [
+          "proof_by_contradiction",
+          "falsifiability"
+        ],
+        "query": "assume the negation and derive an impossible contradiction or counterexample",
+        "query_id": "q_contradiction",
+        "retrieved": [
+          {
+            "claim": "To test a claim, assume its negation and derive an impossible or inconsistent consequence.",
+            "node_id": "prior_proof_by_contradiction",
+            "principle_id": "proof_by_contradiction",
+            "score": 1.074092
+          },
+          {
+            "claim": "State what observation would make the claim fail before treating it as useful knowledge.",
+            "node_id": "prior_falsifiability",
+            "principle_id": "falsifiability",
+            "score": 0.12455
+          },
+          {
+            "claim": "Check whether quantities and formulas are meaningful by preserving units, scale, and dimension.",
+            "node_id": "prior_dimensional_analysis",
+            "principle_id": "dimensional_analysis",
+            "score": 0.031782
+          }
+        ],
+        "top1": "proof_by_contradiction",
+        "top1_hit": true,
+        "top3": [
+          "proof_by_contradiction",
+          "falsifiability",
+          "dimensional_analysis"
+        ],
+        "top3_hit": true
+      },
+      {
+        "gold_principle_ids": [
+          "occams_razor",
+          "model_comparison"
+        ],
+        "query": "two models fit equally well, choose the simpler parsimonious explanation unless it underfits",
+        "query_id": "q_simple_model",
+        "retrieved": [
+          {
+            "claim": "Prefer the simpler model when competing explanations have similar evidence and predictive power.",
+            "node_id": "prior_occams_razor",
+            "principle_id": "occams_razor",
+            "score": 0.14374
+          },
+          {
+            "claim": "Compare alternative models on matched evidence, heldout performance, and failure boundaries.",
+            "node_id": "prior_model_comparison",
+            "principle_id": "model_comparison",
+            "score": 0.089562
+          },
+          {
+            "claim": "Remove or disable one component to measure whether it is necessary for the observed effect.",
+            "node_id": "prior_ablation",
+            "principle_id": "ablation",
+            "score": 0.0
+          }
+        ],
+        "top1": "occams_razor",
+        "top1_hit": true,
+        "top3": [
+          "occams_razor",
+          "model_comparison",
+          "ablation"
+        ],
+        "top3_hit": true
+      },
+      {
+        "gold_principle_ids": [
+          "bayesian_update",
+          "prior_estimate_then_update"
+        ],
+        "query": "start from a prior probability and update belief after new evidence and calibration data",
+        "query_id": "q_update_belief",
+        "retrieved": [
+          {
+            "claim": "Update belief strength as new evidence arrives, weighting prior confidence by observed likelihood.",
+            "node_id": "prior_bayesian_update",
+            "principle_id": "bayesian_update",
+            "score": 1.466908
+          },
+          {
+            "claim": "Start with a calibrated prior estimate, then revise after observing task specific evidence.",
+            "node_id": "prior_prior_estimate_then_update",
+            "principle_id": "prior_estimate_then_update",
+            "score": 1.113827
+          },
+          {
+            "claim": "Actively intervene on a suspected cause to distinguish causation from correlation.",
+            "node_id": "prior_causal_intervention",
+            "principle_id": "causal_intervention",
+            "score": 0.321745
+          }
+        ],
+        "top1": "bayesian_update",
+        "top1_hit": true,
+        "top3": [
+          "bayesian_update",
+          "prior_estimate_then_update",
+          "causal_intervention"
+        ],
+        "top3_hit": true
+      },
+      {
+        "gold_principle_ids": [
+          "negative_control",
+          "placebo_control"
+        ],
+        "query": "use a no-trigger negative control or placebo to detect leakage prompt artifacts and judge bias",
+        "query_id": "q_no_trigger_control",
+        "retrieved": [
+          {
+            "claim": "Use a condition where the effect should not appear to detect leakage, confounding, or prompt artifacts.",
+            "node_id": "prior_negative_control",
+            "principle_id": "negative_control",
+            "score": 1.174058
+          },
+          {
+            "claim": "Use a sham or inert intervention to estimate expectation, style, or measurement artifacts.",
+            "node_id": "prior_placebo_control",
+            "principle_id": "placebo_control",
+            "score": 0.898845
+          },
+          {
+            "claim": "When causal attribution is uncertain, vary one factor while holding other factors fixed.",
+            "node_id": "prior_control_variables",
+            "principle_id": "control_variables",
+            "score": 0.261444
+          }
+        ],
+        "top1": "negative_control",
+        "top1_hit": true,
+        "top3": [
+          "negative_control",
+          "placebo_control",
+          "control_variables"
+        ],
+        "top3_hit": true
+      },
+      {
+        "gold_principle_ids": [
+          "conservation_law",
+          "invariant_search"
+        ],
+        "query": "state transformation must preserve an invariant conserved quantity with mass budget probability balance",
+        "query_id": "q_invariant_balance",
+        "retrieved": [
+          {
+            "claim": "Track conserved quantities through a transformation and reject explanations that leak or create mass, budget, or probability.",
+            "node_id": "prior_conservation_law",
+            "principle_id": "conservation_law",
+            "score": 1.151845
+          },
+          {
+            "claim": "Identify quantities, roles, or relations that should remain unchanged across transformations.",
+            "node_id": "prior_invariant_search",
+            "principle_id": "invariant_search",
+            "score": 0.763604
+          },
+          {
+            "claim": "Generalize from concrete successful cases only after identifying the invariant that explains them.",
+            "node_id": "prior_special_to_general",
+            "principle_id": "special_to_general",
+            "score": 0.464061
+          }
+        ],
+        "top1": "conservation_law",
+        "top1_hit": true,
+        "top3": [
+          "conservation_law",
+          "invariant_search",
+          "special_to_general"
+        ],
+        "top3_hit": true
+      },
+      {
+        "gold_principle_ids": [
+          "boundary_condition_analysis",
+          "limiting_case_analysis"
+        ],
+        "query": "test boundary conditions, extremes, limiting cases, empty input, infinity and transitions",
+        "query_id": "q_edge_extreme",
+        "retrieved": [
+          {
+            "claim": "Test the edges of the scope because assumptions often fail at extremes or transitions.",
+            "node_id": "prior_boundary_condition_analysis",
+            "principle_id": "boundary_condition_analysis",
+            "score": 1.023313
+          },
+          {
+            "claim": "Stress an assumption by extending it to an absurd consequence that exposes its boundary.",
+            "node_id": "prior_reductio_ad_absurdum",
+            "principle_id": "reductio_ad_absurdum",
+            "score": 0.666611
+          },
+          {
+            "claim": "When a broad claim fails, narrow its scope to the conditions where it remains true and useful.",
+            "node_id": "prior_scope_narrowing",
+            "principle_id": "scope_narrowing",
+            "score": 0.59123
+          }
+        ],
+        "top1": "boundary_condition_analysis",
+        "top1_hit": true,
+        "top3": [
+          "boundary_condition_analysis",
+          "reductio_ad_absurdum",
+          "scope_narrowing"
+        ],
+        "top3_hit": true
+      },
+      {
+        "gold_principle_ids": [
+          "incremental_replacement",
+          "minimum_viable_prototype"
+        ],
+        "query": "replace one module behind an adapter boundary while preserving rollback to the working baseline",
+        "query_id": "q_safe_migration",
+        "retrieved": [
+          {
+            "claim": "Replace one bounded component behind an interface while preserving rollback to the working baseline.",
+            "node_id": "prior_incremental_replacement",
+            "principle_id": "incremental_replacement",
+            "score": 1.179527
+          },
+          {
+            "claim": "Test the edges of the scope because assumptions often fail at extremes or transitions.",
+            "node_id": "prior_boundary_condition_analysis",
+            "principle_id": "boundary_condition_analysis",
+            "score": 0.688721
+          },
+          {
+            "claim": "Stress an assumption by extending it to an absurd consequence that exposes its boundary.",
+            "node_id": "prior_reductio_ad_absurdum",
+            "principle_id": "reductio_ad_absurdum",
+            "score": 0.497309
+          }
+        ],
+        "top1": "incremental_replacement",
+        "top1_hit": true,
+        "top3": [
+          "incremental_replacement",
+          "boundary_condition_analysis",
+          "reductio_ad_absurdum"
+        ],
+        "top3_hit": true
+      },
+      {
+        "gold_principle_ids": [
+          "cross_domain_transfer",
+          "analogical_reasoning"
+        ],
+        "query": "transfer a solution from one domain to another by matching roles structure invariants and failure boundaries",
+        "query_id": "q_structural_transfer",
+        "retrieved": [
+          {
+            "claim": "Transfer a method across domains only after matching structure, invariants, and failure boundaries.",
+            "node_id": "prior_cross_domain_transfer",
+            "principle_id": "cross_domain_transfer",
+            "score": 1.171517
+          },
+          {
+            "claim": "Map a new problem to a structurally similar solved problem, then test which relations transfer.",
+            "node_id": "prior_analogical_reasoning",
+            "principle_id": "analogical_reasoning",
+            "score": 0.786504
+          },
+          {
+            "claim": "Identify quantities, roles, or relations that should remain unchanged across transformations.",
+            "node_id": "prior_invariant_search",
+            "principle_id": "invariant_search",
+            "score": 0.612698
+          }
+        ],
+        "top1": "cross_domain_transfer",
+        "top1_hit": true,
+        "top3": [
+          "cross_domain_transfer",
+          "analogical_reasoning",
+          "invariant_search"
+        ],
+        "top3_hit": true
+      }
+    ],
+    "top1_expert_agreement": 1.0,
+    "top3_expert_agreement": 1.0
+  },
+  "roundtrip": {
+    "after_hash": "7df3c59d09df3c6d",
+    "before_hash": "7df3c59d09df3c6d",
+    "edge_count_after": 211,
+    "framework_prior_node_count_after": 30,
+    "node_count_after": 180,
+    "roundtrip_exact": true
+  },
+  "source_md": "reconstruction/md/Hegel_assumption.md",
+  "validation_scope": "Represents 30 human methodology principles as bounded, falsifiable prior assumptions.  Each prior has success cases, failure boundaries, verifier protocols, graph edges, retrieval agreement checks, and conservative-generalization obligations."
+}

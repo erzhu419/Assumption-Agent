@@ -77,6 +77,7 @@ from .runtime_trace import RuntimeTraceRecorder
 from .surface_hypotheses import build_surface_hypothesis_payload
 from .selector import build_acp_learning_payload, build_metaproductivity_benchmark_payload
 from .simulator_no_leakage_audit import build_simulator_no_leakage_audit_payload
+from .philosophy_prior_library import build_philosophy_prior_library_payload
 from .philosophy_growth_benchmark import build_philosophy_growth_benchmark_payload
 from .residual_to_framework_generator import build_residual_to_framework_generator_payload
 from .self_evo_roadmap_coverage_audit import build_self_evo_roadmap_coverage_audit_payload
@@ -223,6 +224,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["framework_object_model"] = _validate_framework_object_model(root=root)
     timings["framework_object_model_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["philosophy_prior_library"] = _validate_philosophy_prior_library(root=root)
+    timings["philosophy_prior_library_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["residual_to_framework_generator"] = _validate_residual_to_framework_generator(root=root)
     timings["residual_to_framework_generator_sec"] = _elapsed(start)
@@ -1329,6 +1333,35 @@ def _validate_framework_object_model(*, root: Path) -> dict:
         "jsonl_roundtrip_exact": metrics["jsonl_roundtrip_exact"],
         "roundtrip_node_count": metrics["roundtrip_node_count"],
         "roundtrip_edge_count": metrics["roundtrip_edge_count"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_philosophy_prior_library(*, root: Path) -> dict:
+    payload = build_philosophy_prior_library_payload(
+        root=root,
+        eval_id="perf_philosophy_prior_library",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "principle_count": metrics["principle_count"],
+        "framework_prior_node_count": metrics["framework_prior_node_count"],
+        "min_success_case_count": metrics["min_success_case_count"],
+        "min_negative_case_count": metrics["min_negative_case_count"],
+        "scope_condition_coverage": metrics["scope_condition_coverage"],
+        "failure_condition_coverage": metrics["failure_condition_coverage"],
+        "verifier_protocol_coverage": metrics["verifier_protocol_coverage"],
+        "conservative_gate_ready_coverage": metrics["conservative_gate_ready_coverage"],
+        "retrieval_query_count": metrics["retrieval_query_count"],
+        "top3_expert_agreement": metrics["top3_expert_agreement"],
+        "top1_expert_agreement": metrics["top1_expert_agreement"],
+        "required_prior_edge_coverage": metrics["required_prior_edge_coverage"],
+        "roundtrip_exact": metrics["roundtrip_exact"],
+        "roundtrip_node_count": metrics["roundtrip_node_count"],
+        "roundtrip_edge_count": metrics["roundtrip_edge_count"],
+        "core_prior_auto_promotion_count": metrics["core_prior_auto_promotion_count"],
         "main_graph_mutation_count": metrics["main_graph_mutation_count"],
         "failed_gates": payload["failed_gates"],
     }
@@ -2747,6 +2780,13 @@ def _key_metric(name: str, section: dict) -> str:
             f"support={section['support_node_count']}, "
             f"relations={section['required_relation_coverage']}, "
             f"roundtrip={section['jsonl_roundtrip_exact']}"
+        )
+    if name == "philosophy_prior_library":
+        return (
+            f"principles={section['principle_count']}, "
+            f"ready={section['conservative_gate_ready_coverage']}, "
+            f"top3={section['top3_expert_agreement']}, "
+            f"roundtrip={section['roundtrip_exact']}"
         )
     if name == "residual_to_framework_generator":
         return (
