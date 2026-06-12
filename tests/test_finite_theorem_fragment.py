@@ -29,6 +29,10 @@ class FiniteTheoremFragmentTest(unittest.TestCase):
         self.assertTrue(metrics["monoidal_pass"])
         self.assertTrue(metrics["blackwell_exact_witness_pass"])
         self.assertTrue(metrics["fisher_geometry_metric_laws_pass"])
+        self.assertTrue(metrics["external_lean_check_passed"])
+        self.assertGreaterEqual(metrics["external_lean_theorem_count"], 20)
+        self.assertTrue(metrics["lean_verified_finite_theorem_fragment_claim_allowed"])
+        self.assertTrue(metrics["external_proof_assistant_integrated"])
         self.assertFalse(metrics["full_theorem_prover_claim_allowed"])
 
     def test_blackwell_exact_witness_accepts_degradation_and_rejects_inverse_claim(self):

@@ -36,6 +36,7 @@ Current target is L2 -> L3, not L4.
 | C2 | `assumption_os/finite_category_lean_export.py` | implemented | `tests/test_finite_category_lean_export.py`, `finite_category_lean_export_20260612.json` |
 | C3-C8 | `assumption_os/finite_formal_reasoning_stack.py` | implemented | `tests/test_finite_formal_reasoning_stack.py`, `finite_formal_reasoning_stack_20260612.json` |
 | C9 | `assumption_os/finite_theorem_fragment.py` | implemented | `tests/test_finite_theorem_fragment.py`, `finite_theorem_fragment_20260612.json` |
+| C10 | `assumption_os/finite_theorem_lean_verifier.py` | implemented | `tests/test_finite_theorem_lean_verifier.py`, `finite_theorem_lean_verifier_20260612.json`, `finite_theorem_fragment_20260612.lean` |
 | I1 | `assumption_os/integrated_recursive_episode.py` | implemented | `tests/test_integrated_recursive_episode.py`, `integrated_recursive_episode_20260612.json` |
 | I2 | `assumption_os/integrated_recursive_episode_b3_c2.py` | implemented | `tests/test_integrated_recursive_episode_b3_c2.py`, `integrated_recursive_episode_b3_c2_20260612.json` |
 
@@ -747,3 +748,65 @@ Claim boundary:
 
 - Allowed: finite theorem fragment over explicit finite categories, selected finite categorical constructions, finite stochastic kernels, and bounded NL diagram certificates.
 - Still blocked: full theorem prover, arbitrary infinite categories, higher-category coherence, dependent-type proof development, unbounded Markov categories, and arbitrary natural-language semantic equivalence.
+
+## C10 External Lean Verifier Snapshot
+
+This is the follow-up to C9.  C9 implemented the finite theorem fragment in
+Python; C10 exports a self-contained Lean 4 verifier and runs the local Lean
+binary.  This upgrades the formal claim from "Python checked finite fragment"
+to "Lean-verified finite fragment" for the bounded constructions.
+
+Artifact:
+
+`phase four/assumption_graph/paper_readiness_20260604/finite_theorem_lean_verifier_20260612.json`
+
+Lean file:
+
+`phase four/assumption_graph/paper_readiness_20260604/finite_theorem_fragment_20260612.lean`
+
+The Lean file is mathlib-free and verifies finite examples with theorem
+statements using `native_decide`.  It covers:
+
+- finite source/target categories
+- identity laws
+- total composition for composable pairs
+- associativity
+- functor typing
+- functor identity preservation
+- functor composition preservation
+- naturality squares
+- finite terminal/initial/product/coproduct/pullback/pushout checks
+- finite adjunction as a Galois connection
+- strict one-object monoidal category laws
+- finite Markov-kernel row-stochastic and composition arithmetic
+- exact small Blackwell witnesses and inverse negative control
+- finite Fisher-style metric table laws
+- bounded NL-diagram certificate counts and abstention flag
+
+Metrics:
+
+- `lean_theorem_count=36`
+- `lean_definition_count=74`
+- `lean_inductive_count=9`
+- `construct_family_count=9`
+- `external_lean_available=true`
+- `external_lean_attempted=true`
+- `external_lean_check_passed=true`
+- `no_sorry_or_admit=true`
+- `mathlib_free=true`
+- `finite_theorem_fragment_lean_verified=true`
+- `full_theorem_prover_claim_allowed=false`
+
+C9/C3-C8 aggregate metrics after integration:
+
+- `external_proof_assistant_integrated=true`
+- `external_lean_check_passed=true`
+- `external_lean_theorem_count=36`
+- `lean_verified_finite_theorem_fragment_claim_allowed=true`
+- `finite_theorem_fragment_external_lean_passed=true`
+- `finite_theorem_fragment_external_lean_theorem_count=36`
+
+Claim boundary:
+
+- Allowed: Lean-verified finite theorem fragment for bounded formal mappings.
+- Still blocked: full category-theory theorem prover.  Lean now verifies the finite fragment, but the system still does not include an arbitrary theorem library for infinite categories, higher categories, dependent types, arbitrary semantic equivalence, or unbounded Markov categories.

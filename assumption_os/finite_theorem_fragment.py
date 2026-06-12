@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from .autonomy_journal import PAPER_DIR, stable_hash
+from .finite_theorem_lean_verifier import build_finite_theorem_lean_verifier_payload
 
 
 DEFAULT_OUT = PAPER_DIR / "finite_theorem_fragment_20260612.json"
@@ -304,6 +305,11 @@ def build_finite_theorem_fragment_payload(
     markov = _finite_markov_blackwell_suite()
     geometry = _finite_information_geometry_suite()
     nl = _natural_language_diagram_suite()
+    lean_verifier = build_finite_theorem_lean_verifier_payload(
+        root=root,
+        eval_id=f"{eval_id}_lean_verifier",
+        run_lean_if_available=True,
+    )
 
     metrics = {
         "source_category_valid": source_validation["valid"],
@@ -326,6 +332,8 @@ def build_finite_theorem_fragment_payload(
         "nl_diagram_extraction_count": nl["extracted_count"],
         "nl_diagram_certificate_pass_rate": nl["certificate_pass_rate"],
         "nl_negative_control_abstained": nl["negative_control_abstained"],
+        "external_lean_check_passed": lean_verifier["metrics"]["external_lean_check_passed"],
+        "external_lean_theorem_count": lean_verifier["metrics"]["lean_theorem_count"],
     }
     fragment_allowed = all(
         [
@@ -347,12 +355,16 @@ def build_finite_theorem_fragment_payload(
             metrics["fisher_geometry_metric_laws_pass"],
             metrics["nl_diagram_certificate_pass_rate"] == 1.0,
             metrics["nl_negative_control_abstained"],
+            metrics["external_lean_check_passed"],
         ]
     )
     metrics.update(
         {
             "finite_theorem_fragment_claim_allowed": fragment_allowed,
-            "external_proof_assistant_integrated": False,
+            "lean_verified_finite_theorem_fragment_claim_allowed": (
+                fragment_allowed and lean_verifier["metrics"]["finite_theorem_fragment_lean_verified"]
+            ),
+            "external_proof_assistant_integrated": lean_verifier["pass"],
             "full_theorem_prover_claim_allowed": False,
         }
     )
@@ -372,10 +384,11 @@ def build_finite_theorem_fragment_payload(
         "natural_language_diagram_certificates_checked": (
             metrics["nl_diagram_certificate_pass_rate"] == 1.0 and metrics["nl_negative_control_abstained"]
         ),
+        "external_lean_verifier_passes": metrics["external_lean_check_passed"] is True
+        and metrics["external_lean_theorem_count"] >= 20,
         "finite_fragment_claim_allowed": metrics["finite_theorem_fragment_claim_allowed"],
-        "full_theorem_prover_claim_blocked_without_external_assistant": (
+        "full_theorem_prover_claim_blocked_for_unbounded_scope": (
             metrics["full_theorem_prover_claim_allowed"] is False
-            and metrics["external_proof_assistant_integrated"] is False
         ),
     }
     payload = {
@@ -415,15 +428,18 @@ def build_finite_theorem_fragment_payload(
         "finite_markov_blackwell": markov,
         "information_geometry_fragment": geometry,
         "natural_language_diagram_extraction": nl,
+        "external_lean_verifier": lean_verifier,
         "claim_gate": {
             "finite_theorem_fragment_claim_allowed": metrics["finite_theorem_fragment_claim_allowed"],
+            "lean_verified_finite_theorem_fragment_claim_allowed": metrics[
+                "lean_verified_finite_theorem_fragment_claim_allowed"
+            ],
             "allowed_claim": (
-                "finite theorem fragment over explicit finite categories, selected finite categorical "
-                "constructions, finite stochastic kernels, and bounded NL diagram certificates"
+                "Lean-verified finite theorem fragment over explicit finite categories, selected finite "
+                "categorical constructions, finite stochastic kernels, and bounded NL diagram certificates"
             ),
             "full_theorem_prover_claim_allowed": metrics["full_theorem_prover_claim_allowed"],
             "full_theorem_prover_blockers": [
-                "no external Lean/Coq/Agda/Isabelle proof assistant check for the extended fragment",
                 "no arbitrary infinite-category or higher-category support",
                 "no dependent-type theorem development",
                 "no complete semantic equivalence proof for arbitrary natural language",

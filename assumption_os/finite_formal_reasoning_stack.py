@@ -123,6 +123,13 @@ def build_finite_formal_reasoning_stack_payload(
         "finite_theorem_fragment_claim_allowed": theorem_fragment["metrics"][
             "finite_theorem_fragment_claim_allowed"
         ],
+        "lean_verified_finite_theorem_fragment_claim_allowed": theorem_fragment["metrics"][
+            "lean_verified_finite_theorem_fragment_claim_allowed"
+        ],
+        "finite_theorem_fragment_external_lean_passed": theorem_fragment["metrics"]["external_lean_check_passed"],
+        "finite_theorem_fragment_external_lean_theorem_count": theorem_fragment["metrics"][
+            "external_lean_theorem_count"
+        ],
         "finite_theorem_fragment_category_laws_pass": theorem_fragment["metrics"]["identity_law_pass"]
         and theorem_fragment["metrics"]["associativity_pass"],
         "finite_theorem_fragment_functor_laws_pass": theorem_fragment["metrics"]["functor_identity_pass"]
@@ -151,6 +158,11 @@ def build_finite_formal_reasoning_stack_payload(
         "negative_controls_rejected": metrics["formal_transfer_negative_control_rejection_rate"] == 1.0,
         "overreach_residuals_recorded": metrics["formal_transfer_overreach_residual_count"] >= 1,
         "finite_theorem_fragment_passes": metrics["finite_theorem_fragment_pass"] is True,
+        "finite_theorem_fragment_lean_verified": (
+            metrics["lean_verified_finite_theorem_fragment_claim_allowed"] is True
+            and metrics["finite_theorem_fragment_external_lean_passed"] is True
+            and metrics["finite_theorem_fragment_external_lean_theorem_count"] >= 20
+        ),
         "finite_category_theorem_laws_checked": (
             metrics["finite_theorem_fragment_category_laws_pass"] is True
             and metrics["finite_theorem_fragment_functor_laws_pass"] is True

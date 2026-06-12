@@ -17,6 +17,9 @@ class FiniteFormalReasoningStackTest(unittest.TestCase):
         self.assertTrue(metrics["dsl_valid"])
         self.assertTrue(metrics["kernel_composition_pass"])
         self.assertTrue(metrics["kernel_negative_control_rejected"])
+        self.assertTrue(metrics["finite_theorem_fragment_external_lean_passed"])
+        self.assertGreaterEqual(metrics["finite_theorem_fragment_external_lean_theorem_count"], 20)
+        self.assertTrue(metrics["lean_verified_finite_theorem_fragment_claim_allowed"])
         self.assertTrue(metrics["bounded_formal_stack_claim_allowed"])
         self.assertFalse(metrics["full_theorem_prover_claim_allowed"])
 
