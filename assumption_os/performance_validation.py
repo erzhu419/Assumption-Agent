@@ -40,6 +40,7 @@ from typing import Any
 from .assumption_bench import build_assumption_bench_payload
 from .candidate_eval import CandidateReadiness, build_candidate_eval_payload
 from .conservative_generalization_gate import build_conservative_generalization_gate_payload
+from .framework_object_model import build_framework_object_model_payload
 from .falsification import build_falsification_payload
 from .evolution_context import build_evolution_context_payload
 from .formal_mapping import (
@@ -219,6 +220,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["conservative_generalization_gate"] = _validate_conservative_generalization_gate(root=root)
     timings["conservative_generalization_gate_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["framework_object_model"] = _validate_framework_object_model(root=root)
+    timings["framework_object_model_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["residual_to_framework_generator"] = _validate_residual_to_framework_generator(root=root)
     timings["residual_to_framework_generator_sec"] = _elapsed(start)
@@ -1298,6 +1302,34 @@ def _validate_conservative_generalization_gate(*, root: Path) -> dict:
         "unbounded_philosophy_generator_claim_allowed": metrics[
             "unbounded_philosophy_generator_claim_allowed"
         ],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_framework_object_model(*, root: Path) -> dict:
+    payload = build_framework_object_model_payload(
+        root=root,
+        eval_id="perf_framework_object_model",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "framework_node_count": metrics["framework_node_count"],
+        "framework_branch_count": metrics["framework_branch_count"],
+        "certificate_count": metrics["certificate_count"],
+        "support_node_count": metrics["support_node_count"],
+        "promoted_framework_count": metrics["promoted_framework_count"],
+        "promoted_certificate_coverage": metrics["promoted_certificate_coverage"],
+        "uncertified_active_framework_allowed_count": metrics[
+            "uncertified_active_framework_allowed_count"
+        ],
+        "required_relation_coverage": metrics["required_relation_coverage"],
+        "demotes_to_branch_edge_count": metrics["demotes_to_branch_edge_count"],
+        "replaces_boundary_of_edge_count": metrics["replaces_boundary_of_edge_count"],
+        "jsonl_roundtrip_exact": metrics["jsonl_roundtrip_exact"],
+        "roundtrip_node_count": metrics["roundtrip_node_count"],
+        "roundtrip_edge_count": metrics["roundtrip_edge_count"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
         "failed_gates": payload["failed_gates"],
     }
 
@@ -2706,6 +2738,15 @@ def _key_metric(name: str, section: dict) -> str:
             f"decisions={section['decision_counts']}, "
             f"growth={section['top_framework_growth_score']}, "
             f"relations={section['active_required_relation_coverage']}"
+        )
+    if name == "framework_object_model":
+        return (
+            f"fw={section['framework_node_count']}, "
+            f"branches={section['framework_branch_count']}, "
+            f"cert={section['certificate_count']}, "
+            f"support={section['support_node_count']}, "
+            f"relations={section['required_relation_coverage']}, "
+            f"roundtrip={section['jsonl_roundtrip_exact']}"
         )
     if name == "residual_to_framework_generator":
         return (

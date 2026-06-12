@@ -42,6 +42,9 @@ class AssumptionType(str, Enum):
     RESIDUAL = "residual"
     CASE = "case"
     VERIFIER = "verifier"
+    FRAMEWORK = "framework"
+    FRAMEWORK_BRANCH = "framework_branch"
+    CERTIFICATE = "certificate"
 
 
 class HypothesisKind(str, Enum):
@@ -86,6 +89,9 @@ class EdgeType(str, Enum):
     HAS_CASE = "has_case"
     HAS_VERIFIER = "has_verifier"
     HAS_RESIDUAL = "has_residual"
+    HAS_CERTIFICATE = "has_certificate"
+    DEMOTES_TO_BRANCH = "demotes_to_branch"
+    REPLACES_BOUNDARY_OF = "replaces_boundary_of"
 
 
 class ResidualType(str, Enum):
