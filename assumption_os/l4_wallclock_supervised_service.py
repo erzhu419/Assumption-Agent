@@ -22,6 +22,7 @@ from .autonomy_supervised_production_run import build_autonomy_supervised_produc
 DEFAULT_OUT = PAPER_DIR / "l4_wallclock_supervised_service_20260613.json"
 DEFAULT_MD_OUT = Path("reconstruction/md/l4_wallclock_supervised_service_20260613.md")
 SOURCE_SUPERVISED_OUT = PAPER_DIR / "autonomy_supervised_production_run_20260612.json"
+DEFAULT_WALLCLOCK_LOG = PAPER_DIR / "l4_wallclock_real_smoke_20260613.json"
 
 SERVICE_LEVELS = [
     {
@@ -96,7 +97,7 @@ def build_l4_wallclock_supervised_service_payload(
         root=root,
         eval_id=f"{eval_id}_l35_supervised_source",
     )
-    observed = _observed_wallclock(root=root, wallclock_log=wallclock_log)
+    observed = _observed_wallclock(root=root, wallclock_log=wallclock_log or DEFAULT_WALLCLOCK_LOG)
     service_contract = _service_contract()
     readiness = _readiness(supervised=supervised, observed=observed, service_contract=service_contract)
     metrics = _metrics(supervised=supervised, observed=observed, readiness=readiness)
@@ -167,7 +168,9 @@ def format_markdown(payload: dict[str, Any]) -> str:
         f"- pass: `{payload['pass']}`",
         f"- service levels: `{m['service_level_count']}`",
         f"- observed wall-clock hours: `{m['observed_wallclock_hours']}`",
+        f"- observed wall-clock seconds: `{m['observed_wallclock_seconds']}`",
         f"- observed uptime: `{m['observed_uptime']}`",
+        f"- real smoke claim allowed: `{m['real_wallclock_smoke_claim_allowed']}`",
         f"- preflight claim allowed: `{m['wallclock_service_preflight_claim_allowed']}`",
         f"- 72h claim allowed: `{m['l4_mini_72h_claim_allowed']}`",
         f"- 7d claim allowed: `{m['l4a_wallclock_completed_claim_allowed']}`",
@@ -237,6 +240,7 @@ def _observed_wallclock(*, root: Path, wallclock_log: Path | None) -> dict[str, 
         return {
             "path": None,
             "exists": False,
+            "observed_wallclock_seconds": 0.0,
             "observed_wallclock_hours": 0.0,
             "observed_uptime": 0.0,
             "cycle_count": 0,
@@ -251,6 +255,7 @@ def _observed_wallclock(*, root: Path, wallclock_log: Path | None) -> dict[str, 
         return {
             "path": str(wallclock_log),
             "exists": False,
+            "observed_wallclock_seconds": 0.0,
             "observed_wallclock_hours": 0.0,
             "observed_uptime": 0.0,
             "cycle_count": 0,
@@ -262,16 +267,31 @@ def _observed_wallclock(*, root: Path, wallclock_log: Path | None) -> dict[str, 
         }
     payload = json.loads(path.read_text(encoding="utf-8"))
     cycles = payload.get("cycles", []) if isinstance(payload, dict) else []
+    payload_metrics = payload.get("metrics", {}) if isinstance(payload, dict) else {}
     return {
         "path": str(wallclock_log),
         "exists": True,
-        "observed_wallclock_hours": float(payload.get("observed_wallclock_hours") or 0.0),
-        "observed_uptime": float(payload.get("observed_uptime") or 0.0),
+        "observed_wallclock_seconds": float(
+            payload.get("observed_wallclock_seconds")
+            or payload_metrics.get("observed_wallclock_seconds")
+            or 0.0
+        ),
+        "observed_wallclock_hours": float(
+            payload.get("observed_wallclock_hours")
+            or payload_metrics.get("observed_wallclock_hours")
+            or 0.0
+        ),
+        "observed_uptime": float(payload.get("observed_uptime") or payload_metrics.get("observed_uptime") or 0.0),
         "cycle_count": len(cycles),
-        "incident_count": int(payload.get("incident_count") or 0),
-        "rollback_success_rate": payload.get("rollback_success_rate"),
-        "manual_review_backlog_max": payload.get("manual_review_backlog_max"),
-        "graph_pollution_alert_count": int(payload.get("graph_pollution_alert_count") or 0),
+        "incident_count": int(payload.get("incident_count") or payload_metrics.get("incident_count") or 0),
+        "rollback_success_rate": payload.get("rollback_success_rate") or payload_metrics.get("rollback_success_rate"),
+        "manual_review_backlog_max": payload.get("manual_review_backlog_max")
+        or payload_metrics.get("manual_review_backlog_max"),
+        "graph_pollution_alert_count": int(
+            payload.get("graph_pollution_alert_count")
+            or payload_metrics.get("graph_pollution_alert_count")
+            or 0
+        ),
         "claim_source": "real_wallclock_log",
     }
 
@@ -294,6 +314,7 @@ def _readiness(*, supervised: dict[str, Any], observed: dict[str, Any], service_
 def _metrics(*, supervised: dict[str, Any], observed: dict[str, Any], readiness: dict[str, Any]) -> dict[str, Any]:
     source = supervised["metrics"]
     observed_hours = round(float(observed["observed_wallclock_hours"]), 4)
+    observed_seconds = round(float(observed.get("observed_wallclock_seconds") or observed_hours * 3600.0), 4)
     observed_uptime = round(float(observed["observed_uptime"]), 4)
     return {
         "service_level_count": len(SERVICE_LEVELS),
@@ -307,12 +328,14 @@ def _metrics(*, supervised: dict[str, Any], observed: dict[str, Any], readiness:
         "source_all_applies_replayable": source["all_applies_replayable"],
         "source_low_risk_auto_apply_precision": source["low_risk_auto_apply_precision"],
         "observed_wallclock_hours": observed_hours,
+        "observed_wallclock_seconds": observed_seconds,
         "observed_uptime": observed_uptime,
         "observed_cycle_count": observed["cycle_count"],
         "observed_incident_count": observed["incident_count"],
         "observed_graph_pollution_alert_count": observed["graph_pollution_alert_count"],
         "ungated_mutation_count": source["ungated_mutation_count"],
         "wallclock_service_preflight_claim_allowed": bool(readiness["source_l35_supervised_pass"]),
+        "real_wallclock_smoke_claim_allowed": observed_seconds > 0 and observed_uptime >= 0.95,
         "l4_mini_72h_claim_allowed": observed_hours >= 72 and observed_uptime >= 0.95,
         "l4a_wallclock_completed_claim_allowed": observed_hours >= 168 and observed_uptime >= 0.95,
         "thirty_day_wallclock_claim_allowed": observed_hours >= 720 and observed_uptime >= 0.95,

@@ -1910,9 +1910,11 @@ def _validate_l4_wallclock_supervised_service(*, root: Path) -> dict:
         "pass": payload["pass"],
         "service_level_count": metrics["service_level_count"],
         "source_cycle_count": metrics["source_cycle_count"],
+        "observed_wallclock_seconds": metrics["observed_wallclock_seconds"],
         "observed_wallclock_hours": metrics["observed_wallclock_hours"],
         "observed_uptime": metrics["observed_uptime"],
         "wallclock_service_preflight_claim_allowed": metrics["wallclock_service_preflight_claim_allowed"],
+        "real_wallclock_smoke_claim_allowed": metrics["real_wallclock_smoke_claim_allowed"],
         "l4_mini_72h_claim_allowed": metrics["l4_mini_72h_claim_allowed"],
         "l4a_wallclock_completed_claim_allowed": metrics["l4a_wallclock_completed_claim_allowed"],
         "thirty_day_wallclock_claim_allowed": metrics["thirty_day_wallclock_claim_allowed"],
@@ -3311,8 +3313,9 @@ def _key_metric(name: str, section: dict) -> str:
         return (
             f"levels={section['service_level_count']}, "
             f"source_cycles={section['source_cycle_count']}, "
-            f"hours={section['observed_wallclock_hours']}, "
+            f"seconds={section['observed_wallclock_seconds']}, "
             f"claim={section['wallclock_service_preflight_claim_allowed']}/"
+            f"{section['real_wallclock_smoke_claim_allowed']}/"
             f"{section['l4a_wallclock_completed_claim_allowed']}"
         )
     if name == "l4_prospective_task_stream":
