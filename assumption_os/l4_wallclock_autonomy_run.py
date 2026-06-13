@@ -35,6 +35,8 @@ def build_l4_wallclock_autonomy_run_payload(
     duration_seconds: float = 12.0,
     cycle_interval_seconds: float = 2.0,
     max_cycles: int | None = 5,
+    seed_count: int | None = None,
+    heartbeat_path: Path | None = None,
     inject_faults: bool = True,
     reset_run_dir: bool = True,
 ) -> dict[str, Any]:
@@ -44,6 +46,8 @@ def build_l4_wallclock_autonomy_run_payload(
         raise ValueError("cycle_interval_seconds must be non-negative")
     if max_cycles is not None and max_cycles <= 0:
         raise ValueError("max_cycles must be positive when supplied")
+    if seed_count is not None and seed_count <= 0:
+        raise ValueError("seed_count must be positive when supplied")
     root = root.resolve()
     run_dir = root / DEFAULT_RUN_DIR / eval_id
     if reset_run_dir and run_dir.exists():
@@ -53,7 +57,11 @@ def build_l4_wallclock_autonomy_run_payload(
     graph_journal = AppendOnlyAutonomyJournal(run_dir / "graph_journal.jsonl")
     queue_journal = AppendOnlyAutonomyJournal(run_dir / "queue_journal.jsonl")
     queue = LeaseBasedAutonomyQueue(run_dir / "queue.json", journal=queue_journal, cycle_id=eval_id)
-    _seed_wallclock_tasks(queue=queue, count=max(24, (max_cycles or 8) * 3))
+    heartbeat_path = heartbeat_path or run_dir / "heartbeat.json"
+    if not heartbeat_path.is_absolute():
+        heartbeat_path = root / heartbeat_path
+    initial_seed_count = seed_count or max(24, min(128, (max_cycles or 8) * 3))
+    next_task_index = _seed_wallclock_tasks(queue=queue, start_index=0, count=initial_seed_count)
 
     wall_start_monotonic = time.monotonic()
     wall_start_time = time.time()
@@ -78,6 +86,12 @@ def build_l4_wallclock_autonomy_run_payload(
         cycle_id = f"{eval_id}_cycle_{cycle_ordinal:04d}"
         cycle_start_monotonic = time.monotonic()
         cycle_start_iso = _iso_now()
+        next_task_index = _ensure_pending_wallclock_tasks(
+            queue=queue,
+            next_task_index=next_task_index,
+            min_pending=min(16, max(4, initial_seed_count // 4)),
+            refill_count=min(16, max(4, initial_seed_count // 8)),
+        )
         queue_before = queue.snapshot()
         checkpoint_before = stable_hash([current_graph, queue_before.checkpoint_hash, cycle_id, "before"])
         incident = None
@@ -173,6 +187,27 @@ def build_l4_wallclock_autonomy_run_payload(
             "elapsed_seconds": cycle_elapsed,
             "queue_status_after": queue_after.status_counts,
         })
+        _write_heartbeat(
+            path=heartbeat_path,
+            payload={
+                "eval_id": eval_id,
+                "status": "running",
+                "run_dir": str(DEFAULT_RUN_DIR / eval_id),
+                "wallclock_start": wall_start_iso,
+                "last_cycle_end": cycle_end_iso,
+                "observed_wallclock_seconds_so_far": round(time.time() - wall_start_time, 4),
+                "cycle_count": len(cycles),
+                "auto_apply_count": auto_apply_count,
+                "manual_review_count": manual_review_count,
+                "blocked_count": blocked_count,
+                "incident_count": len(incidents),
+                "current_graph_hash": current_graph,
+                "queue_checkpoint_hash": queue_after.checkpoint_hash,
+                "queue_status_counts": queue_after.status_counts,
+                "next_task_index": next_task_index,
+                "long_horizon_claims_completed": False,
+            },
+        )
 
         if duration_seconds == 0:
             break
@@ -233,6 +268,32 @@ def build_l4_wallclock_autonomy_run_payload(
             metrics["observed_wallclock_seconds"] >= 72 * 3600
         ),
     }
+    _write_heartbeat(
+        path=heartbeat_path,
+        payload={
+            "eval_id": eval_id,
+            "status": "completed",
+            "run_dir": str(DEFAULT_RUN_DIR / eval_id),
+            "wallclock_start": wall_start_iso,
+            "wallclock_end": wall_end_iso,
+            "observed_wallclock_seconds": metrics["observed_wallclock_seconds"],
+            "cycle_count": metrics["cycle_count"],
+            "auto_apply_count": metrics["auto_apply_count"],
+            "manual_review_count": metrics["manual_review_count"],
+            "blocked_count": metrics["blocked_count"],
+            "incident_count": metrics["incident_count"],
+            "current_graph_hash": current_graph,
+            "queue_checkpoint_hash": queue.snapshot().checkpoint_hash,
+            "queue_status_counts": queue.snapshot().status_counts,
+            "pass": all(gates.values()),
+            "failed_gates": [name for name, passed in gates.items() if not passed],
+            "long_horizon_claims_completed": (
+                metrics["l4_mini_72h_claim_allowed"]
+                or metrics["l4a_7d_claim_allowed"]
+                or metrics["l4a_30d_claim_allowed"]
+            ),
+        },
+    )
     return {
         "eval_id": eval_id,
         "eval_kind": "l4_wallclock_autonomy_run",
@@ -244,6 +305,7 @@ def build_l4_wallclock_autonomy_run_payload(
             "the observed elapsed time reaches those thresholds."
         ),
         "run_dir": str(DEFAULT_RUN_DIR / eval_id),
+        "heartbeat_path": str(heartbeat_path.relative_to(root)) if heartbeat_path.is_relative_to(root) else str(heartbeat_path),
         "wallclock_start": wall_start_iso,
         "wallclock_end": wall_end_iso,
         "cycles": cycles,
@@ -290,10 +352,10 @@ def format_markdown(payload: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _seed_wallclock_tasks(*, queue: LeaseBasedAutonomyQueue, count: int) -> None:
+def _seed_wallclock_tasks(*, queue: LeaseBasedAutonomyQueue, start_index: int, count: int) -> int:
     low = sorted(LOW_RISK_MUTATION_TYPES)
     forbidden = sorted(FORBIDDEN_AUTO_APPLY_TYPES)
-    for index in range(count):
+    for index in range(start_index, start_index + count):
         manual = index % 5 == 4
         mutation_type = forbidden[(index // 5) % len(forbidden)] if manual else low[index % len(low)]
         queue.add_task(
@@ -307,6 +369,32 @@ def _seed_wallclock_tasks(*, queue: LeaseBasedAutonomyQueue, count: int) -> None
             ),
             now=time.time(),
         )
+    return start_index + count
+
+
+def _ensure_pending_wallclock_tasks(
+    *,
+    queue: LeaseBasedAutonomyQueue,
+    next_task_index: int,
+    min_pending: int,
+    refill_count: int,
+) -> int:
+    snapshot = queue.snapshot()
+    pending = int(snapshot.status_counts.get("pending", 0))
+    if pending >= min_pending:
+        return next_task_index
+    return _seed_wallclock_tasks(
+        queue=queue,
+        start_index=next_task_index,
+        count=refill_count,
+    )
+
+
+def _write_heartbeat(*, path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(path)
 
 
 def _incident(
@@ -350,6 +438,8 @@ def main() -> None:
     parser.add_argument("--duration-seconds", type=float, default=12.0)
     parser.add_argument("--cycle-interval-seconds", type=float, default=2.0)
     parser.add_argument("--max-cycles", type=int, default=5)
+    parser.add_argument("--seed-count", type=int, default=None)
+    parser.add_argument("--heartbeat-out", default=None)
     parser.add_argument("--no-fault-injection", action="store_true")
     parser.add_argument("--no-reset-run-dir", action="store_true")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
@@ -362,6 +452,8 @@ def main() -> None:
         duration_seconds=args.duration_seconds,
         cycle_interval_seconds=args.cycle_interval_seconds,
         max_cycles=args.max_cycles,
+        seed_count=args.seed_count,
+        heartbeat_path=Path(args.heartbeat_out) if args.heartbeat_out else None,
         inject_faults=not args.no_fault_injection,
         reset_run_dir=not args.no_reset_run_dir,
     )
