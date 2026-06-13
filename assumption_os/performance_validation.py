@@ -65,6 +65,10 @@ from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .harness_observer import build_harness_observer_payload
 from .last_three_part_coverage_audit import build_last_three_part_coverage_audit_payload
 from .hegel_assumption_coverage_audit import build_hegel_assumption_coverage_audit_payload
+from .l4_prospective_task_stream import build_l4_prospective_task_stream_payload
+from .l4_residual_framework_mini_run import build_l4_residual_framework_mini_run_payload
+from .l4_roadmap_coverage_audit import build_l4_roadmap_coverage_audit_payload
+from .l4_wallclock_supervised_service import build_l4_wallclock_supervised_service_payload
 from .manifest_logger import build_component_manifest_payload, events_from_run_logs
 from .memory_surfaces import build_memory_surface_payload
 from .multigeneration_framework_evolution_benchmark import (
@@ -288,6 +292,18 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["hegel_assumption_coverage_audit"] = _validate_hegel_assumption_coverage(root=root)
     timings["hegel_assumption_coverage_audit_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["l4_wallclock_supervised_service"] = _validate_l4_wallclock_supervised_service(root=root)
+    timings["l4_wallclock_supervised_service_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["l4_prospective_task_stream"] = _validate_l4_prospective_task_stream(root=root)
+    timings["l4_prospective_task_stream_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["l4_residual_framework_mini_run"] = _validate_l4_residual_framework_mini_run(root=root)
+    timings["l4_residual_framework_mini_run_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["l4_roadmap_coverage_audit"] = _validate_l4_roadmap_coverage(root=root)
+    timings["l4_roadmap_coverage_audit_sec"] = _elapsed(start)
     return {
         "eval_id": eval_id,
         "source": {
@@ -1884,6 +1900,96 @@ def _validate_hegel_assumption_coverage(*, root: Path) -> dict:
     }
 
 
+def _validate_l4_wallclock_supervised_service(*, root: Path) -> dict:
+    payload = build_l4_wallclock_supervised_service_payload(
+        root=root,
+        eval_id="perf_l4_wallclock_supervised_service",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "service_level_count": metrics["service_level_count"],
+        "source_cycle_count": metrics["source_cycle_count"],
+        "observed_wallclock_hours": metrics["observed_wallclock_hours"],
+        "observed_uptime": metrics["observed_uptime"],
+        "wallclock_service_preflight_claim_allowed": metrics["wallclock_service_preflight_claim_allowed"],
+        "l4_mini_72h_claim_allowed": metrics["l4_mini_72h_claim_allowed"],
+        "l4a_wallclock_completed_claim_allowed": metrics["l4a_wallclock_completed_claim_allowed"],
+        "thirty_day_wallclock_claim_allowed": metrics["thirty_day_wallclock_claim_allowed"],
+        "ungated_mutation_count": metrics["ungated_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_l4_prospective_task_stream(*, root: Path) -> dict:
+    payload = build_l4_prospective_task_stream_payload(
+        root=root,
+        eval_id="perf_l4_prospective_task_stream",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "total_problem_count": metrics["total_problem_count"],
+        "manifest_task_count": metrics["manifest_task_count"],
+        "manifest_domain_count": metrics["manifest_domain_count"],
+        "baseline_count": metrics["baseline_count"],
+        "raw_prompt_or_answer_exposed": metrics["raw_prompt_or_answer_exposed"],
+        "prospective_manifest_claim_allowed": metrics["prospective_manifest_claim_allowed"],
+        "completed_external_benchmark_claim_allowed": metrics["completed_external_benchmark_claim_allowed"],
+        "manifest_hash": metrics["manifest_hash"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_l4_residual_framework_mini_run(*, root: Path) -> dict:
+    payload = build_l4_residual_framework_mini_run_payload(
+        root=root,
+        eval_id="perf_l4_residual_framework_mini_run",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "real_residual_cluster_count": metrics["real_residual_cluster_count"],
+        "candidate_framework_count": metrics["candidate_framework_count"],
+        "llm_contract_candidate_count": metrics["llm_contract_candidate_count"],
+        "conservative_validation_count": metrics["conservative_validation_count"],
+        "bounded_fresh_validation_row_count": metrics["bounded_fresh_validation_row_count"],
+        "expert_review_packet_row_count": metrics["expert_review_packet_row_count"],
+        "active_scoped_framework_count": metrics["active_scoped_framework_count"],
+        "rejected_boundary_count": metrics["rejected_boundary_count"],
+        "accepted_min_old_success_preservation": metrics["accepted_min_old_success_preservation"],
+        "accepted_min_residual_explanation": metrics["accepted_min_residual_explanation"],
+        "human_expert_panel_claim_allowed": metrics["human_expert_panel_claim_allowed"],
+        "l4_mini_preflight_claim_allowed": metrics["l4_mini_preflight_claim_allowed"],
+        "l4_external_completion_claim_allowed": metrics["l4_external_completion_claim_allowed"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
+def _validate_l4_roadmap_coverage(*, root: Path) -> dict:
+    payload = build_l4_roadmap_coverage_audit_payload(
+        root=root,
+        eval_id="perf_l4_roadmap_coverage_audit",
+    )
+    metrics = payload["metrics"]
+    return {
+        "pass": payload["pass"],
+        "stage_count": metrics["stage_count"],
+        "stage_preflight_pass_count": metrics["stage_preflight_pass_count"],
+        "l4_mini_requirement_preflight_count": metrics["l4_mini_requirement_preflight_count"],
+        "real_residual_candidate_count": metrics["real_residual_candidate_count"],
+        "l4a_preflight_claim_allowed": metrics["l4a_preflight_claim_allowed"],
+        "completed_l4a_claim_allowed": metrics["completed_l4a_claim_allowed"],
+        "l4b_unbounded_claim_allowed": metrics["l4b_unbounded_claim_allowed"],
+        "blocked_claim_boundary_count": metrics["blocked_claim_boundary_count"],
+        "claim_boundary_count": metrics["claim_boundary_count"],
+        "overclaim_leak_count": metrics["overclaim_leak_count"],
+        "main_graph_mutation_count": metrics["main_graph_mutation_count"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
 def _validate_memory_surfaces(*, root: Path, graph_dir: Path, sections: dict[str, dict]) -> dict:
     with tempfile.TemporaryDirectory() as td:
         tmp_graph = Path(td) / "graph"
@@ -3200,6 +3306,41 @@ def _key_metric(name: str, section: dict) -> str:
             f"claims={section['blocked_claim_boundary_count']}/{section['claim_boundary_count']}, "
             f"paper={section['paper_delivery_file_count']}, "
             f"llm_live={section['llm_live_api_executed']}"
+        )
+    if name == "l4_wallclock_supervised_service":
+        return (
+            f"levels={section['service_level_count']}, "
+            f"source_cycles={section['source_cycle_count']}, "
+            f"hours={section['observed_wallclock_hours']}, "
+            f"claim={section['wallclock_service_preflight_claim_allowed']}/"
+            f"{section['l4a_wallclock_completed_claim_allowed']}"
+        )
+    if name == "l4_prospective_task_stream":
+        return (
+            f"tasks={section['manifest_task_count']}/{section['total_problem_count']}, "
+            f"domains={section['manifest_domain_count']}, "
+            f"base={section['baseline_count']}, "
+            f"claim={section['prospective_manifest_claim_allowed']}/"
+            f"{section['completed_external_benchmark_claim_allowed']}"
+        )
+    if name == "l4_residual_framework_mini_run":
+        return (
+            f"clusters={section['real_residual_cluster_count']}, "
+            f"candidates={section['candidate_framework_count']}, "
+            f"valid={section['conservative_validation_count']}, "
+            f"fresh={section['bounded_fresh_validation_row_count']}, "
+            f"expert={section['expert_review_packet_row_count']}, "
+            f"claim={section['l4_mini_preflight_claim_allowed']}/"
+            f"{section['l4_external_completion_claim_allowed']}"
+        )
+    if name == "l4_roadmap_coverage_audit":
+        return (
+            f"stages={section['stage_preflight_pass_count']}/{section['stage_count']}, "
+            f"mini={section['l4_mini_requirement_preflight_count']}, "
+            f"candidates={section['real_residual_candidate_count']}, "
+            f"claims={section['blocked_claim_boundary_count']}/{section['claim_boundary_count']}, "
+            f"L4a={section['l4a_preflight_claim_allowed']}/"
+            f"{section['completed_l4a_claim_allowed']}"
         )
     if name == "memory_surfaces":
         return f"types={section['before_node_type_count']}->{section['after_node_type_count']}, edges={section['before_edge_type_count']}->{section['after_edge_type_count']}"
