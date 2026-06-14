@@ -66,7 +66,7 @@ def build_l4_wallclock_autonomy_run_payload(
     wall_start_monotonic = time.monotonic()
     wall_start_time = time.time()
     wall_start_iso = _iso_now()
-    deadline = wall_start_monotonic + duration_seconds
+    deadline_wall_time = wall_start_time + duration_seconds
     current_graph = graph_hash(f"{eval_id}:candidate_graph_copy:genesis")
     cycles: list[dict[str, Any]] = []
     incidents: list[dict[str, Any]] = []
@@ -75,12 +75,15 @@ def build_l4_wallclock_autonomy_run_payload(
     blocked_count = 0
     forbidden_auto_apply_count = 0
     rollback_success_count = 0
+    stop_reason = "not_started"
 
     while True:
-        now = time.monotonic()
-        if cycles and now >= deadline:
+        now_wall = time.time()
+        if cycles and now_wall >= deadline_wall_time:
+            stop_reason = "duration_reached"
             break
         if max_cycles is not None and len(cycles) >= max_cycles:
+            stop_reason = "max_cycles_reached"
             break
         cycle_ordinal = len(cycles) + 1
         cycle_id = f"{eval_id}_cycle_{cycle_ordinal:04d}"
@@ -205,22 +208,28 @@ def build_l4_wallclock_autonomy_run_payload(
                 "queue_checkpoint_hash": queue_after.checkpoint_hash,
                 "queue_status_counts": queue_after.status_counts,
                 "next_task_index": next_task_index,
+                "remaining_wallclock_seconds": round(max(0.0, deadline_wall_time - time.time()), 4),
                 "long_horizon_claims_completed": False,
             },
         )
 
         if duration_seconds == 0:
+            stop_reason = "zero_duration"
             break
         if max_cycles is not None and len(cycles) >= max_cycles:
+            stop_reason = "max_cycles_reached"
             break
-        remaining = deadline - time.monotonic()
+        remaining = deadline_wall_time - time.time()
         if remaining <= 0:
+            stop_reason = "duration_reached"
             break
         time.sleep(min(cycle_interval_seconds, remaining))
 
     wall_end_time = time.time()
+    wall_end_monotonic = time.monotonic()
     wall_end_iso = _iso_now()
     observed_seconds = max(0.0, wall_end_time - wall_start_time)
+    observed_monotonic_seconds = max(0.0, wall_end_monotonic - wall_start_monotonic)
     replay = graph_journal.replay(initial_graph_hash=graph_hash(f"{eval_id}:candidate_graph_copy:genesis"))
     queue_replay = queue_journal.replay()
     all_cycles_have_required_fields = all(
@@ -235,6 +244,10 @@ def build_l4_wallclock_autonomy_run_payload(
     metrics = {
         "observed_wallclock_seconds": round(observed_seconds, 4),
         "observed_wallclock_hours": round(observed_seconds / 3600.0, 6),
+        "observed_monotonic_seconds": round(observed_monotonic_seconds, 4),
+        "target_wallclock_seconds": round(duration_seconds, 4),
+        "remaining_wallclock_seconds": round(max(0.0, duration_seconds - observed_seconds), 4),
+        "stop_reason": stop_reason,
         "observed_uptime": 1.0,
         "cycle_count": len(cycles),
         "auto_apply_count": auto_apply_count,
@@ -277,6 +290,10 @@ def build_l4_wallclock_autonomy_run_payload(
             "wallclock_start": wall_start_iso,
             "wallclock_end": wall_end_iso,
             "observed_wallclock_seconds": metrics["observed_wallclock_seconds"],
+            "observed_monotonic_seconds": metrics["observed_monotonic_seconds"],
+            "target_wallclock_seconds": metrics["target_wallclock_seconds"],
+            "remaining_wallclock_seconds": metrics["remaining_wallclock_seconds"],
+            "stop_reason": stop_reason,
             "cycle_count": metrics["cycle_count"],
             "auto_apply_count": metrics["auto_apply_count"],
             "manual_review_count": metrics["manual_review_count"],
@@ -338,6 +355,9 @@ def format_markdown(payload: dict[str, Any]) -> str:
         f"- pass: `{payload['pass']}`",
         f"- observed seconds: `{m['observed_wallclock_seconds']}`",
         f"- observed hours: `{m['observed_wallclock_hours']}`",
+        f"- target seconds: `{m['target_wallclock_seconds']}`",
+        f"- remaining seconds: `{m['remaining_wallclock_seconds']}`",
+        f"- stop reason: `{m['stop_reason']}`",
         f"- cycles: `{m['cycle_count']}`",
         f"- auto applies: `{m['auto_apply_count']}`",
         f"- manual reviews: `{m['manual_review_count']}`",
