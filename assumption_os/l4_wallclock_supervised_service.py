@@ -23,6 +23,7 @@ DEFAULT_OUT = PAPER_DIR / "l4_wallclock_supervised_service_20260613.json"
 DEFAULT_MD_OUT = Path("reconstruction/md/l4_wallclock_supervised_service_20260613.md")
 SOURCE_SUPERVISED_OUT = PAPER_DIR / "autonomy_supervised_production_run_20260612.json"
 DEFAULT_WALLCLOCK_LOG = PAPER_DIR / "l4_wallclock_real_smoke_20260613.json"
+DEFAULT_CUMULATIVE_WALLCLOCK_LOG = PAPER_DIR / "l4_wallclock_cumulative_24h_20260614.json"
 
 SERVICE_LEVELS = [
     {
@@ -97,7 +98,7 @@ def build_l4_wallclock_supervised_service_payload(
         root=root,
         eval_id=f"{eval_id}_l35_supervised_source",
     )
-    observed = _observed_wallclock(root=root, wallclock_log=wallclock_log or DEFAULT_WALLCLOCK_LOG)
+    observed = _observed_wallclock(root=root, wallclock_log=wallclock_log or _default_wallclock_log(root))
     service_contract = _service_contract()
     readiness = _readiness(supervised=supervised, observed=observed, service_contract=service_contract)
     metrics = _metrics(supervised=supervised, observed=observed, readiness=readiness)
@@ -112,6 +113,12 @@ def build_l4_wallclock_supervised_service_payload(
         "journal_replay_ready": metrics["source_all_applies_replayable"] is True,
         "ungated_mutation_zero": metrics["ungated_mutation_count"] == 0,
         "preflight_claim_allowed": metrics["wallclock_service_preflight_claim_allowed"] is True,
+        "twenty_four_hour_cumulative_claim_not_fabricated": metrics[
+            "twenty_four_hour_cumulative_claim_allowed"
+        ] is (
+            metrics["observed_wallclock_hours"] >= 24
+            and metrics["observed_uptime"] >= 0.95
+        ),
         "completed_claim_not_fabricated": metrics["l4a_wallclock_completed_claim_allowed"] is (
             metrics["observed_wallclock_hours"] >= 168
             and metrics["observed_uptime"] >= 0.95
@@ -150,6 +157,7 @@ def build_l4_wallclock_supervised_service_payload(
         "blocked_claims": [
             claim
             for claim, allowed in {
+                "continuous_24h_wallclock_service_completed": metrics["twenty_four_hour_continuous_claim_allowed"],
                 "72h_wallclock_service_completed": metrics["l4_mini_72h_claim_allowed"],
                 "7d_wallclock_service_completed": metrics["l4a_wallclock_completed_claim_allowed"],
                 "30d_wallclock_service_completed": metrics["thirty_day_wallclock_claim_allowed"],
@@ -171,6 +179,8 @@ def format_markdown(payload: dict[str, Any]) -> str:
         f"- observed wall-clock seconds: `{m['observed_wallclock_seconds']}`",
         f"- observed uptime: `{m['observed_uptime']}`",
         f"- real smoke claim allowed: `{m['real_wallclock_smoke_claim_allowed']}`",
+        f"- cumulative 24h claim allowed: `{m['twenty_four_hour_cumulative_claim_allowed']}`",
+        f"- continuous 24h claim allowed: `{m['twenty_four_hour_continuous_claim_allowed']}`",
         f"- preflight claim allowed: `{m['wallclock_service_preflight_claim_allowed']}`",
         f"- 72h claim allowed: `{m['l4_mini_72h_claim_allowed']}`",
         f"- 7d claim allowed: `{m['l4a_wallclock_completed_claim_allowed']}`",
@@ -235,6 +245,11 @@ def _load_or_build_supervised(*, root: Path, eval_id: str) -> dict[str, Any]:
     return build_autonomy_supervised_production_run_payload(root=root, eval_id=eval_id)
 
 
+def _default_wallclock_log(root: Path) -> Path:
+    cumulative = root / DEFAULT_CUMULATIVE_WALLCLOCK_LOG
+    return DEFAULT_CUMULATIVE_WALLCLOCK_LOG if cumulative.exists() else DEFAULT_WALLCLOCK_LOG
+
+
 def _observed_wallclock(*, root: Path, wallclock_log: Path | None) -> dict[str, Any]:
     if wallclock_log is None:
         return {
@@ -248,6 +263,8 @@ def _observed_wallclock(*, root: Path, wallclock_log: Path | None) -> dict[str, 
             "rollback_success_rate": None,
             "manual_review_backlog_max": None,
             "graph_pollution_alert_count": 0,
+            "cumulative_24h_claim_allowed": False,
+            "continuous_24h_claim_allowed": False,
             "claim_source": "no_real_wallclock_log_supplied",
         }
     path = wallclock_log if wallclock_log.is_absolute() else root / wallclock_log
@@ -263,6 +280,8 @@ def _observed_wallclock(*, root: Path, wallclock_log: Path | None) -> dict[str, 
             "rollback_success_rate": None,
             "manual_review_backlog_max": None,
             "graph_pollution_alert_count": 0,
+            "cumulative_24h_claim_allowed": False,
+            "continuous_24h_claim_allowed": False,
             "claim_source": "wallclock_log_path_missing",
         }
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -282,7 +301,7 @@ def _observed_wallclock(*, root: Path, wallclock_log: Path | None) -> dict[str, 
             or 0.0
         ),
         "observed_uptime": float(payload.get("observed_uptime") or payload_metrics.get("observed_uptime") or 0.0),
-        "cycle_count": len(cycles),
+        "cycle_count": int(payload.get("cycle_count") or payload_metrics.get("cycle_count") or len(cycles)),
         "incident_count": int(payload.get("incident_count") or payload_metrics.get("incident_count") or 0),
         "rollback_success_rate": payload.get("rollback_success_rate") or payload_metrics.get("rollback_success_rate"),
         "manual_review_backlog_max": payload.get("manual_review_backlog_max")
@@ -292,6 +311,8 @@ def _observed_wallclock(*, root: Path, wallclock_log: Path | None) -> dict[str, 
             or payload_metrics.get("graph_pollution_alert_count")
             or 0
         ),
+        "cumulative_24h_claim_allowed": bool(payload.get("cumulative_24h_claim_allowed")),
+        "continuous_24h_claim_allowed": bool(payload.get("continuous_24h_claim_allowed")),
         "claim_source": "real_wallclock_log",
     }
 
@@ -333,6 +354,9 @@ def _metrics(*, supervised: dict[str, Any], observed: dict[str, Any], readiness:
         "observed_cycle_count": observed["cycle_count"],
         "observed_incident_count": observed["incident_count"],
         "observed_graph_pollution_alert_count": observed["graph_pollution_alert_count"],
+        "twenty_four_hour_cumulative_claim_allowed": bool(observed.get("cumulative_24h_claim_allowed"))
+        or (observed_seconds >= 24 * 3600 and observed_uptime >= 0.95),
+        "twenty_four_hour_continuous_claim_allowed": bool(observed.get("continuous_24h_claim_allowed")),
         "ungated_mutation_count": source["ungated_mutation_count"],
         "wallclock_service_preflight_claim_allowed": bool(readiness["source_l35_supervised_pass"]),
         "real_wallclock_smoke_claim_allowed": observed_seconds > 0 and observed_uptime >= 0.95,

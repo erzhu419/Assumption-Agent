@@ -19,6 +19,11 @@ class L4WallclockSupervisedServiceTest(unittest.TestCase):
         self.assertEqual(metrics["service_level_count"], 4)
         self.assertGreaterEqual(metrics["source_cycle_count"], 720)
         self.assertGreaterEqual(metrics["observed_wallclock_seconds"], 0.0)
+        self.assertEqual(
+            metrics["twenty_four_hour_cumulative_claim_allowed"],
+            metrics["observed_wallclock_seconds"] >= 24 * 3600 and metrics["observed_uptime"] >= 0.95,
+        )
+        self.assertFalse(metrics["twenty_four_hour_continuous_claim_allowed"])
         self.assertFalse(metrics["l4a_wallclock_completed_claim_allowed"])
         self.assertFalse(metrics["thirty_day_wallclock_claim_allowed"])
         self.assertEqual(metrics["ungated_mutation_count"], 0)

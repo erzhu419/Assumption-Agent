@@ -38,7 +38,7 @@ class L4WallclockAutonomyRunTest(unittest.TestCase):
                 root=root,
                 eval_id="unit_l4_wallclock_longmode",
                 duration_seconds=5.0,
-                cycle_interval_seconds=0.0,
+                cycle_interval_seconds=0.001,
                 max_cycles=6,
                 seed_count=3,
                 heartbeat_path=heartbeat,
