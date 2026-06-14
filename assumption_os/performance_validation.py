@@ -65,6 +65,7 @@ from .graph_memory import JsonlGraphStore, SimpleAssumptionGraph
 from .harness_observer import build_harness_observer_payload
 from .last_three_part_coverage_audit import build_last_three_part_coverage_audit_payload
 from .hegel_assumption_coverage_audit import build_hegel_assumption_coverage_audit_payload
+from .historical_morphine_rediscovery import build_historical_morphine_rediscovery_payload
 from .l4_prospective_task_stream import build_l4_prospective_task_stream_payload
 from .l4_residual_framework_mini_run import build_l4_residual_framework_mini_run_payload
 from .l4_roadmap_coverage_audit import build_l4_roadmap_coverage_audit_payload
@@ -292,6 +293,9 @@ def build_performance_validation_payload(
     start = time.perf_counter()
     sections["hegel_assumption_coverage_audit"] = _validate_hegel_assumption_coverage(root=root)
     timings["hegel_assumption_coverage_audit_sec"] = _elapsed(start)
+    start = time.perf_counter()
+    sections["historical_morphine_rediscovery"] = _validate_historical_morphine_rediscovery(root=root)
+    timings["historical_morphine_rediscovery_sec"] = _elapsed(start)
     start = time.perf_counter()
     sections["l4_wallclock_supervised_service"] = _validate_l4_wallclock_supervised_service(root=root)
     timings["l4_wallclock_supervised_service_sec"] = _elapsed(start)
@@ -1900,6 +1904,33 @@ def _validate_hegel_assumption_coverage(*, root: Path) -> dict:
     }
 
 
+def _validate_historical_morphine_rediscovery(*, root: Path) -> dict:
+    payload = build_historical_morphine_rediscovery_payload(
+        root=root,
+        eval_id="perf_historical_morphine_rediscovery",
+    )
+    metrics = payload["metrics"]
+    retained = payload["hypothesis_tree"]["retained"][0]
+    return {
+        "pass": payload["pass"],
+        "retained_hypothesis_id": retained["hypothesis_id"],
+        "hypothesis_count": metrics["hypothesis_count"],
+        "recursive_round_count": metrics["recursive_round_count"],
+        "control_count": metrics["control_count"],
+        "rediscovery_key_score": metrics["rediscovery_key_score"],
+        "agent_score": metrics["agent_score"],
+        "best_baseline_score": metrics["best_baseline_score"],
+        "margin_vs_best_baseline": metrics["margin_vs_best_baseline"],
+        "era_constraint_violation_count": metrics["era_constraint_violation_count"],
+        "modern_knowledge_leak_count": metrics["modern_knowledge_leak_count"],
+        "operational_protocol_leak_count": metrics["operational_protocol_leak_count"],
+        "historical_rediscovery_claim_allowed": metrics["historical_rediscovery_claim_allowed"],
+        "wet_lab_reproduction_claim_allowed": metrics["wet_lab_reproduction_claim_allowed"],
+        "blocked_claims": payload["blocked_claims"],
+        "failed_gates": payload["failed_gates"],
+    }
+
+
 def _validate_l4_wallclock_supervised_service(*, root: Path) -> dict:
     payload = build_l4_wallclock_supervised_service_payload(
         root=root,
@@ -3308,6 +3339,15 @@ def _key_metric(name: str, section: dict) -> str:
             f"claims={section['blocked_claim_boundary_count']}/{section['claim_boundary_count']}, "
             f"paper={section['paper_delivery_file_count']}, "
             f"llm_live={section['llm_live_api_executed']}"
+        )
+    if name == "historical_morphine_rediscovery":
+        return (
+            f"retained={section['retained_hypothesis_id']}, "
+            f"key={section['rediscovery_key_score']}, "
+            f"rounds={section['recursive_round_count']}, "
+            f"margin={section['margin_vs_best_baseline']}, "
+            f"leaks={section['modern_knowledge_leak_count']}/"
+            f"{section['operational_protocol_leak_count']}"
         )
     if name == "l4_wallclock_supervised_service":
         return (
