@@ -303,6 +303,9 @@ def build_performance_validation_payload(
     sections["vanilla_gpt_morphine_rediscovery"] = _validate_vanilla_gpt_morphine_rediscovery(root=root)
     timings["vanilla_gpt_morphine_rediscovery_sec"] = _elapsed(start)
     start = time.perf_counter()
+    sections["live_api_morphine_rediscovery"] = _validate_live_api_morphine_rediscovery(root=root)
+    timings["live_api_morphine_rediscovery_sec"] = _elapsed(start)
+    start = time.perf_counter()
     sections["l4_wallclock_supervised_service"] = _validate_l4_wallclock_supervised_service(root=root)
     timings["l4_wallclock_supervised_service_sec"] = _elapsed(start)
     start = time.perf_counter()
@@ -1965,6 +1968,64 @@ def _validate_vanilla_gpt_morphine_rediscovery(*, root: Path) -> dict:
     }
 
 
+def _validate_live_api_morphine_rediscovery(*, root: Path) -> dict:
+    artifact_dir = root / "phase four/assumption_graph/paper_readiness_20260604"
+    artifact_paths = {
+        "gpt-5.5": artifact_dir / "live_api_morphine_rediscovery_gpt_5_5_20260614.json",
+        "gpt-5.4-mini": artifact_dir / "live_api_morphine_rediscovery_gpt_5_4_mini_20260614.json",
+    }
+    rows: list[dict] = []
+    for expected_model, path in artifact_paths.items():
+        if not path.exists():
+            rows.append({"model": expected_model, "path": str(path), "pass": False, "missing": True})
+            continue
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        metrics = payload["metrics"]
+        retained = (payload.get("live_trace", {}).get("retained") or [{}])[0]
+        row_pass = (
+            payload.get("pass") is True
+            and metrics["parse_success"] is True
+            and metrics["prompt_blind_claim_allowed"] is True
+            and metrics["knowledge_blind_claim_allowed"] is False
+            and metrics["prompt_known_answer_name_count"] == 0
+            and metrics["response_known_answer_name_count"] == 0
+            and metrics["modern_knowledge_leak_count"] == 0
+            and metrics["operational_protocol_leak_count"] == 0
+            and metrics["rediscovery_key_score"] >= 0.95
+        )
+        rows.append({
+            "model": payload.get("model", expected_model),
+            "path": str(path),
+            "pass": row_pass,
+            "missing": False,
+            "retained_hypothesis_id": retained.get("hypothesis_id"),
+            "rediscovery_key_score": metrics["rediscovery_key_score"],
+            "live_api_score": metrics["live_api_score"],
+            "agent_reference_score": metrics["agent_reference_score"],
+            "mechanism_gap_vs_agent": metrics["mechanism_gap_vs_agent"],
+            "hypothesis_count": metrics["hypothesis_count"],
+            "recursive_round_count": metrics["recursive_round_count"],
+            "control_count": metrics["control_count"],
+            "parse_success": metrics["parse_success"],
+            "prompt_blind_claim_allowed": metrics["prompt_blind_claim_allowed"],
+            "knowledge_blind_claim_allowed": metrics["knowledge_blind_claim_allowed"],
+            "response_known_answer_name_count": metrics["response_known_answer_name_count"],
+            "modern_knowledge_leak_count": metrics["modern_knowledge_leak_count"],
+            "operational_protocol_leak_count": metrics["operational_protocol_leak_count"],
+        })
+    best = max((row.get("live_api_score", 0.0) for row in rows), default=0.0)
+    return {
+        "pass": all(row["pass"] for row in rows),
+        "model_count": len(rows),
+        "passed_model_count": sum(1 for row in rows if row["pass"]),
+        "best_live_api_score": best,
+        "rows": rows,
+        "claim_boundary": (
+            "These are prompt-blind live API reconstructions, not knowledge-blind discovery or wet-lab reproduction."
+        ),
+    }
+
+
 def _validate_l4_wallclock_supervised_service(*, root: Path) -> dict:
     payload = build_l4_wallclock_supervised_service_payload(
         root=root,
@@ -3391,6 +3452,13 @@ def _key_metric(name: str, section: dict) -> str:
             f"gap={section['mechanism_gap_vs_agent']}, "
             f"blind={section['blind_claim_allowed']}"
         )
+    if name == "live_api_morphine_rediscovery":
+        rows = section["rows"]
+        scores = ", ".join(
+            f"{row['model']}:key={row.get('rediscovery_key_score')},score={row.get('live_api_score')}"
+            for row in rows
+        )
+        return f"models={section['passed_model_count']}/{section['model_count']}, best={section['best_live_api_score']}, {scores}"
     if name == "l4_wallclock_supervised_service":
         return (
             f"levels={section['service_level_count']}, "
