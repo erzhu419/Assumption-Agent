@@ -4,6 +4,7 @@ from pathlib import Path
 from assumption_os.historical_morphine_rediscovery import (
     KEY_DISCOVERY_OBLIGATIONS,
     build_historical_morphine_rediscovery_payload,
+    build_vanilla_gpt_morphine_rediscovery_payload,
 )
 
 
@@ -43,6 +44,21 @@ class HistoricalMorphineRediscoveryTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["margin_vs_best_baseline"], 0.20)
         self.assertGreaterEqual(metrics["recursive_round_count"], 5)
         self.assertGreaterEqual(metrics["control_count"], 3)
+
+    def test_vanilla_gpt_reconstructs_core_but_not_blind_or_mechanized(self):
+        payload = build_vanilla_gpt_morphine_rediscovery_payload(
+            root=Path("."),
+            eval_id="unit_vanilla_gpt_morphine",
+        )
+        metrics = payload["metrics"]
+
+        self.assertTrue(payload["pass"], payload["failed_gates"])
+        self.assertEqual(payload["vanilla_trace"]["retained"][0]["hypothesis_id"], "v_h_salt_forming_basic_active_principle")
+        self.assertEqual(metrics["rediscovery_key_score"], 1.0)
+        self.assertFalse(metrics["blind_claim_allowed"])
+        self.assertFalse(metrics["wet_lab_reproduction_claim_allowed"])
+        self.assertGreater(metrics["mechanism_gap_vs_agent"], 0)
+        self.assertIn("blind_vanilla_rediscovery", payload["blocked_claims"])
 
 
 if __name__ == "__main__":
