@@ -83,6 +83,7 @@ def build_hle_text_smoke_eval_payload(
         "graph_dir": str(graph_dir),
         "agent_top_k": agent_top_k,
         "agent_context_max_chars": agent_context_max_chars,
+        "underlying_model_calls_executed": 0,
     }
     if execute_live and sample_rows:
         for problem in sample_rows:
@@ -95,7 +96,7 @@ def build_hle_text_smoke_eval_payload(
                         "variant": variant,
                     })
                     agent_plan = None
-                    if variant == "assumption_agent":
+                    if variant.startswith("assumption_agent"):
                         agent_plan = _build_assumption_agent_plan(
                             root=root,
                             graph_dir=graph_dir,
@@ -103,6 +104,7 @@ def build_hle_text_smoke_eval_payload(
                             eval_id=eval_id,
                             call_id=call_id,
                             model=model,
+                            agent_variant=variant,
                             logger=logger,
                             top_k=agent_top_k,
                             context_max_chars=agent_context_max_chars,
@@ -128,12 +130,28 @@ def build_hle_text_smoke_eval_payload(
                     )
                     started = time.monotonic()
                     try:
-                        answer_text = _call_model(
-                            model=model,
-                            prompt=_prompt_for(problem, variant=variant, agent_plan=agent_plan),
-                            timeout=call_timeout,
-                            max_tokens=max_tokens,
-                        )
+                        if variant == "assumption_agent_recursive_verify":
+                            solved = _call_recursive_verified_answer(
+                                problem=problem,
+                                model=model,
+                                agent_plan=agent_plan or {},
+                                eval_id=eval_id,
+                                call_id=call_id,
+                                logger=logger,
+                                timeout=call_timeout,
+                                max_tokens=max_tokens,
+                            )
+                            answer_text = solved["answer_text"]
+                            api_summary["underlying_model_calls_executed"] += solved["underlying_model_calls"]
+                            module_trace = _module_trace(problem, variant=variant, agent_plan=agent_plan)
+                        else:
+                            answer_text = _call_model(
+                                model=model,
+                                prompt=_prompt_for(problem, variant=variant, agent_plan=agent_plan),
+                                timeout=call_timeout,
+                                max_tokens=max_tokens,
+                            )
+                            api_summary["underlying_model_calls_executed"] += 1
                         latency = round(time.monotonic() - started, 4)
                         api_summary["live_model_calls_executed"] += 1
                         row = _score_prediction(
@@ -267,6 +285,7 @@ def format_markdown(payload: dict[str, Any]) -> str:
         f"- sample count: `{metrics['sample_count']}`",
         f"- scanned rows: `{metrics['scanned_row_count']}`",
         f"- live calls returned: `{metrics['live_model_calls_executed']}/{metrics['planned_live_model_calls']}`",
+        f"- underlying model calls executed: `{metrics['underlying_model_calls_executed']}`",
         f"- live attempts resolved: `{metrics['resolved_live_model_calls']}/{metrics['planned_live_model_calls']}`",
         f"- live call errors: `{metrics['live_model_call_error_count']}`",
         f"- overall accuracy: `{metrics['overall_accuracy']}`",
@@ -427,11 +446,13 @@ def _build_assumption_agent_plan(
     logger: "_JsonlLogger | None",
     top_k: int,
     context_max_chars: int,
+    agent_variant: str = "assumption_agent",
 ) -> dict[str, Any]:
     question = problem["_question"]
     goal = f"Solve a text-only HLE item with answer_type={problem['answer_type']} and return exact JSON."
     plan: dict[str, Any] = {
         "agent_kind": "hle_assumption_agent_v1",
+        "agent_variant": agent_variant,
         "call_id": call_id,
         "problem_id_hash": problem["id_hash"],
         "question_hash": problem["question_hash"],
@@ -449,7 +470,16 @@ def _build_assumption_agent_plan(
         "raw_subject": problem["raw_subject"],
         "answer_type": problem["answer_type"],
     }
-    _agent_stage_log(logger, eval_id=eval_id, call_id=call_id, problem=problem, model=model, stage="domain_router", data=plan["stages"]["domain_router"])
+    _agent_stage_log(
+        logger,
+        eval_id=eval_id,
+        call_id=call_id,
+        problem=problem,
+        model=model,
+        variant=agent_variant,
+        stage="domain_router",
+        data=plan["stages"]["domain_router"],
+    )
 
     try:
         store = JsonlGraphStore(graph_dir)
@@ -472,6 +502,7 @@ def _build_assumption_agent_plan(
             call_id=call_id,
             problem=problem,
             model=model,
+            variant=agent_variant,
             stage="assumption_graph_retrieval",
             data=plan["stages"]["assumption_graph_retrieval"],
         )
@@ -505,6 +536,7 @@ def _build_assumption_agent_plan(
             call_id=call_id,
             problem=problem,
             model=model,
+            variant=agent_variant,
             stage="structural_morphism_transfer",
             data=morphism_summary,
         )
@@ -528,6 +560,7 @@ def _build_assumption_agent_plan(
             call_id=call_id,
             problem=problem,
             model=model,
+            variant=agent_variant,
             stage="recursive_assumption_runner",
             data=plan["stages"]["recursive_assumption_runner"],
         )
@@ -591,16 +624,22 @@ def _build_assumption_agent_plan(
             call_id=call_id,
             problem=problem,
             model=model,
+            variant=agent_variant,
             stage="world_model_router",
             data=router_summary,
         )
 
         if context_allowed and retrieval_result is not None:
             context = format_policy_context(retrieval_result, format_assumption_context, max_nodes=top_k)
-            plan["prompt_context"] = _trim_context(context, max_chars=context_max_chars)
+            plan["retrieval_context_candidate"] = _trim_context(context, max_chars=context_max_chars)
+            plan["prompt_context"] = plan["retrieval_context_candidate"]
+        elif retrieval_result is not None:
+            context = format_policy_context(retrieval_result, format_assumption_context, max_nodes=top_k)
+            plan["retrieval_context_candidate"] = _trim_context(context, max_chars=context_max_chars)
         plan["stages"]["prompt_builder"] = {
             "status": "activated",
             "context_injected": bool(plan["prompt_context"]),
+            "retrieval_context_candidate_char_count": len(plan.get("retrieval_context_candidate", "")),
             "context_char_count": len(plan["prompt_context"]),
         }
         _agent_stage_log(
@@ -609,6 +648,7 @@ def _build_assumption_agent_plan(
             call_id=call_id,
             problem=problem,
             model=model,
+            variant=agent_variant,
             stage="prompt_builder",
             data=plan["stages"]["prompt_builder"],
         )
@@ -626,6 +666,7 @@ def _build_assumption_agent_plan(
             call_id=call_id,
             problem=problem,
             model=model,
+            variant=agent_variant,
             stage="agent_planning_error",
             data=plan["stages"]["agent_planning_error"],
         )
@@ -640,7 +681,7 @@ def _prompt_for(problem: dict[str, Any], *, variant: str, agent_plan: dict[str, 
         "For multiple choice, answer with the single letter only. "
         "For exact match, answer with the shortest exact answer."
     )
-    if variant == "assumption_agent":
+    if variant.startswith("assumption_agent"):
         context = (agent_plan or {}).get("prompt_context", "")
         if context:
             return (
@@ -660,6 +701,555 @@ def _prompt_for(problem: dict[str, Any], *, variant: str, agent_plan: dict[str, 
             f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
         )
     return f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
+
+
+def _call_recursive_verified_answer(
+    *,
+    problem: dict[str, Any],
+    model: str,
+    agent_plan: dict[str, Any],
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> dict[str, Any]:
+    """Run multiple child answer attempts and select one without persisting raw HLE text."""
+    specs = _recursive_child_prompt_specs(problem, agent_plan=agent_plan)
+    attempts: list[dict[str, Any]] = []
+    underlying_calls = 0
+    early_stop_reason = None
+    skipped_prompt_kinds: list[str] = []
+    for index, spec in enumerate(specs, start=1):
+        child_id = stable_hash({"call_id": call_id, "child_index": index, "prompt_kind": spec["prompt_kind"]})
+        _log_event(
+            logger,
+            {
+                "event": "recursive_child_start",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "child_id": child_id,
+                "child_index": index,
+                "problem_id_hash": problem["id_hash"],
+                "question_hash": problem["question_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "prompt_kind": spec["prompt_kind"],
+            },
+        )
+        started = time.monotonic()
+        try:
+            text = _call_model(model=model, prompt=spec["prompt"], timeout=timeout, max_tokens=max_tokens)
+            underlying_calls += 1
+            parsed = _parse_answer_json(text) or text.strip()
+            attempt = {
+                "child_id": child_id,
+                "child_index": index,
+                "prompt_kind": spec["prompt_kind"],
+                "parsed_answer": parsed,
+                "parsed_answer_hash": stable_hash({"answer": parsed}),
+                "prediction_hash": stable_hash({"prediction": text}),
+                "latency_sec": round(time.monotonic() - started, 4),
+                "status": "answered",
+            }
+            attempts.append(attempt)
+            _log_event(
+                logger,
+                {
+                    "event": "recursive_child_end",
+                    "eval_id": eval_id,
+                    "call_id": call_id,
+                    "child_id": child_id,
+                    "child_index": index,
+                    "problem_id_hash": problem["id_hash"],
+                    "model": model,
+                    "variant": "assumption_agent_recursive_verify",
+                    "prompt_kind": spec["prompt_kind"],
+                    "latency_sec": attempt["latency_sec"],
+                    "parsed_answer_hash": attempt["parsed_answer_hash"],
+                    "prediction_hash": attempt["prediction_hash"],
+                },
+            )
+        except Exception as exc:
+            attempt = {
+                "child_id": child_id,
+                "child_index": index,
+                "prompt_kind": spec["prompt_kind"],
+                "parsed_answer": "",
+                "parsed_answer_hash": None,
+                "prediction_hash": None,
+                "latency_sec": round(time.monotonic() - started, 4),
+                "status": "error",
+                "error_type": type(exc).__name__,
+            }
+            attempts.append(attempt)
+            _log_event(
+                logger,
+                {
+                    "event": "recursive_child_error",
+                    "eval_id": eval_id,
+                    "call_id": call_id,
+                    "child_id": child_id,
+                    "child_index": index,
+                    "problem_id_hash": problem["id_hash"],
+                    "model": model,
+                    "variant": "assumption_agent_recursive_verify",
+                    "prompt_kind": spec["prompt_kind"],
+                    "latency_sec": attempt["latency_sec"],
+                    "error_type": type(exc).__name__,
+                    "error": str(exc)[:240],
+                },
+            )
+        if _has_two_vote_majority(attempts, answer_type=problem["answer_type"]):
+            early_stop_reason = "two_vote_majority"
+            skipped_prompt_kinds = [row["prompt_kind"] for row in specs[index:]]
+            _log_event(
+                logger,
+                {
+                    "event": "recursive_child_early_stop",
+                    "eval_id": eval_id,
+                    "call_id": call_id,
+                    "problem_id_hash": problem["id_hash"],
+                    "question_hash": problem["question_hash"],
+                    "model": model,
+                    "variant": "assumption_agent_recursive_verify",
+                    "reason": early_stop_reason,
+                    "executed_child_count": len(attempts),
+                    "planned_child_count": len(specs),
+                    "skipped_prompt_kinds": skipped_prompt_kinds,
+                },
+            )
+            break
+
+    selection = _select_recursive_child_answer(
+        problem=problem,
+        attempts=attempts,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=min(max_tokens, 384),
+    )
+    underlying_calls += int(selection.get("underlying_model_calls", 0) or 0)
+    selected_answer = selection.get("selected_answer") or _fallback_answer(attempts)
+    format_repair_summary: dict[str, Any] | None = None
+    if _needs_exact_answer_repair(problem, selected_answer):
+        repair = _repair_exact_answer(
+            problem=problem,
+            selected_answer=selected_answer,
+            agent_plan=agent_plan,
+            model=model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+        underlying_calls += int(repair.get("underlying_model_calls", 0) or 0)
+        selected_answer = repair.get("selected_answer") or selected_answer
+        format_repair_summary = repair.get("stage_summary")
+    selected_hash = stable_hash({"answer": selected_answer})
+    answered_count = sum(1 for attempt in attempts if attempt.get("status") == "answered")
+    child_summary = {
+        "status": "activated",
+        "planned_child_count": len(specs),
+        "child_count": len(attempts),
+        "answered_child_count": answered_count,
+        "error_child_count": len(attempts) - answered_count,
+        "early_stopped": bool(early_stop_reason),
+        "early_stop_reason": early_stop_reason,
+        "skipped_prompt_kinds": skipped_prompt_kinds,
+        "prompt_kinds": [attempt["prompt_kind"] for attempt in attempts],
+        "candidate_answer_hashes": [
+            attempt.get("parsed_answer_hash") for attempt in attempts if attempt.get("parsed_answer_hash")
+        ],
+    }
+    verifier_summary = {
+        "status": "activated",
+        "selection_method": selection.get("selection_method"),
+        "selected_child_id": selection.get("selected_child_id"),
+        "selected_answer_hash": selected_hash,
+        "verifier_model_call": bool(selection.get("verifier_model_call")),
+    }
+    stages = agent_plan.setdefault("stages", {})
+    stages["recursive_child_validation"] = child_summary
+    stages["multi_candidate_self_verifier"] = verifier_summary
+    if format_repair_summary:
+        stages["answer_format_repair"] = format_repair_summary
+    _agent_stage_log(
+        logger,
+        eval_id=eval_id,
+        call_id=call_id,
+        problem=problem,
+        model=model,
+        variant="assumption_agent_recursive_verify",
+        stage="recursive_child_validation",
+        data=child_summary,
+    )
+    _agent_stage_log(
+        logger,
+        eval_id=eval_id,
+        call_id=call_id,
+        problem=problem,
+        model=model,
+        variant="assumption_agent_recursive_verify",
+        stage="multi_candidate_self_verifier",
+        data=verifier_summary,
+    )
+    if format_repair_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="answer_format_repair",
+            data=format_repair_summary,
+        )
+    return {
+        "answer_text": json.dumps({"answer": selected_answer}, ensure_ascii=False),
+        "underlying_model_calls": underlying_calls,
+    }
+
+
+def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[str, Any] | None = None) -> list[dict[str, str]]:
+    question = problem["_question"]
+    answer_type = problem["answer_type"]
+    output = (
+        "Return JSON only: {\"answer\":\"...\"}. For multiple choice, answer with the single letter only. "
+        "For exact match, answer with the shortest exact answer."
+    )
+    specs = [
+        {
+            "prompt_kind": "direct_short_answer",
+            "prompt": f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}",
+        },
+        {
+            "prompt_kind": "constraint_checked_answer",
+            "prompt": (
+                "Solve independently. Before finalizing, internally check whether the answer format, unit, "
+                "name, sign, and multiple-choice letter satisfy the prompt. Return only JSON.\n\n"
+                f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
+            ),
+        },
+        {
+            "prompt_kind": "recursive_assumption_answer",
+            "prompt": (
+                "Use a recursive assumption test internally: propose two candidate assumptions about what the "
+                "question is asking, falsify the weaker one against the wording, then answer from the least "
+                "vulnerable assumption. Return only JSON, with no reasoning.\n\n"
+                f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
+            ),
+        },
+    ]
+    context = (agent_plan or {}).get("prompt_context", "")
+    if context:
+        specs.append({
+            "prompt_kind": "agent_context_answer",
+            "prompt": (
+                "A bounded Assumption Agent retrieved the following graph/morphism context. Use it only if it "
+                "directly constrains the answer; otherwise ignore it. Return only JSON.\n\n"
+                f"{context}\n\nAnswer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
+            ),
+        })
+    return specs
+
+
+def _select_recursive_child_answer(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> dict[str, Any]:
+    valid = [attempt for attempt in attempts if str(attempt.get("parsed_answer") or "").strip()]
+    normalized: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for attempt in valid:
+        normalized[_normalize_for_selection(attempt["parsed_answer"], answer_type=problem["answer_type"])].append(attempt)
+    if normalized:
+        ranked = sorted(normalized.items(), key=lambda item: (-len(item[1]), item[1][0]["child_index"]))
+        if len(ranked[0][1]) >= 2 or len(ranked) == 1:
+            selected = ranked[0][1][0]
+            return {
+                "selection_method": "normalized_majority",
+                "selected_child_id": selected["child_id"],
+                "selected_answer": selected["parsed_answer"],
+                "underlying_model_calls": 0,
+                "verifier_model_call": False,
+            }
+    if not valid:
+        return {
+            "selection_method": "all_children_failed",
+            "selected_child_id": None,
+            "selected_answer": "",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+    try:
+        verifier_text = _call_model(
+            model=model,
+            prompt=_verifier_prompt(problem, valid),
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+        choice = _parse_verifier_choice(verifier_text, max_index=len(valid))
+        selected = valid[(choice or 1) - 1]
+        _log_event(
+            logger,
+            {
+                "event": "recursive_verifier_end",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "candidate_count": len(valid),
+                "choice": choice or 1,
+                "selected_child_id": selected["child_id"],
+                "selected_answer_hash": selected["parsed_answer_hash"],
+                "verifier_prediction_hash": stable_hash({"prediction": verifier_text}),
+            },
+        )
+        return {
+            "selection_method": "verifier_choice" if choice else "verifier_fallback_first",
+            "selected_child_id": selected["child_id"],
+            "selected_answer": selected["parsed_answer"],
+            "underlying_model_calls": 1,
+            "verifier_model_call": True,
+        }
+    except Exception as exc:
+        selected = valid[0]
+        _log_event(
+            logger,
+            {
+                "event": "recursive_verifier_error",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "candidate_count": len(valid),
+                "error_type": type(exc).__name__,
+                "error": str(exc)[:240],
+                "selected_child_id": selected["child_id"],
+            },
+        )
+        return {
+            "selection_method": "verifier_error_fallback_first",
+            "selected_child_id": selected["child_id"],
+            "selected_answer": selected["parsed_answer"],
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+
+def _verifier_prompt(problem: dict[str, Any], attempts: list[dict[str, Any]]) -> str:
+    choices = "\n".join(
+        f"{index}. prompt_kind={attempt['prompt_kind']}; answer={attempt['parsed_answer']}"
+        for index, attempt in enumerate(attempts, start=1)
+    )
+    return (
+        "Choose the candidate answer most likely to satisfy the HLE question. Prefer exact wording, correct "
+        "multiple-choice letter, and answers that do not add unsupported qualifiers. Return JSON only: "
+        "{\"choice\":1}.\n\n"
+        f"Answer type: {problem['answer_type']}\nQuestion:\n{problem['_question']}\n\nCandidates:\n{choices}"
+    )
+
+
+def _parse_verifier_choice(text: str, *, max_index: int) -> int | None:
+    stripped = text.strip()
+    stripped = re.sub(r"^```(?:json)?", "", stripped, flags=re.IGNORECASE).strip()
+    stripped = re.sub(r"```$", "", stripped).strip()
+    try:
+        parsed = json.loads(stripped)
+        if isinstance(parsed, dict):
+            choice = int(parsed.get("choice"))
+            return choice if 1 <= choice <= max_index else None
+    except (TypeError, ValueError, json.JSONDecodeError):
+        pass
+    match = re.search(r"\b([1-9][0-9]*)\b", text)
+    if not match:
+        return None
+    choice = int(match.group(1))
+    return choice if 1 <= choice <= max_index else None
+
+
+def _needs_exact_answer_repair(problem: dict[str, Any], selected_answer: str) -> bool:
+    return problem.get("answer_type") != "multipleChoice" and _is_suspicious_exact_answer(selected_answer)
+
+
+def _is_suspicious_exact_answer(answer: str) -> bool:
+    text = str(answer or "").strip()
+    if not text:
+        return True
+    if re.fullmatch(r"[A-Z]", text):
+        return True
+    if text.lower() in {"unknown", "none", "n/a", "na"}:
+        return True
+    return False
+
+
+def _repair_exact_answer(
+    *,
+    problem: dict[str, Any],
+    selected_answer: str,
+    agent_plan: dict[str, Any],
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> dict[str, Any]:
+    before_hash = stable_hash({"answer": selected_answer})
+    repair_context = _repair_context_for_exact(agent_plan)
+    _log_event(
+        logger,
+        {
+            "event": "answer_format_repair_start",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "problem_id_hash": problem["id_hash"],
+            "question_hash": problem["question_hash"],
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "answer_type": problem["answer_type"],
+            "candidate_answer_hash": before_hash,
+            "repair_reason": "suspicious_exact_answer",
+            "repair_context_used": bool(repair_context),
+            "repair_context_char_count": len(repair_context),
+        },
+    )
+    try:
+        text = _call_model(
+            model=model,
+            prompt=_exact_answer_repair_prompt(problem, selected_answer, repair_context=repair_context),
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+        repaired = _parse_answer_json(text) or text.strip()
+        after_hash = stable_hash({"answer": repaired})
+        still_suspicious = _is_suspicious_exact_answer(repaired)
+        stage_summary = {
+            "status": "activated",
+            "repair_reason": "suspicious_exact_answer",
+            "candidate_answer_hash": before_hash,
+            "repaired_answer_hash": after_hash,
+            "changed": after_hash != before_hash,
+            "still_suspicious": still_suspicious,
+            "repair_context_used": bool(repair_context),
+            "repair_context_char_count": len(repair_context),
+        }
+        _log_event(
+            logger,
+            {
+                "event": "answer_format_repair_end",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "candidate_answer_hash": before_hash,
+                "repaired_answer_hash": after_hash,
+                "changed": after_hash != before_hash,
+                "still_suspicious": still_suspicious,
+                "repair_context_used": bool(repair_context),
+                "repair_context_char_count": len(repair_context),
+                "prediction_hash": stable_hash({"prediction": text}),
+            },
+        )
+        return {
+            "selected_answer": repaired,
+            "underlying_model_calls": 1,
+            "stage_summary": stage_summary,
+        }
+    except Exception as exc:
+        stage_summary = {
+            "status": "failed",
+            "repair_reason": "suspicious_exact_answer",
+            "candidate_answer_hash": before_hash,
+            "error_type": type(exc).__name__,
+            "repair_context_used": bool(repair_context),
+            "repair_context_char_count": len(repair_context),
+        }
+        _log_event(
+            logger,
+            {
+                "event": "answer_format_repair_error",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "candidate_answer_hash": before_hash,
+                "error_type": type(exc).__name__,
+                "error": str(exc)[:240],
+                "repair_context_used": bool(repair_context),
+                "repair_context_char_count": len(repair_context),
+            },
+        )
+        return {
+            "selected_answer": selected_answer,
+            "underlying_model_calls": 0,
+            "stage_summary": stage_summary,
+        }
+
+
+def _repair_context_for_exact(agent_plan: dict[str, Any]) -> str:
+    return str(agent_plan.get("prompt_context") or agent_plan.get("retrieval_context_candidate") or "").strip()
+
+
+def _exact_answer_repair_prompt(problem: dict[str, Any], selected_answer: str, *, repair_context: str = "") -> str:
+    context_block = ""
+    if repair_context:
+        context_block = (
+            "Retrieved graph context is available. It may be generic or irrelevant; use it only if it directly "
+            "helps identify the requested exact entity/term/phrase.\n\n"
+            f"{repair_context}\n\n"
+        )
+    return (
+        "This HLE item is marked exactMatch, not multipleChoice. The previous candidate was rejected as a likely "
+        "choice-letter artifact or underspecified answer. Re-read the question from scratch and return the actual "
+        "shortest exact entity, term, title, formula, number, or phrase requested by the question. Do not return a "
+        "single uppercase A-Z letter unless the wording explicitly asks for a letter symbol as the answer. If the "
+        "question lists options and you know which option is correct, return the option text itself rather than "
+        "the option letter. Return JSON only: {\"answer\":\"...\"}.\n\n"
+        f"{context_block}"
+        f"Rejected candidate hash only: {stable_hash({'answer': selected_answer})}\n"
+        f"Question:\n{problem['_question']}"
+    )
+
+
+def _normalize_for_selection(text: str, *, answer_type: str) -> str:
+    if answer_type == "multipleChoice":
+        return _extract_choice(text)
+    return _normalize_exact(text)
+
+
+def _has_two_vote_majority(attempts: list[dict[str, Any]], *, answer_type: str) -> bool:
+    counts: Counter[str] = Counter()
+    for attempt in attempts:
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        if answer_type != "multipleChoice" and _is_suspicious_exact_answer(answer):
+            continue
+        counts[_normalize_for_selection(answer, answer_type=answer_type)] += 1
+    return any(count >= 2 for count in counts.values())
+
+
+def _fallback_answer(attempts: list[dict[str, Any]]) -> str:
+    for attempt in attempts:
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if answer:
+            return answer
+    return ""
 
 
 def _classify_hle_domain(problem: dict[str, Any]) -> str:
@@ -760,6 +1350,7 @@ def _agent_stage_log(
     model: str,
     stage: str,
     data: dict[str, Any],
+    variant: str = "assumption_agent",
 ) -> None:
     _log_event(
         logger,
@@ -770,7 +1361,7 @@ def _agent_stage_log(
             "problem_id_hash": problem["id_hash"],
             "question_hash": problem["question_hash"],
             "model": model,
-            "variant": "assumption_agent",
+            "variant": variant,
             "stage": stage,
             "stage_status": data.get("status"),
             "stage_data": data,
@@ -786,8 +1377,9 @@ def _module_trace(problem: dict[str, Any], *, variant: str, agent_plan: dict[str
     marks true Assumption Agent subsystems as skipped when this smoke wrapper
     has not actually invoked them.
     """
-    if variant == "assumption_agent":
+    if variant.startswith("assumption_agent"):
         stages = (agent_plan or {}).get("stages", {})
+        recursive_verify = variant == "assumption_agent_recursive_verify"
         return [
             {
                 "module": "answer_type_router",
@@ -826,10 +1418,24 @@ def _module_trace(problem: dict[str, Any], *, variant: str, agent_plan: dict[str
                 "reason": "build_recursive_assumption_run builds a bounded applicability tree in memory",
             },
             {
+                "module": "recursive_child_validation",
+                "expected": recursive_verify,
+                "status": _stage_status(stages, "recursive_child_validation") if recursive_verify else "not_applicable",
+                "reason": (
+                    "recursive verifier executes child answer attempts and records only hashes/metadata"
+                    if recursive_verify
+                    else "single-call agent only builds recursive applicability frames"
+                ),
+            },
+            {
                 "module": "multi_candidate_self_verifier",
-                "expected": False,
-                "status": "not_implemented_for_hle_single_call",
-                "reason": "this HLE variant keeps one answer call; external multi-candidate verification would require extra model calls",
+                "expected": recursive_verify,
+                "status": _stage_status(stages, "multi_candidate_self_verifier") if recursive_verify else "not_implemented_for_hle_single_call",
+                "reason": (
+                    "multi-child answers are selected by majority or verifier model"
+                    if recursive_verify
+                    else "this HLE variant keeps one answer call; external multi-candidate verification would require extra model calls"
+                ),
             },
             {
                 "module": "residual_writeback",
@@ -842,6 +1448,12 @@ def _module_trace(problem: dict[str, Any], *, variant: str, agent_plan: dict[str
                 "expected": True,
                 "status": _stage_status(stages, "prompt_builder"),
                 "reason": "world-model-gated prompt context is built or abstained before the LLM call",
+            },
+            {
+                "module": "answer_format_repair",
+                "expected": False,
+                "status": _stage_status(stages, "answer_format_repair") if stages.get("answer_format_repair") else "not_required",
+                "reason": "exactMatch single-letter/empty candidates trigger a strict repair pass when needed",
             },
             {
                 "module": "answer_format_verifier",
@@ -1114,6 +1726,7 @@ def _metrics(*, sample_rows: list[dict[str, Any]], run_rows: list[dict[str, Any]
         "answer_type_counts": dict(answer_type_counts),
         "planned_live_model_calls": planned,
         "live_model_calls_executed": api_summary["live_model_calls_executed"],
+        "underlying_model_calls_executed": api_summary.get("underlying_model_calls_executed", api_summary["live_model_calls_executed"]),
         "live_model_call_error_count": len(api_summary["live_model_call_errors"]),
         "resolved_live_model_calls": api_summary["live_model_calls_executed"] + len(api_summary["live_model_call_errors"]),
         "scored_row_count": len(run_rows),

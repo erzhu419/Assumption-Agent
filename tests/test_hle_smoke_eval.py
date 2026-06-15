@@ -6,11 +6,15 @@ from assumption_os.hle_module_activation_audit import build_hle_module_activatio
 from assumption_os.hle_smoke_eval import (
     _aggregate_rows,
     _expected_but_missing_modules,
+    _has_two_vote_majority,
     _is_correct,
     _module_activation_summary,
     _module_trace,
+    _needs_exact_answer_repair,
     _parse_answer_json,
+    _parse_verifier_choice,
     _prompt_for,
+    _recursive_child_prompt_specs,
     _score_prediction,
     _should_use_agent_context,
 )
@@ -102,6 +106,32 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(by_module["recursive_assumption_runner"]["status"], "activated")
         self.assertEqual(by_module["multi_candidate_self_verifier"]["expected"], False)
 
+    def test_recursive_verify_trace_uses_real_child_validation_stage(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+        }
+        plan = {
+            "stages": {
+                "domain_router": {"status": "activated"},
+                "assumption_graph_retrieval": {"status": "activated"},
+                "structural_morphism_transfer": {"status": "activated"},
+                "world_model_router": {"status": "activated"},
+                "recursive_assumption_runner": {"status": "activated"},
+                "recursive_child_validation": {"status": "activated"},
+                "multi_candidate_self_verifier": {"status": "activated"},
+                "prompt_builder": {"status": "activated"},
+            }
+        }
+        trace = _module_trace(problem, variant="assumption_agent_recursive_verify", agent_plan=plan)
+        by_module = {item["module"]: item for item in trace}
+
+        self.assertTrue(by_module["recursive_child_validation"]["expected"])
+        self.assertEqual(by_module["recursive_child_validation"]["status"], "activated")
+        self.assertTrue(by_module["multi_candidate_self_verifier"]["expected"])
+        self.assertEqual(by_module["multi_candidate_self_verifier"]["status"], "activated")
+
     def test_assumption_agent_prompt_abstain_matches_raw_prompt(self):
         problem = {
             "answer_type": "multipleChoice",
@@ -111,6 +141,56 @@ class HleSmokeEvalTest(unittest.TestCase):
         agent = _prompt_for(problem, variant="assumption_agent", agent_plan={"prompt_context": ""})
 
         self.assertEqual(agent, raw)
+
+    def test_recursive_verify_prompt_abstain_matches_raw_prompt(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "secret gated question",
+        }
+        raw = _prompt_for(problem, variant="raw")
+        agent = _prompt_for(problem, variant="assumption_agent_recursive_verify", agent_plan={"prompt_context": ""})
+
+        self.assertEqual(agent, raw)
+
+    def test_recursive_child_prompt_specs_include_context_only_when_present(self):
+        problem = {
+            "answer_type": "exactMatch",
+            "_question": "secret gated question",
+        }
+
+        self.assertEqual(len(_recursive_child_prompt_specs(problem, agent_plan={})), 3)
+        specs = _recursive_child_prompt_specs(problem, agent_plan={"prompt_context": "graph context"})
+        self.assertEqual(len(specs), 4)
+        self.assertEqual(specs[-1]["prompt_kind"], "agent_context_answer")
+
+    def test_parse_verifier_choice(self):
+        self.assertEqual(_parse_verifier_choice('{"choice": 2}', max_index=3), 2)
+        self.assertEqual(_parse_verifier_choice("choose 3", max_index=3), 3)
+        self.assertIsNone(_parse_verifier_choice('{"choice": 4}', max_index=3))
+        self.assertIsNone(_parse_verifier_choice("no choice", max_index=3))
+
+    def test_two_vote_majority_detects_stable_child_answers(self):
+        self.assertTrue(_has_two_vote_majority(
+            [{"parsed_answer": "B"}, {"parsed_answer": "The answer is B."}],
+            answer_type="multipleChoice",
+        ))
+        self.assertFalse(_has_two_vote_majority(
+            [{"parsed_answer": "alpha"}, {"parsed_answer": "beta"}],
+            answer_type="exactMatch",
+        ))
+        self.assertFalse(_has_two_vote_majority(
+            [{"parsed_answer": "B"}, {"parsed_answer": "B"}],
+            answer_type="exactMatch",
+        ))
+
+    def test_exact_answer_repair_gate(self):
+        exact_problem = {"answer_type": "exactMatch"}
+        mc_problem = {"answer_type": "multipleChoice"}
+
+        self.assertTrue(_needs_exact_answer_repair(exact_problem, "B"))
+        self.assertTrue(_needs_exact_answer_repair(exact_problem, ""))
+        self.assertFalse(_needs_exact_answer_repair(exact_problem, "Ada Lovelace"))
+        self.assertFalse(_needs_exact_answer_repair(mc_problem, "B"))
 
     def test_hle_agent_context_gate_blocks_weak_exact_match_injection(self):
         self.assertFalse(_should_use_agent_context(
