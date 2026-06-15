@@ -5,17 +5,22 @@ from tempfile import TemporaryDirectory
 from assumption_os.hle_module_activation_audit import build_hle_module_activation_audit_payload
 from assumption_os.hle_smoke_eval import (
     _aggregate_rows,
+    _candidate_evidence_queries,
+    _clean_evidence_text,
     _expected_but_missing_modules,
+    _format_evidence_context,
     _has_two_vote_majority,
     _is_correct,
     _module_activation_summary,
     _module_trace,
     _needs_exact_answer_repair,
+    _needs_evidence_grounded_child,
     _parse_answer_json,
     _parse_verifier_choice,
     _prompt_for,
     _recursive_child_prompt_specs,
     _score_prediction,
+    _select_recursive_child_answer,
     _should_use_agent_context,
 )
 
@@ -121,6 +126,7 @@ class HleSmokeEvalTest(unittest.TestCase):
                 "recursive_assumption_runner": {"status": "activated"},
                 "recursive_child_validation": {"status": "activated"},
                 "multi_candidate_self_verifier": {"status": "activated"},
+                "hle_evidence_bridge": {"status": "activated"},
                 "prompt_builder": {"status": "activated"},
             }
         }
@@ -131,6 +137,7 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(by_module["recursive_child_validation"]["status"], "activated")
         self.assertTrue(by_module["multi_candidate_self_verifier"]["expected"])
         self.assertEqual(by_module["multi_candidate_self_verifier"]["status"], "activated")
+        self.assertEqual(by_module["hle_evidence_bridge"]["status"], "activated")
 
     def test_assumption_agent_prompt_abstain_matches_raw_prompt(self):
         problem = {
@@ -191,6 +198,54 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertTrue(_needs_exact_answer_repair(exact_problem, ""))
         self.assertFalse(_needs_exact_answer_repair(exact_problem, "Ada Lovelace"))
         self.assertFalse(_needs_exact_answer_repair(mc_problem, "B"))
+        self.assertTrue(_needs_evidence_grounded_child(
+            exact_problem,
+            [{"parsed_answer": "B"}, {"parsed_answer": "B"}],
+        ))
+        self.assertFalse(_needs_evidence_grounded_child(
+            exact_problem,
+            [{"parsed_answer": "Ada Lovelace"}, {"parsed_answer": "B"}],
+        ))
+
+    def test_exact_selection_prefers_non_suspicious_candidate(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "exactMatch",
+        }
+        selection = _select_recursive_child_answer(
+            problem=problem,
+            attempts=[
+                {"child_id": "c1", "child_index": 1, "prompt_kind": "direct", "parsed_answer": "B"},
+                {"child_id": "c2", "child_index": 2, "prompt_kind": "checked", "parsed_answer": "B"},
+                {"child_id": "c3", "child_index": 3, "prompt_kind": "evidence", "parsed_answer": "Ada Lovelace"},
+            ],
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=1,
+            max_tokens=32,
+        )
+
+        self.assertEqual(selection["selected_answer"], "Ada Lovelace")
+
+    def test_evidence_bridge_query_and_context_helpers(self):
+        problem = {
+            "raw_subject": "Computer Science",
+            "category": "Computer Science/AI",
+            "_question": 'Which paper introduced "Attention Is All You Need" in neural machine translation?',
+        }
+        queries = _candidate_evidence_queries(problem)
+
+        self.assertTrue(any("Attention Is All You Need" in query for query in queries))
+        self.assertEqual(_clean_evidence_text("<span>Transformer</span>&nbsp;model"), "Transformer model")
+        context = _format_evidence_context(
+            [{"title": "Attention Is All You Need", "snippet": "Transformer architecture."}],
+            max_chars=200,
+        )
+        self.assertIn("source=wikipedia", context)
+        self.assertIn("Transformer architecture", context)
 
     def test_hle_agent_context_gate_blocks_weak_exact_match_injection(self):
         self.assertFalse(_should_use_agent_context(

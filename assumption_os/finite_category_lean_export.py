@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -284,13 +285,14 @@ def _optional_lean_check(lean_path: Path, *, run_lean_if_available: bool) -> dic
             "reason": "lean_unavailable" if not lean_bin else "disabled",
         }
     try:
+        timeout = float(os.environ.get("LEAN_CHECK_TIMEOUT_SEC", "120"))
         result = subprocess.run(
             [lean_bin, str(lean_path)],
             check=False,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=30,
+            timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
         return {
@@ -299,6 +301,7 @@ def _optional_lean_check(lean_path: Path, *, run_lean_if_available: bool) -> dic
             "passed": False,
             "returncode": None,
             "reason": "timeout",
+            "timeout_sec": float(os.environ.get("LEAN_CHECK_TIMEOUT_SEC", "120")),
             "stdout_tail": (exc.stdout or "")[-1000:] if isinstance(exc.stdout, str) else "",
             "stderr_tail": (exc.stderr or "")[-1000:] if isinstance(exc.stderr, str) else "",
         }
@@ -307,6 +310,7 @@ def _optional_lean_check(lean_path: Path, *, run_lean_if_available: bool) -> dic
         "attempted": True,
         "passed": result.returncode == 0,
         "returncode": result.returncode,
+        "timeout_sec": timeout,
         "stdout_tail": result.stdout[-1000:],
         "stderr_tail": result.stderr[-1000:],
     }

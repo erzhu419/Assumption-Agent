@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -527,13 +528,26 @@ def _run_lean(lean_path: Path, *, run_lean_if_available: bool) -> dict[str, Any]
             "stderr": "Lean check skipped or lean binary unavailable.",
             "lean_bin": lean_bin,
         }
-    completed = subprocess.run(
-        [lean_bin, str(lean_path)],
-        check=False,
-        text=True,
-        capture_output=True,
-        timeout=30,
-    )
+    timeout = float(os.environ.get("LEAN_CHECK_TIMEOUT_SEC", "120"))
+    try:
+        completed = subprocess.run(
+            [lean_bin, str(lean_path)],
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "available": True,
+            "attempted": True,
+            "passed": False,
+            "returncode": None,
+            "stdout": (exc.stdout or "").strip() if isinstance(exc.stdout, str) else "",
+            "stderr": f"Lean check timed out after {timeout:g} seconds.",
+            "lean_bin": lean_bin,
+            "timeout_sec": timeout,
+        }
     return {
         "available": True,
         "attempted": True,
@@ -542,6 +556,7 @@ def _run_lean(lean_path: Path, *, run_lean_if_available: bool) -> dict[str, Any]
         "stdout": completed.stdout.strip(),
         "stderr": completed.stderr.strip(),
         "lean_bin": lean_bin,
+        "timeout_sec": timeout,
     }
 
 

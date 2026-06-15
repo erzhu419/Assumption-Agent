@@ -10,13 +10,17 @@ and correctness only.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
+import html
 import json
 import os
 import re
 import signal
 import sys
+import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -61,6 +65,9 @@ def build_hle_text_smoke_eval_payload(
     graph_dir: Path | None = None,
     agent_top_k: int = 5,
     agent_context_max_chars: int = 2800,
+    agent_child_mode: str = "parallel_quorum",
+    agent_child_timeout: float | None = None,
+    evidence_bridge_enabled: bool = True,
 ) -> dict[str, Any]:
     root = root.resolve()
     models = models or ["gpt-5.5"]
@@ -83,6 +90,9 @@ def build_hle_text_smoke_eval_payload(
         "graph_dir": str(graph_dir),
         "agent_top_k": agent_top_k,
         "agent_context_max_chars": agent_context_max_chars,
+        "agent_child_mode": agent_child_mode,
+        "agent_child_timeout_sec": agent_child_timeout if agent_child_timeout is not None else call_timeout,
+        "evidence_bridge_enabled": evidence_bridge_enabled,
         "underlying_model_calls_executed": 0,
     }
     if execute_live and sample_rows:
@@ -139,7 +149,10 @@ def build_hle_text_smoke_eval_payload(
                                 call_id=call_id,
                                 logger=logger,
                                 timeout=call_timeout,
+                                child_mode=agent_child_mode,
+                                child_timeout=agent_child_timeout,
                                 max_tokens=max_tokens,
+                                evidence_bridge_enabled=evidence_bridge_enabled,
                             )
                             answer_text = solved["answer_text"]
                             api_summary["underlying_model_calls_executed"] += solved["underlying_model_calls"]
@@ -712,114 +725,57 @@ def _call_recursive_verified_answer(
     call_id: str,
     logger: "_JsonlLogger | None",
     timeout: float | None,
+    child_mode: str,
+    child_timeout: float | None,
     max_tokens: int,
+    evidence_bridge_enabled: bool,
 ) -> dict[str, Any]:
     """Run multiple child answer attempts and select one without persisting raw HLE text."""
     specs = _recursive_child_prompt_specs(problem, agent_plan=agent_plan)
-    attempts: list[dict[str, Any]] = []
-    underlying_calls = 0
-    early_stop_reason = None
-    skipped_prompt_kinds: list[str] = []
-    for index, spec in enumerate(specs, start=1):
-        child_id = stable_hash({"call_id": call_id, "child_index": index, "prompt_kind": spec["prompt_kind"]})
-        _log_event(
-            logger,
-            {
-                "event": "recursive_child_start",
-                "eval_id": eval_id,
-                "call_id": call_id,
-                "child_id": child_id,
-                "child_index": index,
-                "problem_id_hash": problem["id_hash"],
-                "question_hash": problem["question_hash"],
-                "model": model,
-                "variant": "assumption_agent_recursive_verify",
-                "prompt_kind": spec["prompt_kind"],
-            },
+    child_result = _execute_recursive_child_attempts(
+        problem=problem,
+        specs=specs,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=child_timeout if child_timeout is not None else timeout,
+        max_tokens=max_tokens,
+        mode=child_mode,
+    )
+    attempts = child_result["attempts"]
+    underlying_calls = int(child_result["underlying_model_calls"] or 0)
+    early_stop_reason = child_result.get("early_stop_reason")
+    skipped_prompt_kinds = child_result.get("skipped_prompt_kinds", [])
+    evidence_summary: dict[str, Any] | None = None
+    if evidence_bridge_enabled and _needs_evidence_grounded_child(problem, attempts):
+        evidence_context, evidence_summary = _build_hle_evidence_bridge_context(
+            problem=problem,
+            eval_id=eval_id,
+            call_id=call_id,
+            model=model,
+            logger=logger,
         )
-        started = time.monotonic()
-        try:
-            text = _call_model(model=model, prompt=spec["prompt"], timeout=timeout, max_tokens=max_tokens)
-            underlying_calls += 1
-            parsed = _parse_answer_json(text) or text.strip()
-            attempt = {
-                "child_id": child_id,
-                "child_index": index,
-                "prompt_kind": spec["prompt_kind"],
-                "parsed_answer": parsed,
-                "parsed_answer_hash": stable_hash({"answer": parsed}),
-                "prediction_hash": stable_hash({"prediction": text}),
-                "latency_sec": round(time.monotonic() - started, 4),
-                "status": "answered",
-            }
-            attempts.append(attempt)
-            _log_event(
-                logger,
-                {
-                    "event": "recursive_child_end",
-                    "eval_id": eval_id,
-                    "call_id": call_id,
-                    "child_id": child_id,
-                    "child_index": index,
-                    "problem_id_hash": problem["id_hash"],
-                    "model": model,
-                    "variant": "assumption_agent_recursive_verify",
-                    "prompt_kind": spec["prompt_kind"],
-                    "latency_sec": attempt["latency_sec"],
-                    "parsed_answer_hash": attempt["parsed_answer_hash"],
-                    "prediction_hash": attempt["prediction_hash"],
+        if evidence_context:
+            agent_plan["hle_evidence_context"] = evidence_context
+            agent_plan["hle_evidence_bridge"] = evidence_summary
+            evidence_attempt = _run_child_attempt(
+                problem=problem,
+                spec={
+                    "prompt_kind": "evidence_grounded_answer",
+                    "prompt": _evidence_grounded_answer_prompt(problem, evidence_context=evidence_context),
                 },
+                child_index=len(attempts) + 1,
+                model=model,
+                eval_id=eval_id,
+                call_id=call_id,
+                logger=logger,
+                timeout=child_timeout if child_timeout is not None else timeout,
+                max_tokens=max_tokens,
             )
-        except Exception as exc:
-            attempt = {
-                "child_id": child_id,
-                "child_index": index,
-                "prompt_kind": spec["prompt_kind"],
-                "parsed_answer": "",
-                "parsed_answer_hash": None,
-                "prediction_hash": None,
-                "latency_sec": round(time.monotonic() - started, 4),
-                "status": "error",
-                "error_type": type(exc).__name__,
-            }
-            attempts.append(attempt)
-            _log_event(
-                logger,
-                {
-                    "event": "recursive_child_error",
-                    "eval_id": eval_id,
-                    "call_id": call_id,
-                    "child_id": child_id,
-                    "child_index": index,
-                    "problem_id_hash": problem["id_hash"],
-                    "model": model,
-                    "variant": "assumption_agent_recursive_verify",
-                    "prompt_kind": spec["prompt_kind"],
-                    "latency_sec": attempt["latency_sec"],
-                    "error_type": type(exc).__name__,
-                    "error": str(exc)[:240],
-                },
-            )
-        if _has_two_vote_majority(attempts, answer_type=problem["answer_type"]):
-            early_stop_reason = "two_vote_majority"
-            skipped_prompt_kinds = [row["prompt_kind"] for row in specs[index:]]
-            _log_event(
-                logger,
-                {
-                    "event": "recursive_child_early_stop",
-                    "eval_id": eval_id,
-                    "call_id": call_id,
-                    "problem_id_hash": problem["id_hash"],
-                    "question_hash": problem["question_hash"],
-                    "model": model,
-                    "variant": "assumption_agent_recursive_verify",
-                    "reason": early_stop_reason,
-                    "executed_child_count": len(attempts),
-                    "planned_child_count": len(specs),
-                    "skipped_prompt_kinds": skipped_prompt_kinds,
-                },
-            )
-            break
+            attempts.append(evidence_attempt)
+            if evidence_attempt.get("status") == "answered":
+                underlying_calls += 1
 
     selection = _select_recursive_child_answer(
         problem=problem,
@@ -845,6 +801,7 @@ def _call_recursive_verified_answer(
             logger=logger,
             timeout=timeout,
             max_tokens=max_tokens,
+            evidence_bridge_enabled=evidence_bridge_enabled,
         )
         underlying_calls += int(repair.get("underlying_model_calls", 0) or 0)
         selected_answer = repair.get("selected_answer") or selected_answer
@@ -853,6 +810,9 @@ def _call_recursive_verified_answer(
     answered_count = sum(1 for attempt in attempts if attempt.get("status") == "answered")
     child_summary = {
         "status": "activated",
+        "execution_mode": child_result.get("execution_mode"),
+        "child_timeout_sec": child_result.get("child_timeout_sec"),
+        "child_max_workers": child_result.get("child_max_workers"),
         "planned_child_count": len(specs),
         "child_count": len(attempts),
         "answered_child_count": answered_count,
@@ -877,6 +837,10 @@ def _call_recursive_verified_answer(
     stages["multi_candidate_self_verifier"] = verifier_summary
     if format_repair_summary:
         stages["answer_format_repair"] = format_repair_summary
+        if format_repair_summary.get("evidence_bridge"):
+            stages["hle_evidence_bridge"] = format_repair_summary["evidence_bridge"]
+    elif evidence_summary:
+        stages["hle_evidence_bridge"] = evidence_summary
     _agent_stage_log(
         logger,
         eval_id=eval_id,
@@ -908,10 +872,340 @@ def _call_recursive_verified_answer(
             stage="answer_format_repair",
             data=format_repair_summary,
         )
+        if format_repair_summary.get("evidence_bridge"):
+            _agent_stage_log(
+                logger,
+                eval_id=eval_id,
+                call_id=call_id,
+                problem=problem,
+                model=model,
+                variant="assumption_agent_recursive_verify",
+                stage="hle_evidence_bridge",
+                data=format_repair_summary["evidence_bridge"],
+            )
+    elif evidence_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="hle_evidence_bridge",
+            data=evidence_summary,
+        )
     return {
         "answer_text": json.dumps({"answer": selected_answer}, ensure_ascii=False),
         "underlying_model_calls": underlying_calls,
     }
+
+
+def _execute_recursive_child_attempts(
+    *,
+    problem: dict[str, Any],
+    specs: list[dict[str, str]],
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+    mode: str,
+) -> dict[str, Any]:
+    if mode != "parallel_quorum":
+        return _execute_recursive_child_attempts_serial(
+            problem=problem,
+            specs=specs,
+            model=model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+    first_batch = _run_child_batch(
+        problem=problem,
+        specs=specs[:2],
+        start_index=1,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=max_tokens,
+        max_workers=2,
+    )
+    attempts = first_batch["attempts"]
+    early_stop_reason = None
+    skipped_prompt_kinds: list[str] = []
+    if _has_two_vote_majority(attempts, answer_type=problem["answer_type"]):
+        early_stop_reason = "two_vote_majority"
+        skipped_prompt_kinds = [row["prompt_kind"] for row in specs[len(attempts):]]
+        _log_recursive_child_early_stop(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            reason=early_stop_reason,
+            executed_child_count=len(attempts),
+            planned_child_count=len(specs),
+            skipped_prompt_kinds=skipped_prompt_kinds,
+        )
+        return {
+            "attempts": attempts,
+            "underlying_model_calls": first_batch["underlying_model_calls"],
+            "early_stop_reason": early_stop_reason,
+            "skipped_prompt_kinds": skipped_prompt_kinds,
+            "execution_mode": "parallel_quorum",
+            "child_timeout_sec": timeout,
+            "child_max_workers": first_batch["max_workers"],
+        }
+    rest_batch = _run_child_batch(
+        problem=problem,
+        specs=specs[2:],
+        start_index=3,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=max_tokens,
+        max_workers=max(1, min(2, len(specs[2:]))),
+    )
+    attempts.extend(rest_batch["attempts"])
+    attempts.sort(key=lambda row: int(row.get("child_index", 0) or 0))
+    return {
+        "attempts": attempts,
+        "underlying_model_calls": first_batch["underlying_model_calls"] + rest_batch["underlying_model_calls"],
+        "early_stop_reason": None,
+        "skipped_prompt_kinds": [],
+        "execution_mode": "parallel_quorum",
+        "child_timeout_sec": timeout,
+        "child_max_workers": max(first_batch["max_workers"], rest_batch["max_workers"]),
+    }
+
+
+def _execute_recursive_child_attempts_serial(
+    *,
+    problem: dict[str, Any],
+    specs: list[dict[str, str]],
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> dict[str, Any]:
+    attempts: list[dict[str, Any]] = []
+    underlying_calls = 0
+    early_stop_reason = None
+    skipped_prompt_kinds: list[str] = []
+    for index, spec in enumerate(specs, start=1):
+        attempt = _run_child_attempt(
+            problem=problem,
+            spec=spec,
+            child_index=index,
+            model=model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+        attempts.append(attempt)
+        if attempt.get("status") == "answered":
+            underlying_calls += 1
+        if _has_two_vote_majority(attempts, answer_type=problem["answer_type"]):
+            early_stop_reason = "two_vote_majority"
+            skipped_prompt_kinds = [row["prompt_kind"] for row in specs[index:]]
+            _log_recursive_child_early_stop(
+                logger,
+                eval_id=eval_id,
+                call_id=call_id,
+                problem=problem,
+                model=model,
+                reason=early_stop_reason,
+                executed_child_count=len(attempts),
+                planned_child_count=len(specs),
+                skipped_prompt_kinds=skipped_prompt_kinds,
+            )
+            break
+    return {
+        "attempts": attempts,
+        "underlying_model_calls": underlying_calls,
+        "early_stop_reason": early_stop_reason,
+        "skipped_prompt_kinds": skipped_prompt_kinds,
+        "execution_mode": "serial",
+        "child_timeout_sec": timeout,
+        "child_max_workers": 1,
+    }
+
+
+def _run_child_batch(
+    *,
+    problem: dict[str, Any],
+    specs: list[dict[str, str]],
+    start_index: int,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+    max_workers: int,
+) -> dict[str, Any]:
+    if not specs:
+        return {"attempts": [], "underlying_model_calls": 0, "max_workers": 0}
+    max_workers = max(1, min(max_workers, len(specs)))
+    attempts: list[dict[str, Any]] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(
+                _run_child_attempt,
+                problem=problem,
+                spec=spec,
+                child_index=start_index + offset,
+                model=model,
+                eval_id=eval_id,
+                call_id=call_id,
+                logger=logger,
+                timeout=timeout,
+                max_tokens=max_tokens,
+            )
+            for offset, spec in enumerate(specs)
+        ]
+        for future in concurrent.futures.as_completed(futures):
+            attempts.append(future.result())
+    attempts.sort(key=lambda row: int(row.get("child_index", 0) or 0))
+    return {
+        "attempts": attempts,
+        "underlying_model_calls": sum(1 for attempt in attempts if attempt.get("status") == "answered"),
+        "max_workers": max_workers,
+    }
+
+
+def _run_child_attempt(
+    *,
+    problem: dict[str, Any],
+    spec: dict[str, str],
+    child_index: int,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> dict[str, Any]:
+    child_id = stable_hash({"call_id": call_id, "child_index": child_index, "prompt_kind": spec["prompt_kind"]})
+    _log_event(
+        logger,
+        {
+            "event": "recursive_child_start",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "child_id": child_id,
+            "child_index": child_index,
+            "problem_id_hash": problem["id_hash"],
+            "question_hash": problem["question_hash"],
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "prompt_kind": spec["prompt_kind"],
+            "timeout_sec": timeout,
+        },
+    )
+    started = time.monotonic()
+    try:
+        text = _call_model(model=model, prompt=spec["prompt"], timeout=timeout, max_tokens=max_tokens)
+        parsed = _parse_answer_json(text) or text.strip()
+        attempt = {
+            "child_id": child_id,
+            "child_index": child_index,
+            "prompt_kind": spec["prompt_kind"],
+            "parsed_answer": parsed,
+            "parsed_answer_hash": stable_hash({"answer": parsed}),
+            "prediction_hash": stable_hash({"prediction": text}),
+            "latency_sec": round(time.monotonic() - started, 4),
+            "status": "answered",
+        }
+        _log_event(
+            logger,
+            {
+                "event": "recursive_child_end",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "child_id": child_id,
+                "child_index": child_index,
+                "problem_id_hash": problem["id_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "prompt_kind": spec["prompt_kind"],
+                "latency_sec": attempt["latency_sec"],
+                "parsed_answer_hash": attempt["parsed_answer_hash"],
+                "prediction_hash": attempt["prediction_hash"],
+            },
+        )
+        return attempt
+    except Exception as exc:
+        attempt = {
+            "child_id": child_id,
+            "child_index": child_index,
+            "prompt_kind": spec["prompt_kind"],
+            "parsed_answer": "",
+            "parsed_answer_hash": None,
+            "prediction_hash": None,
+            "latency_sec": round(time.monotonic() - started, 4),
+            "status": "error",
+            "error_type": type(exc).__name__,
+        }
+        _log_event(
+            logger,
+            {
+                "event": "recursive_child_error",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "child_id": child_id,
+                "child_index": child_index,
+                "problem_id_hash": problem["id_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "prompt_kind": spec["prompt_kind"],
+                "latency_sec": attempt["latency_sec"],
+                "error_type": type(exc).__name__,
+                "error": str(exc)[:240],
+            },
+        )
+        return attempt
+
+
+def _log_recursive_child_early_stop(
+    logger: "_JsonlLogger | None",
+    *,
+    eval_id: str,
+    call_id: str,
+    problem: dict[str, Any],
+    model: str,
+    reason: str,
+    executed_child_count: int,
+    planned_child_count: int,
+    skipped_prompt_kinds: list[str],
+) -> None:
+    _log_event(
+        logger,
+        {
+            "event": "recursive_child_early_stop",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "problem_id_hash": problem["id_hash"],
+            "question_hash": problem["question_hash"],
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "reason": reason,
+            "executed_child_count": executed_child_count,
+            "planned_child_count": planned_child_count,
+            "skipped_prompt_kinds": skipped_prompt_kinds,
+        },
+    )
 
 
 def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[str, Any] | None = None) -> list[dict[str, str]]:
@@ -969,6 +1263,13 @@ def _select_recursive_child_answer(
     max_tokens: int,
 ) -> dict[str, Any]:
     valid = [attempt for attempt in attempts if str(attempt.get("parsed_answer") or "").strip()]
+    if problem["answer_type"] != "multipleChoice":
+        non_suspicious = [
+            attempt for attempt in valid
+            if not _is_suspicious_exact_answer(str(attempt.get("parsed_answer") or ""))
+        ]
+        if non_suspicious:
+            valid = non_suspicious
     normalized: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for attempt in valid:
         normalized[_normalize_for_selection(attempt["parsed_answer"], answer_type=problem["answer_type"])].append(attempt)
@@ -1084,6 +1385,17 @@ def _needs_exact_answer_repair(problem: dict[str, Any], selected_answer: str) ->
     return problem.get("answer_type") != "multipleChoice" and _is_suspicious_exact_answer(selected_answer)
 
 
+def _needs_evidence_grounded_child(problem: dict[str, Any], attempts: list[dict[str, Any]]) -> bool:
+    if problem.get("answer_type") == "multipleChoice":
+        return False
+    valid = [
+        str(attempt.get("parsed_answer") or "").strip()
+        for attempt in attempts
+        if str(attempt.get("parsed_answer") or "").strip()
+    ]
+    return bool(valid) and all(_is_suspicious_exact_answer(answer) for answer in valid)
+
+
 def _is_suspicious_exact_answer(answer: str) -> bool:
     text = str(answer or "").strip()
     if not text:
@@ -1093,6 +1405,17 @@ def _is_suspicious_exact_answer(answer: str) -> bool:
     if text.lower() in {"unknown", "none", "n/a", "na"}:
         return True
     return False
+
+
+def _evidence_grounded_answer_prompt(problem: dict[str, Any], *, evidence_context: str) -> str:
+    return (
+        "Use the transient evidence below to answer this exactMatch HLE item. The existing child attempts all "
+        "collapsed to a likely choice-letter artifact, so ignore single-letter answers unless the question "
+        "explicitly asks for a letter symbol. Return the shortest exact entity, title, formula, number, or phrase. "
+        "If the evidence is irrelevant, answer from the question directly. Return JSON only: {\"answer\":\"...\"}.\n\n"
+        f"{evidence_context}\n\n"
+        f"Question:\n{problem['_question']}"
+    )
 
 
 def _repair_exact_answer(
@@ -1106,9 +1429,23 @@ def _repair_exact_answer(
     logger: "_JsonlLogger | None",
     timeout: float | None,
     max_tokens: int,
+    evidence_bridge_enabled: bool,
 ) -> dict[str, Any]:
     before_hash = stable_hash({"answer": selected_answer})
     repair_context = _repair_context_for_exact(agent_plan)
+    evidence_context = str(agent_plan.get("hle_evidence_context") or "")
+    evidence_summary: dict[str, Any] | None = agent_plan.get("hle_evidence_bridge")
+    if evidence_bridge_enabled:
+        if not evidence_context:
+            evidence_context, evidence_summary = _build_hle_evidence_bridge_context(
+                problem=problem,
+                eval_id=eval_id,
+                call_id=call_id,
+                model=model,
+                logger=logger,
+            )
+            agent_plan["hle_evidence_context"] = evidence_context
+            agent_plan["hle_evidence_bridge"] = evidence_summary
     _log_event(
         logger,
         {
@@ -1124,12 +1461,19 @@ def _repair_exact_answer(
             "repair_reason": "suspicious_exact_answer",
             "repair_context_used": bool(repair_context),
             "repair_context_char_count": len(repair_context),
+            "evidence_bridge_used": bool(evidence_context),
+            "evidence_bridge_char_count": len(evidence_context),
         },
     )
     try:
         text = _call_model(
             model=model,
-            prompt=_exact_answer_repair_prompt(problem, selected_answer, repair_context=repair_context),
+            prompt=_exact_answer_repair_prompt(
+                problem,
+                selected_answer,
+                repair_context=repair_context,
+                evidence_context=evidence_context,
+            ),
             timeout=timeout,
             max_tokens=max_tokens,
         )
@@ -1145,6 +1489,9 @@ def _repair_exact_answer(
             "still_suspicious": still_suspicious,
             "repair_context_used": bool(repair_context),
             "repair_context_char_count": len(repair_context),
+            "evidence_bridge_used": bool(evidence_context),
+            "evidence_bridge_char_count": len(evidence_context),
+            "evidence_bridge": evidence_summary,
         }
         _log_event(
             logger,
@@ -1161,6 +1508,8 @@ def _repair_exact_answer(
                 "still_suspicious": still_suspicious,
                 "repair_context_used": bool(repair_context),
                 "repair_context_char_count": len(repair_context),
+                "evidence_bridge_used": bool(evidence_context),
+                "evidence_bridge_char_count": len(evidence_context),
                 "prediction_hash": stable_hash({"prediction": text}),
             },
         )
@@ -1177,6 +1526,9 @@ def _repair_exact_answer(
             "error_type": type(exc).__name__,
             "repair_context_used": bool(repair_context),
             "repair_context_char_count": len(repair_context),
+            "evidence_bridge_used": bool(evidence_context),
+            "evidence_bridge_char_count": len(evidence_context),
+            "evidence_bridge": evidence_summary,
         }
         _log_event(
             logger,
@@ -1192,6 +1544,8 @@ def _repair_exact_answer(
                 "error": str(exc)[:240],
                 "repair_context_used": bool(repair_context),
                 "repair_context_char_count": len(repair_context),
+                "evidence_bridge_used": bool(evidence_context),
+                "evidence_bridge_char_count": len(evidence_context),
             },
         )
         return {
@@ -1205,13 +1559,214 @@ def _repair_context_for_exact(agent_plan: dict[str, Any]) -> str:
     return str(agent_plan.get("prompt_context") or agent_plan.get("retrieval_context_candidate") or "").strip()
 
 
-def _exact_answer_repair_prompt(problem: dict[str, Any], selected_answer: str, *, repair_context: str = "") -> str:
+def _build_hle_evidence_bridge_context(
+    *,
+    problem: dict[str, Any],
+    eval_id: str,
+    call_id: str,
+    model: str,
+    logger: "_JsonlLogger | None",
+) -> tuple[str, dict[str, Any]]:
+    queries = _candidate_evidence_queries(problem)
+    query_hashes = [stable_hash({"query": query}) for query in queries]
+    if not queries:
+        summary = {
+            "status": "no_queries",
+            "source": "wikipedia_search",
+            "query_count": 0,
+            "query_hashes": [],
+            "result_count": 0,
+            "source_hashes": [],
+            "evidence_char_count": 0,
+        }
+        _log_hle_evidence_bridge_event(logger, eval_id=eval_id, call_id=call_id, problem=problem, model=model, summary=summary)
+        return "", summary
+
+    results: list[dict[str, str]] = []
+    errors: list[str] = []
+    for query in queries:
+        try:
+            results.extend(_wikipedia_search(query, limit=2, timeout=6.0))
+        except Exception as exc:
+            errors.append(type(exc).__name__)
+    unique_results = _dedupe_evidence_results(results)[:5]
+    evidence_context = _format_evidence_context(unique_results, max_chars=1800)
+    summary = {
+        "status": "activated" if evidence_context else "no_results",
+        "source": "wikipedia_search",
+        "query_count": len(queries),
+        "query_hashes": query_hashes,
+        "result_count": len(unique_results),
+        "source_hashes": [
+            stable_hash({"title": row.get("title", ""), "snippet": row.get("snippet", "")})
+            for row in unique_results
+        ],
+        "evidence_char_count": len(evidence_context),
+        "error_types": sorted(set(errors)),
+    }
+    _log_hle_evidence_bridge_event(logger, eval_id=eval_id, call_id=call_id, problem=problem, model=model, summary=summary)
+    return evidence_context, summary
+
+
+def _log_hle_evidence_bridge_event(
+    logger: "_JsonlLogger | None",
+    *,
+    eval_id: str,
+    call_id: str,
+    problem: dict[str, Any],
+    model: str,
+    summary: dict[str, Any],
+) -> None:
+    _log_event(
+        logger,
+        {
+            "event": "hle_evidence_bridge",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "problem_id_hash": problem["id_hash"],
+            "question_hash": problem["question_hash"],
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "stage_status": summary.get("status"),
+            "stage_data": summary,
+        },
+    )
+
+
+def _candidate_evidence_queries(problem: dict[str, Any]) -> list[str]:
+    question = str(problem.get("_question") or "")
+    seeds: list[str] = []
+    for key in ("raw_subject", "category"):
+        value = str(problem.get(key) or "").strip()
+        if value and value.lower() not in {"other", "misc", "unknown"}:
+            seeds.append(value)
+    quoted = re.findall(r'"([^"]{3,120})"|\'([^\']{3,120})\'|`([^`]{3,120})`', question)
+    for groups in quoted:
+        seeds.extend(item for item in groups if item)
+    for match in re.finditer(r"\b[A-Z][A-Za-z0-9_+.-]*(?:\s+[A-Z][A-Za-z0-9_+.-]*){1,5}\b", question):
+        seeds.append(match.group(0))
+    if not seeds:
+        words = [
+            word
+            for word in re.findall(r"[A-Za-z0-9_+.-]{4,}", question)
+            if word.lower() not in _EVIDENCE_QUERY_STOPWORDS
+        ][:12]
+        if words:
+            seeds.append(" ".join(words))
+    queries: list[str] = []
+    for seed in seeds:
+        query = _clean_evidence_query(seed)
+        if not query:
+            continue
+        if problem.get("raw_subject") and problem["raw_subject"] not in query and len(query.split()) <= 4:
+            query = f"{query} {problem['raw_subject']}"
+        if query not in queries:
+            queries.append(query)
+        if len(queries) >= 4:
+            break
+    return queries
+
+
+_EVIDENCE_QUERY_STOPWORDS = {
+    "which",
+    "what",
+    "when",
+    "where",
+    "whose",
+    "question",
+    "answer",
+    "following",
+    "correct",
+    "return",
+    "exact",
+    "match",
+}
+
+
+def _clean_evidence_query(text: str) -> str:
+    text = html.unescape(str(text or ""))
+    text = re.sub(r"\b[A-E]\s*[\).:]", " ", text)
+    text = re.sub(r"[^A-Za-z0-9_+.' -]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip(" .'-")
+    if len(text) < 3:
+        return ""
+    return text[:120]
+
+
+def _wikipedia_search(query: str, *, limit: int, timeout: float) -> list[dict[str, str]]:
+    params = urllib.parse.urlencode({
+        "action": "query",
+        "list": "search",
+        "srsearch": query,
+        "format": "json",
+        "utf8": "1",
+        "srlimit": str(limit),
+    })
+    request = urllib.request.Request(
+        f"https://en.wikipedia.org/w/api.php?{params}",
+        headers={"User-Agent": "AssumptionAgentHLEEvidenceBridge/0.1"},
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    rows = []
+    for item in data.get("query", {}).get("search", [])[:limit]:
+        title = _clean_evidence_text(str(item.get("title") or ""))
+        snippet = _clean_evidence_text(str(item.get("snippet") or ""))
+        if title or snippet:
+            rows.append({"title": title, "snippet": snippet, "source": "wikipedia"})
+    return rows
+
+
+def _clean_evidence_text(text: str) -> str:
+    text = re.sub(r"<[^>]+>", " ", str(text or ""))
+    text = html.unescape(text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:500]
+
+
+def _dedupe_evidence_results(results: list[dict[str, str]]) -> list[dict[str, str]]:
+    seen: set[str] = set()
+    deduped: list[dict[str, str]] = []
+    for row in results:
+        key = _normalize_exact(row.get("title") or row.get("snippet") or "")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+    return deduped
+
+
+def _format_evidence_context(results: list[dict[str, str]], *, max_chars: int) -> str:
+    lines: list[str] = []
+    for index, row in enumerate(results, start=1):
+        title = row.get("title") or "Untitled"
+        snippet = row.get("snippet") or ""
+        lines.append(f"[Evidence {index}] source=wikipedia; title={title}; snippet={snippet}")
+    text = "\n".join(lines).strip()
+    return _trim_context(text, max_chars=max_chars)
+
+
+def _exact_answer_repair_prompt(
+    problem: dict[str, Any],
+    selected_answer: str,
+    *,
+    repair_context: str = "",
+    evidence_context: str = "",
+) -> str:
     context_block = ""
     if repair_context:
         context_block = (
             "Retrieved graph context is available. It may be generic or irrelevant; use it only if it directly "
             "helps identify the requested exact entity/term/phrase.\n\n"
             f"{repair_context}\n\n"
+        )
+    evidence_block = ""
+    if evidence_context:
+        evidence_block = (
+            "Transient evidence bridge results are available. Prefer concrete source evidence over generic "
+            "assumption context, but ignore evidence that does not match the question.\n\n"
+            f"{evidence_context}\n\n"
         )
     return (
         "This HLE item is marked exactMatch, not multipleChoice. The previous candidate was rejected as a likely "
@@ -1221,6 +1776,7 @@ def _exact_answer_repair_prompt(problem: dict[str, Any], selected_answer: str, *
         "question lists options and you know which option is correct, return the option text itself rather than "
         "the option letter. Return JSON only: {\"answer\":\"...\"}.\n\n"
         f"{context_block}"
+        f"{evidence_block}"
         f"Rejected candidate hash only: {stable_hash({'answer': selected_answer})}\n"
         f"Question:\n{problem['_question']}"
     )
@@ -1456,6 +2012,12 @@ def _module_trace(problem: dict[str, Any], *, variant: str, agent_plan: dict[str
                 "reason": "exactMatch single-letter/empty candidates trigger a strict repair pass when needed",
             },
             {
+                "module": "hle_evidence_bridge",
+                "expected": False,
+                "status": _stage_status(stages, "hle_evidence_bridge") if stages.get("hle_evidence_bridge") else "not_required",
+                "reason": "exactMatch repair can use transient external evidence; logs persist only hashes and counts",
+            },
+            {
                 "module": "answer_format_verifier",
                 "expected": True,
                 "status": "activated",
@@ -1552,14 +2114,18 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
     last_error: Exception | None = None
     for attempt in range(attempts):
         try:
-            previous_handler = signal.signal(signal.SIGALRM, _raise_wallclock_timeout)
-            signal.alarm(max(1, int(timeout)))
-            try:
+            if threading.current_thread() is threading.main_thread():
+                previous_handler = signal.signal(signal.SIGALRM, _raise_wallclock_timeout)
+                signal.alarm(max(1, int(timeout)))
+                try:
+                    with urllib.request.urlopen(request, timeout=timeout) as response:
+                        data = json.loads(response.read().decode("utf-8"))
+                finally:
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, previous_handler)
+            else:
                 with urllib.request.urlopen(request, timeout=timeout) as response:
                     data = json.loads(response.read().decode("utf-8"))
-            finally:
-                signal.alarm(0)
-                signal.signal(signal.SIGALRM, previous_handler)
             return str((data.get("choices") or [{}])[0].get("message", {}).get("content", "")).strip()
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
             last_error = exc
@@ -1800,6 +2366,9 @@ def main() -> None:
     parser.add_argument("--graph-dir", default=str(DEFAULT_GRAPH_DIR))
     parser.add_argument("--agent-top-k", type=int, default=5)
     parser.add_argument("--agent-context-max-chars", type=int, default=2800)
+    parser.add_argument("--agent-child-mode", choices=["serial", "parallel_quorum"], default=os.environ.get("HLE_AGENT_CHILD_MODE", "parallel_quorum"))
+    parser.add_argument("--agent-child-timeout", type=float, default=None)
+    parser.add_argument("--disable-evidence-bridge", action="store_true")
     parser.add_argument("--hard-exit-after-write", action="store_true")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--md-out", default=str(DEFAULT_MD_OUT))
@@ -1826,6 +2395,9 @@ def main() -> None:
         graph_dir=graph_dir,
         agent_top_k=args.agent_top_k,
         agent_context_max_chars=args.agent_context_max_chars,
+        agent_child_mode=args.agent_child_mode,
+        agent_child_timeout=args.agent_child_timeout,
+        evidence_bridge_enabled=not args.disable_evidence_bridge,
     )
     out = Path(args.out)
     out = out if out.is_absolute() else root / out
