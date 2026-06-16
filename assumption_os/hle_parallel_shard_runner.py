@@ -192,12 +192,34 @@ def build_shard_command(
     return cmd
 
 
-def build_runner_env(*, model_router_attempts: int | None, model_router_timeout: float | None) -> dict[str, str]:
+def build_runner_env(
+    *,
+    model_router_attempts: int | None,
+    model_router_timeout: float | None,
+    model_router_per_attempt_timeout: float | None = None,
+    model_router_backoff_base_sec: float | None = None,
+    model_router_global_concurrency: int | None = None,
+    model_router_global_concurrency_dir: str | None = None,
+    model_router_global_slot_ttl_sec: float | None = None,
+    model_router_global_slot_wait_sec: float | None = None,
+) -> dict[str, str]:
     env = os.environ.copy()
     if model_router_attempts is not None:
         env["MODEL_ROUTER_ATTEMPTS"] = str(model_router_attempts)
     if model_router_timeout is not None:
         env["MODEL_ROUTER_TIMEOUT"] = str(model_router_timeout)
+    if model_router_per_attempt_timeout is not None:
+        env["MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"] = str(model_router_per_attempt_timeout)
+    if model_router_backoff_base_sec is not None:
+        env["MODEL_ROUTER_BACKOFF_BASE_SEC"] = str(model_router_backoff_base_sec)
+    if model_router_global_concurrency is not None:
+        env["MODEL_ROUTER_GLOBAL_CONCURRENCY"] = str(model_router_global_concurrency)
+    if model_router_global_concurrency_dir:
+        env["MODEL_ROUTER_GLOBAL_CONCURRENCY_DIR"] = model_router_global_concurrency_dir
+    if model_router_global_slot_ttl_sec is not None:
+        env["MODEL_ROUTER_GLOBAL_SLOT_TTL_SEC"] = str(model_router_global_slot_ttl_sec)
+    if model_router_global_slot_wait_sec is not None:
+        env["MODEL_ROUTER_GLOBAL_SLOT_WAIT_SEC"] = str(model_router_global_slot_wait_sec)
     return env
 
 
@@ -399,6 +421,13 @@ def aggregate_parallel_payload(
         specs=specs,
         states=states,
     )
+    pollution_audit = build_pollution_audit(
+        rows=run_rows,
+        shard_payloads=shard_payloads,
+        metrics=metrics,
+        error_stratification=error_stratification,
+        execute_live=execute_live,
+    )
     gates = {
         "all_shards_finished_without_process_failure": all(
             state.status == "completed" for state in states
@@ -417,6 +446,7 @@ def aggregate_parallel_payload(
     paper_clean_gates["zero_top_level_live_errors"] = error_stratification["top_level_error_count"] == 0
     paper_clean_gates["zero_process_timeouts"] = error_stratification["process_timeout_count"] == 0
     paper_clean_gates["no_duplicate_sample_problems"] = metrics["duplicate_sample_problem_count"] == 0
+    pollution_gates = pollution_audit["gates"]
     return {
         "eval_id": eval_id,
         "eval_kind": "hle_parallel_shard_runner",
@@ -444,10 +474,13 @@ def aggregate_parallel_payload(
         "loaded_shard_payload_count": len(shard_payloads),
         "metrics": metrics,
         "error_stratification": error_stratification,
+        "pollution_audit": pollution_audit,
         "pass": all(gates.values()),
         "paper_clean_pass": all(paper_clean_gates.values()),
+        "pollution_pass": all(pollution_gates.values()),
         "failed_gates": [name for name, passed in gates.items() if not passed],
         "paper_clean_failed_gates": [name for name, passed in paper_clean_gates.items() if not passed],
+        "pollution_failed_gates": [name for name, passed in pollution_gates.items() if not passed],
         "raw_content_persisted": False,
     }
 
@@ -603,6 +636,248 @@ def build_error_stratification(
     }
 
 
+def build_pollution_audit(
+    *,
+    rows: list[dict[str, Any]],
+    shard_payloads: list[dict[str, Any]],
+    metrics: dict[str, Any],
+    error_stratification: dict[str, Any],
+    execute_live: bool,
+) -> dict[str, Any]:
+    sample_hashes = _merged_sample_problem_hashes(shard_payloads)
+    api_summaries = [payload.get("api_summary") or {} for payload in shard_payloads]
+    excluded_existing_problem_count = sum(
+        int(summary.get("excluded_existing_problem_count") or 0)
+        for summary in api_summaries
+    )
+    exclude_existing_enabled_count = sum(
+        1 for summary in api_summaries if bool(summary.get("exclude_existing_hle_artifacts"))
+    )
+    context_by_variant = _context_pollution_by_variant(rows)
+    selection_credit = _selection_credit(rows)
+    clean_shared = metrics.get("clean_shared_subset") or {}
+    agent_advantage = _clean_shared_agent_advantage(clean_shared)
+    top_level_errors = int(error_stratification.get("top_level_error_count") or 0)
+    process_timeouts = int(error_stratification.get("process_timeout_count") or 0)
+    clean_shared_problem_count = max(
+        [int(row.get("shared_clean_problem_count") or 0) for row in clean_shared.values()] or [0]
+    )
+    claim_scope = {
+        "paper_clean_claim_allowed": top_level_errors == 0 and process_timeouts == 0,
+        "selective_agent_advantage_claim_allowed": bool(agent_advantage.get("agent_beats_all_controls")),
+        "recommended_hle_claim_scope": (
+            "full_resolved_rows"
+            if top_level_errors == 0 and process_timeouts == 0
+            else "clean_shared_subset_due_to_endpoint_noise"
+        ),
+        "agent_advantage": agent_advantage,
+    }
+    gates = {
+        "raw_content_not_persisted": metrics.get("raw_content_persisted") is False,
+        "fresh_problem_hashes_accounted": bool(sample_hashes) or not execute_live,
+        "no_duplicate_problem_hashes": int(metrics.get("duplicate_sample_problem_count") or 0) == 0,
+        "cache_live_separation_accounted": True,
+        "endpoint_errors_separated": "top_level_errors_by_variant" in error_stratification,
+        "clean_shared_subset_available_if_endpoint_errors": top_level_errors == 0 or clean_shared_problem_count > 0,
+        "context_pollution_accounted": isinstance(context_by_variant, dict),
+        "selection_credit_accounted": bool(selection_credit.get("by_selection_method")) or not rows,
+        "claim_scope_downgraded_when_endpoint_errors": (
+            top_level_errors == 0
+            or claim_scope["recommended_hle_claim_scope"] == "clean_shared_subset_due_to_endpoint_noise"
+        ),
+    }
+    return {
+        "audit_kind": "hle_anti_pollution_audit",
+        "fresh_problem_hash_exclusion": {
+            "sample_problem_hash_count": len(sample_hashes),
+            "distinct_sample_problem_hash_count": len(set(sample_hashes)),
+            "duplicate_sample_problem_hash_count": max(0, len(sample_hashes) - len(set(sample_hashes))),
+            "exclude_existing_enabled_shard_count": exclude_existing_enabled_count,
+            "excluded_existing_problem_count": excluded_existing_problem_count,
+        },
+        "cache_live_separation": {
+            "execute_live": execute_live,
+            "planned_live_model_calls": metrics.get("planned_live_model_calls"),
+            "resolved_live_model_calls": metrics.get("resolved_live_model_calls"),
+            "live_model_calls_executed": metrics.get("live_model_calls_executed"),
+            "underlying_model_calls_executed": metrics.get("underlying_model_calls_executed"),
+            "top_level_error_count": top_level_errors,
+            "process_timeout_count": process_timeouts,
+            "top_level_errors_by_variant": error_stratification.get("top_level_errors_by_variant") or {},
+        },
+        "context_pollution": {
+            "by_variant": context_by_variant,
+            "summary": _context_pollution_summary(context_by_variant),
+        },
+        "module_credit_assignment": selection_credit,
+        "claim_guard": claim_scope,
+        "gates": gates,
+        "failed_gates": [name for name, passed in gates.items() if not passed],
+        "raw_content_persisted": False,
+    }
+
+
+def _context_pollution_by_variant(rows: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    by_variant: dict[str, Counter[str]] = defaultdict(Counter)
+    for row in rows:
+        variant = str(row.get("variant") or "unknown")
+        ce = row.get("component_efficacy") if isinstance(row.get("component_efficacy"), dict) else {}
+        flags = ce.get("flags") if isinstance(ce.get("flags"), dict) else {}
+        correct = bool(row.get("correct"))
+        has_error = bool(row.get("error"))
+        outcome_bucket = "error" if has_error else "correct" if correct else "wrong"
+        graph = ce.get("graph") if isinstance(ce.get("graph"), dict) else {}
+        evidence = ce.get("evidence") if isinstance(ce.get("evidence"), dict) else {}
+        hipporag = ce.get("agent_hipporag") if isinstance(ce.get("agent_hipporag"), dict) else {}
+        morphism = ce.get("morphism") if isinstance(ce.get("morphism"), dict) else {}
+        if _flag_true(flags, "graph_context_discarded"):
+            by_variant[variant]["graph_context_discarded"] += 1
+        if _flag_true(flags, "generic_graph_context_only"):
+            by_variant[variant]["generic_graph_context_only"] += 1
+        if graph.get("status") in {"activated", "used"}:
+            by_variant[variant]["graph_retrieval_activated"] += 1
+            if _is_generic_harness_graph_context(graph):
+                by_variant[variant]["graph_generic_harness_retrieved"] += 1
+        if _flag_true(flags, "graph_context_injected"):
+            by_variant[variant]["graph_context_used"] += 1
+            by_variant[variant][f"graph_context_{outcome_bucket}"] += 1
+            if _is_generic_harness_graph_context(graph):
+                by_variant[variant]["graph_generic_harness_context"] += 1
+        if _flag_true(flags, "evidence_bridge_activated") or evidence.get("status") in {"activated", "used"}:
+            by_variant[variant]["evidence_context_used"] += 1
+            by_variant[variant][f"evidence_context_{outcome_bucket}"] += 1
+        if evidence.get("status") in {"no_results", "empty"}:
+            by_variant[variant]["evidence_no_results"] += 1
+        if _flag_true(flags, "agent_hipporag_context_activated") or hipporag.get("status") in {"activated", "used"}:
+            by_variant[variant]["hipporag_context_used"] += 1
+            by_variant[variant][f"hipporag_context_{outcome_bucket}"] += 1
+        if hipporag.get("status") in {"no_results", "empty"}:
+            by_variant[variant]["hipporag_no_results"] += 1
+        if _flag_true(flags, "morphism_hit") or int(morphism.get("formal_hit_count") or 0) > 0 or int(morphism.get("structural_hit_count") or 0) > 0:
+            by_variant[variant]["morphism_hit"] += 1
+            by_variant[variant][f"morphism_{outcome_bucket}"] += 1
+        if _flag_true(flags, "strong_morphism_hit") or int(morphism.get("strong_hit_count") or 0) > 0:
+            by_variant[variant]["strong_morphism_hit"] += 1
+            by_variant[variant][f"strong_morphism_{outcome_bucket}"] += 1
+    return {variant: dict(sorted(counter.items())) for variant, counter in sorted(by_variant.items())}
+
+
+def _context_pollution_summary(context_by_variant: dict[str, dict[str, int]]) -> dict[str, int]:
+    summary: Counter[str] = Counter()
+    for counts in context_by_variant.values():
+        for key, value in counts.items():
+            summary[key] += int(value)
+    return dict(sorted(summary.items()))
+
+
+def _flag_true(flags: dict[str, Any], key: str) -> bool:
+    return bool(flags.get(key))
+
+
+def _is_generic_harness_graph_context(graph: dict[str, Any]) -> bool:
+    counts = graph.get("top_node_type_counts")
+    if not isinstance(counts, dict) or not counts:
+        return False
+    total = sum(int(value or 0) for value in counts.values())
+    harness = int(counts.get("harness") or counts.get("generic_harness") or 0)
+    return total > 0 and harness >= total
+
+
+def _selection_credit(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    by_method: dict[str, Counter[str]] = defaultdict(Counter)
+    by_variant_method: dict[str, Counter[str]] = defaultdict(Counter)
+    for row in rows:
+        method = _selection_method(row)
+        variant = str(row.get("variant") or "unknown")
+        correct = bool(row.get("correct"))
+        has_error = bool(row.get("error"))
+        by_method[method]["n"] += 1
+        by_variant_method[f"{variant}::{method}"]["n"] += 1
+        if correct:
+            by_method[method]["correct"] += 1
+            by_variant_method[f"{variant}::{method}"]["correct"] += 1
+        if has_error:
+            by_method[method]["error"] += 1
+            by_variant_method[f"{variant}::{method}"]["error"] += 1
+    return {
+        "by_selection_method": _credit_counter_rows(by_method),
+        "by_variant_selection_method": _credit_counter_rows(by_variant_method),
+    }
+
+
+def _credit_counter_rows(counters: dict[str, Counter[str]]) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for key, counter in sorted(counters.items()):
+        n = int(counter.get("n") or 0)
+        out[key] = {
+            "n": n,
+            "correct": int(counter.get("correct") or 0),
+            "error": int(counter.get("error") or 0),
+            "accuracy": round(int(counter.get("correct") or 0) / n, 4) if n else None,
+        }
+    return out
+
+
+def _selection_method(row: dict[str, Any]) -> str:
+    ce = row.get("component_efficacy") if isinstance(row.get("component_efficacy"), dict) else {}
+    selection = ce.get("selection") if isinstance(ce.get("selection"), dict) else {}
+    stages = ce.get("stages") if isinstance(ce.get("stages"), dict) else {}
+    multi = stages.get("multi_candidate_self_verifier") if isinstance(stages.get("multi_candidate_self_verifier"), dict) else {}
+    metadata = row.get("call_metadata") if isinstance(row.get("call_metadata"), dict) else {}
+    return str(
+        selection.get("method")
+        or selection.get("selection_method")
+        or ce.get("selection_method")
+        or multi.get("selection_method")
+        or metadata.get("selection_method")
+        or "unknown"
+    )
+
+
+def _clean_shared_agent_advantage(clean_shared: dict[str, Any]) -> dict[str, Any]:
+    best_payload: dict[str, Any] = {
+        "agent_beats_all_controls": False,
+        "model": None,
+        "agent_variant": None,
+        "agent_accuracy": None,
+        "best_control_accuracy": None,
+        "margin": None,
+    }
+    for model, row in sorted(clean_shared.items()):
+        by_variant = row.get("by_variant") or {}
+        agent_items = [
+            (variant, variant_row)
+            for variant, variant_row in by_variant.items()
+            if str(variant).startswith("assumption_agent")
+        ]
+        control_items = [
+            (variant, variant_row)
+            for variant, variant_row in by_variant.items()
+            if not str(variant).startswith("assumption_agent")
+        ]
+        for agent_variant, agent_row in agent_items:
+            agent_acc = agent_row.get("accuracy")
+            control_accs = [
+                control_row.get("accuracy")
+                for _, control_row in control_items
+                if control_row.get("accuracy") is not None
+            ]
+            if agent_acc is None or not control_accs:
+                continue
+            best_control = max(float(value) for value in control_accs)
+            margin = round(float(agent_acc) - best_control, 4)
+            if best_payload["margin"] is None or margin > float(best_payload["margin"]):
+                best_payload = {
+                    "agent_beats_all_controls": margin > 0,
+                    "model": model,
+                    "agent_variant": agent_variant,
+                    "agent_accuracy": agent_acc,
+                    "best_control_accuracy": best_control,
+                    "margin": margin,
+                }
+    return best_payload
+
+
 def _jsonl_error_events(specs: list[ShardSpec]) -> dict[str, Counter[str]]:
     by_event: Counter[str] = Counter()
     by_variant: Counter[str] = Counter()
@@ -631,11 +906,14 @@ def _jsonl_error_events(specs: list[ShardSpec]) -> dict[str, Counter[str]]:
 def format_parallel_markdown(payload: dict[str, Any]) -> str:
     metrics = payload["metrics"]
     errors = payload["error_stratification"]
+    pollution = payload.get("pollution_audit") or {}
+    claim_guard = pollution.get("claim_guard") or {}
     lines = [
         "# HLE Parallel Shard Evaluation",
         "",
         f"- pass: `{payload['pass']}`",
         f"- paper clean pass: `{payload['paper_clean_pass']}`",
+        f"- pollution pass: `{payload.get('pollution_pass')}`",
         f"- loaded shard payloads: `{payload['loaded_shard_payload_count']}/{payload['sampling']['planned_shard_count']}`",
         f"- sample count: `{metrics['sample_count']}`",
         f"- distinct sample problems: `{metrics['distinct_sample_problem_count']}`",
@@ -647,6 +925,8 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
         f"- process timeouts: `{errors['process_timeout_count']}`",
         f"- failed gates: `{payload['failed_gates']}`",
         f"- paper-clean failed gates: `{payload['paper_clean_failed_gates']}`",
+        f"- pollution failed gates: `{payload.get('pollution_failed_gates')}`",
+        f"- recommended HLE claim scope: `{claim_guard.get('recommended_hle_claim_scope')}`",
         "",
         "## By Variant",
         "",
@@ -690,6 +970,35 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
     ):
         for key, count in sorted((errors.get(bucket) or {}).items()):
             lines.append(f"| `{bucket}` | `{key}` | `{count}` |")
+    context_summary = (pollution.get("context_pollution") or {}).get("summary") or {}
+    lines.extend([
+        "",
+        "## Pollution Audit",
+        "",
+        "| bucket | key | value |",
+        "| --- | --- | ---: |",
+    ])
+    for key, value in sorted((pollution.get("fresh_problem_hash_exclusion") or {}).items()):
+        lines.append(f"| `fresh_problem_hash_exclusion` | `{key}` | `{value}` |")
+    for key, value in sorted((pollution.get("cache_live_separation") or {}).items()):
+        if isinstance(value, dict):
+            continue
+        lines.append(f"| `cache_live_separation` | `{key}` | `{value}` |")
+    for key, value in sorted(context_summary.items()):
+        lines.append(f"| `context_pollution_summary` | `{key}` | `{value}` |")
+    for key, value in sorted((pollution.get("gates") or {}).items()):
+        lines.append(f"| `pollution_gate` | `{key}` | `{value}` |")
+    lines.extend([
+        "",
+        "## Selection Credit",
+        "",
+        "| method | n | correct | error | accuracy |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ])
+    for method, row in sorted(((pollution.get("module_credit_assignment") or {}).get("by_selection_method") or {}).items()):
+        lines.append(
+            f"| `{method}` | `{row['n']}` | `{row['correct']}` | `{row['error']}` | `{row['accuracy']}` |"
+        )
     lines.extend([
         "",
         "## Shards",
@@ -763,7 +1072,7 @@ def main() -> None:
     parser.add_argument("--root", default=".")
     parser.add_argument("--eval-id", default="hle_parallel_shard_eval_20260616")
     parser.add_argument("--total-sample-size", type=int, default=30)
-    parser.add_argument("--shard-size", type=int, default=3)
+    parser.add_argument("--shard-size", type=int, default=1)
     parser.add_argument("--parallel-workers", type=int, default=3)
     parser.add_argument("--max-scan", type=int, default=5000)
     parser.add_argument("--seed-offset", type=int, default=3000)
@@ -797,6 +1106,12 @@ def main() -> None:
     parser.add_argument("--terminate-grace-sec", type=float, default=30.0)
     parser.add_argument("--model-router-attempts", type=int, default=None)
     parser.add_argument("--model-router-timeout", type=float, default=None)
+    parser.add_argument("--model-router-per-attempt-timeout", type=float, default=None)
+    parser.add_argument("--model-router-backoff-base-sec", type=float, default=None)
+    parser.add_argument("--model-router-global-concurrency", type=int, default=None)
+    parser.add_argument("--model-router-global-concurrency-dir", default="")
+    parser.add_argument("--model-router-global-slot-ttl-sec", type=float, default=None)
+    parser.add_argument("--model-router-global-slot-wait-sec", type=float, default=None)
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
@@ -812,6 +1127,12 @@ def main() -> None:
     env = build_runner_env(
         model_router_attempts=args.model_router_attempts,
         model_router_timeout=args.model_router_timeout,
+        model_router_per_attempt_timeout=args.model_router_per_attempt_timeout,
+        model_router_backoff_base_sec=args.model_router_backoff_base_sec,
+        model_router_global_concurrency=args.model_router_global_concurrency,
+        model_router_global_concurrency_dir=args.model_router_global_concurrency_dir,
+        model_router_global_slot_ttl_sec=args.model_router_global_slot_ttl_sec,
+        model_router_global_slot_wait_sec=args.model_router_global_slot_wait_sec,
     )
     run_parallel_shards(
         root=root,
@@ -846,6 +1167,7 @@ def main() -> None:
         "eval_id": payload["eval_id"],
         "pass": payload["pass"],
         "paper_clean_pass": payload["paper_clean_pass"],
+        "pollution_pass": payload["pollution_pass"],
         "metrics": {
             "sample_count": payload["metrics"]["sample_count"],
             "distinct_sample_problem_count": payload["metrics"]["distinct_sample_problem_count"],
@@ -858,6 +1180,10 @@ def main() -> None:
         "error_stratification": {
             "top_level_error_count": payload["error_stratification"]["top_level_error_count"],
             "process_timeout_count": payload["error_stratification"]["process_timeout_count"],
+        },
+        "pollution_audit": {
+            "recommended_hle_claim_scope": payload["pollution_audit"]["claim_guard"]["recommended_hle_claim_scope"],
+            "failed_gates": payload["pollution_failed_gates"],
         },
         "failed_gates": payload["failed_gates"],
         "paper_clean_failed_gates": payload["paper_clean_failed_gates"],

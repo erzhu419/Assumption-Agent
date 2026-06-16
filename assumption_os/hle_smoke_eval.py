@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import contextlib
 import http.client
 import html
 import json
 import os
+import random
 import re
 import signal
 import sys
@@ -785,6 +787,7 @@ def _build_assumption_agent_plan(
         )
 
         top_node_ids = retrieval_summary.get("top_node_ids", [])
+        generic_graph_context_only = _retrieval_summary_is_generic_harness_only(retrieval_summary)
         top_score = max(retrieval_summary.get("top_scores", [0.0]) or [0.0])
         formal_hit_count = len(morphism_summary["formal_mapping_hits"])
         structural_hit_count = len(morphism_summary["structural_morphism_hits"])
@@ -822,9 +825,18 @@ def _build_assumption_agent_plan(
             strong_structural_hit_count=strong_structural_hit_count,
             expected_utility=prediction.expected_utility,
         )
+        if generic_graph_context_only:
+            context_allowed = False
+            context_abstain_reason = "generic_harness_graph_context_only"
+        elif not context_allowed:
+            context_abstain_reason = "world_model_or_scope_gate"
+        else:
+            context_abstain_reason = ""
         router_summary = {
             "status": "activated",
             "decision": "use_context" if context_allowed else "abstain_to_raw_prompt",
+            "context_abstain_reason": context_abstain_reason,
+            "generic_graph_context_only": generic_graph_context_only,
             "top_score": round(float(top_score), 4),
             "formal_hit_count": formal_hit_count,
             "structural_hit_count": structural_hit_count,
@@ -848,17 +860,23 @@ def _build_assumption_agent_plan(
             data=router_summary,
         )
 
+        retrieval_context_discarded = False
         if context_allowed and retrieval_result is not None:
             context = format_policy_context(retrieval_result, format_assumption_context, max_nodes=top_k)
             plan["retrieval_context_candidate"] = _trim_context(context, max_chars=context_max_chars)
             plan["prompt_context"] = plan["retrieval_context_candidate"]
-        elif retrieval_result is not None:
+        elif retrieval_result is not None and not generic_graph_context_only:
             context = format_policy_context(retrieval_result, format_assumption_context, max_nodes=top_k)
             plan["retrieval_context_candidate"] = _trim_context(context, max_chars=context_max_chars)
+        elif retrieval_result is not None:
+            retrieval_context_discarded = True
+            plan["retrieval_context_candidate"] = ""
         plan["stages"]["prompt_builder"] = {
             "status": "activated",
             "context_injected": bool(plan["prompt_context"]),
             "retrieval_context_candidate_char_count": len(plan.get("retrieval_context_candidate", "")),
+            "retrieval_context_discarded": retrieval_context_discarded,
+            "context_abstain_reason": context_abstain_reason,
             "context_char_count": len(plan["prompt_context"]),
         }
         _agent_stage_log(
@@ -4866,6 +4884,8 @@ def _needs_exact_answer_repair(problem: dict[str, Any], selected_answer: str) ->
 
 
 def _needs_evidence_grounded_child(problem: dict[str, Any], attempts: list[dict[str, Any]]) -> bool:
+    if _classify_hle_domain(problem) == "math":
+        return False
     if problem.get("answer_type") == "multipleChoice":
         return False
     valid = [
@@ -4878,6 +4898,8 @@ def _needs_evidence_grounded_child(problem: dict[str, Any], attempts: list[dict[
 
 def _should_prime_evidence_bridge(problem: dict[str, Any], agent_plan: dict[str, Any]) -> bool:
     if agent_plan.get("hle_evidence_context"):
+        return False
+    if _classify_hle_domain(problem) == "math":
         return False
     # HLE failures are often answer-bearing retrieval failures.  Keep
     # graph/morphism context as one candidate, but give the recursive verifier a
@@ -5747,6 +5769,14 @@ def _sanitize_retrieval_result(result: Any) -> dict[str, Any]:
     }
 
 
+def _retrieval_summary_is_generic_harness_only(summary: dict[str, Any]) -> bool:
+    node_types = [str(value) for value in summary.get("top_node_types", []) or []]
+    if not node_types:
+        return False
+    generic_types = {"harness", "generic_harness"}
+    return all(node_type in generic_types for node_type in node_types)
+
+
 def _sanitize_recursive_payload(payload: dict[str, Any]) -> dict[str, Any]:
     root = payload.get("root", {})
     next_actions = payload.get("next_actions", [])
@@ -6153,19 +6183,9 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise TimeoutError("model_call_deadline_exceeded")
-            request_timeout = max(0.1, remaining)
-            if threading.current_thread() is threading.main_thread():
-                previous_handler = signal.signal(signal.SIGALRM, _raise_wallclock_timeout)
-                signal.alarm(max(1, int(request_timeout)))
-                try:
-                    with urllib.request.urlopen(request, timeout=request_timeout) as response:
-                        data = json.loads(response.read().decode("utf-8"))
-                finally:
-                    signal.alarm(0)
-                    signal.signal(signal.SIGALRM, previous_handler)
-            else:
-                with urllib.request.urlopen(request, timeout=request_timeout) as response:
-                    data = json.loads(response.read().decode("utf-8"))
+            request_timeout = max(0.1, min(remaining, _model_router_per_attempt_timeout()))
+            with _global_model_router_slot(model=env["model"]):
+                data = _urlopen_json_with_deadline(request=request, timeout=request_timeout)
             return str((data.get("choices") or [{}])[0].get("message", {}).get("content", "")).strip()
         except (
             urllib.error.URLError,
@@ -6177,9 +6197,122 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
         ) as exc:
             last_error = exc
             if attempt + 1 >= attempts:
-                raise RuntimeError(f"model request failed: {type(exc).__name__}") from exc
-            time.sleep(0.5 * (attempt + 1))
+                raise RuntimeError(f"model request failed: {_model_error_label(exc)}") from exc
+            _sleep_before_model_retry(attempt=attempt, deadline=deadline)
     raise RuntimeError(f"model request failed: {last_error}")
+
+
+def _urlopen_json_with_deadline(*, request: urllib.request.Request, timeout: float) -> dict[str, Any]:
+    if threading.current_thread() is threading.main_thread():
+        previous_handler = signal.signal(signal.SIGALRM, _raise_wallclock_timeout)
+        signal.alarm(max(1, int(timeout)))
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read().decode("utf-8"))
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, previous_handler)
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _model_error_label(exc: Exception) -> str:
+    if isinstance(exc, urllib.error.HTTPError):
+        return f"HTTPError_{exc.code}"
+    if isinstance(exc, urllib.error.URLError):
+        reason = getattr(exc, "reason", None)
+        if reason is not None:
+            return f"URLError_{type(reason).__name__}"
+    return type(exc).__name__
+
+
+def _sleep_before_model_retry(*, attempt: int, deadline: float) -> None:
+    base = float(os.environ.get("MODEL_ROUTER_BACKOFF_BASE_SEC", "0.75"))
+    cap = float(os.environ.get("MODEL_ROUTER_BACKOFF_MAX_SEC", "10"))
+    jitter = float(os.environ.get("MODEL_ROUTER_BACKOFF_JITTER_SEC", "0.25"))
+    delay = min(cap, base * (2 ** attempt)) + random.uniform(0.0, max(0.0, jitter))
+    remaining = max(0.0, deadline - time.monotonic())
+    if remaining <= 0:
+        return
+    time.sleep(min(delay, remaining))
+
+
+@contextlib.contextmanager
+def _global_model_router_slot(*, model: str) -> Any:
+    limit = int(os.environ.get("MODEL_ROUTER_GLOBAL_CONCURRENCY", "0") or 0)
+    if limit <= 0:
+        yield
+        return
+    directory = Path(os.environ.get("MODEL_ROUTER_GLOBAL_CONCURRENCY_DIR", "/tmp/assumption_agent_model_slots"))
+    ttl_sec = float(os.environ.get("MODEL_ROUTER_GLOBAL_SLOT_TTL_SEC", "900"))
+    wait_sec = float(os.environ.get("MODEL_ROUTER_GLOBAL_SLOT_WAIT_SEC", "600"))
+    slot_path = _acquire_model_router_slot(
+        directory=directory,
+        limit=limit,
+        ttl_sec=ttl_sec,
+        wait_sec=wait_sec,
+        model=model,
+    )
+    try:
+        yield
+    finally:
+        _release_model_router_slot(slot_path)
+
+
+def _acquire_model_router_slot(
+    *,
+    directory: Path,
+    limit: int,
+    ttl_sec: float,
+    wait_sec: float,
+    model: str,
+) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + wait_sec
+    while True:
+        _remove_stale_model_router_slots(directory=directory, ttl_sec=ttl_sec)
+        for slot_index in range(max(1, limit)):
+            path = directory / f"slot_{slot_index:03d}.lock"
+            try:
+                fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            except FileExistsError:
+                continue
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "pid": os.getpid(),
+                            "thread_id": threading.get_ident(),
+                            "model_hash": stable_hash({"model": model})[:16],
+                            "acquired_monotonic": time.monotonic(),
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    )
+                )
+            return path
+        if time.monotonic() >= deadline:
+            raise TimeoutError("model_router_global_concurrency_wait_exceeded")
+        time.sleep(0.05 + random.uniform(0.0, 0.15))
+
+
+def _remove_stale_model_router_slots(*, directory: Path, ttl_sec: float) -> None:
+    if ttl_sec <= 0:
+        return
+    now = time.time()
+    for path in directory.glob("slot_*.lock"):
+        try:
+            if now - path.stat().st_mtime > ttl_sec:
+                path.unlink()
+        except OSError:
+            continue
+
+
+def _release_model_router_slot(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
 
 
 def _raise_wallclock_timeout(signum: int, frame: Any) -> None:
@@ -6188,6 +6321,10 @@ def _raise_wallclock_timeout(signum: int, frame: Any) -> None:
 
 def _default_call_timeout() -> float:
     return float(os.environ.get("MODEL_ROUTER_TIMEOUT", "120"))
+
+
+def _model_router_per_attempt_timeout() -> float:
+    return float(os.environ.get("MODEL_ROUTER_PER_ATTEMPT_TIMEOUT", "90"))
 
 
 class _JsonlLogger:
@@ -6392,6 +6529,8 @@ def _component_efficacy_from_plan(
     flags.update({
         "graph_retrieved_nodes": int(graph.get("node_count") or 0) > 0,
         "graph_context_injected": bool(prompt.get("context_injected")),
+        "graph_context_discarded": bool(prompt.get("retrieval_context_discarded")),
+        "generic_graph_context_only": bool(world_model.get("generic_graph_context_only")),
         "morphism_hit": bool(formal_hits or structural_hits),
         "strong_morphism_hit": bool(transfer_supported_hits),
         "world_model_used_context": world_model.get("decision") == "use_context",
@@ -6473,6 +6612,8 @@ def _component_efficacy_from_plan(
         "world_model": {
             "status": world_model.get("status"),
             "decision": world_model.get("decision"),
+            "context_abstain_reason": world_model.get("context_abstain_reason"),
+            "generic_graph_context_only": bool(world_model.get("generic_graph_context_only")),
             "expected_utility": world_model.get("expected_utility"),
             "predicted_regression_risk": world_model.get("predicted_regression_risk"),
         },

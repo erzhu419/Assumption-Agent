@@ -10,6 +10,8 @@ from assumption_os.hle_parallel_shard_runner import (
     aggregate_parallel_payload,
     build_error_stratification,
     build_heartbeat,
+    build_pollution_audit,
+    build_runner_env,
     build_shard_command,
     build_shard_specs,
     format_parallel_markdown,
@@ -200,10 +202,164 @@ class TestHleParallelShardRunner(unittest.TestCase):
         clean = payload["metrics"]["clean_shared_subset"]["gpt-5.4-mini"]["by_variant"]
         self.assertEqual(clean["assumption_agent_recursive_verify"]["accuracy"], 1.0)
         self.assertEqual(clean["raw"]["accuracy"], 0.5)
+        self.assertTrue(payload["pollution_pass"])
+        self.assertEqual(
+            payload["pollution_audit"]["claim_guard"]["recommended_hle_claim_scope"],
+            "full_resolved_rows",
+        )
         self.assertIn("HLE Parallel Shard Evaluation", markdown)
+        self.assertIn("Pollution Audit", markdown)
+
+    def test_runner_env_sets_retry_and_global_concurrency_without_secrets(self) -> None:
+        env = build_runner_env(
+            model_router_attempts=7,
+            model_router_timeout=7200,
+            model_router_per_attempt_timeout=90,
+            model_router_backoff_base_sec=1.25,
+            model_router_global_concurrency=2,
+            model_router_global_concurrency_dir="/tmp/hle-slots",
+            model_router_global_slot_ttl_sec=1800,
+            model_router_global_slot_wait_sec=2400,
+        )
+        self.assertEqual(env["MODEL_ROUTER_ATTEMPTS"], "7")
+        self.assertEqual(env["MODEL_ROUTER_TIMEOUT"], "7200")
+        self.assertEqual(env["MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"], "90")
+        self.assertEqual(env["MODEL_ROUTER_BACKOFF_BASE_SEC"], "1.25")
+        self.assertEqual(env["MODEL_ROUTER_GLOBAL_CONCURRENCY"], "2")
+        self.assertEqual(env["MODEL_ROUTER_GLOBAL_CONCURRENCY_DIR"], "/tmp/hle-slots")
+        self.assertEqual(env["MODEL_ROUTER_GLOBAL_SLOT_TTL_SEC"], "1800")
+        self.assertEqual(env["MODEL_ROUTER_GLOBAL_SLOT_WAIT_SEC"], "2400")
+        configured_values = " ".join(
+            env[key]
+            for key in (
+                "MODEL_ROUTER_ATTEMPTS",
+                "MODEL_ROUTER_TIMEOUT",
+                "MODEL_ROUTER_PER_ATTEMPT_TIMEOUT",
+                "MODEL_ROUTER_BACKOFF_BASE_SEC",
+                "MODEL_ROUTER_GLOBAL_CONCURRENCY",
+                "MODEL_ROUTER_GLOBAL_CONCURRENCY_DIR",
+                "MODEL_ROUTER_GLOBAL_SLOT_TTL_SEC",
+                "MODEL_ROUTER_GLOBAL_SLOT_WAIT_SEC",
+            )
+        )
+        self.assertNotIn("sk-", configured_values)
+        self.assertNotIn("hf_", configured_values)
+
+    def test_pollution_audit_tracks_generic_context_selection_and_endpoint_scope(self) -> None:
+        rows = [
+            _row(
+                "p1",
+                "assumption_agent_recursive_verify",
+                True,
+                component_efficacy={
+                    "flags": {
+                        "graph_context_injected": True,
+                        "agent_hipporag_context_activated": True,
+                        "morphism_hit": True,
+                    },
+                    "graph": {"status": "activated", "top_node_type_counts": {"harness": 3}},
+                    "agent_hipporag": {"status": "activated"},
+                    "morphism": {"structural_hit_count": 1},
+                    "selection": {"method": "normalized_majority"},
+                },
+            ),
+            _row("p1", "raw", False, error_type="RuntimeError"),
+        ]
+        metrics = {
+            "raw_content_persisted": False,
+            "duplicate_sample_problem_count": 0,
+            "planned_live_model_calls": 2,
+            "resolved_live_model_calls": 1,
+            "live_model_calls_executed": 1,
+            "underlying_model_calls_executed": 1,
+            "clean_shared_subset": {
+                "gpt-5.4-mini": {
+                    "shared_clean_problem_count": 0,
+                    "by_variant": {},
+                }
+            },
+        }
+        errors = {
+            "top_level_error_count": 1,
+            "process_timeout_count": 0,
+            "top_level_errors_by_variant": {"raw": 1},
+        }
+        audit = build_pollution_audit(
+            rows=rows,
+            shard_payloads=[_payload(rows)],
+            metrics=metrics,
+            error_stratification=errors,
+            execute_live=True,
+        )
+        summary = audit["context_pollution"]["summary"]
+        self.assertEqual(summary["graph_generic_harness_context"], 1)
+        self.assertEqual(summary["hipporag_context_correct"], 1)
+        self.assertEqual(summary["morphism_correct"], 1)
+        self.assertEqual(
+            audit["module_credit_assignment"]["by_selection_method"]["normalized_majority"]["accuracy"],
+            1.0,
+        )
+        self.assertEqual(
+            audit["claim_guard"]["recommended_hle_claim_scope"],
+            "clean_shared_subset_due_to_endpoint_noise",
+        )
+        self.assertIn("clean_shared_subset_available_if_endpoint_errors", audit["failed_gates"])
+
+    def test_pollution_audit_separates_graph_retrieval_from_context_injection(self) -> None:
+        rows = [
+            _row(
+                "p1",
+                "assumption_agent_recursive_verify",
+                False,
+                component_efficacy={
+                    "flags": {
+                        "graph_retrieved_nodes": True,
+                        "graph_context_injected": False,
+                        "graph_context_discarded": True,
+                        "generic_graph_context_only": True,
+                    },
+                    "graph": {"status": "activated", "top_node_type_counts": {"harness": 4}},
+                    "world_model": {
+                        "decision": "abstain_to_raw_prompt",
+                        "context_abstain_reason": "generic_harness_graph_context_only",
+                    },
+                },
+            )
+        ]
+        audit = build_pollution_audit(
+            rows=rows,
+            shard_payloads=[_payload(rows)],
+            metrics={
+                "raw_content_persisted": False,
+                "duplicate_sample_problem_count": 0,
+                "planned_live_model_calls": 1,
+                "resolved_live_model_calls": 1,
+                "live_model_calls_executed": 1,
+                "underlying_model_calls_executed": 1,
+                "clean_shared_subset": {},
+            },
+            error_stratification={
+                "top_level_error_count": 0,
+                "process_timeout_count": 0,
+                "top_level_errors_by_variant": {},
+            },
+            execute_live=True,
+        )
+        summary = audit["context_pollution"]["summary"]
+        self.assertEqual(summary["graph_retrieval_activated"], 1)
+        self.assertEqual(summary["graph_generic_harness_retrieved"], 1)
+        self.assertEqual(summary["graph_context_discarded"], 1)
+        self.assertNotIn("graph_context_used", summary)
 
 
-def _row(problem_id: str, variant: str, correct: bool, *, error_type: str | None = None) -> dict[str, object]:
+def _row(
+    problem_id: str,
+    variant: str,
+    correct: bool,
+    *,
+    error_type: str | None = None,
+    component_efficacy: dict[str, object] | None = None,
+) -> dict[str, object]:
     return {
         "problem_id_hash": problem_id,
         "question_hash": f"q-{problem_id}",
@@ -220,16 +376,20 @@ def _row(problem_id: str, variant: str, correct: bool, *, error_type: str | None
         "gold_answer_persisted": False,
         "module_trace": [],
         "call_metadata": {},
-        "component_efficacy": {},
+        "component_efficacy": component_efficacy or {},
         "error": {"type": error_type, "message": "synthetic"} if error_type else None,
     }
 
 
 def _payload(rows: list[dict[str, object]]) -> dict[str, object]:
+    sample_hashes = sorted({str(row["problem_id_hash"]) for row in rows})
     return {
         "rows": rows,
+        "sampling": {
+            "sample_problem_hashes": sample_hashes,
+        },
         "metrics": {
-            "sample_count": len({row["problem_id_hash"] for row in rows}),
+            "sample_count": len(sample_hashes),
             "planned_live_model_calls": len(rows),
             "live_model_calls_executed": len(rows),
             "underlying_model_calls_executed": len(rows),

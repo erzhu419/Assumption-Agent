@@ -42,6 +42,7 @@ from assumption_os.hle_smoke_eval import (
     _parse_answer_json,
     _parse_verifier_choice,
     _prompt_for,
+    _retrieval_summary_is_generic_harness_only,
     _recursive_child_prompt_specs,
     _run_child_batch,
     _score_prediction,
@@ -190,6 +191,11 @@ class HleSmokeEvalTest(unittest.TestCase):
         agent = _prompt_for(problem, variant="assumption_agent_recursive_verify", agent_plan={"prompt_context": ""})
 
         self.assertEqual(agent, raw)
+
+    def test_generic_harness_retrieval_summary_is_detected(self):
+        self.assertTrue(_retrieval_summary_is_generic_harness_only({"top_node_types": ["harness", "harness"]}))
+        self.assertFalse(_retrieval_summary_is_generic_harness_only({"top_node_types": ["harness", "assumption"]}))
+        self.assertFalse(_retrieval_summary_is_generic_harness_only({"top_node_types": []}))
 
     def test_recursive_child_prompt_specs_include_context_only_when_present(self):
         problem = {
@@ -343,6 +349,12 @@ class HleSmokeEvalTest(unittest.TestCase):
     def test_exact_answer_repair_gate(self):
         exact_problem = {"answer_type": "exactMatch"}
         mc_problem = {"answer_type": "multipleChoice"}
+        math_exact_problem = {
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Compute the exact value.",
+        }
 
         self.assertTrue(_needs_exact_answer_repair(exact_problem, "B"))
         self.assertTrue(_needs_exact_answer_repair(exact_problem, ""))
@@ -356,12 +368,20 @@ class HleSmokeEvalTest(unittest.TestCase):
             exact_problem,
             [{"parsed_answer": "Ada Lovelace"}, {"parsed_answer": "B"}],
         ))
+        self.assertFalse(_needs_evidence_grounded_child(
+            math_exact_problem,
+            [{"parsed_answer": "B"}, {"parsed_answer": "B"}],
+        ))
         self.assertTrue(_should_prime_evidence_bridge(
             exact_problem,
             {"world_model_router": {"decision": "abstain_to_raw_prompt"}, "prompt_context": ""},
         ))
         self.assertTrue(_should_prime_evidence_bridge(
             mc_problem,
+            {"world_model_router": {"decision": "abstain_to_raw_prompt"}, "prompt_context": ""},
+        ))
+        self.assertFalse(_should_prime_evidence_bridge(
+            math_exact_problem,
             {"world_model_router": {"decision": "abstain_to_raw_prompt"}, "prompt_context": ""},
         ))
 
