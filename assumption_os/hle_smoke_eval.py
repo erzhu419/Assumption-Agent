@@ -422,6 +422,9 @@ def format_markdown(payload: dict[str, Any]) -> str:
                 "graph_context_injected",
                 "evidence_bridge_activated",
                 "evidence_child_executed",
+                "agent_hipporag_context_activated",
+                "agent_hipporag_child_executed",
+                "hipporag_context_priority_used",
                 "recursive_diverse_candidates",
                 "recursive_collapsed_consensus",
                 "recursive_timeout_pressure",
@@ -1112,6 +1115,19 @@ def _call_recursive_verified_answer(
         if evidence_context:
             agent_plan["hle_evidence_context"] = evidence_context
             agent_plan["hle_evidence_bridge"] = evidence_summary
+    if _agent_hipporag_child_enabled(problem):
+        hipporag_context, hipporag_summary = _build_agent_hipporag_child_context(
+            problem=problem,
+            eval_id=eval_id,
+            call_id=call_id,
+            model=model,
+            logger=logger,
+            context_max_chars=2200,
+        )
+        if hipporag_context:
+            agent_plan["hipporag_prompt_context"] = hipporag_context
+        if hipporag_summary:
+            agent_plan.setdefault("stages", {})["agent_hipporag_context_bridge"] = hipporag_summary
     specs = _recursive_child_prompt_specs(problem, agent_plan=agent_plan)
     child_result = _execute_recursive_child_attempts(
         problem=problem,
@@ -1136,7 +1152,7 @@ def _call_recursive_verified_answer(
             eval_id=eval_id,
             call_id=call_id,
             logger=logger,
-            timeout=child_timeout if child_timeout is not None else timeout,
+            timeout=_math_tool_child_timeout(child_timeout if child_timeout is not None else timeout),
             max_tokens=min(max_tokens, 512),
         )
         attempts.append(math_attempt)
@@ -1563,6 +1579,64 @@ def _call_recursive_verified_answer(
     }
 
 
+def _agent_hipporag_child_enabled(problem: dict[str, Any]) -> bool:
+    if os.environ.get("HLE_DISABLE_AGENT_HIPPORAG_CHILD", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    if os.environ.get("HLE_ENABLE_EXACT_AGENT_HIPPORAG_CHILD", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return problem.get("answer_type") in {"multipleChoice", "exactMatch"}
+    return problem.get("answer_type") == "multipleChoice"
+
+
+def _build_agent_hipporag_child_context(
+    *,
+    problem: dict[str, Any],
+    eval_id: str,
+    call_id: str,
+    model: str,
+    logger: "_JsonlLogger | None",
+    context_max_chars: int,
+) -> tuple[str, dict[str, Any] | None]:
+    queries = _candidate_evidence_queries(problem)
+    docs: list[dict[str, str]] = []
+    errors: list[str] = []
+    for query in queries:
+        try:
+            docs.extend(_wikipedia_search(query, limit=3, timeout=6.0))
+        except Exception as exc:
+            errors.append(type(exc).__name__)
+    docs = _dedupe_evidence_results(docs)
+    ranked_docs = _hipporag_style_rerank(problem, docs)
+    context = _format_evidence_context([row["doc"] for row in ranked_docs[:5]], max_chars=context_max_chars)
+    summary = {
+        "status": "activated" if context else "no_results",
+        "source": "wikipedia_search_plus_hipporag_style_rerank",
+        "query_count": len(queries),
+        "query_hashes": [stable_hash({"query": query}) for query in queries],
+        "candidate_doc_count": len(docs),
+        "selected_doc_count": min(len(ranked_docs), 5),
+        "selected_doc_hashes": [
+            stable_hash({"title": row["doc"].get("title", ""), "snippet": row["doc"].get("snippet", "")})
+            for row in ranked_docs[:5]
+        ],
+        "top_scores": [round(float(row["score"]), 4) for row in ranked_docs[:5]],
+        "entity_node_count": len(_hipporag_entity_nodes(problem, docs)),
+        "context_char_count": len(context),
+        "error_types": sorted(set(errors)),
+        "underlying_model_calls": 0,
+    }
+    _agent_stage_log(
+        logger,
+        eval_id=eval_id,
+        call_id=call_id,
+        problem=problem,
+        model=model,
+        variant="assumption_agent_recursive_verify",
+        stage="agent_hipporag_context_bridge",
+        data=summary,
+    )
+    return context, summary
+
+
 def _execute_recursive_child_attempts(
     *,
     problem: dict[str, Any],
@@ -1601,7 +1675,9 @@ def _execute_recursive_child_attempts(
     attempts = first_batch["attempts"]
     early_stop_reason = None
     skipped_prompt_kinds: list[str] = []
-    if _can_stop_recursive_children_early(problem, attempts):
+    remaining_prompt_kinds = {row["prompt_kind"] for row in specs[len(attempts):]}
+    retrieval_child_pending = bool(remaining_prompt_kinds & {"agent_context_answer", "hipporag_context_answer"})
+    if _can_stop_recursive_children_early(problem, attempts) and not retrieval_child_pending:
         early_stop_reason = "two_vote_majority"
         skipped_prompt_kinds = [row["prompt_kind"] for row in specs[len(attempts):]]
         _log_recursive_child_early_stop(
@@ -3094,6 +3170,18 @@ def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[s
             "prompt_kind": "evidence_bridge_answer",
             "prompt": _evidence_grounded_answer_prompt(problem, evidence_context=evidence_context),
         })
+    hipporag_context = str((agent_plan or {}).get("hipporag_prompt_context") or "")
+    if hipporag_context:
+        hipporag_spec = {
+            "prompt_kind": "hipporag_context_answer",
+            "prompt": _prompt_for(
+                problem,
+                variant="hipporag_baseline",
+                agent_plan={"prompt_context": hipporag_context},
+            ),
+        }
+        insert_index = 2 if evidence_context else 1
+        specs.insert(insert_index, hipporag_spec)
     context = (agent_plan or {}).get("prompt_context", "")
     if context:
         context_spec = {
@@ -4115,6 +4203,9 @@ def _select_recursive_child_answer(
         )
         if source_selection:
             return source_selection
+        hipporag_selection = _select_hipporag_context_candidate(problem=problem, valid=valid, ranked=ranked)
+        if hipporag_selection:
+            return hipporag_selection
         counter_selection = _select_after_counter_assumption_challenge(
             problem=problem,
             valid=valid,
@@ -4168,7 +4259,11 @@ def _select_recursive_child_answer(
         if problem["answer_type"] != "multipleChoice" and evidence_candidates:
             top_attempts = ranked[0][1]
             top_has_evidence = any(attempt in evidence_candidates for attempt in top_attempts)
-            if len(top_attempts) >= 2 and not top_has_evidence:
+            exact_evidence_override_enabled = (
+                os.environ.get("HLE_ENABLE_EXACT_EVIDENCE_OVERRIDE", "").strip().lower()
+                in {"1", "true", "yes", "on"}
+            )
+            if exact_evidence_override_enabled and len(top_attempts) >= 2 and not top_has_evidence:
                 selected = evidence_candidates[0]
                 return {
                     "selection_method": "evidence_bridge_priority_over_closed_book_majority",
@@ -4186,6 +4281,20 @@ def _select_recursive_child_answer(
                 "underlying_model_calls": 0,
                 "verifier_model_call": False,
             }
+        if problem["answer_type"] != "multipleChoice":
+            direct_candidates = [
+                attempt for attempt in valid
+                if attempt.get("prompt_kind") == "direct_short_answer"
+            ]
+            if direct_candidates:
+                selected = direct_candidates[0]
+                return {
+                    "selection_method": "exact_direct_fallback",
+                    "selected_child_id": selected["child_id"],
+                    "selected_answer": selected["parsed_answer"],
+                    "underlying_model_calls": 0,
+                    "verifier_model_call": False,
+                }
     if not valid:
         return {
             "selection_method": "all_children_failed",
@@ -4251,7 +4360,39 @@ def _select_recursive_child_answer(
             "selected_answer": selected["parsed_answer"],
             "underlying_model_calls": 0,
             "verifier_model_call": False,
-        }
+            }
+
+
+def _select_hipporag_context_candidate(
+    *,
+    problem: dict[str, Any],
+    valid: list[dict[str, Any]],
+    ranked: list[tuple[str, list[dict[str, Any]]]],
+) -> dict[str, Any] | None:
+    if problem.get("answer_type") != "multipleChoice":
+        return None
+    if os.environ.get("HLE_DISABLE_AGENT_HIPPORAG_PRIORITY", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return None
+    candidates = [
+        attempt for attempt in valid
+        if attempt.get("prompt_kind") == "hipporag_context_answer"
+        and str(attempt.get("parsed_answer") or "").strip()
+    ]
+    if not candidates:
+        return None
+    selected = sorted(candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+    selected_norm = _normalize_for_selection(str(selected.get("parsed_answer") or ""), answer_type="multipleChoice")
+    top_norm = ranked[0][0] if ranked else ""
+    broad_enabled = os.environ.get("HLE_ENABLE_BROAD_AGENT_HIPPORAG_PRIORITY", "").strip().lower() in {"1", "true", "yes", "on"}
+    if not broad_enabled and selected_norm != top_norm:
+        return None
+    return {
+        "selection_method": "hipporag_context_priority",
+        "selected_child_id": selected["child_id"],
+        "selected_answer": selected["parsed_answer"],
+        "underlying_model_calls": 0,
+        "verifier_model_call": False,
+    }
 
 
 def _maybe_run_source_grounded_mc_selection(
@@ -4327,19 +4468,25 @@ def _select_after_counter_assumption_challenge(
     timeout: float | None,
     max_tokens: int,
 ) -> dict[str, Any] | None:
+    if os.environ.get("HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        return None
     if not ranked or len(ranked[0][1]) < 2:
         return None
     top_norm = ranked[0][0]
+    option_evidence_arbitrator_enabled = _option_evidence_arbitrator_enabled()
+    challenge_prompt_kinds = {
+        "counter_assumption_challenge_answer",
+        "option_elimination_challenge_answer",
+        "forced_alternative_answer",
+        "critic_synthesis_answer",
+    }
+    if option_evidence_arbitrator_enabled:
+        challenge_prompt_kinds.add("mc_option_evidence_scorer_answer")
+    if _option_sweep_counter_trigger_enabled():
+        challenge_prompt_kinds.add("mc_option_sweep_candidate")
     challenge_candidates = [
         attempt for attempt in valid
-        if attempt.get("prompt_kind") in {
-            "counter_assumption_challenge_answer",
-            "option_elimination_challenge_answer",
-            "forced_alternative_answer",
-            "mc_option_evidence_scorer_answer",
-            "critic_synthesis_answer",
-            "mc_option_sweep_candidate",
-        }
+        if attempt.get("prompt_kind") in challenge_prompt_kinds
         and str(attempt.get("parsed_answer") or "").strip()
     ]
     if not any(
@@ -4347,21 +4494,28 @@ def _select_after_counter_assumption_challenge(
         for attempt in challenge_candidates
     ):
         return None
-    option_evidence_selection = _run_option_evidence_arbitrator(
-        problem=problem,
-        valid=valid,
-        top_norm=top_norm,
-        model=model,
-        eval_id=eval_id,
-        call_id=call_id,
-        logger=logger,
-        timeout=timeout,
-        max_tokens=max_tokens,
-    )
-    if option_evidence_selection:
-        return option_evidence_selection
+    verifier_valid = valid
+    if not option_evidence_arbitrator_enabled:
+        verifier_valid = [
+            attempt for attempt in valid
+            if attempt.get("prompt_kind") != "mc_option_evidence_scorer_answer"
+        ]
+    else:
+        option_evidence_selection = _run_option_evidence_arbitrator(
+            problem=problem,
+            valid=valid,
+            top_norm=top_norm,
+            model=model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+        if option_evidence_selection:
+            return option_evidence_selection
     try:
-        verifier_candidates = _unique_verifier_candidates(problem, valid)
+        verifier_candidates = _unique_verifier_candidates(problem, verifier_valid)
         verifier_text = _call_model(
             model=model,
             prompt=_verifier_prompt(problem, verifier_candidates),
@@ -4418,6 +4572,27 @@ def _select_after_counter_assumption_challenge(
             "underlying_model_calls": 0,
             "verifier_model_call": False,
         }
+
+
+def _option_evidence_arbitrator_enabled() -> bool:
+    return os.environ.get("HLE_ENABLE_OPTION_EVIDENCE_ARBITRATOR", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _option_sweep_counter_trigger_enabled() -> bool:
+    return os.environ.get("HLE_ENABLE_OPTION_SWEEP_COUNTER_TRIGGER", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _math_tool_child_timeout(timeout: float | None) -> float | None:
+    cap_text = os.environ.get("HLE_MATH_TOOL_CHILD_TIMEOUT_SEC", "180").strip()
+    try:
+        cap = float(cap_text)
+    except ValueError:
+        cap = 180.0
+    if cap <= 0:
+        return timeout
+    if timeout is None:
+        return cap
+    return min(float(timeout), cap)
 
 
 def _run_option_evidence_arbitrator(
@@ -5832,6 +6007,12 @@ def _module_trace(problem: dict[str, Any], *, variant: str, agent_plan: dict[str
                 "reason": "recursive HLE answering can add a transient external-evidence child; logs persist only hashes and counts",
             },
             {
+                "module": "agent_hipporag_context_bridge",
+                "expected": recursive_verify and problem.get("answer_type") == "multipleChoice",
+                "status": _stage_status(stages, "agent_hipporag_context_bridge") if stages.get("agent_hipporag_context_bridge") else "not_required",
+                "reason": "recursive HLE answering can add a HippoRAG-style associative retrieval child without using gold answers",
+            },
+            {
                 "module": "hle_math_tool_solver",
                 "expected": recursive_verify and _should_run_math_tool_child(problem),
                 "status": _stage_status(stages, "hle_math_tool_solver") if stages.get("hle_math_tool_solver") else "not_required",
@@ -6172,6 +6353,7 @@ def _component_efficacy_from_plan(
     recursive = stages.get("recursive_child_validation", {})
     selection = stages.get("multi_candidate_self_verifier", {})
     evidence = stages.get("hle_evidence_bridge", {})
+    agent_hipporag = stages.get("agent_hipporag_context_bridge", {})
     claim_verifier = stages.get("candidate_claim_verifier", {})
     domain_rule = stages.get("domain_rule_mc_verifier", {})
     math_tool = stages.get("hle_math_tool_solver", {})
@@ -6216,6 +6398,9 @@ def _component_efficacy_from_plan(
         "critic_model_used": critic_router.get("status") == "activated",
         "evidence_bridge_activated": evidence_status == "activated",
         "evidence_child_executed": "evidence_bridge_answer" in prompt_kinds,
+        "agent_hipporag_context_activated": agent_hipporag.get("status") == "activated",
+        "agent_hipporag_child_executed": "hipporag_context_answer" in prompt_kinds,
+        "hipporag_context_priority_used": selection_method == "hipporag_context_priority",
         "recursive_child_validation_activated": recursive.get("status") == "activated",
         "recursive_diverse_candidates": unique_candidate_count >= 2,
         "recursive_collapsed_consensus": bool(candidate_hashes) and unique_candidate_count <= 1,
@@ -6303,6 +6488,15 @@ def _component_efficacy_from_plan(
             "query_count": int(evidence.get("query_count") or 0),
             "selected_result_count": int(evidence.get("selected_result_count") or 0),
             "evidence_char_count": int(evidence.get("evidence_char_count") or 0),
+        },
+        "agent_hipporag": {
+            "status": agent_hipporag.get("status"),
+            "source": agent_hipporag.get("source"),
+            "query_count": int(agent_hipporag.get("query_count") or 0),
+            "candidate_doc_count": int(agent_hipporag.get("candidate_doc_count") or 0),
+            "selected_doc_count": int(agent_hipporag.get("selected_doc_count") or 0),
+            "context_char_count": int(agent_hipporag.get("context_char_count") or 0),
+            "top_scores": list(agent_hipporag.get("top_scores", []) or []),
         },
         "recursive": {
             "status": recursive.get("status"),

@@ -35,6 +35,7 @@ from assumption_os.hle_smoke_eval import (
     _maybe_run_domain_rule_mc_verifier,
     _maybe_run_mc_option_evidence_scorer,
     _maybe_run_option_elimination_challenge,
+    _math_tool_child_timeout,
     _module_trace,
     _needs_exact_answer_repair,
     _needs_evidence_grounded_child,
@@ -218,12 +219,22 @@ class HleSmokeEvalTest(unittest.TestCase):
             agent_plan={
                 "prompt_context": "graph context",
                 "hle_evidence_context": "[Evidence 1] source=wikipedia; title=X; snippet=Y.",
+                "hipporag_prompt_context": "[Evidence 1] source=wikipedia; title=H; snippet=R.",
             },
         )
         self.assertEqual(
-            [spec["prompt_kind"] for spec in mc_evidence_specs[:3]],
-            ["direct_short_answer", "evidence_bridge_answer", "agent_context_answer"],
+            [spec["prompt_kind"] for spec in mc_evidence_specs[:4]],
+            ["direct_short_answer", "evidence_bridge_answer", "agent_context_answer", "hipporag_context_answer"],
         )
+
+        exact_hipporag_specs = _recursive_child_prompt_specs(problem, agent_plan={})
+        self.assertNotIn("hipporag_context_answer", [spec["prompt_kind"] for spec in exact_hipporag_specs])
+        with patch.dict(os.environ, {"HLE_ENABLE_EXACT_AGENT_HIPPORAG_CHILD": "1"}):
+            exact_hipporag_specs = _recursive_child_prompt_specs(
+                problem,
+                agent_plan={"hipporag_prompt_context": "[Evidence 1] source=wikipedia; title=H; snippet=R."},
+            )
+        self.assertIn("hipporag_context_answer", [spec["prompt_kind"] for spec in exact_hipporag_specs])
 
     def test_parse_verifier_choice(self):
         self.assertEqual(_parse_verifier_choice('{"choice": 2}', max_index=3), 2)
@@ -377,12 +388,31 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertEqual(selection["selected_answer"], "Ada Lovelace")
 
-        evidence_selection = _select_recursive_child_answer(
+        with patch.dict(os.environ, {"HLE_ENABLE_EXACT_EVIDENCE_OVERRIDE": "1"}):
+            evidence_selection = _select_recursive_child_answer(
+                problem=problem,
+                attempts=[
+                    {"child_id": "c1", "child_index": 1, "prompt_kind": "direct", "parsed_answer": "wrong theorem"},
+                    {"child_id": "c2", "child_index": 2, "prompt_kind": "checked", "parsed_answer": "wrong theorem"},
+                    {"child_id": "c3", "child_index": 3, "prompt_kind": "evidence_bridge_answer", "parsed_answer": "right theorem"},
+                ],
+                model="m",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=1,
+                max_tokens=32,
+            )
+
+        self.assertEqual(evidence_selection["selection_method"], "evidence_bridge_priority_over_closed_book_majority")
+        self.assertEqual(evidence_selection["selected_answer"], "right theorem")
+
+        direct_selection = _select_recursive_child_answer(
             problem=problem,
             attempts=[
-                {"child_id": "c1", "child_index": 1, "prompt_kind": "direct", "parsed_answer": "wrong theorem"},
-                {"child_id": "c2", "child_index": 2, "prompt_kind": "checked", "parsed_answer": "wrong theorem"},
-                {"child_id": "c3", "child_index": 3, "prompt_kind": "evidence_bridge_answer", "parsed_answer": "right theorem"},
+                {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "direct answer"},
+                {"child_id": "c2", "child_index": 2, "prompt_kind": "evidence_bridge_answer", "parsed_answer": "evidence answer"},
+                {"child_id": "c3", "child_index": 3, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "third answer"},
             ],
             model="m",
             eval_id="e",
@@ -391,9 +421,8 @@ class HleSmokeEvalTest(unittest.TestCase):
             timeout=1,
             max_tokens=32,
         )
-
-        self.assertEqual(evidence_selection["selection_method"], "evidence_bridge_priority_over_closed_book_majority")
-        self.assertEqual(evidence_selection["selected_answer"], "right theorem")
+        self.assertEqual(direct_selection["selection_method"], "exact_direct_fallback")
+        self.assertEqual(direct_selection["selected_answer"], "direct answer")
 
         math_selection = _select_recursive_child_answer(
             problem=problem,
@@ -674,17 +703,18 @@ class HleSmokeEvalTest(unittest.TestCase):
             {"child_id": "c2", "child_index": 2, "prompt_kind": "agent_context_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
             {"child_id": "c3", "child_index": 3, "prompt_kind": "counter_assumption_challenge_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
         ]
-        with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}'):
-            selection = _select_recursive_child_answer(
-                problem=problem,
-                attempts=attempts,
-                model="m",
-                eval_id="e",
-                call_id="c",
-                logger=None,
-                timeout=1,
-                max_tokens=32,
-            )
+        with patch.dict(os.environ, {"HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1"}):
+            with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}'):
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
 
         self.assertEqual(selection["selection_method"], "counter_assumption_verifier_choice")
         self.assertEqual(selection["selected_child_id"], "c3")
@@ -916,23 +946,24 @@ class HleSmokeEvalTest(unittest.TestCase):
             {"child_id": "c2", "child_index": 2, "prompt_kind": "agent_context_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
             {"child_id": "c3", "child_index": 3, "prompt_kind": "option_elimination_challenge_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
         ]
-        with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}'):
-            selection = _select_recursive_child_answer(
-                problem=problem,
-                attempts=attempts,
-                model="m",
-                eval_id="e",
-                call_id="c",
-                logger=None,
-                timeout=1,
-                max_tokens=32,
-            )
+        with patch.dict(os.environ, {"HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1"}):
+            with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}'):
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
 
         self.assertEqual(selection["selection_method"], "counter_assumption_verifier_choice")
         self.assertEqual(selection["selected_child_id"], "c3")
         self.assertEqual(selection["selected_answer"], "B")
 
-    def test_option_evidence_conflict_uses_evidence_aware_arbitrator(self):
+    def test_option_evidence_conflict_is_diagnostic_by_default(self):
         problem = {
             "id_hash": "pid",
             "question_hash": "qid",
@@ -965,9 +996,136 @@ class HleSmokeEvalTest(unittest.TestCase):
                 max_tokens=32,
             )
 
+        self.assertEqual(selection["selection_method"], "normalized_majority")
+        self.assertEqual(selection["selected_child_id"], "c1")
+        self.assertEqual(selection["selected_answer"], "A")
+
+    def test_option_evidence_conflict_can_use_evidence_aware_arbitrator_when_enabled(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. majority\nB. evidence-backed",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "agent_context_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {
+                "child_id": "c3",
+                "child_index": 3,
+                "prompt_kind": "mc_option_evidence_scorer_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+                "private_option_evidence_context": "Option B: directly supported by evidence.",
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_OPTION_EVIDENCE_ARBITRATOR": "1", "HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1"}):
+            with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}'):
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
+
         self.assertEqual(selection["selection_method"], "option_evidence_verifier_choice")
         self.assertEqual(selection["selected_child_id"], "c3")
         self.assertEqual(selection["selected_answer"], "B")
+
+    def test_option_sweep_candidates_do_not_trigger_counter_verifier_by_default(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. majority\nB. synthetic\nC. synthetic",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "agent_context_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "c3", "child_index": 3, "prompt_kind": "mc_option_sweep_candidate", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+            {"child_id": "c4", "child_index": 4, "prompt_kind": "mc_option_sweep_candidate", "parsed_answer": "C", "parsed_answer_hash": "hc"},
+        ]
+        with patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+            selection = _select_recursive_child_answer(
+                problem=problem,
+                attempts=attempts,
+                model="m",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=1,
+                max_tokens=32,
+            )
+
+        call_model.assert_not_called()
+        self.assertEqual(selection["selection_method"], "normalized_majority")
+        self.assertEqual(selection["selected_child_id"], "c1")
+        self.assertEqual(selection["selected_answer"], "A")
+
+    def test_hipporag_context_child_requires_agreement_by_default(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. majority\nB. retrieval",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "c3", "child_index": 3, "prompt_kind": "hipporag_context_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+        ]
+        selection = _select_recursive_child_answer(
+            problem=problem,
+            attempts=attempts,
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=1,
+            max_tokens=32,
+        )
+
+        self.assertEqual(selection["selection_method"], "normalized_majority")
+        self.assertEqual(selection["selected_child_id"], "c1")
+
+        with patch.dict(os.environ, {"HLE_ENABLE_BROAD_AGENT_HIPPORAG_PRIORITY": "1"}):
+            selection = _select_recursive_child_answer(
+                problem=problem,
+                attempts=attempts,
+                model="m",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=1,
+                max_tokens=32,
+            )
+        self.assertEqual(selection["selection_method"], "hipporag_context_priority")
+        self.assertEqual(selection["selected_child_id"], "c3")
+        self.assertEqual(selection["selected_answer"], "B")
+
+        with patch.dict(os.environ, {"HLE_ENABLE_BROAD_AGENT_HIPPORAG_PRIORITY": "1", "HLE_DISABLE_AGENT_HIPPORAG_PRIORITY": "1"}):
+            selection = _select_recursive_child_answer(
+                problem=problem,
+                attempts=attempts,
+                model="m",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=1,
+                max_tokens=32,
+            )
+        self.assertEqual(selection["selection_method"], "normalized_majority")
+        self.assertEqual(selection["selected_child_id"], "c1")
 
     def test_source_grounded_verifier_can_precede_counter_challenge_when_broad_mode_enabled(self):
         problem = {
@@ -1051,17 +1209,18 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertTrue(summary["critic_disagreed_with_majority"])
 
         attempts.append(attempt)
-        with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}'):
-            selection = _select_recursive_child_answer(
-                problem=problem,
-                attempts=attempts,
-                model="gpt-5.5",
-                eval_id="e",
-                call_id="c",
-                logger=None,
-                timeout=1,
-                max_tokens=32,
-            )
+        with patch.dict(os.environ, {"HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1"}):
+            with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}'):
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="gpt-5.5",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
         self.assertEqual(selection["selection_method"], "counter_assumption_verifier_choice")
         self.assertEqual(selection["selected_child_id"], "c4")
 
@@ -1097,6 +1256,21 @@ class HleSmokeEvalTest(unittest.TestCase):
                 timeout=1,
                 max_tokens=32,
             )
+        self.assertEqual(selection["selection_method"], "normalized_majority")
+        self.assertEqual(selection["selected_answer"], "A")
+
+        with patch.dict(os.environ, {"HLE_ENABLE_OPTION_SWEEP_COUNTER_TRIGGER": "1", "HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1"}):
+            with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}'):
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="gpt-5.5",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
         self.assertEqual(selection["selection_method"], "counter_assumption_verifier_choice")
         self.assertEqual(selection["selected_answer"], "B")
 
@@ -1279,6 +1453,10 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertTrue(_should_run_math_tool_child(math_problem))
         self.assertFalse(_should_run_math_tool_child(non_math_problem))
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(_math_tool_child_timeout(7200), 180)
+        with patch.dict(os.environ, {"HLE_MATH_TOOL_CHILD_TIMEOUT_SEC": "0"}):
+            self.assertEqual(_math_tool_child_timeout(7200), 7200)
         result = _deterministic_math_tool_answer(math_problem)
         self.assertEqual(result["answer"], "42")
         self.assertEqual(result["confidence"], "verified_symbolic")
