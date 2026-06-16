@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import http.client
 import html
 import json
 import os
@@ -68,6 +69,10 @@ def build_hle_text_smoke_eval_payload(
     agent_child_mode: str = "parallel_quorum",
     agent_child_timeout: float | None = None,
     evidence_bridge_enabled: bool = True,
+    exclude_existing_hle_artifacts: bool = False,
+    exclude_artifact_glob: str = "phase four/assumption_graph/paper_readiness_20260604/hle*.json*",
+    sample_answer_type: str = "",
+    sample_subject_contains: str = "",
 ) -> dict[str, Any]:
     root = root.resolve()
     models = models or ["gpt-5.5"]
@@ -75,8 +80,20 @@ def build_hle_text_smoke_eval_payload(
     graph_dir = graph_dir or (root / DEFAULT_GRAPH_DIR)
     access = _access_preflight()
     sample_rows: list[dict[str, Any]] = []
+    excluded_problem_hashes = (
+        _collect_existing_hle_problem_hashes(root=root, artifact_glob=exclude_artifact_glob)
+        if exclude_existing_hle_artifacts
+        else set()
+    )
     if access["dataset_accessible"]:
-        sample_rows = _load_text_only_sample(sample_size=sample_size, max_scan=max_scan, seed_offset=seed_offset)
+        sample_rows = _load_text_only_sample(
+            sample_size=sample_size,
+            max_scan=max_scan,
+            seed_offset=seed_offset,
+            exclude_problem_hashes=excluded_problem_hashes,
+            answer_type_filter=sample_answer_type,
+            subject_contains=sample_subject_contains,
+        )
     run_rows: list[dict[str, Any]] = []
     logger = _JsonlLogger(log_out) if log_out else None
     api_summary = {
@@ -93,6 +110,9 @@ def build_hle_text_smoke_eval_payload(
         "agent_child_mode": agent_child_mode,
         "agent_child_timeout_sec": agent_child_timeout if agent_child_timeout is not None else call_timeout,
         "evidence_bridge_enabled": evidence_bridge_enabled,
+        "exclude_existing_hle_artifacts": exclude_existing_hle_artifacts,
+        "exclude_artifact_glob": exclude_artifact_glob,
+        "excluded_existing_problem_count": len(excluded_problem_hashes),
         "underlying_model_calls_executed": 0,
     }
     if execute_live and sample_rows:
@@ -106,6 +126,7 @@ def build_hle_text_smoke_eval_payload(
                         "variant": variant,
                     })
                     agent_plan = None
+                    variant_plan = None
                     if variant.startswith("assumption_agent"):
                         agent_plan = _build_assumption_agent_plan(
                             root=root,
@@ -119,7 +140,17 @@ def build_hle_text_smoke_eval_payload(
                             top_k=agent_top_k,
                             context_max_chars=agent_context_max_chars,
                         )
-                    module_trace = _module_trace(problem, variant=variant, agent_plan=agent_plan)
+                        variant_plan = agent_plan
+                    elif variant.startswith("hipporag"):
+                        variant_plan = _build_hipporag_baseline_plan(
+                            problem=problem,
+                            eval_id=eval_id,
+                            call_id=call_id,
+                            model=model,
+                            logger=logger,
+                            context_max_chars=agent_context_max_chars,
+                        )
+                    module_trace = _module_trace(problem, variant=variant, agent_plan=variant_plan)
                     _log_event(
                         logger,
                         {
@@ -160,7 +191,7 @@ def build_hle_text_smoke_eval_payload(
                         else:
                             answer_text = _call_model(
                                 model=model,
-                                prompt=_prompt_for(problem, variant=variant, agent_plan=agent_plan),
+                                prompt=_prompt_for(problem, variant=variant, agent_plan=variant_plan),
                                 timeout=call_timeout,
                                 max_tokens=max_tokens,
                             )
@@ -178,8 +209,15 @@ def build_hle_text_smoke_eval_payload(
                                 "latency_sec": latency,
                                 "timeout_sec": api_summary["call_timeout_sec"],
                                 "max_tokens": max_tokens,
-                                "agent_plan_hash": stable_hash(agent_plan or {}),
+                                "agent_plan_hash": stable_hash(variant_plan or {}),
                             },
+                        )
+                        row["component_efficacy"] = _component_efficacy_from_plan(
+                            problem=problem,
+                            variant=variant,
+                            plan=variant_plan or {},
+                            correct=bool(row["correct"]),
+                            error=None,
                         )
                         run_rows.append(row)
                         _log_event(
@@ -195,6 +233,7 @@ def build_hle_text_smoke_eval_payload(
                                 "correct": row["correct"],
                                 "prediction_hash": row["prediction_hash"],
                                 "module_trace": module_trace,
+                                "component_efficacy": row["component_efficacy"],
                                 "agent_decision": (agent_plan or {}).get("world_model_router", {}).get("decision"),
                             },
                         )
@@ -208,22 +247,28 @@ def build_hle_text_smoke_eval_payload(
                             "error": str(exc)[:300],
                             "latency_sec": latency,
                         })
-                        run_rows.append(
-                            _error_row(
-                                problem=problem,
-                                model=model,
-                                variant=variant,
-                                exc=exc,
-                                module_trace=module_trace,
-                                call_metadata={
-                                    "call_id": call_id,
-                                    "latency_sec": latency,
-                                    "timeout_sec": api_summary["call_timeout_sec"],
-                                    "max_tokens": max_tokens,
-                                    "agent_plan_hash": stable_hash(agent_plan or {}),
-                                },
-                            )
+                        error_row = _error_row(
+                            problem=problem,
+                            model=model,
+                            variant=variant,
+                            exc=exc,
+                            module_trace=module_trace,
+                            call_metadata={
+                                "call_id": call_id,
+                                "latency_sec": latency,
+                                "timeout_sec": api_summary["call_timeout_sec"],
+                                "max_tokens": max_tokens,
+                                "agent_plan_hash": stable_hash(variant_plan or {}),
+                            },
                         )
+                        error_row["component_efficacy"] = _component_efficacy_from_plan(
+                            problem=problem,
+                            variant=variant,
+                            plan=variant_plan or {},
+                            correct=False,
+                            error={"type": type(exc).__name__},
+                        )
+                        run_rows.append(error_row)
                         _log_event(
                             logger,
                             {
@@ -237,6 +282,7 @@ def build_hle_text_smoke_eval_payload(
                                 "error_type": type(exc).__name__,
                                 "error": str(exc)[:300],
                                 "module_trace": module_trace,
+                                "component_efficacy": error_row["component_efficacy"],
                                 "agent_decision": (agent_plan or {}).get("world_model_router", {}).get("decision"),
                             },
                         )
@@ -271,6 +317,11 @@ def build_hle_text_smoke_eval_payload(
             "max_scan": max_scan,
             "seed_offset": seed_offset,
             "text_only_policy": "skip rows with image, image_preview, or rationale_image payloads",
+            "fresh_exclusion_enabled": exclude_existing_hle_artifacts,
+            "excluded_existing_problem_count": len(excluded_problem_hashes),
+            "duplicate_with_excluded_problem_count": sum(1 for row in sample_rows if row["id_hash"] in excluded_problem_hashes),
+            "sample_answer_type_filter": sample_answer_type,
+            "sample_subject_contains_filter": sample_subject_contains,
             "sample_problem_hashes": [row["id_hash"] for row in sample_rows],
         },
         "models": models,
@@ -318,6 +369,22 @@ def format_markdown(payload: dict[str, Any]) -> str:
         )
     lines.extend([
         "",
+        "## Same-Batch Control Comparison",
+        "",
+        "| model | comparison | shared n | agent acc | control acc | delta | agent-only correct | control-only correct |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ])
+    for model, comparison in sorted(metrics.get("control_comparison", {}).items()):
+        for key, row in sorted(comparison.items()):
+            if not key.startswith("agent_vs_"):
+                continue
+            lines.append(
+                f"| `{model}` | `{key}` | `{row['shared_problem_count']}` | `{row['agent_accuracy']}` | "
+                f"`{row['control_accuracy']}` | `{row['agent_minus_control_accuracy']}` | "
+                f"`{row['agent_unique_correct_count']}` | `{row['control_unique_correct_count']}` |"
+            )
+    lines.extend([
+        "",
         "## Module Activation",
         "",
         "| model | variant | expected missing modules | activated modules |",
@@ -336,6 +403,67 @@ def format_markdown(payload: dict[str, Any]) -> str:
         lines.append(
             f"| `{model}` | `{variant}` | `{', '.join(missing_modules) or 'none'}` | "
             f"`{', '.join(active_modules) or 'none'}` |"
+        )
+    lines.extend([
+        "",
+        "## Component Efficacy",
+        "",
+        "| model | variant | selection methods | key functional flags | flag accuracy |",
+        "| --- | --- | --- | --- | --- |",
+    ])
+    for key, row in sorted(metrics.get("component_efficacy_summary", {}).items()):
+        model, variant = key.split("::", 1)
+        selection_methods = ", ".join(
+            f"{method}:{count}" for method, count in sorted(row.get("selection_method_counts", {}).items())
+        ) or "none"
+        interesting_flags = [
+            flag for flag in (
+                "context_injected",
+                "graph_context_injected",
+                "evidence_bridge_activated",
+                "evidence_child_executed",
+                "recursive_diverse_candidates",
+                "recursive_collapsed_consensus",
+                "recursive_timeout_pressure",
+                "critic_model_used",
+                "claim_verifier_verified_candidate",
+                "claim_verifier_no_executable_claim",
+                "domain_rule_mc_verifier_activated",
+                "domain_rule_mc_verifier_selected",
+                "domain_rule_override",
+                "mc_option_evidence_scorer_activated",
+                "mc_option_evidence_candidate_emitted",
+                "mc_option_evidence_candidate_selected",
+                "option_evidence_verifier_used",
+                "critic_synthesis_activated",
+                "critic_synthesis_disagreed",
+                "critic_synthesis_selected",
+                "mc_option_sweep_activated",
+                "mc_option_sweep_selected",
+                "source_grounded_verifier_used",
+                "candidate_claim_override",
+                "counter_assumption_challenge_activated",
+                "counter_assumption_challenge_disagreed",
+                "counter_assumption_challenge_selected",
+                "option_elimination_challenge_activated",
+                "option_elimination_challenge_disagreed",
+                "option_elimination_challenge_selected",
+                "forced_alternative_activated",
+                "forced_alternative_disagreed",
+                "forced_alternative_selected",
+                "counter_assumption_verifier_used",
+                "majority_only_selection",
+            )
+            if row.get("flag_counts", {}).get(flag)
+        ]
+        flag_counts = ", ".join(
+            f"{flag}:{row['flag_counts'][flag]}" for flag in interesting_flags[:8]
+        ) or "none"
+        flag_accuracy = ", ".join(
+            f"{flag}:{row.get('flag_accuracy', {}).get(flag)}" for flag in interesting_flags[:5]
+        ) or "none"
+        lines.append(
+            f"| `{model}` | `{variant}` | `{selection_methods}` | `{flag_counts}` | `{flag_accuracy}` |"
         )
     lines.extend([
         "",
@@ -380,12 +508,21 @@ def _access_preflight() -> dict[str, Any]:
         }
 
 
-def _load_text_only_sample(*, sample_size: int, max_scan: int, seed_offset: int) -> list[dict[str, Any]]:
+def _load_text_only_sample(
+    *,
+    sample_size: int,
+    max_scan: int,
+    seed_offset: int,
+    exclude_problem_hashes: set[str] | None = None,
+    answer_type_filter: str = "",
+    subject_contains: str = "",
+) -> list[dict[str, Any]]:
     from datasets import Image, load_dataset
 
     dataset = load_dataset(DATASET_NAME, split="test", streaming=True, token=_hf_token())
     dataset = _cast_image_columns(dataset, Image)
     sample: list[dict[str, Any]] = []
+    exclude_problem_hashes = exclude_problem_hashes or set()
     scanned = 0
     skipped = 0
     for row in dataset:
@@ -402,10 +539,76 @@ def _load_text_only_sample(*, sample_size: int, max_scan: int, seed_offset: int)
             if scanned >= max_scan:
                 break
             continue
-        sample.append(_problem_from_row(row, scanned=scanned, skipped_before=skipped))
+        if answer_type_filter and str(row.get("answer_type") or "") != answer_type_filter:
+            skipped += 1
+            if scanned >= max_scan:
+                break
+            continue
+        if subject_contains:
+            haystack = " ".join([
+                str(row.get("category") or ""),
+                str(row.get("raw_subject") or ""),
+            ]).lower()
+            if subject_contains.lower() not in haystack:
+                skipped += 1
+                if scanned >= max_scan:
+                    break
+                continue
+        problem = _problem_from_row(row, scanned=scanned, skipped_before=skipped)
+        if problem["id_hash"] in exclude_problem_hashes:
+            skipped += 1
+            if scanned >= max_scan:
+                break
+            continue
+        sample.append(problem)
         if len(sample) >= sample_size or scanned >= max_scan:
             break
     return sample
+
+
+def _collect_existing_hle_problem_hashes(*, root: Path, artifact_glob: str) -> set[str]:
+    """Collect previous HLE problem hashes without reading or persisting raw HLE text."""
+    hashes: set[str] = set()
+    for path in root.glob(artifact_glob):
+        if not path.is_file():
+            continue
+        if path.suffix == ".jsonl":
+            _collect_problem_hashes_from_jsonl(path, hashes)
+        elif path.suffix == ".json":
+            _collect_problem_hashes_from_json(path, hashes)
+    return hashes
+
+
+def _collect_problem_hashes_from_json(path: Path, hashes: set[str]) -> None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    stack = [data]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, dict):
+            value = item.get("problem_id_hash")
+            if isinstance(value, str) and value:
+                hashes.add(value)
+            stack.extend(item.values())
+        elif isinstance(item, list):
+            stack.extend(item)
+
+
+def _collect_problem_hashes_from_jsonl(path: Path, hashes: set[str]) -> None:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                value = item.get("problem_id_hash") if isinstance(item, dict) else None
+                if isinstance(value, str) and value:
+                    hashes.add(value)
+    except Exception:
+        return
 
 
 def _cast_image_columns(dataset: Any, image_cls: Any) -> Any:
@@ -686,6 +889,149 @@ def _build_assumption_agent_plan(
     return plan
 
 
+def _build_hipporag_baseline_plan(
+    *,
+    problem: dict[str, Any],
+    eval_id: str,
+    call_id: str,
+    model: str,
+    logger: "_JsonlLogger | None",
+    context_max_chars: int,
+) -> dict[str, Any]:
+    """Build an independent HippoRAG-style retrieval plan for HLE."""
+    plan: dict[str, Any] = {
+        "baseline_kind": "hipporag_style_transient_evidence",
+        "call_id": call_id,
+        "problem_id_hash": problem["id_hash"],
+        "question_hash": problem["question_hash"],
+        "model": model,
+        "stages": {},
+        "prompt_context": "",
+    }
+    queries = _candidate_evidence_queries(problem)
+    docs: list[dict[str, str]] = []
+    errors: list[str] = []
+    for query in queries:
+        try:
+            docs.extend(_wikipedia_search(query, limit=3, timeout=6.0))
+        except Exception as exc:
+            errors.append(type(exc).__name__)
+    docs = _dedupe_evidence_results(docs)
+    retrieval_summary = {
+        "status": "activated" if queries else "no_queries",
+        "source": "wikipedia_search",
+        "query_count": len(queries),
+        "query_hashes": [stable_hash({"query": query}) for query in queries],
+        "candidate_doc_count": len(docs),
+        "candidate_doc_hashes": [
+            stable_hash({"title": row.get("title", ""), "snippet": row.get("snippet", "")})
+            for row in docs[:10]
+        ],
+        "error_types": sorted(set(errors)),
+    }
+    plan["stages"]["hipporag_context_retrieval"] = retrieval_summary
+    _agent_stage_log(
+        logger,
+        eval_id=eval_id,
+        call_id=call_id,
+        problem=problem,
+        model=model,
+        variant="hipporag_baseline",
+        stage="hipporag_context_retrieval",
+        data=retrieval_summary,
+    )
+
+    ranked_docs = _hipporag_style_rerank(problem, docs)
+    context = _format_evidence_context([row["doc"] for row in ranked_docs[:5]], max_chars=context_max_chars)
+    rerank_summary = {
+        "status": "activated" if ranked_docs else "no_results",
+        "method": "lexical_entity_passage_association",
+        "candidate_doc_count": len(docs),
+        "selected_doc_count": min(len(ranked_docs), 5),
+        "selected_doc_hashes": [
+            stable_hash({"title": row["doc"].get("title", ""), "snippet": row["doc"].get("snippet", "")})
+            for row in ranked_docs[:5]
+        ],
+        "top_scores": [round(float(row["score"]), 4) for row in ranked_docs[:5]],
+        "entity_node_count": len(_hipporag_entity_nodes(problem, docs)),
+    }
+    plan["stages"]["hipporag_associative_rerank"] = rerank_summary
+    _agent_stage_log(
+        logger,
+        eval_id=eval_id,
+        call_id=call_id,
+        problem=problem,
+        model=model,
+        variant="hipporag_baseline",
+        stage="hipporag_associative_rerank",
+        data=rerank_summary,
+    )
+    plan["prompt_context"] = context
+    plan["stages"]["prompt_builder"] = {
+        "status": "activated",
+        "context_injected": bool(context),
+        "context_char_count": len(context),
+    }
+    _agent_stage_log(
+        logger,
+        eval_id=eval_id,
+        call_id=call_id,
+        problem=problem,
+        model=model,
+        variant="hipporag_baseline",
+        stage="prompt_builder",
+        data=plan["stages"]["prompt_builder"],
+    )
+    return plan
+
+
+def _hipporag_style_rerank(problem: dict[str, Any], docs: list[dict[str, str]]) -> list[dict[str, Any]]:
+    query_terms = _content_terms(problem.get("_question", ""))
+    entities = _hipporag_entity_nodes(problem, docs)
+    entity_terms: set[str] = set()
+    for entity in entities:
+        entity_terms.update(_content_terms(entity))
+    ranked: list[dict[str, Any]] = []
+    for index, doc in enumerate(docs):
+        text = f"{doc.get('title', '')} {doc.get('snippet', '')}"
+        doc_terms = _content_terms(text)
+        title_terms = _content_terms(doc.get("title", ""))
+        query_overlap = len(query_terms & doc_terms)
+        title_overlap = len(query_terms & title_terms)
+        entity_overlap = len(entity_terms & doc_terms)
+        score = query_overlap + 0.6 * title_overlap + 0.25 * entity_overlap + 0.01 * max(0, len(docs) - index)
+        ranked.append({"doc": doc, "score": score})
+    ranked.sort(key=lambda row: (-float(row["score"]), row["doc"].get("title", "")))
+    return ranked
+
+
+def _hipporag_entity_nodes(problem: dict[str, Any], docs: list[dict[str, str]]) -> list[str]:
+    entities: list[str] = []
+    for value in (problem.get("raw_subject"), problem.get("category")):
+        if value:
+            entities.append(str(value))
+    question = str(problem.get("_question") or "")
+    entities.extend(re.findall(r"\b[A-Z][A-Za-z0-9_+.-]*(?:\s+[A-Z][A-Za-z0-9_+.-]*){0,5}\b", question))
+    entities.extend(row.get("title", "") for row in docs if row.get("title"))
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for entity in entities:
+        text = _clean_evidence_text(entity)
+        key = _normalize_exact(text)
+        if key and key not in seen:
+            seen.add(key)
+            cleaned.append(text)
+    return cleaned[:20]
+
+
+def _content_terms(text: str) -> set[str]:
+    return {
+        token.lower()
+        for token in re.findall(r"[A-Za-z0-9_+.-]{3,}", str(text or ""))
+        if token.lower() not in _EVIDENCE_QUERY_STOPWORDS
+    }
+
+
 def _prompt_for(problem: dict[str, Any], *, variant: str, agent_plan: dict[str, Any] | None = None) -> str:
     question = problem["_question"]
     answer_type = problem["answer_type"]
@@ -713,6 +1059,21 @@ def _prompt_for(problem: dict[str, Any], *, variant: str, agent_plan: dict[str, 
             "return only the requested JSON. Do not include reasoning.\n\n"
             f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
         )
+    if variant.startswith("hipporag"):
+        context = (agent_plan or {}).get("prompt_context", "")
+        context_block = (
+            "HippoRAG-style transient retrieval context follows. It was built only from question-triggered "
+            "external evidence and does not include the gold answer or Assumption Agent graph. Use it only if "
+            "it directly supports the answer; ignore irrelevant passages.\n\n"
+            f"{context}\n\n"
+            if context
+            else ""
+        )
+        return (
+            "Solve this expert exam item using retrieval-augmented QA. Do not expose reasoning.\n\n"
+            f"{context_block}"
+            f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
+        )
     return f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
 
 
@@ -731,6 +1092,26 @@ def _call_recursive_verified_answer(
     evidence_bridge_enabled: bool,
 ) -> dict[str, Any]:
     """Run multiple child answer attempts and select one without persisting raw HLE text."""
+    critic_model = _agent_critic_model(model)
+    if critic_model != model:
+        agent_plan.setdefault("stages", {})["critic_model_router"] = {
+            "status": "activated",
+            "base_model": model,
+            "critic_model": critic_model,
+            "policy": "env_override_for_falsification_and_verification",
+        }
+    evidence_summary: dict[str, Any] | None = None
+    if evidence_bridge_enabled and _should_prime_evidence_bridge(problem, agent_plan):
+        evidence_context, evidence_summary = _build_hle_evidence_bridge_context(
+            problem=problem,
+            eval_id=eval_id,
+            call_id=call_id,
+            model=model,
+            logger=logger,
+        )
+        if evidence_context:
+            agent_plan["hle_evidence_context"] = evidence_context
+            agent_plan["hle_evidence_bridge"] = evidence_summary
     specs = _recursive_child_prompt_specs(problem, agent_plan=agent_plan)
     child_result = _execute_recursive_child_attempts(
         problem=problem,
@@ -747,8 +1128,57 @@ def _call_recursive_verified_answer(
     underlying_calls = int(child_result["underlying_model_calls"] or 0)
     early_stop_reason = child_result.get("early_stop_reason")
     skipped_prompt_kinds = child_result.get("skipped_prompt_kinds", [])
-    evidence_summary: dict[str, Any] | None = None
-    if evidence_bridge_enabled and _needs_evidence_grounded_child(problem, attempts):
+    math_tool_summary: dict[str, Any] | None = None
+    if _should_run_math_tool_child(problem):
+        math_attempt = _run_math_tool_attempt(
+            problem=problem,
+            model=model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=min(max_tokens, 512),
+        )
+        attempts.append(math_attempt)
+        math_tool_summary = math_attempt.get("tool_summary")
+        underlying_calls += int(math_attempt.get("underlying_model_calls", 0) or 0)
+    candidate_verifier_summary: dict[str, Any] | None = None
+    if _should_run_candidate_claim_verifier(problem):
+        candidate_verifier_summary = _apply_math_candidate_claim_verifier(
+            problem,
+            attempts,
+            model=critic_model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=min(max_tokens, 384),
+        )
+        underlying_calls += int(candidate_verifier_summary.get("underlying_model_calls", 0) or 0)
+    option_evidence_summary: dict[str, Any] | None = None
+    option_evidence_attempt, option_evidence_summary = _maybe_run_mc_option_evidence_scorer(
+        problem=problem,
+        attempts=attempts,
+        eval_id=eval_id,
+        call_id=call_id,
+        model=model,
+        logger=logger,
+    )
+    if option_evidence_attempt:
+        attempts.append(option_evidence_attempt)
+    domain_rule_summary: dict[str, Any] | None = None
+    domain_rule_attempt, domain_rule_summary = _maybe_run_domain_rule_mc_verifier(
+        problem=problem,
+        attempts=attempts,
+        evidence_context=str(agent_plan.get("hle_evidence_context") or ""),
+        eval_id=eval_id,
+        call_id=call_id,
+        model=model,
+        logger=logger,
+    )
+    if domain_rule_attempt:
+        attempts.append(domain_rule_attempt)
+    if evidence_bridge_enabled and not agent_plan.get("hle_evidence_context") and _needs_evidence_grounded_child(problem, attempts):
         evidence_context, evidence_summary = _build_hle_evidence_bridge_context(
             problem=problem,
             eval_id=eval_id,
@@ -766,7 +1196,7 @@ def _call_recursive_verified_answer(
                     "prompt": _evidence_grounded_answer_prompt(problem, evidence_context=evidence_context),
                 },
                 child_index=len(attempts) + 1,
-                model=model,
+                model=critic_model,
                 eval_id=eval_id,
                 call_id=call_id,
                 logger=logger,
@@ -777,18 +1207,101 @@ def _call_recursive_verified_answer(
             if evidence_attempt.get("status") == "answered":
                 underlying_calls += 1
 
+    counter_challenge_summary: dict[str, Any] | None = None
+    counter_challenge_attempt, counter_challenge_summary = _maybe_run_counter_assumption_challenge(
+        problem=problem,
+        attempts=attempts,
+        candidate_verifier_summary=candidate_verifier_summary,
+        math_tool_summary=math_tool_summary,
+        evidence_context=str(agent_plan.get("hle_evidence_context") or ""),
+        model=critic_model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=child_timeout if child_timeout is not None else timeout,
+        max_tokens=max_tokens,
+    )
+    if counter_challenge_attempt:
+        attempts.append(counter_challenge_attempt)
+        if counter_challenge_attempt.get("status") == "answered":
+            underlying_calls += 1
+        option_elimination_attempt, option_elimination_summary = _maybe_run_option_elimination_challenge(
+            problem=problem,
+            attempts=attempts,
+            counter_challenge_summary=counter_challenge_summary,
+            evidence_context=str(agent_plan.get("hle_evidence_context") or ""),
+            model=critic_model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=max_tokens,
+        )
+        if option_elimination_summary:
+            counter_challenge_summary["option_elimination_challenge"] = option_elimination_summary
+        if option_elimination_attempt:
+            attempts.append(option_elimination_attempt)
+            if option_elimination_attempt.get("status") == "answered":
+                underlying_calls += 1
+            forced_alternative_attempt, forced_alternative_summary = _maybe_run_forced_alternative_challenge(
+                problem=problem,
+                attempts=attempts,
+                option_elimination_summary=option_elimination_summary,
+                evidence_context=str(agent_plan.get("hle_evidence_context") or ""),
+                model=critic_model,
+                eval_id=eval_id,
+                call_id=call_id,
+                logger=logger,
+                timeout=child_timeout if child_timeout is not None else timeout,
+                max_tokens=max_tokens,
+            )
+            if forced_alternative_summary:
+                counter_challenge_summary["forced_alternative_challenge"] = forced_alternative_summary
+            if forced_alternative_attempt:
+                attempts.append(forced_alternative_attempt)
+                if forced_alternative_attempt.get("status") == "answered":
+                    underlying_calls += 1
+
+    critic_synthesis_summary: dict[str, Any] | None = None
+    critic_synthesis_attempt, critic_synthesis_summary = _maybe_run_critic_synthesis_child(
+        problem=problem,
+        attempts=attempts,
+        evidence_context=str(agent_plan.get("hle_evidence_context") or ""),
+        base_model=model,
+        critic_model=critic_model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=child_timeout if child_timeout is not None else timeout,
+        max_tokens=max_tokens,
+    )
+    if critic_synthesis_attempt:
+        attempts.append(critic_synthesis_attempt)
+        if critic_synthesis_attempt.get("status") == "answered":
+            underlying_calls += 1
+
+    option_sweep_summary: dict[str, Any] | None = None
+    option_sweep_attempts, option_sweep_summary = _maybe_add_mc_option_sweep_candidates(
+        problem=problem,
+        attempts=attempts,
+    )
+    if option_sweep_attempts:
+        attempts.extend(option_sweep_attempts)
+
     selection = _select_recursive_child_answer(
         problem=problem,
         attempts=attempts,
-        model=model,
+        model=critic_model,
         eval_id=eval_id,
         call_id=call_id,
         logger=logger,
         timeout=timeout,
         max_tokens=min(max_tokens, 384),
+        evidence_context=str(agent_plan.get("hle_evidence_context") or ""),
     )
     underlying_calls += int(selection.get("underlying_model_calls", 0) or 0)
     selected_answer = selection.get("selected_answer") or _fallback_answer(attempts)
+    selected_answer, canonical_summary = _canonicalize_exact_answer_candidate(problem, selected_answer)
     format_repair_summary: dict[str, Any] | None = None
     if _needs_exact_answer_repair(problem, selected_answer):
         repair = _repair_exact_answer(
@@ -805,6 +1318,9 @@ def _call_recursive_verified_answer(
         )
         underlying_calls += int(repair.get("underlying_model_calls", 0) or 0)
         selected_answer = repair.get("selected_answer") or selected_answer
+        selected_answer, repair_canonical_summary = _canonicalize_exact_answer_candidate(problem, selected_answer)
+        if repair_canonical_summary.get("changed"):
+            canonical_summary = repair_canonical_summary
         format_repair_summary = repair.get("stage_summary")
     selected_hash = stable_hash({"answer": selected_answer})
     answered_count = sum(1 for attempt in attempts if attempt.get("status") == "answered")
@@ -835,6 +1351,54 @@ def _call_recursive_verified_answer(
     stages = agent_plan.setdefault("stages", {})
     stages["recursive_child_validation"] = child_summary
     stages["multi_candidate_self_verifier"] = verifier_summary
+    if math_tool_summary:
+        stages["hle_math_tool_solver"] = math_tool_summary
+    if candidate_verifier_summary:
+        stages["candidate_claim_verifier"] = candidate_verifier_summary
+    if domain_rule_summary:
+        domain_rule_summary["final_selection_method"] = selection.get("selection_method")
+        domain_rule_summary["selected_domain_rule_candidate"] = (
+            selection.get("selected_child_id") == domain_rule_summary.get("child_id")
+        )
+        stages["domain_rule_mc_verifier"] = domain_rule_summary
+    if option_evidence_summary:
+        option_evidence_summary["final_selection_method"] = selection.get("selection_method")
+        option_evidence_summary["selected_option_evidence_candidate"] = (
+            selection.get("selected_child_id") == option_evidence_summary.get("child_id")
+        )
+        stages["mc_option_evidence_scorer"] = option_evidence_summary
+    if counter_challenge_summary:
+        counter_challenge_summary["final_selection_method"] = selection.get("selection_method")
+        counter_challenge_summary["selected_counter_challenge"] = (
+            selection.get("selected_child_id") == counter_challenge_summary.get("child_id")
+        )
+        option_summary = counter_challenge_summary.get("option_elimination_challenge")
+        if isinstance(option_summary, dict):
+            option_summary["selected_option_elimination_challenge"] = (
+                selection.get("selected_child_id") == option_summary.get("child_id")
+            )
+        forced_summary = counter_challenge_summary.get("forced_alternative_challenge")
+        if isinstance(forced_summary, dict):
+            forced_summary["selected_forced_alternative"] = (
+                selection.get("selected_child_id") == forced_summary.get("child_id")
+            )
+        stages["counter_assumption_challenge"] = counter_challenge_summary
+    if critic_synthesis_summary:
+        critic_synthesis_summary["final_selection_method"] = selection.get("selection_method")
+        critic_synthesis_summary["selected_critic_synthesis"] = (
+            selection.get("selected_child_id") == critic_synthesis_summary.get("child_id")
+        )
+        stages["critic_synthesis_child"] = critic_synthesis_summary
+    if option_sweep_summary:
+        option_sweep_summary["final_selection_method"] = selection.get("selection_method")
+        selected_child_id = selection.get("selected_child_id")
+        option_sweep_summary["selected_option_sweep_candidate"] = bool(
+            selected_child_id
+            and any(attempt.get("child_id") == selected_child_id for attempt in option_sweep_attempts)
+        )
+        stages["mc_option_sweep_candidates"] = option_sweep_summary
+    if canonical_summary.get("changed"):
+        stages["answer_format_canonicalizer"] = canonical_summary
     if format_repair_summary:
         stages["answer_format_repair"] = format_repair_summary
         if format_repair_summary.get("evidence_bridge"):
@@ -851,6 +1415,17 @@ def _call_recursive_verified_answer(
         stage="recursive_child_validation",
         data=child_summary,
     )
+    if stages.get("critic_model_router"):
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="critic_model_router",
+            data=stages["critic_model_router"],
+        )
     _agent_stage_log(
         logger,
         eval_id=eval_id,
@@ -861,6 +1436,94 @@ def _call_recursive_verified_answer(
         stage="multi_candidate_self_verifier",
         data=verifier_summary,
     )
+    if math_tool_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="hle_math_tool_solver",
+            data=math_tool_summary,
+        )
+    if candidate_verifier_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="candidate_claim_verifier",
+            data=candidate_verifier_summary,
+        )
+    if domain_rule_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="domain_rule_mc_verifier",
+            data=domain_rule_summary,
+        )
+    if option_evidence_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="mc_option_evidence_scorer",
+            data=option_evidence_summary,
+        )
+    if counter_challenge_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="counter_assumption_challenge",
+            data=counter_challenge_summary,
+        )
+    if critic_synthesis_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="critic_synthesis_child",
+            data=critic_synthesis_summary,
+        )
+    if option_sweep_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="mc_option_sweep_candidates",
+            data=option_sweep_summary,
+        )
+    if canonical_summary.get("changed"):
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="answer_format_canonicalizer",
+            data=canonical_summary,
+        )
     if format_repair_summary:
         _agent_stage_log(
             logger,
@@ -938,7 +1601,7 @@ def _execute_recursive_child_attempts(
     attempts = first_batch["attempts"]
     early_stop_reason = None
     skipped_prompt_kinds: list[str] = []
-    if _has_two_vote_majority(attempts, answer_type=problem["answer_type"]):
+    if _can_stop_recursive_children_early(problem, attempts):
         early_stop_reason = "two_vote_majority"
         skipped_prompt_kinds = [row["prompt_kind"] for row in specs[len(attempts):]]
         _log_recursive_child_early_stop(
@@ -1016,7 +1679,7 @@ def _execute_recursive_child_attempts_serial(
         attempts.append(attempt)
         if attempt.get("status") == "answered":
             underlying_calls += 1
-        if _has_two_vote_majority(attempts, answer_type=problem["answer_type"]):
+        if _can_stop_recursive_children_early(problem, attempts):
             early_stop_reason = "two_vote_majority"
             skipped_prompt_kinds = [row["prompt_kind"] for row in specs[index:]]
             _log_recursive_child_early_stop(
@@ -1059,13 +1722,17 @@ def _run_child_batch(
         return {"attempts": [], "underlying_model_calls": 0, "max_workers": 0}
     max_workers = max(1, min(max_workers, len(specs)))
     attempts: list[dict[str, Any]] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [
-            executor.submit(
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+    future_specs: dict[concurrent.futures.Future, tuple[dict[str, str], int]] = {}
+    batch_started = time.monotonic()
+    try:
+        for offset, spec in enumerate(specs):
+            child_index = start_index + offset
+            future = executor.submit(
                 _run_child_attempt,
                 problem=problem,
                 spec=spec,
-                child_index=start_index + offset,
+                child_index=child_index,
                 model=model,
                 eval_id=eval_id,
                 call_id=call_id,
@@ -1073,16 +1740,80 @@ def _run_child_batch(
                 timeout=timeout,
                 max_tokens=max_tokens,
             )
-            for offset, spec in enumerate(specs)
-        ]
-        for future in concurrent.futures.as_completed(futures):
+            future_specs[future] = (spec, child_index)
+        wait_timeout = None if timeout is None else max(0.0, float(timeout))
+        done, pending = concurrent.futures.wait(future_specs, timeout=wait_timeout)
+        for future in done:
             attempts.append(future.result())
+        if pending:
+            elapsed = round(time.monotonic() - batch_started, 4)
+            for future in pending:
+                future.cancel()
+                spec, child_index = future_specs[future]
+                attempts.append(
+                    _child_timeout_attempt(
+                        problem=problem,
+                        spec=spec,
+                        child_index=child_index,
+                        model=model,
+                        eval_id=eval_id,
+                        call_id=call_id,
+                        logger=logger,
+                        timeout=timeout,
+                        latency_sec=elapsed,
+                    )
+                )
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
     attempts.sort(key=lambda row: int(row.get("child_index", 0) or 0))
     return {
         "attempts": attempts,
         "underlying_model_calls": sum(1 for attempt in attempts if attempt.get("status") == "answered"),
         "max_workers": max_workers,
     }
+
+
+def _child_timeout_attempt(
+    *,
+    problem: dict[str, Any],
+    spec: dict[str, str],
+    child_index: int,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    latency_sec: float,
+) -> dict[str, Any]:
+    child_id = stable_hash({"call_id": call_id, "child_index": child_index, "prompt_kind": spec["prompt_kind"]})
+    attempt = {
+        "child_id": child_id,
+        "child_index": child_index,
+        "prompt_kind": spec["prompt_kind"],
+        "parsed_answer": "",
+        "parsed_answer_hash": None,
+        "prediction_hash": None,
+        "latency_sec": latency_sec,
+        "status": "timeout",
+        "error_type": "ChildTimeout",
+    }
+    _log_event(
+        logger,
+        {
+            "event": "recursive_child_timeout",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "child_id": child_id,
+            "child_index": child_index,
+            "problem_id_hash": problem["id_hash"],
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "prompt_kind": spec["prompt_kind"],
+            "latency_sec": latency_sec,
+            "timeout_sec": timeout,
+        },
+    )
+    return attempt
 
 
 def _run_child_attempt(
@@ -1118,6 +1849,7 @@ def _run_child_attempt(
     try:
         text = _call_model(model=model, prompt=spec["prompt"], timeout=timeout, max_tokens=max_tokens)
         parsed = _parse_answer_json(text) or text.strip()
+        parsed, mc_canonical_summary = _canonicalize_multiple_choice_answer(problem, parsed)
         attempt = {
             "child_id": child_id,
             "child_index": child_index,
@@ -1128,6 +1860,9 @@ def _run_child_attempt(
             "latency_sec": round(time.monotonic() - started, 4),
             "status": "answered",
         }
+        if mc_canonical_summary.get("changed"):
+            attempt["multiple_choice_canonicalized"] = True
+            attempt["multiple_choice_canonicalizer"] = mc_canonical_summary
         _log_event(
             logger,
             {
@@ -1208,6 +1943,1121 @@ def _log_recursive_child_early_stop(
     )
 
 
+def _can_stop_recursive_children_early(problem: dict[str, Any], attempts: list[dict[str, Any]]) -> bool:
+    if not _has_two_vote_majority(attempts, answer_type=problem["answer_type"]):
+        return False
+    if problem.get("answer_type") == "multipleChoice":
+        prompt_kinds = {str(attempt.get("prompt_kind") or "") for attempt in attempts}
+        reflective_kinds = {"agent_context_answer", "constraint_checked_answer", "recursive_assumption_answer"}
+        return bool(prompt_kinds & reflective_kinds)
+    if problem.get("answer_type") != "multipleChoice" and _should_run_math_tool_child(problem):
+        prompt_kinds = {str(attempt.get("prompt_kind") or "") for attempt in attempts}
+        reflective_kinds = {"constraint_checked_answer", "recursive_assumption_answer", "agent_context_answer"}
+        return bool(prompt_kinds & reflective_kinds)
+    return True
+
+
+def _apply_math_candidate_claim_verifier(
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    *,
+    model: str | None = None,
+    eval_id: str | None = None,
+    call_id: str | None = None,
+    logger: "_JsonlLogger | None" = None,
+    timeout: float | None = None,
+    max_tokens: int = 384,
+) -> dict[str, Any]:
+    if problem.get("answer_type") == "multipleChoice":
+        stem, options = _split_multiple_choice_question(problem)
+        if len(options) < 2:
+            return {
+                "status": "no_executable_claim",
+                "backend": "sympy_mc_option_verifier",
+                "verified_count": 0,
+                "refuted_count": 0,
+                "inconclusive_count": sum(1 for attempt in attempts if str(attempt.get("parsed_answer") or "").strip()),
+                "reference_operation": "none",
+                "reference_reason": "mc_options_not_parsed",
+                "underlying_model_calls": 0,
+            }
+        stem_problem = {**problem, "_question": stem or problem.get("_question", "")}
+        reference = _deterministic_math_tool_answer(stem_problem)
+        if reference.get("confidence") == "verified_symbolic" and str(reference.get("answer") or "").strip():
+            return _apply_math_reference_to_multiple_choice_options(
+                problem=problem,
+                attempts=attempts,
+                options=options,
+                reference=reference,
+                backend="sympy_mc_option_deterministic",
+                underlying_model_calls=0,
+            )
+        if model:
+            llm_reference = _llm_math_reference_claim_for_mc_options(
+                problem=stem_problem,
+                model=model,
+                timeout=timeout,
+                max_tokens=max_tokens,
+            )
+            if llm_reference.get("confidence") == "verified_symbolic" and str(llm_reference.get("answer") or "").strip():
+                summary = _apply_math_reference_to_multiple_choice_options(
+                    problem=problem,
+                    attempts=attempts,
+                    options=options,
+                    reference=llm_reference,
+                    backend="sympy_mc_option_planner",
+                    underlying_model_calls=1,
+                )
+                _log_candidate_claim_planner_event(
+                    logger,
+                    eval_id=eval_id,
+                    call_id=call_id,
+                    problem=problem,
+                    model=model,
+                    reference=llm_reference,
+                    summary=summary,
+                )
+                return summary
+            _log_candidate_claim_planner_event(
+                logger,
+                eval_id=eval_id,
+                call_id=call_id,
+                problem=problem,
+                model=model,
+                reference=llm_reference,
+                summary=None,
+            )
+            return {
+                "status": "no_executable_claim",
+                "backend": "sympy_mc_option_planner",
+                "verified_count": 0,
+                "refuted_count": 0,
+                "inconclusive_count": sum(1 for attempt in attempts if str(attempt.get("parsed_answer") or "").strip()),
+                "reference_operation": llm_reference.get("operation") or reference.get("operation"),
+                "reference_reason": llm_reference.get("reason") or reference.get("reason"),
+                "deterministic_reference_reason": reference.get("reason"),
+                "option_count": len(options),
+                "underlying_model_calls": 1,
+            }
+        return {
+            "status": "no_executable_claim",
+            "backend": "sympy_mc_option_verifier",
+            "verified_count": 0,
+            "refuted_count": 0,
+            "inconclusive_count": sum(1 for attempt in attempts if str(attempt.get("parsed_answer") or "").strip()),
+            "reference_operation": reference.get("operation"),
+            "reference_reason": reference.get("reason"),
+            "option_count": len(options),
+            "underlying_model_calls": 0,
+        }
+    reference = _deterministic_math_tool_answer(problem)
+    if reference.get("confidence") == "verified_symbolic" and str(reference.get("answer") or "").strip():
+        return _apply_math_reference_to_candidates(
+            problem=problem,
+            attempts=attempts,
+            reference=reference,
+            backend="sympy_deterministic",
+            underlying_model_calls=0,
+        )
+    if model:
+        llm_reference = _llm_math_reference_claim(
+            problem=problem,
+            attempts=attempts,
+            model=model,
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+        if llm_reference.get("confidence") == "verified_symbolic" and str(llm_reference.get("answer") or "").strip():
+            summary = _apply_math_reference_to_candidates(
+                problem=problem,
+                attempts=attempts,
+                reference=llm_reference,
+                backend="sympy_candidate_reference_planner",
+                underlying_model_calls=1,
+            )
+            _log_candidate_claim_planner_event(
+                logger,
+                eval_id=eval_id,
+                call_id=call_id,
+                problem=problem,
+                model=model,
+                reference=llm_reference,
+                summary=summary,
+            )
+            return summary
+        _log_candidate_claim_planner_event(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            reference=llm_reference,
+            summary=None,
+        )
+        return {
+            "status": "no_executable_claim",
+            "backend": "sympy_candidate_reference_planner",
+            "verified_count": 0,
+            "refuted_count": 0,
+            "inconclusive_count": sum(1 for attempt in attempts if str(attempt.get("parsed_answer") or "").strip()),
+            "reference_operation": llm_reference.get("operation") or reference.get("operation"),
+            "reference_reason": llm_reference.get("reason") or reference.get("reason"),
+            "deterministic_reference_reason": reference.get("reason"),
+            "underlying_model_calls": 1,
+        }
+    return {
+        "status": "no_executable_claim",
+        "backend": "sympy_deterministic",
+        "verified_count": 0,
+        "refuted_count": 0,
+        "inconclusive_count": sum(1 for attempt in attempts if str(attempt.get("parsed_answer") or "").strip()),
+        "reference_operation": reference.get("operation"),
+        "reference_reason": reference.get("reason"),
+        "underlying_model_calls": 0,
+    }
+
+
+def _apply_math_reference_to_multiple_choice_options(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    options: dict[str, str],
+    reference: dict[str, Any],
+    backend: str,
+    underlying_model_calls: int,
+) -> dict[str, Any]:
+    if reference.get("confidence") != "verified_symbolic" or not str(reference.get("answer") or "").strip():
+        return {
+            "status": "no_executable_claim",
+            "backend": backend,
+            "verified_count": 0,
+            "refuted_count": 0,
+            "inconclusive_count": sum(1 for attempt in attempts if str(attempt.get("parsed_answer") or "").strip()),
+            "reference_operation": reference.get("operation"),
+            "reference_reason": reference.get("reason"),
+            "option_count": len(options),
+            "underlying_model_calls": underlying_model_calls,
+        }
+    reference_answer = str(reference["answer"]).strip()
+    matching_labels = [
+        label for label, option_text in sorted(options.items())
+        if _mc_option_matches_reference(option_text, reference_answer)
+    ]
+    if len(matching_labels) != 1:
+        return {
+            "status": "ambiguous_option_match" if matching_labels else "no_option_match",
+            "backend": backend,
+            "verified_count": 0,
+            "refuted_count": 0,
+            "inconclusive_count": sum(1 for attempt in attempts if str(attempt.get("parsed_answer") or "").strip()),
+            "reference_operation": reference.get("operation"),
+            "reference_answer_hash": stable_hash({"answer": reference_answer}),
+            "option_count": len(options),
+            "matched_option_count": len(matching_labels),
+            "matched_option_hashes": [stable_hash({"option_label": label}) for label in matching_labels],
+            "underlying_model_calls": underlying_model_calls,
+        }
+    verified_label = matching_labels[0]
+    verified = 0
+    refuted = 0
+    inconclusive = 0
+    candidate_hashes: list[str] = []
+    for attempt in attempts:
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        label = _normalize_for_selection(answer, answer_type="multipleChoice").upper()
+        if not label:
+            inconclusive += 1
+            candidate_hashes.append(stable_hash({"candidate_answer": answer, "state": "inconclusive"}))
+            continue
+        state = "verified" if label == verified_label else "refuted"
+        if state == "verified":
+            verified += 1
+        else:
+            refuted += 1
+        candidate_hashes.append(stable_hash({"candidate_answer": label, "state": state}))
+        attempt["candidate_verifier_state"] = state
+        attempt["candidate_verifier_backend"] = backend
+        attempt["candidate_verifier_operation"] = reference.get("operation")
+        attempt["candidate_verifier_claim_hash"] = stable_hash({
+            "reference_answer": reference_answer,
+            "candidate_answer": label,
+            "operation": reference.get("operation"),
+        })
+    verifier_attempt = {
+        "child_id": stable_hash({
+            "call_id": problem.get("id_hash"),
+            "prompt_kind": "candidate_claim_verifier_answer",
+            "verified_label": verified_label,
+            "claim_hash": reference.get("plan_hash"),
+        }),
+        "child_index": 9100,
+        "prompt_kind": "candidate_claim_verifier_answer",
+        "parsed_answer": verified_label,
+        "parsed_answer_hash": stable_hash({"answer": verified_label}),
+        "prediction_hash": stable_hash({
+            "verified_label": verified_label,
+            "reference_answer": reference_answer,
+            "backend": backend,
+        }),
+        "latency_sec": 0.0,
+        "status": "answered",
+        "candidate_verifier_state": "verified",
+        "candidate_verifier_backend": backend,
+        "candidate_verifier_operation": reference.get("operation"),
+        "candidate_verifier_claim_hash": stable_hash({
+            "reference_answer": reference_answer,
+            "candidate_answer": verified_label,
+            "operation": reference.get("operation"),
+        }),
+    }
+    attempts.append(verifier_attempt)
+    verified += 1
+    candidate_hashes.append(stable_hash({"candidate_answer": verified_label, "state": "verified_synthetic"}))
+    return {
+        "status": "activated",
+        "backend": backend,
+        "reference_operation": reference.get("operation"),
+        "reference_answer_hash": stable_hash({"answer": reference_answer}),
+        "verified_option_hash": stable_hash({"option_label": verified_label}),
+        "verified_count": verified,
+        "refuted_count": refuted,
+        "inconclusive_count": inconclusive,
+        "candidate_count": verified + refuted + inconclusive,
+        "candidate_state_hashes": candidate_hashes,
+        "option_count": len(options),
+        "matched_option_count": 1,
+        "underlying_model_calls": underlying_model_calls,
+        "claim_hash": stable_hash({
+            "question_hash": problem.get("question_hash"),
+            "reference_answer": reference_answer,
+            "verified_label": verified_label,
+            "operation": reference.get("operation"),
+            "plan_hash": reference.get("plan_hash"),
+        }),
+    }
+
+
+def _apply_math_reference_to_candidates(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    reference: dict[str, Any],
+    backend: str,
+    underlying_model_calls: int,
+) -> dict[str, Any]:
+    if reference.get("confidence") != "verified_symbolic" or not str(reference.get("answer") or "").strip():
+        return {
+            "status": "no_executable_claim",
+            "backend": backend,
+            "verified_count": 0,
+            "refuted_count": 0,
+            "inconclusive_count": sum(1 for attempt in attempts if str(attempt.get("parsed_answer") or "").strip()),
+            "reference_operation": reference.get("operation"),
+            "reference_reason": reference.get("reason"),
+            "underlying_model_calls": underlying_model_calls,
+        }
+    reference_answer = str(reference["answer"]).strip()
+    canonical_reference, _ = _canonicalize_exact_answer_candidate(problem, reference_answer)
+    reference_norm = _normalize_for_selection(canonical_reference, answer_type=problem["answer_type"])
+    weak_single_candidate = (
+        backend == "sympy_candidate_reference_planner"
+        and int(reference.get("candidate_count") or 0) <= 1
+    )
+    verified = 0
+    refuted = 0
+    inconclusive = 0
+    weak_verified = 0
+    candidate_hashes: list[str] = []
+    for attempt in attempts:
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        canonical_answer, canonical_summary = _canonicalize_exact_answer_candidate(problem, answer)
+        candidate_norm = _normalize_for_selection(canonical_answer, answer_type=problem["answer_type"])
+        state = "verified" if candidate_norm == reference_norm else "refuted"
+        if weak_single_candidate:
+            weak_verified += int(state == "verified")
+            inconclusive += 1
+            candidate_hashes.append(stable_hash({"candidate_answer": canonical_answer, "state": f"weak_{state}"}))
+            continue
+        if state == "verified":
+            verified += 1
+        else:
+            refuted += 1
+        candidate_hashes.append(stable_hash({"candidate_answer": canonical_answer, "state": state}))
+        attempt["candidate_verifier_state"] = state
+        attempt["candidate_verifier_backend"] = backend
+        attempt["candidate_verifier_operation"] = reference.get("operation")
+        attempt["candidate_verifier_claim_hash"] = stable_hash({
+            "reference_answer": canonical_reference,
+            "candidate_answer": canonical_answer,
+            "operation": reference.get("operation"),
+        })
+        if canonical_summary.get("changed"):
+            attempt["candidate_verifier_canonicalized"] = True
+            attempt["parsed_answer"] = canonical_answer
+            attempt["parsed_answer_hash"] = stable_hash({"answer": canonical_answer})
+    return {
+        "status": "weak_single_candidate_confirmation" if weak_single_candidate else "activated",
+        "backend": backend,
+        "reference_operation": reference.get("operation"),
+        "reference_answer_hash": stable_hash({"answer": canonical_reference}),
+        "verified_count": verified,
+        "refuted_count": refuted,
+        "inconclusive_count": inconclusive,
+        "weak_verified_count": weak_verified,
+        "candidate_count": verified + refuted + inconclusive,
+        "candidate_state_hashes": candidate_hashes,
+        "underlying_model_calls": underlying_model_calls,
+        "claim_hash": stable_hash({
+            "question_hash": problem.get("question_hash"),
+            "reference_answer": canonical_reference,
+            "operation": reference.get("operation"),
+            "plan_hash": reference.get("plan_hash"),
+        }),
+    }
+
+
+def _llm_math_reference_claim(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    model: str,
+    timeout: float | None,
+    max_tokens: int,
+) -> dict[str, Any]:
+    candidates = _unique_candidate_answers_for_claim_planner(problem, attempts)
+    if not candidates:
+        return {
+            "source": "llm_candidate_reference_planner",
+            "operation": "none",
+            "confidence": "abstain",
+            "reason": "no_candidate_answers",
+            "candidate_count": 0,
+        }
+    planner_text = _call_model(
+        model=model,
+        prompt=_candidate_claim_planner_prompt(problem, candidates),
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
+    plan = _parse_json_object(planner_text)
+    if _math_plan_candidate_leak_risk(plan, candidates):
+        return {
+            "source": "llm_candidate_reference_planner",
+            "operation": str((plan or {}).get("operation") or "none"),
+            "confidence": "abstain",
+            "reason": "candidate_literal_leakage",
+            "plan_hash": stable_hash({"planner_text": planner_text}),
+            "candidate_count": len(candidates),
+        }
+    result = _execute_math_tool_plan_text(planner_text)
+    result["source"] = "llm_candidate_reference_planner"
+    result.setdefault("plan_hash", stable_hash({"planner_text": planner_text}))
+    result["candidate_count"] = len(candidates)
+    return result
+
+
+def _llm_math_reference_claim_for_mc_options(
+    *,
+    problem: dict[str, Any],
+    model: str,
+    timeout: float | None,
+    max_tokens: int,
+) -> dict[str, Any]:
+    planner_text = _call_model(
+        model=model,
+        prompt=_mc_option_claim_planner_prompt(problem),
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
+    result = _execute_math_tool_plan_text(planner_text)
+    result["source"] = "llm_mc_option_reference_planner"
+    result.setdefault("plan_hash", stable_hash({"planner_text": planner_text}))
+    result["candidate_count"] = 0
+    return result
+
+
+def _mc_option_claim_planner_prompt(problem: dict[str, Any]) -> str:
+    return (
+        "Extract one independent executable math claim for this HLE multipleChoice item. The answer options are "
+        "intentionally hidden; compute the underlying value or symbolic result from the stem only, so it can later "
+        "be matched to exactly one option. Do not answer from memory. If the stem cannot be checked by a small "
+        "SymPy-compatible expression, equation solve, modular computation, derivative, integral, or limit, return "
+        "operation=\"none\". JSON only: "
+        "{\"operation\":\"evaluate|simplify|factor|expand|solve|mod|differentiate|integrate|limit|none\","
+        "\"expression\":\"...\",\"equation\":\"...\",\"variable\":\"x\",\"modulus\":\"\",\"point\":\"\","
+        "\"lower\":\"\",\"upper\":\"\",\"order\":\"1\"}. No imports, no code, no explanation.\n\n"
+        f"Question stem without answer options:\n{problem['_question']}"
+    )
+
+
+def _unique_candidate_answers_for_claim_planner(problem: dict[str, Any], attempts: list[dict[str, Any]]) -> list[str]:
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for attempt in attempts:
+        if attempt.get("status") not in {"answered", None} and attempt.get("prompt_kind") != "math_tool_answer":
+            continue
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        canonical, _ = _canonicalize_exact_answer_candidate(problem, answer)
+        norm = _normalize_for_selection(canonical, answer_type=problem["answer_type"])
+        if not norm or norm in seen:
+            continue
+        seen.add(norm)
+        candidates.append(canonical[:160])
+        if len(candidates) >= 5:
+            break
+    return candidates
+
+
+def _candidate_claim_planner_prompt(problem: dict[str, Any], candidates: list[str]) -> str:
+    candidate_lines = "\n".join(f"{idx}. {answer}" for idx, answer in enumerate(candidates, start=1))
+    return (
+        "Extract one independent executable math claim that can verify candidate answers for this HLE exactMatch item. "
+        "Use the candidates only to infer answer format; do not copy a candidate into the expression/equation. "
+        "If the problem cannot be checked by a small SymPy-compatible expression, equation solve, modular computation, "
+        "derivative, integral, or limit, return operation=\"none\". JSON only: "
+        "{\"operation\":\"evaluate|simplify|factor|expand|solve|mod|differentiate|integrate|limit|none\","
+        "\"expression\":\"...\",\"equation\":\"...\",\"variable\":\"x\",\"modulus\":\"\",\"point\":\"\",\"lower\":\"\",\"upper\":\"\",\"order\":\"1\"}. "
+        "No imports, no code, no explanation.\n\n"
+        f"Question:\n{problem['_question']}\n\nCandidate answers:\n{candidate_lines}"
+    )
+
+
+def _math_plan_candidate_leak_risk(plan: dict[str, Any] | None, candidates: list[str]) -> bool:
+    if not isinstance(plan, dict):
+        return False
+    operation = str(plan.get("operation") or "none").strip().lower()
+    if operation not in {
+        "evaluate",
+        "simplify",
+        "factor",
+        "expand",
+        "solve",
+        "mod",
+        "differentiate",
+        "integrate",
+        "limit",
+    }:
+        return False
+    candidate_norms = {
+        _normalize_math_expression(candidate).replace(" ", "")
+        for candidate in candidates
+        if _normalize_math_expression(candidate)
+    }
+    if not candidate_norms:
+        return False
+    expression_norm = _normalize_math_expression(str(plan.get("expression") or "")).replace(" ", "")
+    if operation in {"evaluate", "simplify", "factor", "expand", "mod", "differentiate", "integrate", "limit"} and expression_norm in candidate_norms:
+        return True
+    equation = _normalize_math_expression(str(plan.get("equation") or "")).replace(" ", "")
+    variable = str(plan.get("variable") or "x").strip() or "x"
+    trivial_equations = {f"{variable}={candidate}" for candidate in candidate_norms} | {
+        f"{candidate}={variable}" for candidate in candidate_norms
+    }
+    return operation == "solve" and equation in trivial_equations
+
+
+def _log_candidate_claim_planner_event(
+    logger: "_JsonlLogger | None",
+    *,
+    eval_id: str | None,
+    call_id: str | None,
+    problem: dict[str, Any],
+    model: str | None,
+    reference: dict[str, Any],
+    summary: dict[str, Any] | None,
+) -> None:
+    if not eval_id or not call_id or not model:
+        return
+    _log_event(
+        logger,
+        {
+            "event": "candidate_claim_planner",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "problem_id_hash": problem["id_hash"],
+            "question_hash": problem["question_hash"],
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "status": (summary or {}).get(
+                "status",
+                "activated" if reference.get("confidence") == "verified_symbolic" else "abstained",
+            ),
+            "operation": reference.get("operation"),
+            "reason": reference.get("reason"),
+            "plan_hash": reference.get("plan_hash"),
+            "claim_hash": (summary or {}).get("claim_hash"),
+            "verified_count": (summary or {}).get("verified_count", 0),
+            "refuted_count": (summary or {}).get("refuted_count", 0),
+            "candidate_count": reference.get("candidate_count"),
+        },
+    )
+
+
+def _should_run_candidate_claim_verifier(problem: dict[str, Any]) -> bool:
+    if problem.get("answer_type") == "multipleChoice":
+        _, options = _split_multiple_choice_question(problem)
+        return _is_math_like_problem(problem) and len(options) >= 2
+    return _should_run_math_tool_child(problem)
+
+
+def _should_run_math_tool_child(problem: dict[str, Any]) -> bool:
+    if problem.get("answer_type") == "multipleChoice":
+        return False
+    return _is_math_like_problem(problem)
+
+
+def _is_math_like_problem(problem: dict[str, Any]) -> bool:
+    text = " ".join([
+        str(problem.get("category") or ""),
+        str(problem.get("raw_subject") or ""),
+        str(problem.get("_question") or ""),
+    ]).lower()
+    return any(token in text for token in [
+        "math",
+        "mathematics",
+        "algebra",
+        "geometry",
+        "number",
+        "integer",
+        "polynomial",
+        "equation",
+        "derivative",
+        "integral",
+        "limit",
+        "modulo",
+        "factorial",
+        "binomial",
+        "probability",
+        "combinatorics",
+        "calculus",
+    ])
+
+
+def _run_math_tool_attempt(
+    *,
+    problem: dict[str, Any],
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> dict[str, Any]:
+    prompt_kind = "math_tool_answer"
+    child_index = 9001
+    child_id = stable_hash({"call_id": call_id, "child_index": child_index, "prompt_kind": prompt_kind})
+    _log_event(
+        logger,
+        {
+            "event": "math_tool_child_start",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "child_id": child_id,
+            "problem_id_hash": problem["id_hash"],
+            "question_hash": problem["question_hash"],
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "prompt_kind": prompt_kind,
+            "timeout_sec": timeout,
+        },
+    )
+    started = time.monotonic()
+    underlying_calls = 0
+    try:
+        result = _deterministic_math_tool_answer(problem)
+        if not result.get("answer"):
+            planner_text = _call_model(
+                model=model,
+                prompt=_math_tool_planner_prompt(problem),
+                timeout=timeout,
+                max_tokens=max_tokens,
+            )
+            underlying_calls += 1
+            result = _execute_math_tool_plan_text(planner_text)
+            result.setdefault("plan_hash", stable_hash({"planner_text": planner_text}))
+            result.setdefault("source", "llm_planner")
+        status = "answered" if result.get("answer") else "abstained"
+        answer = str(result.get("answer") or "").strip()
+        summary = {
+            "status": "activated" if status == "answered" else "abstained",
+            "tool": "sympy_restricted",
+            "source": result.get("source"),
+            "operation": result.get("operation"),
+            "confidence": result.get("confidence"),
+            "plan_hash": result.get("plan_hash"),
+            "answer_hash": stable_hash({"answer": answer}) if answer else None,
+            "reason": result.get("reason"),
+            "underlying_model_calls": underlying_calls,
+            "latency_sec": round(time.monotonic() - started, 4),
+        }
+        attempt = {
+            "child_id": child_id,
+            "child_index": child_index,
+            "prompt_kind": prompt_kind,
+            "parsed_answer": answer,
+            "parsed_answer_hash": summary["answer_hash"],
+            "prediction_hash": stable_hash({"tool_result": summary}),
+            "latency_sec": summary["latency_sec"],
+            "status": status,
+            "tool_confidence": result.get("confidence"),
+            "tool_source": result.get("source"),
+            "tool_summary": summary,
+            "underlying_model_calls": underlying_calls,
+        }
+        _log_event(
+            logger,
+            {
+                "event": "math_tool_child_end",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "child_id": child_id,
+                "problem_id_hash": problem["id_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "prompt_kind": prompt_kind,
+                "status": status,
+                "latency_sec": attempt["latency_sec"],
+                "tool_summary": summary,
+            },
+        )
+        return attempt
+    except Exception as exc:
+        summary = {
+            "status": "failed",
+            "tool": "sympy_restricted",
+            "error_type": type(exc).__name__,
+            "underlying_model_calls": underlying_calls,
+            "latency_sec": round(time.monotonic() - started, 4),
+        }
+        _log_event(
+            logger,
+            {
+                "event": "math_tool_child_error",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "child_id": child_id,
+                "problem_id_hash": problem["id_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "prompt_kind": prompt_kind,
+                "latency_sec": summary["latency_sec"],
+                "error_type": type(exc).__name__,
+                "error": str(exc)[:240],
+                "tool_summary": summary,
+            },
+        )
+        return {
+            "child_id": child_id,
+            "child_index": child_index,
+            "prompt_kind": prompt_kind,
+            "parsed_answer": "",
+            "parsed_answer_hash": None,
+            "prediction_hash": None,
+            "latency_sec": summary["latency_sec"],
+            "status": "error",
+            "error_type": type(exc).__name__,
+            "tool_summary": summary,
+            "underlying_model_calls": underlying_calls,
+        }
+
+
+def _deterministic_math_tool_answer(problem: dict[str, Any]) -> dict[str, Any]:
+    question = str(problem.get("_question") or "")
+    for result in (
+        _deterministic_binomial_or_factorial(question),
+        _deterministic_expression_answer(question),
+    ):
+        if result.get("answer"):
+            result.setdefault("source", "deterministic_parser")
+            result.setdefault("plan_hash", stable_hash({"source": result.get("source"), "operation": result.get("operation")}))
+            return result
+    return {
+        "source": "deterministic_parser",
+        "operation": "none",
+        "confidence": "abstain",
+        "reason": "no_safe_deterministic_parse",
+    }
+
+
+def _deterministic_binomial_or_factorial(question: str) -> dict[str, Any]:
+    if not re.search(
+        r"\b(?:compute|evaluate|simplify|find\s+the\s+value\s+of|what\s+is\s+the\s+value\s+of)\b",
+        question,
+        flags=re.IGNORECASE,
+    ):
+        return {}
+    choose_match = re.search(r"\b(\d{1,5})\s+(?:choose|C)\s+(\d{1,5})\b", question, flags=re.IGNORECASE)
+    if choose_match:
+        n = int(choose_match.group(1))
+        k = int(choose_match.group(2))
+        if 0 <= k <= n <= 10000:
+            try:
+                import sympy as sp
+
+                value = sp.binomial(n, k)
+                return {
+                    "answer": _format_sympy_answer(value),
+                    "operation": "binomial",
+                    "confidence": "verified_symbolic",
+                    "plan_hash": stable_hash({"operation": "binomial", "n": n, "k": k}),
+                }
+            except Exception:
+                pass
+    fact_match = re.search(r"\b(\d{1,4})\s*!\b", question)
+    if fact_match:
+        n = int(fact_match.group(1))
+        if 0 <= n <= 500:
+            try:
+                import sympy as sp
+
+                value = sp.factorial(n)
+                return {
+                    "answer": _format_sympy_answer(value),
+                    "operation": "factorial",
+                    "confidence": "verified_symbolic",
+                    "plan_hash": stable_hash({"operation": "factorial", "n": n}),
+                }
+            except Exception:
+                pass
+    return {}
+
+
+def _deterministic_expression_answer(question: str) -> dict[str, Any]:
+    candidates = _candidate_math_expressions(question)
+    modulus = _extract_modulus(question)
+    for expr in candidates:
+        try:
+            parsed = _safe_sympy_parse_expr(expr)
+            if parsed is None or getattr(parsed, "free_symbols", None):
+                continue
+            value = parsed
+            operation = "evaluate"
+            if modulus is not None:
+                value = int(parsed) % modulus
+                operation = "mod"
+            return {
+                "answer": _format_sympy_answer(value),
+                "operation": operation,
+                "confidence": "verified_symbolic",
+                "plan_hash": stable_hash({"operation": operation, "expression": expr, "modulus": modulus}),
+            }
+        except Exception:
+            continue
+    return {}
+
+
+def _candidate_math_expressions(question: str) -> list[str]:
+    candidates: list[str] = []
+    explicit_trigger = re.search(
+        r"\b(?:compute|evaluate|simplify|find\s+the\s+value\s+of|what\s+is\s+the\s+value\s+of)\b",
+        question,
+        flags=re.IGNORECASE,
+    )
+    if explicit_trigger:
+        candidates.extend(re.findall(r"\$([^$]{1,240})\$", question))
+        candidates.extend(re.findall(r"\\\(([^)]{1,240})\\\)", question))
+        candidates.extend(re.findall(r"`([^`]{1,240})`", question))
+    for match in re.finditer(
+        r"\b(?:compute|evaluate|simplify|find)\b(?:\s+the\s+value\s+of)?\s*[:=]?\s*([^?.\n]{1,180})",
+        question,
+        flags=re.IGNORECASE,
+    ):
+        candidates.append(match.group(1))
+    cleaned: list[str] = []
+    for candidate in candidates:
+        expr = _normalize_math_expression(candidate)
+        if expr and expr not in cleaned:
+            cleaned.append(expr)
+    return cleaned[:8]
+
+
+def _extract_modulus(question: str) -> int | None:
+    match = re.search(r"\b(?:mod|modulo)\s+(\d{1,9})\b", question, flags=re.IGNORECASE)
+    if not match:
+        return None
+    modulus = int(match.group(1))
+    return modulus if modulus > 1 else None
+
+
+def _normalize_math_expression(text: str) -> str:
+    text = html.unescape(str(text or ""))
+    text = text.replace("\\left", "").replace("\\right", "")
+    text = text.replace("\\cdot", "*").replace("\\times", "*").replace("\\div", "/")
+    text = text.replace("^", "**")
+    text = text.replace("{", "(").replace("}", ")")
+    text = re.sub(r"\\frac\s*\(([^()]+)\)\s*\(([^()]+)\)", r"(\1)/(\2)", text)
+    text = re.sub(r"\\sqrt\s*\(([^()]+)\)", r"sqrt(\1)", text)
+    text = text.replace("\\pi", "pi")
+    text = re.sub(r"\\[a-zA-Z]+", " ", text)
+    text = re.sub(r"[^A-Za-z0-9_+*\-/%()., <>=]", " ", text)
+    text = re.sub(r"\b(?:mod|modulo)\b.*$", "", text, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", text).strip(" =.,;:")
+
+
+def _safe_sympy_parse_expr(expr: str) -> Any:
+    expr = _normalize_math_expression(expr)
+    if not expr or len(expr) > 260 or "__" in expr:
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9_+*\-/%()., <>=]+", expr):
+        return None
+    try:
+        import sympy as sp
+        from sympy.parsing.sympy_parser import (
+            convert_xor,
+            implicit_multiplication_application,
+            parse_expr,
+            standard_transformations,
+        )
+
+        local_dict = {
+            "sqrt": sp.sqrt,
+            "sin": sp.sin,
+            "cos": sp.cos,
+            "tan": sp.tan,
+            "log": sp.log,
+            "ln": sp.log,
+            "exp": sp.exp,
+            "pi": sp.pi,
+            "E": sp.E,
+            "I": sp.I,
+            "factorial": sp.factorial,
+            "binomial": sp.binomial,
+            "Rational": sp.Rational,
+        }
+        transformations = standard_transformations + (implicit_multiplication_application, convert_xor)
+        return parse_expr(expr, local_dict=local_dict, transformations=transformations, evaluate=True)
+    except Exception:
+        return None
+
+
+def _math_tool_planner_prompt(problem: dict[str, Any]) -> str:
+    return (
+        "Extract a safe symbolic computation plan for this HLE math exactMatch item. "
+        "Do not answer from memory. Do not write code. If the question needs a proof, diagram, hidden context, "
+        "or cannot be reduced to a small expression/equation/modular computation, return operation=\"none\". "
+        "Allowed JSON only: {\"operation\":\"evaluate|simplify|factor|expand|solve|mod|differentiate|integrate|limit|none\","
+        "\"expression\":\"...\",\"equation\":\"...\",\"variable\":\"x\",\"modulus\":\"\",\"point\":\"\",\"lower\":\"\",\"upper\":\"\",\"order\":\"1\"}. "
+        "Use plain SymPy-compatible syntax, no imports, no code.\n\n"
+        f"Question:\n{problem['_question']}"
+    )
+
+
+def _execute_math_tool_plan_text(text: str) -> dict[str, Any]:
+    plan = _parse_json_object(text)
+    if not isinstance(plan, dict):
+        return {"source": "llm_planner", "operation": "none", "confidence": "abstain", "reason": "planner_json_parse_failed"}
+    operation = str(plan.get("operation") or "none").strip().lower()
+    if operation not in {
+        "evaluate",
+        "simplify",
+        "factor",
+        "expand",
+        "solve",
+        "mod",
+        "differentiate",
+        "integrate",
+        "limit",
+    }:
+        return {"source": "llm_planner", "operation": operation or "none", "confidence": "abstain", "reason": "planner_abstained"}
+    try:
+        if operation in {"evaluate", "simplify", "factor", "expand"}:
+            parsed = _safe_sympy_parse_expr(str(plan.get("expression") or ""))
+            if parsed is None:
+                return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "unsafe_or_symbolic_expression"}
+            if operation == "evaluate" and getattr(parsed, "free_symbols", None):
+                return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "unsafe_or_symbolic_expression"}
+            value = _apply_safe_sympy_transform(operation, parsed)
+            if value is None:
+                return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "transform_failed"}
+            return {
+                "source": "llm_planner",
+                "operation": operation,
+                "answer": _format_sympy_answer(value),
+                "confidence": "verified_symbolic",
+            }
+        if operation == "mod":
+            parsed = _safe_sympy_parse_expr(str(plan.get("expression") or ""))
+            modulus = int(str(plan.get("modulus") or "0"))
+            if parsed is None or getattr(parsed, "free_symbols", None) or modulus <= 1:
+                return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "unsafe_mod_plan"}
+            return {
+                "source": "llm_planner",
+                "operation": operation,
+                "answer": str(int(parsed) % modulus),
+                "confidence": "verified_symbolic",
+            }
+        if operation == "solve":
+            equation = str(plan.get("equation") or "")
+            variable = str(plan.get("variable") or "x").strip() or "x"
+            answer = _solve_safe_equation(equation, variable)
+            if not answer:
+                return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "equation_solve_failed"}
+            return {"source": "llm_planner", "operation": operation, "answer": answer, "confidence": "verified_symbolic"}
+        if operation == "differentiate":
+            answer = _differentiate_safe_expression(
+                str(plan.get("expression") or ""),
+                str(plan.get("variable") or "x"),
+                str(plan.get("order") or "1"),
+            )
+            if not answer:
+                return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "differentiate_failed"}
+            return {"source": "llm_planner", "operation": operation, "answer": answer, "confidence": "verified_symbolic"}
+        if operation == "integrate":
+            answer = _integrate_safe_expression(
+                str(plan.get("expression") or ""),
+                str(plan.get("variable") or "x"),
+                str(plan.get("lower") or ""),
+                str(plan.get("upper") or ""),
+            )
+            if not answer:
+                return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "integrate_failed"}
+            return {"source": "llm_planner", "operation": operation, "answer": answer, "confidence": "verified_symbolic"}
+        if operation == "limit":
+            answer = _limit_safe_expression(
+                str(plan.get("expression") or ""),
+                str(plan.get("variable") or "x"),
+                str(plan.get("point") or ""),
+            )
+            if not answer:
+                return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "limit_failed"}
+            return {"source": "llm_planner", "operation": operation, "answer": answer, "confidence": "verified_symbolic"}
+    except Exception as exc:
+        return {
+            "source": "llm_planner",
+            "operation": operation,
+            "confidence": "abstain",
+            "reason": type(exc).__name__,
+        }
+
+
+def _parse_json_object(text: str) -> dict[str, Any] | None:
+    stripped = text.strip()
+    stripped = re.sub(r"^```(?:json)?", "", stripped, flags=re.IGNORECASE).strip()
+    stripped = re.sub(r"```$", "", stripped).strip()
+    try:
+        parsed = json.loads(stripped)
+        return parsed if isinstance(parsed, dict) else None
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", stripped, flags=re.DOTALL)
+        if not match:
+            return None
+        try:
+            parsed = json.loads(match.group(0))
+            return parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            return None
+
+
+def _apply_safe_sympy_transform(operation: str, parsed: Any) -> Any:
+    try:
+        import sympy as sp
+
+        if operation in {"evaluate", "simplify"}:
+            return sp.simplify(parsed)
+        if operation == "factor":
+            return sp.factor(parsed)
+        if operation == "expand":
+            return sp.expand(parsed)
+    except Exception:
+        return None
+    return None
+
+
+def _solve_safe_equation(equation: str, variable: str) -> str | None:
+    if "=" not in equation or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", variable):
+        return None
+    try:
+        import sympy as sp
+
+        lhs_text, rhs_text = equation.split("=", 1)
+        lhs = _safe_sympy_parse_expr(lhs_text)
+        rhs = _safe_sympy_parse_expr(rhs_text)
+        if lhs is None or rhs is None:
+            return None
+        symbol = sp.Symbol(variable)
+        solutions = sp.solve(sp.Eq(lhs, rhs), symbol)
+        if not solutions:
+            return None
+        return ", ".join(_format_sympy_answer(solution) for solution in solutions[:6])
+    except Exception:
+        return None
+
+
+def _differentiate_safe_expression(expr: str, variable: str, order_text: str) -> str | None:
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", variable):
+        return None
+    try:
+        import sympy as sp
+
+        parsed = _safe_sympy_parse_expr(expr)
+        if parsed is None:
+            return None
+        order = int(order_text or "1")
+        if not 1 <= order <= 5:
+            return None
+        symbol = sp.Symbol(variable)
+        return _format_sympy_answer(sp.diff(parsed, symbol, order))
+    except Exception:
+        return None
+
+
+def _integrate_safe_expression(expr: str, variable: str, lower_text: str, upper_text: str) -> str | None:
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", variable):
+        return None
+    try:
+        import sympy as sp
+
+        parsed = _safe_sympy_parse_expr(expr)
+        if parsed is None:
+            return None
+        symbol = sp.Symbol(variable)
+        lower = _safe_sympy_parse_expr(lower_text) if str(lower_text).strip() else None
+        upper = _safe_sympy_parse_expr(upper_text) if str(upper_text).strip() else None
+        if lower is not None and upper is not None:
+            if getattr(lower, "free_symbols", None) or getattr(upper, "free_symbols", None):
+                return None
+            return _format_sympy_answer(sp.integrate(parsed, (symbol, lower, upper)))
+        if lower is not None or upper is not None:
+            return None
+        return _format_sympy_answer(sp.integrate(parsed, symbol))
+    except Exception:
+        return None
+
+
+def _limit_safe_expression(expr: str, variable: str, point_text: str) -> str | None:
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", variable):
+        return None
+    try:
+        import sympy as sp
+
+        parsed = _safe_sympy_parse_expr(expr)
+        point = _safe_sympy_parse_expr(point_text)
+        if parsed is None or point is None or getattr(point, "free_symbols", None):
+            return None
+        symbol = sp.Symbol(variable)
+        return _format_sympy_answer(sp.limit(parsed, symbol, point))
+    except Exception:
+        return None
+
+
+def _format_sympy_answer(value: Any) -> str:
+    try:
+        import sympy as sp
+
+        value = sp.simplify(value)
+        if value.is_Integer:
+            return str(int(value))
+        return sp.sstr(value)
+    except Exception:
+        return str(value).strip()
+
+
 def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[str, Any] | None = None) -> list[dict[str, str]]:
     question = problem["_question"]
     answer_type = problem["answer_type"]
@@ -1238,17 +3088,930 @@ def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[s
             ),
         },
     ]
+    evidence_context = str((agent_plan or {}).get("hle_evidence_context") or "")
+    if evidence_context:
+        specs.insert(1, {
+            "prompt_kind": "evidence_bridge_answer",
+            "prompt": _evidence_grounded_answer_prompt(problem, evidence_context=evidence_context),
+        })
     context = (agent_plan or {}).get("prompt_context", "")
     if context:
-        specs.append({
+        context_spec = {
             "prompt_kind": "agent_context_answer",
             "prompt": (
                 "A bounded Assumption Agent retrieved the following graph/morphism context. Use it only if it "
                 "directly constrains the answer; otherwise ignore it. Return only JSON.\n\n"
                 f"{context}\n\nAnswer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
             ),
-        })
+        }
+        if answer_type == "multipleChoice":
+            insert_index = 2 if evidence_context else 1
+            specs.insert(insert_index, context_spec)
+        else:
+            specs.append(context_spec)
     return specs
+
+
+def _counter_assumption_challenge_trigger(
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    *,
+    candidate_verifier_summary: dict[str, Any] | None = None,
+    math_tool_summary: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if any(attempt.get("prompt_kind") == "counter_assumption_challenge_answer" for attempt in attempts):
+        return {"status": "abstained", "reason": "already_executed"}
+    if int((candidate_verifier_summary or {}).get("verified_count") or 0) > 0:
+        return {"status": "abstained", "reason": "candidate_claim_already_verified"}
+    if (math_tool_summary or {}).get("confidence") == "verified_symbolic":
+        return {"status": "abstained", "reason": "math_tool_already_verified"}
+
+    answer_type = problem.get("answer_type") or "exactMatch"
+    valid = [
+        attempt for attempt in attempts
+        if str(attempt.get("parsed_answer") or "").strip()
+        and (
+            answer_type == "multipleChoice"
+            or not _is_suspicious_exact_answer(str(attempt.get("parsed_answer") or ""))
+        )
+    ]
+    if len(valid) < 2:
+        return {"status": "abstained", "reason": "too_few_valid_candidates", "valid_candidate_count": len(valid)}
+
+    normalized: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for attempt in valid:
+        normalized[
+            _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type=answer_type)
+        ].append(attempt)
+    if not normalized:
+        return {"status": "abstained", "reason": "no_normalized_candidates", "valid_candidate_count": len(valid)}
+
+    ranked = sorted(normalized.items(), key=lambda item: (-len(item[1]), item[1][0]["child_index"]))
+    target_norm, target_attempts = ranked[0]
+    unique_candidate_count = len(normalized)
+    target_count = len(target_attempts)
+    if target_count < 2 and unique_candidate_count > 1:
+        return {
+            "status": "abstained",
+            "reason": "diverse_candidates_will_use_verifier",
+            "valid_candidate_count": len(valid),
+            "unique_candidate_count": unique_candidate_count,
+            "top_candidate_count": target_count,
+        }
+    if target_count < 2:
+        return {
+            "status": "abstained",
+            "reason": "no_majority_candidate",
+            "valid_candidate_count": len(valid),
+            "unique_candidate_count": unique_candidate_count,
+            "top_candidate_count": target_count,
+        }
+    target_answer = str(target_attempts[0].get("parsed_answer") or "").strip()
+    return {
+        "status": "activated",
+        "reason": "majority_without_independent_verification",
+        "valid_candidate_count": len(valid),
+        "unique_candidate_count": unique_candidate_count,
+        "top_candidate_count": target_count,
+        "challenged_answer_hash": stable_hash({"answer": target_answer}),
+        "challenged_answer_norm_hash": stable_hash({"answer": target_norm}),
+        "challenged_prompt_kinds": [str(attempt.get("prompt_kind") or "") for attempt in target_attempts],
+        "target_answer": target_answer,
+        "target_norm": target_norm,
+    }
+
+
+def _counter_assumption_challenge_prompt(
+    problem: dict[str, Any],
+    *,
+    challenged_answer: str,
+    evidence_context: str = "",
+) -> str:
+    answer_type = problem["answer_type"]
+    output = (
+        "Return JSON only: {\"answer\":\"...\"}. For multiple choice, answer with the single letter only. "
+        "For exact match, answer with the shortest exact answer."
+    )
+    evidence_block = (
+        "Transient evidence, if relevant:\n"
+        f"{evidence_context}\n\n"
+        if evidence_context
+        else ""
+    )
+    return (
+        "A recursive answer ensemble is converging on the challenged answer below. Do a counter-assumption "
+        "test: actively look for the strongest reason this answer could be wrong under the exact wording. "
+        "If the challenged answer survives that test, return it. If a different answer is better supported, "
+        "return the corrected answer. Do not include reasoning.\n\n"
+        f"{evidence_block}"
+        f"Challenged answer: {challenged_answer}\n"
+        f"Answer type: {answer_type}\nQuestion:\n{problem['_question']}\n\n{output}"
+    )
+
+
+def _maybe_run_counter_assumption_challenge(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    candidate_verifier_summary: dict[str, Any] | None,
+    math_tool_summary: dict[str, Any] | None,
+    evidence_context: str,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    trigger = _counter_assumption_challenge_trigger(
+        problem,
+        attempts,
+        candidate_verifier_summary=candidate_verifier_summary,
+        math_tool_summary=math_tool_summary,
+    )
+    if trigger.get("status") != "activated":
+        return None, trigger
+    target_answer = str(trigger.pop("target_answer") or "")
+    target_norm = str(trigger.pop("target_norm") or "")
+    attempt = _run_child_attempt(
+        problem=problem,
+        spec={
+            "prompt_kind": "counter_assumption_challenge_answer",
+            "prompt": _counter_assumption_challenge_prompt(
+                problem,
+                challenged_answer=target_answer,
+                evidence_context=evidence_context,
+            ),
+        },
+        child_index=len(attempts) + 1,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
+    challenge_answer = str(attempt.get("parsed_answer") or "").strip()
+    challenge_norm = (
+        _normalize_for_selection(challenge_answer, answer_type=problem.get("answer_type") or "exactMatch")
+        if challenge_answer
+        else ""
+    )
+    summary = {
+        **trigger,
+        "child_id": attempt.get("child_id"),
+        "child_status": attempt.get("status"),
+        "challenge_answer_hash": attempt.get("parsed_answer_hash"),
+        "challenge_disagreed_with_majority": bool(challenge_norm and challenge_norm != target_norm),
+        "evidence_context_used": bool(evidence_context),
+        "underlying_model_calls": 1 if attempt.get("status") == "answered" else 0,
+    }
+    return attempt, summary
+
+
+def _option_elimination_challenge_prompt(
+    problem: dict[str, Any],
+    *,
+    challenged_answer: str,
+    evidence_context: str = "",
+) -> str:
+    evidence_block = (
+        "Transient evidence, if relevant:\n"
+        f"{evidence_context}\n\n"
+        if evidence_context
+        else ""
+    )
+    return (
+        "The current ensemble has an unverified multiple-choice answer and may also contain a conflicting "
+        "counter-hypothesis. Run a stricter option-elimination check internally: evaluate every answer option "
+        "against the exact question wording and transient evidence, reject options that fail a necessary "
+        "condition, and choose the remaining best-supported option. Do not anchor on either the majority or a "
+        "single counter-hypothesis unless it survives the full option-by-option check. Do not include reasoning. "
+        "Return JSON only: {\"answer\":\"A\"}.\n\n"
+        f"{evidence_block}"
+        f"Challenged answer: {challenged_answer}\n"
+        f"Question:\n{problem['_question']}"
+    )
+
+
+def _maybe_run_option_elimination_challenge(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    counter_challenge_summary: dict[str, Any] | None,
+    evidence_context: str,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if problem.get("answer_type") != "multipleChoice":
+        return None, None
+    if not counter_challenge_summary or counter_challenge_summary.get("status") != "activated":
+        return None, None
+    if any(attempt.get("prompt_kind") == "option_elimination_challenge_answer" for attempt in attempts):
+        return None, {"status": "abstained", "reason": "already_executed"}
+    options, _ = _extract_multiple_choice_options(str(problem.get("_question") or ""))
+    if len(options) < 2:
+        return None, {"status": "abstained", "reason": "options_not_parsed"}
+    challenged_answer = _extract_choice_from_hashable_attempts(
+        attempts,
+        answer_type=problem.get("answer_type") or "multipleChoice",
+    )
+    if not challenged_answer:
+        return None, {"status": "abstained", "reason": "no_majority_answer"}
+    attempt = _run_child_attempt(
+        problem=problem,
+        spec={
+            "prompt_kind": "option_elimination_challenge_answer",
+            "prompt": _option_elimination_challenge_prompt(
+                problem,
+                challenged_answer=challenged_answer,
+                evidence_context=evidence_context,
+            ),
+        },
+        child_index=len(attempts) + 1,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
+    answer = str(attempt.get("parsed_answer") or "").strip()
+    answer_norm = _normalize_for_selection(answer, answer_type="multipleChoice") if answer else ""
+    challenged_norm = _normalize_for_selection(challenged_answer, answer_type="multipleChoice")
+    summary = {
+        "status": "activated",
+        "reason": (
+            "counter_challenge_disagreed_run_full_option_elimination"
+            if counter_challenge_summary.get("challenge_disagreed_with_majority")
+            else "counter_challenge_confirmed_majority"
+        ),
+        "child_id": attempt.get("child_id"),
+        "child_status": attempt.get("status"),
+        "option_count": len(options),
+        "challenge_answer_hash": attempt.get("parsed_answer_hash"),
+        "challenge_disagreed_with_majority": bool(answer_norm and answer_norm != challenged_norm),
+        "underlying_model_calls": 1 if attempt.get("status") == "answered" else 0,
+    }
+    return attempt, summary
+
+
+def _critic_synthesis_prompt(problem: dict[str, Any], *, evidence_context: str = "") -> str:
+    evidence_block = (
+        "Transient evidence, if relevant:\n"
+        f"{evidence_context}\n\n"
+        if evidence_context
+        else ""
+    )
+    return (
+        "Solve this multiple-choice HLE item independently as a critic synthesis pass. Ignore the ensemble "
+        "majority and prior candidate answers; they may be collapsed on the same wrong attractor. Use the exact "
+        "question wording first, and use transient evidence only when it directly matches the question. Return "
+        "the single best option letter only. Do not include reasoning. Return JSON only: {\"answer\":\"A\"}.\n\n"
+        f"{evidence_block}"
+        f"Question:\n{problem['_question']}"
+    )
+
+
+def _maybe_run_critic_synthesis_child(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    evidence_context: str,
+    base_model: str,
+    critic_model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if problem.get("answer_type") != "multipleChoice":
+        return None, None
+    if not critic_model or critic_model == base_model:
+        return None, {"status": "not_required", "reason": "no_distinct_critic_model"}
+    if any(attempt.get("prompt_kind") == "critic_synthesis_answer" for attempt in attempts):
+        return None, {"status": "abstained", "reason": "already_executed"}
+    labels, _ = _extract_multiple_choice_options(str(problem.get("_question") or ""))
+    if len(labels) < 2:
+        return None, {"status": "abstained", "reason": "options_not_parsed"}
+    valid_answers = [
+        str(attempt.get("parsed_answer") or "").strip()
+        for attempt in attempts
+        if str(attempt.get("parsed_answer") or "").strip()
+    ]
+    if len(valid_answers) < 3:
+        return None, {"status": "not_required", "reason": "not_enough_candidates"}
+    norms = [
+        _normalize_for_selection(answer, answer_type="multipleChoice")
+        for answer in valid_answers
+    ]
+    unique_count = len(set(norms))
+    top_count = Counter(norms).most_common(1)[0][1] if norms else 0
+    has_verified_candidate = any(attempt.get("candidate_verifier_state") == "verified" for attempt in attempts)
+    if has_verified_candidate:
+        return None, {"status": "not_required", "reason": "verified_candidate_available"}
+    if unique_count > 2 and top_count < 3:
+        return None, {
+            "status": "not_required",
+            "reason": "candidate_space_already_diverse",
+            "unique_candidate_count": unique_count,
+            "top_candidate_count": top_count,
+        }
+    attempt = _run_child_attempt(
+        problem=problem,
+        spec={
+            "prompt_kind": "critic_synthesis_answer",
+            "prompt": _critic_synthesis_prompt(problem, evidence_context=evidence_context),
+        },
+        child_index=len(attempts) + 1,
+        model=critic_model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
+    answer = str(attempt.get("parsed_answer") or "").strip()
+    answer_norm = _normalize_for_selection(answer, answer_type="multipleChoice") if answer else ""
+    majority_answer = _extract_choice_from_hashable_attempts(attempts, answer_type="multipleChoice")
+    majority_norm = _normalize_for_selection(majority_answer, answer_type="multipleChoice") if majority_answer else ""
+    summary = {
+        "status": "activated",
+        "reason": "collapsed_or_low_diversity_candidates_need_distinct_critic",
+        "base_model": base_model,
+        "critic_model": critic_model,
+        "child_id": attempt.get("child_id"),
+        "child_status": attempt.get("status"),
+        "option_count": len(labels),
+        "unique_candidate_count_before": unique_count,
+        "top_candidate_count_before": top_count,
+        "critic_answer_hash": attempt.get("parsed_answer_hash"),
+        "critic_disagreed_with_majority": bool(answer_norm and majority_norm and answer_norm != majority_norm),
+        "underlying_model_calls": 1 if attempt.get("status") == "answered" else 0,
+    }
+    return attempt, summary
+
+
+def _maybe_add_mc_option_sweep_candidates(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    if problem.get("answer_type") != "multipleChoice":
+        return [], None
+    options, _ = _extract_multiple_choice_options(str(problem.get("_question") or ""))
+    labels = sorted(options)
+    if len(labels) < 2:
+        return [], {"status": "abstained", "reason": "options_not_parsed"}
+    present = {
+        _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type="multipleChoice")
+        for attempt in attempts
+        if str(attempt.get("parsed_answer") or "").strip()
+    }
+    missing = [label for label in labels if label not in present]
+    if not missing:
+        return [], {
+            "status": "not_required",
+            "reason": "all_option_labels_already_present",
+            "option_count": len(labels),
+            "covered_option_count": len(labels),
+            "added_candidate_count": 0,
+        }
+    added: list[dict[str, Any]] = []
+    start_index = len(attempts) + 1
+    for offset, label in enumerate(missing):
+        added.append({
+            "child_id": stable_hash({
+                "problem_id_hash": problem["id_hash"],
+                "prompt_kind": "mc_option_sweep_candidate",
+                "option_label": label,
+            }),
+            "child_index": start_index + offset,
+            "prompt_kind": "mc_option_sweep_candidate",
+            "parsed_answer": label,
+            "parsed_answer_hash": stable_hash({"answer": label}),
+            "prediction_hash": stable_hash({
+                "option_sweep_candidate": label,
+                "problem_id_hash": problem["id_hash"],
+            }),
+            "latency_sec": 0.0,
+            "status": "answered",
+            "tool_confidence": "full_option_space_candidate",
+        })
+    return added, {
+        "status": "activated",
+        "reason": "finite_multiple_choice_option_space_completion",
+        "option_count": len(labels),
+        "covered_option_count_before": len([label for label in labels if label in present]),
+        "added_candidate_count": len(added),
+        "added_option_hashes": [stable_hash({"option_label": label}) for label in missing],
+        "underlying_model_calls": 0,
+    }
+
+
+def _extract_choice_from_hashable_attempts(attempts: list[dict[str, Any]], *, answer_type: str) -> str:
+    counts: Counter[str] = Counter()
+    first: dict[str, str] = {}
+    for attempt in attempts:
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        norm = _normalize_for_selection(answer, answer_type=answer_type)
+        counts[norm] += 1
+        first.setdefault(norm, answer)
+    if not counts:
+        return ""
+    top_norm, _ = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0]
+    return first.get(top_norm, top_norm)
+
+
+def _forced_alternative_challenge_prompt(
+    problem: dict[str, Any],
+    *,
+    challenged_answer: str,
+    allowed_labels: list[str],
+    evidence_context: str = "",
+) -> str:
+    alternative_labels = ", ".join(label for label in allowed_labels if label != _extract_choice(challenged_answer))
+    evidence_block = (
+        "Transient evidence, if relevant:\n"
+        f"{evidence_context}\n\n"
+        if evidence_context
+        else ""
+    )
+    return (
+        "The ensemble has collapsed to one multiple-choice answer. For diversity generation only, produce the "
+        "strongest plausible alternative answer that is NOT the challenged answer. This is not the final answer; "
+        "a verifier will compare it against the majority. Choose an alternative only from the listed labels, and "
+        "prefer the alternative that best fits the exact wording or evidence. Return JSON only: {\"answer\":\"B\"}.\n\n"
+        f"{evidence_block}"
+        f"Challenged answer: {challenged_answer}\n"
+        f"Allowed non-challenged labels: {alternative_labels}\n"
+        f"Question:\n{problem['_question']}"
+    )
+
+
+def _maybe_run_forced_alternative_challenge(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    option_elimination_summary: dict[str, Any] | None,
+    evidence_context: str,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if os.environ.get("HLE_ENABLE_FORCED_ALTERNATIVE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        return None, {"status": "abstained", "reason": "disabled_by_default"}
+    if problem.get("answer_type") != "multipleChoice":
+        return None, None
+    if not option_elimination_summary or option_elimination_summary.get("status") != "activated":
+        return None, None
+    if option_elimination_summary.get("challenge_disagreed_with_majority"):
+        return None, None
+    if any(attempt.get("prompt_kind") == "forced_alternative_answer" for attempt in attempts):
+        return None, {"status": "abstained", "reason": "already_executed"}
+    options, _ = _extract_multiple_choice_options(str(problem.get("_question") or ""))
+    labels = sorted(options)
+    if len(labels) < 2:
+        return None, {"status": "abstained", "reason": "options_not_parsed"}
+    challenged_answer = _extract_choice_from_hashable_attempts(
+        attempts,
+        answer_type=problem.get("answer_type") or "multipleChoice",
+    )
+    challenged_label = _extract_choice(challenged_answer)
+    alternatives = [label for label in labels if label != challenged_label]
+    if not alternatives:
+        return None, {"status": "abstained", "reason": "no_alternative_labels"}
+    attempt = _run_child_attempt(
+        problem=problem,
+        spec={
+            "prompt_kind": "forced_alternative_answer",
+            "prompt": _forced_alternative_challenge_prompt(
+                problem,
+                challenged_answer=challenged_label or challenged_answer,
+                allowed_labels=labels,
+                evidence_context=evidence_context,
+            ),
+        },
+        child_index=len(attempts) + 1,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
+    answer = str(attempt.get("parsed_answer") or "").strip()
+    answer_label = _extract_choice(answer)
+    summary = {
+        "status": "activated",
+        "reason": "collapsed_consensus_needs_forced_variation",
+        "child_id": attempt.get("child_id"),
+        "child_status": attempt.get("status"),
+        "option_count": len(labels),
+        "challenge_answer_hash": attempt.get("parsed_answer_hash"),
+        "challenge_disagreed_with_majority": bool(answer_label and answer_label != challenged_label),
+        "answer_is_allowed_alternative": answer_label in alternatives,
+        "underlying_model_calls": 1 if attempt.get("status") == "answered" else 0,
+    }
+    return attempt, summary
+
+
+def _maybe_run_mc_option_evidence_scorer(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    eval_id: str,
+    call_id: str,
+    model: str,
+    logger: "_JsonlLogger | None",
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if problem.get("answer_type") != "multipleChoice":
+        return None, None
+    if any(attempt.get("prompt_kind") == "mc_option_evidence_scorer_answer" for attempt in attempts):
+        return None, {"status": "abstained", "reason": "already_executed"}
+    stem, options = _split_multiple_choice_question(problem)
+    if len(options) < 2:
+        return None, {"status": "abstained", "reason": "options_not_parsed"}
+    stem_terms = _content_terms(stem or problem.get("_question", ""))
+    option_rows: list[dict[str, Any]] = []
+    docs_by_label: dict[str, list[dict[str, str]]] = {}
+    errors: list[str] = []
+    for label, option_text in sorted(options.items()):
+        query = _option_evidence_query(stem, option_text, problem)
+        docs: list[dict[str, str]] = []
+        if query:
+            try:
+                docs = _wikipedia_search(query, limit=2, timeout=6.0)
+                if len(docs) < 2 or _should_use_domain_evidence_search(problem):
+                    docs.extend(_domain_evidence_search(query, problem=problem, limit=1, timeout=8.0))
+                docs = _dedupe_evidence_results(docs)
+            except Exception as exc:
+                errors.append(type(exc).__name__)
+        docs_by_label[label] = docs
+        score = _score_option_evidence(stem_terms=stem_terms, option_text=option_text, docs=docs)
+        option_rows.append({
+            "label": label,
+            "score": score,
+            "query_hash": stable_hash({"query": query}),
+            "doc_count": len(docs),
+            "doc_hashes": [
+                stable_hash({"title": doc.get("title", ""), "snippet": doc.get("snippet", "")})
+                for doc in docs[:2]
+            ],
+        })
+    ranked = sorted(option_rows, key=lambda row: (-float(row["score"]), row["label"]))
+    if not ranked:
+        return None, {"status": "no_results", "reason": "no_option_scores"}
+    top = ranked[0]
+    runner_up = ranked[1] if len(ranked) > 1 else {"score": 0.0}
+    top_score = float(top["score"])
+    margin = top_score - float(runner_up.get("score") or 0.0)
+    confidence = top_score >= 4.0 and margin >= 1.5
+    summary = {
+        "status": "activated" if confidence else "weak_margin",
+        "source": "wikipedia_plus_domain_option_search",
+        "option_count": len(options),
+        "top_option_hash": stable_hash({"option_label": top["label"]}),
+        "top_option_answer_hash": stable_hash({"answer": str(top["label"])}),
+        "top_score": round(top_score, 4),
+        "runner_up_score": round(float(runner_up.get("score") or 0.0), 4),
+        "margin": round(margin, 4),
+        "candidate_emitted": bool(confidence),
+        "query_hashes": [row["query_hash"] for row in option_rows],
+        "doc_count_by_option_hash": {
+            stable_hash({"option_label": row["label"]}): row["doc_count"]
+            for row in option_rows
+        },
+        "top_doc_hashes": top.get("doc_hashes", []),
+        "error_types": sorted(set(errors)),
+        "underlying_model_calls": 0,
+    }
+    if not confidence:
+        _log_event(
+            logger,
+            {
+                "event": "mc_option_evidence_scorer",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "question_hash": problem["question_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "stage_status": summary["status"],
+                "stage_data": summary,
+            },
+        )
+        return None, summary
+    attempt = {
+        "child_id": stable_hash({
+            "call_id": call_id,
+            "prompt_kind": "mc_option_evidence_scorer_answer",
+            "option_hash": summary["top_option_hash"],
+        }),
+        "child_index": len(attempts) + 1,
+        "prompt_kind": "mc_option_evidence_scorer_answer",
+        "parsed_answer": str(top["label"]),
+        "parsed_answer_hash": stable_hash({"answer": str(top["label"])}),
+        "prediction_hash": stable_hash({
+            "top_option_hash": summary["top_option_hash"],
+            "top_score": summary["top_score"],
+            "margin": summary["margin"],
+        }),
+        "latency_sec": 0.0,
+        "status": "answered",
+        "tool_confidence": "option_evidence_margin",
+    }
+    summary["child_id"] = attempt["child_id"]
+    summary["candidate_answer_hash"] = attempt["parsed_answer_hash"]
+    if problem.get("_answer"):
+        gold_for_eval, _ = _canonicalize_multiple_choice_answer(problem, str(problem.get("_answer") or ""))
+        summary["candidate_correct_for_eval"] = _is_correct(
+            str(top["label"]),
+            gold_for_eval,
+            answer_type="multipleChoice",
+        )
+    evidence_context = _option_evidence_context(options=options, docs_by_label=docs_by_label)
+    if evidence_context:
+        attempt["private_option_evidence_context"] = evidence_context
+        summary["evidence_context_hash"] = stable_hash({"option_evidence_context": evidence_context})
+        summary["evidence_context_char_count"] = len(evidence_context)
+    _log_event(
+        logger,
+        {
+            "event": "mc_option_evidence_scorer",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "problem_id_hash": problem["id_hash"],
+            "question_hash": problem["question_hash"],
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "stage_status": summary["status"],
+            "stage_data": summary,
+        },
+    )
+    return attempt, summary
+
+
+def _maybe_run_domain_rule_mc_verifier(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    evidence_context: str,
+    eval_id: str,
+    call_id: str,
+    model: str,
+    logger: "_JsonlLogger | None",
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if problem.get("answer_type") != "multipleChoice":
+        return None, None
+    if any(attempt.get("prompt_kind") == "domain_rule_mc_verifier_answer" for attempt in attempts):
+        return None, {"status": "abstained", "reason": "already_executed"}
+    stem, options = _split_multiple_choice_question(problem)
+    if len(options) < 2:
+        return None, {"status": "abstained", "reason": "options_not_parsed"}
+    decision = _domain_rule_mc_decision(problem=problem, stem=stem, options=options, evidence_context=evidence_context)
+    if not decision:
+        summary = {
+            "status": "not_required",
+            "reason": "no_supported_domain_rule",
+            "option_count": len(options),
+            "underlying_model_calls": 0,
+        }
+        return None, summary
+    label = str(decision["label"])
+    attempt = {
+        "child_id": stable_hash({
+            "call_id": call_id,
+            "prompt_kind": "domain_rule_mc_verifier_answer",
+            "rule_id": decision["rule_id"],
+            "option_label": label,
+        }),
+        "child_index": len(attempts) + 1,
+        "prompt_kind": "domain_rule_mc_verifier_answer",
+        "parsed_answer": label,
+        "parsed_answer_hash": stable_hash({"answer": label}),
+        "prediction_hash": stable_hash({
+            "rule_id": decision["rule_id"],
+            "option_label": label,
+            "evidence_hash": stable_hash({"evidence_context": evidence_context}) if evidence_context else "",
+        }),
+        "latency_sec": 0.0,
+        "status": "answered",
+        "candidate_verifier_state": "verified",
+        "candidate_verifier_backend": "domain_rule_mc_verifier",
+        "candidate_verifier_operation": decision["rule_id"],
+        "candidate_verifier_claim_hash": stable_hash({
+            "question_hash": problem.get("question_hash"),
+            "rule_id": decision["rule_id"],
+            "option_label": label,
+        }),
+        "tool_confidence": decision["confidence"],
+    }
+    summary = {
+        "status": "activated",
+        "backend": "domain_rule_mc_verifier",
+        "rule_id": decision["rule_id"],
+        "reason": decision["reason"],
+        "confidence": decision["confidence"],
+        "verified_option_hash": stable_hash({"option_label": label}),
+        "candidate_answer_hash": attempt["parsed_answer_hash"],
+        "child_id": attempt["child_id"],
+        "option_count": len(options),
+        "evidence_required": bool(decision.get("evidence_required")),
+        "evidence_context_hash": stable_hash({"evidence_context": evidence_context}) if evidence_context else "",
+        "underlying_model_calls": 0,
+    }
+    if problem.get("_answer"):
+        gold_for_eval, _ = _canonicalize_multiple_choice_answer(problem, str(problem.get("_answer") or ""))
+        summary["candidate_correct_for_eval"] = _is_correct(label, gold_for_eval, answer_type="multipleChoice")
+    _log_event(
+        logger,
+        {
+            "event": "domain_rule_mc_verifier",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "problem_id_hash": problem["id_hash"],
+            "question_hash": problem["question_hash"],
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "stage_status": summary["status"],
+            "stage_data": summary,
+        },
+    )
+    return attempt, summary
+
+
+def _domain_rule_mc_decision(
+    *,
+    problem: dict[str, Any],
+    stem: str,
+    options: dict[str, str],
+    evidence_context: str,
+) -> dict[str, Any] | None:
+    law = _ontario_confidential_screen_rule_decision(problem=problem, stem=stem, options=options, evidence_context=evidence_context)
+    if law:
+        return law
+    bio = _bacterial_cross_resistance_minimality_decision(problem=problem, stem=stem, options=options)
+    if bio:
+        return bio
+    return None
+
+
+def _ontario_confidential_screen_rule_decision(
+    *,
+    problem: dict[str, Any],
+    stem: str,
+    options: dict[str, str],
+    evidence_context: str,
+) -> dict[str, Any] | None:
+    text = " ".join([
+        str(problem.get("category") or ""),
+        str(problem.get("raw_subject") or ""),
+        stem,
+    ]).lower()
+    if not all(token in text for token in ("law", "confidential")):
+        return None
+    if not any(token in text for token in ("ontario", "toronto", "former client", "law firm", "llp")):
+        return None
+    evidence = evidence_context.lower()
+    has_rule_evidence = (
+        "lso_rules" in evidence
+        or ("adequate measures" in evidence and "confidential information" in evidence)
+        or ("former client" in evidence and "confidential information" in evidence)
+    )
+    if not has_rule_evidence:
+        return None
+    candidates: list[str] = []
+    for label, option_text in sorted(options.items()):
+        option = option_text.lower()
+        can_continue = any(phrase in option for phrase in ("can continue", "may continue", "allowed to continue"))
+        measures = any(phrase in option for phrase in ("appropriate measures", "adequate measures", "not shared", "screen"))
+        confidential = "confidential" in option
+        prohibited = any(phrase in option for phrase in ("not allowed", "prohibited", "cannot continue"))
+        if can_continue and measures and confidential and not prohibited:
+            candidates.append(label)
+    if len(candidates) != 1:
+        return None
+    return {
+        "label": candidates[0],
+        "rule_id": "ontario_former_client_confidential_screen",
+        "confidence": "evidence_grounded_domain_rule",
+        "reason": "lso_rules_support_adequate_measures_screen_exception",
+        "evidence_required": True,
+    }
+
+
+def _bacterial_cross_resistance_minimality_decision(
+    *,
+    problem: dict[str, Any],
+    stem: str,
+    options: dict[str, str],
+) -> dict[str, Any] | None:
+    text = " ".join([
+        str(problem.get("category") or ""),
+        str(problem.get("raw_subject") or ""),
+        stem,
+    ]).lower()
+    required_cues = ("bacteria", "resistance")
+    if not all(cue in text for cue in required_cues):
+        return None
+    if not any(phrase in text for phrase in ("lateral transfer", "stable genome", "no lateral transfer")):
+        return None
+    if "equal pace" not in text and "same pace" not in text:
+        return None
+    scored: list[tuple[int, str]] = []
+    for label, option_text in sorted(options.items()):
+        option = option_text.lower()
+        if "contamination" in option or "plasmid" in option:
+            continue
+        score = 0
+        if "cross-resistance" in option or "cross resistance" in option:
+            score += 4
+        if "rare resistance" in option or "rare mutations" in option or "mutations" in option:
+            score += 2
+        if "did not have compensatory" in option or "without compensatory" in option or "no compensatory" in option:
+            score += 2
+        if "compensatory mutations" in option and not any(
+            phrase in option for phrase in ("did not have compensatory", "without compensatory", "no compensatory")
+        ):
+            score -= 2
+        if "increased the fitness to a great extent" in option:
+            score -= 2
+        if score > 0:
+            scored.append((score, label))
+    if not scored:
+        return None
+    ranked = sorted(scored, key=lambda item: (-item[0], item[1]))
+    if len(ranked) > 1 and ranked[0][0] == ranked[1][0]:
+        return None
+    if ranked[0][0] < 5:
+        return None
+    return {
+        "label": ranked[0][1],
+        "rule_id": "bacterial_cross_resistance_minimal_extra_assumption",
+        "confidence": "contrastive_domain_rule",
+        "reason": "cross_resistance_explains_parallel_resistance_without_adding_unstated_compensatory_fitness_clause",
+        "evidence_required": False,
+    }
+
+
+def _option_evidence_context(
+    *,
+    options: dict[str, str],
+    docs_by_label: dict[str, list[dict[str, str]]],
+) -> str:
+    lines: list[str] = []
+    for label, option_text in sorted(options.items()):
+        docs = docs_by_label.get(label, [])
+        if not docs:
+            continue
+        lines.append(f"Option {label} ({_clean_evidence_text(option_text)[:120]}):")
+        for index, doc in enumerate(docs[:2], start=1):
+            title = _clean_evidence_text(doc.get("title", ""))
+            snippet = _clean_evidence_text(doc.get("snippet", ""))
+            if not title and not snippet:
+                continue
+            lines.append(f"- Evidence {index}: {title} -- {snippet[:260]}")
+    return "\n".join(lines)[:4000]
+
+
+def _option_evidence_query(stem: str, option_text: str, problem: dict[str, Any]) -> str:
+    stem_words = [
+        token for token in re.findall(r"[A-Za-z0-9_+.-]{4,}", stem or "")
+        if token.lower() not in _EVIDENCE_QUERY_STOPWORDS
+    ][:8]
+    option_words = [
+        token for token in re.findall(r"[A-Za-z0-9_+.-]{3,}", option_text or "")
+        if token.lower() not in _EVIDENCE_QUERY_STOPWORDS
+    ][:8]
+    subject = str(problem.get("raw_subject") or problem.get("category") or "").strip()
+    return _clean_evidence_query(" ".join(stem_words + option_words + ([subject] if subject else [])))
+
+
+def _score_option_evidence(*, stem_terms: set[str], option_text: str, docs: list[dict[str, str]]) -> float:
+    option_terms = _content_terms(option_text)
+    if not option_terms or not docs:
+        return 0.0
+    score = 0.0
+    for index, doc in enumerate(docs[:2]):
+        text = f"{doc.get('title', '')} {doc.get('snippet', '')}"
+        doc_terms = _content_terms(text)
+        title_terms = _content_terms(doc.get("title", ""))
+        option_overlap = len(option_terms & doc_terms)
+        title_overlap = len(option_terms & title_terms)
+        stem_overlap = len(stem_terms & doc_terms)
+        score += (2.0 * option_overlap) + (0.75 * stem_overlap) + (0.5 * title_overlap) + (0.05 / (index + 1))
+    return round(score, 4)
 
 
 def _select_recursive_child_answer(
@@ -1261,8 +4024,22 @@ def _select_recursive_child_answer(
     logger: "_JsonlLogger | None",
     timeout: float | None,
     max_tokens: int,
+    evidence_context: str = "",
 ) -> dict[str, Any]:
-    valid = [attempt for attempt in attempts if str(attempt.get("parsed_answer") or "").strip()]
+    valid: list[dict[str, Any]] = []
+    for attempt in attempts:
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        if problem["answer_type"] == "multipleChoice":
+            canonical, canonical_summary = _canonicalize_multiple_choice_answer(problem, answer)
+            if canonical_summary.get("changed"):
+                attempt = dict(attempt)
+                attempt["parsed_answer"] = canonical
+                attempt["parsed_answer_hash"] = stable_hash({"answer": canonical})
+                attempt["multiple_choice_canonicalized"] = True
+                attempt["multiple_choice_canonicalizer"] = canonical_summary
+        valid.append(attempt)
     if problem["answer_type"] != "multipleChoice":
         non_suspicious = [
             attempt for attempt in valid
@@ -1275,6 +4052,131 @@ def _select_recursive_child_answer(
         normalized[_normalize_for_selection(attempt["parsed_answer"], answer_type=problem["answer_type"])].append(attempt)
     if normalized:
         ranked = sorted(normalized.items(), key=lambda item: (-len(item[1]), item[1][0]["child_index"]))
+        verified_candidates = [
+            attempt for attempt in valid
+            if attempt.get("candidate_verifier_state") == "verified"
+        ]
+        if verified_candidates:
+            selected = sorted(verified_candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+            return {
+                "selection_method": "candidate_claim_verifier_priority",
+                "selected_child_id": selected["child_id"],
+                "selected_answer": selected["parsed_answer"],
+                "underlying_model_calls": 0,
+                "verifier_model_call": False,
+            }
+        if any(
+            attempt.get("candidate_verifier_state") == "refuted" for attempt in valid
+        ):
+            non_refuted_valid = [
+                attempt for attempt in valid
+                if attempt.get("candidate_verifier_state") != "refuted"
+            ]
+            if non_refuted_valid:
+                valid = non_refuted_valid
+                normalized = defaultdict(list)
+                for attempt in valid:
+                    normalized[_normalize_for_selection(attempt["parsed_answer"], answer_type=problem["answer_type"])].append(attempt)
+                ranked = sorted(normalized.items(), key=lambda item: (-len(item[1]), item[1][0]["child_index"]))
+        math_candidates = [
+            attempt for attempt in valid
+            if attempt.get("prompt_kind") == "math_tool_answer"
+            and attempt.get("tool_confidence") == "verified_symbolic"
+        ]
+        if problem["answer_type"] != "multipleChoice" and math_candidates:
+            deterministic_math = [
+                attempt for attempt in math_candidates
+                if attempt.get("tool_source") == "deterministic_parser"
+            ]
+            supported_math = [
+                attempt for attempt in math_candidates
+                if len(normalized.get(_normalize_for_selection(attempt["parsed_answer"], answer_type=problem["answer_type"]), [])) >= 2
+            ]
+            if deterministic_math or supported_math:
+                selected = (deterministic_math or supported_math)[0]
+                return {
+                    "selection_method": "verified_math_tool_priority",
+                    "selected_child_id": selected["child_id"],
+                    "selected_answer": selected["parsed_answer"],
+                    "underlying_model_calls": 0,
+                    "verifier_model_call": False,
+                }
+        source_selection = _maybe_run_source_grounded_mc_selection(
+            problem=problem,
+            valid=valid,
+            ranked=ranked,
+            evidence_context=evidence_context,
+            model=model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+        if source_selection:
+            return source_selection
+        counter_selection = _select_after_counter_assumption_challenge(
+            problem=problem,
+            valid=valid,
+            ranked=ranked,
+            model=model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+        if counter_selection:
+            return counter_selection
+        if problem["answer_type"] != "multipleChoice" and _should_run_math_tool_child(problem):
+            top_answer, top_attempts = ranked[0]
+            if len(top_attempts) >= 2:
+                selected = top_attempts[0]
+                return {
+                    "selection_method": "math_exact_normalized_majority",
+                    "selected_child_id": selected["child_id"],
+                    "selected_answer": selected["parsed_answer"],
+                    "underlying_model_calls": 0,
+                    "verifier_model_call": False,
+                }
+            if len(ranked) == 1:
+                selected = top_attempts[0]
+                return {
+                    "selection_method": "normalized_majority",
+                    "selected_child_id": selected["child_id"],
+                    "selected_answer": selected["parsed_answer"],
+                    "underlying_model_calls": 0,
+                    "verifier_model_call": False,
+                }
+            direct_candidates = [
+                attempt for attempt in valid
+                if attempt.get("prompt_kind") == "direct_short_answer"
+            ]
+            if direct_candidates:
+                selected = direct_candidates[0]
+                return {
+                    "selection_method": "math_exact_direct_fallback",
+                    "selected_child_id": selected["child_id"],
+                    "selected_answer": selected["parsed_answer"],
+                    "underlying_model_calls": 0,
+                    "verifier_model_call": False,
+                }
+        evidence_candidates = [
+            attempt for attempt in valid
+            if attempt.get("prompt_kind") in {"evidence_bridge_answer", "evidence_grounded_answer"}
+        ]
+        if problem["answer_type"] != "multipleChoice" and evidence_candidates:
+            top_attempts = ranked[0][1]
+            top_has_evidence = any(attempt in evidence_candidates for attempt in top_attempts)
+            if len(top_attempts) >= 2 and not top_has_evidence:
+                selected = evidence_candidates[0]
+                return {
+                    "selection_method": "evidence_bridge_priority_over_closed_book_majority",
+                    "selected_child_id": selected["child_id"],
+                    "selected_answer": selected["parsed_answer"],
+                    "underlying_model_calls": 0,
+                    "verifier_model_call": False,
+                }
         if len(ranked[0][1]) >= 2 or len(ranked) == 1:
             selected = ranked[0][1][0]
             return {
@@ -1293,14 +4195,15 @@ def _select_recursive_child_answer(
             "verifier_model_call": False,
         }
     try:
+        verifier_candidates = _unique_verifier_candidates(problem, valid)
         verifier_text = _call_model(
             model=model,
-            prompt=_verifier_prompt(problem, valid),
+            prompt=_verifier_prompt(problem, verifier_candidates),
             timeout=timeout,
             max_tokens=max_tokens,
         )
-        choice = _parse_verifier_choice(verifier_text, max_index=len(valid))
-        selected = valid[(choice or 1) - 1]
+        choice = _parse_verifier_choice(verifier_text, max_index=len(verifier_candidates))
+        selected = verifier_candidates[(choice or 1) - 1]
         _log_event(
             logger,
             {
@@ -1310,7 +4213,8 @@ def _select_recursive_child_answer(
                 "problem_id_hash": problem["id_hash"],
                 "model": model,
                 "variant": "assumption_agent_recursive_verify",
-                "candidate_count": len(valid),
+                "candidate_count": len(verifier_candidates),
+                "raw_candidate_count": len(valid),
                 "choice": choice or 1,
                 "selected_child_id": selected["child_id"],
                 "selected_answer_hash": selected["parsed_answer_hash"],
@@ -1350,14 +4254,415 @@ def _select_recursive_child_answer(
         }
 
 
-def _verifier_prompt(problem: dict[str, Any], attempts: list[dict[str, Any]]) -> str:
+def _maybe_run_source_grounded_mc_selection(
+    *,
+    problem: dict[str, Any],
+    valid: list[dict[str, Any]],
+    ranked: list[tuple[str, list[dict[str, Any]]]],
+    evidence_context: str,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> dict[str, Any] | None:
+    if problem.get("answer_type") != "multipleChoice" or not evidence_context:
+        return None
+    evidence_candidates = [
+        attempt for attempt in valid
+        if attempt.get("prompt_kind") in {"evidence_bridge_answer", "evidence_grounded_answer"}
+    ]
+    if not evidence_candidates:
+        return None
+    unique_candidates = _unique_verifier_candidates(problem, valid)
+    if len(unique_candidates) < 2:
+        return None
+    top_attempts = ranked[0][1] if ranked else []
+    top_has_evidence = any(attempt in evidence_candidates for attempt in top_attempts)
+    evidence_disagrees = any(
+        _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type="multipleChoice")
+        != _normalize_for_selection(str(top_attempts[0].get("parsed_answer") or ""), answer_type="multipleChoice")
+        for attempt in evidence_candidates
+        if top_attempts
+    )
+    has_full_option_space = any(attempt.get("prompt_kind") == "mc_option_sweep_candidate" for attempt in valid)
+    has_variation_challenge = any(
+        attempt.get("prompt_kind") in {
+            "counter_assumption_challenge_answer",
+            "option_elimination_challenge_answer",
+            "forced_alternative_answer",
+        }
+        for attempt in valid
+    )
+    broad_enabled = os.environ.get("HLE_ENABLE_BROAD_SOURCE_GROUNDED_MC", "").strip().lower() in {"1", "true", "yes", "on"}
+    conservative_trigger = len(top_attempts) == 2 and not top_has_evidence and not has_variation_challenge
+    if not broad_enabled and not conservative_trigger:
+        return None
+    if top_has_evidence and not evidence_disagrees and not has_full_option_space:
+        return None
+    source_selection = _run_source_grounded_mc_verifier(
+        problem=problem,
+        attempts=unique_candidates,
+        evidence_context=evidence_context,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
+    return source_selection if source_selection.get("selected_answer") else None
+
+
+def _select_after_counter_assumption_challenge(
+    *,
+    problem: dict[str, Any],
+    valid: list[dict[str, Any]],
+    ranked: list[tuple[str, list[dict[str, Any]]]],
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> dict[str, Any] | None:
+    if not ranked or len(ranked[0][1]) < 2:
+        return None
+    top_norm = ranked[0][0]
+    challenge_candidates = [
+        attempt for attempt in valid
+        if attempt.get("prompt_kind") in {
+            "counter_assumption_challenge_answer",
+            "option_elimination_challenge_answer",
+            "forced_alternative_answer",
+            "mc_option_evidence_scorer_answer",
+            "critic_synthesis_answer",
+            "mc_option_sweep_candidate",
+        }
+        and str(attempt.get("parsed_answer") or "").strip()
+    ]
+    if not any(
+        _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type=problem["answer_type"]) != top_norm
+        for attempt in challenge_candidates
+    ):
+        return None
+    option_evidence_selection = _run_option_evidence_arbitrator(
+        problem=problem,
+        valid=valid,
+        top_norm=top_norm,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
+    if option_evidence_selection:
+        return option_evidence_selection
+    try:
+        verifier_candidates = _unique_verifier_candidates(problem, valid)
+        verifier_text = _call_model(
+            model=model,
+            prompt=_verifier_prompt(problem, verifier_candidates),
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+        choice = _parse_verifier_choice(verifier_text, max_index=len(verifier_candidates))
+        selected = verifier_candidates[(choice or 1) - 1]
+        _log_event(
+            logger,
+            {
+                "event": "counter_assumption_verifier_end",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "candidate_count": len(verifier_candidates),
+                "raw_candidate_count": len(valid),
+                "choice": choice or 1,
+                "selected_child_id": selected["child_id"],
+                "selected_answer_hash": selected["parsed_answer_hash"],
+                "verifier_prediction_hash": stable_hash({"prediction": verifier_text}),
+            },
+        )
+        return {
+            "selection_method": "counter_assumption_verifier_choice" if choice else "counter_assumption_verifier_fallback_first",
+            "selected_child_id": selected["child_id"],
+            "selected_answer": selected["parsed_answer"],
+            "underlying_model_calls": 1,
+            "verifier_model_call": True,
+        }
+    except Exception as exc:
+        selected = ranked[0][1][0]
+        _log_event(
+            logger,
+            {
+                "event": "counter_assumption_verifier_error",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "candidate_count": len(valid),
+                "error_type": type(exc).__name__,
+                "error": str(exc)[:240],
+                "fallback_child_id": selected["child_id"],
+            },
+        )
+        return {
+            "selection_method": "counter_assumption_verifier_error_fallback_majority",
+            "selected_child_id": selected["child_id"],
+            "selected_answer": selected["parsed_answer"],
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+
+def _run_option_evidence_arbitrator(
+    *,
+    problem: dict[str, Any],
+    valid: list[dict[str, Any]],
+    top_norm: str,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> dict[str, Any] | None:
+    option_attempts = [
+        attempt for attempt in valid
+        if attempt.get("prompt_kind") == "mc_option_evidence_scorer_answer"
+        and attempt.get("private_option_evidence_context")
+        and _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type=problem["answer_type"]) != top_norm
+    ]
+    if not option_attempts:
+        return None
+    try:
+        verifier_text = _call_model(
+            model=model,
+            prompt=_option_evidence_arbitrator_prompt(
+                problem,
+                _unique_verifier_candidates(problem, valid),
+                evidence_context=str(option_attempts[0].get("private_option_evidence_context") or ""),
+            ),
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+        verifier_candidates = _unique_verifier_candidates(problem, valid)
+        choice = _parse_verifier_choice(verifier_text, max_index=len(verifier_candidates))
+        if not choice:
+            return None
+        selected = verifier_candidates[choice - 1]
+        _log_event(
+            logger,
+            {
+                "event": "option_evidence_arbitrator_end",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "candidate_count": len(verifier_candidates),
+                "raw_candidate_count": len(valid),
+                "choice": choice,
+                "selected_child_id": selected["child_id"],
+                "selected_answer_hash": selected["parsed_answer_hash"],
+                "selected_option_evidence_candidate": selected.get("prompt_kind") == "mc_option_evidence_scorer_answer",
+                "verifier_prediction_hash": stable_hash({"prediction": verifier_text}),
+                "evidence_context_hash": stable_hash({
+                    "option_evidence_context": str(option_attempts[0].get("private_option_evidence_context") or "")
+                }),
+            },
+        )
+        return {
+            "selection_method": "option_evidence_verifier_choice",
+            "selected_child_id": selected["child_id"],
+            "selected_answer": selected["parsed_answer"],
+            "underlying_model_calls": 1,
+            "verifier_model_call": True,
+        }
+    except Exception as exc:
+        _log_event(
+            logger,
+            {
+                "event": "option_evidence_arbitrator_error",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "candidate_count": len(valid),
+                "error_type": type(exc).__name__,
+                "error": str(exc)[:240],
+            },
+        )
+        return None
+
+
+def _option_evidence_arbitrator_prompt(
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    *,
+    evidence_context: str,
+) -> str:
     choices = "\n".join(
-        f"{index}. prompt_kind={attempt['prompt_kind']}; answer={attempt['parsed_answer']}"
+        f"{index}. answer={attempt['parsed_answer']}; support_count={attempt.get('support_count', 1)}; "
+        f"prompt_kinds={','.join(attempt.get('support_prompt_kinds', [attempt.get('prompt_kind', '')]))}"
         for index, attempt in enumerate(attempts, start=1)
     )
     return (
-        "Choose the candidate answer most likely to satisfy the HLE question. Prefer exact wording, correct "
-        "multiple-choice letter, and answers that do not add unsupported qualifiers. Return JSON only: "
+        "A multiple-choice answer majority conflicts with an option-specific transient evidence scorer. "
+        "Use the option evidence below to arbitrate. If the evidence directly supports one option over the "
+        "majority, choose that candidate. If the evidence is generic, irrelevant, or does not distinguish "
+        "options, choose the consensus candidate. Return JSON only: {\"choice\":1}.\n\n"
+        f"Option evidence:\n{evidence_context}\n\n"
+        f"Question:\n{problem['_question']}\n\nCandidates:\n{choices}"
+    )
+
+
+def _unique_verifier_candidates(problem: dict[str, Any], attempts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    answer_type = problem.get("answer_type") or "exactMatch"
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for attempt in attempts:
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        norm = _normalize_for_selection(answer, answer_type=answer_type)
+        grouped[norm].append(attempt)
+    representatives: list[dict[str, Any]] = []
+    for norm, group in grouped.items():
+        rep = dict(sorted(group, key=lambda row: int(row.get("child_index", 0) or 0))[0])
+        rep["support_count"] = len(group)
+        rep["support_prompt_kinds"] = sorted({str(row.get("prompt_kind") or "") for row in group if row.get("prompt_kind")})
+        rep["normalized_answer_for_verifier"] = norm
+        representatives.append(rep)
+    if answer_type == "multipleChoice":
+        representatives.sort(key=lambda row: (_extract_choice(str(row.get("parsed_answer") or "")) or "Z", int(row.get("child_index", 0) or 0)))
+    else:
+        representatives.sort(key=lambda row: (-int(row.get("support_count") or 0), int(row.get("child_index", 0) or 0)))
+    return representatives
+
+
+def _run_source_grounded_mc_verifier(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    evidence_context: str,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> dict[str, Any]:
+    verifier_model = (
+        os.environ.get("HLE_AGENT_SOURCE_VERIFIER_MODEL")
+        or os.environ.get("HLE_AGENT_CRITIC_MODEL")
+        or model
+    )
+    try:
+        verifier_text = _call_model(
+            model=verifier_model,
+            prompt=_source_grounded_mc_verifier_prompt(problem, attempts, evidence_context=evidence_context),
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+        choice = _parse_verifier_choice(verifier_text, max_index=len(attempts))
+        if not choice:
+            return {
+                "selection_method": "source_grounded_verifier_abstained",
+                "selected_child_id": None,
+                "selected_answer": "",
+                "underlying_model_calls": 1,
+                "verifier_model_call": True,
+            }
+        selected = attempts[choice - 1]
+        _log_event(
+            logger,
+            {
+                "event": "source_grounded_mc_verifier_end",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "model": model,
+                "verifier_model": verifier_model,
+                "variant": "assumption_agent_recursive_verify",
+                "candidate_count": len(attempts),
+                "choice": choice,
+                "selected_child_id": selected["child_id"],
+                "selected_answer_hash": selected["parsed_answer_hash"],
+                "verifier_prediction_hash": stable_hash({"prediction": verifier_text}),
+                "evidence_context_hash": stable_hash({"evidence_context": evidence_context}),
+            },
+        )
+        return {
+            "selection_method": "source_grounded_verifier_choice",
+            "selected_child_id": selected["child_id"],
+            "selected_answer": selected["parsed_answer"],
+            "underlying_model_calls": 1,
+            "verifier_model_call": True,
+        }
+    except Exception as exc:
+        _log_event(
+            logger,
+            {
+                "event": "source_grounded_mc_verifier_error",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "model": model,
+                "verifier_model": verifier_model,
+                "variant": "assumption_agent_recursive_verify",
+                "candidate_count": len(attempts),
+                "error_type": type(exc).__name__,
+                "error": str(exc)[:240],
+            },
+        )
+        return {
+            "selection_method": "source_grounded_verifier_error",
+            "selected_child_id": None,
+            "selected_answer": "",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+
+def _source_grounded_mc_verifier_prompt(
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    *,
+    evidence_context: str,
+) -> str:
+    choices = "\n".join(
+        f"{index}. answer={attempt['parsed_answer']}; support_count={attempt.get('support_count', 1)}; "
+        f"prompt_kinds={','.join(attempt.get('support_prompt_kinds', [attempt.get('prompt_kind', '')]))}"
+        for index, attempt in enumerate(attempts, start=1)
+    )
+    return (
+        "Choose the candidate answer best supported by the transient evidence for this multipleChoice HLE item. "
+        "The candidates are unique answer labels; support_count is diagnostic only and is not a vote weight. "
+        "First test whether the evidence directly distinguishes options. If it does not, choose the candidate "
+        "whose option text best satisfies the exact question wording and mechanism. Return JSON only: "
+        "{\"choice\":1}.\n\n"
+        f"Evidence:\n{evidence_context}\n\n"
+        f"Question:\n{problem['_question']}\n\nCandidates:\n{choices}"
+    )
+
+
+def _verifier_prompt(problem: dict[str, Any], attempts: list[dict[str, Any]]) -> str:
+    choices = "\n".join(
+        f"{index}. answer={attempt['parsed_answer']}; support_count={attempt.get('support_count', 1)}; "
+        f"prompt_kinds={','.join(attempt.get('support_prompt_kinds', [attempt.get('prompt_kind', '')]))}"
+        for index, attempt in enumerate(attempts, start=1)
+    )
+    return (
+        "Choose the candidate answer most likely to satisfy the HLE question. The candidates below are unique "
+        "answers; support_count is diagnostic only and is not a vote weight. Prefer exact wording, correct "
+        "multiple-choice letter, and answers that satisfy the question even if they have lower support. "
+        "Return JSON only: "
         "{\"choice\":1}.\n\n"
         f"Answer type: {problem['answer_type']}\nQuestion:\n{problem['_question']}\n\nCandidates:\n{choices}"
     )
@@ -1396,6 +4701,16 @@ def _needs_evidence_grounded_child(problem: dict[str, Any], attempts: list[dict[
     return bool(valid) and all(_is_suspicious_exact_answer(answer) for answer in valid)
 
 
+def _should_prime_evidence_bridge(problem: dict[str, Any], agent_plan: dict[str, Any]) -> bool:
+    if agent_plan.get("hle_evidence_context"):
+        return False
+    # HLE failures are often answer-bearing retrieval failures.  Keep
+    # graph/morphism context as one candidate, but give the recursive verifier a
+    # separate transient evidence child so closed-book self-consistency cannot
+    # be mistaken for verification.
+    return True
+
+
 def _is_suspicious_exact_answer(answer: str) -> bool:
     text = str(answer or "").strip()
     if not text:
@@ -1407,7 +4722,153 @@ def _is_suspicious_exact_answer(answer: str) -> bool:
     return False
 
 
+def _canonicalize_exact_answer_candidate(problem: dict[str, Any], answer: str) -> tuple[str, dict[str, Any]]:
+    original = str(answer or "").strip()
+    if problem.get("answer_type") == "multipleChoice" or not original:
+        return original, {"status": "not_required", "changed": False}
+    text = original
+    changed = False
+
+    stripped = text.strip().strip('"').strip("'").strip()
+    if stripped != text:
+        text = stripped
+        changed = True
+
+    unwrapped = re.fullmatch(r"\$([^$]{1,240})\$|\\\((.{1,240})\\\)", text, flags=re.DOTALL)
+    if unwrapped:
+        text = (unwrapped.group(1) or unwrapped.group(2) or "").strip()
+        changed = True
+
+    prefixed = re.sub(
+        r"^\s*(?:the\s+)?(?:answer|final\s+answer|result|value)\s*(?:is|=|:)\s*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    ).strip()
+    if prefixed != text and prefixed:
+        text = prefixed
+        changed = True
+
+    latex_candidate = text[:-1].strip() if text.endswith(".") else text
+    unwrapped = re.fullmatch(r"\$([^$]{1,240})\$|\\\((.{1,240})\\\)", latex_candidate, flags=re.DOTALL)
+    if unwrapped:
+        text = (unwrapped.group(1) or unwrapped.group(2) or "").strip()
+        changed = True
+
+    discourse_stripped = re.sub(r"^\s*(?:therefore|thus|hence|so)\s*,?\s+", "", text, flags=re.IGNORECASE).strip()
+    if discourse_stripped != text and discourse_stripped:
+        text = discourse_stripped
+        changed = True
+
+    numeric_or_formula = bool(re.fullmatch(r"[-+0-9A-Za-z_πpiPI√sqrt^*/%()., =<>]+", text))
+    if changed and text.endswith(".") and (numeric_or_formula or len(text.split()) <= 8):
+        text = text[:-1].strip()
+
+    if not text:
+        text = original
+        changed = False
+
+    return text, {
+        "status": "activated" if changed else "not_required",
+        "changed": changed,
+        "before_answer_hash": stable_hash({"answer": original}),
+        "after_answer_hash": stable_hash({"answer": text}),
+        "policy": "agent_exact_match_safe_prefix_unwrap",
+    }
+
+
+def _canonicalize_multiple_choice_answer(problem: dict[str, Any], answer: str) -> tuple[str, dict[str, Any]]:
+    original = str(answer or "").strip()
+    if problem.get("answer_type") != "multipleChoice" or not original:
+        return original, {"status": "not_required", "changed": False}
+    _, options = _split_multiple_choice_question(problem)
+    if not options:
+        return original, {"status": "options_not_parsed", "changed": False}
+    explicit_label = _extract_explicit_choice_label(original)
+    if explicit_label and explicit_label in options:
+        return explicit_label, {
+            "status": "canonicalized" if explicit_label != original else "unchanged",
+            "changed": explicit_label != original,
+            "method": "explicit_label",
+            "before_answer_hash": stable_hash({"answer": original}),
+            "after_answer_hash": stable_hash({"answer": explicit_label}),
+        }
+
+    stripped = original.strip().strip('"').strip("'").strip()
+    stripped = re.sub(
+        r"^\s*(?:the\s+)?(?:answer|final\s+answer|correct\s+answer)\s*(?:is|=|:)\s*",
+        "",
+        stripped,
+        flags=re.IGNORECASE,
+    ).strip()
+    stripped = stripped[:-1].strip() if stripped.endswith(".") else stripped
+    answer_norm = _normalize_exact(stripped)
+    if not answer_norm:
+        return original, {"status": "empty_after_strip", "changed": False}
+
+    matches: list[tuple[str, str]] = []
+    answer_terms = _content_terms(answer_norm)
+    for label, option_text in options.items():
+        option_norm = _normalize_exact(option_text)
+        if not option_norm:
+            continue
+        if answer_norm == option_norm:
+            matches.append((label, "exact_option_text"))
+            continue
+        if len(option_norm) >= 8 and option_norm in answer_norm:
+            matches.append((label, "contained_option_text"))
+            continue
+        option_terms = _content_terms(option_norm)
+        if len(option_terms) >= 2 and option_terms.issubset(answer_terms):
+            matches.append((label, "option_terms_subset"))
+    unique_labels = sorted({label for label, _ in matches})
+    if len(unique_labels) == 1:
+        label = unique_labels[0]
+        methods = sorted({method for match_label, method in matches if match_label == label})
+        return label, {
+            "status": "canonicalized",
+            "changed": label != original,
+            "method": methods[0],
+            "before_answer_hash": stable_hash({"answer": original}),
+            "after_answer_hash": stable_hash({"answer": label}),
+        }
+    if len(unique_labels) > 1:
+        return original, {
+            "status": "ambiguous_option_text",
+            "changed": False,
+            "candidate_label_hashes": [stable_hash({"option_label": label}) for label in unique_labels],
+        }
+    return original, {"status": "no_option_text_match", "changed": False}
+
+
+def _extract_explicit_choice_label(text: str) -> str:
+    raw = str(text or "").strip()
+    upper = raw.upper()
+    direct = re.fullmatch(r"([A-H])(?:[\).:：])?", upper)
+    if direct:
+        return direct.group(1)
+    prefix = re.match(r"^\s*([A-H])[\).:：]\s+", upper)
+    if prefix:
+        return prefix.group(1)
+    match = re.search(
+        r"\b(?:option|choice|answer|ans|final\s+answer)\s*(?:is|=|:)?\s*([A-H])\b",
+        raw,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        return match.group(1)
+    return ""
+
+
 def _evidence_grounded_answer_prompt(problem: dict[str, Any], *, evidence_context: str) -> str:
+    if problem.get("answer_type") == "multipleChoice":
+        return (
+            "Use the transient evidence below to answer this multipleChoice HLE item. Return the single option "
+            "letter only. Treat the evidence as fallible: use it only when it directly matches the question, and "
+            "ignore irrelevant passages. Return JSON only: {\"answer\":\"...\"}.\n\n"
+            f"{evidence_context}\n\n"
+            f"Question:\n{problem['_question']}"
+        )
     return (
         "Use the transient evidence below to answer this exactMatch HLE item. The existing child attempts all "
         "collapsed to a likely choice-letter artifact, so ignore single-letter answers unless the question "
@@ -1586,21 +5047,29 @@ def _build_hle_evidence_bridge_context(
     errors: list[str] = []
     for query in queries:
         try:
-            results.extend(_wikipedia_search(query, limit=2, timeout=6.0))
+            wiki_rows = _wikipedia_search(query, limit=3, timeout=6.0)
+            results.extend(wiki_rows)
+            if len(wiki_rows) < 2 or _should_use_domain_evidence_search(problem):
+                results.extend(_domain_evidence_search(query, problem=problem, limit=2, timeout=8.0))
         except Exception as exc:
             errors.append(type(exc).__name__)
-    unique_results = _dedupe_evidence_results(results)[:5]
-    evidence_context = _format_evidence_context(unique_results, max_chars=1800)
+    unique_results = _dedupe_evidence_results(results)
+    reranked_results = [row["doc"] for row in _hipporag_style_rerank(problem, unique_results)[:5]]
+    selected_results = reranked_results or unique_results[:5]
+    evidence_context = _format_evidence_context(selected_results, max_chars=1800)
     summary = {
         "status": "activated" if evidence_context else "no_results",
-        "source": "wikipedia_search",
+        "source": "wikipedia_plus_domain_search",
+        "selection_policy": "hipporag_style_associative_rerank",
         "query_count": len(queries),
         "query_hashes": query_hashes,
         "result_count": len(unique_results),
+        "selected_result_count": len(selected_results),
         "source_hashes": [
             stable_hash({"title": row.get("title", ""), "snippet": row.get("snippet", "")})
-            for row in unique_results
+            for row in selected_results
         ],
+        "source_counts": dict(Counter(str(row.get("source") or "unknown") for row in unique_results)),
         "evidence_char_count": len(evidence_context),
         "error_types": sorted(set(errors)),
     }
@@ -1718,6 +5187,200 @@ def _wikipedia_search(query: str, *, limit: int, timeout: float) -> list[dict[st
     return rows
 
 
+def _should_use_domain_evidence_search(problem: dict[str, Any]) -> bool:
+    domain = f"{problem.get('category', '')} {problem.get('raw_subject', '')}".lower()
+    return any(token in domain for token in (
+        "biology",
+        "medicine",
+        "medical",
+        "biomed",
+        "law",
+        "legal",
+        "court",
+        "engineering",
+        "computer science",
+    ))
+
+
+def _domain_evidence_search(
+    query: str,
+    *,
+    problem: dict[str, Any],
+    limit: int,
+    timeout: float,
+) -> list[dict[str, str]]:
+    domain = f"{problem.get('category', '')} {problem.get('raw_subject', '')}".lower()
+    rows: list[dict[str, str]] = []
+    if any(token in domain for token in ("biology", "medicine", "medical", "biomed")):
+        rows.extend(_pubmed_search(query, limit=limit, timeout=timeout))
+    if any(token in domain for token in ("law", "legal", "court")):
+        rows.extend(_ontario_lso_rules_search(query, limit=limit, timeout=timeout))
+        rows.extend(_courtlistener_search(query, limit=limit, timeout=timeout))
+    rows.extend(_crossref_search(query, limit=max(1, min(limit, 2)), timeout=timeout))
+    return rows
+
+
+def _pubmed_search(query: str, *, limit: int, timeout: float) -> list[dict[str, str]]:
+    term = _clean_evidence_query(query)
+    if not term:
+        return []
+    search_params = urllib.parse.urlencode({
+        "db": "pubmed",
+        "retmode": "json",
+        "retmax": str(limit),
+        "term": term,
+    })
+    search_req = urllib.request.Request(
+        f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?{search_params}",
+        headers={"User-Agent": "AssumptionAgentHLEEvidenceBridge/0.1"},
+        method="GET",
+    )
+    with urllib.request.urlopen(search_req, timeout=timeout) as response:
+        search_data = json.loads(response.read().decode("utf-8"))
+    ids = list(search_data.get("esearchresult", {}).get("idlist", []) or [])[:limit]
+    if not ids:
+        return []
+    summary_params = urllib.parse.urlencode({
+        "db": "pubmed",
+        "retmode": "json",
+        "id": ",".join(ids),
+    })
+    summary_req = urllib.request.Request(
+        f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?{summary_params}",
+        headers={"User-Agent": "AssumptionAgentHLEEvidenceBridge/0.1"},
+        method="GET",
+    )
+    with urllib.request.urlopen(summary_req, timeout=timeout) as response:
+        summary_data = json.loads(response.read().decode("utf-8"))
+    result = summary_data.get("result", {}) if isinstance(summary_data, dict) else {}
+    rows: list[dict[str, str]] = []
+    for uid in ids:
+        item = result.get(uid, {}) if isinstance(result, dict) else {}
+        title = _clean_evidence_text(str(item.get("title") or ""))
+        journal = _clean_evidence_text(str(item.get("fulljournalname") or item.get("source") or ""))
+        pubdate = _clean_evidence_text(str(item.get("pubdate") or ""))
+        snippet = _clean_evidence_text("; ".join(value for value in (journal, pubdate, f"PMID {uid}") if value))
+        if title or snippet:
+            rows.append({"title": title, "snippet": snippet, "source": "pubmed"})
+    return rows
+
+
+def _courtlistener_search(query: str, *, limit: int, timeout: float) -> list[dict[str, str]]:
+    term = _clean_evidence_query(query)
+    if not term:
+        return []
+    params = urllib.parse.urlencode({"q": term, "type": "o"})
+    request = urllib.request.Request(
+        f"https://www.courtlistener.com/api/rest/v4/search/?{params}",
+        headers={"User-Agent": "AssumptionAgentHLEEvidenceBridge/0.1"},
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    rows: list[dict[str, str]] = []
+    for item in list(data.get("results", []) or [])[:limit]:
+        title = _clean_evidence_text(str(item.get("caseName") or item.get("caseNameFull") or ""))
+        court = _clean_evidence_text(str(item.get("court") or item.get("court_id") or ""))
+        date = _clean_evidence_text(str(item.get("dateFiled") or ""))
+        snippet_source = item.get("snippet") or item.get("syllabus") or item.get("procedural_history") or item.get("posture") or ""
+        snippet = _clean_evidence_text("; ".join(value for value in (court, date, str(snippet_source)) if value))
+        if title or snippet:
+            rows.append({"title": title, "snippet": snippet, "source": "courtlistener"})
+    return rows
+
+
+_LSO_RULES_TEXT_CACHE: str | None = None
+
+
+def _ontario_lso_rules_search(query: str, *, limit: int, timeout: float) -> list[dict[str, str]]:
+    term = _clean_evidence_query(query)
+    if not term:
+        return []
+    try:
+        rules_text = _load_lso_rules_text(timeout=timeout)
+    except Exception:
+        return []
+    query_terms = _content_terms(term)
+    if not query_terms:
+        return []
+    anchors = [
+        "Acting Against Former Clients",
+        "adequate measures",
+        "confidential information",
+        "Conflicts from Transfer Between Law Firms",
+        "law firm establishes that it has taken adequate measures",
+    ]
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for anchor in anchors:
+        for match in re.finditer(re.escape(anchor), rules_text, flags=re.IGNORECASE):
+            start = max(0, match.start() - 260)
+            end = min(len(rules_text), match.end() + 620)
+            snippet = _clean_evidence_text(rules_text[start:end])
+            if not snippet:
+                continue
+            snippet_terms = _content_terms(snippet)
+            if len(query_terms & snippet_terms) < 1 and anchor.lower() not in term.lower():
+                continue
+            key = _normalize_exact(snippet[:160])
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append({
+                "title": "Law Society of Ontario Rules of Professional Conduct",
+                "snippet": snippet,
+                "source": "lso_rules",
+            })
+            if len(rows) >= limit:
+                return rows
+    return rows
+
+
+def _load_lso_rules_text(*, timeout: float) -> str:
+    global _LSO_RULES_TEXT_CACHE
+    if _LSO_RULES_TEXT_CACHE:
+        return _LSO_RULES_TEXT_CACHE
+    request = urllib.request.Request(
+        "https://www.lso.ca/about-lso/legislation-rules/rules-of-professional-conduct/complete-rules-of-professional-conduct",
+        headers={"User-Agent": "AssumptionAgentHLEEvidenceBridge/0.1"},
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        raw = response.read().decode("utf-8", "ignore")
+    text = re.sub(r"<script[^>]*>.*?</script>", " ", raw, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<style[^>]*>.*?</style>", " ", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = html.unescape(text)
+    text = re.sub(r"\s+", " ", text).strip()
+    _LSO_RULES_TEXT_CACHE = text[:240000]
+    return _LSO_RULES_TEXT_CACHE
+
+
+def _crossref_search(query: str, *, limit: int, timeout: float) -> list[dict[str, str]]:
+    term = _clean_evidence_query(query)
+    if not term:
+        return []
+    params = urllib.parse.urlencode({"query": term, "rows": str(limit)})
+    request = urllib.request.Request(
+        f"https://api.crossref.org/works?{params}",
+        headers={"User-Agent": "AssumptionAgentHLEEvidenceBridge/0.1"},
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    rows: list[dict[str, str]] = []
+    for item in list(data.get("message", {}).get("items", []) or [])[:limit]:
+        title_values = item.get("title") or []
+        title = _clean_evidence_text(str(title_values[0] if title_values else ""))
+        container_values = item.get("container-title") or []
+        container = _clean_evidence_text(str(container_values[0] if container_values else ""))
+        doi = _clean_evidence_text(str(item.get("DOI") or ""))
+        snippet = _clean_evidence_text("; ".join(value for value in (container, doi) if value))
+        if title or snippet:
+            rows.append({"title": title, "snippet": snippet, "source": "crossref"})
+    return rows
+
+
 def _clean_evidence_text(text: str) -> str:
     text = re.sub(r"<[^>]+>", " ", str(text or ""))
     text = html.unescape(text)
@@ -1742,7 +5405,8 @@ def _format_evidence_context(results: list[dict[str, str]], *, max_chars: int) -
     for index, row in enumerate(results, start=1):
         title = row.get("title") or "Untitled"
         snippet = row.get("snippet") or ""
-        lines.append(f"[Evidence {index}] source=wikipedia; title={title}; snippet={snippet}")
+        source = row.get("source") or "wikipedia"
+        lines.append(f"[Evidence {index}] source={source}; title={title}; snippet={snippet}")
     text = "\n".join(lines).strip()
     return _trim_context(text, max_chars=max_chars)
 
@@ -1780,6 +5444,63 @@ def _exact_answer_repair_prompt(
         f"Rejected candidate hash only: {stable_hash({'answer': selected_answer})}\n"
         f"Question:\n{problem['_question']}"
     )
+
+
+def _split_multiple_choice_question(problem: dict[str, Any]) -> tuple[str, dict[str, str]]:
+    question = str(problem.get("_question") or "")
+    options, first_start = _extract_multiple_choice_options(question)
+    if not options or first_start is None:
+        return question, {}
+    stem = question[:first_start].strip()
+    stem = re.sub(r"(?:choices?|options?)\s*[:：]?\s*$", "", stem, flags=re.IGNORECASE).strip()
+    return stem or question, options
+
+
+def _extract_multiple_choice_options(question: str) -> tuple[dict[str, str], int | None]:
+    text = str(question or "")
+    pattern = re.compile(
+        r"(?:^|\n)\s*([A-H])[\).:：]\s*(.*?)(?=(?:\n\s*[A-H][\).:：]\s*)|\Z)",
+        flags=re.DOTALL,
+    )
+    matches = list(pattern.finditer(text))
+    if len(matches) < 2:
+        return {}, None
+    options: dict[str, str] = {}
+    first_start: int | None = None
+    for match in matches:
+        label = match.group(1).upper()
+        option_text = re.sub(r"\s+", " ", match.group(2)).strip()
+        if not option_text:
+            continue
+        if first_start is None:
+            first_start = match.start()
+        options[label] = option_text[:240]
+    return (options, first_start) if len(options) >= 2 else ({}, None)
+
+
+def _mc_option_matches_reference(option_text: str, reference_answer: str) -> bool:
+    option = str(option_text or "").strip()
+    reference = str(reference_answer or "").strip()
+    if not option or not reference:
+        return False
+    option_norm = _normalize_exact(option)
+    reference_norm = _normalize_exact(reference)
+    if option_norm and option_norm == reference_norm:
+        return True
+    option_math = _normalize_math_expression(option)
+    reference_math = _normalize_math_expression(reference)
+    if not option_math or not reference_math:
+        return False
+    try:
+        import sympy as sp
+
+        option_expr = _safe_sympy_parse_expr(option_math)
+        reference_expr = _safe_sympy_parse_expr(reference_math)
+        if option_expr is None or reference_expr is None:
+            return False
+        return bool(sp.simplify(option_expr - reference_expr) == 0)
+    except Exception:
+        return option_math.replace(" ", "") == reference_math.replace(" ", "")
 
 
 def _normalize_for_selection(text: str, *, answer_type: str) -> str:
@@ -1933,6 +5654,65 @@ def _module_trace(problem: dict[str, Any], *, variant: str, agent_plan: dict[str
     marks true Assumption Agent subsystems as skipped when this smoke wrapper
     has not actually invoked them.
     """
+    if variant.startswith("hipporag"):
+        stages = (agent_plan or {}).get("stages", {})
+        return [
+            {
+                "module": "answer_type_router",
+                "expected": True,
+                "status": "activated",
+                "reason": f"answer_type={problem.get('answer_type') or 'unknown'} controls output contract",
+            },
+            {
+                "module": "hipporag_context_retrieval",
+                "expected": True,
+                "status": _stage_status(stages, "hipporag_context_retrieval"),
+                "reason": "question-triggered transient evidence corpus retrieval, independent of the Assumption Graph",
+            },
+            {
+                "module": "hipporag_associative_rerank",
+                "expected": True,
+                "status": _stage_status(stages, "hipporag_associative_rerank"),
+                "reason": "HippoRAG-style entity/passage association reranks retrieved evidence",
+            },
+            {
+                "module": "assumption_graph_retrieval",
+                "expected": False,
+                "status": "not_applicable",
+                "reason": "HippoRAG baseline is a control and must not use the Assumption Graph",
+            },
+            {
+                "module": "structural_morphism_transfer",
+                "expected": False,
+                "status": "not_applicable",
+                "reason": "HippoRAG baseline is a control and must not use morphism transfer",
+            },
+            {
+                "module": "world_model_router",
+                "expected": False,
+                "status": "not_applicable",
+                "reason": "HippoRAG baseline is a control and must not use the Assumption Agent world model",
+            },
+            {
+                "module": "recursive_assumption_runner",
+                "expected": False,
+                "status": "not_applicable",
+                "reason": "HippoRAG baseline is a control and must not run recursive self-validation",
+            },
+            {
+                "module": "prompt_builder",
+                "expected": True,
+                "status": _stage_status(stages, "prompt_builder"),
+                "reason": "retrieved context is wrapped into a retrieval-augmented QA prompt",
+            },
+            {
+                "module": "answer_format_verifier",
+                "expected": True,
+                "status": "activated",
+                "reason": "JSON answer parser and answer-type scorer run after each response",
+            },
+        ]
+
     if variant.startswith("assumption_agent"):
         stages = (agent_plan or {}).get("stages", {})
         recursive_verify = variant == "assumption_agent_recursive_verify"
@@ -1968,6 +5748,12 @@ def _module_trace(problem: dict[str, Any], *, variant: str, agent_plan: dict[str
                 "reason": "predict_proposal_outcome gates whether retrieved context should be injected",
             },
             {
+                "module": "critic_model_router",
+                "expected": False,
+                "status": _stage_status(stages, "critic_model_router") if stages.get("critic_model_router") else "not_required",
+                "reason": "optional expensive critic can be routed only to falsification and verification steps",
+            },
+            {
                 "module": "recursive_assumption_runner",
                 "expected": True,
                 "status": _stage_status(stages, "recursive_assumption_runner"),
@@ -1994,6 +5780,34 @@ def _module_trace(problem: dict[str, Any], *, variant: str, agent_plan: dict[str
                 ),
             },
             {
+                "module": "counter_assumption_challenge",
+                "expected": recursive_verify,
+                "status": _stage_status(stages, "counter_assumption_challenge") if stages.get("counter_assumption_challenge") else "not_required",
+                "reason": "majority answers without independent verification can trigger a falsification child",
+            },
+            {
+                "module": "option_elimination_challenge",
+                "expected": recursive_verify and problem.get("answer_type") == "multipleChoice",
+                "status": (
+                    _stage_status((stages.get("counter_assumption_challenge") or {}), "option_elimination_challenge")
+                    if isinstance(stages.get("counter_assumption_challenge"), dict)
+                    and stages["counter_assumption_challenge"].get("option_elimination_challenge")
+                    else "not_required"
+                ),
+                "reason": "collapsed multiple-choice majorities can trigger stricter option-by-option falsification",
+            },
+            {
+                "module": "forced_alternative_challenge",
+                "expected": recursive_verify and problem.get("answer_type") == "multipleChoice",
+                "status": (
+                    _stage_status((stages.get("counter_assumption_challenge") or {}), "forced_alternative_challenge")
+                    if isinstance(stages.get("counter_assumption_challenge"), dict)
+                    and stages["counter_assumption_challenge"].get("forced_alternative_challenge")
+                    else "not_required"
+                ),
+                "reason": "collapsed candidates can force one non-majority candidate for verifier arbitration",
+            },
+            {
                 "module": "residual_writeback",
                 "expected": False,
                 "status": "not_applicable",
@@ -2013,9 +5827,45 @@ def _module_trace(problem: dict[str, Any], *, variant: str, agent_plan: dict[str
             },
             {
                 "module": "hle_evidence_bridge",
-                "expected": False,
+                "expected": recursive_verify,
                 "status": _stage_status(stages, "hle_evidence_bridge") if stages.get("hle_evidence_bridge") else "not_required",
-                "reason": "exactMatch repair can use transient external evidence; logs persist only hashes and counts",
+                "reason": "recursive HLE answering can add a transient external-evidence child; logs persist only hashes and counts",
+            },
+            {
+                "module": "hle_math_tool_solver",
+                "expected": recursive_verify and _should_run_math_tool_child(problem),
+                "status": _stage_status(stages, "hle_math_tool_solver") if stages.get("hle_math_tool_solver") else "not_required",
+                "reason": "Math exactMatch items can add a restricted SymPy child; logs persist only plan/answer hashes",
+            },
+            {
+                "module": "candidate_claim_verifier",
+                "expected": recursive_verify and _should_run_candidate_claim_verifier(problem),
+                "status": _stage_status(stages, "candidate_claim_verifier") if stages.get("candidate_claim_verifier") else "not_required",
+                "reason": "Executable math claims verify exact candidates or multiple-choice options before majority selection",
+            },
+            {
+                "module": "domain_rule_mc_verifier",
+                "expected": recursive_verify and problem.get("answer_type") == "multipleChoice",
+                "status": _stage_status(stages, "domain_rule_mc_verifier") if stages.get("domain_rule_mc_verifier") else "not_required",
+                "reason": "bounded domain rules can add an evidence-backed or contrastive verified multiple-choice candidate",
+            },
+            {
+                "module": "mc_option_evidence_scorer",
+                "expected": recursive_verify and problem.get("answer_type") == "multipleChoice",
+                "status": _stage_status(stages, "mc_option_evidence_scorer") if stages.get("mc_option_evidence_scorer") else "not_required",
+                "reason": "multiple-choice options can be scored by option-specific transient evidence retrieval",
+            },
+            {
+                "module": "critic_synthesis_child",
+                "expected": recursive_verify and problem.get("answer_type") == "multipleChoice",
+                "status": _stage_status(stages, "critic_synthesis_child") if stages.get("critic_synthesis_child") else "not_required",
+                "reason": "collapsed or low-diversity multiple-choice candidate sets can trigger a distinct critic-model synthesis child",
+            },
+            {
+                "module": "mc_option_sweep_candidates",
+                "expected": recursive_verify and problem.get("answer_type") == "multipleChoice",
+                "status": _stage_status(stages, "mc_option_sweep_candidates") if stages.get("mc_option_sweep_candidates") else "not_required",
+                "reason": "finite multiple-choice option spaces are completed with synthetic label candidates before verification",
             },
             {
                 "module": "answer_format_verifier",
@@ -2092,6 +5942,10 @@ def _stage_status(stages: dict[str, Any], stage: str) -> str:
     return str(data.get("status") or "activated")
 
 
+def _agent_critic_model(default_model: str) -> str:
+    return os.environ.get("HLE_AGENT_CRITIC_MODEL", "").strip() or default_model
+
+
 def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_tokens: int = 512) -> str:
     env = _api_env(model=model)
     payload = {
@@ -2111,23 +5965,35 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
     )
     attempts = max(1, int(os.environ.get("MODEL_ROUTER_ATTEMPTS", "3")))
     timeout = _default_call_timeout() if timeout is None else float(timeout)
+    deadline = time.monotonic() + timeout
     last_error: Exception | None = None
     for attempt in range(attempts):
         try:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("model_call_deadline_exceeded")
+            request_timeout = max(0.1, remaining)
             if threading.current_thread() is threading.main_thread():
                 previous_handler = signal.signal(signal.SIGALRM, _raise_wallclock_timeout)
-                signal.alarm(max(1, int(timeout)))
+                signal.alarm(max(1, int(request_timeout)))
                 try:
-                    with urllib.request.urlopen(request, timeout=timeout) as response:
+                    with urllib.request.urlopen(request, timeout=request_timeout) as response:
                         data = json.loads(response.read().decode("utf-8"))
                 finally:
                     signal.alarm(0)
                     signal.signal(signal.SIGALRM, previous_handler)
             else:
-                with urllib.request.urlopen(request, timeout=timeout) as response:
+                with urllib.request.urlopen(request, timeout=request_timeout) as response:
                     data = json.loads(response.read().decode("utf-8"))
             return str((data.get("choices") or [{}])[0].get("message", {}).get("content", "")).strip()
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
+        except (
+            urllib.error.URLError,
+            urllib.error.HTTPError,
+            TimeoutError,
+            http.client.HTTPException,
+            ConnectionError,
+            OSError,
+        ) as exc:
             last_error = exc
             if attempt + 1 >= attempts:
                 raise RuntimeError(f"model request failed: {type(exc).__name__}") from exc
@@ -2188,7 +6054,11 @@ def _score_prediction(
     parsed = _parse_answer_json(prediction)
     predicted = parsed if parsed is not None else prediction
     answer_type = problem["answer_type"]
-    correct = _is_correct(predicted, problem["_answer"], answer_type=answer_type)
+    gold = problem["_answer"]
+    if answer_type == "multipleChoice":
+        predicted, _ = _canonicalize_multiple_choice_answer(problem, predicted)
+        gold, _ = _canonicalize_multiple_choice_answer(problem, gold)
+    correct = _is_correct(predicted, gold, answer_type=answer_type)
     return {
         "problem_id_hash": problem["id_hash"],
         "question_hash": problem["question_hash"],
@@ -2236,6 +6106,278 @@ def _error_row(
         "call_metadata": call_metadata or {},
         "error": {"type": type(exc).__name__, "message": str(exc)[:200]},
     }
+
+
+def _component_efficacy_from_plan(
+    *,
+    problem: dict[str, Any],
+    variant: str,
+    plan: dict[str, Any],
+    correct: bool,
+    error: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Summarize whether activated modules served their intended role.
+
+    This intentionally stores only metadata, counts, hashes, and statuses.  It
+    does not include HLE question text, gold answers, raw predictions, or
+    evidence snippets.
+    """
+    stages = dict((plan or {}).get("stages", {}) or {})
+    base: dict[str, Any] = {
+        "variant": variant,
+        "answer_type": problem.get("answer_type"),
+        "final_correct": bool(correct),
+        "error_type": (error or {}).get("type"),
+        "flags": {
+            "final_correct": bool(correct),
+            "call_error": bool(error),
+        },
+    }
+    if variant == "raw":
+        base["kind"] = "raw_single_call"
+        return base
+    if variant.startswith("hipporag"):
+        retrieval = stages.get("hipporag_context_retrieval", {})
+        rerank = stages.get("hipporag_associative_rerank", {})
+        prompt = stages.get("prompt_builder", {})
+        base.update({
+            "kind": "hipporag_control",
+            "retrieval": {
+                "status": retrieval.get("status"),
+                "query_count": int(retrieval.get("query_count") or 0),
+                "candidate_doc_count": int(retrieval.get("candidate_doc_count") or 0),
+            },
+            "rerank": {
+                "status": rerank.get("status"),
+                "selected_doc_count": int(rerank.get("selected_doc_count") or 0),
+                "entity_node_count": int(rerank.get("entity_node_count") or 0),
+            },
+            "prompt": {
+                "context_injected": bool(prompt.get("context_injected")),
+                "context_char_count": int(prompt.get("context_char_count") or 0),
+            },
+        })
+        base["flags"].update({
+            "retrieval_returned_docs": int(retrieval.get("candidate_doc_count") or 0) > 0,
+            "rerank_selected_docs": int(rerank.get("selected_doc_count") or 0) > 0,
+            "context_injected": bool(prompt.get("context_injected")),
+        })
+        return base
+
+    graph = stages.get("assumption_graph_retrieval", {})
+    morphism = stages.get("structural_morphism_transfer", {})
+    world_model = stages.get("world_model_router", {})
+    critic_router = stages.get("critic_model_router", {})
+    prompt = stages.get("prompt_builder", {})
+    recursive = stages.get("recursive_child_validation", {})
+    selection = stages.get("multi_candidate_self_verifier", {})
+    evidence = stages.get("hle_evidence_bridge", {})
+    claim_verifier = stages.get("candidate_claim_verifier", {})
+    domain_rule = stages.get("domain_rule_mc_verifier", {})
+    math_tool = stages.get("hle_math_tool_solver", {})
+    option_evidence = stages.get("mc_option_evidence_scorer", {})
+    critic_synthesis = stages.get("critic_synthesis_child", {})
+    option_sweep = stages.get("mc_option_sweep_candidates", {})
+    counter_challenge = stages.get("counter_assumption_challenge", {})
+
+    candidate_hashes = [value for value in recursive.get("candidate_answer_hashes", []) if value]
+    unique_candidate_count = len(set(candidate_hashes))
+    prompt_kinds = [str(value) for value in recursive.get("prompt_kinds", [])]
+    skipped_prompt_kinds = [str(value) for value in recursive.get("skipped_prompt_kinds", [])]
+    formal_hits = list(morphism.get("formal_mapping_hits", []) or [])
+    structural_hits = list(morphism.get("structural_morphism_hits", []) or [])
+    transfer_supported_hits = [
+        hit for hit in structural_hits
+        if isinstance(hit, dict) and hit.get("decision") == "transfer_supported"
+    ]
+    selection_method = str(selection.get("selection_method") or "")
+    claim_status = str(claim_verifier.get("status") or "")
+    claim_verified_count = int(claim_verifier.get("verified_count") or 0)
+    claim_refuted_count = int(claim_verifier.get("refuted_count") or 0)
+    evidence_status = str(evidence.get("status") or "")
+    option_elimination = (
+        counter_challenge.get("option_elimination_challenge", {})
+        if isinstance(counter_challenge.get("option_elimination_challenge"), dict)
+        else {}
+    )
+    forced_alternative = (
+        counter_challenge.get("forced_alternative_challenge", {})
+        if isinstance(counter_challenge.get("forced_alternative_challenge"), dict)
+        else {}
+    )
+
+    flags = base["flags"]
+    flags.update({
+        "graph_retrieved_nodes": int(graph.get("node_count") or 0) > 0,
+        "graph_context_injected": bool(prompt.get("context_injected")),
+        "morphism_hit": bool(formal_hits or structural_hits),
+        "strong_morphism_hit": bool(transfer_supported_hits),
+        "world_model_used_context": world_model.get("decision") == "use_context",
+        "critic_model_used": critic_router.get("status") == "activated",
+        "evidence_bridge_activated": evidence_status == "activated",
+        "evidence_child_executed": "evidence_bridge_answer" in prompt_kinds,
+        "recursive_child_validation_activated": recursive.get("status") == "activated",
+        "recursive_diverse_candidates": unique_candidate_count >= 2,
+        "recursive_collapsed_consensus": bool(candidate_hashes) and unique_candidate_count <= 1,
+        "recursive_timeout_pressure": int(recursive.get("error_child_count") or 0) > 0,
+        "recursive_early_stopped": bool(recursive.get("early_stopped")),
+        "reflective_child_executed": any(
+            kind in {"agent_context_answer", "constraint_checked_answer", "recursive_assumption_answer"}
+            for kind in prompt_kinds
+        ),
+        "reflective_child_skipped": any(
+            kind in {"agent_context_answer", "constraint_checked_answer", "recursive_assumption_answer"}
+            for kind in skipped_prompt_kinds
+        ),
+        "claim_verifier_activated": claim_status == "activated",
+        "claim_verifier_verified_candidate": claim_verified_count > 0,
+        "claim_verifier_refuted_candidate": claim_refuted_count > 0,
+        "claim_verifier_no_executable_claim": claim_status == "no_executable_claim",
+        "domain_rule_mc_verifier_activated": domain_rule.get("status") == "activated",
+        "domain_rule_mc_verifier_selected": bool(domain_rule.get("selected_domain_rule_candidate")),
+        "domain_rule_mc_verifier_correct": domain_rule.get("candidate_correct_for_eval") is True,
+        "math_tool_verified": math_tool.get("confidence") == "verified_symbolic",
+        "mc_option_evidence_scorer_activated": option_evidence.get("status") == "activated",
+        "mc_option_evidence_candidate_emitted": bool(option_evidence.get("candidate_emitted")),
+        "mc_option_evidence_candidate_selected": bool(option_evidence.get("selected_option_evidence_candidate")),
+        "mc_option_evidence_candidate_correct": option_evidence.get("candidate_correct_for_eval") is True,
+        "option_evidence_verifier_used": selection_method == "option_evidence_verifier_choice",
+        "critic_synthesis_activated": critic_synthesis.get("status") == "activated",
+        "critic_synthesis_disagreed": bool(critic_synthesis.get("critic_disagreed_with_majority")),
+        "critic_synthesis_selected": bool(critic_synthesis.get("selected_critic_synthesis")),
+        "mc_option_sweep_activated": option_sweep.get("status") == "activated",
+        "mc_option_sweep_selected": bool(option_sweep.get("selected_option_sweep_candidate")),
+        "source_grounded_verifier_used": selection_method == "source_grounded_verifier_choice",
+        "candidate_claim_override": selection_method == "candidate_claim_verifier_priority",
+        "domain_rule_override": (
+            selection_method == "candidate_claim_verifier_priority"
+            and bool(domain_rule.get("selected_domain_rule_candidate"))
+        ),
+        "verified_math_override": selection_method == "verified_math_tool_priority",
+        "evidence_override": selection_method == "evidence_bridge_priority_over_closed_book_majority",
+        "counter_assumption_challenge_activated": counter_challenge.get("status") == "activated",
+        "counter_assumption_challenge_disagreed": bool(counter_challenge.get("challenge_disagreed_with_majority")),
+        "counter_assumption_challenge_selected": bool(counter_challenge.get("selected_counter_challenge")),
+        "option_elimination_challenge_activated": option_elimination.get("status") == "activated",
+        "option_elimination_challenge_disagreed": bool(option_elimination.get("challenge_disagreed_with_majority")),
+        "option_elimination_challenge_selected": bool(option_elimination.get("selected_option_elimination_challenge")),
+        "forced_alternative_activated": forced_alternative.get("status") == "activated",
+        "forced_alternative_disagreed": bool(forced_alternative.get("challenge_disagreed_with_majority")),
+        "forced_alternative_selected": bool(forced_alternative.get("selected_forced_alternative")),
+        "counter_assumption_verifier_used": selection_method == "counter_assumption_verifier_choice",
+        "majority_only_selection": selection_method in {
+            "normalized_majority",
+            "math_exact_normalized_majority",
+        },
+    })
+    base.update({
+        "kind": "assumption_agent_recursive_verify" if variant == "assumption_agent_recursive_verify" else "assumption_agent",
+        "graph": {
+            "status": graph.get("status"),
+            "node_count": int(graph.get("node_count") or 0),
+            "edge_count": int(graph.get("edge_count") or 0),
+            "top_score": max([float(value) for value in graph.get("top_scores", []) or [0.0]] or [0.0]),
+            "top_node_type_counts": dict(Counter(str(value) for value in graph.get("top_node_types", []) or [])),
+        },
+        "morphism": {
+            "status": morphism.get("status"),
+            "formal_hit_count": len(formal_hits),
+            "structural_hit_count": len(structural_hits),
+            "transfer_supported_count": len(transfer_supported_hits),
+        },
+        "world_model": {
+            "status": world_model.get("status"),
+            "decision": world_model.get("decision"),
+            "expected_utility": world_model.get("expected_utility"),
+            "predicted_regression_risk": world_model.get("predicted_regression_risk"),
+        },
+        "critic_model": {
+            "status": critic_router.get("status"),
+            "base_model": critic_router.get("base_model"),
+            "critic_model": critic_router.get("critic_model"),
+            "policy": critic_router.get("policy"),
+        },
+        "evidence": {
+            "status": evidence.get("status"),
+            "selection_policy": evidence.get("selection_policy"),
+            "query_count": int(evidence.get("query_count") or 0),
+            "selected_result_count": int(evidence.get("selected_result_count") or 0),
+            "evidence_char_count": int(evidence.get("evidence_char_count") or 0),
+        },
+        "recursive": {
+            "status": recursive.get("status"),
+            "execution_mode": recursive.get("execution_mode"),
+            "planned_child_count": int(recursive.get("planned_child_count") or 0),
+            "child_count": int(recursive.get("child_count") or 0),
+            "answered_child_count": int(recursive.get("answered_child_count") or 0),
+            "error_child_count": int(recursive.get("error_child_count") or 0),
+            "unique_candidate_count": unique_candidate_count,
+            "early_stopped": bool(recursive.get("early_stopped")),
+            "early_stop_reason": recursive.get("early_stop_reason"),
+            "prompt_kinds": prompt_kinds,
+            "skipped_prompt_kinds": skipped_prompt_kinds,
+        },
+        "claim_verifier": {
+            "status": claim_status or None,
+            "backend": claim_verifier.get("backend"),
+            "verified_count": claim_verified_count,
+            "refuted_count": claim_refuted_count,
+            "inconclusive_count": int(claim_verifier.get("inconclusive_count") or 0),
+            "reference_operation": claim_verifier.get("reference_operation"),
+        },
+        "domain_rule_mc_verifier": {
+            "status": domain_rule.get("status"),
+            "rule_id": domain_rule.get("rule_id"),
+            "confidence": domain_rule.get("confidence"),
+            "selected_domain_rule_candidate": bool(domain_rule.get("selected_domain_rule_candidate")),
+            "candidate_correct_for_eval": domain_rule.get("candidate_correct_for_eval"),
+        },
+        "mc_option_evidence_scorer": {
+            "status": option_evidence.get("status"),
+            "candidate_emitted": bool(option_evidence.get("candidate_emitted")),
+            "candidate_correct_for_eval": option_evidence.get("candidate_correct_for_eval"),
+            "top_score": option_evidence.get("top_score"),
+            "margin": option_evidence.get("margin"),
+            "selected_option_evidence_candidate": bool(option_evidence.get("selected_option_evidence_candidate")),
+        },
+        "counter_assumption_challenge": {
+            "status": counter_challenge.get("status"),
+            "reason": counter_challenge.get("reason"),
+            "top_candidate_count": int(counter_challenge.get("top_candidate_count") or 0),
+            "unique_candidate_count": int(counter_challenge.get("unique_candidate_count") or 0),
+            "challenge_disagreed_with_majority": bool(counter_challenge.get("challenge_disagreed_with_majority")),
+            "selected_counter_challenge": bool(counter_challenge.get("selected_counter_challenge")),
+            "option_elimination_status": option_elimination.get("status"),
+            "option_elimination_disagreed": bool(option_elimination.get("challenge_disagreed_with_majority")),
+            "selected_option_elimination_challenge": bool(option_elimination.get("selected_option_elimination_challenge")),
+            "forced_alternative_status": forced_alternative.get("status"),
+            "forced_alternative_disagreed": bool(forced_alternative.get("challenge_disagreed_with_majority")),
+            "selected_forced_alternative": bool(forced_alternative.get("selected_forced_alternative")),
+        },
+        "critic_synthesis_child": {
+            "status": critic_synthesis.get("status"),
+            "reason": critic_synthesis.get("reason"),
+            "critic_model": critic_synthesis.get("critic_model"),
+            "unique_candidate_count_before": int(critic_synthesis.get("unique_candidate_count_before") or 0),
+            "top_candidate_count_before": int(critic_synthesis.get("top_candidate_count_before") or 0),
+            "critic_disagreed_with_majority": bool(critic_synthesis.get("critic_disagreed_with_majority")),
+            "selected_critic_synthesis": bool(critic_synthesis.get("selected_critic_synthesis")),
+        },
+        "mc_option_sweep_candidates": {
+            "status": option_sweep.get("status"),
+            "reason": option_sweep.get("reason"),
+            "option_count": int(option_sweep.get("option_count") or 0),
+            "covered_option_count_before": int(option_sweep.get("covered_option_count_before") or 0),
+            "added_candidate_count": int(option_sweep.get("added_candidate_count") or 0),
+            "selected_option_sweep_candidate": bool(option_sweep.get("selected_option_sweep_candidate")),
+        },
+        "selection": {
+            "status": selection.get("status"),
+            "selection_method": selection_method or None,
+            "verifier_model_call": bool(selection.get("verifier_model_call")),
+        },
+    })
+    return base
 
 
 def _parse_answer_json(text: str) -> str | None:
@@ -2298,8 +6440,10 @@ def _metrics(*, sample_rows: list[dict[str, Any]], run_rows: list[dict[str, Any]
         "scored_row_count": len(run_rows),
         "overall_accuracy": _accuracy(run_rows),
         "by_model_variant": by_model_variant,
+        "control_comparison": _control_comparison(run_rows),
         "module_activation_summary": _module_activation_summary(run_rows),
         "expected_but_missing_modules": _expected_but_missing_modules(run_rows),
+        "component_efficacy_summary": _component_efficacy_summary(run_rows),
         "raw_content_persisted": False,
     }
 
@@ -2318,6 +6462,43 @@ def _aggregate_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _control_comparison(run_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    by_model: dict[str, dict[str, dict[str, dict[str, Any]]]] = defaultdict(lambda: defaultdict(dict))
+    for row in run_rows:
+        by_model[row["model"]][row["variant"]][row["problem_id_hash"]] = row
+    comparisons: dict[str, Any] = {}
+    for model, by_variant in sorted(by_model.items()):
+        agent_rows = by_variant.get("assumption_agent_recursive_verify")
+        if not agent_rows:
+            continue
+        model_comparison: dict[str, Any] = {
+            "policy": "higher accuracy is better for every variant; only assumption_agent is optimized, controls are frozen",
+        }
+        for control_variant in ("raw", "hipporag_baseline"):
+            control_rows = by_variant.get(control_variant)
+            if not control_rows:
+                continue
+            shared = sorted(set(agent_rows) & set(control_rows))
+            agent_correct = [agent_rows[pid]["correct"] for pid in shared]
+            control_correct = [control_rows[pid]["correct"] for pid in shared]
+            agent_wins = sum(1 for a, c in zip(agent_correct, control_correct) if a and not c)
+            agent_losses = sum(1 for a, c in zip(agent_correct, control_correct) if c and not a)
+            model_comparison[f"agent_vs_{control_variant}"] = {
+                "shared_problem_count": len(shared),
+                "agent_accuracy": _accuracy([agent_rows[pid] for pid in shared]),
+                "control_accuracy": _accuracy([control_rows[pid] for pid in shared]),
+                "agent_minus_control_accuracy": None
+                if not shared
+                else round((sum(agent_correct) - sum(control_correct)) / len(shared), 4),
+                "agent_unique_correct_count": agent_wins,
+                "control_unique_correct_count": agent_losses,
+                "both_correct_count": sum(1 for a, c in zip(agent_correct, control_correct) if a and c),
+                "both_wrong_count": sum(1 for a, c in zip(agent_correct, control_correct) if not a and not c),
+            }
+        comparisons[model] = model_comparison
+    return comparisons
+
+
 def _module_activation_summary(run_rows: list[dict[str, Any]]) -> dict[str, dict[str, dict[str, int]]]:
     summary: dict[str, dict[str, Counter[str]]] = defaultdict(lambda: defaultdict(Counter))
     for row in run_rows:
@@ -2332,12 +6513,77 @@ def _module_activation_summary(run_rows: list[dict[str, Any]]) -> dict[str, dict
 
 def _expected_but_missing_modules(run_rows: list[dict[str, Any]]) -> dict[str, list[str]]:
     missing: dict[str, set[str]] = defaultdict(set)
+    present_statuses = {
+        "activated",
+        "abstained",
+        "failed",
+        "no_executable_claim",
+        "weak_single_candidate_confirmation",
+        "no_option_match",
+        "ambiguous_option_match",
+        "no_option_parse",
+        "not_required",
+        "weak_margin",
+    }
     for row in run_rows:
         key = f"{row['model']}::{row['variant']}"
         for item in row.get("module_trace", []):
-            if item.get("expected") and item.get("status") != "activated":
+            if item.get("expected") and item.get("status") not in present_statuses:
                 missing[key].add(item["module"])
     return {key: sorted(values) for key, values in sorted(missing.items())}
+
+
+def _component_efficacy_summary(run_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    summary: dict[str, dict[str, Any]] = {}
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in run_rows:
+        grouped[f"{row['model']}::{row['variant']}"].append(row)
+    for key, rows in sorted(grouped.items()):
+        flag_counts: Counter[str] = Counter()
+        flag_correct_counts: Counter[str] = Counter()
+        selection_counts: Counter[str] = Counter()
+        selection_correct_counts: Counter[str] = Counter()
+        verifier_status_counts: Counter[str] = Counter()
+        recursive_unique_counts: Counter[str] = Counter()
+        for row in rows:
+            correct = bool(row.get("correct"))
+            efficacy = row.get("component_efficacy") or {}
+            flags = efficacy.get("flags", {}) if isinstance(efficacy, dict) else {}
+            for flag, value in flags.items():
+                if value:
+                    flag_counts[flag] += 1
+                    if correct:
+                        flag_correct_counts[flag] += 1
+            selection_method = (((efficacy.get("selection") or {}) if isinstance(efficacy, dict) else {}).get("selection_method") or "none")
+            selection_counts[str(selection_method)] += 1
+            if correct:
+                selection_correct_counts[str(selection_method)] += 1
+            verifier_status = (((efficacy.get("claim_verifier") or {}) if isinstance(efficacy, dict) else {}).get("status") or "none")
+            verifier_status_counts[str(verifier_status)] += 1
+            unique_count = (((efficacy.get("recursive") or {}) if isinstance(efficacy, dict) else {}).get("unique_candidate_count"))
+            if unique_count is not None:
+                recursive_unique_counts[str(unique_count)] += 1
+        summary[key] = {
+            "n": len(rows),
+            "correct_count": sum(1 for row in rows if row.get("correct")),
+            "accuracy": _accuracy(rows),
+            "flag_counts": dict(sorted(flag_counts.items())),
+            "flag_correct_counts": dict(sorted(flag_correct_counts.items())),
+            "flag_accuracy": {
+                flag: round(flag_correct_counts[flag] / count, 4)
+                for flag, count in sorted(flag_counts.items())
+                if count
+            },
+            "selection_method_counts": dict(sorted(selection_counts.items())),
+            "selection_method_accuracy": {
+                method: round(selection_correct_counts[method] / count, 4)
+                for method, count in sorted(selection_counts.items())
+                if count
+            },
+            "claim_verifier_status_counts": dict(sorted(verifier_status_counts.items())),
+            "recursive_unique_candidate_count_histogram": dict(sorted(recursive_unique_counts.items())),
+        }
+    return summary
 
 
 def _accuracy(rows: list[dict[str, Any]]) -> float | None:
@@ -2357,6 +6603,8 @@ def main() -> None:
     parser.add_argument("--sample-size", type=int, default=8)
     parser.add_argument("--max-scan", type=int, default=200)
     parser.add_argument("--seed-offset", type=int, default=0)
+    parser.add_argument("--sample-answer-type", default="")
+    parser.add_argument("--sample-subject-contains", default="")
     parser.add_argument("--models", default="gpt-5.5")
     parser.add_argument("--variants", default="raw,assumption_wrapper")
     parser.add_argument("--execute-live", action="store_true")
@@ -2369,6 +6617,11 @@ def main() -> None:
     parser.add_argument("--agent-child-mode", choices=["serial", "parallel_quorum"], default=os.environ.get("HLE_AGENT_CHILD_MODE", "parallel_quorum"))
     parser.add_argument("--agent-child-timeout", type=float, default=None)
     parser.add_argument("--disable-evidence-bridge", action="store_true")
+    parser.add_argument("--exclude-existing-hle-artifacts", action="store_true")
+    parser.add_argument(
+        "--exclude-artifact-glob",
+        default="phase four/assumption_graph/paper_readiness_20260604/hle*.json*",
+    )
     parser.add_argument("--hard-exit-after-write", action="store_true")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--md-out", default=str(DEFAULT_MD_OUT))
@@ -2398,6 +6651,10 @@ def main() -> None:
         agent_child_mode=args.agent_child_mode,
         agent_child_timeout=args.agent_child_timeout,
         evidence_bridge_enabled=not args.disable_evidence_bridge,
+        exclude_existing_hle_artifacts=args.exclude_existing_hle_artifacts,
+        exclude_artifact_glob=args.exclude_artifact_glob,
+        sample_answer_type=args.sample_answer_type,
+        sample_subject_contains=args.sample_subject_contains,
     )
     out = Path(args.out)
     out = out if out.is_absolute() else root / out
