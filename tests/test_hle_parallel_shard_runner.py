@@ -3,8 +3,13 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from argparse import Namespace
 from pathlib import Path
 
+from assumption_os.hle_module_ablation_runner import (
+    build_ablation_plan,
+    selected_ablation_profiles,
+)
 from assumption_os.hle_parallel_shard_runner import (
     ShardRunState,
     aggregate_parallel_payload,
@@ -20,6 +25,49 @@ from assumption_os.hle_parallel_shard_runner import (
 
 
 class TestHleParallelShardRunner(unittest.TestCase):
+    def _ablation_args(self, tmp: str) -> Namespace:
+        return Namespace(
+            root=tmp,
+            eval_id="ablate",
+            profiles="full,no_graph,no_evidence,no_morphism,no_option_evidence,verified_gate_off",
+            dry_run=True,
+            total_sample_size=3,
+            shard_size=1,
+            parallel_workers=1,
+            max_scan=500,
+            seed_offset=100,
+            seed_stride=7,
+            sample_answer_type="multipleChoice",
+            sample_subject_contains="",
+            models="gpt-5.4-mini",
+            variants="raw,assumption_agent_recursive_verify,hipporag_baseline",
+            execute_live=False,
+            call_timeout=45,
+            max_tokens=256,
+            graph_dir="phase four/assumption_graph",
+            agent_top_k=5,
+            agent_context_max_chars=2800,
+            agent_child_mode="parallel_quorum",
+            agent_child_timeout=45,
+            disable_evidence_bridge=False,
+            exclude_existing_hle_artifacts=True,
+            exclude_artifact_glob="phase four/assumption_graph/paper_readiness_20260604/hle*.json*",
+            run_dir=str(Path(tmp) / "runs"),
+            md_dir=str(Path(tmp) / "md"),
+            out="",
+            md_out="",
+            soft_timeout_sec=900,
+            terminate_grace_sec=30,
+            model_router_attempts=2,
+            model_router_timeout=7200,
+            model_router_per_attempt_timeout=90,
+            model_router_backoff_base_sec=1.25,
+            model_router_global_concurrency=1,
+            model_router_global_concurrency_dir=str(Path(tmp) / "slots"),
+            model_router_global_slot_ttl_sec=1800,
+            model_router_global_slot_wait_sec=2400,
+        )
+
     def test_build_shard_specs_splits_total_and_advances_seeds(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             run_dir = Path(tmp) / "runs"
@@ -36,6 +84,32 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual([spec.sample_size for spec in specs], [3, 3, 1])
         self.assertEqual([spec.seed_offset for spec in specs], [100, 111, 122])
         self.assertEqual([spec.eval_id for spec in specs], ["fresh30_shard_000", "fresh30_shard_001", "fresh30_shard_002"])
+
+    def test_module_ablation_plan_builds_real_toggles_without_secrets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = build_ablation_plan(self._ablation_args(tmp))
+
+        self.assertTrue(payload["gates"]["profiles_defined"])
+        self.assertTrue(payload["gates"]["secrets_not_persisted"])
+        self.assertFalse(payload["gates"]["raw_content_persisted"])
+        by_profile = {row["profile"]: row for row in payload["profiles"]}
+        self.assertEqual(by_profile["no_graph"]["agent_top_k"], 0)
+        self.assertTrue(by_profile["no_evidence"]["disable_evidence_bridge"])
+        self.assertEqual(
+            by_profile["no_morphism"]["env_overrides"]["HLE_DISABLE_STRUCTURAL_MORPHISM_TRANSFER"],
+            "1",
+        )
+        self.assertEqual(
+            by_profile["no_option_evidence"]["env_overrides"]["HLE_DISABLE_MC_OPTION_EVIDENCE_SCORER"],
+            "1",
+        )
+        flattened = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("sk-", flattened)
+        self.assertNotIn("hf_", flattened)
+
+    def test_module_ablation_rejects_unknown_profile(self) -> None:
+        with self.assertRaises(ValueError):
+            selected_ablation_profiles("full,does_not_exist")
 
     def test_build_shard_command_keeps_api_secrets_out_of_argv(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -705,17 +705,34 @@ def _build_assumption_agent_plan(
     try:
         store = JsonlGraphStore(graph_dir)
         graph = SimpleAssumptionGraph(store)
-        retrieval_result = retrieve_phase2_assumptions(
-            graph,
-            problem=question,
-            meta={},
-            pid=problem["id_hash"],
-            domain=domain,
-            difficulty="hle",
-            top_k=top_k,
-            pool_k=max(top_k, top_k * 3),
+        graph_retrieval_disabled = (
+            top_k <= 0
+            or os.environ.get("HLE_DISABLE_ASSUMPTION_GRAPH_RETRIEVAL", "").strip().lower()
+            in {"1", "true", "yes", "on"}
         )
-        retrieval_summary = _sanitize_retrieval_result(retrieval_result)
+        if graph_retrieval_disabled:
+            retrieval_result = None
+            retrieval_summary = {
+                "status": "disabled",
+                "node_count": 0,
+                "edge_count": 0,
+                "top_scores": [],
+                "top_node_ids": [],
+                "top_node_types": [],
+                "reason": "env_disabled" if top_k > 0 else "top_k_zero",
+            }
+        else:
+            retrieval_result = retrieve_phase2_assumptions(
+                graph,
+                problem=question,
+                meta={},
+                pid=problem["id_hash"],
+                domain=domain,
+                difficulty="hle",
+                top_k=top_k,
+                pool_k=max(top_k, top_k * 3),
+            )
+            retrieval_summary = _sanitize_retrieval_result(retrieval_result)
         plan["stages"]["assumption_graph_retrieval"] = {"status": "activated", **retrieval_summary}
         _agent_stage_log(
             logger,
@@ -728,28 +745,40 @@ def _build_assumption_agent_plan(
             data=plan["stages"]["assumption_graph_retrieval"],
         )
 
-        formal_payload = build_formal_mapping_payload(store)
-        formal_apps = search_formal_mappings(formal_payload, question, top_n=2)
-        structural_apps = search_structural_patterns(store, question, top_n=2)
-        morphism_summary = {
-            "status": "activated",
-            "formal_mapping_hits": [
-                {
-                    "mapping_id": app.get("mapping_id"),
-                    "source_key": app.get("source_key"),
-                    "score": round(float(app.get("score", 0.0) or 0.0), 4),
-                }
-                for app in formal_apps
-            ],
-            "structural_morphism_hits": [
-                {
-                    "pattern_id": app.get("pattern_id"),
-                    "score": round(float(app.get("score", 0.0) or 0.0), 4),
-                    "decision": app.get("decision"),
-                }
-                for app in structural_apps
-            ],
-        }
+        morphism_disabled = (
+            os.environ.get("HLE_DISABLE_STRUCTURAL_MORPHISM_TRANSFER", "").strip().lower()
+            in {"1", "true", "yes", "on"}
+        )
+        if morphism_disabled:
+            morphism_summary = {
+                "status": "disabled",
+                "formal_mapping_hits": [],
+                "structural_morphism_hits": [],
+                "reason": "env_disabled",
+            }
+        else:
+            formal_payload = build_formal_mapping_payload(store)
+            formal_apps = search_formal_mappings(formal_payload, question, top_n=2)
+            structural_apps = search_structural_patterns(store, question, top_n=2)
+            morphism_summary = {
+                "status": "activated",
+                "formal_mapping_hits": [
+                    {
+                        "mapping_id": app.get("mapping_id"),
+                        "source_key": app.get("source_key"),
+                        "score": round(float(app.get("score", 0.0) or 0.0), 4),
+                    }
+                    for app in formal_apps
+                ],
+                "structural_morphism_hits": [
+                    {
+                        "pattern_id": app.get("pattern_id"),
+                        "score": round(float(app.get("score", 0.0) or 0.0), 4),
+                        "decision": app.get("decision"),
+                    }
+                    for app in structural_apps
+                ],
+            }
         plan["stages"]["structural_morphism_transfer"] = morphism_summary
         _agent_stage_log(
             logger,
@@ -762,18 +791,31 @@ def _build_assumption_agent_plan(
             data=morphism_summary,
         )
 
-        recursive_payload = build_recursive_assumption_run(
-            graph_dir=graph_dir,
-            problem=question,
-            goal=goal,
-            eval_id=f"{eval_id}_{call_id}_recursive",
-            problem_id=problem["id_hash"],
-            top_k=top_k,
-            max_children=min(4, top_k),
-            max_depth=2,
-            writeback=False,
+        recursive_disabled = (
+            top_k <= 0
+            or os.environ.get("HLE_DISABLE_RECURSIVE_ASSUMPTION_RUNNER", "").strip().lower()
+            in {"1", "true", "yes", "on"}
         )
-        recursive_summary = _sanitize_recursive_payload(recursive_payload)
+        if recursive_disabled:
+            recursive_summary = {
+                "status": "disabled",
+                "reason": "env_disabled" if top_k > 0 else "top_k_zero",
+                "child_count": 0,
+                "leaf_count": 0,
+            }
+        else:
+            recursive_payload = build_recursive_assumption_run(
+                graph_dir=graph_dir,
+                problem=question,
+                goal=goal,
+                eval_id=f"{eval_id}_{call_id}_recursive",
+                problem_id=problem["id_hash"],
+                top_k=top_k,
+                max_children=min(4, top_k),
+                max_depth=2,
+                writeback=False,
+            )
+            recursive_summary = _sanitize_recursive_payload(recursive_payload)
         plan["stages"]["recursive_assumption_runner"] = {"status": "activated", **recursive_summary}
         _agent_stage_log(
             logger,
@@ -810,24 +852,34 @@ def _build_assumption_agent_plan(
             "decision": "allow" if formal_hit_count or structural_hit_count else "not_applicable",
             "blocks_policy_update": False,
         }
-        prediction = predict_proposal_outcome(
-            store=store,
-            proposal=proposal,
-            preflight=preflight,
-            formal_gate=formal_gate,
-            regression={"risk": "low" if top_node_ids else "medium"},
+        world_model_disabled = (
+            os.environ.get("HLE_DISABLE_WORLD_MODEL_ROUTER", "").strip().lower()
+            in {"1", "true", "yes", "on"}
         )
-        context_allowed = _should_use_agent_context(
-            answer_type=problem["answer_type"],
-            top_score=top_score,
-            formal_hit_count=formal_hit_count,
-            structural_hit_count=structural_hit_count,
-            strong_structural_hit_count=strong_structural_hit_count,
-            expected_utility=prediction.expected_utility,
-        )
+        if world_model_disabled:
+            prediction = None
+            context_allowed = False
+        else:
+            prediction = predict_proposal_outcome(
+                store=store,
+                proposal=proposal,
+                preflight=preflight,
+                formal_gate=formal_gate,
+                regression={"risk": "low" if top_node_ids else "medium"},
+            )
+            context_allowed = _should_use_agent_context(
+                answer_type=problem["answer_type"],
+                top_score=top_score,
+                formal_hit_count=formal_hit_count,
+                structural_hit_count=structural_hit_count,
+                strong_structural_hit_count=strong_structural_hit_count,
+                expected_utility=prediction.expected_utility,
+            )
         if generic_graph_context_only:
             context_allowed = False
             context_abstain_reason = "generic_harness_graph_context_only"
+        elif world_model_disabled:
+            context_abstain_reason = "world_model_router_disabled"
         elif not context_allowed:
             context_abstain_reason = "world_model_or_scope_gate"
         else:
@@ -841,12 +893,16 @@ def _build_assumption_agent_plan(
             "formal_hit_count": formal_hit_count,
             "structural_hit_count": structural_hit_count,
             "strong_structural_hit_count": strong_structural_hit_count,
-            "predicted_acceptance_probability": prediction.predicted_acceptance_probability,
-            "prediction_confidence": prediction.prediction_confidence,
-            "expected_utility": prediction.expected_utility,
-            "recommended_next_action": prediction.recommended_next_action,
-            "predicted_regression_risk": prediction.predicted_regression_risk,
+            "predicted_acceptance_probability": (
+                None if prediction is None else prediction.predicted_acceptance_probability
+            ),
+            "prediction_confidence": None if prediction is None else prediction.prediction_confidence,
+            "expected_utility": None if prediction is None else prediction.expected_utility,
+            "recommended_next_action": "disabled" if prediction is None else prediction.recommended_next_action,
+            "predicted_regression_risk": "unknown" if prediction is None else prediction.predicted_regression_risk,
         }
+        if world_model_disabled:
+            router_summary["status"] = "disabled"
         plan["stages"]["world_model_router"] = router_summary
         plan["world_model_router"] = router_summary
         _agent_stage_log(
@@ -3766,12 +3822,20 @@ def _maybe_run_mc_option_evidence_scorer(
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     if problem.get("answer_type") != "multipleChoice":
         return None, None
+    if os.environ.get("HLE_DISABLE_MC_OPTION_EVIDENCE_SCORER", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return None, {"status": "disabled", "reason": "env_disabled"}
     if any(attempt.get("prompt_kind") == "mc_option_evidence_scorer_answer" for attempt in attempts):
         return None, {"status": "abstained", "reason": "already_executed"}
     stem, options = _split_multiple_choice_question(problem)
     if len(options) < 2:
         return None, {"status": "abstained", "reason": "options_not_parsed"}
     stem_terms = _content_terms(stem or problem.get("_question", ""))
+    option_terms_by_label = {
+        label: _content_terms(text)
+        for label, text in options.items()
+        if _content_terms(text)
+    }
+    option_text_by_label = dict(options)
     option_rows: list[dict[str, Any]] = []
     docs_by_label: dict[str, list[dict[str, str]]] = {}
     errors: list[str] = []
@@ -3787,12 +3851,23 @@ def _maybe_run_mc_option_evidence_scorer(
             except Exception as exc:
                 errors.append(type(exc).__name__)
         docs_by_label[label] = docs
-        score = _score_option_evidence(stem_terms=stem_terms, option_text=option_text, docs=docs)
+        score_detail = _score_option_evidence_detail(
+            stem_terms=stem_terms,
+            option_label=label,
+            option_text=option_text,
+            option_terms_by_label=option_terms_by_label,
+            option_text_by_label=option_text_by_label,
+            docs=docs,
+        )
         option_rows.append({
             "label": label,
-            "score": score,
+            "score": score_detail["score"],
             "query_hash": stable_hash({"query": query}),
             "doc_count": len(docs),
+            "support_doc_count": score_detail["support_doc_count"],
+            "ambiguous_doc_count": score_detail["ambiguous_doc_count"],
+            "unsupported_doc_count": score_detail["unsupported_doc_count"],
+            "supporting_doc_hashes": score_detail["supporting_doc_hashes"],
             "doc_hashes": [
                 stable_hash({"title": doc.get("title", ""), "snippet": doc.get("snippet", "")})
                 for doc in docs[:2]
@@ -3805,10 +3880,27 @@ def _maybe_run_mc_option_evidence_scorer(
     runner_up = ranked[1] if len(ranked) > 1 else {"score": 0.0}
     top_score = float(top["score"])
     margin = top_score - float(runner_up.get("score") or 0.0)
-    confidence = top_score >= 4.0 and margin >= 1.5
+    top_support_doc_count = int(top.get("support_doc_count") or 0)
+    runner_up_support_doc_count = int(runner_up.get("support_doc_count") or 0)
+    top_ambiguous_doc_count = int(top.get("ambiguous_doc_count") or 0)
+    confidence = (
+        top_score >= 6.0
+        and margin >= 2.0
+        and top_support_doc_count >= 2
+        and top_support_doc_count > runner_up_support_doc_count
+        and top_ambiguous_doc_count == 0
+    )
+    status = "activated" if confidence else "weak_margin"
+    if not confidence and top_score >= 4.0 and top_support_doc_count <= 0:
+        status = "blocked_non_discriminative_option_evidence"
+    if not confidence and top_ambiguous_doc_count > 0:
+        status = "blocked_ambiguous_option_evidence"
+    if not confidence and top_score >= 6.0 and top_support_doc_count <= runner_up_support_doc_count:
+        status = "blocked_weak_support_count"
     summary = {
-        "status": "activated" if confidence else "weak_margin",
+        "status": status,
         "source": "wikipedia_plus_domain_option_search",
+        "score_policy": "discriminative_option_support_v2",
         "option_count": len(options),
         "top_option_hash": stable_hash({"option_label": top["label"]}),
         "top_option_answer_hash": stable_hash({"answer": str(top["label"])}),
@@ -3816,12 +3908,25 @@ def _maybe_run_mc_option_evidence_scorer(
         "runner_up_score": round(float(runner_up.get("score") or 0.0), 4),
         "margin": round(margin, 4),
         "candidate_emitted": bool(confidence),
+        "candidate_verifier_state": "verified" if confidence else "not_verified",
+        "top_support_doc_count": top_support_doc_count,
+        "top_ambiguous_doc_count": top_ambiguous_doc_count,
+        "runner_up_support_doc_count": runner_up_support_doc_count,
         "query_hashes": [row["query_hash"] for row in option_rows],
         "doc_count_by_option_hash": {
             stable_hash({"option_label": row["label"]}): row["doc_count"]
             for row in option_rows
         },
+        "support_doc_count_by_option_hash": {
+            stable_hash({"option_label": row["label"]}): int(row.get("support_doc_count") or 0)
+            for row in option_rows
+        },
+        "ambiguous_doc_count_by_option_hash": {
+            stable_hash({"option_label": row["label"]}): int(row.get("ambiguous_doc_count") or 0)
+            for row in option_rows
+        },
         "top_doc_hashes": top.get("doc_hashes", []),
+        "top_supporting_doc_hashes": top.get("supporting_doc_hashes", []),
         "error_types": sorted(set(errors)),
         "underlying_model_calls": 0,
     }
@@ -3858,7 +3963,19 @@ def _maybe_run_mc_option_evidence_scorer(
         }),
         "latency_sec": 0.0,
         "status": "answered",
-        "tool_confidence": "option_evidence_margin",
+        "tool_confidence": "verified_option_evidence_margin",
+        "candidate_verifier_state": "verified",
+        "candidate_verifier_backend": "mc_option_evidence_scorer",
+        "candidate_verifier_operation": "option_specific_retrieval_margin",
+        "candidate_verifier_claim_hash": stable_hash({
+            "backend": "mc_option_evidence_scorer",
+            "operation": "option_specific_retrieval_margin",
+            "question_hash": problem.get("question_hash"),
+            "top_option_hash": summary["top_option_hash"],
+            "top_score": summary["top_score"],
+            "margin": summary["margin"],
+            "supporting_doc_hashes": summary["top_supporting_doc_hashes"],
+        }),
     }
     summary["child_id"] = attempt["child_id"]
     summary["candidate_answer_hash"] = attempt["parsed_answer_hash"]
@@ -4143,6 +4260,106 @@ def _score_option_evidence(*, stem_terms: set[str], option_text: str, docs: list
     return round(score, 4)
 
 
+def _score_option_evidence_detail(
+    *,
+    stem_terms: set[str],
+    option_label: str,
+    option_text: str,
+    option_terms_by_label: dict[str, set[str]],
+    option_text_by_label: dict[str, str],
+    docs: list[dict[str, str]],
+) -> dict[str, Any]:
+    option_terms = option_terms_by_label.get(option_label) or _content_terms(option_text)
+    if not option_terms or not docs:
+        return {
+            "score": 0.0,
+            "support_doc_count": 0,
+            "ambiguous_doc_count": 0,
+            "unsupported_doc_count": len(docs),
+            "supporting_doc_hashes": [],
+        }
+    score = 0.0
+    support_doc_count = 0
+    ambiguous_doc_count = 0
+    unsupported_doc_count = 0
+    supporting_doc_hashes: list[str] = []
+    for index, doc in enumerate(docs[:3]):
+        text = f"{doc.get('title', '')} {doc.get('snippet', '')}"
+        doc_terms = _content_terms(text)
+        title_terms = _content_terms(doc.get("title", ""))
+        supporting_labels = _option_evidence_supporting_labels(
+            text=text,
+            doc_terms=doc_terms,
+            title_terms=title_terms,
+            option_terms_by_label=option_terms_by_label,
+            option_text_by_label=option_text_by_label,
+        )
+        supports_current = option_label in supporting_labels
+        supports_other = any(label != option_label for label in supporting_labels)
+        if supports_current and not supports_other:
+            support_doc_count += 1
+            supporting_doc_hashes.append(stable_hash({"title": doc.get("title", ""), "snippet": doc.get("snippet", "")}))
+            option_overlap = len(option_terms & doc_terms)
+            title_overlap = len(option_terms & title_terms)
+            stem_overlap = len(stem_terms & doc_terms)
+            phrase_bonus = 4.0 if _normalized_phrase_present(option_text, text) else 0.0
+            score += (
+                (2.0 * option_overlap)
+                + (0.75 * stem_overlap)
+                + (0.5 * title_overlap)
+                + phrase_bonus
+                + (0.1 / (index + 1))
+            )
+        elif supports_current and supports_other:
+            ambiguous_doc_count += 1
+            score += 0.25
+        else:
+            unsupported_doc_count += 1
+    return {
+        "score": round(score, 4),
+        "support_doc_count": support_doc_count,
+        "ambiguous_doc_count": ambiguous_doc_count,
+        "unsupported_doc_count": unsupported_doc_count,
+        "supporting_doc_hashes": supporting_doc_hashes[:2],
+    }
+
+
+def _option_evidence_supporting_labels(
+    *,
+    text: str,
+    doc_terms: set[str],
+    title_terms: set[str],
+    option_terms_by_label: dict[str, set[str]],
+    option_text_by_label: dict[str, str],
+) -> set[str]:
+    labels: set[str] = set()
+    for label, option_terms in option_terms_by_label.items():
+        if not option_terms:
+            continue
+        option_text = option_text_by_label.get(label, "")
+        term_overlap = len(option_terms & doc_terms)
+        title_overlap = len(option_terms & title_terms)
+        min_term_support = 1 if len(option_terms) <= 2 else 2
+        if (
+            _normalized_phrase_present(option_text, text)
+            or title_overlap >= min_term_support
+            or term_overlap >= min_term_support
+        ):
+            labels.add(label)
+    return labels
+
+
+def _normalized_phrase_present(phrase: str, text: str) -> bool:
+    phrase_norm = _normalize_evidence_phrase(phrase)
+    if len(phrase_norm) < 4:
+        return False
+    return phrase_norm in _normalize_evidence_phrase(text)
+
+
+def _normalize_evidence_phrase(text: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9+.-]+", " ", str(text or "").lower())).strip()
+
+
 def _select_recursive_child_answer(
     *,
     problem: dict[str, Any],
@@ -4181,6 +4398,21 @@ def _select_recursive_child_answer(
         normalized[_normalize_for_selection(attempt["parsed_answer"], answer_type=problem["answer_type"])].append(attempt)
     if normalized:
         ranked = sorted(normalized.items(), key=lambda item: (-len(item[1]), item[1][0]["child_index"]))
+        verified_option_evidence_candidates = [
+            attempt for attempt in valid
+            if attempt.get("prompt_kind") == "mc_option_evidence_scorer_answer"
+            and attempt.get("candidate_verifier_state") == "verified"
+            and attempt.get("tool_confidence") == "verified_option_evidence_margin"
+        ]
+        if problem["answer_type"] == "multipleChoice" and verified_option_evidence_candidates:
+            selected = sorted(verified_option_evidence_candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+            return {
+                "selection_method": "verified_option_evidence_priority",
+                "selected_child_id": selected["child_id"],
+                "selected_answer": selected["parsed_answer"],
+                "underlying_model_calls": 0,
+                "verifier_model_call": False,
+            }
         verified_candidates = [
             attempt for attempt in valid
             if attempt.get("candidate_verifier_state") == "verified"
@@ -4409,6 +4641,7 @@ _VERIFIED_SELECTION_METHODS = {
     "verified_math_tool_priority",
     "source_grounded_verifier_choice",
     "option_evidence_verifier_choice",
+    "verified_option_evidence_priority",
 }
 
 
@@ -6775,8 +7008,12 @@ def _component_efficacy_from_plan(
         "mc_option_evidence_scorer_activated": option_evidence.get("status") == "activated",
         "mc_option_evidence_candidate_emitted": bool(option_evidence.get("candidate_emitted")),
         "mc_option_evidence_candidate_selected": bool(option_evidence.get("selected_option_evidence_candidate")),
+        "verified_option_evidence_override": selection_method == "verified_option_evidence_priority",
         "mc_option_evidence_candidate_correct": option_evidence.get("candidate_correct_for_eval") is True,
-        "option_evidence_verifier_used": selection_method == "option_evidence_verifier_choice",
+        "option_evidence_verifier_used": selection_method in {
+            "option_evidence_verifier_choice",
+            "verified_option_evidence_priority",
+        },
         "critic_synthesis_activated": critic_synthesis.get("status") == "activated",
         "critic_synthesis_disagreed": bool(critic_synthesis.get("critic_disagreed_with_majority")),
         "critic_synthesis_selected": bool(critic_synthesis.get("selected_critic_synthesis")),
@@ -6884,9 +7121,12 @@ def _component_efficacy_from_plan(
         "mc_option_evidence_scorer": {
             "status": option_evidence.get("status"),
             "candidate_emitted": bool(option_evidence.get("candidate_emitted")),
+            "candidate_verifier_state": option_evidence.get("candidate_verifier_state"),
             "candidate_correct_for_eval": option_evidence.get("candidate_correct_for_eval"),
             "top_score": option_evidence.get("top_score"),
             "margin": option_evidence.get("margin"),
+            "top_support_doc_count": int(option_evidence.get("top_support_doc_count") or 0),
+            "top_ambiguous_doc_count": int(option_evidence.get("top_ambiguous_doc_count") or 0),
             "selected_option_evidence_candidate": bool(option_evidence.get("selected_option_evidence_candidate")),
         },
         "counter_assumption_challenge": {

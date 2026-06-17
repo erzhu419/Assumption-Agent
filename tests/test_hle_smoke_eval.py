@@ -1015,7 +1015,11 @@ class HleSmokeEvalTest(unittest.TestCase):
                     {
                         "title": "Attention Is All You Need",
                         "snippet": "Attention Is All You Need introduced the Transformer architecture.",
-                    }
+                    },
+                    {
+                        "title": "Transformer (deep learning architecture)",
+                        "snippet": "The Transformer architecture was introduced in the paper Attention Is All You Need.",
+                    },
                 ]
             return [{"title": "Unrelated", "snippet": "No matching architecture evidence."}]
 
@@ -1032,9 +1036,88 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertIsNotNone(attempt)
         self.assertEqual(attempt["prompt_kind"], "mc_option_evidence_scorer_answer")
         self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(attempt["candidate_verifier_state"], "verified")
+        self.assertEqual(attempt["tool_confidence"], "verified_option_evidence_margin")
         self.assertEqual(summary["status"], "activated")
         self.assertTrue(summary["candidate_emitted"])
+        self.assertEqual(summary["candidate_verifier_state"], "verified")
+        self.assertGreaterEqual(summary["top_support_doc_count"], 1)
+        self.assertEqual(summary["top_ambiguous_doc_count"], 0)
         self.assertTrue(summary["candidate_correct_for_eval"])
+
+    def test_mc_option_evidence_scorer_blocks_ambiguous_multisupport_docs(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which named method is the intended answer?\nA. Alpha Method\nB. Beta Method\nC. Gamma Method",
+            "_answer": "B",
+        }
+
+        def fake_search(query, *, limit, timeout):
+            return [
+                {
+                    "title": "Alpha Method and Beta Method comparison",
+                    "snippet": "The source discusses both Alpha Method and Beta Method in the same context.",
+                }
+            ]
+
+        with patch("assumption_os.hle_smoke_eval._wikipedia_search", side_effect=fake_search):
+            attempt, summary = _maybe_run_mc_option_evidence_scorer(
+                problem=problem,
+                attempts=[],
+                eval_id="e",
+                call_id="c",
+                model="m",
+                logger=None,
+            )
+
+        self.assertIsNone(attempt)
+        self.assertEqual(summary["status"], "blocked_ambiguous_option_evidence")
+        self.assertFalse(summary["candidate_emitted"])
+        self.assertEqual(summary["candidate_verifier_state"], "not_verified")
+        self.assertGreaterEqual(summary["top_ambiguous_doc_count"], 1)
+
+    def test_verified_option_evidence_priority_can_override_unverified_majority(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. majority\nB. evidence-backed",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "agent_context_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {
+                "child_id": "c3",
+                "child_index": 3,
+                "prompt_kind": "mc_option_evidence_scorer_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+                "private_option_evidence_context": "Option B: directly supported by evidence.",
+                "candidate_verifier_state": "verified",
+                "tool_confidence": "verified_option_evidence_margin",
+            },
+        ]
+        with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":1}'):
+            selection = _select_recursive_child_answer(
+                problem=problem,
+                attempts=attempts,
+                model="m",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=1,
+                max_tokens=32,
+            )
+
+        self.assertEqual(selection["selection_method"], "verified_option_evidence_priority")
+        self.assertEqual(selection["selected_child_id"], "c3")
+        self.assertEqual(selection["selected_answer"], "B")
 
     def test_domain_rule_mc_verifier_handles_cross_resistance_minimality(self):
         problem = {
