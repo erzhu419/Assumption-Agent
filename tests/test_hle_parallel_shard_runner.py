@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 import tempfile
 import unittest
 from argparse import Namespace
@@ -20,7 +22,9 @@ from assumption_os.hle_parallel_shard_runner import (
     build_runner_env,
     build_shard_command,
     build_shard_specs,
+    dedupe_shard_specs_by_sample_hash,
     format_parallel_markdown,
+    run_parallel_shards,
 )
 
 
@@ -29,7 +33,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
         return Namespace(
             root=tmp,
             eval_id="ablate",
-            profiles="full,no_graph,no_evidence,no_morphism,no_option_evidence,verified_gate_off",
+            profiles="full,no_graph,no_evidence,no_morphism,no_option_evidence,no_candidate_claim_verifier,verified_gate_off",
             dry_run=True,
             total_sample_size=3,
             shard_size=1,
@@ -101,6 +105,10 @@ class TestHleParallelShardRunner(unittest.TestCase):
         )
         self.assertEqual(
             by_profile["no_option_evidence"]["env_overrides"]["HLE_DISABLE_MC_OPTION_EVIDENCE_SCORER"],
+            "1",
+        )
+        self.assertEqual(
+            by_profile["no_candidate_claim_verifier"]["env_overrides"]["HLE_DISABLE_CANDIDATE_CLAIM_VERIFIER"],
             "1",
         )
         flattened = json.dumps(payload, ensure_ascii=False)
@@ -186,6 +194,42 @@ class TestHleParallelShardRunner(unittest.TestCase):
         max_scan_index = cmd.index("--max-scan") + 1
         self.assertEqual(cmd[max_scan_index], "53600")
 
+    def test_dedupe_shard_specs_advances_colliding_seed_offsets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            specs = build_shard_specs(
+                eval_id="dedupe",
+                total_sample_size=2,
+                shard_size=1,
+                seed_offset=0,
+                seed_stride=37,
+                run_dir=root,
+                md_dir=root,
+            )
+
+            def fake_loader(**kwargs):
+                seed = kwargs["seed_offset"]
+                return [{"id_hash": "same"}] if seed < 100 else [{"id_hash": f"unique-{seed}"}]
+
+            deduped, summary = dedupe_shard_specs_by_sample_hash(
+                root=root,
+                specs=specs,
+                max_scan=1000,
+                seed_stride=37,
+                exclude_existing_hle_artifacts=False,
+                exclude_artifact_glob="unused",
+                sample_answer_type="multipleChoice",
+                sample_subject_contains="",
+                max_attempts=4,
+                sample_loader=fake_loader,
+            )
+
+        self.assertEqual(deduped[0].seed_offset, 0)
+        self.assertEqual(deduped[1].seed_offset, 111)
+        self.assertEqual(summary["accepted_shard_count"], 2)
+        self.assertEqual(summary["remaps"][1]["attempt_count"], 3)
+        self.assertFalse(summary["raw_content_persisted"])
+
     def test_heartbeat_reports_latest_jsonl_event(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -246,6 +290,44 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(errors["top_level_errors_by_label"], {"synthetic": 1})
         self.assertEqual(errors["process_timeout_count"], 1)
 
+    def test_soft_timeout_is_watch_only_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            spec = build_shard_specs(
+                eval_id="watch",
+                total_sample_size=1,
+                shard_size=1,
+                seed_offset=0,
+                seed_stride=1,
+                run_dir=root,
+                md_dir=root,
+            )[0]
+            state = ShardRunState(
+                spec=spec,
+                command=[sys.executable, "-c", "import time; time.sleep(0.3)"],
+            )
+            states = run_parallel_shards(
+                root=root,
+                shard_states=[state],
+                parallel_workers=1,
+                heartbeat_path=root / "heartbeat.json",
+                poll_interval_sec=0.01,
+                heartbeat_interval_sec=0.01,
+                soft_timeout_sec=0.02,
+                terminate_grace_sec=0.01,
+                kill_on_soft_timeout=False,
+                env=os.environ.copy(),
+            )
+            heartbeat = json.loads((root / "heartbeat.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(states[0].status, "completed")
+        self.assertEqual(states[0].returncode, 0)
+        self.assertTrue(states[0].soft_timeout_observed)
+        self.assertFalse(states[0].soft_timeout_sent)
+        self.assertFalse(states[0].hard_kill_sent)
+        self.assertEqual(states[0].process_timeout_policy, "watch_only")
+        self.assertTrue(heartbeat["shards"][0]["soft_timeout_observed"])
+
     def test_aggregate_parallel_payload_builds_clean_shared_subset(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -275,10 +357,12 @@ class TestHleParallelShardRunner(unittest.TestCase):
                 shard_size=1,
                 parallel_workers=2,
                 soft_timeout_sec=900,
+                kill_on_soft_timeout=False,
             )
             markdown = format_parallel_markdown(payload)
         self.assertTrue(payload["pass"])
         self.assertTrue(payload["paper_clean_pass"])
+        self.assertEqual(payload["runtime_policy"]["process_timeout_policy"], "watch_only")
         self.assertEqual(payload["metrics"]["sample_count"], 2)
         self.assertEqual(payload["metrics"]["by_model_variant"]["gpt-5.4-mini::raw"]["accuracy"], 0.5)
         clean = payload["metrics"]["clean_shared_subset"]["gpt-5.4-mini"]["by_variant"]

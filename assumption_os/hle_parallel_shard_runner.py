@@ -2,7 +2,8 @@
 
 This module orchestrates multiple ``hle_smoke_eval`` subprocesses.  It does
 not change the underlying scoring path; it only adds bounded parallelism,
-heartbeat files, soft timeouts, and error-stratified aggregate reports.
+heartbeat files, optional soft-timeout observation, and error-stratified
+aggregate reports.
 Artifacts intentionally store hashes, counts, and metadata only.
 """
 
@@ -16,7 +17,7 @@ import subprocess
 import sys
 import time
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -26,8 +27,10 @@ from .hle_smoke_eval import (
     HLE_OFFICIAL_SOURCES,
     _aggregate_rows,
     _component_efficacy_summary,
+    _collect_existing_hle_problem_hashes,
     _control_comparison,
     _expected_but_missing_modules,
+    _load_text_only_sample,
     _module_activation_summary,
 )
 
@@ -70,7 +73,9 @@ class ShardRunState:
     returncode: int | None = None
     status: str = "pending"
     soft_timeout_sent: bool = False
+    soft_timeout_observed: bool = False
     hard_kill_sent: bool = False
+    process_timeout_policy: str = "watch_only"
     error: str | None = None
     _stdout_handle: Any = field(default=None, repr=False, compare=False)
 
@@ -113,6 +118,89 @@ def build_shard_specs(
             )
         )
     return specs
+
+
+def dedupe_shard_specs_by_sample_hash(
+    *,
+    root: Path,
+    specs: list[ShardSpec],
+    max_scan: int,
+    seed_stride: int,
+    exclude_existing_hle_artifacts: bool,
+    exclude_artifact_glob: str,
+    sample_answer_type: str,
+    sample_subject_contains: str,
+    max_attempts: int = 25,
+    sample_loader: Any | None = None,
+) -> tuple[list[ShardSpec], dict[str, Any]]:
+    """Advance shard seeds until parent-side sample hashes are non-overlapping.
+
+    The preflight reads HLE rows only in memory through the same text-only loader
+    used by child shards.  It persists only hashes and seed remaps.
+    """
+    if not specs:
+        return specs, {"enabled": True, "status": "empty", "raw_content_persisted": False, "remaps": []}
+    loader = sample_loader or _load_text_only_sample
+    excluded_hashes = (
+        _collect_existing_hle_problem_hashes(root=root, artifact_glob=exclude_artifact_glob)
+        if exclude_existing_hle_artifacts
+        else set()
+    )
+    seen: set[str] = set()
+    deduped: list[ShardSpec] = []
+    remaps: list[dict[str, Any]] = []
+    for spec in specs:
+        original_seed = spec.seed_offset
+        candidate_seed = original_seed
+        selected_spec = spec
+        selected_hashes: list[str] = []
+        selected_status = "fallback_unchecked"
+        for attempt_index in range(max(1, max_attempts + 1)):
+            rows = loader(
+                sample_size=spec.sample_size,
+                max_scan=max_scan + max(0, candidate_seed),
+                seed_offset=candidate_seed,
+                exclude_problem_hashes=excluded_hashes,
+                answer_type_filter=sample_answer_type,
+                subject_contains=sample_subject_contains,
+            )
+            hashes = [str(row.get("id_hash")) for row in rows if row.get("id_hash")]
+            duplicate_hashes = sorted(set(hashes) & seen)
+            enough_rows = len(hashes) >= spec.sample_size
+            if enough_rows and not duplicate_hashes:
+                selected_spec = replace(spec, seed_offset=candidate_seed)
+                selected_hashes = hashes
+                selected_status = "accepted"
+                break
+            selected_hashes = hashes
+            selected_status = "duplicate" if duplicate_hashes else "insufficient_sample"
+            candidate_seed += max(1, seed_stride)
+        deduped.append(selected_spec)
+        seen.update(selected_hashes)
+        remaps.append(
+            {
+                "shard_index": spec.shard_index,
+                "original_seed_offset": original_seed,
+                "selected_seed_offset": selected_spec.seed_offset,
+                "status": selected_status,
+                "attempt_count": attempt_index + 1,
+                "sample_count": len(selected_hashes),
+                "sample_problem_hashes": selected_hashes,
+                "raw_content_persisted": False,
+            }
+        )
+    duplicate_count = sum(1 for row in remaps if row["status"] == "duplicate")
+    return deduped, {
+        "enabled": True,
+        "status": "completed",
+        "max_attempts": max_attempts,
+        "seed_stride": seed_stride,
+        "excluded_existing_problem_count": len(excluded_hashes),
+        "accepted_shard_count": sum(1 for row in remaps if row["status"] == "accepted"),
+        "duplicate_fallback_count": duplicate_count,
+        "remaps": remaps,
+        "raw_content_persisted": False,
+    }
 
 
 def build_shard_command(
@@ -233,6 +321,7 @@ def run_parallel_shards(
     heartbeat_interval_sec: float,
     soft_timeout_sec: float | None,
     terminate_grace_sec: float,
+    kill_on_soft_timeout: bool,
     env: dict[str, str],
 ) -> list[ShardRunState]:
     if parallel_workers <= 0:
@@ -279,18 +368,18 @@ def run_parallel_shards(
             returncode = process.poll()
             elapsed = state.elapsed_sec(now)
             if returncode is None and soft_timeout_sec is not None and elapsed is not None:
-                if elapsed > soft_timeout_sec and not state.soft_timeout_sent:
-                    state.soft_timeout_sent = True
-                    state.status = "soft_timed_out"
-                    process.terminate()
-                elif (
-                    state.soft_timeout_sent
-                    and elapsed > soft_timeout_sec + terminate_grace_sec
-                    and not state.hard_kill_sent
-                ):
-                    state.hard_kill_sent = True
-                    state.status = "hard_killed"
-                    process.kill()
+                state.process_timeout_policy = "terminate_and_kill" if kill_on_soft_timeout else "watch_only"
+                if elapsed > soft_timeout_sec:
+                    state.soft_timeout_observed = True
+                    if kill_on_soft_timeout:
+                        if not state.soft_timeout_sent:
+                            state.soft_timeout_sent = True
+                            state.status = "soft_timed_out"
+                            process.terminate()
+                        elif elapsed > soft_timeout_sec + terminate_grace_sec and not state.hard_kill_sent:
+                            state.hard_kill_sent = True
+                            state.status = "hard_killed"
+                            process.kill()
             returncode = process.poll()
             if returncode is None:
                 still_running.append(state)
@@ -348,7 +437,9 @@ def build_heartbeat(states: list[ShardRunState]) -> dict[str, Any]:
                 "out_exists": state.spec.out.exists(),
                 "log_out_exists": state.spec.log_out.exists(),
                 "soft_timeout_sent": state.soft_timeout_sent,
+                "soft_timeout_observed": state.soft_timeout_observed,
                 "hard_kill_sent": state.hard_kill_sent,
+                "process_timeout_policy": state.process_timeout_policy,
                 "latest_event": latest_event,
                 "error": state.error,
             }
@@ -413,6 +504,8 @@ def aggregate_parallel_payload(
     shard_size: int,
     parallel_workers: int,
     soft_timeout_sec: float | None,
+    kill_on_soft_timeout: bool = False,
+    shard_sample_dedupe: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_rows = _merged_run_rows(shard_payloads)
     metrics = _parallel_metrics(run_rows=run_rows, shard_payloads=shard_payloads)
@@ -465,10 +558,13 @@ def aggregate_parallel_payload(
             "parallel_workers": parallel_workers,
             "models": [item.strip() for item in models.split(",") if item.strip()],
             "variants": [item.strip() for item in variants.split(",") if item.strip()],
+            "shard_sample_dedupe": shard_sample_dedupe or {"enabled": False},
         },
         "runtime_policy": {
             "execute_live": execute_live,
             "soft_timeout_sec": soft_timeout_sec,
+            "process_timeout_policy": "terminate_and_kill" if kill_on_soft_timeout else "watch_only",
+            "kill_on_soft_timeout": kill_on_soft_timeout,
             "raw_content_persisted": False,
         },
         "shards": [_shard_summary(state) for state in states],
@@ -500,7 +596,9 @@ def _shard_summary(state: ShardRunState) -> dict[str, Any]:
         "log_out": str(state.spec.log_out),
         "stdout_out": str(state.spec.stdout_out),
         "soft_timeout_sent": state.soft_timeout_sent,
+        "soft_timeout_observed": state.soft_timeout_observed,
         "hard_kill_sent": state.hard_kill_sent,
+        "process_timeout_policy": state.process_timeout_policy,
         "error": state.error,
     }
 
@@ -1097,12 +1195,17 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
     pollution = payload.get("pollution_audit") or {}
     diagnostics = payload.get("failure_diagnostics") or {}
     claim_guard = pollution.get("claim_guard") or {}
+    runtime_policy = payload.get("runtime_policy") or {}
+    shard_dedupe = (payload.get("sampling") or {}).get("shard_sample_dedupe") or {"enabled": False}
     lines = [
         "# HLE Parallel Shard Evaluation",
         "",
         f"- pass: `{payload['pass']}`",
         f"- paper clean pass: `{payload['paper_clean_pass']}`",
         f"- pollution pass: `{payload.get('pollution_pass')}`",
+        f"- process timeout policy: `{runtime_policy.get('process_timeout_policy')}`",
+        f"- kill on soft timeout: `{runtime_policy.get('kill_on_soft_timeout')}`",
+        f"- shard sample dedupe: `{shard_dedupe.get('status', shard_dedupe.get('enabled'))}`",
         f"- loaded shard payloads: `{payload['loaded_shard_payload_count']}/{payload['sampling']['planned_shard_count']}`",
         f"- sample count: `{metrics['sample_count']}`",
         f"- distinct sample problems: `{metrics['distinct_sample_problem_count']}`",
@@ -1220,7 +1323,15 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
         "| ---: | --- | ---: | ---: | ---: | ---: | --- |",
     ])
     for shard in sorted(payload.get("shards", []), key=lambda item: item["shard_index"]):
-        timeout = "soft" if shard.get("soft_timeout_sent") else "hard" if shard.get("hard_kill_sent") else "none"
+        timeout = (
+            "hard"
+            if shard.get("hard_kill_sent")
+            else "soft-kill"
+            if shard.get("soft_timeout_sent")
+            else "soft-observed"
+            if shard.get("soft_timeout_observed")
+            else "none"
+        )
         lines.append(
             f"| `{shard['shard_index']}` | `{shard['status']}` | `{shard['returncode']}` | "
             f"`{shard['elapsed_sec']}` | `{shard['sample_size']}` | `{shard['seed_offset']}` | `{timeout}` |"
@@ -1245,6 +1356,29 @@ def build_payload_without_execution(args: argparse.Namespace) -> tuple[list[Shar
         run_dir=run_dir,
         md_dir=md_dir,
     )
+    dedupe_summary: dict[str, Any] = {"enabled": False}
+    if getattr(args, "dedupe_shard_samples", False):
+        try:
+            specs, dedupe_summary = dedupe_shard_specs_by_sample_hash(
+                root=root,
+                specs=specs,
+                max_scan=args.max_scan,
+                seed_stride=args.seed_stride,
+                exclude_existing_hle_artifacts=args.exclude_existing_hle_artifacts,
+                exclude_artifact_glob=args.exclude_artifact_glob,
+                sample_answer_type=args.sample_answer_type,
+                sample_subject_contains=args.sample_subject_contains,
+                max_attempts=args.dedupe_shard_max_attempts,
+            )
+        except Exception as exc:
+            dedupe_summary = {
+                "enabled": True,
+                "status": "error",
+                "error_type": type(exc).__name__,
+                "error": str(exc)[:240],
+                "raw_content_persisted": False,
+            }
+    setattr(args, "_shard_sample_dedupe_summary", dedupe_summary)
     graph_dir = _path_arg(args.graph_dir, root=root)
     states = [
         ShardRunState(
@@ -1290,6 +1424,8 @@ def main() -> None:
     parser.add_argument("--max-scan", type=int, default=5000)
     parser.add_argument("--seed-offset", type=int, default=3000)
     parser.add_argument("--seed-stride", type=int, default=400)
+    parser.add_argument("--dedupe-shard-samples", action="store_true")
+    parser.add_argument("--dedupe-shard-max-attempts", type=int, default=25)
     parser.add_argument("--sample-answer-type", default="")
     parser.add_argument("--sample-subject-contains", default="")
     parser.add_argument("--models", default="gpt-5.4-mini")
@@ -1317,6 +1453,11 @@ def main() -> None:
     parser.add_argument("--heartbeat-interval-sec", type=float, default=10.0)
     parser.add_argument("--soft-timeout-sec", type=float, default=None)
     parser.add_argument("--terminate-grace-sec", type=float, default=30.0)
+    parser.add_argument(
+        "--kill-on-soft-timeout",
+        action="store_true",
+        help="Terminate and then kill shards after --soft-timeout-sec. Default only records heartbeat observation.",
+    )
     parser.add_argument("--model-router-attempts", type=int, default=None)
     parser.add_argument("--model-router-timeout", type=float, default=None)
     parser.add_argument("--model-router-per-attempt-timeout", type=float, default=None)
@@ -1356,6 +1497,7 @@ def main() -> None:
         heartbeat_interval_sec=args.heartbeat_interval_sec,
         soft_timeout_sec=args.soft_timeout_sec,
         terminate_grace_sec=args.terminate_grace_sec,
+        kill_on_soft_timeout=args.kill_on_soft_timeout,
         env=env,
     )
     payloads = load_shard_payloads(specs)
@@ -1371,6 +1513,8 @@ def main() -> None:
         shard_size=args.shard_size,
         parallel_workers=args.parallel_workers,
         soft_timeout_sec=args.soft_timeout_sec,
+        kill_on_soft_timeout=args.kill_on_soft_timeout,
+        shard_sample_dedupe=getattr(args, "_shard_sample_dedupe_summary", {"enabled": False}),
     )
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")

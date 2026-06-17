@@ -10,15 +10,19 @@ and correctness only.
 from __future__ import annotations
 
 import argparse
+import ast
 import concurrent.futures
 import contextlib
+import fractions
 import http.client
 import html
 import json
+import math
 import os
 import random
 import re
 import signal
+import subprocess
 import sys
 import threading
 import time
@@ -1170,12 +1174,20 @@ def _call_recursive_verified_answer(
 ) -> dict[str, Any]:
     """Run multiple child answer attempts and select one without persisting raw HLE text."""
     critic_model = _agent_critic_model(model)
+    child_model = _agent_child_model(model)
     if critic_model != model:
         agent_plan.setdefault("stages", {})["critic_model_router"] = {
             "status": "activated",
             "base_model": model,
             "critic_model": critic_model,
             "policy": "env_override_for_falsification_and_verification",
+        }
+    if child_model != model:
+        agent_plan.setdefault("stages", {})["child_model_router"] = {
+            "status": "activated",
+            "base_model": model,
+            "child_model": child_model,
+            "policy": "env_override_for_candidate_generation",
         }
     evidence_summary: dict[str, Any] | None = None
     if evidence_bridge_enabled and _should_prime_evidence_bridge(problem, agent_plan):
@@ -1207,7 +1219,7 @@ def _call_recursive_verified_answer(
     child_result = _execute_recursive_child_attempts(
         problem=problem,
         specs=specs,
-        model=model,
+        model=child_model,
         eval_id=eval_id,
         call_id=call_id,
         logger=logger,
@@ -1233,6 +1245,38 @@ def _call_recursive_verified_answer(
         attempts.append(math_attempt)
         math_tool_summary = math_attempt.get("tool_summary")
         underlying_calls += int(math_attempt.get("underlying_model_calls", 0) or 0)
+    timeout_recovery_summary: dict[str, Any] | None = None
+    timeout_recovery_attempt, timeout_recovery_summary = _maybe_run_timeout_recovery_child(
+        problem=problem,
+        attempts=attempts,
+        math_tool_summary=math_tool_summary,
+        model=child_model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=child_timeout if child_timeout is not None else timeout,
+        max_tokens=max_tokens,
+    )
+    if timeout_recovery_attempt:
+        attempts.append(timeout_recovery_attempt)
+        if timeout_recovery_attempt.get("status") == "answered":
+            underlying_calls += 1
+    child_model_failover_summary: dict[str, Any] | None = None
+    child_model_failover_attempt, child_model_failover_summary = _maybe_run_child_model_failover_child(
+        problem=problem,
+        attempts=attempts,
+        base_model=model,
+        child_model=child_model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=child_timeout if child_timeout is not None else timeout,
+        max_tokens=max_tokens,
+    )
+    if child_model_failover_attempt:
+        attempts.append(child_model_failover_attempt)
+        if child_model_failover_attempt.get("status") == "answered":
+            underlying_calls += 1
     candidate_verifier_summary: dict[str, Any] | None = None
     if _should_run_candidate_claim_verifier(problem):
         candidate_verifier_summary = _apply_math_candidate_claim_verifier(
@@ -1285,6 +1329,15 @@ def _call_recursive_verified_answer(
         if evidence_context:
             agent_plan["hle_evidence_context"] = evidence_context
             agent_plan["hle_evidence_bridge"] = evidence_summary
+            supported_evidence_attempt, supported_evidence_summary = _maybe_add_answer_bearing_evidence_candidate(
+                problem=problem,
+                attempts=attempts,
+                evidence_summary=evidence_summary,
+            )
+            if supported_evidence_summary:
+                evidence_summary["source_supported_candidate"] = supported_evidence_summary
+            if supported_evidence_attempt:
+                attempts.append(supported_evidence_attempt)
             evidence_attempt = _run_child_attempt(
                 problem=problem,
                 spec={
@@ -1298,6 +1351,11 @@ def _call_recursive_verified_answer(
                 logger=logger,
                 timeout=child_timeout if child_timeout is not None else timeout,
                 max_tokens=max_tokens,
+            )
+            _maybe_mark_answer_bearing_evidence_attempt(
+                problem=problem,
+                attempt=evidence_attempt,
+                evidence_summary=evidence_summary,
             )
             attempts.append(evidence_attempt)
             if evidence_attempt.get("status") == "answered":
@@ -1391,7 +1449,7 @@ def _call_recursive_verified_answer(
         eval_id=eval_id,
         call_id=call_id,
         logger=logger,
-        timeout=timeout,
+        timeout=_recursive_verifier_timeout(child_timeout if child_timeout is not None else timeout),
         max_tokens=min(max_tokens, 384),
         evidence_context=str(agent_plan.get("hle_evidence_context") or ""),
     )
@@ -1424,6 +1482,9 @@ def _call_recursive_verified_answer(
     child_summary = {
         "status": "activated",
         "execution_mode": child_result.get("execution_mode"),
+        "serial_forced_reason": child_result.get("serial_forced_reason"),
+        "base_model": model,
+        "child_model": child_model,
         "child_timeout_sec": child_result.get("child_timeout_sec"),
         "child_max_workers": child_result.get("child_max_workers"),
         "planned_child_count": len(specs),
@@ -1451,6 +1512,18 @@ def _call_recursive_verified_answer(
     stages["multi_candidate_self_verifier"] = verifier_summary
     if math_tool_summary:
         stages["hle_math_tool_solver"] = math_tool_summary
+    if timeout_recovery_summary:
+        timeout_recovery_summary["final_selection_method"] = selection.get("selection_method")
+        timeout_recovery_summary["selected_timeout_recovery_candidate"] = (
+            selection.get("selected_child_id") == timeout_recovery_summary.get("child_id")
+        )
+        stages["recursive_timeout_recovery_child"] = timeout_recovery_summary
+    if child_model_failover_summary:
+        child_model_failover_summary["final_selection_method"] = selection.get("selection_method")
+        child_model_failover_summary["selected_child_model_failover_candidate"] = (
+            selection.get("selected_child_id") == child_model_failover_summary.get("child_id")
+        )
+        stages["child_model_failover_child"] = child_model_failover_summary
     if candidate_verifier_summary:
         stages["candidate_claim_verifier"] = candidate_verifier_summary
     if domain_rule_summary:
@@ -1524,6 +1597,17 @@ def _call_recursive_verified_answer(
             stage="critic_model_router",
             data=stages["critic_model_router"],
         )
+    if stages.get("child_model_router"):
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="child_model_router",
+            data=stages["child_model_router"],
+        )
     _agent_stage_log(
         logger,
         eval_id=eval_id,
@@ -1544,6 +1628,28 @@ def _call_recursive_verified_answer(
             variant="assumption_agent_recursive_verify",
             stage="hle_math_tool_solver",
             data=math_tool_summary,
+        )
+    if timeout_recovery_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="recursive_timeout_recovery_child",
+            data=timeout_recovery_summary,
+        )
+    if child_model_failover_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="child_model_failover_child",
+            data=child_model_failover_summary,
         )
     if candidate_verifier_summary:
         _agent_stage_log(
@@ -1746,8 +1852,9 @@ def _execute_recursive_child_attempts(
     max_tokens: int,
     mode: str,
 ) -> dict[str, Any]:
-    if mode != "parallel_quorum":
-        return _execute_recursive_child_attempts_serial(
+    force_serial_reason = _force_serial_child_execution_reason(mode=mode, timeout=timeout)
+    if mode != "parallel_quorum" or force_serial_reason:
+        result = _execute_recursive_child_attempts_serial(
             problem=problem,
             specs=specs,
             model=model,
@@ -1757,6 +1864,10 @@ def _execute_recursive_child_attempts(
             timeout=timeout,
             max_tokens=max_tokens,
         )
+        if force_serial_reason:
+            result["execution_mode"] = "serial_strict_timeout"
+            result["serial_forced_reason"] = force_serial_reason
+        return result
     first_batch = _run_child_batch(
         problem=problem,
         specs=specs[:2],
@@ -1820,6 +1931,16 @@ def _execute_recursive_child_attempts(
         "child_timeout_sec": timeout,
         "child_max_workers": max(first_batch["max_workers"], rest_batch["max_workers"]),
     }
+
+
+def _force_serial_child_execution_reason(*, mode: str, timeout: float | None) -> str:
+    if mode != "parallel_quorum":
+        return ""
+    if timeout is None:
+        return ""
+    if os.environ.get("HLE_DISABLE_STRICT_SERIAL_CHILD_TIMEOUT", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return ""
+    return "finite_timeout_requires_main_thread_deadline"
 
 
 def _execute_recursive_child_attempts_serial(
@@ -2086,6 +2207,314 @@ def _run_child_attempt(
         return attempt
 
 
+def _maybe_run_timeout_recovery_child(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    math_tool_summary: dict[str, Any] | None,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    trigger = _recursive_timeout_recovery_trigger(
+        problem=problem,
+        attempts=attempts,
+        math_tool_summary=math_tool_summary,
+    )
+    if trigger.get("status") != "activated":
+        return None, None
+
+    recovery_model = os.environ.get("HLE_TIMEOUT_RECOVERY_MODEL", "").strip() or model
+    recovery_timeout = _timeout_recovery_child_timeout(timeout)
+    recovery_max_tokens = _timeout_recovery_child_max_tokens(max_tokens)
+    child_index = _timeout_recovery_child_index(attempts)
+    attempt = _run_child_attempt(
+        problem=problem,
+        spec={
+            "prompt_kind": "timeout_recovery_answer",
+            "prompt": _timeout_recovery_answer_prompt(problem, trigger=trigger),
+        },
+        child_index=child_index,
+        model=recovery_model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=recovery_timeout,
+        max_tokens=recovery_max_tokens,
+    )
+    summary = {
+        "status": "activated",
+        "reason": trigger.get("reason"),
+        "answer_type": problem.get("answer_type"),
+        "valid_candidate_count_before": trigger.get("valid_candidate_count"),
+        "unique_candidate_count_before": trigger.get("unique_candidate_count"),
+        "timeout_child_count_before": trigger.get("timeout_child_count"),
+        "error_child_count_before": trigger.get("error_child_count"),
+        "child_id": attempt.get("child_id"),
+        "child_index": attempt.get("child_index"),
+        "child_status": attempt.get("status"),
+        "child_error_type": attempt.get("error_type"),
+        "recovery_model": recovery_model,
+        "recovery_timeout_sec": recovery_timeout,
+        "recovery_max_tokens": recovery_max_tokens,
+        "candidate_emitted": bool(str(attempt.get("parsed_answer") or "").strip()),
+        "candidate_answer_hash": attempt.get("parsed_answer_hash"),
+    }
+    return attempt, summary
+
+
+def _recursive_timeout_recovery_trigger(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    math_tool_summary: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if os.environ.get("HLE_DISABLE_TIMEOUT_RECOVERY_CHILD", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return {"status": "abstained", "reason": "disabled"}
+    if (math_tool_summary or {}).get("confidence") in {"verified_symbolic", "verified_symbolic_consensus"}:
+        return {"status": "abstained", "reason": "math_tool_already_verified"}
+
+    timeout_count = sum(1 for attempt in attempts if attempt.get("status") == "timeout")
+    error_count = sum(1 for attempt in attempts if attempt.get("status") == "error")
+    if timeout_count + error_count <= 0:
+        return {
+            "status": "abstained",
+            "reason": "no_timeout_or_error_pressure",
+            "timeout_child_count": timeout_count,
+            "error_child_count": error_count,
+        }
+
+    valid = _valid_recursive_answer_attempts(problem=problem, attempts=attempts)
+    normalized = {
+        _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type=problem.get("answer_type") or "exactMatch")
+        for attempt in valid
+    }
+    unique_count = len({value for value in normalized if value})
+    min_valid = 2
+    if len(valid) >= min_valid and unique_count >= min_valid:
+        return {
+            "status": "abstained",
+            "reason": "sufficient_candidate_diversity",
+            "valid_candidate_count": len(valid),
+            "unique_candidate_count": unique_count,
+            "timeout_child_count": timeout_count,
+            "error_child_count": error_count,
+        }
+    return {
+        "status": "activated",
+        "reason": "timeout_or_error_with_candidate_shortage",
+        "valid_candidate_count": len(valid),
+        "unique_candidate_count": unique_count,
+        "timeout_child_count": timeout_count,
+        "error_child_count": error_count,
+    }
+
+
+def _maybe_run_child_model_failover_child(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    base_model: str,
+    child_model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    trigger = _child_model_failover_trigger(problem=problem, attempts=attempts, base_model=base_model, child_model=child_model)
+    if trigger.get("status") != "activated":
+        return None, None
+    child_index = _timeout_recovery_child_index(attempts)
+    failover_timeout = _child_model_failover_timeout(timeout)
+    failover_max_tokens = _child_model_failover_max_tokens(max_tokens)
+    attempt = _run_child_attempt(
+        problem=problem,
+        spec={
+            "prompt_kind": "child_model_failover_answer",
+            "prompt": _child_model_failover_prompt(problem, trigger=trigger),
+        },
+        child_index=child_index,
+        model=base_model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=failover_timeout,
+        max_tokens=failover_max_tokens,
+    )
+    summary = {
+        "status": "activated",
+        "reason": trigger.get("reason"),
+        "base_model": base_model,
+        "failed_child_model": child_model,
+        "valid_candidate_count_before": trigger.get("valid_candidate_count"),
+        "unique_candidate_count_before": trigger.get("unique_candidate_count"),
+        "timeout_child_count_before": trigger.get("timeout_child_count"),
+        "error_child_count_before": trigger.get("error_child_count"),
+        "child_id": attempt.get("child_id"),
+        "child_index": attempt.get("child_index"),
+        "child_status": attempt.get("status"),
+        "child_error_type": attempt.get("error_type"),
+        "failover_timeout_sec": failover_timeout,
+        "failover_max_tokens": failover_max_tokens,
+        "candidate_emitted": bool(str(attempt.get("parsed_answer") or "").strip()),
+        "candidate_answer_hash": attempt.get("parsed_answer_hash"),
+    }
+    return attempt, summary
+
+
+def _child_model_failover_trigger(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    base_model: str,
+    child_model: str,
+) -> dict[str, Any]:
+    if os.environ.get("HLE_DISABLE_CHILD_MODEL_FAILOVER", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return {"status": "abstained", "reason": "disabled"}
+    if not child_model or child_model == base_model:
+        return {"status": "abstained", "reason": "child_model_same_as_base"}
+    valid = _valid_recursive_answer_attempts(problem=problem, attempts=attempts)
+    timeout_count = sum(1 for attempt in attempts if attempt.get("status") == "timeout")
+    error_count = sum(1 for attempt in attempts if attempt.get("status") == "error")
+    if timeout_count + error_count <= 0:
+        return {
+            "status": "abstained",
+            "reason": "no_child_model_failure_pressure",
+            "valid_candidate_count": len(valid),
+            "timeout_child_count": timeout_count,
+            "error_child_count": error_count,
+        }
+    if not valid:
+        return {
+            "status": "activated",
+            "reason": "child_model_failed_without_valid_candidate",
+            "valid_candidate_count": 0,
+            "unique_candidate_count": 0,
+            "timeout_child_count": timeout_count,
+            "error_child_count": error_count,
+        }
+    normalized = {
+        _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type=problem.get("answer_type") or "exactMatch")
+        for attempt in valid
+    }
+    unique_count = len({value for value in normalized if value})
+    min_unique = 3 if problem.get("answer_type") == "multipleChoice" else 4
+    if unique_count >= min_unique:
+        return {
+            "status": "abstained",
+            "reason": "valid_candidate_diversity_already_available",
+            "valid_candidate_count": len(valid),
+            "unique_candidate_count": unique_count,
+            "timeout_child_count": timeout_count,
+            "error_child_count": error_count,
+        }
+    return {
+        "status": "activated",
+        "reason": "child_model_failure_with_low_candidate_diversity",
+        "valid_candidate_count": len(valid),
+        "unique_candidate_count": unique_count,
+        "timeout_child_count": timeout_count,
+        "error_child_count": error_count,
+    }
+
+
+def _child_model_failover_prompt(problem: dict[str, Any], *, trigger: dict[str, Any]) -> str:
+    answer_type = problem.get("answer_type") or "exactMatch"
+    return (
+        "One or more stronger candidate-generation calls failed or disconnected before the recursive set had enough "
+        "independent candidates. Produce one concise fallback answer using only the question. Return JSON only: {\"answer\":\"...\"}. "
+        "For multiple choice, return one option letter only. For exact match, return the shortest exact final answer only.\n\n"
+        f"Failure pressure: timeouts={trigger.get('timeout_child_count')}, errors={trigger.get('error_child_count')}, "
+        f"valid_candidates={trigger.get('valid_candidate_count')}.\n\n"
+        f"Answer type: {answer_type}\nQuestion:\n{problem.get('_question') or ''}"
+    )
+
+
+def _child_model_failover_timeout(timeout: float | None) -> float | None:
+    has_override, override = _optional_timeout_override_from_env("HLE_CHILD_MODEL_FAILOVER_TIMEOUT_SEC")
+    if has_override:
+        return override
+    if timeout is None:
+        return None
+    return _normalize_optional_timeout(timeout)
+
+
+def _child_model_failover_max_tokens(max_tokens: int) -> int:
+    override = os.environ.get("HLE_CHILD_MODEL_FAILOVER_MAX_TOKENS", "").strip()
+    if override:
+        try:
+            return max(16, int(override))
+        except ValueError:
+            pass
+    return max(16, min(int(max_tokens), 64))
+
+
+def _valid_recursive_answer_attempts(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    answer_type = problem.get("answer_type") or "exactMatch"
+    valid: list[dict[str, Any]] = []
+    for attempt in attempts:
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        if answer_type == "multipleChoice":
+            canonical, _ = _canonicalize_multiple_choice_answer(problem, answer)
+            if _extract_choice(canonical):
+                valid.append(attempt)
+            continue
+        if not _is_suspicious_exact_answer(answer):
+            valid.append(attempt)
+    return valid
+
+
+def _timeout_recovery_answer_prompt(problem: dict[str, Any], *, trigger: dict[str, Any]) -> str:
+    answer_type = problem.get("answer_type") or "exactMatch"
+    output_contract = (
+        "Return JSON only: {\"answer\":\"...\"}. "
+        "For multiple choice, return one option letter only. "
+        "For exact match, return the shortest exact final answer only."
+    )
+    return (
+        "The previous recursive child attempts timed out or errored before enough valid answer candidates were "
+        "available. Produce one concise candidate answer under the same constraints. Do not explain, do not list "
+        "alternatives, and do not include reasoning.\n\n"
+        f"Timeout/error pressure: timeouts={trigger.get('timeout_child_count')}, errors={trigger.get('error_child_count')}, "
+        f"valid_candidates={trigger.get('valid_candidate_count')}, unique_candidates={trigger.get('unique_candidate_count')}.\n\n"
+        f"Answer type: {answer_type}\nQuestion:\n{problem.get('_question') or ''}\n\n{output_contract}"
+    )
+
+
+def _timeout_recovery_child_timeout(timeout: float | None) -> float | None:
+    has_override, override = _optional_timeout_override_from_env("HLE_TIMEOUT_RECOVERY_TIMEOUT_SEC")
+    if has_override:
+        return override
+    if timeout is None:
+        return None
+    return max(float(timeout), min(float(timeout) * 2.0, 7200.0))
+
+
+def _timeout_recovery_child_max_tokens(max_tokens: int) -> int:
+    override = os.environ.get("HLE_TIMEOUT_RECOVERY_MAX_TOKENS", "").strip()
+    if override:
+        try:
+            return max(16, int(override))
+        except ValueError:
+            pass
+    return max(32, min(int(max_tokens), 160))
+
+
+def _timeout_recovery_child_index(attempts: list[dict[str, Any]]) -> int:
+    existing = [int(attempt.get("child_index") or 0) for attempt in attempts]
+    return max(existing or [0]) + 1
+
+
 def _log_recursive_child_early_stop(
     logger: "_JsonlLogger | None",
     *,
@@ -2123,10 +2552,22 @@ def _can_stop_recursive_children_early(problem: dict[str, Any], attempts: list[d
         prompt_kinds = {str(attempt.get("prompt_kind") or "") for attempt in attempts}
         reflective_kinds = {"agent_context_answer", "constraint_checked_answer", "recursive_assumption_answer"}
         return bool(prompt_kinds & reflective_kinds)
-    if problem.get("answer_type") != "multipleChoice" and _should_run_math_tool_child(problem):
-        prompt_kinds = {str(attempt.get("prompt_kind") or "") for attempt in attempts}
-        reflective_kinds = {"constraint_checked_answer", "recursive_assumption_answer", "agent_context_answer"}
-        return bool(prompt_kinds & reflective_kinds)
+    if problem.get("answer_type") == "exactMatch":
+        if _exact_trajectory_search_enabled():
+            return False
+        valid = _valid_recursive_answer_attempts(problem=problem, attempts=attempts)
+        prompt_kinds = {str(attempt.get("prompt_kind") or "") for attempt in valid}
+        independent_kinds = {
+            "agent_context_answer",
+            "adversarial_alternative_answer",
+            "decomposition_answer",
+            "evidence_bridge_answer",
+            "evidence_grounded_answer",
+            "hipporag_context_answer",
+            "literal_constraint_answer",
+            "recursive_assumption_answer",
+        }
+        return len(valid) >= 3 and bool(prompt_kinds & independent_kinds)
     return True
 
 
@@ -2156,7 +2597,7 @@ def _apply_math_candidate_claim_verifier(
             }
         stem_problem = {**problem, "_question": stem or problem.get("_question", "")}
         reference = _deterministic_math_tool_answer(stem_problem)
-        if reference.get("confidence") == "verified_symbolic" and str(reference.get("answer") or "").strip():
+        if _is_verified_math_reference(reference):
             return _apply_math_reference_to_multiple_choice_options(
                 problem=problem,
                 attempts=attempts,
@@ -2169,17 +2610,20 @@ def _apply_math_candidate_claim_verifier(
             llm_reference = _llm_math_reference_claim_for_mc_options(
                 problem=stem_problem,
                 model=model,
+                eval_id=eval_id,
+                call_id=call_id,
+                logger=logger,
                 timeout=timeout,
                 max_tokens=max_tokens,
             )
-            if llm_reference.get("confidence") == "verified_symbolic" and str(llm_reference.get("answer") or "").strip():
+            if _is_verified_math_reference(llm_reference):
                 summary = _apply_math_reference_to_multiple_choice_options(
                     problem=problem,
                     attempts=attempts,
                     options=options,
                     reference=llm_reference,
                     backend="sympy_mc_option_planner",
-                    underlying_model_calls=1,
+                    underlying_model_calls=int(llm_reference.get("underlying_model_calls") or 1),
                 )
                 _log_candidate_claim_planner_event(
                     logger,
@@ -2208,9 +2652,11 @@ def _apply_math_candidate_claim_verifier(
                 "inconclusive_count": sum(1 for attempt in attempts if str(attempt.get("parsed_answer") or "").strip()),
                 "reference_operation": llm_reference.get("operation") or reference.get("operation"),
                 "reference_reason": llm_reference.get("reason") or reference.get("reason"),
+                "reference_error_type": llm_reference.get("error_type"),
+                "planner_latency_sec": llm_reference.get("planner_latency_sec"),
                 "deterministic_reference_reason": reference.get("reason"),
                 "option_count": len(options),
-                "underlying_model_calls": 1,
+                "underlying_model_calls": int(llm_reference.get("underlying_model_calls") or 1),
             }
         return {
             "status": "no_executable_claim",
@@ -2224,7 +2670,7 @@ def _apply_math_candidate_claim_verifier(
             "underlying_model_calls": 0,
         }
     reference = _deterministic_math_tool_answer(problem)
-    if reference.get("confidence") == "verified_symbolic" and str(reference.get("answer") or "").strip():
+    if _is_verified_math_reference(reference):
         return _apply_math_reference_to_candidates(
             problem=problem,
             attempts=attempts,
@@ -2237,16 +2683,19 @@ def _apply_math_candidate_claim_verifier(
             problem=problem,
             attempts=attempts,
             model=model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
             timeout=timeout,
             max_tokens=max_tokens,
         )
-        if llm_reference.get("confidence") == "verified_symbolic" and str(llm_reference.get("answer") or "").strip():
+        if _is_verified_math_reference(llm_reference):
             summary = _apply_math_reference_to_candidates(
                 problem=problem,
                 attempts=attempts,
                 reference=llm_reference,
                 backend="sympy_candidate_reference_planner",
-                underlying_model_calls=1,
+                underlying_model_calls=int(llm_reference.get("underlying_model_calls") or 1),
             )
             _log_candidate_claim_planner_event(
                 logger,
@@ -2275,8 +2724,10 @@ def _apply_math_candidate_claim_verifier(
             "inconclusive_count": sum(1 for attempt in attempts if str(attempt.get("parsed_answer") or "").strip()),
             "reference_operation": llm_reference.get("operation") or reference.get("operation"),
             "reference_reason": llm_reference.get("reason") or reference.get("reason"),
+            "reference_error_type": llm_reference.get("error_type"),
+            "planner_latency_sec": llm_reference.get("planner_latency_sec"),
             "deterministic_reference_reason": reference.get("reason"),
-            "underlying_model_calls": 1,
+            "underlying_model_calls": int(llm_reference.get("underlying_model_calls") or 1),
         }
     return {
         "status": "no_executable_claim",
@@ -2299,7 +2750,7 @@ def _apply_math_reference_to_multiple_choice_options(
     backend: str,
     underlying_model_calls: int,
 ) -> dict[str, Any]:
-    if reference.get("confidence") != "verified_symbolic" or not str(reference.get("answer") or "").strip():
+    if not _is_verified_math_reference(reference):
         return {
             "status": "no_executable_claim",
             "backend": backend,
@@ -2310,6 +2761,8 @@ def _apply_math_reference_to_multiple_choice_options(
             "reference_reason": reference.get("reason"),
             "option_count": len(options),
             "underlying_model_calls": underlying_model_calls,
+            "planner_latency_sec": reference.get("planner_latency_sec"),
+            "reference_error_type": reference.get("error_type"),
         }
     reference_answer = str(reference["answer"]).strip()
     matching_labels = [
@@ -2329,6 +2782,8 @@ def _apply_math_reference_to_multiple_choice_options(
             "matched_option_count": len(matching_labels),
             "matched_option_hashes": [stable_hash({"option_label": label}) for label in matching_labels],
             "underlying_model_calls": underlying_model_calls,
+            "planner_latency_sec": reference.get("planner_latency_sec"),
+            "reference_error_type": reference.get("error_type"),
         }
     verified_label = matching_labels[0]
     verified = 0
@@ -2402,6 +2857,8 @@ def _apply_math_reference_to_multiple_choice_options(
         "option_count": len(options),
         "matched_option_count": 1,
         "underlying_model_calls": underlying_model_calls,
+        "planner_latency_sec": reference.get("planner_latency_sec"),
+        "reference_error_type": reference.get("error_type"),
         "claim_hash": stable_hash({
             "question_hash": problem.get("question_hash"),
             "reference_answer": reference_answer,
@@ -2412,6 +2869,280 @@ def _apply_math_reference_to_multiple_choice_options(
     }
 
 
+def _exact_math_candidate_match(candidate_answer: str, reference_answer: str) -> dict[str, Any]:
+    candidate = str(candidate_answer or "").strip()
+    reference = str(reference_answer or "").strip()
+    if not candidate or not reference:
+        return {"matched": False, "method": "empty"}
+
+    candidate_norm = _normalize_exact(candidate)
+    reference_norm = _normalize_exact(reference)
+    if candidate_norm and candidate_norm == reference_norm:
+        return {
+            "matched": True,
+            "method": "normalized_exact",
+            "candidate_part_count": 1,
+            "reference_part_count": 1,
+        }
+
+    candidate_parts = _math_answer_parts(candidate)
+    reference_parts = _math_answer_parts(reference)
+    if not candidate_parts or not reference_parts:
+        return {
+            "matched": False,
+            "method": "not_parseable",
+            "candidate_part_count": len(candidate_parts),
+            "reference_part_count": len(reference_parts),
+        }
+    if len(candidate_parts) != len(reference_parts):
+        return {
+            "matched": False,
+            "method": "part_count_mismatch",
+            "candidate_part_count": len(candidate_parts),
+            "reference_part_count": len(reference_parts),
+        }
+
+    if len(candidate_parts) == 1:
+        equivalent, method = _sympy_answer_parts_equivalent(candidate_parts[0], reference_parts[0])
+        return {
+            "matched": equivalent,
+            "method": method if equivalent else "symbolic_mismatch",
+            "candidate_part_count": 1,
+            "reference_part_count": 1,
+        }
+
+    unmatched = set(range(len(candidate_parts)))
+    methods: list[str] = []
+    for reference_part in reference_parts:
+        matched_index: int | None = None
+        matched_method = "none"
+        for candidate_index in list(unmatched):
+            equivalent, method = _sympy_answer_parts_equivalent(candidate_parts[candidate_index], reference_part)
+            if equivalent:
+                matched_index = candidate_index
+                matched_method = method
+                break
+        if matched_index is None:
+            return {
+                "matched": False,
+                "method": "collection_mismatch",
+                "candidate_part_count": len(candidate_parts),
+                "reference_part_count": len(reference_parts),
+            }
+        unmatched.remove(matched_index)
+        methods.append(matched_method)
+    return {
+        "matched": True,
+        "method": "unordered_collection_equivalence",
+        "part_methods": sorted(Counter(methods).items()),
+        "candidate_part_count": len(candidate_parts),
+        "reference_part_count": len(reference_parts),
+    }
+
+
+def _math_answer_parts(text: str) -> list[str]:
+    cleaned = _clean_math_answer_text(text)
+    if not cleaned or len(cleaned) > 320:
+        return []
+    if not _has_math_answer_signal(cleaned):
+        return []
+    for segment in _math_answer_candidate_segments(cleaned):
+        if not _has_math_answer_signal(segment):
+            continue
+        parts = _math_answer_parts_from_segment(segment)
+        if parts and all(_safe_sympy_parse_expr(part) is not None for part in parts):
+            return parts
+    return []
+
+
+def _math_answer_parts_from_segment(segment: str) -> list[str]:
+    cleaned = str(segment or "").strip()
+    if not cleaned:
+        return []
+    cleaned = re.sub(r"\s+(?:or|and)\s+", ",", cleaned, flags=re.IGNORECASE)
+    cleaned = _strip_outer_math_container(cleaned)
+    raw_parts = _split_top_level_math_parts(cleaned)
+    if len(raw_parts) > 8:
+        return []
+
+    parts: list[str] = []
+    for raw_part in raw_parts:
+        part = _strip_outer_math_container(raw_part.strip())
+        part = re.sub(
+            r"^\s*[A-Za-z][A-Za-z0-9_]*(?:\([^()]{0,40}\))?\s*=\s*",
+            "",
+            part,
+        ).strip()
+        for expanded in _expand_plus_minus_answer_part(part):
+            normalized = _normalize_math_expression(expanded)
+            if normalized and len(normalized) <= 180:
+                parts.append(normalized)
+    return parts if parts and len(parts) <= 8 else []
+
+
+def _math_answer_candidate_segments(cleaned: str) -> list[str]:
+    segments: list[str] = []
+
+    def add(segment: str) -> None:
+        segment = _strip_outer_math_container(str(segment or "").strip())
+        if segment and segment not in segments and len(segment) <= 260:
+            segments.append(segment)
+
+    add(cleaned)
+    for pattern in (
+        r"\\boxed\s*\{([^{}]{1,220})\}",
+        r"\\boxed\s*\(([^()]{1,220})\)",
+        r"\$([^$]{1,220})\$",
+        r"\\\((.{1,220})\\\)",
+        r"\\\[(.{1,220})\\\]",
+    ):
+        for match in re.finditer(pattern, cleaned, flags=re.DOTALL):
+            add(match.group(1))
+    keyword_pattern = re.compile(
+        r"(?:answers?|final\s+answers?|results?|values?|solutions?|roots?)\s*"
+        r"(?:is|are|=|:)?\s*([^.\n]{1,220})",
+        flags=re.IGNORECASE,
+    )
+    for match in keyword_pattern.finditer(cleaned):
+        add(match.group(1))
+    assignment_pattern = re.compile(
+        r"\b[A-Za-z][A-Za-z0-9_]*(?:\([^()]{0,40}\))?\s*=\s*([^.;\n]{1,220})",
+        flags=re.IGNORECASE,
+    )
+    assignment_segments = [match.group(0) for match in assignment_pattern.finditer(cleaned)]
+    if assignment_segments:
+        add(", ".join(assignment_segments))
+        for segment in assignment_segments:
+            add(segment)
+    if ":" in cleaned:
+        add(cleaned.rsplit(":", 1)[-1])
+    return segments
+
+
+def _clean_math_answer_text(text: str) -> str:
+    cleaned = html.unescape(str(text or "")).strip().strip('"').strip("'").strip()
+    if not cleaned:
+        return ""
+    cleaned = re.sub(r"\\boxed\s*\{([^{}]{1,240})\}", r"\1", cleaned)
+    cleaned = cleaned.replace("−", "-").replace("–", "-").replace("—", "-")
+    cleaned = cleaned.replace("π", "pi").replace("√", "sqrt")
+    cleaned = cleaned.replace("\\{", "{").replace("\\}", "}")
+    cleaned = cleaned.replace("\\pm", "±")
+    unwrapped = re.fullmatch(r"\$([^$]{1,300})\$|\\\((.{1,300})\\\)|\\\[(.{1,300})\\\]", cleaned, flags=re.DOTALL)
+    if unwrapped:
+        cleaned = next((group for group in unwrapped.groups() if group), "").strip()
+    cleaned = re.sub(
+        r"^\s*(?:therefore|thus|hence|so)\s*,?\s+",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    ).strip()
+    cleaned = re.sub(
+        r"^\s*(?:the\s+)?(?:answer|final\s+answer|result|value|solutions?)\s*(?:is|are|=|:)\s*",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    ).strip()
+    if cleaned.endswith(".") and re.fullmatch(r"[-+0-9A-Za-z_±piPIsqrt^*/%()., {}\\=<>; ]+", cleaned[:-1]):
+        cleaned = cleaned[:-1].strip()
+    return cleaned
+
+
+def _has_math_answer_signal(text: str) -> bool:
+    return bool(re.search(
+        r"\d|[+\-*/^=<>%±√]|\\(?:frac|sqrt)|\b(?:pi|sqrt|sin|cos|tan|log|ln|exp)\b",
+        str(text or ""),
+        flags=re.IGNORECASE,
+    ))
+
+
+def _strip_outer_math_container(text: str) -> str:
+    stripped = str(text or "").strip()
+    changed = True
+    while changed and len(stripped) >= 2:
+        changed = False
+        for opener, closer in (("{", "}"), ("[", "]"), ("(", ")")):
+            if stripped.startswith(opener) and stripped.endswith(closer) and _outer_pair_encloses_text(stripped, opener, closer):
+                stripped = stripped[1:-1].strip()
+                changed = True
+                break
+        if stripped.startswith("$") and stripped.endswith("$") and stripped.count("$") == 2:
+            stripped = stripped[1:-1].strip()
+            changed = True
+    return stripped
+
+
+def _outer_pair_encloses_text(text: str, opener: str, closer: str) -> bool:
+    depth = 0
+    for index, char in enumerate(text):
+        if char == opener:
+            depth += 1
+        elif char == closer:
+            depth -= 1
+            if depth == 0 and index != len(text) - 1:
+                return False
+        if depth < 0:
+            return False
+    return depth == 0
+
+
+def _split_top_level_math_parts(text: str) -> list[str]:
+    parts: list[str] = []
+    depth = 0
+    start = 0
+    for index, char in enumerate(text):
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth = max(0, depth - 1)
+        elif depth == 0 and char in ",;":
+            part = text[start:index].strip()
+            if part:
+                parts.append(part)
+            start = index + 1
+    tail = text[start:].strip()
+    if tail:
+        parts.append(tail)
+    return parts or [text.strip()]
+
+
+def _expand_plus_minus_answer_part(part: str) -> list[str]:
+    stripped = str(part or "").strip()
+    match = re.fullmatch(r"(?:±|\+/-)\s*(.+)", stripped)
+    if not match:
+        return [stripped]
+    magnitude = match.group(1).strip()
+    if not magnitude:
+        return []
+    return [f"-({magnitude})", f"({magnitude})"]
+
+
+def _sympy_answer_parts_equivalent(candidate_part: str, reference_part: str) -> tuple[bool, str]:
+    candidate_expr = _safe_sympy_parse_expr(candidate_part)
+    reference_expr = _safe_sympy_parse_expr(reference_part)
+    if candidate_expr is None or reference_expr is None:
+        return (candidate_part.replace(" ", "") == reference_part.replace(" ", ""), "normalized_math_text")
+    try:
+        import sympy as sp
+
+        diff = sp.simplify(candidate_expr - reference_expr)
+        if diff == 0:
+            free_symbols = getattr(candidate_expr, "free_symbols", set()) | getattr(reference_expr, "free_symbols", set())
+            return (True, "symbolic_equivalence" if free_symbols else "numeric_equivalence")
+        free_symbols = getattr(candidate_expr, "free_symbols", set()) | getattr(reference_expr, "free_symbols", set())
+        if not free_symbols:
+            try:
+                candidate_num = complex(sp.N(candidate_expr, 40))
+                reference_num = complex(sp.N(reference_expr, 40))
+                if abs(candidate_num - reference_num) <= 1e-10 * max(1.0, abs(reference_num)):
+                    return (True, "numeric_tolerance")
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return (False, "symbolic_mismatch")
+
+
 def _apply_math_reference_to_candidates(
     *,
     problem: dict[str, Any],
@@ -2420,7 +3151,7 @@ def _apply_math_reference_to_candidates(
     backend: str,
     underlying_model_calls: int,
 ) -> dict[str, Any]:
-    if reference.get("confidence") != "verified_symbolic" or not str(reference.get("answer") or "").strip():
+    if not _is_verified_math_reference(reference):
         return {
             "status": "no_executable_claim",
             "backend": backend,
@@ -2430,6 +3161,8 @@ def _apply_math_reference_to_candidates(
             "reference_operation": reference.get("operation"),
             "reference_reason": reference.get("reason"),
             "underlying_model_calls": underlying_model_calls,
+            "planner_latency_sec": reference.get("planner_latency_sec"),
+            "reference_error_type": reference.get("error_type"),
         }
     reference_answer = str(reference["answer"]).strip()
     canonical_reference, _ = _canonicalize_exact_answer_candidate(problem, reference_answer)
@@ -2443,37 +3176,107 @@ def _apply_math_reference_to_candidates(
     inconclusive = 0
     weak_verified = 0
     candidate_hashes: list[str] = []
+    match_methods: Counter[str] = Counter()
     for attempt in attempts:
         answer = str(attempt.get("parsed_answer") or "").strip()
         if not answer:
             continue
         canonical_answer, canonical_summary = _canonicalize_exact_answer_candidate(problem, answer)
         candidate_norm = _normalize_for_selection(canonical_answer, answer_type=problem["answer_type"])
-        state = "verified" if candidate_norm == reference_norm else "refuted"
+        match = _exact_math_candidate_match(canonical_answer, canonical_reference)
+        state = "verified" if match["matched"] or candidate_norm == reference_norm else "refuted"
+        match_method = str(match.get("method") or ("normalized_exact" if state == "verified" else "none"))
+        match_methods[match_method] += 1
         if weak_single_candidate:
             weak_verified += int(state == "verified")
             inconclusive += 1
-            candidate_hashes.append(stable_hash({"candidate_answer": canonical_answer, "state": f"weak_{state}"}))
+            candidate_hashes.append(stable_hash({
+                "candidate_answer": canonical_answer,
+                "state": f"weak_{state}",
+                "match_method": match_method,
+            }))
             continue
         if state == "verified":
             verified += 1
         else:
             refuted += 1
-        candidate_hashes.append(stable_hash({"candidate_answer": canonical_answer, "state": state}))
+        candidate_hashes.append(stable_hash({
+            "candidate_answer": canonical_answer,
+            "state": state,
+            "match_method": match_method,
+        }))
         attempt["candidate_verifier_state"] = state
         attempt["candidate_verifier_backend"] = backend
         attempt["candidate_verifier_operation"] = reference.get("operation")
+        attempt["candidate_verifier_match_method"] = match_method
         attempt["candidate_verifier_claim_hash"] = stable_hash({
             "reference_answer": canonical_reference,
             "candidate_answer": canonical_answer,
             "operation": reference.get("operation"),
+            "match_method": match_method,
         })
         if canonical_summary.get("changed"):
             attempt["candidate_verifier_canonicalized"] = True
             attempt["parsed_answer"] = canonical_answer
             attempt["parsed_answer_hash"] = stable_hash({"answer": canonical_answer})
+    if not weak_single_candidate and verified == 0:
+        verifier_attempt = {
+            "child_id": stable_hash({
+                "call_id": problem.get("id_hash"),
+                "prompt_kind": "candidate_claim_verifier_answer",
+                "reference_answer": canonical_reference,
+                "claim_hash": reference.get("plan_hash"),
+            }),
+            "child_index": 9101,
+            "prompt_kind": "candidate_claim_verifier_answer",
+            "parsed_answer": canonical_reference,
+            "parsed_answer_hash": stable_hash({"answer": canonical_reference}),
+            "prediction_hash": stable_hash({
+                "reference_answer": canonical_reference,
+                "backend": backend,
+                "operation": reference.get("operation"),
+            }),
+            "latency_sec": 0.0,
+            "status": "answered",
+            "candidate_verifier_state": "verified",
+            "candidate_verifier_backend": backend,
+            "candidate_verifier_operation": reference.get("operation"),
+            "candidate_verifier_match_method": "executable_reference_synthetic",
+            "candidate_verifier_claim_hash": stable_hash({
+                "reference_answer": canonical_reference,
+                "candidate_answer": canonical_reference,
+                "operation": reference.get("operation"),
+                "match_method": "executable_reference_synthetic",
+            }),
+        }
+        attempts.append(verifier_attempt)
+        verified += 1
+        candidate_hashes.append(stable_hash({
+            "candidate_answer": canonical_reference,
+            "state": "verified_synthetic",
+            "match_method": "executable_reference_synthetic",
+        }))
+        match_methods["executable_reference_synthetic"] += 1
+    planner_backend = backend in {"sympy_candidate_reference_planner", "sympy_mc_option_planner"}
+    planner_single_weak = backend == "sympy_candidate_reference_planner" and verified < 2
+    planner_untrusted = planner_backend and not _trust_llm_reference_planner_enabled()
+    for attempt in attempts:
+        if attempt.get("candidate_verifier_backend") == backend:
+            attempt["candidate_verifier_trust"] = (
+                "weak_single_planner"
+                if planner_single_weak
+                else "weak_llm_reference_planner"
+                if planner_untrusted
+                else "trusted"
+            )
     return {
-        "status": "weak_single_candidate_confirmation" if weak_single_candidate else "activated",
+        "status": (
+            "weak_single_candidate_confirmation"
+            if weak_single_candidate
+            else "weak_planner_single_verified"
+            if planner_single_weak
+            else "activated"
+        ),
         "backend": backend,
         "reference_operation": reference.get("operation"),
         "reference_answer_hash": stable_hash({"answer": canonical_reference}),
@@ -2483,7 +3286,10 @@ def _apply_math_reference_to_candidates(
         "weak_verified_count": weak_verified,
         "candidate_count": verified + refuted + inconclusive,
         "candidate_state_hashes": candidate_hashes,
+        "match_method_counts": dict(match_methods),
         "underlying_model_calls": underlying_model_calls,
+        "planner_latency_sec": reference.get("planner_latency_sec"),
+        "reference_error_type": reference.get("error_type"),
         "claim_hash": stable_hash({
             "question_hash": problem.get("question_hash"),
             "reference_answer": canonical_reference,
@@ -2498,6 +3304,9 @@ def _llm_math_reference_claim(
     problem: dict[str, Any],
     attempts: list[dict[str, Any]],
     model: str,
+    eval_id: str | None = None,
+    call_id: str | None = None,
+    logger: "_JsonlLogger | None" = None,
     timeout: float | None,
     max_tokens: int,
 ) -> dict[str, Any]:
@@ -2510,26 +3319,101 @@ def _llm_math_reference_claim(
             "reason": "no_candidate_answers",
             "candidate_count": 0,
         }
-    planner_text = _call_model(
-        model=model,
-        prompt=_candidate_claim_planner_prompt(problem, candidates),
+    planner_model = _candidate_claim_planner_model(model)
+    _log_candidate_claim_planner_lifecycle(
+        logger,
+        event="candidate_claim_planner_start",
+        eval_id=eval_id,
+        call_id=call_id,
+        problem=problem,
+        model=planner_model,
+        planner_kind="exact_candidate_reference",
+        candidate_count=len(candidates),
         timeout=timeout,
-        max_tokens=max_tokens,
     )
-    plan = _parse_json_object(planner_text)
-    if _math_plan_candidate_leak_risk(plan, candidates):
+    started = time.monotonic()
+    try:
+        planner_text = _call_model(
+            model=planner_model,
+            prompt=_candidate_claim_planner_prompt(problem, candidates),
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+    except Exception as exc:
+        latency = round(time.monotonic() - started, 4)
+        _log_candidate_claim_planner_lifecycle(
+            logger,
+            event="candidate_claim_planner_error",
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=planner_model,
+            planner_kind="exact_candidate_reference",
+            candidate_count=len(candidates),
+            timeout=timeout,
+            latency_sec=latency,
+            error_type=type(exc).__name__,
+            error=str(exc)[:240],
+        )
         return {
             "source": "llm_candidate_reference_planner",
-            "operation": str((plan or {}).get("operation") or "none"),
+            "operation": "none",
             "confidence": "abstain",
-            "reason": "candidate_literal_leakage",
-            "plan_hash": stable_hash({"planner_text": planner_text}),
+            "reason": "planner_error",
+            "error_type": type(exc).__name__,
             "candidate_count": len(candidates),
+            "planner_latency_sec": latency,
         }
-    result = _execute_math_tool_plan_text(planner_text)
+    latency = round(time.monotonic() - started, 4)
+    plan = _parse_json_object(planner_text)
+    if not isinstance(plan, dict):
+        result = {"source": "llm_candidate_reference_planner", "operation": "none", "confidence": "abstain", "reason": "planner_json_parse_failed"}
+    else:
+        result = _execute_math_tool_plan_candidates(_math_tool_plan_candidates_from_object(plan), leak_candidates=candidates)
+    underlying_model_calls = 1
+    if not _is_verified_math_reference(result):
+        repair_result, repair_calls = _run_reference_plan_repair(
+            problem=problem,
+            model=planner_model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=timeout,
+            max_tokens=max_tokens,
+            planner_kind="exact_candidate_reference_repair",
+            prompt=_candidate_claim_plan_repair_prompt(problem, candidates, result),
+            initial_result=result,
+            leak_candidates=candidates,
+        )
+        underlying_model_calls += repair_calls
+        if _is_verified_math_reference(repair_result):
+            result = repair_result
+        else:
+            result["repair_attempted"] = bool(repair_calls)
+            result["repair_reason"] = repair_result.get("reason")
+            result["repair_error_type"] = repair_result.get("error_type")
     result["source"] = "llm_candidate_reference_planner"
     result.setdefault("plan_hash", stable_hash({"planner_text": planner_text}))
     result["candidate_count"] = len(candidates)
+    result["planner_latency_sec"] = latency
+    result["underlying_model_calls"] = underlying_model_calls
+    result["planner_model"] = planner_model
+    _log_candidate_claim_planner_lifecycle(
+        logger,
+        event="candidate_claim_planner_end",
+        eval_id=eval_id,
+        call_id=call_id,
+        problem=problem,
+        model=planner_model,
+        planner_kind="exact_candidate_reference",
+        candidate_count=len(candidates),
+        timeout=timeout,
+        latency_sec=latency,
+        status="activated" if _is_verified_math_reference(result) else "abstained",
+        operation=result.get("operation"),
+        reason=result.get("reason"),
+        plan_hash=result.get("plan_hash"),
+    )
     return result
 
 
@@ -2537,32 +3421,222 @@ def _llm_math_reference_claim_for_mc_options(
     *,
     problem: dict[str, Any],
     model: str,
+    eval_id: str | None = None,
+    call_id: str | None = None,
+    logger: "_JsonlLogger | None" = None,
     timeout: float | None,
     max_tokens: int,
 ) -> dict[str, Any]:
-    planner_text = _call_model(
-        model=model,
-        prompt=_mc_option_claim_planner_prompt(problem),
+    planner_model = _candidate_claim_planner_model(model)
+    _log_candidate_claim_planner_lifecycle(
+        logger,
+        event="candidate_claim_planner_start",
+        eval_id=eval_id,
+        call_id=call_id,
+        problem=problem,
+        model=planner_model,
+        planner_kind="mc_option_reference",
+        candidate_count=0,
         timeout=timeout,
-        max_tokens=max_tokens,
     )
-    result = _execute_math_tool_plan_text(planner_text)
+    started = time.monotonic()
+    try:
+        planner_text = _call_model(
+            model=planner_model,
+            prompt=_mc_option_claim_planner_prompt(problem),
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+    except Exception as exc:
+        latency = round(time.monotonic() - started, 4)
+        _log_candidate_claim_planner_lifecycle(
+            logger,
+            event="candidate_claim_planner_error",
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=planner_model,
+            planner_kind="mc_option_reference",
+            candidate_count=0,
+            timeout=timeout,
+            latency_sec=latency,
+            error_type=type(exc).__name__,
+            error=str(exc)[:240],
+        )
+        return {
+            "source": "llm_mc_option_reference_planner",
+            "operation": "none",
+            "confidence": "abstain",
+            "reason": "planner_error",
+            "error_type": type(exc).__name__,
+            "candidate_count": 0,
+            "planner_latency_sec": latency,
+        }
+    latency = round(time.monotonic() - started, 4)
+    plan = _parse_json_object(planner_text)
+    if not isinstance(plan, dict):
+        result = {"source": "llm_mc_option_reference_planner", "operation": "none", "confidence": "abstain", "reason": "planner_json_parse_failed"}
+    else:
+        result = _execute_math_tool_plan_candidates(_math_tool_plan_candidates_from_object(plan))
+    underlying_model_calls = 1
+    if not _is_verified_math_reference(result):
+        repair_result, repair_calls = _run_reference_plan_repair(
+            problem=problem,
+            model=planner_model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=timeout,
+            max_tokens=max_tokens,
+            planner_kind="mc_option_reference_repair",
+            prompt=_mc_option_claim_plan_repair_prompt(problem, result),
+            initial_result=result,
+            leak_candidates=None,
+        )
+        underlying_model_calls += repair_calls
+        if _is_verified_math_reference(repair_result):
+            result = repair_result
+        else:
+            result["repair_attempted"] = bool(repair_calls)
+            result["repair_reason"] = repair_result.get("reason")
+            result["repair_error_type"] = repair_result.get("error_type")
     result["source"] = "llm_mc_option_reference_planner"
     result.setdefault("plan_hash", stable_hash({"planner_text": planner_text}))
     result["candidate_count"] = 0
+    result["planner_latency_sec"] = latency
+    result["underlying_model_calls"] = underlying_model_calls
+    result["planner_model"] = planner_model
+    _log_candidate_claim_planner_lifecycle(
+        logger,
+        event="candidate_claim_planner_end",
+        eval_id=eval_id,
+        call_id=call_id,
+        problem=problem,
+        model=planner_model,
+        planner_kind="mc_option_reference",
+        candidate_count=0,
+        timeout=timeout,
+        latency_sec=latency,
+        status="activated" if _is_verified_math_reference(result) else "abstained",
+        operation=result.get("operation"),
+        reason=result.get("reason"),
+        plan_hash=result.get("plan_hash"),
+    )
     return result
+
+
+def _is_verified_math_reference(result: dict[str, Any]) -> bool:
+    return result.get("confidence") in {"verified_symbolic", "verified_symbolic_consensus"} and bool(str(result.get("answer") or "").strip())
+
+
+def _candidate_claim_planner_model(default_model: str) -> str:
+    return os.environ.get("HLE_CANDIDATE_CLAIM_PLANNER_MODEL", "").strip() or default_model
+
+
+def _run_reference_plan_repair(
+    *,
+    problem: dict[str, Any],
+    model: str,
+    eval_id: str | None,
+    call_id: str | None,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+    planner_kind: str,
+    prompt: str,
+    initial_result: dict[str, Any],
+    leak_candidates: list[str] | None,
+) -> tuple[dict[str, Any], int]:
+    _log_candidate_claim_planner_lifecycle(
+        logger,
+        event="candidate_claim_planner_start",
+        eval_id=eval_id,
+        call_id=call_id,
+        problem=problem,
+        model=model,
+        planner_kind=planner_kind,
+        candidate_count=0,
+        timeout=timeout,
+    )
+    started = time.monotonic()
+    try:
+        repair_text = _call_model(
+            model=model,
+            prompt=prompt,
+            timeout=timeout,
+            max_tokens=max_tokens,
+        )
+    except Exception as exc:
+        latency = round(time.monotonic() - started, 4)
+        _log_candidate_claim_planner_lifecycle(
+            logger,
+            event="candidate_claim_planner_error",
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            planner_kind=planner_kind,
+            candidate_count=0,
+            timeout=timeout,
+            latency_sec=latency,
+            error_type=type(exc).__name__,
+            error=str(exc)[:240],
+        )
+        return (
+            {
+                "source": "llm_candidate_reference_repair",
+                "operation": "none",
+                "confidence": "abstain",
+                "reason": "repair_planner_error",
+                "error_type": type(exc).__name__,
+                "repair_attempted": True,
+                "initial_reference_reason": initial_result.get("reason"),
+                "repair_latency_sec": latency,
+            },
+            1,
+        )
+    latency = round(time.monotonic() - started, 4)
+    plan = _parse_json_object(repair_text)
+    if isinstance(plan, dict):
+        result = _execute_math_tool_plan_candidates(_math_tool_plan_candidates_from_object(plan), leak_candidates=leak_candidates)
+    else:
+        result = {"source": "llm_candidate_reference_repair", "operation": "none", "confidence": "abstain", "reason": "repair_json_parse_failed"}
+    result["source"] = "llm_candidate_reference_repair"
+    result.setdefault("plan_hash", stable_hash({"repair_text": repair_text}))
+    result["repair_attempted"] = True
+    result["repair_latency_sec"] = latency
+    result["initial_reference_operation"] = initial_result.get("operation")
+    result["initial_reference_reason"] = initial_result.get("reason")
+    _log_candidate_claim_planner_lifecycle(
+        logger,
+        event="candidate_claim_planner_end",
+        eval_id=eval_id,
+        call_id=call_id,
+        problem=problem,
+        model=model,
+        planner_kind=planner_kind,
+        candidate_count=0,
+        timeout=timeout,
+        latency_sec=latency,
+        status="activated" if _is_verified_math_reference(result) else "abstained",
+        operation=result.get("operation"),
+        reason=result.get("reason"),
+        plan_hash=result.get("plan_hash"),
+    )
+    return result, 1
 
 
 def _mc_option_claim_planner_prompt(problem: dict[str, Any]) -> str:
     return (
-        "Extract one independent executable math claim for this HLE multipleChoice item. The answer options are "
-        "intentionally hidden; compute the underlying value or symbolic result from the stem only, so it can later "
-        "be matched to exactly one option. Do not answer from memory. If the stem cannot be checked by a small "
-        "SymPy-compatible expression, equation solve, modular computation, derivative, integral, or limit, return "
-        "operation=\"none\". JSON only: "
-        "{\"operation\":\"evaluate|simplify|factor|expand|solve|mod|differentiate|integrate|limit|none\","
+        "Extract up to four independent executable math plans for this HLE multipleChoice item. The answer options "
+        "are intentionally hidden; compute the underlying value or symbolic result from the stem only, so it can "
+        "later be matched to exactly one option. Do not answer from memory. Prefer plans in this order when applicable: "
+        "direct evaluate/mod, solve equation or roots, simplify/factor/expand symbolic result, derivative/integral/limit, "
+        "or python expression for combinatorics, sums, and integer arithmetic. "
+        "If the stem cannot be checked by a small SymPy-compatible plan, return one none plan. JSON only: "
+        "{\"plans\":[{\"operation\":\"evaluate|simplify|factor|expand|solve|mod|differentiate|integrate|limit|python|none\","
         "\"expression\":\"...\",\"equation\":\"...\",\"variable\":\"x\",\"modulus\":\"\",\"point\":\"\","
-        "\"lower\":\"\",\"upper\":\"\",\"order\":\"1\"}. No imports, no code, no explanation.\n\n"
+        "\"lower\":\"\",\"upper\":\"\",\"order\":\"1\"}]}. No imports, no code, no explanation.\n\n"
         f"Question stem without answer options:\n{problem['_question']}"
     )
 
@@ -2590,15 +3664,65 @@ def _unique_candidate_answers_for_claim_planner(problem: dict[str, Any], attempt
 def _candidate_claim_planner_prompt(problem: dict[str, Any], candidates: list[str]) -> str:
     candidate_lines = "\n".join(f"{idx}. {answer}" for idx, answer in enumerate(candidates, start=1))
     return (
-        "Extract one independent executable math claim that can verify candidate answers for this HLE exactMatch item. "
+        "Extract up to four independent executable math plans that can verify candidate answers for this HLE exactMatch item. "
         "Use the candidates only to infer answer format; do not copy a candidate into the expression/equation. "
-        "If the problem cannot be checked by a small SymPy-compatible expression, equation solve, modular computation, "
-        "derivative, integral, or limit, return operation=\"none\". JSON only: "
-        "{\"operation\":\"evaluate|simplify|factor|expand|solve|mod|differentiate|integrate|limit|none\","
-        "\"expression\":\"...\",\"equation\":\"...\",\"variable\":\"x\",\"modulus\":\"\",\"point\":\"\",\"lower\":\"\",\"upper\":\"\",\"order\":\"1\"}. "
+        "Prefer plans in this order when applicable: direct evaluate/mod, solve equation or roots, simplify/factor/expand "
+        "symbolic result, derivative/integral/limit, or python expression for combinatorics, sums, and integer arithmetic. "
+        "If one plan is uncertain, include an alternate plan rather than "
+        "abstaining immediately. If the problem cannot be checked by a small SymPy-compatible plan, return one none plan. "
+        "JSON only: {\"plans\":[{\"operation\":\"evaluate|simplify|factor|expand|solve|mod|differentiate|integrate|limit|python|none\","
+        "\"expression\":\"...\",\"equation\":\"...\",\"variable\":\"x\",\"modulus\":\"\",\"point\":\"\",\"lower\":\"\",\"upper\":\"\",\"order\":\"1\"}]}. "
         "No imports, no code, no explanation.\n\n"
         f"Question:\n{problem['_question']}\n\nCandidate answers:\n{candidate_lines}"
     )
+
+
+def _candidate_claim_plan_repair_prompt(
+    problem: dict[str, Any],
+    candidates: list[str],
+    initial_result: dict[str, Any],
+) -> str:
+    candidate_lines = "\n".join(f"{idx}. {answer}" for idx, answer in enumerate(candidates, start=1))
+    failure_summary = _reference_plan_failure_summary(initial_result)
+    return (
+        "The previous executable math plan failed. Produce corrected executable plans for the same HLE exactMatch item. "
+        "Use the question text as the source of computation; use candidate answers only for expected answer format. "
+        "Do not copy a candidate answer into expression/equation. Common repairs: use solve for equations or roots; "
+        "use simplify/factor/expand for symbolic answers; strip prose, assignments, and side conditions from expressions; "
+        "use derivative/integral/limit operations when the wording asks for them; use python expression for comb/factorial/sum/range. "
+        "Return JSON only: "
+        "{\"plans\":[{\"operation\":\"evaluate|simplify|factor|expand|solve|mod|differentiate|integrate|limit|python|none\","
+        "\"expression\":\"...\",\"equation\":\"...\",\"variable\":\"x\",\"modulus\":\"\",\"point\":\"\",\"lower\":\"\","
+        "\"upper\":\"\",\"order\":\"1\"}]}. No explanation.\n\n"
+        f"Previous failure:\n{failure_summary}\n\n"
+        f"Question:\n{problem['_question']}\n\nCandidate answers:\n{candidate_lines}"
+    )
+
+
+def _mc_option_claim_plan_repair_prompt(problem: dict[str, Any], initial_result: dict[str, Any]) -> str:
+    failure_summary = _reference_plan_failure_summary(initial_result)
+    return (
+        "The previous executable math plan failed. Produce corrected executable plans for this HLE multipleChoice stem. "
+        "The answer options are hidden; compute the underlying value or symbolic result from the stem only. "
+        "Common repairs: use solve for equations or roots; use simplify/factor/expand for symbolic answers; strip prose, "
+        "assignments, and side conditions from expressions; use derivative/integral/limit operations when the wording asks; "
+        "use python expression for comb/factorial/sum/range. "
+        "Return JSON only: {\"plans\":[{\"operation\":\"evaluate|simplify|factor|expand|solve|mod|differentiate|integrate|limit|python|none\","
+        "\"expression\":\"...\",\"equation\":\"...\",\"variable\":\"x\",\"modulus\":\"\",\"point\":\"\",\"lower\":\"\","
+        "\"upper\":\"\",\"order\":\"1\"}]}. No explanation.\n\n"
+        f"Previous failure:\n{failure_summary}\n\n"
+        f"Question stem without answer options:\n{problem['_question']}"
+    )
+
+
+def _reference_plan_failure_summary(result: dict[str, Any]) -> str:
+    summary = {
+        "operation": result.get("operation"),
+        "reason": result.get("reason"),
+        "plan_failure_reasons": result.get("plan_failure_reasons"),
+        "plan_count": result.get("plan_count"),
+    }
+    return json.dumps({key: value for key, value in summary.items() if value not in (None, {}, [])}, sort_keys=True)
 
 
 def _math_plan_candidate_leak_risk(plan: dict[str, Any] | None, candidates: list[str]) -> bool:
@@ -2615,6 +3739,7 @@ def _math_plan_candidate_leak_risk(plan: dict[str, Any] | None, candidates: list
         "differentiate",
         "integrate",
         "limit",
+        "python",
     }:
         return False
     candidate_norms = {
@@ -2625,7 +3750,7 @@ def _math_plan_candidate_leak_risk(plan: dict[str, Any] | None, candidates: list
     if not candidate_norms:
         return False
     expression_norm = _normalize_math_expression(str(plan.get("expression") or "")).replace(" ", "")
-    if operation in {"evaluate", "simplify", "factor", "expand", "mod", "differentiate", "integrate", "limit"} and expression_norm in candidate_norms:
+    if operation in {"evaluate", "simplify", "factor", "expand", "mod", "differentiate", "integrate", "limit", "python"} and expression_norm in candidate_norms:
         return True
     equation = _normalize_math_expression(str(plan.get("equation") or "")).replace(" ", "")
     variable = str(plan.get("variable") or "x").strip() or "x"
@@ -2633,6 +3758,56 @@ def _math_plan_candidate_leak_risk(plan: dict[str, Any] | None, candidates: list
         f"{candidate}={variable}" for candidate in candidate_norms
     }
     return operation == "solve" and equation in trivial_equations
+
+
+def _log_candidate_claim_planner_lifecycle(
+    logger: "_JsonlLogger | None",
+    *,
+    event: str,
+    eval_id: str | None,
+    call_id: str | None,
+    problem: dict[str, Any],
+    model: str | None,
+    planner_kind: str,
+    candidate_count: int,
+    timeout: float | None,
+    latency_sec: float | None = None,
+    status: str | None = None,
+    operation: str | None = None,
+    reason: str | None = None,
+    plan_hash: str | None = None,
+    error_type: str | None = None,
+    error: str | None = None,
+) -> None:
+    if not eval_id or not call_id or not model:
+        return
+    payload: dict[str, Any] = {
+        "event": event,
+        "eval_id": eval_id,
+        "call_id": call_id,
+        "problem_id_hash": problem["id_hash"],
+        "question_hash": problem["question_hash"],
+        "model": model,
+        "variant": "assumption_agent_recursive_verify",
+        "planner_kind": planner_kind,
+        "candidate_count": candidate_count,
+        "timeout_sec": timeout,
+    }
+    if latency_sec is not None:
+        payload["latency_sec"] = latency_sec
+    if status is not None:
+        payload["status"] = status
+    if operation is not None:
+        payload["operation"] = operation
+    if reason is not None:
+        payload["reason"] = reason
+    if plan_hash is not None:
+        payload["plan_hash"] = plan_hash
+    if error_type is not None:
+        payload["error_type"] = error_type
+    if error is not None:
+        payload["error"] = error
+    _log_event(logger, payload)
 
 
 def _log_candidate_claim_planner_event(
@@ -2659,10 +3834,12 @@ def _log_candidate_claim_planner_event(
             "variant": "assumption_agent_recursive_verify",
             "status": (summary or {}).get(
                 "status",
-                "activated" if reference.get("confidence") == "verified_symbolic" else "abstained",
+                "activated" if _is_verified_math_reference(reference) else "abstained",
             ),
             "operation": reference.get("operation"),
             "reason": reference.get("reason"),
+            "error_type": reference.get("error_type"),
+            "planner_latency_sec": reference.get("planner_latency_sec"),
             "plan_hash": reference.get("plan_hash"),
             "claim_hash": (summary or {}).get("claim_hash"),
             "verified_count": (summary or {}).get("verified_count", 0),
@@ -2673,6 +3850,8 @@ def _log_candidate_claim_planner_event(
 
 
 def _should_run_candidate_claim_verifier(problem: dict[str, Any]) -> bool:
+    if os.environ.get("HLE_DISABLE_CANDIDATE_CLAIM_VERIFIER", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return False
     if problem.get("answer_type") == "multipleChoice":
         _, options = _split_multiple_choice_question(problem)
         return _is_math_like_problem(problem) and len(options) >= 2
@@ -2755,6 +3934,27 @@ def _run_math_tool_attempt(
             result = _execute_math_tool_plan_text(planner_text)
             result.setdefault("plan_hash", stable_hash({"planner_text": planner_text}))
             result.setdefault("source", "llm_planner")
+            if not result.get("answer") and _math_tool_plan_repair_enabled():
+                initial_result = dict(result)
+                repair_text = _call_model(
+                    model=model,
+                    prompt=_math_tool_plan_repair_prompt(problem, initial_result),
+                    timeout=timeout,
+                    max_tokens=max_tokens,
+                )
+                underlying_calls += 1
+                repair_result = _execute_math_tool_plan_text(repair_text)
+                repair_result.setdefault("plan_hash", stable_hash({"planner_text": repair_text}))
+                repair_result["source"] = "llm_planner_repair"
+                repair_result["initial_plan_reason"] = initial_result.get("reason")
+                repair_result["initial_plan_operation"] = initial_result.get("operation")
+                if repair_result.get("answer"):
+                    result = repair_result
+                else:
+                    result["repair_reason"] = repair_result.get("reason")
+                    result["repair_operation"] = repair_result.get("operation")
+                    result["repair_plan_hash"] = repair_result.get("plan_hash")
+                    result["repair_underlying_model_calls"] = 1
         status = "answered" if result.get("answer") else "abstained"
         answer = str(result.get("answer") or "").strip()
         summary = {
@@ -2764,8 +3964,13 @@ def _run_math_tool_attempt(
             "operation": result.get("operation"),
             "confidence": result.get("confidence"),
             "plan_hash": result.get("plan_hash"),
+            "plan_count": result.get("plan_count"),
+            "plan_success_count": result.get("plan_success_count"),
+            "plan_agreement_count": result.get("plan_agreement_count"),
             "answer_hash": stable_hash({"answer": answer}) if answer else None,
             "reason": result.get("reason"),
+            "initial_plan_reason": result.get("initial_plan_reason"),
+            "repair_reason": result.get("repair_reason"),
             "underlying_model_calls": underlying_calls,
             "latency_sec": round(time.monotonic() - started, 4),
         }
@@ -2844,6 +4049,8 @@ def _deterministic_math_tool_answer(problem: dict[str, Any]) -> dict[str, Any]:
     question = str(problem.get("_question") or "")
     for result in (
         _deterministic_binomial_or_factorial(question),
+        _deterministic_equation_answer(question),
+        _deterministic_symbolic_transform_answer(question),
         _deterministic_expression_answer(question),
     ):
         if result.get("answer"):
@@ -2899,6 +4106,304 @@ def _deterministic_binomial_or_factorial(question: str) -> dict[str, Any]:
             except Exception:
                 pass
     return {}
+
+
+def _deterministic_symbolic_transform_answer(question: str) -> dict[str, Any]:
+    text = str(question or "")
+    if re.search(r"\b(?:differentiate|derivative)\b|d\s*/\s*d[A-Za-z]\b", text, flags=re.IGNORECASE):
+        for expression in _candidate_operation_expressions(text, "differentiate"):
+            variable = _infer_expression_variable(expression, text)
+            if not variable:
+                continue
+            answer = _differentiate_safe_expression(expression, variable, "1")
+            if answer:
+                return _deterministic_transform_result("differentiate", expression, answer, variable=variable)
+    if re.search(r"\b(?:integrate|integral|antiderivative)\b", text, flags=re.IGNORECASE):
+        lower, upper = _extract_integral_bounds(text)
+        for expression in _candidate_operation_expressions(text, "integrate"):
+            variable = _infer_expression_variable(expression, text)
+            if not variable:
+                continue
+            answer = _integrate_safe_expression(expression, variable, lower or "", upper or "")
+            if answer:
+                return _deterministic_transform_result("integrate", expression, answer, variable=variable, lower=lower, upper=upper)
+    if re.search(r"\blimit\b|(?:->|→|approaches|tends\s+to)", text, flags=re.IGNORECASE):
+        for expression in _candidate_operation_expressions(text, "limit"):
+            variable = _infer_expression_variable(expression, text)
+            if not variable:
+                continue
+            point = _extract_limit_point(text, variable)
+            if not point:
+                continue
+            answer = _limit_safe_expression(expression, variable, point)
+            if answer:
+                return _deterministic_transform_result("limit", expression, answer, variable=variable, point=point)
+    transform_triggers = (
+        ("factor", r"\b(?:factor|factorize)\b"),
+        ("expand", r"\bexpand\b"),
+        ("simplify", r"\b(?:simplify|reduce)\b"),
+    )
+    for operation, trigger in transform_triggers:
+        if not re.search(trigger, text, flags=re.IGNORECASE):
+            continue
+        for expression in _candidate_operation_expressions(text, operation):
+            parsed = _safe_sympy_parse_expr(expression)
+            if parsed is None:
+                continue
+            value = _apply_safe_sympy_transform(operation, parsed)
+            if value is None:
+                continue
+            return _deterministic_transform_result(operation, expression, _format_sympy_operation_answer(operation, value))
+    return {}
+
+
+def _deterministic_transform_result(
+    operation: str,
+    expression: str,
+    answer: str,
+    **extra: Any,
+) -> dict[str, Any]:
+    payload = {
+        "operation": f"deterministic_{operation}",
+        "expression": expression,
+        **{key: value for key, value in extra.items() if value not in (None, "")},
+    }
+    return {
+        "answer": answer,
+        "operation": operation,
+        "confidence": "verified_symbolic",
+        "source": "deterministic_transform_solver",
+        "plan_hash": stable_hash(payload),
+    }
+
+
+def _candidate_operation_expressions(question: str, operation: str) -> list[str]:
+    text = str(question or "")
+    raw_candidates: list[str] = []
+    raw_candidates.extend(candidate for candidate in _math_container_texts(text) if "=" not in candidate)
+    keyword_patterns = {
+        "differentiate": [
+            r"\b(?:differentiate|derivative\s+of)\s+([^?.\n]{1,180})",
+            r"\bd\s*/\s*d[A-Za-z]\s*(?:of)?\s*([^?.\n]{1,180})",
+        ],
+        "integrate": [
+            r"\b(?:integrate|integral\s+of|antiderivative\s+of)\s+([^?.\n]{1,180})",
+        ],
+        "limit": [
+            r"\blimit\s+of\s+([^?.\n]{1,180})",
+            r"\blim(?:it)?\s*([^?.\n]{1,180})",
+        ],
+        "simplify": [
+            r"\b(?:simplify|reduce)\s+([^?.\n]{1,180})",
+        ],
+        "factor": [
+            r"\b(?:factor|factorize)\s+([^?.\n]{1,180})",
+        ],
+        "expand": [
+            r"\bexpand\s+([^?.\n]{1,180})",
+        ],
+    }
+    for pattern in keyword_patterns.get(operation, []):
+        raw_candidates.extend(match.group(1) for match in re.finditer(pattern, text, flags=re.IGNORECASE))
+    cleaned: list[str] = []
+    for candidate in raw_candidates:
+        normalized = _normalize_math_expression(candidate)
+        normalized = _strip_operation_expression_tail(normalized)
+        if not normalized or "=" in normalized or len(normalized) > 180:
+            continue
+        parsed = _safe_sympy_parse_expr(normalized)
+        if parsed is None:
+            continue
+        if normalized not in cleaned:
+            cleaned.append(normalized)
+    return cleaned[:8]
+
+
+def _strip_operation_expression_tail(expression: str) -> str:
+    expression = str(expression or "")
+    expression = re.sub(
+        r"\b(?:with\s+respect\s+to|wrt|as|when|where|from|between|over|for|at)\b.*$",
+        "",
+        expression,
+        flags=re.IGNORECASE,
+    )
+    expression = re.sub(r"\s*d[A-Za-z]\s*$", "", expression)
+    return expression.strip(" =.,;:")
+
+
+def _extract_integral_bounds(question: str) -> tuple[str | None, str | None]:
+    text = _normalize_math_expression(question)
+    match = re.search(r"\bfrom\s+([^,; ]{1,40})\s+to\s+([^,; ]{1,40})\b", text, flags=re.IGNORECASE)
+    if not match:
+        match = re.search(r"\bbetween\s+([^,; ]{1,40})\s+and\s+([^,; ]{1,40})\b", text, flags=re.IGNORECASE)
+    if not match:
+        return (None, None)
+    lower = _normalize_math_expression(match.group(1))
+    upper = _normalize_math_expression(match.group(2))
+    if _safe_sympy_parse_expr(lower) is None or _safe_sympy_parse_expr(upper) is None:
+        return (None, None)
+    return (lower, upper)
+
+
+def _extract_limit_point(question: str, variable: str) -> str | None:
+    text = str(question or "").replace("→", "->")
+    patterns = [
+        rf"\b{re.escape(variable)}\s*(?:->|approaches|tends\s+to)\s*([^,;.\n ]{{1,60}})",
+        rf"\bas\s+{re.escape(variable)}\s+(?:approaches|tends\s+to)\s*([^,;.\n ]{{1,60}})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if not match:
+            continue
+        point = _normalize_math_expression(match.group(1))
+        parsed = _safe_sympy_parse_expr(point)
+        if parsed is not None and not getattr(parsed, "free_symbols", None):
+            return point
+    return None
+
+
+def _deterministic_equation_answer(question: str) -> dict[str, Any]:
+    for equation in _candidate_math_equations(question):
+        variable = _infer_equation_variable(equation, question)
+        if not variable:
+            continue
+        answer = _solve_safe_equation(equation, variable)
+        if answer:
+            return {
+                "answer": answer,
+                "operation": "solve",
+                "confidence": "verified_symbolic",
+                "source": "deterministic_equation_solver",
+                "plan_hash": stable_hash({
+                    "operation": "deterministic_solve",
+                    "equation": equation,
+                    "variable": variable,
+                }),
+            }
+    for expression in _candidate_root_expressions(question):
+        variable = _infer_expression_variable(expression, question)
+        if not variable:
+            continue
+        equation = f"{expression} = 0"
+        answer = _solve_safe_equation(equation, variable)
+        if answer:
+            return {
+                "answer": answer,
+                "operation": "solve",
+                "confidence": "verified_symbolic",
+                "source": "deterministic_root_solver",
+                "plan_hash": stable_hash({
+                    "operation": "deterministic_roots",
+                    "expression": expression,
+                    "variable": variable,
+                }),
+            }
+    return {}
+
+
+def _candidate_math_equations(question: str) -> list[str]:
+    text = str(question or "")
+    if not re.search(r"\b(?:solve|solution|solutions|root|roots|zero|zeros|equation|satisf(?:y|ies))\b|=", text, flags=re.IGNORECASE):
+        return []
+    raw_candidates: list[str] = []
+    raw_candidates.extend(_math_container_texts(text))
+    equation_pattern = re.compile(
+        r"([A-Za-z0-9_\\{}^+\-*/%().\s]{1,180}=[A-Za-z0-9_\\{}^+\-*/%().\s]{1,120})"
+    )
+    raw_candidates.extend(match.group(1) for match in equation_pattern.finditer(text))
+    cleaned: list[str] = []
+    for candidate in raw_candidates:
+        normalized = _normalize_math_expression(candidate)
+        if "=" not in normalized or re.search(r"[<>]=?|!=", normalized):
+            continue
+        lhs_rhs = [part.strip() for part in normalized.split("=", 1)]
+        if len(lhs_rhs) != 2 or not lhs_rhs[0] or not lhs_rhs[1]:
+            continue
+        equation = f"{lhs_rhs[0]} = {lhs_rhs[1]}"
+        if len(equation) <= 220 and equation not in cleaned:
+            cleaned.append(equation)
+    return cleaned[:8]
+
+
+def _candidate_root_expressions(question: str) -> list[str]:
+    text = str(question or "")
+    if not re.search(r"\b(?:roots?|zeros?|solve)\b", text, flags=re.IGNORECASE):
+        return []
+    raw_candidates: list[str] = []
+    raw_candidates.extend(candidate for candidate in _math_container_texts(text) if "=" not in candidate)
+    for match in re.finditer(
+        r"\b(?:roots?|zeros?)\s+of\s+([^?.\n]{1,180})",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        raw_candidates.append(match.group(1))
+    for match in re.finditer(
+        r"\bsolve\s+([^?.\n=]{1,180})",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        raw_candidates.append(match.group(1))
+    cleaned: list[str] = []
+    for candidate in raw_candidates:
+        normalized = _normalize_math_expression(candidate)
+        normalized = re.sub(
+            r"\b(?:for|over|in|where|with|and|find|the|roots?|zeros?|solutions?|solve)\b.*$",
+            "",
+            normalized,
+            flags=re.IGNORECASE,
+        ).strip(" =.,;:")
+        if not normalized or "=" in normalized or len(normalized) > 180:
+            continue
+        parsed = _safe_sympy_parse_expr(normalized)
+        if parsed is None or not getattr(parsed, "free_symbols", None):
+            continue
+        if normalized not in cleaned:
+            cleaned.append(normalized)
+    return cleaned[:8]
+
+
+def _math_container_texts(text: str) -> list[str]:
+    candidates: list[str] = []
+    for pattern in (
+        r"\$([^$]{1,240})\$",
+        r"\\\((.{1,240})\\\)",
+        r"\\\[(.{1,240})\\\]",
+        r"`([^`]{1,240})`",
+    ):
+        candidates.extend(match.group(1) for match in re.finditer(pattern, str(text or ""), flags=re.DOTALL))
+    return candidates
+
+
+def _infer_equation_variable(equation: str, question: str) -> str | None:
+    if "=" not in equation:
+        return None
+    lhs_text, rhs_text = equation.split("=", 1)
+    lhs = _safe_sympy_parse_expr(lhs_text)
+    rhs = _safe_sympy_parse_expr(rhs_text)
+    if lhs is None or rhs is None:
+        return None
+    return _choose_safe_symbol(
+        sorted(str(symbol) for symbol in (set(getattr(lhs, "free_symbols", set())) | set(getattr(rhs, "free_symbols", set())))),
+        question,
+    )
+
+
+def _infer_expression_variable(expression: str, question: str) -> str | None:
+    parsed = _safe_sympy_parse_expr(expression)
+    if parsed is None:
+        return None
+    return _choose_safe_symbol(sorted(str(symbol) for symbol in getattr(parsed, "free_symbols", set())), question)
+
+
+def _choose_safe_symbol(symbols: list[str], question: str) -> str | None:
+    safe_symbols = [symbol for symbol in symbols if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", symbol)]
+    if len(safe_symbols) == 1:
+        return safe_symbols[0]
+    for match in re.finditer(r"\b(?:for|solve\s+for|in terms of)\s+([A-Za-z][A-Za-z0-9_]*)\b", str(question or ""), flags=re.IGNORECASE):
+        symbol = match.group(1)
+        if symbol in safe_symbols:
+            return symbol
+    return None
 
 
 def _deterministic_expression_answer(question: str) -> dict[str, Any]:
@@ -3009,22 +4514,152 @@ def _safe_sympy_parse_expr(expr: str) -> Any:
         return None
 
 
+def _safe_sympy_parse_plan_expression(expr: str) -> Any:
+    for candidate in _plan_expression_parse_candidates(expr):
+        parsed = _safe_sympy_parse_expr(candidate)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _plan_expression_parse_candidates(expr: str) -> list[str]:
+    normalized = _normalize_math_expression(expr)
+    candidates: list[str] = []
+
+    def add(candidate: str) -> None:
+        candidate = _strip_operation_expression_tail(_normalize_math_expression(candidate))
+        if candidate and len(candidate) <= 220 and candidate not in candidates:
+            candidates.append(candidate)
+
+    add(normalized)
+    for segment in _math_answer_candidate_segments(str(expr or "")):
+        add(segment)
+    if "=" in normalized:
+        lhs, rhs = normalized.split("=", 1)
+        add(rhs)
+        add(lhs)
+    assignment_stripped = re.sub(
+        r"^\s*[A-Za-z][A-Za-z0-9_]*(?:\([^()]{0,40}\))?\s*=\s*",
+        "",
+        normalized,
+    )
+    add(assignment_stripped)
+    return candidates[:8]
+
+
 def _math_tool_planner_prompt(problem: dict[str, Any]) -> str:
     return (
-        "Extract a safe symbolic computation plan for this HLE math exactMatch item. "
-        "Do not answer from memory. Do not write code. If the question needs a proof, diagram, hidden context, "
-        "or cannot be reduced to a small expression/equation/modular computation, return operation=\"none\". "
-        "Allowed JSON only: {\"operation\":\"evaluate|simplify|factor|expand|solve|mod|differentiate|integrate|limit|none\","
-        "\"expression\":\"...\",\"equation\":\"...\",\"variable\":\"x\",\"modulus\":\"\",\"point\":\"\",\"lower\":\"\",\"upper\":\"\",\"order\":\"1\"}. "
-        "Use plain SymPy-compatible syntax, no imports, no code.\n\n"
+        "Extract up to four independent executable math plans for this HLE math exactMatch item. "
+        "Do not answer from memory and do not copy a guessed final answer into an expression. Prefer a safe executable "
+        "plan whenever the question can be computed, simplified, solved, counted, checked modulo an integer, or reduced "
+        "to a finite arithmetic/combinatorics expression. If one plan is uncertain, include an alternate plan rather "
+        "than abstaining immediately. Use python only as a side-effect-free expression for finite sums/products, "
+        "combinations, factorials, integer arithmetic, or fractions. Return none only when no small executable check "
+        "is possible. JSON only: {\"plans\":[{\"operation\":\"evaluate|simplify|factor|expand|solve|mod|differentiate|integrate|limit|python|none\","
+        "\"expression\":\"...\",\"equation\":\"...\",\"variable\":\"x\",\"modulus\":\"\",\"point\":\"\",\"lower\":\"\",\"upper\":\"\",\"order\":\"1\"}]}. "
+        "Use plain SymPy-compatible syntax or a side-effect-free Python expression, no imports, no statements, no code blocks.\n\n"
         f"Question:\n{problem['_question']}"
     )
+
+
+def _math_tool_plan_repair_prompt(problem: dict[str, Any], initial_result: dict[str, Any]) -> str:
+    failure_summary = _reference_plan_failure_summary(initial_result)
+    return (
+        "The previous executable math plan for this HLE exactMatch item failed or abstained. Produce corrected "
+        "executable plans. Use the question text as the only source of computation; do not invent or copy a final "
+        "answer. Common repairs: convert prose into an equation, use solve for roots, use simplify/factor/expand "
+        "for symbolic results, use derivative/integral/limit operations when explicitly asked, or use a python "
+        "expression for finite sums/products/combinatorics/modular arithmetic. If the result is still not executable, "
+        "return one none plan. JSON only: {\"plans\":[{\"operation\":\"evaluate|simplify|factor|expand|solve|mod|differentiate|integrate|limit|python|none\","
+        "\"expression\":\"...\",\"equation\":\"...\",\"variable\":\"x\",\"modulus\":\"\",\"point\":\"\",\"lower\":\"\","
+        "\"upper\":\"\",\"order\":\"1\"}]}. No explanation.\n\n"
+        f"Previous failure:\n{failure_summary}\n\nQuestion:\n{problem['_question']}"
+    )
+
+
+def _math_tool_plan_repair_enabled() -> bool:
+    return os.environ.get("HLE_DISABLE_MATH_TOOL_PLAN_REPAIR", "").strip().lower() not in {"1", "true", "yes", "on"}
 
 
 def _execute_math_tool_plan_text(text: str) -> dict[str, Any]:
     plan = _parse_json_object(text)
     if not isinstance(plan, dict):
         return {"source": "llm_planner", "operation": "none", "confidence": "abstain", "reason": "planner_json_parse_failed"}
+    return _execute_math_tool_plan_candidates(_math_tool_plan_candidates_from_object(plan))
+
+
+def _math_tool_plan_candidates_from_object(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    plans = plan.get("plans")
+    if isinstance(plans, list):
+        return [candidate for candidate in plans if isinstance(candidate, dict)][:6]
+    return [plan]
+
+
+def _execute_math_tool_plan_candidates(
+    plans: list[dict[str, Any]],
+    *,
+    leak_candidates: list[str] | None = None,
+) -> dict[str, Any]:
+    if not plans:
+        return {"source": "llm_planner", "operation": "none", "confidence": "abstain", "reason": "planner_json_parse_failed"}
+    failures: list[dict[str, Any]] = []
+    successes: list[dict[str, Any]] = []
+    for index, plan in enumerate(plans):
+        operation = str(plan.get("operation") or "none").strip().lower()
+        if leak_candidates and _math_plan_candidate_leak_risk(plan, leak_candidates):
+            failures.append({"plan_index": index, "operation": operation or "none", "reason": "candidate_literal_leakage"})
+            continue
+        result = _execute_math_tool_plan(plan)
+        result["plan_index"] = index
+        result["plan_count"] = len(plans)
+        if result.get("confidence") == "verified_symbolic" and str(result.get("answer") or "").strip():
+            successes.append(result)
+            continue
+        failures.append({
+            "plan_index": index,
+            "operation": result.get("operation") or operation or "none",
+            "reason": result.get("reason") or "not_verified",
+        })
+    if successes:
+        grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for result in successes:
+            answer_norm = _normalize_exact(str(result.get("answer") or ""))
+            grouped[answer_norm or str(result.get("answer") or "").strip()].append(result)
+        ranked_successes = sorted(
+            grouped.items(),
+            key=lambda item: (-len(item[1]), int(item[1][0].get("plan_index", 0) or 0)),
+        )
+        top_norm, top_results = ranked_successes[0]
+        runner_up_count = len(ranked_successes[1][1]) if len(ranked_successes) > 1 else 0
+        selected = dict(top_results[0])
+        selected["plan_success_count"] = len(successes)
+        selected["plan_agreement_count"] = len(top_results)
+        selected["plan_count"] = len(plans)
+        selected["agreement_answer_hash"] = stable_hash({"answer_norm": top_norm})
+        if len(top_results) >= 2 and len(top_results) > runner_up_count:
+            selected["confidence"] = "verified_symbolic_consensus"
+            selected["consensus_plan_indices"] = [
+                int(result.get("plan_index", 0) or 0)
+                for result in top_results
+            ]
+        if failures:
+            selected["prior_plan_failures"] = failures[:5]
+        return selected
+    failure_reasons = Counter(str(failure.get("reason") or "unknown") for failure in failures)
+    first = failures[0] if failures else {}
+    dominant_reason = failure_reasons.most_common(1)[0][0] if failure_reasons else "all_candidate_plans_failed"
+    return {
+        "source": "llm_planner",
+        "operation": first.get("operation") or "none",
+        "confidence": "abstain",
+        "reason": dominant_reason if len(failure_reasons) == 1 else "all_candidate_plans_failed",
+        "plan_count": len(plans),
+        "plan_failure_reasons": dict(failure_reasons),
+        "plan_failures": failures[:6],
+    }
+
+
+def _execute_math_tool_plan(plan: dict[str, Any]) -> dict[str, Any]:
     operation = str(plan.get("operation") or "none").strip().lower()
     if operation not in {
         "evaluate",
@@ -3036,26 +4671,36 @@ def _execute_math_tool_plan_text(text: str) -> dict[str, Any]:
         "differentiate",
         "integrate",
         "limit",
+        "python",
     }:
         return {"source": "llm_planner", "operation": operation or "none", "confidence": "abstain", "reason": "planner_abstained"}
     try:
         if operation in {"evaluate", "simplify", "factor", "expand"}:
-            parsed = _safe_sympy_parse_expr(str(plan.get("expression") or ""))
+            parsed = _safe_sympy_parse_plan_expression(str(plan.get("expression") or ""))
             if parsed is None:
                 return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "unsafe_or_symbolic_expression"}
             if operation == "evaluate" and getattr(parsed, "free_symbols", None):
-                return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "unsafe_or_symbolic_expression"}
+                value = _apply_safe_sympy_transform("simplify", parsed)
+                if value is None:
+                    return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "unsafe_or_symbolic_expression"}
+                return {
+                    "source": "llm_planner",
+                    "operation": "simplify",
+                    "answer": _format_sympy_operation_answer("simplify", value),
+                    "confidence": "verified_symbolic",
+                    "coerced_from_operation": "evaluate",
+                }
             value = _apply_safe_sympy_transform(operation, parsed)
             if value is None:
                 return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "transform_failed"}
             return {
                 "source": "llm_planner",
                 "operation": operation,
-                "answer": _format_sympy_answer(value),
+                "answer": _format_sympy_operation_answer(operation, value),
                 "confidence": "verified_symbolic",
             }
         if operation == "mod":
-            parsed = _safe_sympy_parse_expr(str(plan.get("expression") or ""))
+            parsed = _safe_sympy_parse_plan_expression(str(plan.get("expression") or ""))
             modulus = int(str(plan.get("modulus") or "0"))
             if parsed is None or getattr(parsed, "free_symbols", None) or modulus <= 1:
                 return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "unsafe_mod_plan"}
@@ -3100,6 +4745,11 @@ def _execute_math_tool_plan_text(text: str) -> dict[str, Any]:
             if not answer:
                 return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "limit_failed"}
             return {"source": "llm_planner", "operation": operation, "answer": answer, "confidence": "verified_symbolic"}
+        if operation == "python":
+            answer = _evaluate_safe_python_expression(str(plan.get("expression") or ""))
+            if not answer:
+                return {"source": "llm_planner", "operation": operation, "confidence": "abstain", "reason": "unsafe_python_expression"}
+            return {"source": "llm_planner", "operation": operation, "answer": answer, "confidence": "verified_symbolic"}
     except Exception as exc:
         return {
             "source": "llm_planner",
@@ -3107,6 +4757,161 @@ def _execute_math_tool_plan_text(text: str) -> dict[str, Any]:
             "confidence": "abstain",
             "reason": type(exc).__name__,
         }
+
+
+def _evaluate_safe_python_expression(expression: str) -> str | None:
+    expression = str(expression or "").strip()
+    if not expression or len(expression) > 500 or "__" in expression:
+        return None
+    try:
+        tree = ast.parse(expression, mode="eval")
+        _validate_safe_python_ast(tree)
+        env = _safe_python_eval_env()
+        value = eval(compile(tree, "<hle_safe_python_expr>", "eval"), {"__builtins__": {}, **env}, {})
+        return _format_safe_python_value(value)
+    except Exception:
+        return None
+
+
+def _safe_python_eval_env() -> dict[str, Any]:
+    return {
+        "abs": abs,
+        "min": min,
+        "max": max,
+        "sum": sum,
+        "round": round,
+        "range": _safe_python_range,
+        "comb": math.comb,
+        "perm": getattr(math, "perm", _safe_perm),
+        "factorial": math.factorial,
+        "gcd": math.gcd,
+        "lcm": getattr(math, "lcm", _safe_lcm),
+        "sqrt": math.sqrt,
+        "floor": math.floor,
+        "ceil": math.ceil,
+        "log": math.log,
+        "exp": math.exp,
+        "sin": math.sin,
+        "cos": math.cos,
+        "tan": math.tan,
+        "pi": math.pi,
+        "e": math.e,
+        "Fraction": fractions.Fraction,
+    }
+
+
+def _validate_safe_python_ast(node: ast.AST, bound_names: set[str] | None = None) -> None:
+    bound_names = set(bound_names or set())
+    if isinstance(node, ast.Expression):
+        _validate_safe_python_ast(node.body, bound_names)
+        return
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, (int, float, bool)):
+            return
+        raise ValueError("unsafe_constant")
+    if isinstance(node, ast.Name):
+        if node.id in _safe_python_eval_env() or node.id in bound_names:
+            return
+        raise ValueError("unsafe_name")
+    if isinstance(node, ast.BinOp):
+        if not isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow)):
+            raise ValueError("unsafe_operator")
+        _validate_safe_python_ast(node.left, bound_names)
+        _validate_safe_python_ast(node.right, bound_names)
+        return
+    if isinstance(node, ast.UnaryOp):
+        if not isinstance(node.op, (ast.UAdd, ast.USub)):
+            raise ValueError("unsafe_unary")
+        _validate_safe_python_ast(node.operand, bound_names)
+        return
+    if isinstance(node, ast.BoolOp):
+        if not isinstance(node.op, (ast.And, ast.Or)):
+            raise ValueError("unsafe_boolop")
+        for value in node.values:
+            _validate_safe_python_ast(value, bound_names)
+        return
+    if isinstance(node, ast.Compare):
+        _validate_safe_python_ast(node.left, bound_names)
+        for op in node.ops:
+            if not isinstance(op, (ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE)):
+                raise ValueError("unsafe_compare")
+        for comparator in node.comparators:
+            _validate_safe_python_ast(comparator, bound_names)
+        return
+    if isinstance(node, ast.IfExp):
+        _validate_safe_python_ast(node.test, bound_names)
+        _validate_safe_python_ast(node.body, bound_names)
+        _validate_safe_python_ast(node.orelse, bound_names)
+        return
+    if isinstance(node, ast.Call):
+        if not isinstance(node.func, ast.Name) or node.func.id not in _safe_python_eval_env():
+            raise ValueError("unsafe_call")
+        for arg in node.args:
+            _validate_safe_python_ast(arg, bound_names)
+        for keyword in node.keywords:
+            _validate_safe_python_ast(keyword.value, bound_names)
+        return
+    if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+        if len(node.elts) > 20:
+            raise ValueError("unsafe_collection_size")
+        for elt in node.elts:
+            _validate_safe_python_ast(elt, bound_names)
+        return
+    if isinstance(node, (ast.GeneratorExp, ast.ListComp, ast.SetComp)):
+        local_bound = set(bound_names)
+        for generator in node.generators:
+            if not isinstance(generator.target, ast.Name):
+                raise ValueError("unsafe_comprehension_target")
+            _validate_safe_python_ast(generator.iter, local_bound)
+            local_bound.add(generator.target.id)
+            for condition in generator.ifs:
+                _validate_safe_python_ast(condition, local_bound)
+        _validate_safe_python_ast(node.elt, local_bound)
+        return
+    raise ValueError(type(node).__name__)
+
+
+def _safe_python_range(*args: Any) -> range:
+    ints = [int(arg) for arg in args]
+    if not 1 <= len(ints) <= 3:
+        raise ValueError("bad_range_arity")
+    result = range(*ints)
+    if len(result) > 100000:
+        raise ValueError("range_too_large")
+    return result
+
+
+def _safe_perm(n: int, k: int | None = None) -> int:
+    n = int(n)
+    k = n if k is None else int(k)
+    return math.factorial(n) // math.factorial(n - k)
+
+
+def _safe_lcm(*values: int) -> int:
+    result = 1
+    for value in values:
+        result = abs(result * int(value)) // math.gcd(result, int(value))
+    return result
+
+
+def _format_safe_python_value(value: Any) -> str | None:
+    if isinstance(value, bool):
+        return "True" if value else "False"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, fractions.Fraction):
+        return str(value.numerator) if value.denominator == 1 else f"{value.numerator}/{value.denominator}"
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return None
+        if abs(value - round(value)) <= 1e-12:
+            return str(int(round(value)))
+        return format(value, ".12g")
+    if isinstance(value, (tuple, list)) and len(value) <= 12:
+        parts = [_format_safe_python_value(part) for part in value]
+        if all(part is not None for part in parts):
+            return ", ".join(str(part) for part in parts)
+    return None
 
 
 def _parse_json_object(text: str) -> dict[str, Any] | None:
@@ -3231,6 +5036,17 @@ def _format_sympy_answer(value: Any) -> str:
         return str(value).strip()
 
 
+def _format_sympy_operation_answer(operation: str, value: Any) -> str:
+    if operation in {"factor", "expand"}:
+        try:
+            import sympy as sp
+
+            return sp.sstr(value)
+        except Exception:
+            return str(value).strip()
+    return _format_sympy_answer(value)
+
+
 def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[str, Any] | None = None) -> list[dict[str, str]]:
     question = problem["_question"]
     answer_type = problem["answer_type"]
@@ -3261,6 +5077,38 @@ def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[s
             ),
         },
     ]
+    if answer_type == "exactMatch" and _exact_trajectory_search_enabled():
+        specs.extend([
+            {
+                "prompt_kind": "decomposition_answer",
+                "prompt": (
+                    "Solve through an independent decomposition path. Internally identify the exact target "
+                    "quantity/name, the binding constraints, and any exclusion clauses before giving the final "
+                    "short answer. Do not reuse a first-impression answer unless it survives the decomposition. "
+                    "Return only JSON.\n\n"
+                    f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
+                ),
+            },
+            {
+                "prompt_kind": "adversarial_alternative_answer",
+                "prompt": (
+                    "Solve as an adversarial alternative generator. Assume the most obvious direct answer may be "
+                    "wrong. Search for a different answer forced by a hidden constraint, edge case, wording trap, "
+                    "or named entity disambiguation. If no alternative survives, return the best surviving answer. "
+                    "Return only JSON.\n\n"
+                    f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
+                ),
+            },
+            {
+                "prompt_kind": "literal_constraint_answer",
+                "prompt": (
+                    "Solve by literal constraint matching. Ignore broad background priors and choose the shortest "
+                    "answer that satisfies every explicit word in the question, including time, scope, version, "
+                    "unit, notation, and requested output form. Return only JSON.\n\n"
+                    f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
+                ),
+            },
+        ])
     evidence_context = str((agent_plan or {}).get("hle_evidence_context") or "")
     if evidence_context:
         specs.insert(1, {
@@ -3297,6 +5145,15 @@ def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[s
     return specs
 
 
+def _exact_trajectory_search_enabled() -> bool:
+    return os.environ.get("HLE_ENABLE_EXACT_TRAJECTORY_SEARCH", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def _counter_assumption_challenge_trigger(
     problem: dict[str, Any],
     attempts: list[dict[str, Any]],
@@ -3308,7 +5165,7 @@ def _counter_assumption_challenge_trigger(
         return {"status": "abstained", "reason": "already_executed"}
     if int((candidate_verifier_summary or {}).get("verified_count") or 0) > 0:
         return {"status": "abstained", "reason": "candidate_claim_already_verified"}
-    if (math_tool_summary or {}).get("confidence") == "verified_symbolic":
+    if (math_tool_summary or {}).get("confidence") in {"verified_symbolic", "verified_symbolic_consensus"}:
         return {"status": "abstained", "reason": "math_tool_already_verified"}
 
     answer_type = problem.get("answer_type") or "exactMatch"
@@ -4416,6 +6273,7 @@ def _select_recursive_child_answer(
         verified_candidates = [
             attempt for attempt in valid
             if attempt.get("candidate_verifier_state") == "verified"
+            and _is_trusted_candidate_verifier_attempt(attempt)
         ]
         if verified_candidates:
             selected = sorted(verified_candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
@@ -4427,11 +6285,14 @@ def _select_recursive_child_answer(
                 "verifier_model_call": False,
             }
         if any(
-            attempt.get("candidate_verifier_state") == "refuted" for attempt in valid
+            attempt.get("candidate_verifier_state") == "refuted"
+            and _is_trusted_candidate_verifier_attempt(attempt)
+            for attempt in valid
         ):
             non_refuted_valid = [
                 attempt for attempt in valid
                 if attempt.get("candidate_verifier_state") != "refuted"
+                or not _is_trusted_candidate_verifier_attempt(attempt)
             ]
             if non_refuted_valid:
                 valid = non_refuted_valid
@@ -4442,12 +6303,15 @@ def _select_recursive_child_answer(
         math_candidates = [
             attempt for attempt in valid
             if attempt.get("prompt_kind") == "math_tool_answer"
-            and attempt.get("tool_confidence") == "verified_symbolic"
+            and attempt.get("tool_confidence") in {"verified_symbolic", "verified_symbolic_consensus"}
+            and attempt.get("candidate_verifier_state") != "refuted"
+            and _is_math_tool_attempt_override_trusted(attempt)
         ]
         if problem["answer_type"] != "multipleChoice" and math_candidates:
             deterministic_math = [
                 attempt for attempt in math_candidates
-                if attempt.get("tool_source") == "deterministic_parser"
+                if _is_deterministic_math_tool_source(attempt.get("tool_source"))
+                or _is_math_tool_consensus_attempt(attempt)
             ]
             supported_math = [
                 attempt for attempt in math_candidates
@@ -4516,7 +6380,11 @@ def _select_recursive_child_answer(
                 attempt for attempt in valid
                 if attempt.get("prompt_kind") == "direct_short_answer"
             ]
-            if direct_candidates:
+            if direct_candidates and not _should_defer_exact_direct_to_verifier(
+                problem=problem,
+                valid=valid,
+                ranked=ranked,
+            ):
                 selected = direct_candidates[0]
                 return {
                     "selection_method": "math_exact_direct_fallback",
@@ -4559,7 +6427,11 @@ def _select_recursive_child_answer(
                 attempt for attempt in valid
                 if attempt.get("prompt_kind") == "direct_short_answer"
             ]
-            if direct_candidates:
+            if direct_candidates and not _should_defer_exact_direct_to_verifier(
+                problem=problem,
+                valid=valid,
+                ranked=ranked,
+            ):
                 selected = direct_candidates[0]
                 return {
                     "selection_method": "exact_direct_fallback",
@@ -4578,12 +6450,29 @@ def _select_recursive_child_answer(
         }
     try:
         verifier_candidates = _unique_verifier_candidates(problem, valid)
+        _log_event(
+            logger,
+            {
+                "event": "recursive_verifier_start",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "question_hash": problem["question_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "candidate_count": len(verifier_candidates),
+                "raw_candidate_count": len(valid),
+                "timeout_sec": timeout,
+            },
+        )
+        started = time.monotonic()
         verifier_text = _call_model(
             model=model,
             prompt=_verifier_prompt(problem, verifier_candidates),
             timeout=timeout,
             max_tokens=max_tokens,
         )
+        latency_sec = round(time.monotonic() - started, 4)
         choice = _parse_verifier_choice(verifier_text, max_index=len(verifier_candidates))
         selected = verifier_candidates[(choice or 1) - 1]
         _log_event(
@@ -4599,8 +6488,11 @@ def _select_recursive_child_answer(
                 "raw_candidate_count": len(valid),
                 "choice": choice or 1,
                 "selected_child_id": selected["child_id"],
-                "selected_answer_hash": selected["parsed_answer_hash"],
+                "selected_answer_hash": selected.get("parsed_answer_hash")
+                or stable_hash({"answer": selected.get("parsed_answer")}),
                 "verifier_prediction_hash": stable_hash({"prediction": verifier_text}),
+                "timeout_sec": timeout,
+                "latency_sec": latency_sec,
             },
         )
         return {
@@ -4611,6 +6503,7 @@ def _select_recursive_child_answer(
             "verifier_model_call": True,
         }
     except Exception as exc:
+        latency_sec = round(time.monotonic() - started, 4) if "started" in locals() else None
         selected = valid[0]
         _log_event(
             logger,
@@ -4622,6 +6515,8 @@ def _select_recursive_child_answer(
                 "model": model,
                 "variant": "assumption_agent_recursive_verify",
                 "candidate_count": len(valid),
+                "timeout_sec": timeout,
+                "latency_sec": latency_sec,
                 "error_type": type(exc).__name__,
                 "error": str(exc)[:240],
                 "selected_child_id": selected["child_id"],
@@ -4636,13 +6531,90 @@ def _select_recursive_child_answer(
         }
 
 
+def _is_deterministic_math_tool_source(source: Any) -> bool:
+    source_text = str(source or "")
+    return source_text == "deterministic_parser" or source_text.startswith("deterministic_")
+
+
+def _is_math_tool_consensus_attempt(attempt: dict[str, Any]) -> bool:
+    if attempt.get("tool_confidence") != "verified_symbolic_consensus":
+        return False
+    summary = attempt.get("tool_summary") if isinstance(attempt.get("tool_summary"), dict) else {}
+    agreement_count = attempt.get("plan_agreement_count", summary.get("plan_agreement_count"))
+    success_count = attempt.get("plan_success_count", summary.get("plan_success_count"))
+    try:
+        return int(agreement_count or 0) >= 2 and int(success_count or 0) >= 2
+    except Exception:
+        return False
+
+
+def _is_math_tool_attempt_override_trusted(attempt: dict[str, Any]) -> bool:
+    if attempt.get("candidate_verifier_state") == "refuted":
+        return False
+    trust = attempt.get("candidate_verifier_trust")
+    if trust in {"weak_llm_reference_planner", "weak_single_planner"}:
+        return False
+    if _is_deterministic_math_tool_source(attempt.get("tool_source")):
+        return True
+    return _is_math_tool_consensus_attempt(attempt)
+
+
+def _recursive_verifier_timeout(timeout: float | None) -> float | None:
+    has_override, override = _optional_timeout_override_from_env("HLE_RECURSIVE_VERIFIER_TIMEOUT_SEC")
+    if has_override:
+        return override
+    if timeout is None:
+        return None
+    return _normalize_optional_timeout(timeout)
+
+
+def _is_trusted_candidate_verifier_attempt(attempt: dict[str, Any]) -> bool:
+    return attempt.get("candidate_verifier_trust") not in {
+        "weak_llm_reference_planner",
+        "weak_single_planner",
+    }
+
+
+def _trust_llm_reference_planner_enabled() -> bool:
+    return os.environ.get("HLE_TRUST_LLM_REFERENCE_PLANNER", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 _VERIFIED_SELECTION_METHODS = {
     "candidate_claim_verifier_priority",
+    "counter_assumption_verifier_choice",
     "verified_math_tool_priority",
+    "verifier_choice",
     "source_grounded_verifier_choice",
     "option_evidence_verifier_choice",
     "verified_option_evidence_priority",
 }
+
+
+def _exact_diverse_verifier_enabled() -> bool:
+    return os.environ.get("HLE_ENABLE_EXACT_DIVERSE_VERIFIER", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _should_defer_exact_direct_to_verifier(
+    *,
+    problem: dict[str, Any],
+    valid: list[dict[str, Any]],
+    ranked: list[tuple[str, list[dict[str, Any]]]],
+) -> bool:
+    if problem.get("answer_type") == "multipleChoice":
+        return False
+    if not _exact_diverse_verifier_enabled():
+        return False
+    if not ranked or len(ranked) < 2:
+        return False
+    if len(ranked[0][1]) != 1:
+        return False
+    unique_candidates = _unique_verifier_candidates(problem, valid)
+    return len(unique_candidates) >= 2
 
 
 def _apply_verified_or_abstain_selection(
@@ -4898,7 +6870,8 @@ def _select_after_counter_assumption_challenge(
                 "raw_candidate_count": len(valid),
                 "choice": choice or 1,
                 "selected_child_id": selected["child_id"],
-                "selected_answer_hash": selected["parsed_answer_hash"],
+                "selected_answer_hash": selected.get("parsed_answer_hash")
+                or stable_hash({"answer": selected.get("parsed_answer")}),
                 "verifier_prediction_hash": stable_hash({"prediction": verifier_text}),
             },
         )
@@ -4944,13 +6917,11 @@ def _option_sweep_counter_trigger_enabled() -> bool:
 
 
 def _math_tool_child_timeout(timeout: float | None) -> float | None:
-    cap_text = os.environ.get("HLE_MATH_TOOL_CHILD_TIMEOUT_SEC", "180").strip()
-    try:
-        cap = float(cap_text)
-    except ValueError:
-        cap = 180.0
-    if cap <= 0:
-        return timeout
+    has_override, cap = _optional_timeout_override_from_env("HLE_MATH_TOOL_CHILD_TIMEOUT_SEC")
+    if not has_override:
+        return _normalize_optional_timeout(timeout)
+    if cap is None:
+        return None
     if timeout is None:
         return cap
     return min(float(timeout), cap)
@@ -5005,7 +6976,8 @@ def _run_option_evidence_arbitrator(
                 "raw_candidate_count": len(valid),
                 "choice": choice,
                 "selected_child_id": selected["child_id"],
-                "selected_answer_hash": selected["parsed_answer_hash"],
+                "selected_answer_hash": selected.get("parsed_answer_hash")
+                or stable_hash({"answer": selected.get("parsed_answer")}),
                 "selected_option_evidence_candidate": selected.get("prompt_kind") == "mc_option_evidence_scorer_answer",
                 "verifier_prediction_hash": stable_hash({"prediction": verifier_text}),
                 "evidence_context_hash": stable_hash({
@@ -5129,7 +7101,8 @@ def _run_source_grounded_mc_verifier(
                 "candidate_count": len(attempts),
                 "choice": choice,
                 "selected_child_id": selected["child_id"],
-                "selected_answer_hash": selected["parsed_answer_hash"],
+                "selected_answer_hash": selected.get("parsed_answer_hash")
+                or stable_hash({"answer": selected.get("parsed_answer")}),
                 "verifier_prediction_hash": stable_hash({"prediction": verifier_text}),
                 "evidence_context_hash": stable_hash({"evidence_context": evidence_context}),
             },
@@ -5236,7 +7209,24 @@ def _needs_evidence_grounded_child(problem: dict[str, Any], attempts: list[dict[
         for attempt in attempts
         if str(attempt.get("parsed_answer") or "").strip()
     ]
+    if _exact_diverse_evidence_bridge_enabled():
+        normalized = {
+            _normalize_for_selection(answer, answer_type="exactMatch")
+            for answer in valid
+            if not _is_suspicious_exact_answer(answer)
+        }
+        if len(normalized) >= 2:
+            return True
     return bool(valid) and all(_is_suspicious_exact_answer(answer) for answer in valid)
+
+
+def _exact_diverse_evidence_bridge_enabled() -> bool:
+    return os.environ.get("HLE_ENABLE_EXACT_DIVERSE_EVIDENCE_BRIDGE", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def _should_prime_evidence_bridge(problem: dict[str, Any], agent_plan: dict[str, Any]) -> bool:
@@ -5450,6 +7440,7 @@ def _repair_exact_answer(
             )
             agent_plan["hle_evidence_context"] = evidence_context
             agent_plan["hle_evidence_bridge"] = evidence_summary
+    effective_timeout = _answer_format_repair_timeout(timeout)
     _log_event(
         logger,
         {
@@ -5467,8 +7458,10 @@ def _repair_exact_answer(
             "repair_context_char_count": len(repair_context),
             "evidence_bridge_used": bool(evidence_context),
             "evidence_bridge_char_count": len(evidence_context),
+            "timeout_sec": effective_timeout,
         },
     )
+    started = time.monotonic()
     try:
         text = _call_model(
             model=model,
@@ -5478,9 +7471,10 @@ def _repair_exact_answer(
                 repair_context=repair_context,
                 evidence_context=evidence_context,
             ),
-            timeout=timeout,
+            timeout=effective_timeout,
             max_tokens=max_tokens,
         )
+        latency_sec = round(time.monotonic() - started, 4)
         repaired = _parse_answer_json(text) or text.strip()
         after_hash = stable_hash({"answer": repaired})
         still_suspicious = _is_suspicious_exact_answer(repaired)
@@ -5496,6 +7490,8 @@ def _repair_exact_answer(
             "evidence_bridge_used": bool(evidence_context),
             "evidence_bridge_char_count": len(evidence_context),
             "evidence_bridge": evidence_summary,
+            "timeout_sec": effective_timeout,
+            "latency_sec": latency_sec,
         }
         _log_event(
             logger,
@@ -5515,6 +7511,8 @@ def _repair_exact_answer(
                 "evidence_bridge_used": bool(evidence_context),
                 "evidence_bridge_char_count": len(evidence_context),
                 "prediction_hash": stable_hash({"prediction": text}),
+                "timeout_sec": effective_timeout,
+                "latency_sec": latency_sec,
             },
         )
         return {
@@ -5523,6 +7521,7 @@ def _repair_exact_answer(
             "stage_summary": stage_summary,
         }
     except Exception as exc:
+        latency_sec = round(time.monotonic() - started, 4)
         stage_summary = {
             "status": "failed",
             "repair_reason": "suspicious_exact_answer",
@@ -5533,6 +7532,8 @@ def _repair_exact_answer(
             "evidence_bridge_used": bool(evidence_context),
             "evidence_bridge_char_count": len(evidence_context),
             "evidence_bridge": evidence_summary,
+            "timeout_sec": effective_timeout,
+            "latency_sec": latency_sec,
         }
         _log_event(
             logger,
@@ -5550,13 +7551,24 @@ def _repair_exact_answer(
                 "repair_context_char_count": len(repair_context),
                 "evidence_bridge_used": bool(evidence_context),
                 "evidence_bridge_char_count": len(evidence_context),
+                "timeout_sec": effective_timeout,
+                "latency_sec": latency_sec,
             },
         )
         return {
             "selected_answer": selected_answer,
-            "underlying_model_calls": 0,
+            "underlying_model_calls": 1,
             "stage_summary": stage_summary,
         }
+
+
+def _answer_format_repair_timeout(timeout: float | None) -> float | None:
+    has_override, override = _optional_timeout_override_from_env("HLE_ANSWER_FORMAT_REPAIR_TIMEOUT_SEC")
+    if has_override:
+        return override
+    if timeout is None:
+        return None
+    return _normalize_optional_timeout(timeout)
 
 
 def _repair_context_for_exact(agent_plan: dict[str, Any]) -> str:
@@ -5572,7 +7584,7 @@ def _build_hle_evidence_bridge_context(
     logger: "_JsonlLogger | None",
     candidate_answers: list[str] | None = None,
 ) -> tuple[str, dict[str, Any]]:
-    queries = _candidate_evidence_queries(problem)
+    queries = _candidate_evidence_queries(problem, candidate_answers=candidate_answers or [])
     query_hashes = [stable_hash({"query": query}) for query in queries]
     if not queries:
         summary = {
@@ -5631,6 +7643,137 @@ def _build_hle_evidence_bridge_context(
     return evidence_context, summary
 
 
+def _maybe_mark_answer_bearing_evidence_attempt(
+    *,
+    problem: dict[str, Any],
+    attempt: dict[str, Any],
+    evidence_summary: dict[str, Any] | None,
+) -> dict[str, Any]:
+    certificate = (evidence_summary or {}).get("answer_bearing_certificate") or {}
+    if problem.get("answer_type") == "multipleChoice":
+        return {"status": "not_required", "reason": "multiple_choice_uses_option_evidence"}
+    if _classify_hle_domain(problem) == "math":
+        return {"status": "not_required", "reason": "math_requires_executable_verifier"}
+    if certificate.get("status") != "answer_bearing":
+        return {"status": "not_marked", "reason": str(certificate.get("status") or "no_answer_bearing_certificate")}
+    answer = str(attempt.get("parsed_answer") or "").strip()
+    if not answer or _is_suspicious_exact_answer(answer):
+        return {"status": "not_marked", "reason": "suspicious_or_empty_answer"}
+    supported_norm_hashes = {
+        str(item)
+        for item in certificate.get("candidate_hit_answer_norm_hashes", [])
+        if str(item or "").strip()
+    }
+    answer_norm_hash = stable_hash({
+        "answer_norm": _normalize_for_selection(answer, answer_type="exactMatch"),
+    })
+    if supported_norm_hashes and answer_norm_hash not in supported_norm_hashes:
+        return {
+            "status": "not_marked",
+            "reason": "evidence_child_answer_not_candidate_supported",
+            "answer_norm_hash": answer_norm_hash,
+        }
+    attempt["candidate_verifier_state"] = "verified"
+    attempt["candidate_verifier_backend"] = "answer_bearing_evidence_bridge"
+    attempt["candidate_verifier_operation"] = "candidate_specific_retrieval"
+    attempt["candidate_verifier_match_method"] = "answer_bearing_candidate_overlap"
+    attempt["candidate_verifier_claim_hash"] = stable_hash({
+        "question_hash": problem.get("question_hash"),
+        "answer_norm_hash": answer_norm_hash,
+        "certificate_status": certificate.get("status"),
+        "candidate_hit_count": certificate.get("candidate_hit_count"),
+    })
+    attempt["candidate_verifier_trust"] = "trusted"
+    return {
+        "status": "marked_verified",
+        "backend": attempt["candidate_verifier_backend"],
+        "answer_norm_hash": answer_norm_hash,
+    }
+
+
+def _maybe_add_answer_bearing_evidence_candidate(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    evidence_summary: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    certificate = (evidence_summary or {}).get("answer_bearing_certificate") or {}
+    if problem.get("answer_type") == "multipleChoice":
+        return None, {"status": "not_required", "reason": "multiple_choice_uses_option_evidence"}
+    if _classify_hle_domain(problem) == "math":
+        return None, {"status": "not_required", "reason": "math_requires_executable_verifier"}
+    if certificate.get("status") != "answer_bearing":
+        return None, {"status": "not_emitted", "reason": str(certificate.get("status") or "no_answer_bearing_certificate")}
+    supported_answer_hashes = {
+        str(item)
+        for item in certificate.get("candidate_hit_answer_hashes", [])
+        if str(item or "").strip()
+    }
+    supported_norm_hashes = {
+        str(item)
+        for item in certificate.get("candidate_hit_answer_norm_hashes", [])
+        if str(item or "").strip()
+    }
+    if not supported_answer_hashes and not supported_norm_hashes:
+        return None, {"status": "not_emitted", "reason": "no_supported_candidate_hashes"}
+    candidate_rows: list[tuple[int, dict[str, Any], str, str]] = []
+    for attempt in attempts:
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer or _is_suspicious_exact_answer(answer):
+            continue
+        answer_hash = str(attempt.get("parsed_answer_hash") or stable_hash({"answer": answer}))
+        answer_norm_hash = stable_hash({
+            "answer_norm": _normalize_for_selection(answer, answer_type="exactMatch"),
+        })
+        if answer_hash in supported_answer_hashes or answer_norm_hash in supported_norm_hashes:
+            candidate_rows.append((int(attempt.get("child_index", 0) or 0), attempt, answer_hash, answer_norm_hash))
+    if not candidate_rows:
+        return None, {"status": "not_emitted", "reason": "supported_candidate_not_in_attempts"}
+    _, source_attempt, answer_hash, answer_norm_hash = sorted(candidate_rows, key=lambda row: row[0])[0]
+    source_child_id = str(source_attempt.get("child_id") or "")
+    child_id = "source_supported_" + stable_hash({
+        "source_child_id": source_child_id,
+        "answer_hash": answer_hash,
+        "question_hash": problem.get("question_hash"),
+    })[:16]
+    synthetic_attempt = {
+        "child_id": child_id,
+        "child_index": max([int(attempt.get("child_index", 0) or 0) for attempt in attempts] or [0]) + 1,
+        "prompt_kind": "answer_bearing_evidence_candidate",
+        "status": "answered",
+        "parsed_answer": source_attempt.get("parsed_answer"),
+        "parsed_answer_hash": answer_hash,
+        "prediction_hash": stable_hash({
+            "source_supported_answer_hash": answer_hash,
+            "question_hash": problem.get("question_hash"),
+        }),
+        "source_child_id": source_child_id,
+        "source_prompt_kind": source_attempt.get("prompt_kind"),
+        "candidate_verifier_state": "verified",
+        "candidate_verifier_backend": "answer_bearing_evidence_bridge",
+        "candidate_verifier_operation": "candidate_specific_retrieval",
+        "candidate_verifier_match_method": "source_supported_candidate_hash",
+        "candidate_verifier_claim_hash": stable_hash({
+            "question_hash": problem.get("question_hash"),
+            "answer_norm_hash": answer_norm_hash,
+            "candidate_hit_count": certificate.get("candidate_hit_count"),
+            "selected_result_count": certificate.get("selected_result_count"),
+        }),
+        "candidate_verifier_trust": "trusted",
+        "tool_source": "candidate_specific_evidence_certificate",
+        "tool_confidence": "answer_bearing_candidate_overlap",
+    }
+    return synthetic_attempt, {
+        "status": "emitted",
+        "child_id": child_id,
+        "source_child_id": source_child_id,
+        "source_prompt_kind": source_attempt.get("prompt_kind"),
+        "answer_hash": answer_hash,
+        "answer_norm_hash": answer_norm_hash,
+        "candidate_hit_count": int(certificate.get("candidate_hit_count") or 0),
+    }
+
+
 def _filter_answer_bearing_evidence_results(
     *,
     problem: dict[str, Any],
@@ -5645,22 +7788,67 @@ def _filter_answer_bearing_evidence_results(
         for label, text in options.items()
         if _content_terms(text)
     }
-    exact_candidate_terms = [
-        _content_terms(answer)
-        for answer in candidate_answers
-        if answer and not _is_suspicious_exact_answer(answer)
-    ]
-    exact_candidate_terms = [terms for terms in exact_candidate_terms if terms]
+    subject_terms = _content_terms(f"{problem.get('raw_subject', '')} {problem.get('category', '')}")
+    exact_candidates: list[dict[str, Any]] = []
+    for answer in candidate_answers:
+        answer_text = str(answer or "").strip()
+        if not answer_text or _is_suspicious_exact_answer(answer_text):
+            continue
+        terms = _content_terms(answer_text)
+        if not terms:
+            continue
+        exact_candidates.append({
+            "terms": terms,
+            "answer_hash": stable_hash({"answer": answer_text}),
+            "answer_norm_hash": stable_hash({
+                "answer_norm": _normalize_for_selection(answer_text, answer_type="exactMatch"),
+            }),
+        })
     selected: list[dict[str, str]] = []
     label_hits: Counter[str] = Counter()
     observed_option_hits: Counter[str] = Counter()
     candidate_hit_count = 0
+    observed_candidate_raw_hit_count = 0
+    candidate_hits_blocked_by_question_overlap = 0
+    candidate_hit_answer_hashes: set[str] = set()
+    candidate_hit_answer_norm_hashes: set[str] = set()
     required_question_overlap = _evidence_question_overlap_required()
+    relaxed_candidate_overlap_count = 0
+    relaxed_question_overlap_required = _exact_candidate_evidence_question_overlap_required()
     for row in results:
         text = f"{row.get('title', '')} {row.get('snippet', '')}"
         doc_terms = _content_terms(text)
-        if len(question_terms & doc_terms) < required_question_overlap:
-            continue
+        title_terms = _content_terms(row.get("title", ""))
+        question_overlap = len(question_terms & doc_terms)
+        subject_overlap = len(subject_terms & doc_terms)
+        candidate_hits = [
+            candidate
+            for candidate in exact_candidates
+            if len(candidate["terms"] & doc_terms) >= max(1, min(2, len(candidate["terms"])))
+        ]
+        candidate_title_hits = [
+            candidate
+            for candidate in exact_candidates
+            if len(candidate["terms"] & title_terms) >= max(1, min(2, len(candidate["terms"])))
+        ]
+        if problem.get("answer_type") != "multipleChoice" and candidate_hits:
+            observed_candidate_raw_hit_count += 1
+        relaxed_candidate_allowed = (
+            problem.get("answer_type") != "multipleChoice"
+            and bool(candidate_hits)
+            and (
+                question_overlap >= relaxed_question_overlap_required
+                or (bool(candidate_title_hits) and subject_overlap >= 1)
+            )
+        )
+        if question_overlap < required_question_overlap:
+            if relaxed_candidate_allowed:
+                relaxed_candidate_overlap_count += 1
+            elif problem.get("answer_type") != "multipleChoice" and candidate_hits:
+                candidate_hits_blocked_by_question_overlap += 1
+                continue
+            else:
+                continue
         if problem.get("answer_type") == "multipleChoice":
             hit_labels = [
                 label
@@ -5674,10 +7862,13 @@ def _filter_answer_bearing_evidence_results(
             for label in hit_labels:
                 label_hits[label] += 1
         else:
-            if not exact_candidate_terms:
+            if not exact_candidates:
                 continue
-            if not any(len(terms & doc_terms) >= max(1, min(2, len(terms))) for terms in exact_candidate_terms):
+            if not candidate_hits:
                 continue
+            for candidate in candidate_hits:
+                candidate_hit_answer_hashes.add(str(candidate["answer_hash"]))
+                candidate_hit_answer_norm_hashes.add(str(candidate["answer_norm_hash"]))
             candidate_hit_count += 1
         selected.append(row)
         if len(selected) >= max_results:
@@ -5697,6 +7888,12 @@ def _filter_answer_bearing_evidence_results(
         "option_discriminative_required": problem.get("answer_type") == "multipleChoice",
         "option_hit_labels": sorted(label_hits or observed_option_hits),
         "candidate_hit_count": candidate_hit_count,
+        "candidate_raw_hit_count": observed_candidate_raw_hit_count,
+        "candidate_hits_blocked_by_question_overlap": candidate_hits_blocked_by_question_overlap,
+        "candidate_relaxed_overlap_count": relaxed_candidate_overlap_count,
+        "candidate_relaxed_question_overlap_required": relaxed_question_overlap_required,
+        "candidate_hit_answer_hashes": sorted(candidate_hit_answer_hashes),
+        "candidate_hit_answer_norm_hashes": sorted(candidate_hit_answer_norm_hashes),
         "input_result_count": len(results),
         "selected_result_count": len(selected),
         "raw_content_persisted": False,
@@ -5709,6 +7906,13 @@ def _evidence_question_overlap_required() -> int:
         return max(1, int(os.environ.get("HLE_EVIDENCE_MIN_QUESTION_OVERLAP", "3")))
     except ValueError:
         return 3
+
+
+def _exact_candidate_evidence_question_overlap_required() -> int:
+    try:
+        return max(1, int(os.environ.get("HLE_EXACT_CANDIDATE_EVIDENCE_MIN_QUESTION_OVERLAP", "1")))
+    except ValueError:
+        return 1
 
 
 def _log_hle_evidence_bridge_event(
@@ -5736,9 +7940,45 @@ def _log_hle_evidence_bridge_event(
     )
 
 
-def _candidate_evidence_queries(problem: dict[str, Any]) -> list[str]:
+def _candidate_evidence_queries(
+    problem: dict[str, Any],
+    candidate_answers: list[str] | None = None,
+) -> list[str]:
     question = str(problem.get("_question") or "")
     seeds: list[str] = []
+    candidate_seed_norms: set[str] = set()
+    candidate_answers = candidate_answers or []
+    if problem.get("answer_type") != "multipleChoice" and candidate_answers:
+        anchors = [
+            str(problem.get("raw_subject") or "").strip(),
+            str(problem.get("category") or "").strip(),
+        ]
+        anchors.extend(
+            item
+            for groups in re.findall(r'"([^"]{3,120})"|\'([^\']{3,120})\'|`([^`]{3,120})`', question)
+            for item in groups
+            if item
+        )
+        cleaned_anchors: list[str] = []
+        seen_anchor_keys: set[str] = set()
+        for anchor in anchors:
+            cleaned_anchor = _clean_evidence_query(anchor)
+            key = _normalize_exact(cleaned_anchor)
+            if cleaned_anchor and key and key not in seen_anchor_keys:
+                seen_anchor_keys.add(key)
+                cleaned_anchors.append(cleaned_anchor)
+        for answer in candidate_answers:
+            answer_text = str(answer or "").strip()
+            if not answer_text or _is_suspicious_exact_answer(answer_text):
+                continue
+            cleaned_answer = _clean_evidence_query(answer_text)
+            if not cleaned_answer:
+                continue
+            seeds.append(cleaned_answer)
+            candidate_seed_norms.add(_normalize_exact(cleaned_answer))
+            for anchor in cleaned_anchors[:2]:
+                if anchor and _normalize_exact(anchor) not in _normalize_exact(cleaned_answer):
+                    seeds.append(f"{cleaned_answer} {anchor}")
     for key in ("raw_subject", "category"):
         value = str(problem.get(key) or "").strip()
         if value and value.lower() not in {"other", "misc", "unknown"}:
@@ -5757,17 +7997,33 @@ def _candidate_evidence_queries(problem: dict[str, Any]) -> list[str]:
         if words:
             seeds.append(" ".join(words))
     queries: list[str] = []
+    max_queries = _candidate_evidence_query_limit(candidate_answers)
     for seed in seeds:
         query = _clean_evidence_query(seed)
         if not query:
             continue
-        if problem.get("raw_subject") and problem["raw_subject"] not in query and len(query.split()) <= 4:
+        if (
+            problem.get("raw_subject")
+            and problem["raw_subject"] not in query
+            and len(query.split()) <= 4
+            and _normalize_exact(query) not in candidate_seed_norms
+        ):
             query = f"{query} {problem['raw_subject']}"
         if query not in queries:
             queries.append(query)
-        if len(queries) >= 4:
+        if len(queries) >= max_queries:
             break
     return queries
+
+
+def _candidate_evidence_query_limit(candidate_answers: list[str] | None = None) -> int:
+    env_value = os.environ.get("HLE_EVIDENCE_MAX_QUERIES")
+    if env_value:
+        try:
+            return max(1, int(env_value))
+        except ValueError:
+            pass
+    return 8 if candidate_answers else 4
 
 
 _EVIDENCE_QUERY_STOPWORDS = {
@@ -6121,6 +8377,9 @@ def _mc_option_matches_reference(option_text: str, reference_answer: str) -> boo
     reference_norm = _normalize_exact(reference)
     if option_norm and option_norm == reference_norm:
         return True
+    executable_match = _exact_math_candidate_match(option, reference)
+    if executable_match.get("matched"):
+        return True
     option_math = _normalize_math_expression(option)
     reference_math = _normalize_math_expression(reference)
     if not option_math or not reference_math:
@@ -6140,7 +8399,31 @@ def _mc_option_matches_reference(option_text: str, reference_answer: str) -> boo
 def _normalize_for_selection(text: str, *, answer_type: str) -> str:
     if answer_type == "multipleChoice":
         return _extract_choice(text)
+    math_key = _canonical_math_selection_key(text)
+    if math_key:
+        return f"math:{math_key}"
     return _normalize_exact(text)
+
+
+def _canonical_math_selection_key(text: str) -> str:
+    parts = _math_answer_parts(text)
+    if not parts:
+        return ""
+    try:
+        import sympy as sp
+    except Exception:
+        return ""
+    canonical_parts: list[str] = []
+    for part in parts:
+        expr = _safe_sympy_parse_expr(part)
+        if expr is None:
+            return ""
+        try:
+            expr = sp.simplify(expr)
+        except Exception:
+            pass
+        canonical_parts.append(_format_sympy_answer(expr))
+    return "|".join(sorted(canonical_parts))
 
 
 def _has_two_vote_majority(attempts: list[dict[str, Any]], *, answer_type: str) -> bool:
@@ -6396,6 +8679,12 @@ def _module_trace(problem: dict[str, Any], *, variant: str, agent_plan: dict[str
                 "reason": "optional expensive critic can be routed only to falsification and verification steps",
             },
             {
+                "module": "child_model_router",
+                "expected": False,
+                "status": _stage_status(stages, "child_model_router") if stages.get("child_model_router") else "not_required",
+                "reason": "optional stronger child model can be routed only to candidate generation steps",
+            },
+            {
                 "module": "recursive_assumption_runner",
                 "expected": True,
                 "status": _stage_status(stages, "recursive_assumption_runner"),
@@ -6410,6 +8699,26 @@ def _module_trace(problem: dict[str, Any], *, variant: str, agent_plan: dict[str
                     if recursive_verify
                     else "single-call agent only builds recursive applicability frames"
                 ),
+            },
+            {
+                "module": "recursive_timeout_recovery_child",
+                "expected": recursive_verify and problem.get("answer_type") == "exactMatch",
+                "status": (
+                    _stage_status(stages, "recursive_timeout_recovery_child")
+                    if stages.get("recursive_timeout_recovery_child")
+                    else "not_required"
+                ),
+                "reason": "timeout/error pressure with too few answer candidates can trigger a short recovery child",
+            },
+            {
+                "module": "child_model_failover_child",
+                "expected": False,
+                "status": (
+                    _stage_status(stages, "child_model_failover_child")
+                    if stages.get("child_model_failover_child")
+                    else "not_required"
+                ),
+                "reason": "optional base-model failover can produce one candidate when the routed child model yields none",
             },
             {
                 "module": "multi_candidate_self_verifier",
@@ -6594,6 +8903,10 @@ def _agent_critic_model(default_model: str) -> str:
     return os.environ.get("HLE_AGENT_CRITIC_MODEL", "").strip() or default_model
 
 
+def _agent_child_model(default_model: str) -> str:
+    return os.environ.get("HLE_AGENT_CHILD_MODEL", "").strip() or default_model
+
+
 def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_tokens: int = 512) -> str:
     env = _api_env(model=model)
     payload = {
@@ -6602,6 +8915,9 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
         "temperature": 0,
         "max_tokens": max_tokens,
     }
+    payload.update(_model_router_extra_body())
+    if _model_router_subprocess_calls_enabled():
+        return _call_model_via_subprocess(env=env, payload=payload, timeout=timeout)
     request = urllib.request.Request(
         f"{env['base_url']}/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
@@ -6612,15 +8928,12 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
         method="POST",
     )
     attempts = max(1, int(os.environ.get("MODEL_ROUTER_ATTEMPTS", "3")))
-    timeout = _default_call_timeout() if timeout is None else float(timeout)
-    deadline = time.monotonic() + timeout
+    timeout = _normalize_optional_timeout(_default_call_timeout() if timeout is None else timeout)
+    deadline = None if timeout is None else time.monotonic() + timeout
     last_error: Exception | None = None
     for attempt in range(attempts):
         try:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise TimeoutError("model_call_deadline_exceeded")
-            request_timeout = max(0.1, min(remaining, _model_router_per_attempt_timeout()))
+            request_timeout = _request_timeout_for_attempt(deadline=deadline)
             with _global_model_router_slot(model=env["model"]):
                 data = _urlopen_json_with_deadline(request=request, timeout=request_timeout)
             return str((data.get("choices") or [{}])[0].get("message", {}).get("content", "")).strip()
@@ -6634,12 +8947,99 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
         ) as exc:
             last_error = exc
             if attempt + 1 >= attempts:
-                raise RuntimeError(f"model request failed: {_model_error_label(exc)}") from exc
+                raise RuntimeError(f"model request failed: {_model_error_label(exc)}: {_model_error_message(exc)}") from exc
             _sleep_before_model_retry(attempt=attempt, deadline=deadline)
-    raise RuntimeError(f"model request failed: {last_error}")
+    raise RuntimeError(f"model request failed: {_model_error_message(last_error)}")
 
 
-def _urlopen_json_with_deadline(*, request: urllib.request.Request, timeout: float) -> dict[str, Any]:
+def _model_router_subprocess_calls_enabled() -> bool:
+    return os.environ.get("MODEL_ROUTER_SUBPROCESS_CALLS", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _model_router_extra_body() -> dict[str, Any]:
+    body: dict[str, Any] = {}
+    effort = os.environ.get("MODEL_ROUTER_REASONING_EFFORT", "").strip()
+    if effort:
+        body["reasoning_effort"] = effort
+    raw = os.environ.get("MODEL_ROUTER_EXTRA_BODY_JSON", "").strip()
+    if raw:
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = {}
+        if isinstance(parsed, dict):
+            for key, value in parsed.items():
+                if key not in {"model", "messages"}:
+                    body[str(key)] = value
+    return body
+
+
+def _call_model_via_subprocess(*, env: dict[str, str], payload: dict[str, Any], timeout: float | None) -> str:
+    attempts = max(1, int(os.environ.get("MODEL_ROUTER_ATTEMPTS", "3")))
+    timeout = _normalize_optional_timeout(_default_call_timeout() if timeout is None else timeout)
+    deadline = None if timeout is None else time.monotonic() + timeout
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            request_timeout = _request_timeout_for_attempt(deadline=deadline)
+            return _single_model_subprocess_call(env=env, payload=payload, request_timeout=request_timeout)
+        except Exception as exc:
+            last_error = exc
+            if attempt + 1 >= attempts:
+                raise RuntimeError(f"model request failed: {_model_error_label(exc)}: {_model_error_message(exc)}") from exc
+            _sleep_before_model_retry(attempt=attempt, deadline=deadline)
+    raise RuntimeError(f"model request failed: {_model_error_message(last_error)}")
+
+
+def _single_model_subprocess_call(*, env: dict[str, str], payload: dict[str, Any], request_timeout: float | None) -> str:
+    script = r"""
+import json
+import sys
+import urllib.request
+
+cfg = json.loads(sys.stdin.read())
+request = urllib.request.Request(
+    cfg["base_url"].rstrip("/") + "/chat/completions",
+    data=json.dumps(cfg["payload"]).encode("utf-8"),
+    headers={
+        "Authorization": "Bearer " + cfg["api_key"],
+        "Content-Type": "application/json",
+    },
+    method="POST",
+)
+if cfg.get("request_timeout") is None:
+    response_ctx = urllib.request.urlopen(request)
+else:
+    response_ctx = urllib.request.urlopen(request, timeout=float(cfg["request_timeout"]))
+with response_ctx as response:
+    data = json.loads(response.read().decode("utf-8"))
+print(str((data.get("choices") or [{}])[0].get("message", {}).get("content", "")).strip())
+"""
+    stdin_payload = json.dumps({
+        "base_url": env["base_url"],
+        "api_key": env["api_key"],
+        "payload": payload,
+        "request_timeout": request_timeout,
+    })
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        input=stdin_payload,
+        text=True,
+        capture_output=True,
+        timeout=None if request_timeout is None else max(1.0, request_timeout + 5.0),
+        check=False,
+    )
+    if completed.returncode != 0:
+        stderr = (completed.stderr or "").strip().splitlines()
+        message = stderr[-1] if stderr else f"subprocess_exit_{completed.returncode}"
+        raise RuntimeError(message[:240])
+    return str(completed.stdout or "").strip()
+
+
+def _urlopen_json_with_deadline(*, request: urllib.request.Request, timeout: float | None) -> dict[str, Any]:
+    if timeout is None:
+        with urllib.request.urlopen(request) as response:
+            return json.loads(response.read().decode("utf-8"))
     if threading.current_thread() is threading.main_thread():
         previous_handler = signal.signal(signal.SIGALRM, _raise_wallclock_timeout)
         signal.alarm(max(1, int(timeout)))
@@ -6663,11 +9063,27 @@ def _model_error_label(exc: Exception) -> str:
     return type(exc).__name__
 
 
-def _sleep_before_model_retry(*, attempt: int, deadline: float) -> None:
+def _model_error_message(exc: Exception | None) -> str:
+    if exc is None:
+        return ""
+    message = str(exc)
+    for key_name in ("GPT5_API_KEY", "RUOLI_GPT_KEY", "OPENAI_API_KEY"):
+        secret = os.environ.get(key_name)
+        if secret:
+            message = message.replace(secret, "[redacted]")
+    message = re.sub(r"Bearer\s+[A-Za-z0-9._:-]+", "Bearer [redacted]", message)
+    message = re.sub(r"sk-[A-Za-z0-9._:-]+", "sk-[redacted]", message)
+    return message[:240]
+
+
+def _sleep_before_model_retry(*, attempt: int, deadline: float | None) -> None:
     base = float(os.environ.get("MODEL_ROUTER_BACKOFF_BASE_SEC", "0.75"))
     cap = float(os.environ.get("MODEL_ROUTER_BACKOFF_MAX_SEC", "10"))
     jitter = float(os.environ.get("MODEL_ROUTER_BACKOFF_JITTER_SEC", "0.25"))
     delay = min(cap, base * (2 ** attempt)) + random.uniform(0.0, max(0.0, jitter))
+    if deadline is None:
+        time.sleep(delay)
+        return
     remaining = max(0.0, deadline - time.monotonic())
     if remaining <= 0:
         return
@@ -6756,12 +9172,56 @@ def _raise_wallclock_timeout(signum: int, frame: Any) -> None:
     raise TimeoutError("wall_clock_model_timeout")
 
 
-def _default_call_timeout() -> float:
-    return float(os.environ.get("MODEL_ROUTER_TIMEOUT", "120"))
+def _default_call_timeout() -> float | None:
+    return _optional_timeout_from_text(os.environ.get("MODEL_ROUTER_TIMEOUT"))
 
 
-def _model_router_per_attempt_timeout() -> float:
-    return float(os.environ.get("MODEL_ROUTER_PER_ATTEMPT_TIMEOUT", "90"))
+def _model_router_per_attempt_timeout() -> float | None:
+    return _optional_timeout_from_text(os.environ.get("MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"))
+
+
+def _request_timeout_for_attempt(*, deadline: float | None) -> float | None:
+    per_attempt = _model_router_per_attempt_timeout()
+    if deadline is None:
+        return per_attempt
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("model_call_deadline_exceeded")
+    if per_attempt is None:
+        return max(0.1, remaining)
+    return max(0.1, min(remaining, per_attempt))
+
+
+def _normalize_optional_timeout(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        parsed = _optional_timeout_from_text(value)
+        return parsed
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if parsed <= 0 else parsed
+
+
+def _optional_timeout_from_text(value: str | None) -> float | None:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if not text or text in {"0", "none", "null", "off", "false", "no", "unlimited"}:
+        return None
+    try:
+        parsed = float(text)
+    except ValueError:
+        return None
+    return None if parsed <= 0 else parsed
+
+
+def _optional_timeout_override_from_env(name: str) -> tuple[bool, float | None]:
+    if name not in os.environ:
+        return False, None
+    return True, _optional_timeout_from_text(os.environ.get(name))
 
 
 class _JsonlLogger:
@@ -6923,9 +9383,12 @@ def _component_efficacy_from_plan(
     morphism = stages.get("structural_morphism_transfer", {})
     world_model = stages.get("world_model_router", {})
     critic_router = stages.get("critic_model_router", {})
+    child_router = stages.get("child_model_router", {})
     prompt = stages.get("prompt_builder", {})
     recursive = stages.get("recursive_child_validation", {})
     selection = stages.get("multi_candidate_self_verifier", {})
+    timeout_recovery = stages.get("recursive_timeout_recovery_child", {})
+    child_model_failover = stages.get("child_model_failover_child", {})
     evidence = stages.get("hle_evidence_bridge", {})
     agent_hipporag = stages.get("agent_hipporag_context_bridge", {})
     claim_verifier = stages.get("candidate_claim_verifier", {})
@@ -6979,8 +9442,19 @@ def _component_efficacy_from_plan(
         "morphism_routing_only": bool(formal_hits or structural_hits) and not bool(prompt.get("context_injected")),
         "world_model_used_context": world_model.get("decision") == "use_context",
         "critic_model_used": critic_router.get("status") == "activated",
+        "child_model_used": child_router.get("status") == "activated",
         "evidence_bridge_activated": evidence_status == "activated",
-        "evidence_child_executed": "evidence_bridge_answer" in prompt_kinds,
+        "evidence_child_executed": any(
+            kind in {
+                "evidence_bridge_answer",
+                "evidence_grounded_answer",
+                "answer_bearing_evidence_candidate",
+            }
+            for kind in prompt_kinds
+        ),
+        "source_supported_evidence_candidate": (
+            (evidence.get("source_supported_candidate") or {}).get("status") == "emitted"
+        ),
         "agent_hipporag_context_activated": agent_hipporag.get("status") == "activated",
         "agent_hipporag_child_executed": "hipporag_context_answer" in prompt_kinds,
         "hipporag_context_priority_used": selection_method == "hipporag_context_priority",
@@ -6988,6 +9462,12 @@ def _component_efficacy_from_plan(
         "recursive_diverse_candidates": unique_candidate_count >= 2,
         "recursive_collapsed_consensus": bool(candidate_hashes) and unique_candidate_count <= 1,
         "recursive_timeout_pressure": int(recursive.get("error_child_count") or 0) > 0,
+        "recursive_timeout_recovery_activated": timeout_recovery.get("status") == "activated",
+        "recursive_timeout_recovery_emitted_candidate": bool(timeout_recovery.get("candidate_emitted")),
+        "recursive_timeout_recovery_selected": bool(timeout_recovery.get("selected_timeout_recovery_candidate")),
+        "child_model_failover_activated": child_model_failover.get("status") == "activated",
+        "child_model_failover_emitted_candidate": bool(child_model_failover.get("candidate_emitted")),
+        "child_model_failover_selected": bool(child_model_failover.get("selected_child_model_failover_candidate")),
         "recursive_early_stopped": bool(recursive.get("early_stopped")),
         "reflective_child_executed": any(
             kind in {"agent_context_answer", "constraint_checked_answer", "recursive_assumption_answer"}
@@ -7004,7 +9484,7 @@ def _component_efficacy_from_plan(
         "domain_rule_mc_verifier_activated": domain_rule.get("status") == "activated",
         "domain_rule_mc_verifier_selected": bool(domain_rule.get("selected_domain_rule_candidate")),
         "domain_rule_mc_verifier_correct": domain_rule.get("candidate_correct_for_eval") is True,
-        "math_tool_verified": math_tool.get("confidence") == "verified_symbolic",
+        "math_tool_verified": math_tool.get("confidence") in {"verified_symbolic", "verified_symbolic_consensus"},
         "mc_option_evidence_scorer_activated": option_evidence.get("status") == "activated",
         "mc_option_evidence_candidate_emitted": bool(option_evidence.get("candidate_emitted")),
         "mc_option_evidence_candidate_selected": bool(option_evidence.get("selected_option_evidence_candidate")),
@@ -7026,7 +9506,12 @@ def _component_efficacy_from_plan(
             and bool(domain_rule.get("selected_domain_rule_candidate"))
         ),
         "verified_math_override": selection_method == "verified_math_tool_priority",
-        "evidence_override": selection_method == "evidence_bridge_priority_over_closed_book_majority",
+        "evidence_override": selection_method in {
+            "evidence_bridge_priority_over_closed_book_majority",
+            "candidate_claim_verifier_priority",
+        } and (
+            (evidence.get("source_supported_candidate") or {}).get("status") == "emitted"
+        ),
         "counter_assumption_challenge_activated": counter_challenge.get("status") == "activated",
         "counter_assumption_challenge_disagreed": bool(counter_challenge.get("challenge_disagreed_with_majority")),
         "counter_assumption_challenge_selected": bool(counter_challenge.get("selected_counter_challenge")),
@@ -7074,6 +9559,12 @@ def _component_efficacy_from_plan(
             "critic_model": critic_router.get("critic_model"),
             "policy": critic_router.get("policy"),
         },
+        "child_model": {
+            "status": child_router.get("status"),
+            "base_model": child_router.get("base_model"),
+            "child_model": child_router.get("child_model"),
+            "policy": child_router.get("policy"),
+        },
         "evidence": {
             "status": evidence.get("status"),
             "selection_policy": evidence.get("selection_policy"),
@@ -7093,6 +9584,9 @@ def _component_efficacy_from_plan(
         "recursive": {
             "status": recursive.get("status"),
             "execution_mode": recursive.get("execution_mode"),
+            "serial_forced_reason": recursive.get("serial_forced_reason"),
+            "base_model": recursive.get("base_model"),
+            "child_model": recursive.get("child_model"),
             "planned_child_count": int(recursive.get("planned_child_count") or 0),
             "child_count": int(recursive.get("child_count") or 0),
             "answered_child_count": int(recursive.get("answered_child_count") or 0),
@@ -7102,6 +9596,28 @@ def _component_efficacy_from_plan(
             "early_stop_reason": recursive.get("early_stop_reason"),
             "prompt_kinds": prompt_kinds,
             "skipped_prompt_kinds": skipped_prompt_kinds,
+        },
+        "recursive_timeout_recovery": {
+            "status": timeout_recovery.get("status"),
+            "reason": timeout_recovery.get("reason"),
+            "valid_candidate_count_before": timeout_recovery.get("valid_candidate_count_before"),
+            "unique_candidate_count_before": timeout_recovery.get("unique_candidate_count_before"),
+            "timeout_child_count_before": timeout_recovery.get("timeout_child_count_before"),
+            "error_child_count_before": timeout_recovery.get("error_child_count_before"),
+            "candidate_emitted": bool(timeout_recovery.get("candidate_emitted")),
+            "selected_timeout_recovery_candidate": bool(timeout_recovery.get("selected_timeout_recovery_candidate")),
+            "recovery_model": timeout_recovery.get("recovery_model"),
+        },
+        "child_model_failover": {
+            "status": child_model_failover.get("status"),
+            "reason": child_model_failover.get("reason"),
+            "base_model": child_model_failover.get("base_model"),
+            "failed_child_model": child_model_failover.get("failed_child_model"),
+            "candidate_emitted": bool(child_model_failover.get("candidate_emitted")),
+            "selected_child_model_failover_candidate": bool(child_model_failover.get("selected_child_model_failover_candidate")),
+            "valid_candidate_count_before": child_model_failover.get("valid_candidate_count_before"),
+            "timeout_child_count_before": child_model_failover.get("timeout_child_count_before"),
+            "error_child_count_before": child_model_failover.get("error_child_count_before"),
         },
         "claim_verifier": {
             "status": claim_status or None,

@@ -1,4 +1,5 @@
 import unittest
+import json
 import os
 import time
 from pathlib import Path
@@ -10,6 +11,8 @@ from assumption_os.hle_smoke_eval import (
     _aggregate_rows,
     _apply_math_candidate_claim_verifier,
     _apply_verified_or_abstain_selection,
+    _agent_child_model,
+    _answer_format_repair_timeout,
     _build_agent_hipporag_child_context,
     _build_hle_evidence_bridge_context,
     _candidate_evidence_queries,
@@ -22,24 +25,33 @@ from assumption_os.hle_smoke_eval import (
     _component_efficacy_summary,
     _control_comparison,
     _counter_assumption_challenge_trigger,
+    _default_call_timeout,
     _deterministic_math_tool_answer,
     _execute_math_tool_plan_text,
     _extract_multiple_choice_options,
     _expected_but_missing_modules,
     _filter_answer_bearing_evidence_results,
+    _force_serial_child_execution_reason,
     _format_evidence_context,
     _has_two_vote_majority,
     _hipporag_style_rerank,
     _is_correct,
     _module_activation_summary,
+    _model_router_subprocess_calls_enabled,
     _maybe_run_forced_alternative_challenge,
     _maybe_run_critic_synthesis_child,
     _maybe_add_mc_option_sweep_candidates,
     _maybe_run_domain_rule_mc_verifier,
     _maybe_run_mc_option_evidence_scorer,
     _maybe_run_option_elimination_challenge,
+    _maybe_run_child_model_failover_child,
+    _maybe_run_timeout_recovery_child,
     _math_tool_child_timeout,
+    _maybe_add_answer_bearing_evidence_candidate,
+    _maybe_mark_answer_bearing_evidence_attempt,
     _module_trace,
+    _model_router_per_attempt_timeout,
+    _model_router_extra_body,
     _needs_exact_answer_repair,
     _needs_evidence_grounded_child,
     _parse_answer_json,
@@ -47,7 +59,13 @@ from assumption_os.hle_smoke_eval import (
     _prompt_for,
     _retrieval_summary_is_generic_harness_only,
     _recursive_child_prompt_specs,
+    _recursive_timeout_recovery_trigger,
+    _recursive_verifier_timeout,
+    _child_model_failover_trigger,
+    _call_recursive_verified_answer,
+    _run_math_tool_attempt,
     _run_child_batch,
+    _single_model_subprocess_call,
     _score_prediction,
     _select_recursive_child_answer,
     _should_run_math_tool_child,
@@ -207,6 +225,12 @@ class HleSmokeEvalTest(unittest.TestCase):
         }
 
         self.assertEqual(len(_recursive_child_prompt_specs(problem, agent_plan={})), 3)
+        with patch.dict(os.environ, {"HLE_ENABLE_EXACT_TRAJECTORY_SEARCH": "1"}):
+            trajectory_specs = _recursive_child_prompt_specs(problem, agent_plan={})
+        self.assertEqual(
+            [spec["prompt_kind"] for spec in trajectory_specs[3:6]],
+            ["decomposition_answer", "adversarial_alternative_answer", "literal_constraint_answer"],
+        )
         specs = _recursive_child_prompt_specs(problem, agent_plan={"prompt_context": "graph context"})
         self.assertEqual(len(specs), 4)
         self.assertEqual(specs[-1]["prompt_kind"], "agent_context_answer")
@@ -298,6 +322,143 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(len(exact_selected), 1)
         self.assertEqual(exact_certificate["status"], "answer_bearing")
         self.assertEqual(exact_certificate["candidate_hit_count"], 1)
+        self.assertEqual(len(exact_certificate["candidate_hit_answer_norm_hashes"]), 1)
+
+    def test_candidate_specific_evidence_queries_and_verified_marking(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "raw_subject": "Computer Science",
+            "category": "Computer Science/AI",
+            "answer_type": "exactMatch",
+            "_question": "Which person is named by the described compiler result?",
+        }
+        queries = _candidate_evidence_queries(problem, candidate_answers=["Ada Lovelace", "Grace Hopper"])
+
+        self.assertIn("Ada Lovelace", queries)
+        self.assertIn("Grace Hopper", queries)
+        self.assertTrue(any("Ada Lovelace Computer Science" in query for query in queries))
+
+        selected, certificate = _filter_answer_bearing_evidence_results(
+            problem=problem,
+            results=[
+                {
+                    "title": "Ada Lovelace",
+                    "snippet": "Ada Lovelace is named by the described compiler result in computer science history.",
+                    "source": "wikipedia",
+                }
+            ],
+            candidate_answers=["Ada Lovelace", "Grace Hopper"],
+            max_results=5,
+        )
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(certificate["status"], "answer_bearing")
+        self.assertEqual(certificate["candidate_hit_count"], 1)
+        self.assertEqual(certificate["candidate_raw_hit_count"], 1)
+
+        attempt = {
+            "child_id": "e1",
+            "child_index": 4,
+            "prompt_kind": "evidence_grounded_answer",
+            "parsed_answer": "Ada Lovelace",
+            "status": "answered",
+        }
+        mark = _maybe_mark_answer_bearing_evidence_attempt(
+            problem=problem,
+            attempt=attempt,
+            evidence_summary={"answer_bearing_certificate": certificate},
+        )
+        self.assertEqual(mark["status"], "marked_verified")
+        self.assertEqual(attempt["candidate_verifier_state"], "verified")
+        self.assertEqual(attempt["candidate_verifier_backend"], "answer_bearing_evidence_bridge")
+
+        selection = _select_recursive_child_answer(
+            problem=problem,
+            attempts=[
+                {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "Grace Hopper"},
+                {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "Grace Hopper"},
+                attempt,
+            ],
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=None,
+            max_tokens=32,
+        )
+        self.assertEqual(selection["selection_method"], "candidate_claim_verifier_priority")
+        self.assertEqual(selection["selected_answer"], "Ada Lovelace")
+
+        wrong_evidence_child = {
+            "child_id": "e2",
+            "child_index": 4,
+            "prompt_kind": "evidence_grounded_answer",
+            "parsed_answer": "Grace Hopper",
+            "status": "answered",
+        }
+        rejected_mark = _maybe_mark_answer_bearing_evidence_attempt(
+            problem=problem,
+            attempt=wrong_evidence_child,
+            evidence_summary={"answer_bearing_certificate": certificate},
+        )
+        self.assertEqual(rejected_mark["status"], "not_marked")
+        supported_attempt, supported_summary = _maybe_add_answer_bearing_evidence_candidate(
+            problem=problem,
+            attempts=[
+                {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "Ada Lovelace"},
+                {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "Grace Hopper"},
+                wrong_evidence_child,
+            ],
+            evidence_summary={"answer_bearing_certificate": certificate},
+        )
+        self.assertEqual(supported_summary["status"], "emitted")
+        self.assertEqual(supported_attempt["prompt_kind"], "answer_bearing_evidence_candidate")
+        self.assertEqual(supported_attempt["parsed_answer"], "Ada Lovelace")
+        self.assertEqual(supported_attempt["candidate_verifier_state"], "verified")
+
+        supported_selection = _select_recursive_child_answer(
+            problem=problem,
+            attempts=[
+                {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "Ada Lovelace"},
+                {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "Grace Hopper"},
+                {"child_id": "c3", "child_index": 3, "prompt_kind": "decomposition_answer", "parsed_answer": "Grace Hopper"},
+                supported_attempt,
+            ],
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=None,
+            max_tokens=32,
+        )
+        self.assertEqual(supported_selection["selection_method"], "candidate_claim_verifier_priority")
+        self.assertEqual(supported_selection["selected_answer"], "Ada Lovelace")
+
+    def test_candidate_specific_evidence_filter_relaxes_overlap_with_subject_anchor(self):
+        problem = {
+            "answer_type": "exactMatch",
+            "raw_subject": "Computer Science",
+            "category": "Computer Science/AI",
+            "_question": "Which compiler pioneer is indicated by the described result?",
+        }
+        selected, certificate = _filter_answer_bearing_evidence_results(
+            problem=problem,
+            results=[
+                {
+                    "title": "Grace Hopper",
+                    "snippet": "Grace Hopper was a computer scientist and programming language pioneer.",
+                    "source": "wikipedia",
+                }
+            ],
+            candidate_answers=["Grace Hopper"],
+            max_results=5,
+        )
+
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(certificate["status"], "answer_bearing")
+        self.assertEqual(certificate["candidate_raw_hit_count"], 1)
+        self.assertEqual(certificate["candidate_relaxed_overlap_count"], 1)
+        self.assertEqual(certificate["candidate_hits_blocked_by_question_overlap"], 0)
 
     def test_answer_bearing_evidence_filter_blocks_non_discriminative_option_context(self):
         problem = {
@@ -374,7 +535,7 @@ class HleSmokeEvalTest(unittest.TestCase):
             answer_type="exactMatch",
         ))
 
-    def test_math_exact_early_stop_requires_reflective_child(self):
+    def test_exact_early_stop_requires_independent_context_child(self):
         math_problem = {
             "answer_type": "exactMatch",
             "category": "Math",
@@ -387,17 +548,22 @@ class HleSmokeEvalTest(unittest.TestCase):
             "raw_subject": "History",
             "_question": "Who wrote the text?",
         }
-        direct_evidence = [
+        direct_constraint = [
             {"prompt_kind": "direct_short_answer", "parsed_answer": "42"},
-            {"prompt_kind": "evidence_bridge_answer", "parsed_answer": "42"},
-        ]
-        with_reflective = direct_evidence + [
             {"prompt_kind": "constraint_checked_answer", "parsed_answer": "42"},
         ]
+        direct_evidence = direct_constraint + [
+            {"prompt_kind": "evidence_bridge_answer", "parsed_answer": "42"},
+        ]
+        with_recursive = direct_constraint + [
+            {"prompt_kind": "recursive_assumption_answer", "parsed_answer": "42"},
+        ]
 
-        self.assertFalse(_can_stop_recursive_children_early(math_problem, direct_evidence))
-        self.assertTrue(_can_stop_recursive_children_early(math_problem, with_reflective))
-        self.assertTrue(_can_stop_recursive_children_early(non_math_problem, direct_evidence))
+        self.assertFalse(_can_stop_recursive_children_early(math_problem, direct_constraint))
+        self.assertTrue(_can_stop_recursive_children_early(math_problem, direct_evidence))
+        self.assertTrue(_can_stop_recursive_children_early(math_problem, with_recursive))
+        self.assertFalse(_can_stop_recursive_children_early(non_math_problem, direct_constraint))
+        self.assertTrue(_can_stop_recursive_children_early(non_math_problem, with_recursive))
 
         mc_problem = {
             "answer_type": "multipleChoice",
@@ -458,6 +624,325 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual([row["status"] for row in result["attempts"]], ["timeout", "timeout"])
         self.assertEqual(result["underlying_model_calls"], 0)
 
+    def test_parallel_child_execution_forces_serial_when_timeout_is_finite(self):
+        self.assertEqual(
+            _force_serial_child_execution_reason(mode="parallel_quorum", timeout=180),
+            "finite_timeout_requires_main_thread_deadline",
+        )
+        self.assertEqual(_force_serial_child_execution_reason(mode="parallel_quorum", timeout=None), "")
+        self.assertEqual(_force_serial_child_execution_reason(mode="serial", timeout=180), "")
+        with patch.dict(os.environ, {"HLE_DISABLE_STRICT_SERIAL_CHILD_TIMEOUT": "1"}, clear=False):
+            self.assertEqual(_force_serial_child_execution_reason(mode="parallel_quorum", timeout=180), "")
+
+    def test_agent_child_model_env_override_is_optional(self):
+        self.assertEqual(_agent_child_model("gpt-5.4-mini"), "gpt-5.4-mini")
+        with patch.dict(os.environ, {"HLE_AGENT_CHILD_MODEL": "gpt-5.5"}, clear=False):
+            self.assertEqual(_agent_child_model("gpt-5.4-mini"), "gpt-5.5")
+
+    def test_recursive_answer_routes_child_generation_model(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Compute the value.",
+        }
+        plan = {"stages": {}}
+        execute_result = {
+            "attempts": [
+                {
+                    "child_id": "c1",
+                    "child_index": 1,
+                    "prompt_kind": "direct_short_answer",
+                    "parsed_answer": "42",
+                    "parsed_answer_hash": "h42",
+                    "status": "answered",
+                }
+            ],
+            "underlying_model_calls": 1,
+            "early_stop_reason": None,
+            "skipped_prompt_kinds": [],
+            "execution_mode": "serial",
+            "serial_forced_reason": None,
+            "child_timeout_sec": 30,
+            "child_max_workers": 1,
+        }
+        selection = {
+            "status": "activated",
+            "selection_method": "normalized_majority",
+            "selected_child_id": "c1",
+            "selected_answer": "42",
+            "underlying_model_calls": 0,
+        }
+        with patch.dict(os.environ, {"HLE_AGENT_CHILD_MODEL": "gpt-5.5"}, clear=False):
+            with patch("assumption_os.hle_smoke_eval._execute_recursive_child_attempts", return_value=execute_result) as execute:
+                with patch("assumption_os.hle_smoke_eval._select_recursive_child_answer", return_value=selection):
+                    with patch("assumption_os.hle_smoke_eval._maybe_run_timeout_recovery_child", return_value=(None, None)):
+                        with patch("assumption_os.hle_smoke_eval._should_run_math_tool_child", return_value=False):
+                            with patch("assumption_os.hle_smoke_eval._should_run_candidate_claim_verifier", return_value=False):
+                                with patch("assumption_os.hle_smoke_eval._maybe_run_mc_option_evidence_scorer", return_value=(None, None)):
+                                    with patch("assumption_os.hle_smoke_eval._maybe_run_domain_rule_mc_verifier", return_value=(None, None)):
+                                        with patch("assumption_os.hle_smoke_eval._maybe_run_counter_assumption_challenge", return_value=(None, None)):
+                                            with patch("assumption_os.hle_smoke_eval._maybe_run_critic_synthesis_child", return_value=(None, None)):
+                                                with patch("assumption_os.hle_smoke_eval._maybe_add_mc_option_sweep_candidates", return_value=([], None)):
+                                                    result = _call_recursive_verified_answer(
+                                                        problem=problem,
+                                                        model="gpt-5.4-mini",
+                                                        agent_plan=plan,
+                                                        eval_id="e",
+                                                        call_id="call",
+                                                        logger=None,
+                                                        timeout=60,
+                                                        child_mode="serial",
+                                                        child_timeout=30,
+                                                        max_tokens=128,
+                                                        evidence_bridge_enabled=False,
+                                                    )
+
+        self.assertEqual(json.loads(result["answer_text"])["answer"], "42")
+        self.assertEqual(execute.call_args.kwargs["model"], "gpt-5.5")
+        self.assertEqual(plan["stages"]["child_model_router"]["child_model"], "gpt-5.5")
+        self.assertEqual(plan["stages"]["recursive_child_validation"]["child_model"], "gpt-5.5")
+
+    def test_timeout_recovery_child_triggers_only_on_candidate_shortage(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Compute the value.",
+        }
+        timeout_attempts = [
+            {"status": "timeout", "prompt_kind": "direct_short_answer", "parsed_answer": ""},
+            {"status": "error", "prompt_kind": "constraint_checked_answer", "parsed_answer": ""},
+        ]
+        trigger = _recursive_timeout_recovery_trigger(problem=problem, attempts=timeout_attempts)
+        self.assertEqual(trigger["status"], "activated")
+        self.assertEqual(trigger["reason"], "timeout_or_error_with_candidate_shortage")
+
+        enough_attempts = timeout_attempts + [
+            {"status": "answered", "prompt_kind": "direct_short_answer", "parsed_answer": "42"},
+            {"status": "answered", "prompt_kind": "constraint_checked_answer", "parsed_answer": "43"},
+        ]
+        abstained = _recursive_timeout_recovery_trigger(problem=problem, attempts=enough_attempts)
+        self.assertEqual(abstained["status"], "abstained")
+        self.assertEqual(abstained["reason"], "sufficient_candidate_diversity")
+
+        verified_math = _recursive_timeout_recovery_trigger(
+            problem=problem,
+            attempts=timeout_attempts,
+            math_tool_summary={"confidence": "verified_symbolic"},
+        )
+        self.assertEqual(verified_math["reason"], "math_tool_already_verified")
+
+    def test_timeout_recovery_child_emits_logged_candidate(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "exactMatch",
+            "category": "Science",
+            "raw_subject": "Chemistry",
+            "_question": "Name the isolated active alkaloid.",
+        }
+        attempts = [
+            {
+                "child_id": "c1",
+                "child_index": 1,
+                "status": "timeout",
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "",
+            },
+            {
+                "child_id": "c2",
+                "child_index": 2,
+                "status": "error",
+                "prompt_kind": "constraint_checked_answer",
+                "parsed_answer": "",
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_TIMEOUT_RECOVERY_MODEL": "gpt-5.5"}, clear=False):
+            with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"answer":"morphine"}') as call_model:
+                attempt, summary = _maybe_run_timeout_recovery_child(
+                    problem=problem,
+                    attempts=attempts,
+                    math_tool_summary=None,
+                    model="gpt-5.4-mini",
+                    eval_id="e",
+                    call_id="call",
+                    logger=None,
+                    timeout=30,
+                    max_tokens=512,
+                )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["prompt_kind"], "timeout_recovery_answer")
+        self.assertEqual(attempt["status"], "answered")
+        self.assertEqual(attempt["parsed_answer"], "morphine")
+        self.assertEqual(summary["status"], "activated")
+        self.assertTrue(summary["candidate_emitted"])
+        self.assertEqual(summary["recovery_model"], "gpt-5.5")
+        self.assertLessEqual(summary["recovery_max_tokens"], 160)
+        self.assertEqual(call_model.call_args.kwargs["model"], "gpt-5.5")
+
+    def test_child_model_failover_triggers_when_candidate_diversity_is_low(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "exactMatch",
+            "category": "Computer Science/AI",
+            "raw_subject": "Computer Science",
+            "_question": "Name the algorithm.",
+        }
+        failed_attempts = [
+            {"status": "error", "prompt_kind": "direct_short_answer", "parsed_answer": ""},
+            {"status": "timeout", "prompt_kind": "constraint_checked_answer", "parsed_answer": ""},
+        ]
+        trigger = _child_model_failover_trigger(
+            problem=problem,
+            attempts=failed_attempts,
+            base_model="gpt-5.4-mini",
+            child_model="gpt-5.5",
+        )
+        self.assertEqual(trigger["status"], "activated")
+        self.assertEqual(trigger["reason"], "child_model_failed_without_valid_candidate")
+
+        with_candidate = failed_attempts + [
+            {"status": "answered", "prompt_kind": "direct_short_answer", "parsed_answer": "Dijkstra"},
+        ]
+        partial = _child_model_failover_trigger(
+            problem=problem,
+            attempts=with_candidate,
+            base_model="gpt-5.4-mini",
+            child_model="gpt-5.5",
+        )
+        self.assertEqual(partial["status"], "activated")
+        self.assertEqual(partial["reason"], "child_model_failure_with_low_candidate_diversity")
+        self.assertEqual(partial["unique_candidate_count"], 1)
+
+        diverse_candidates = failed_attempts + [
+            {"status": "answered", "prompt_kind": "direct_short_answer", "parsed_answer": "Dijkstra"},
+            {"status": "answered", "prompt_kind": "constraint_checked_answer", "parsed_answer": "Bellman-Ford"},
+            {"status": "answered", "prompt_kind": "recursive_assumption_answer", "parsed_answer": "A*"},
+            {"status": "answered", "prompt_kind": "decomposition_answer", "parsed_answer": "Floyd-Warshall"},
+        ]
+        abstained = _child_model_failover_trigger(
+            problem=problem,
+            attempts=diverse_candidates,
+            base_model="gpt-5.4-mini",
+            child_model="gpt-5.5",
+        )
+        self.assertEqual(abstained["status"], "abstained")
+        self.assertEqual(abstained["reason"], "valid_candidate_diversity_already_available")
+
+    def test_child_model_failover_uses_base_model_for_one_candidate(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "exactMatch",
+            "category": "Computer Science/AI",
+            "raw_subject": "Computer Science",
+            "_question": "Name the algorithm.",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "status": "error", "prompt_kind": "direct_short_answer", "parsed_answer": ""},
+            {"child_id": "c2", "child_index": 2, "status": "error", "prompt_kind": "constraint_checked_answer", "parsed_answer": ""},
+        ]
+        with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"answer":"Dijkstra"}') as call_model:
+            attempt, summary = _maybe_run_child_model_failover_child(
+                problem=problem,
+                attempts=attempts,
+                base_model="gpt-5.4-mini",
+                child_model="gpt-5.5",
+                eval_id="e",
+                call_id="call",
+                logger=None,
+                timeout=240,
+                max_tokens=512,
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["prompt_kind"], "child_model_failover_answer")
+        self.assertEqual(attempt["parsed_answer"], "Dijkstra")
+        self.assertEqual(summary["status"], "activated")
+        self.assertTrue(summary["candidate_emitted"])
+        self.assertEqual(summary["base_model"], "gpt-5.4-mini")
+        self.assertEqual(summary["failed_child_model"], "gpt-5.5")
+        self.assertEqual(summary["unique_candidate_count_before"], 0)
+        self.assertEqual(call_model.call_args.kwargs["model"], "gpt-5.4-mini")
+
+    def test_recursive_verifier_timeout_is_capped_separately_from_call_timeout(self):
+        self.assertIsNone(_recursive_verifier_timeout(None))
+        self.assertEqual(_recursive_verifier_timeout(7200), 7200.0)
+        self.assertEqual(_recursive_verifier_timeout(45), 45.0)
+        with patch.dict(os.environ, {"HLE_RECURSIVE_VERIFIER_TIMEOUT_SEC": "37"}, clear=False):
+            self.assertEqual(_recursive_verifier_timeout(7200), 37.0)
+        with patch.dict(os.environ, {"HLE_RECURSIVE_VERIFIER_TIMEOUT_SEC": "0"}, clear=False):
+            self.assertIsNone(_recursive_verifier_timeout(7200))
+
+    def test_model_router_timeout_defaults_are_unbounded(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(_default_call_timeout())
+            self.assertIsNone(_model_router_per_attempt_timeout())
+            self.assertIsNone(_math_tool_child_timeout(None))
+            self.assertIsNone(_answer_format_repair_timeout(None))
+        with patch.dict(os.environ, {"MODEL_ROUTER_TIMEOUT": "240", "MODEL_ROUTER_PER_ATTEMPT_TIMEOUT": "30"}, clear=True):
+            self.assertEqual(_default_call_timeout(), 240.0)
+            self.assertEqual(_model_router_per_attempt_timeout(), 30.0)
+        with patch.dict(os.environ, {"MODEL_ROUTER_TIMEOUT": "none", "MODEL_ROUTER_PER_ATTEMPT_TIMEOUT": "0"}, clear=True):
+            self.assertIsNone(_default_call_timeout())
+            self.assertIsNone(_model_router_per_attempt_timeout())
+        with patch.dict(os.environ, {"HLE_ANSWER_FORMAT_REPAIR_TIMEOUT_SEC": "0"}, clear=True):
+            self.assertIsNone(_answer_format_repair_timeout(120))
+        with patch.dict(os.environ, {"HLE_ANSWER_FORMAT_REPAIR_TIMEOUT_SEC": "45"}, clear=True):
+            self.assertEqual(_answer_format_repair_timeout(None), 45.0)
+
+    def test_model_router_extra_body_is_env_only_and_protected(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(_model_router_extra_body(), {})
+        with patch.dict(
+            os.environ,
+            {
+                "MODEL_ROUTER_REASONING_EFFORT": "low",
+                "MODEL_ROUTER_EXTRA_BODY_JSON": '{"top_p":0.9,"model":"bad","messages":[]}',
+            },
+            clear=True,
+        ):
+            body = _model_router_extra_body()
+        self.assertEqual(body["reasoning_effort"], "low")
+        self.assertEqual(body["top_p"], 0.9)
+        self.assertNotIn("model", body)
+        self.assertNotIn("messages", body)
+
+    def test_model_subprocess_call_does_not_put_api_key_in_command_args(self):
+        with patch.dict(os.environ, {"MODEL_ROUTER_SUBPROCESS_CALLS": "1"}, clear=False):
+            self.assertTrue(_model_router_subprocess_calls_enabled())
+
+        completed = type("Completed", (), {"returncode": 0, "stdout": "ok\n", "stderr": ""})()
+        with patch("assumption_os.hle_smoke_eval.subprocess.run", return_value=completed) as run:
+            text = _single_model_subprocess_call(
+                env={"base_url": "https://example.test", "api_key": "secret-key", "model": "m"},
+                payload={"model": "m", "messages": []},
+                request_timeout=3,
+            )
+
+        self.assertEqual(text, "ok")
+        args = run.call_args.args[0]
+        self.assertNotIn("secret-key", " ".join(args))
+        self.assertIn("secret-key", run.call_args.kwargs["input"])
+        self.assertEqual(run.call_args.kwargs["timeout"], 8.0)
+
+        with patch("assumption_os.hle_smoke_eval.subprocess.run", return_value=completed) as run_unbounded:
+            text = _single_model_subprocess_call(
+                env={"base_url": "https://example.test", "api_key": "secret-key", "model": "m"},
+                payload={"model": "m", "messages": []},
+                request_timeout=None,
+            )
+        self.assertEqual(text, "ok")
+        self.assertIsNone(run_unbounded.call_args.kwargs["timeout"])
+        self.assertIn('"request_timeout": null', run_unbounded.call_args.kwargs["input"])
+
     def test_exact_answer_repair_gate(self):
         exact_problem = {"answer_type": "exactMatch"}
         mc_problem = {"answer_type": "multipleChoice"}
@@ -484,6 +969,15 @@ class HleSmokeEvalTest(unittest.TestCase):
             math_exact_problem,
             [{"parsed_answer": "B"}, {"parsed_answer": "B"}],
         ))
+        with patch.dict(os.environ, {"HLE_ENABLE_EXACT_DIVERSE_EVIDENCE_BRIDGE": "1"}):
+            self.assertTrue(_needs_evidence_grounded_child(
+                exact_problem,
+                [{"parsed_answer": "Ada Lovelace"}, {"parsed_answer": "Marie Curie"}],
+            ))
+            self.assertFalse(_needs_evidence_grounded_child(
+                math_exact_problem,
+                [{"parsed_answer": "41"}, {"parsed_answer": "42"}],
+            ))
         self.assertTrue(_should_prime_evidence_bridge(
             exact_problem,
             {"world_model_router": {"decision": "abstain_to_raw_prompt"}, "prompt_context": ""},
@@ -507,6 +1001,7 @@ class HleSmokeEvalTest(unittest.TestCase):
             "id_hash": "pid",
             "question_hash": "qid",
             "answer_type": "exactMatch",
+            "_question": "Return the exact answer.",
         }
         selection = _select_recursive_child_answer(
             problem=problem,
@@ -561,6 +1056,44 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(direct_selection["selection_method"], "exact_direct_fallback")
         self.assertEqual(direct_selection["selected_answer"], "direct answer")
 
+        with patch.dict(os.environ, {"HLE_ENABLE_EXACT_DIVERSE_VERIFIER": "1"}):
+            with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice": 2}') as call_model:
+                verifier_selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=[
+                        {
+                            "child_id": "c1",
+                            "child_index": 1,
+                            "prompt_kind": "direct_short_answer",
+                            "parsed_answer": "direct answer",
+                        },
+                        {
+                            "child_id": "c2",
+                            "child_index": 2,
+                            "prompt_kind": "constraint_checked_answer",
+                            "parsed_answer": "checked answer",
+                        },
+                        {
+                            "child_id": "c3",
+                            "child_index": 3,
+                            "prompt_kind": "recursive_assumption_answer",
+                            "parsed_answer": "third answer",
+                        },
+                    ],
+                    model="critic",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=None,
+                    max_tokens=32,
+                )
+
+        self.assertEqual(verifier_selection["selection_method"], "verifier_choice")
+        self.assertEqual(verifier_selection["selected_child_id"], "c2")
+        self.assertEqual(verifier_selection["selected_answer"], "checked answer")
+        self.assertTrue(verifier_selection["verifier_model_call"])
+        call_model.assert_called_once()
+
     def test_verified_or_abstain_falls_back_to_direct_for_unverified_selection(self):
         problem = {
             "answer_type": "multipleChoice",
@@ -585,6 +1118,23 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(gated["selected_answer"], "A")
         self.assertEqual(gated["verified_or_abstain_gate"]["status"], "abstained")
         self.assertEqual(gated["verified_or_abstain_gate"]["original_selection_method"], "normalized_majority")
+
+        verifier_selection = {
+            "selection_method": "verifier_choice",
+            "selected_child_id": "context",
+            "selected_answer": "B",
+            "underlying_model_calls": 1,
+            "verifier_model_call": True,
+        }
+        verifier_gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=verifier_selection,
+        )
+
+        self.assertEqual(verifier_gated["selection_method"], "verifier_choice")
+        self.assertEqual(verifier_gated["selected_child_id"], "context")
+        self.assertEqual(verifier_gated["verified_or_abstain_gate"]["status"], "allowed")
 
     def test_verified_or_abstain_allows_verified_selection(self):
         problem = {
@@ -774,6 +1324,362 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertEqual(math_direct_fallback["selection_method"], "math_exact_direct_fallback")
         self.assertEqual(math_direct_fallback["selected_answer"], "direct")
+
+    def test_exact_math_candidate_claim_verifier_uses_executable_equivalence(self):
+        solve_problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Use the described symbolic process to solve for x.",
+        }
+        solve_attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "x = -2 or x = 2", "status": "answered"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "agent_context_answer", "parsed_answer": "2, 3", "status": "answered"},
+            {"child_id": "c3", "child_index": 3, "prompt_kind": "constraint_checked_answer", "parsed_answer": "±2", "status": "answered"},
+            {"child_id": "c4", "child_index": 4, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "The roots are x = -2 and x = 2.", "status": "answered"},
+        ]
+        with patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            return_value='{"operation":"solve","expression":"","equation":"x**2 - 4 = 0","variable":"x","modulus":""}',
+        ):
+            solve_summary = _apply_math_candidate_claim_verifier(
+                solve_problem,
+                solve_attempts,
+                model="m",
+                timeout=1,
+                max_tokens=64,
+            )
+
+        self.assertEqual(solve_summary["backend"], "sympy_candidate_reference_planner")
+        self.assertEqual(solve_summary["verified_count"], 3)
+        self.assertEqual(solve_summary["refuted_count"], 1)
+        self.assertEqual(solve_attempts[0]["candidate_verifier_state"], "verified")
+        self.assertEqual(solve_attempts[0]["candidate_verifier_match_method"], "unordered_collection_equivalence")
+        self.assertEqual(solve_attempts[1]["candidate_verifier_state"], "refuted")
+        self.assertEqual(solve_attempts[2]["candidate_verifier_state"], "verified")
+        self.assertEqual(solve_attempts[2]["candidate_verifier_match_method"], "unordered_collection_equivalence")
+        self.assertEqual(solve_attempts[3]["candidate_verifier_state"], "verified")
+        self.assertEqual(solve_attempts[3]["candidate_verifier_match_method"], "unordered_collection_equivalence")
+
+        solve_selection = _select_recursive_child_answer(
+            problem=solve_problem,
+            attempts=solve_attempts,
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=1,
+            max_tokens=32,
+        )
+        self.assertEqual(solve_selection["selection_method"], "math_exact_normalized_majority")
+        self.assertEqual(solve_selection["selected_answer"], "x = -2 or x = 2")
+        self.assertEqual(solve_attempts[0]["candidate_verifier_trust"], "weak_llm_reference_planner")
+
+        equivalent_majority = _select_recursive_child_answer(
+            problem=solve_problem,
+            attempts=[
+                {"child_id": "m1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "x = -2 or x = 2", "status": "answered"},
+                {"child_id": "m2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "±2", "status": "answered"},
+                {"child_id": "m3", "child_index": 3, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "2, 3", "status": "answered"},
+            ],
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=1,
+            max_tokens=32,
+        )
+        self.assertEqual(equivalent_majority["selection_method"], "math_exact_normalized_majority")
+        self.assertEqual(equivalent_majority["selected_answer"], "x = -2 or x = 2")
+
+        with patch.dict(os.environ, {"HLE_DISABLE_CANDIDATE_CLAIM_VERIFIER": "1"}):
+            self.assertFalse(_should_run_candidate_claim_verifier(solve_problem))
+
+        numeric_problem = {
+            "id_hash": "pid2",
+            "question_hash": "qid2",
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Use the described arithmetic process to determine the final value.",
+        }
+        numeric_attempts = [
+            {"child_id": "n1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "0.5", "status": "answered"},
+            {"child_id": "n2", "child_index": 2, "prompt_kind": "agent_context_answer", "parsed_answer": "0.25", "status": "answered"},
+            {"child_id": "n3", "child_index": 3, "prompt_kind": "constraint_checked_answer", "parsed_answer": "The final answer is \\boxed{1/2}.", "status": "answered"},
+        ]
+        with patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            return_value='{"operation":"evaluate","expression":"1/2","equation":"","variable":"x","modulus":""}',
+        ):
+            numeric_summary = _apply_math_candidate_claim_verifier(
+                numeric_problem,
+                numeric_attempts,
+                model="m",
+                timeout=1,
+                max_tokens=64,
+            )
+
+        self.assertEqual(numeric_summary["verified_count"], 2)
+        self.assertEqual(numeric_summary["refuted_count"], 1)
+        self.assertEqual(numeric_attempts[0]["candidate_verifier_state"], "verified")
+        self.assertIn(
+            numeric_attempts[0]["candidate_verifier_match_method"],
+            {"numeric_equivalence", "numeric_tolerance"},
+        )
+        self.assertEqual(numeric_attempts[2]["candidate_verifier_state"], "verified")
+
+        routed_attempts = [
+            {"child_id": "rt1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "0.5", "status": "answered"},
+            {"child_id": "rt2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "0.25", "status": "answered"},
+        ]
+        with patch.dict(os.environ, {"HLE_CANDIDATE_CLAIM_PLANNER_MODEL": "gpt-5.5"}):
+            with patch(
+                "assumption_os.hle_smoke_eval._call_model",
+                return_value='{"operation":"evaluate","expression":"1/2","equation":"","variable":"x","modulus":""}',
+            ) as call_model:
+                routed_summary = _apply_math_candidate_claim_verifier(
+                    numeric_problem,
+                    routed_attempts,
+                    model="gpt-5.4-mini",
+                    timeout=1,
+                    max_tokens=64,
+                )
+        self.assertEqual(routed_summary["verified_count"], 1)
+        self.assertEqual(call_model.call_args.kwargs["model"], "gpt-5.5")
+
+        multiplan_attempts = [
+            {"child_id": "mp1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "0.5", "status": "answered"},
+            {"child_id": "mp2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "0.25", "status": "answered"},
+        ]
+        with patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            return_value=(
+                '{"plans":['
+                '{"operation":"none","expression":"","equation":"","variable":"x"},'
+                '{"operation":"evaluate","expression":"1/2","equation":"","variable":"x"}'
+                ']}'
+            ),
+        ):
+            multiplan_summary = _apply_math_candidate_claim_verifier(
+                numeric_problem,
+                multiplan_attempts,
+                model="m",
+                timeout=1,
+                max_tokens=64,
+            )
+        self.assertEqual(multiplan_summary["verified_count"], 1)
+        self.assertEqual(multiplan_summary["refuted_count"], 1)
+        self.assertEqual(multiplan_attempts[0]["candidate_verifier_state"], "verified")
+
+        leak_skip_attempts = [
+            {"child_id": "ls1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "0.5", "status": "answered"},
+            {"child_id": "ls2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "0.25", "status": "answered"},
+        ]
+        with patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            return_value=(
+                '{"plans":['
+                '{"operation":"evaluate","expression":"0.5","equation":"","variable":"x"},'
+                '{"operation":"evaluate","expression":"1/2","equation":"","variable":"x"}'
+                ']}'
+            ),
+        ):
+            leak_skip_summary = _apply_math_candidate_claim_verifier(
+                numeric_problem,
+                leak_skip_attempts,
+                model="m",
+                timeout=1,
+                max_tokens=64,
+            )
+        self.assertEqual(leak_skip_summary["verified_count"], 1)
+        self.assertEqual(leak_skip_summary["refuted_count"], 1)
+        self.assertEqual(leak_skip_attempts[0]["candidate_verifier_state"], "verified")
+
+        repair_attempts = [
+            {"child_id": "rp1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "0.5", "status": "answered"},
+            {"child_id": "rp2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "0.25", "status": "answered"},
+        ]
+        with patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            side_effect=[
+                '{"plans":[{"operation":"none","expression":"","equation":"","variable":"x"}]}',
+                '{"plans":[{"operation":"evaluate","expression":"1/2","equation":"","variable":"x"}]}',
+            ],
+        ):
+            repair_summary = _apply_math_candidate_claim_verifier(
+                numeric_problem,
+                repair_attempts,
+                model="m",
+                timeout=1,
+                max_tokens=64,
+            )
+        self.assertEqual(repair_summary["verified_count"], 1)
+        self.assertEqual(repair_summary["refuted_count"], 1)
+        self.assertEqual(repair_summary["underlying_model_calls"], 2)
+        self.assertEqual(repair_attempts[0]["candidate_verifier_state"], "verified")
+
+        python_problem = {
+            "id_hash": "pid5",
+            "question_hash": "qid5",
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Combinatorics",
+            "_question": "Use the described combinatorial process to determine the final count.",
+        }
+        python_attempts = [
+            {"child_id": "py1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "120", "status": "answered"},
+            {"child_id": "py2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "100", "status": "answered"},
+        ]
+        with patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            return_value='{"plans":[{"operation":"python","expression":"comb(10, 3)","variable":"x"}]}',
+        ):
+            python_summary = _apply_math_candidate_claim_verifier(
+                python_problem,
+                python_attempts,
+                model="m",
+                timeout=1,
+                max_tokens=64,
+            )
+        self.assertEqual(python_summary["verified_count"], 1)
+        self.assertEqual(python_summary["refuted_count"], 1)
+        self.assertEqual(python_attempts[0]["candidate_verifier_state"], "verified")
+
+        weak_planner_attempts = [
+            {"child_id": "wp1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "100", "status": "answered"},
+            {"child_id": "wp2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "120", "status": "answered"},
+        ]
+        with patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            return_value='{"plans":[{"operation":"python","expression":"comb(10, 3)","variable":"x"}]}',
+        ):
+            weak_planner_summary = _apply_math_candidate_claim_verifier(
+                python_problem,
+                weak_planner_attempts,
+                model="m",
+                timeout=1,
+                max_tokens=64,
+            )
+        self.assertEqual(weak_planner_summary["status"], "weak_planner_single_verified")
+        self.assertEqual(weak_planner_attempts[1]["candidate_verifier_state"], "verified")
+        self.assertEqual(weak_planner_attempts[1]["candidate_verifier_trust"], "weak_single_planner")
+        weak_selection = _select_recursive_child_answer(
+            problem=python_problem,
+            attempts=weak_planner_attempts,
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=1,
+            max_tokens=32,
+        )
+        self.assertNotEqual(weak_selection["selection_method"], "candidate_claim_verifier_priority")
+
+        error_attempts = [
+            {"child_id": "e1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "42", "status": "answered"},
+        ]
+        with patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            side_effect=RuntimeError("endpoint disconnected"),
+        ):
+            error_summary = _apply_math_candidate_claim_verifier(
+                numeric_problem,
+                error_attempts,
+                model="m",
+                timeout=1,
+                max_tokens=64,
+            )
+
+        self.assertEqual(error_summary["status"], "no_executable_claim")
+        self.assertEqual(error_summary["reference_reason"], "planner_error")
+        self.assertEqual(error_summary["reference_error_type"], "RuntimeError")
+        self.assertEqual(error_summary["underlying_model_calls"], 1)
+
+        deterministic_solve_problem = {
+            "id_hash": "pid3",
+            "question_hash": "qid3",
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Solve $x^2 - 4 = 0$.",
+        }
+        deterministic_attempts = [
+            {"child_id": "d1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "2, 3", "status": "answered"},
+            {"child_id": "d2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "±2", "status": "answered"},
+        ]
+        with patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+            deterministic_summary = _apply_math_candidate_claim_verifier(
+                deterministic_solve_problem,
+                deterministic_attempts,
+                model=None,
+                timeout=1,
+                max_tokens=64,
+            )
+        call_model.assert_not_called()
+        self.assertEqual(deterministic_summary["backend"], "sympy_deterministic")
+        self.assertEqual(deterministic_summary["reference_operation"], "solve")
+        self.assertEqual(deterministic_summary["verified_count"], 1)
+        self.assertEqual(deterministic_summary["refuted_count"], 1)
+        self.assertEqual(deterministic_summary["underlying_model_calls"], 0)
+        self.assertEqual(deterministic_attempts[1]["candidate_verifier_state"], "verified")
+
+        deterministic_simplify_problem = {
+            "id_hash": "pid4",
+            "question_hash": "qid4",
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Simplify $x + x$.",
+        }
+        simplify_attempts = [
+            {"child_id": "s1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "x", "status": "answered"},
+            {"child_id": "s2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "2*x", "status": "answered"},
+        ]
+        with patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+            simplify_summary = _apply_math_candidate_claim_verifier(
+                deterministic_simplify_problem,
+                simplify_attempts,
+                model=None,
+                timeout=1,
+                max_tokens=64,
+            )
+        call_model.assert_not_called()
+        self.assertEqual(simplify_summary["backend"], "sympy_deterministic")
+        self.assertEqual(simplify_summary["reference_operation"], "simplify")
+        self.assertEqual(simplify_summary["verified_count"], 1)
+        self.assertEqual(simplify_summary["refuted_count"], 1)
+        self.assertEqual(simplify_attempts[1]["candidate_verifier_state"], "verified")
+
+        all_wrong_simplify_attempts = [
+            {"child_id": "aw1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "x", "status": "answered"},
+            {"child_id": "aw2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "3*x", "status": "answered"},
+        ]
+        all_wrong_summary = _apply_math_candidate_claim_verifier(
+            deterministic_simplify_problem,
+            all_wrong_simplify_attempts,
+            model=None,
+            timeout=1,
+            max_tokens=64,
+        )
+        self.assertEqual(all_wrong_summary["verified_count"], 1)
+        self.assertEqual(all_wrong_summary["refuted_count"], 2)
+        self.assertEqual(all_wrong_simplify_attempts[-1]["prompt_kind"], "candidate_claim_verifier_answer")
+        self.assertEqual(all_wrong_simplify_attempts[-1]["parsed_answer"], "2*x")
+        synthetic_selection = _select_recursive_child_answer(
+            problem=deterministic_simplify_problem,
+            attempts=all_wrong_simplify_attempts,
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=1,
+            max_tokens=32,
+        )
+        self.assertEqual(synthetic_selection["selection_method"], "candidate_claim_verifier_priority")
+        self.assertEqual(synthetic_selection["selected_answer"], "2*x")
 
     def test_mc_candidate_claim_verifier_can_override_wrong_majority(self):
         problem = {
@@ -1722,17 +2628,313 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertTrue(_should_run_math_tool_child(math_problem))
         self.assertFalse(_should_run_math_tool_child(non_math_problem))
         with patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(_math_tool_child_timeout(7200), 180)
-        with patch.dict(os.environ, {"HLE_MATH_TOOL_CHILD_TIMEOUT_SEC": "0"}):
             self.assertEqual(_math_tool_child_timeout(7200), 7200)
+            self.assertIsNone(_math_tool_child_timeout(None))
+        with patch.dict(os.environ, {"HLE_MATH_TOOL_CHILD_TIMEOUT_SEC": "0"}):
+            self.assertIsNone(_math_tool_child_timeout(7200))
+        with patch.dict(os.environ, {"HLE_MATH_TOOL_CHILD_TIMEOUT_SEC": "180"}):
+            self.assertEqual(_math_tool_child_timeout(7200), 180)
         result = _deterministic_math_tool_answer(math_problem)
         self.assertEqual(result["answer"], "42")
         self.assertEqual(result["confidence"], "verified_symbolic")
+
+        solve_problem = {
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Solve $x^2 - 4 = 0$.",
+        }
+        solve_result = _deterministic_math_tool_answer(solve_problem)
+        self.assertEqual(solve_result["answer"], "-2, 2")
+        self.assertEqual(solve_result["source"], "deterministic_equation_solver")
+        self.assertEqual(solve_result["operation"], "solve")
+
+        root_problem = {
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Find the roots of $x^2 - 4$.",
+        }
+        root_result = _deterministic_math_tool_answer(root_problem)
+        self.assertEqual(root_result["answer"], "-2, 2")
+        self.assertEqual(root_result["source"], "deterministic_root_solver")
+
+        simplify_problem = {
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Simplify $x + x$.",
+        }
+        simplify_result = _deterministic_math_tool_answer(simplify_problem)
+        self.assertEqual(simplify_result["answer"], "2*x")
+        self.assertEqual(simplify_result["source"], "deterministic_transform_solver")
+        self.assertEqual(simplify_result["operation"], "simplify")
+
+        derivative_problem = {
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Find the derivative of $x^3$ with respect to x.",
+        }
+        derivative_result = _deterministic_math_tool_answer(derivative_problem)
+        self.assertEqual(derivative_result["answer"], "3*x**2")
+        self.assertEqual(derivative_result["operation"], "differentiate")
+
+        limit_problem = {
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Evaluate the limit of $sin(x)/x$ as x approaches 0.",
+        }
+        limit_result = _deterministic_math_tool_answer(limit_problem)
+        self.assertEqual(limit_result["answer"], "1")
+        self.assertEqual(limit_result["operation"], "limit")
+
+        factor_result = _deterministic_math_tool_answer({
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Factor $x^2 - 4$.",
+        })
+        self.assertEqual(factor_result["answer"], "(x - 2)*(x + 2)")
+        self.assertEqual(factor_result["operation"], "factor")
 
         plan_result = _execute_math_tool_plan_text(
             '{"operation":"solve","equation":"x**2 - 4 = 0","variable":"x","modulus":""}'
         )
         self.assertEqual(plan_result["answer"], "-2, 2")
+
+        factor_plan_result = _execute_math_tool_plan_text(
+            '{"operation":"factor","expression":"x**2 - 4","variable":"x","modulus":""}'
+        )
+        self.assertEqual(factor_plan_result["answer"], "(x - 2)*(x + 2)")
+
+        selected_math_tool = _select_recursive_child_answer(
+            problem={
+                "id_hash": "pid",
+                "question_hash": "qid",
+                "answer_type": "exactMatch",
+                "category": "Math",
+                "raw_subject": "Mathematics",
+                "_question": "Factor $x^2 - 4$.",
+            },
+            attempts=[
+                {"child_id": "d", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "x**2 - 4", "status": "answered"},
+                {
+                    "child_id": "m",
+                    "child_index": 9001,
+                    "prompt_kind": "math_tool_answer",
+                    "parsed_answer": "(x - 2)*(x + 2)",
+                    "status": "answered",
+                    "tool_confidence": "verified_symbolic",
+                    "tool_source": "deterministic_transform_solver",
+                },
+            ],
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=1,
+            max_tokens=32,
+        )
+        self.assertEqual(selected_math_tool["selection_method"], "verified_math_tool_priority")
+        self.assertEqual(selected_math_tool["selected_answer"], "(x - 2)*(x + 2)")
+
+        symbolic_evaluate = _execute_math_tool_plan_text(
+            '{"operation":"evaluate","expression":"x + x","variable":"x","modulus":""}'
+        )
+        self.assertEqual(symbolic_evaluate["operation"], "simplify")
+        self.assertEqual(symbolic_evaluate["answer"], "2*x")
+        self.assertEqual(symbolic_evaluate["coerced_from_operation"], "evaluate")
+
+        multiplan_result = _execute_math_tool_plan_text(
+            '{"plans":[{"operation":"none"},{"operation":"factor","expression":"x**2 - 4","variable":"x"}]}'
+        )
+        self.assertEqual(multiplan_result["operation"], "factor")
+        self.assertEqual(multiplan_result["answer"], "(x - 2)*(x + 2)")
+        self.assertEqual(multiplan_result["plan_index"], 1)
+        self.assertEqual(multiplan_result["plan_count"], 2)
+
+        consensus_result = _execute_math_tool_plan_text(
+            '{"plans":['
+            '{"operation":"evaluate","expression":"1/2","variable":"x"},'
+            '{"operation":"python","expression":"Fraction(1, 2)","variable":"x"},'
+            '{"operation":"evaluate","expression":"1/3","variable":"x"}'
+            ']}'
+        )
+        self.assertEqual(consensus_result["confidence"], "verified_symbolic_consensus")
+        self.assertEqual(consensus_result["answer"], "1/2")
+        self.assertEqual(consensus_result["plan_agreement_count"], 2)
+
+        consensus_selection = _select_recursive_child_answer(
+            problem=math_problem,
+            attempts=[
+                {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "41"},
+                {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "41"},
+                {
+                    "child_id": "c3",
+                    "child_index": 9001,
+                    "prompt_kind": "math_tool_answer",
+                    "parsed_answer": "42",
+                    "status": "answered",
+                    "tool_confidence": "verified_symbolic_consensus",
+                    "tool_source": "llm_planner",
+                    "tool_summary": {"plan_agreement_count": 2, "plan_success_count": 2},
+                },
+            ],
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=None,
+            max_tokens=32,
+        )
+        self.assertEqual(consensus_selection["selection_method"], "verified_math_tool_priority")
+        self.assertEqual(consensus_selection["selected_answer"], "42")
+
+        single_plan_llm_selection = _select_recursive_child_answer(
+            problem=math_problem,
+            attempts=[
+                {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "41"},
+                {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "41"},
+                {
+                    "child_id": "c3",
+                    "child_index": 9001,
+                    "prompt_kind": "math_tool_answer",
+                    "parsed_answer": "42",
+                    "status": "answered",
+                    "tool_confidence": "verified_symbolic",
+                    "tool_source": "llm_planner",
+                },
+            ],
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=None,
+            max_tokens=32,
+        )
+        self.assertNotEqual(single_plan_llm_selection["selection_method"], "verified_math_tool_priority")
+
+        refuted_consensus_selection = _select_recursive_child_answer(
+            problem=math_problem,
+            attempts=[
+                {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "41"},
+                {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "41"},
+                {
+                    "child_id": "c3",
+                    "child_index": 9001,
+                    "prompt_kind": "math_tool_answer",
+                    "parsed_answer": "42",
+                    "status": "answered",
+                    "tool_confidence": "verified_symbolic_consensus",
+                    "tool_source": "llm_planner",
+                    "tool_summary": {"plan_agreement_count": 2, "plan_success_count": 2},
+                    "candidate_verifier_state": "refuted",
+                    "candidate_verifier_backend": "sympy_candidate_reference_planner",
+                },
+            ],
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=None,
+            max_tokens=32,
+        )
+        self.assertNotEqual(refuted_consensus_selection["selection_method"], "verified_math_tool_priority")
+
+        weak_reference_consensus_selection = _select_recursive_child_answer(
+            problem=math_problem,
+            attempts=[
+                {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "41"},
+                {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "41"},
+                {
+                    "child_id": "c3",
+                    "child_index": 9001,
+                    "prompt_kind": "math_tool_answer",
+                    "parsed_answer": "42",
+                    "status": "answered",
+                    "tool_confidence": "verified_symbolic_consensus",
+                    "tool_source": "llm_planner",
+                    "tool_summary": {"plan_agreement_count": 2, "plan_success_count": 2},
+                    "candidate_verifier_trust": "weak_llm_reference_planner",
+                },
+            ],
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=None,
+            max_tokens=32,
+        )
+        self.assertNotEqual(weak_reference_consensus_selection["selection_method"], "verified_math_tool_priority")
+
+        all_failed_result = _execute_math_tool_plan_text(
+            '{"plans":[{"operation":"none"},{"operation":"evaluate","expression":"not a safe expression","variable":"x"}]}'
+        )
+        self.assertEqual(all_failed_result["confidence"], "abstain")
+        self.assertIn(all_failed_result["reason"], {"all_candidate_plans_failed", "planner_abstained", "equation_solve_failed"})
+        self.assertEqual(all_failed_result["plan_count"], 2)
+
+        python_comb = _execute_math_tool_plan_text(
+            '{"operation":"python","expression":"comb(10, 3)","variable":"x"}'
+        )
+        self.assertEqual(python_comb["answer"], "120")
+        self.assertEqual(python_comb["operation"], "python")
+
+        python_sum = _execute_math_tool_plan_text(
+            '{"operation":"python","expression":"sum(i*i for i in range(4))","variable":"x"}'
+        )
+        self.assertEqual(python_sum["answer"], "14")
+
+        repair_problem = {
+            "id_hash": "repair_pid",
+            "question_hash": "repair_qid",
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Compute the finite count described by the combinatorial process.",
+        }
+        with patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            side_effect=[
+                '{"plans":[{"operation":"none","expression":"","equation":"","variable":"x"}]}',
+                '{"plans":[{"operation":"python","expression":"comb(10, 3)","variable":"x"}]}',
+            ],
+        ) as call_model:
+            repair_attempt = _run_math_tool_attempt(
+                problem=repair_problem,
+                model="m",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=64,
+            )
+        self.assertEqual(call_model.call_count, 2)
+        self.assertEqual(repair_attempt["status"], "answered")
+        self.assertEqual(repair_attempt["parsed_answer"], "120")
+        self.assertEqual(repair_attempt["tool_confidence"], "verified_symbolic")
+        self.assertEqual(repair_attempt["underlying_model_calls"], 2)
+        self.assertEqual(repair_attempt["tool_summary"]["source"], "llm_planner_repair")
+        self.assertEqual(repair_attempt["tool_summary"]["reason"], None)
+
+        python_fraction = _execute_math_tool_plan_text(
+            '{"operation":"python","expression":"Fraction(1, 3) + Fraction(1, 6)","variable":"x"}'
+        )
+        self.assertEqual(python_fraction["answer"], "1/2")
+
+        unsafe_python = _execute_math_tool_plan_text(
+            '{"operation":"python","expression":"__import__(\\\"os\\\").system(\\\"echo bad\\\")","variable":"x"}'
+        )
+        self.assertEqual(unsafe_python["confidence"], "abstain")
+        self.assertEqual(unsafe_python["reason"], "unsafe_python_expression")
+
+        repaired_symbolic_evaluate = _execute_math_tool_plan_text(
+            '{"operation":"evaluate","expression":"f(x) = x + x where x is real","variable":"x","modulus":""}'
+        )
+        self.assertEqual(repaired_symbolic_evaluate["operation"], "simplify")
+        self.assertEqual(repaired_symbolic_evaluate["answer"], "2*x")
 
         derivative = _execute_math_tool_plan_text(
             '{"operation":"differentiate","expression":"x**3","variable":"x","order":"1"}'
@@ -2005,6 +3207,17 @@ class HleSmokeEvalTest(unittest.TestCase):
                     "skipped_prompt_kinds": ["constraint_checked_answer", "recursive_assumption_answer"],
                     "candidate_answer_hashes": ["h1", "h1", "h1"],
                 },
+                "recursive_timeout_recovery_child": {
+                    "status": "activated",
+                    "reason": "timeout_or_error_with_candidate_shortage",
+                    "valid_candidate_count_before": 1,
+                    "unique_candidate_count_before": 1,
+                    "timeout_child_count_before": 1,
+                    "error_child_count_before": 1,
+                    "candidate_emitted": True,
+                    "selected_timeout_recovery_candidate": False,
+                    "recovery_model": "gpt-5.5",
+                },
                 "candidate_claim_verifier": {
                     "status": "no_executable_claim",
                     "backend": "sympy_mc_option_planner",
@@ -2050,6 +3263,10 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertTrue(efficacy["flags"]["evidence_bridge_activated"])
         self.assertTrue(efficacy["flags"]["evidence_child_executed"])
         self.assertTrue(efficacy["flags"]["recursive_collapsed_consensus"])
+        self.assertTrue(efficacy["flags"]["recursive_timeout_recovery_activated"])
+        self.assertTrue(efficacy["flags"]["recursive_timeout_recovery_emitted_candidate"])
+        self.assertFalse(efficacy["flags"]["recursive_timeout_recovery_selected"])
+        self.assertEqual(efficacy["recursive_timeout_recovery"]["recovery_model"], "gpt-5.5")
         self.assertTrue(efficacy["flags"]["claim_verifier_no_executable_claim"])
         self.assertTrue(efficacy["flags"]["counter_assumption_challenge_activated"])
         self.assertTrue(efficacy["flags"]["option_elimination_challenge_activated"])
