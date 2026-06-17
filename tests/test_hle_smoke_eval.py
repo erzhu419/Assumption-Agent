@@ -44,6 +44,7 @@ from assumption_os.hle_smoke_eval import (
     _maybe_run_domain_rule_mc_verifier,
     _maybe_run_mc_option_evidence_scorer,
     _maybe_run_option_elimination_challenge,
+    _maybe_run_raw_preserve_selector_child,
     _maybe_run_child_model_failover_child,
     _maybe_run_timeout_recovery_child,
     _math_tool_child_timeout,
@@ -54,9 +55,11 @@ from assumption_os.hle_smoke_eval import (
     _model_router_extra_body,
     _needs_exact_answer_repair,
     _needs_evidence_grounded_child,
+    _normalize_problem_hashes,
     _parse_answer_json,
     _parse_verifier_choice,
     _prompt_for,
+    _read_problem_hashes_file,
     _retrieval_summary_is_generic_harness_only,
     _recursive_child_prompt_specs,
     _recursive_timeout_recovery_trigger,
@@ -72,6 +75,7 @@ from assumption_os.hle_smoke_eval import (
     _should_run_candidate_claim_verifier,
     _should_use_agent_context,
     _should_prime_evidence_bridge,
+    build_hle_text_smoke_eval_payload,
 )
 
 
@@ -107,6 +111,17 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertFalse(row["gold_answer_persisted"])
         self.assertNotIn("_question", row)
         self.assertNotIn("_answer", row)
+
+    def test_problem_hash_manifest_parsing_is_hash_only_and_deduped(self):
+        with TemporaryDirectory() as tmp:
+            text_path = Path(tmp) / "hashes.txt"
+            text_path.write_text("abc\n# comment\nabc\n def \n", encoding="utf-8")
+            json_path = Path(tmp) / "hashes.json"
+            json_path.write_text(json.dumps({"sample_problem_hashes": ["x", "x", "y"]}), encoding="utf-8")
+
+            self.assertEqual(_read_problem_hashes_file(text_path), ["abc", "def"])
+            self.assertEqual(_read_problem_hashes_file(json_path), ["x", "y"])
+            self.assertEqual(_normalize_problem_hashes(["a", "", "a", "# skip", "b"]), ["a", "b"])
 
     def test_aggregate_rows(self):
         rows = [
@@ -872,6 +887,63 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(summary["unique_candidate_count_before"], 0)
         self.assertEqual(call_model.call_args.kwargs["model"], "gpt-5.4-mini")
 
+    def test_disable_recursive_runner_disables_child_verifier_path(self):
+        sample = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_hash": "ahid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Chemistry",
+            "_question": "Which option is correct?",
+            "_answer": "A",
+            "choices": ["A. alpha", "B. beta"],
+            "scanned_index": 0,
+        }
+        plan = {
+            "prompt_context": "bounded graph context",
+            "stages": {
+                "assumption_graph_retrieval": {"status": "activated"},
+                "structural_morphism_transfer": {"status": "activated"},
+                "world_model_router": {"status": "activated", "decision": "inject"},
+            },
+        }
+        with TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {"HLE_DISABLE_RECURSIVE_ASSUMPTION_RUNNER": "1"}, clear=False):
+                with patch(
+                    "assumption_os.hle_smoke_eval._access_preflight",
+                    return_value={"dataset_accessible": True},
+                ):
+                    with patch("assumption_os.hle_smoke_eval._load_text_only_sample", return_value=[sample]):
+                        with patch("assumption_os.hle_smoke_eval._build_assumption_agent_plan", return_value=plan):
+                            with patch(
+                                "assumption_os.hle_smoke_eval._call_recursive_verified_answer",
+                                side_effect=AssertionError("recursive verifier should be disabled"),
+                            ):
+                                with patch(
+                                    "assumption_os.hle_smoke_eval._call_model",
+                                    return_value='{"answer":"A"}',
+                                ) as call_model:
+                                    payload = build_hle_text_smoke_eval_payload(
+                                        root=Path(tmp),
+                                        eval_id="unit_no_recursive",
+                                        sample_size=1,
+                                        execute_live=True,
+                                        models=["gpt-5.4-mini"],
+                                        variants=["assumption_agent_recursive_verify"],
+                                    )
+
+        self.assertEqual(call_model.call_count, 1)
+        self.assertEqual(payload["api_summary"]["underlying_model_calls_executed"], 1)
+        row = payload["rows"][0]
+        self.assertTrue(row["correct"])
+        by_module = {item["module"]: item for item in row["module_trace"]}
+        self.assertEqual(by_module["recursive_child_validation"]["status"], "disabled")
+        self.assertEqual(by_module["multi_candidate_self_verifier"]["status"], "disabled")
+        efficacy = row["component_efficacy"]
+        self.assertFalse(efficacy["flags"]["recursive_child_validation_activated"])
+        self.assertEqual(efficacy["recursive"]["status"], "disabled")
+
     def test_recursive_verifier_timeout_is_capped_separately_from_call_timeout(self):
         self.assertIsNone(_recursive_verifier_timeout(None))
         self.assertEqual(_recursive_verifier_timeout(7200), 7200.0)
@@ -1135,6 +1207,57 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(verifier_gated["selection_method"], "verifier_choice")
         self.assertEqual(verifier_gated["selected_child_id"], "context")
         self.assertEqual(verifier_gated["verified_or_abstain_gate"]["status"], "allowed")
+
+    def test_raw_preserve_selector_candidate_and_fallback_priority(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw\nB. context",
+        }
+        with patch.dict(os.environ, {"HLE_ENABLE_RAW_PRESERVE_SELECTOR": "1"}), patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            return_value='{"answer":"A"}',
+        ) as call_model:
+            attempt, summary = _maybe_run_raw_preserve_selector_child(
+                problem=problem,
+                attempts=[
+                    {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "B"}
+                ],
+                model="base-model",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertIsNotNone(summary)
+        self.assertEqual(attempt["prompt_kind"], "raw_preserve_selector_answer")
+        self.assertEqual(attempt["parsed_answer"], "A")
+        self.assertEqual(summary["status"], "activated")
+        self.assertEqual(summary["underlying_model_calls"], 1)
+        call_model.assert_called_once()
+
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "B"},
+            {"child_id": "rawp", "child_index": 2, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+        ]
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "B",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+        with patch.dict(os.environ, {"HLE_ENABLE_RAW_PRESERVE_SELECTOR": "1"}):
+            gated = _apply_verified_or_abstain_selection(problem=problem, attempts=attempts, selection=selection)
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "rawp")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(gated["verified_or_abstain_gate"]["fallback_prompt_kind"], "raw_preserve_selector_answer")
 
     def test_verified_or_abstain_allows_verified_selection(self):
         problem = {

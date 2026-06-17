@@ -26,12 +26,16 @@ from .hle_smoke_eval import (
     DATASET_NAME,
     HLE_OFFICIAL_SOURCES,
     _aggregate_rows,
+    _cast_image_columns,
     _component_efficacy_summary,
     _collect_existing_hle_problem_hashes,
     _control_comparison,
     _expected_but_missing_modules,
+    _has_image_payload,
+    _hf_token,
     _load_text_only_sample,
     _module_activation_summary,
+    _problem_from_row,
 )
 
 
@@ -61,6 +65,7 @@ class ShardSpec:
     md_out: Path
     log_out: Path
     stdout_out: Path
+    sample_problem_hashes_file: Path | None = None
 
 
 @dataclass
@@ -120,6 +125,83 @@ def build_shard_specs(
     return specs
 
 
+def attach_fixed_problem_hash_manifests(
+    *,
+    specs: list[ShardSpec],
+    problem_hashes_file: Path,
+    manifest_dir: Path,
+) -> tuple[list[ShardSpec], dict[str, Any]]:
+    hashes = _read_problem_hash_manifest(problem_hashes_file)
+    if not hashes:
+        return specs, {
+            "enabled": True,
+            "status": "empty_or_unreadable",
+            "source": str(problem_hashes_file),
+            "raw_content_persisted": False,
+        }
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    out_specs: list[ShardSpec] = []
+    cursor = 0
+    remaps: list[dict[str, Any]] = []
+    for spec in specs:
+        shard_hashes = hashes[cursor : cursor + spec.sample_size]
+        cursor += spec.sample_size
+        shard_manifest = manifest_dir / f"{spec.eval_id}.problem_hashes.json"
+        shard_manifest.write_text(json.dumps(shard_hashes, ensure_ascii=False, indent=2), encoding="utf-8")
+        out_specs.append(replace(spec, sample_problem_hashes_file=shard_manifest))
+        remaps.append({
+            "shard_index": spec.shard_index,
+            "sample_count": len(shard_hashes),
+            "sample_problem_hashes": shard_hashes,
+            "manifest": str(shard_manifest),
+            "raw_content_persisted": False,
+        })
+    return out_specs, {
+        "enabled": True,
+        "status": "completed",
+        "source": str(problem_hashes_file),
+        "source_hash_count": len(hashes),
+        "assigned_hash_count": sum(row["sample_count"] for row in remaps),
+        "remaps": remaps,
+        "raw_content_persisted": False,
+    }
+
+
+def _read_problem_hash_manifest(path: Path) -> list[str]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    stripped = text.strip()
+    if not stripped:
+        return []
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        values = stripped.splitlines()
+    else:
+        if isinstance(parsed, list):
+            values = parsed
+        elif isinstance(parsed, dict):
+            values = (
+                parsed.get("sample_problem_hashes")
+                or parsed.get("problem_hashes")
+                or parsed.get("hashes")
+                or []
+            )
+        else:
+            values = []
+    seen: set[str] = set()
+    out: list[str] = []
+    for value in values:
+        item = str(value).strip()
+        if not item or item.startswith("#") or item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+
 def dedupe_shard_specs_by_sample_hash(
     *,
     root: Path,
@@ -140,12 +222,35 @@ def dedupe_shard_specs_by_sample_hash(
     """
     if not specs:
         return specs, {"enabled": True, "status": "empty", "raw_content_persisted": False, "remaps": []}
-    loader = sample_loader or _load_text_only_sample
     excluded_hashes = (
         _collect_existing_hle_problem_hashes(root=root, artifact_glob=exclude_artifact_glob)
         if exclude_existing_hle_artifacts
         else set()
     )
+    if sample_loader is None:
+        try:
+            return _dedupe_shard_specs_by_problem_pool(
+                specs=specs,
+                problems=_load_text_only_problem_pool_for_specs(
+                    specs=specs,
+                    max_scan=max_scan,
+                    seed_stride=seed_stride,
+                    max_attempts=max_attempts,
+                    exclude_problem_hashes=excluded_hashes,
+                    sample_answer_type=sample_answer_type,
+                    sample_subject_contains=sample_subject_contains,
+                ),
+                seed_stride=seed_stride,
+                max_attempts=max_attempts,
+                excluded_existing_problem_count=len(excluded_hashes),
+                mode="single_stream_pool",
+            )
+        except Exception:
+            # Fall back to the slower per-shard loader path. The error is not
+            # persisted because provider or dataset messages can include noisy
+            # transport detail; downstream gates will still verify duplicates.
+            pass
+    loader = sample_loader or _load_text_only_sample
     seen: set[str] = set()
     deduped: list[ShardSpec] = []
     remaps: list[dict[str, Any]] = []
@@ -198,6 +303,124 @@ def dedupe_shard_specs_by_sample_hash(
         "excluded_existing_problem_count": len(excluded_hashes),
         "accepted_shard_count": sum(1 for row in remaps if row["status"] == "accepted"),
         "duplicate_fallback_count": duplicate_count,
+        "remaps": remaps,
+        "raw_content_persisted": False,
+    }
+
+
+def _load_text_only_problem_pool_for_specs(
+    *,
+    specs: list[ShardSpec],
+    max_scan: int,
+    seed_stride: int,
+    max_attempts: int,
+    exclude_problem_hashes: set[str],
+    sample_answer_type: str,
+    sample_subject_contains: str,
+) -> list[dict[str, Any]]:
+    from datasets import Image, load_dataset
+
+    min_seed = min(max(0, int(spec.seed_offset)) for spec in specs)
+    max_candidate_seed = max(
+        max(0, int(spec.seed_offset)) + max(0, max_attempts) * max(1, seed_stride)
+        for spec in specs
+    )
+    scan_limit = max_scan + max_candidate_seed
+    dataset = load_dataset(DATASET_NAME, split="test", streaming=True, token=_hf_token())
+    dataset = _cast_image_columns(dataset, Image)
+    problems: list[dict[str, Any]] = []
+    skipped = 0
+    for scanned, row in enumerate(dataset, start=1):
+        if scanned > scan_limit:
+            break
+        if scanned <= min_seed:
+            continue
+        if _has_image_payload(row):
+            skipped += 1
+            continue
+        if not str(row.get("question") or "").strip() or not str(row.get("answer") or "").strip():
+            skipped += 1
+            continue
+        if sample_answer_type and str(row.get("answer_type") or "") != sample_answer_type:
+            skipped += 1
+            continue
+        if sample_subject_contains:
+            haystack = " ".join([
+                str(row.get("category") or ""),
+                str(row.get("raw_subject") or ""),
+            ]).lower()
+            if sample_subject_contains.lower() not in haystack:
+                skipped += 1
+                continue
+        problem = _problem_from_row(row, scanned=scanned, skipped_before=skipped)
+        if problem["id_hash"] in exclude_problem_hashes:
+            skipped += 1
+            continue
+        problems.append(problem)
+    return problems
+
+
+def _dedupe_shard_specs_by_problem_pool(
+    *,
+    specs: list[ShardSpec],
+    problems: list[dict[str, Any]],
+    seed_stride: int,
+    max_attempts: int,
+    excluded_existing_problem_count: int,
+    mode: str,
+) -> tuple[list[ShardSpec], dict[str, Any]]:
+    seen: set[str] = set()
+    deduped: list[ShardSpec] = []
+    remaps: list[dict[str, Any]] = []
+    sorted_problems = sorted(problems, key=lambda row: int(row.get("scanned_index") or 0))
+    for spec in specs:
+        original_seed = spec.seed_offset
+        candidate_seed = original_seed
+        selected_spec = spec
+        selected_hashes: list[str] = []
+        selected_status = "fallback_unchecked"
+        duplicate_hashes: list[str] = []
+        for attempt_index in range(max(1, max_attempts + 1)):
+            selected_rows = [
+                problem for problem in sorted_problems
+                if int(problem.get("scanned_index") or 0) > candidate_seed
+            ][: spec.sample_size]
+            hashes = [str(row.get("id_hash")) for row in selected_rows if row.get("id_hash")]
+            duplicate_hashes = sorted(set(hashes) & seen)
+            enough_rows = len(hashes) >= spec.sample_size
+            if enough_rows and not duplicate_hashes:
+                selected_spec = replace(spec, seed_offset=candidate_seed)
+                selected_hashes = hashes
+                selected_status = "accepted"
+                break
+            selected_hashes = hashes
+            selected_status = "duplicate" if duplicate_hashes else "insufficient_sample"
+            candidate_seed += max(1, seed_stride)
+        deduped.append(selected_spec)
+        seen.update(selected_hashes)
+        remaps.append(
+            {
+                "shard_index": spec.shard_index,
+                "original_seed_offset": original_seed,
+                "selected_seed_offset": selected_spec.seed_offset,
+                "status": selected_status,
+                "attempt_count": attempt_index + 1,
+                "sample_count": len(selected_hashes),
+                "sample_problem_hashes": selected_hashes,
+                "duplicate_problem_hashes": duplicate_hashes,
+                "raw_content_persisted": False,
+            }
+        )
+    return deduped, {
+        "enabled": True,
+        "status": "completed",
+        "mode": mode,
+        "max_attempts": max_attempts,
+        "seed_stride": seed_stride,
+        "excluded_existing_problem_count": excluded_existing_problem_count,
+        "problem_pool_count": len(sorted_problems),
+        "accepted_shard_count": sum(1 for row in remaps if row["status"] == "accepted"),
+        "duplicate_fallback_count": sum(1 for row in remaps if row["status"] == "duplicate"),
         "remaps": remaps,
         "raw_content_persisted": False,
     }
@@ -277,6 +500,8 @@ def build_shard_command(
         cmd.extend(["--sample-answer-type", sample_answer_type])
     if sample_subject_contains:
         cmd.extend(["--sample-subject-contains", sample_subject_contains])
+    if spec.sample_problem_hashes_file is not None:
+        cmd.extend(["--sample-problem-hashes-file", str(spec.sample_problem_hashes_file)])
     return cmd
 
 
@@ -1357,7 +1582,14 @@ def build_payload_without_execution(args: argparse.Namespace) -> tuple[list[Shar
         md_dir=md_dir,
     )
     dedupe_summary: dict[str, Any] = {"enabled": False}
-    if getattr(args, "dedupe_shard_samples", False):
+    sample_hash_file = _path_arg(args.sample_problem_hashes_file, root=root) if getattr(args, "sample_problem_hashes_file", "") else None
+    if sample_hash_file is not None:
+        specs, dedupe_summary = attach_fixed_problem_hash_manifests(
+            specs=specs,
+            problem_hashes_file=sample_hash_file,
+            manifest_dir=run_dir / "fixed_problem_hash_manifests",
+        )
+    elif getattr(args, "dedupe_shard_samples", False):
         try:
             specs, dedupe_summary = dedupe_shard_specs_by_sample_hash(
                 root=root,
@@ -1428,6 +1660,7 @@ def main() -> None:
     parser.add_argument("--dedupe-shard-max-attempts", type=int, default=25)
     parser.add_argument("--sample-answer-type", default="")
     parser.add_argument("--sample-subject-contains", default="")
+    parser.add_argument("--sample-problem-hashes-file", default="")
     parser.add_argument("--models", default="gpt-5.4-mini")
     parser.add_argument("--variants", default="raw,assumption_agent_recursive_verify,hipporag_baseline")
     parser.add_argument("--execute-live", action="store_true")
