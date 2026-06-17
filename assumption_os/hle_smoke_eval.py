@@ -177,7 +177,27 @@ def build_hle_text_smoke_eval_payload(
                     )
                     started = time.monotonic()
                     try:
-                        if variant == "assumption_agent_recursive_verify":
+                        if variant == "assumption_agent_recursive_verify" and _recursive_answering_disabled():
+                            answer_text = _call_model(
+                                model=model,
+                                prompt=_prompt_for(problem, variant=variant, agent_plan=agent_plan),
+                                timeout=call_timeout,
+                                max_tokens=max_tokens,
+                            )
+                            api_summary["underlying_model_calls_executed"] += 1
+                            (agent_plan or {}).setdefault("stages", {})["recursive_child_validation"] = {
+                                "status": "disabled",
+                                "reason": "env_disabled",
+                                "child_count": 0,
+                                "underlying_model_calls": 0,
+                            }
+                            (agent_plan or {}).setdefault("stages", {})["multi_candidate_self_verifier"] = {
+                                "status": "disabled",
+                                "reason": "recursive_runner_disabled",
+                                "underlying_model_calls": 0,
+                            }
+                            module_trace = _module_trace(problem, variant=variant, agent_plan=agent_plan)
+                        elif variant == "assumption_agent_recursive_verify":
                             solved = _call_recursive_verified_answer(
                                 problem=problem,
                                 model=model,
@@ -194,6 +214,22 @@ def build_hle_text_smoke_eval_payload(
                             answer_text = solved["answer_text"]
                             api_summary["underlying_model_calls_executed"] += solved["underlying_model_calls"]
                             module_trace = _module_trace(problem, variant=variant, agent_plan=agent_plan)
+                        elif _is_budget_matched_control_variant(variant):
+                            variant_plan = variant_plan or {"stages": {}}
+                            solved = _call_budget_matched_control_answer(
+                                problem=problem,
+                                model=model,
+                                variant=variant,
+                                variant_plan=variant_plan,
+                                eval_id=eval_id,
+                                call_id=call_id,
+                                logger=logger,
+                                timeout=call_timeout,
+                                max_tokens=max_tokens,
+                            )
+                            answer_text = solved["answer_text"]
+                            api_summary["underlying_model_calls_executed"] += solved["underlying_model_calls"]
+                            module_trace = _module_trace(problem, variant=variant, agent_plan=variant_plan)
                         else:
                             answer_text = _call_model(
                                 model=model,
@@ -1158,6 +1194,177 @@ def _prompt_for(problem: dict[str, Any], *, variant: str, agent_plan: dict[str, 
     return f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
 
 
+def _is_budget_matched_control_variant(variant: str) -> bool:
+    return variant in {"raw_budget_matched", "hipporag_budget_matched"}
+
+
+def _budget_control_base_variant(variant: str) -> str:
+    return "hipporag_baseline" if variant.startswith("hipporag") else "raw"
+
+
+def _call_budget_matched_control_answer(
+    *,
+    problem: dict[str, Any],
+    model: str,
+    variant: str,
+    variant_plan: dict[str, Any],
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> dict[str, Any]:
+    specs = _budget_matched_control_prompt_specs(problem, variant=variant, variant_plan=variant_plan)
+    max_workers = _budget_matched_control_workers(len(specs))
+    batch = _run_child_batch(
+        problem=problem,
+        specs=specs,
+        start_index=1,
+        model=model,
+        variant=variant,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=max_tokens,
+        max_workers=max_workers,
+    )
+    attempts = batch["attempts"]
+    selection = _select_recursive_child_answer(
+        problem=problem,
+        attempts=attempts,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=min(max_tokens, 384),
+        evidence_context=str((variant_plan or {}).get("prompt_context") or ""),
+    )
+    selection = _apply_verified_or_abstain_selection(problem=problem, attempts=attempts, selection=selection)
+    selected_answer = selection.get("selected_answer") or _fallback_answer(attempts)
+    selected_hash = stable_hash({"answer": selected_answer})
+    answered_count = sum(1 for attempt in attempts if attempt.get("status") == "answered")
+    stages = variant_plan.setdefault("stages", {})
+    stages["budget_matched_control"] = {
+        "status": "activated",
+        "base_variant": _budget_control_base_variant(variant),
+        "execution_mode": "parallel_self_consistency",
+        "candidate_count": len(attempts),
+        "answered_candidate_count": answered_count,
+        "error_candidate_count": len(attempts) - answered_count,
+        "candidate_prompt_kinds": [attempt.get("prompt_kind") for attempt in attempts],
+        "candidate_answer_hashes": [
+            attempt.get("parsed_answer_hash") for attempt in attempts if attempt.get("parsed_answer_hash")
+        ],
+        "child_max_workers": batch.get("max_workers"),
+        "selection_method": selection.get("selection_method"),
+        "selected_child_id": selection.get("selected_child_id"),
+        "selected_answer_hash": selected_hash,
+        "verifier_model_call": bool(selection.get("verifier_model_call")),
+        "verified_or_abstain_gate": selection.get("verified_or_abstain_gate"),
+        "underlying_model_calls": int(batch.get("underlying_model_calls") or 0)
+        + int(selection.get("underlying_model_calls") or 0),
+    }
+    _agent_stage_log(
+        logger,
+        eval_id=eval_id,
+        call_id=call_id,
+        problem=problem,
+        model=model,
+        variant=variant,
+        stage="budget_matched_control",
+        data=stages["budget_matched_control"],
+    )
+    return {
+        "answer_text": json.dumps({"answer": selected_answer}, ensure_ascii=False),
+        "underlying_model_calls": stages["budget_matched_control"]["underlying_model_calls"],
+    }
+
+
+def _budget_matched_control_prompt_specs(
+    problem: dict[str, Any],
+    *,
+    variant: str,
+    variant_plan: dict[str, Any],
+) -> list[dict[str, str]]:
+    question = problem["_question"]
+    answer_type = problem["answer_type"]
+    output = (
+        "Return JSON only: {\"answer\":\"...\"}. For multiple choice, answer with the single letter only. "
+        "For exact match, answer with the shortest exact answer."
+    )
+    base_variant = _budget_control_base_variant(variant)
+    base_prompt = _prompt_for(problem, variant=base_variant, agent_plan=variant_plan)
+    context_prefix = ""
+    if base_variant == "hipporag_baseline" and (variant_plan or {}).get("prompt_context"):
+        context_prefix = (
+            "Use the same retrieval context as a standard HippoRAG-style QA baseline. "
+            "Do not use an Assumption Graph, morphism transfer, world model, or recursive assumption tree.\n\n"
+        )
+    specs = [
+        {"prompt_kind": "direct_short_answer", "prompt": base_prompt},
+        {
+            "prompt_kind": "constraint_checked_answer",
+            "prompt": (
+                f"{context_prefix}Solve independently and internally verify that the answer obeys the exact output "
+                f"contract. Do not expose reasoning.\n\nAnswer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
+            ),
+        },
+        {
+            "prompt_kind": "skeptical_recheck_answer",
+            "prompt": (
+                f"{context_prefix}Re-solve the item from scratch. Assume the most obvious answer may be wrong; check "
+                f"wording, exclusions, units, and option labels before answering. Do not expose reasoning.\n\n"
+                f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
+            ),
+        },
+        {
+            "prompt_kind": "literal_constraint_answer",
+            "prompt": (
+                f"{context_prefix}Choose the answer that best satisfies every explicit constraint in the question. "
+                f"Ignore unrelated priors and return only JSON.\n\n"
+                f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
+            ),
+        },
+    ]
+    if problem.get("answer_type") == "multipleChoice":
+        specs.append({
+            "prompt_kind": "option_elimination_baseline_answer",
+            "prompt": (
+                f"{context_prefix}Evaluate the listed options one by one and eliminate options contradicted by the "
+                f"question wording. Return only the final option letter as JSON, with no reasoning.\n\n"
+                f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
+            ),
+        })
+    if base_variant == "hipporag_baseline" and (variant_plan or {}).get("prompt_context"):
+        specs.insert(1, {
+            "prompt_kind": "hipporag_context_answer",
+            "prompt": base_prompt,
+        })
+    return specs[: _budget_matched_control_candidate_count()]
+
+
+def _budget_matched_control_candidate_count() -> int:
+    value = os.environ.get("HLE_BUDGET_MATCHED_CANDIDATE_COUNT", "").strip()
+    if value:
+        try:
+            return max(1, min(12, int(value)))
+        except ValueError:
+            pass
+    return 5
+
+
+def _budget_matched_control_workers(candidate_count: int) -> int:
+    value = os.environ.get("HLE_BUDGET_MATCHED_MAX_WORKERS", "").strip()
+    if value:
+        try:
+            return max(1, min(candidate_count, int(value)))
+        except ValueError:
+            pass
+    return max(1, min(candidate_count, 5))
+
+
 def _call_recursive_verified_answer(
     *,
     problem: dict[str, Any],
@@ -1441,6 +1648,23 @@ def _call_recursive_verified_answer(
     )
     if option_sweep_attempts:
         attempts.extend(option_sweep_attempts)
+
+    raw_preserve_summary: dict[str, Any] | None = None
+    raw_preserve_attempt, raw_preserve_summary = _maybe_run_raw_preserve_selector_child(
+        problem=problem,
+        attempts=attempts,
+        agent_plan=agent_plan,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=child_timeout if child_timeout is not None else timeout,
+        max_tokens=max_tokens,
+    )
+    if raw_preserve_attempt:
+        attempts.append(raw_preserve_attempt)
+        if raw_preserve_attempt.get("status") == "answered":
+            underlying_calls += 1
 
     selection = _select_recursive_child_answer(
         problem=problem,
@@ -1775,6 +1999,178 @@ def _agent_hipporag_child_enabled(problem: dict[str, Any]) -> bool:
     return problem.get("answer_type") == "multipleChoice"
 
 
+def _recursive_answering_disabled() -> bool:
+    return os.environ.get("HLE_DISABLE_RECURSIVE_ASSUMPTION_RUNNER", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _maybe_run_raw_preserve_selector_child(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    agent_plan: dict[str, Any] | None = None,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    env_forced = os.environ.get("HLE_ENABLE_RAW_PRESERVE_SELECTOR", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    trigger = _cost_aware_raw_preserve_trigger(
+        problem=problem,
+        attempts=attempts,
+        agent_plan=agent_plan or {},
+    )
+    if not env_forced and trigger.get("status") != "activated":
+        return None, None
+    child_index = _timeout_recovery_child_index(attempts)
+    attempt = _run_child_attempt(
+        problem=problem,
+        spec={
+            "prompt_kind": "raw_preserve_selector_answer",
+            "prompt": _prompt_for(problem, variant="raw"),
+        },
+        child_index=child_index,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
+    summary = {
+        "status": "activated",
+        "policy": (
+            "env_forced_no_context_base_model_candidate"
+            if env_forced
+            else "cost_aware_regression_guard_no_context_candidate"
+        ),
+        "trigger": trigger if not env_forced else {"status": "activated", "reason": "env_forced"},
+        "base_model": model,
+        "child_id": attempt.get("child_id"),
+        "child_index": attempt.get("child_index"),
+        "child_status": attempt.get("status"),
+        "child_error_type": attempt.get("error_type"),
+        "candidate_emitted": bool(str(attempt.get("parsed_answer") or "").strip()),
+        "candidate_answer_hash": attempt.get("parsed_answer_hash"),
+        "underlying_model_calls": 1 if attempt.get("status") == "answered" else 0,
+    }
+    return attempt, summary
+
+
+def _cost_aware_raw_preserve_trigger(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    agent_plan: dict[str, Any],
+) -> dict[str, Any]:
+    if os.environ.get("HLE_DISABLE_COST_AWARE_RAW_PRESERVE_SELECTOR", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return {"status": "abstained", "reason": "disabled"}
+    enabled = os.environ.get("HLE_ENABLE_COST_AWARE_RAW_PRESERVE_SELECTOR", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not enabled:
+        return {"status": "abstained", "reason": "not_enabled"}
+    if problem.get("answer_type") != "multipleChoice":
+        return {"status": "abstained", "reason": "not_multiple_choice"}
+    valid = _valid_recursive_answer_attempts(problem=problem, attempts=attempts)
+    if not valid:
+        return {"status": "abstained", "reason": "no_valid_candidates"}
+    trusted_verified = [
+        attempt for attempt in valid
+        if attempt.get("candidate_verifier_state") == "verified"
+        and _is_trusted_candidate_verifier_attempt(attempt)
+    ]
+    if trusted_verified:
+        return {
+            "status": "abstained",
+            "reason": "trusted_verified_candidate_available",
+            "verified_count": len(trusted_verified),
+        }
+    normalized = {
+        _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type="multipleChoice")
+        for attempt in valid
+        if str(attempt.get("parsed_answer") or "").strip()
+    }
+    unique_count = len({value for value in normalized if value})
+    prompt_kinds = {str(attempt.get("prompt_kind") or "") for attempt in valid}
+    domain = _classify_hle_domain(problem)
+    text = " ".join([
+        str(problem.get("category") or ""),
+        str(problem.get("raw_subject") or ""),
+    ]).lower()
+    world_model = (agent_plan.get("stages") or {}).get("world_model_router") or agent_plan.get("world_model_router") or {}
+    generic_graph_only = bool(world_model.get("generic_graph_context_only"))
+    graph_context_used = bool((agent_plan.get("stages") or {}).get("prompt_builder", {}).get("context_injected"))
+    high_regression_domain = (
+        domain == "humanities_social_science"
+        or "social" in text
+        or "humanit" in text
+        or "history" in text
+        or "law" in text
+    )
+    high_divergence = unique_count >= 4
+    recursive_pressure = any(
+        kind in prompt_kinds
+        for kind in {
+            "counter_assumption_challenge_answer",
+            "option_elimination_challenge_answer",
+            "forced_alternative_answer",
+            "critic_synthesis_answer",
+        }
+    )
+    if high_regression_domain and high_divergence:
+        return {
+            "status": "activated",
+            "reason": "high_regression_domain_with_unverified_divergent_candidates",
+            "domain": domain,
+            "unique_candidate_count": unique_count,
+            "valid_candidate_count": len(valid),
+            "generic_graph_context_only": generic_graph_only,
+            "graph_context_used": graph_context_used,
+            "recursive_pressure": recursive_pressure,
+        }
+    if generic_graph_only and high_divergence and "hipporag_context_answer" in prompt_kinds:
+        return {
+            "status": "activated",
+            "reason": "generic_graph_plus_hipporag_disagreement_without_verification",
+            "domain": domain,
+            "unique_candidate_count": unique_count,
+            "valid_candidate_count": len(valid),
+            "generic_graph_context_only": generic_graph_only,
+            "graph_context_used": graph_context_used,
+            "recursive_pressure": recursive_pressure,
+        }
+    return {
+        "status": "abstained",
+        "reason": "risk_below_threshold",
+        "domain": domain,
+        "unique_candidate_count": unique_count,
+        "valid_candidate_count": len(valid),
+        "generic_graph_context_only": generic_graph_only,
+        "graph_context_used": graph_context_used,
+        "recursive_pressure": recursive_pressure,
+    }
+
+
 def _build_agent_hipporag_child_context(
     *,
     problem: dict[str, Any],
@@ -2011,6 +2407,7 @@ def _run_child_batch(
     timeout: float | None,
     max_tokens: int,
     max_workers: int,
+    variant: str = "assumption_agent_recursive_verify",
 ) -> dict[str, Any]:
     if not specs:
         return {"attempts": [], "underlying_model_calls": 0, "max_workers": 0}
@@ -2028,6 +2425,7 @@ def _run_child_batch(
                 spec=spec,
                 child_index=child_index,
                 model=model,
+                variant=variant,
                 eval_id=eval_id,
                 call_id=call_id,
                 logger=logger,
@@ -2050,6 +2448,7 @@ def _run_child_batch(
                         spec=spec,
                         child_index=child_index,
                         model=model,
+                        variant=variant,
                         eval_id=eval_id,
                         call_id=call_id,
                         logger=logger,
@@ -2073,6 +2472,7 @@ def _child_timeout_attempt(
     spec: dict[str, str],
     child_index: int,
     model: str,
+    variant: str,
     eval_id: str,
     call_id: str,
     logger: "_JsonlLogger | None",
@@ -2101,7 +2501,7 @@ def _child_timeout_attempt(
             "child_index": child_index,
             "problem_id_hash": problem["id_hash"],
             "model": model,
-            "variant": "assumption_agent_recursive_verify",
+            "variant": variant,
             "prompt_kind": spec["prompt_kind"],
             "latency_sec": latency_sec,
             "timeout_sec": timeout,
@@ -2121,6 +2521,7 @@ def _run_child_attempt(
     logger: "_JsonlLogger | None",
     timeout: float | None,
     max_tokens: int,
+    variant: str = "assumption_agent_recursive_verify",
 ) -> dict[str, Any]:
     child_id = stable_hash({"call_id": call_id, "child_index": child_index, "prompt_kind": spec["prompt_kind"]})
     _log_event(
@@ -2134,7 +2535,7 @@ def _run_child_attempt(
             "problem_id_hash": problem["id_hash"],
             "question_hash": problem["question_hash"],
             "model": model,
-            "variant": "assumption_agent_recursive_verify",
+            "variant": variant,
             "prompt_kind": spec["prompt_kind"],
             "timeout_sec": timeout,
         },
@@ -2167,7 +2568,7 @@ def _run_child_attempt(
                 "child_index": child_index,
                 "problem_id_hash": problem["id_hash"],
                 "model": model,
-                "variant": "assumption_agent_recursive_verify",
+                "variant": variant,
                 "prompt_kind": spec["prompt_kind"],
                 "latency_sec": attempt["latency_sec"],
                 "parsed_answer_hash": attempt["parsed_answer_hash"],
@@ -2197,7 +2598,7 @@ def _run_child_attempt(
                 "child_index": child_index,
                 "problem_id_hash": problem["id_hash"],
                 "model": model,
-                "variant": "assumption_agent_recursive_verify",
+                "variant": variant,
                 "prompt_kind": spec["prompt_kind"],
                 "latency_sec": attempt["latency_sec"],
                 "error_type": type(exc).__name__,
@@ -6682,6 +7083,7 @@ def _verified_or_abstain_fallback_candidate(
     if not candidates:
         return None
     preferred_prompt_kinds = [
+        "raw_preserve_selector_answer",
         "direct_short_answer",
         "constraint_checked_answer",
         "recursive_assumption_answer",
@@ -8579,6 +8981,66 @@ def _module_trace(problem: dict[str, Any], *, variant: str, agent_plan: dict[str
     marks true Assumption Agent subsystems as skipped when this smoke wrapper
     has not actually invoked them.
     """
+    if _is_budget_matched_control_variant(variant):
+        stages = (agent_plan or {}).get("stages", {})
+        base_variant = _budget_control_base_variant(variant)
+        return [
+            {
+                "module": "answer_type_router",
+                "expected": True,
+                "status": "activated",
+                "reason": f"answer_type={problem.get('answer_type') or 'unknown'} controls output contract",
+            },
+            {
+                "module": "baseline_prompt_builder",
+                "expected": True,
+                "status": _stage_status(stages, "prompt_builder") if base_variant == "hipporag_baseline" else "activated",
+                "reason": f"{base_variant} prompt is used without Assumption Agent context",
+            },
+            {
+                "module": "budget_matched_self_consistency",
+                "expected": True,
+                "status": _stage_status(stages, "budget_matched_control"),
+                "reason": "control baseline receives multiple independent candidates under a matched-call budget",
+            },
+            {
+                "module": "budget_matched_verifier",
+                "expected": True,
+                "status": _stage_status(stages, "budget_matched_control"),
+                "reason": "control baseline selects among candidates by majority/verifier without graph, morphism, or world model",
+            },
+            {
+                "module": "assumption_graph_retrieval",
+                "expected": False,
+                "status": "not_applicable",
+                "reason": "budget-matched control must not use the Assumption Graph",
+            },
+            {
+                "module": "structural_morphism_transfer",
+                "expected": False,
+                "status": "not_applicable",
+                "reason": "budget-matched control must not use morphism transfer",
+            },
+            {
+                "module": "world_model_router",
+                "expected": False,
+                "status": "not_applicable",
+                "reason": "budget-matched control must not use the Assumption Agent world model",
+            },
+            {
+                "module": "recursive_assumption_runner",
+                "expected": False,
+                "status": "not_applicable",
+                "reason": "budget-matched control does self-consistency, not recursive assumption generation",
+            },
+            {
+                "module": "answer_format_verifier",
+                "expected": True,
+                "status": "activated",
+                "reason": "JSON answer parser and answer-type scorer run after each response",
+            },
+        ]
+
     if variant.startswith("hipporag"):
         stages = (agent_plan or {}).get("stages", {})
         return [
@@ -9350,6 +9812,41 @@ def _component_efficacy_from_plan(
     }
     if variant == "raw":
         base["kind"] = "raw_single_call"
+        return base
+    if _is_budget_matched_control_variant(variant):
+        budget = stages.get("budget_matched_control", {})
+        base.update({
+            "kind": "budget_matched_control",
+            "budget_matched_control": {
+                "status": budget.get("status"),
+                "base_variant": budget.get("base_variant"),
+                "candidate_count": int(budget.get("candidate_count") or 0),
+                "answered_candidate_count": int(budget.get("answered_candidate_count") or 0),
+                "error_candidate_count": int(budget.get("error_candidate_count") or 0),
+                "child_max_workers": int(budget.get("child_max_workers") or 0),
+                "selection_method": budget.get("selection_method"),
+                "verifier_model_call": bool(budget.get("verifier_model_call")),
+                "underlying_model_calls": int(budget.get("underlying_model_calls") or 0),
+            },
+            "selection": {
+                "status": budget.get("status"),
+                "selection_method": budget.get("selection_method"),
+                "verifier_model_call": bool(budget.get("verifier_model_call")),
+                "verified_or_abstain_gate": budget.get("verified_or_abstain_gate"),
+            },
+        })
+        base["flags"].update({
+            "budget_matched_control_activated": budget.get("status") == "activated",
+            "budget_matched_verifier_used": bool(budget.get("verifier_model_call")),
+            "verified_or_abstain_allowed": (
+                isinstance(budget.get("verified_or_abstain_gate"), dict)
+                and budget.get("verified_or_abstain_gate", {}).get("status") == "allowed"
+            ),
+            "verified_or_abstain_abstained": (
+                isinstance(budget.get("verified_or_abstain_gate"), dict)
+                and budget.get("verified_or_abstain_gate", {}).get("status") == "abstained"
+            ),
+        })
         return base
     if variant.startswith("hipporag"):
         retrieval = stages.get("hipporag_context_retrieval", {})

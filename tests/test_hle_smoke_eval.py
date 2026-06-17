@@ -24,6 +24,7 @@ from assumption_os.hle_smoke_eval import (
     _component_efficacy_from_plan,
     _component_efficacy_summary,
     _control_comparison,
+    _cost_aware_raw_preserve_trigger,
     _counter_assumption_challenge_trigger,
     _default_call_timeout,
     _deterministic_math_tool_answer,
@@ -44,6 +45,7 @@ from assumption_os.hle_smoke_eval import (
     _maybe_run_domain_rule_mc_verifier,
     _maybe_run_mc_option_evidence_scorer,
     _maybe_run_option_elimination_challenge,
+    _maybe_run_raw_preserve_selector_child,
     _maybe_run_child_model_failover_child,
     _maybe_run_timeout_recovery_child,
     _math_tool_child_timeout,
@@ -72,6 +74,7 @@ from assumption_os.hle_smoke_eval import (
     _should_run_candidate_claim_verifier,
     _should_use_agent_context,
     _should_prime_evidence_bridge,
+    build_hle_text_smoke_eval_payload,
 )
 
 
@@ -872,6 +875,159 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(summary["unique_candidate_count_before"], 0)
         self.assertEqual(call_model.call_args.kwargs["model"], "gpt-5.4-mini")
 
+    def test_disable_recursive_runner_disables_child_verifier_path(self):
+        sample = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_hash": "ahid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Chemistry",
+            "_question": "Which option is correct?",
+            "_answer": "A",
+            "choices": ["A. alpha", "B. beta"],
+            "scanned_index": 0,
+        }
+        plan = {
+            "prompt_context": "bounded graph context",
+            "stages": {
+                "assumption_graph_retrieval": {"status": "activated"},
+                "structural_morphism_transfer": {"status": "activated"},
+                "world_model_router": {"status": "activated", "decision": "inject"},
+            },
+        }
+        with TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {"HLE_DISABLE_RECURSIVE_ASSUMPTION_RUNNER": "1"}, clear=False):
+                with patch(
+                    "assumption_os.hle_smoke_eval._access_preflight",
+                    return_value={"dataset_accessible": True},
+                ):
+                    with patch("assumption_os.hle_smoke_eval._load_text_only_sample", return_value=[sample]):
+                        with patch("assumption_os.hle_smoke_eval._build_assumption_agent_plan", return_value=plan):
+                            with patch(
+                                "assumption_os.hle_smoke_eval._call_recursive_verified_answer",
+                                side_effect=AssertionError("recursive verifier should be disabled"),
+                            ):
+                                with patch(
+                                    "assumption_os.hle_smoke_eval._call_model",
+                                    return_value='{"answer":"A"}',
+                                ) as call_model:
+                                    payload = build_hle_text_smoke_eval_payload(
+                                        root=Path(tmp),
+                                        eval_id="unit_no_recursive",
+                                        sample_size=1,
+                                        execute_live=True,
+                                        models=["gpt-5.4-mini"],
+                                        variants=["assumption_agent_recursive_verify"],
+                                    )
+
+        self.assertEqual(call_model.call_count, 1)
+        self.assertEqual(payload["api_summary"]["underlying_model_calls_executed"], 1)
+        row = payload["rows"][0]
+        self.assertTrue(row["correct"])
+        by_module = {item["module"]: item for item in row["module_trace"]}
+        self.assertEqual(by_module["recursive_child_validation"]["status"], "disabled")
+        self.assertEqual(by_module["multi_candidate_self_verifier"]["status"], "disabled")
+        efficacy = row["component_efficacy"]
+        self.assertFalse(efficacy["flags"]["recursive_child_validation_activated"])
+        self.assertEqual(efficacy["recursive"]["status"], "disabled")
+
+    def test_raw_budget_matched_control_uses_multiple_calls_without_agent_modules(self):
+        sample = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_hash": "ahid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. alpha\nB. beta\nC. gamma",
+            "_answer": "A",
+            "choices": ["A. alpha", "B. beta", "C. gamma"],
+            "scanned_index": 0,
+        }
+        with TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ,
+                {
+                    "HLE_BUDGET_MATCHED_CANDIDATE_COUNT": "3",
+                    "HLE_BUDGET_MATCHED_MAX_WORKERS": "2",
+                },
+                clear=False,
+            ):
+                with patch("assumption_os.hle_smoke_eval._access_preflight", return_value={"dataset_accessible": True}):
+                    with patch("assumption_os.hle_smoke_eval._load_text_only_sample", return_value=[sample]):
+                        with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"answer":"A"}') as call_model:
+                            payload = build_hle_text_smoke_eval_payload(
+                                root=Path(tmp),
+                                eval_id="unit_raw_budget_matched",
+                                sample_size=1,
+                                execute_live=True,
+                                models=["gpt-5.5"],
+                                variants=["raw_budget_matched"],
+                            )
+
+        self.assertEqual(call_model.call_count, 3)
+        self.assertEqual(payload["api_summary"]["underlying_model_calls_executed"], 3)
+        row = payload["rows"][0]
+        self.assertTrue(row["correct"])
+        self.assertEqual(row["variant"], "raw_budget_matched")
+        by_module = {item["module"]: item for item in row["module_trace"]}
+        self.assertEqual(by_module["budget_matched_self_consistency"]["status"], "activated")
+        self.assertEqual(by_module["assumption_graph_retrieval"]["status"], "not_applicable")
+        self.assertEqual(by_module["structural_morphism_transfer"]["status"], "not_applicable")
+        self.assertEqual(by_module["world_model_router"]["status"], "not_applicable")
+        self.assertEqual(by_module["recursive_assumption_runner"]["status"], "not_applicable")
+        efficacy = row["component_efficacy"]
+        self.assertEqual(efficacy["kind"], "budget_matched_control")
+        self.assertEqual(efficacy["budget_matched_control"]["base_variant"], "raw")
+        self.assertEqual(efficacy["budget_matched_control"]["candidate_count"], 3)
+        self.assertTrue(efficacy["flags"]["budget_matched_control_activated"])
+
+    def test_hipporag_budget_matched_control_keeps_retrieval_but_not_agent_modules(self):
+        sample = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_hash": "ahid",
+            "answer_type": "multipleChoice",
+            "category": "Humanities/Social Science",
+            "raw_subject": "History",
+            "_question": "Which option is correct?\nA. alpha\nB. beta\nC. gamma",
+            "_answer": "B",
+            "choices": ["A. alpha", "B. beta", "C. gamma"],
+            "scanned_index": 0,
+        }
+        hippo_plan = {
+            "prompt_context": "[HippoRAG evidence] beta is explicitly supported.",
+            "stages": {"prompt_builder": {"status": "activated", "context_injected": True}},
+        }
+        with TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {"HLE_BUDGET_MATCHED_CANDIDATE_COUNT": "2"}, clear=False):
+                with patch("assumption_os.hle_smoke_eval._access_preflight", return_value={"dataset_accessible": True}):
+                    with patch("assumption_os.hle_smoke_eval._load_text_only_sample", return_value=[sample]):
+                        with patch("assumption_os.hle_smoke_eval._build_hipporag_baseline_plan", return_value=hippo_plan):
+                            with patch(
+                                "assumption_os.hle_smoke_eval._call_model",
+                                return_value='{"answer":"B"}',
+                            ) as call_model:
+                                payload = build_hle_text_smoke_eval_payload(
+                                    root=Path(tmp),
+                                    eval_id="unit_hippo_budget_matched",
+                                    sample_size=1,
+                                    execute_live=True,
+                                    models=["gpt-5.5"],
+                                    variants=["hipporag_budget_matched"],
+                                )
+
+        self.assertEqual(call_model.call_count, 2)
+        row = payload["rows"][0]
+        self.assertTrue(row["correct"])
+        by_module = {item["module"]: item for item in row["module_trace"]}
+        self.assertEqual(by_module["baseline_prompt_builder"]["status"], "activated")
+        self.assertEqual(by_module["budget_matched_self_consistency"]["status"], "activated")
+        self.assertEqual(by_module["assumption_graph_retrieval"]["status"], "not_applicable")
+        self.assertEqual(by_module["recursive_assumption_runner"]["status"], "not_applicable")
+        self.assertEqual(row["component_efficacy"]["budget_matched_control"]["base_variant"], "hipporag_baseline")
+
     def test_recursive_verifier_timeout_is_capped_separately_from_call_timeout(self):
         self.assertIsNone(_recursive_verifier_timeout(None))
         self.assertEqual(_recursive_verifier_timeout(7200), 7200.0)
@@ -1135,6 +1291,152 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(verifier_gated["selection_method"], "verifier_choice")
         self.assertEqual(verifier_gated["selected_child_id"], "context")
         self.assertEqual(verifier_gated["verified_or_abstain_gate"]["status"], "allowed")
+
+    def test_raw_preserve_selector_candidate_and_fallback_priority(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw\nB. context",
+        }
+        with patch.dict(os.environ, {"HLE_ENABLE_RAW_PRESERVE_SELECTOR": "1"}), patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            return_value='{"answer":"A"}',
+        ) as call_model:
+            attempt, summary = _maybe_run_raw_preserve_selector_child(
+                problem=problem,
+                attempts=[
+                    {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "B"}
+                ],
+                model="base-model",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertIsNotNone(summary)
+        self.assertEqual(attempt["prompt_kind"], "raw_preserve_selector_answer")
+        self.assertEqual(attempt["parsed_answer"], "A")
+        self.assertEqual(summary["status"], "activated")
+        self.assertEqual(summary["underlying_model_calls"], 1)
+        call_model.assert_called_once()
+
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "B"},
+            {"child_id": "rawp", "child_index": 2, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+        ]
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "B",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+        with patch.dict(os.environ, {"HLE_ENABLE_RAW_PRESERVE_SELECTOR": "1"}):
+            gated = _apply_verified_or_abstain_selection(problem=problem, attempts=attempts, selection=selection)
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "rawp")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(gated["verified_or_abstain_gate"]["fallback_prompt_kind"], "raw_preserve_selector_answer")
+
+    def test_cost_aware_raw_preserve_trigger_is_narrow_and_unverified(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Humanities/Social Science",
+            "raw_subject": "History",
+            "_question": "Which interpretation is best?\nA. a\nB. b\nC. c\nD. d",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "B"},
+            {"child_id": "c3", "child_index": 3, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "C"},
+            {"child_id": "c4", "child_index": 4, "prompt_kind": "critic_synthesis_answer", "parsed_answer": "D"},
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_COST_AWARE_RAW_PRESERVE_SELECTOR": "1"}, clear=False):
+            trigger = _cost_aware_raw_preserve_trigger(problem=problem, attempts=attempts, agent_plan={})
+
+        self.assertEqual(trigger["status"], "activated")
+        self.assertEqual(trigger["reason"], "high_regression_domain_with_unverified_divergent_candidates")
+
+        verified_attempts = attempts + [{
+            "child_id": "v",
+            "child_index": 5,
+            "prompt_kind": "candidate_claim_verifier_answer",
+            "parsed_answer": "B",
+            "candidate_verifier_state": "verified",
+        }]
+        with patch.dict(os.environ, {"HLE_ENABLE_COST_AWARE_RAW_PRESERVE_SELECTOR": "1"}, clear=False):
+            verified_trigger = _cost_aware_raw_preserve_trigger(
+                problem=problem,
+                attempts=verified_attempts,
+                agent_plan={},
+            )
+
+        self.assertEqual(verified_trigger["status"], "abstained")
+        self.assertEqual(verified_trigger["reason"], "trusted_verified_candidate_available")
+
+    def test_cost_aware_raw_preserve_selector_runs_only_when_triggered(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Humanities/Social Science",
+            "raw_subject": "History",
+            "_question": "Which interpretation is best?\nA. a\nB. b\nC. c\nD. d",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "B"},
+            {"child_id": "c3", "child_index": 3, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "C"},
+            {"child_id": "c4", "child_index": 4, "prompt_kind": "critic_synthesis_answer", "parsed_answer": "D"},
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_COST_AWARE_RAW_PRESERVE_SELECTOR": "1"}, clear=False), patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            return_value='{"answer":"A"}',
+        ) as call_model:
+            attempt, summary = _maybe_run_raw_preserve_selector_child(
+                problem=problem,
+                attempts=attempts,
+                agent_plan={},
+                model="base-model",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(summary["policy"], "cost_aware_regression_guard_no_context_candidate")
+        self.assertEqual(summary["trigger"]["status"], "activated")
+        call_model.assert_called_once()
+
+        science_problem = dict(problem, category="Science", raw_subject="Physics")
+        with patch.dict(os.environ, {"HLE_ENABLE_COST_AWARE_RAW_PRESERVE_SELECTOR": "1"}, clear=False), patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            return_value='{"answer":"A"}',
+        ) as no_call_model:
+            skipped_attempt, skipped_summary = _maybe_run_raw_preserve_selector_child(
+                problem=science_problem,
+                attempts=attempts[:2],
+                agent_plan={},
+                model="base-model",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+
+        self.assertIsNone(skipped_attempt)
+        self.assertIsNone(skipped_summary)
+        no_call_model.assert_not_called()
 
     def test_verified_or_abstain_allows_verified_selection(self):
         problem = {

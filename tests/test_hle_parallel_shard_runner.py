@@ -18,12 +18,14 @@ from assumption_os.hle_parallel_shard_runner import (
     build_error_stratification,
     build_failure_diagnostics,
     build_heartbeat,
+    build_model_budget_fairness_audit,
     build_pollution_audit,
     build_runner_env,
     build_shard_command,
     build_shard_specs,
     dedupe_shard_specs_by_sample_hash,
     format_parallel_markdown,
+    mark_reusable_completed_shards,
     run_parallel_shards,
 )
 
@@ -33,7 +35,11 @@ class TestHleParallelShardRunner(unittest.TestCase):
         return Namespace(
             root=tmp,
             eval_id="ablate",
-            profiles="full,no_graph,no_evidence,no_morphism,no_option_evidence,no_candidate_claim_verifier,verified_gate_off",
+            profiles=(
+                "full,no_graph,no_evidence,no_morphism,no_option_evidence,no_candidate_claim_verifier,"
+                "no_world_model,no_recursive,raw_preserve_selector,verified_gate_off"
+            ),
+            profile_workers=1,
             dry_run=True,
             total_sample_size=3,
             shard_size=1,
@@ -56,12 +62,17 @@ class TestHleParallelShardRunner(unittest.TestCase):
             disable_evidence_bridge=False,
             exclude_existing_hle_artifacts=True,
             exclude_artifact_glob="phase four/assumption_graph/paper_readiness_20260604/hle*.json*",
+            dedupe_shard_samples=True,
+            dedupe_shard_max_attempts=11,
             run_dir=str(Path(tmp) / "runs"),
             md_dir=str(Path(tmp) / "md"),
             out="",
             md_out="",
             soft_timeout_sec=900,
             terminate_grace_sec=30,
+            launch_stagger_sec=0.1,
+            reuse_completed_shards=True,
+            kill_on_soft_timeout=False,
             model_router_attempts=2,
             model_router_timeout=7200,
             model_router_per_attempt_timeout=90,
@@ -111,6 +122,31 @@ class TestHleParallelShardRunner(unittest.TestCase):
             by_profile["no_candidate_claim_verifier"]["env_overrides"]["HLE_DISABLE_CANDIDATE_CLAIM_VERIFIER"],
             "1",
         )
+        self.assertEqual(
+            by_profile["no_world_model"]["env_overrides"]["HLE_DISABLE_WORLD_MODEL_ROUTER"],
+            "1",
+        )
+        self.assertEqual(
+            by_profile["no_recursive"]["env_overrides"]["HLE_DISABLE_RECURSIVE_ASSUMPTION_RUNNER"],
+            "1",
+        )
+        self.assertEqual(
+            by_profile["raw_preserve_selector"]["env_overrides"]["HLE_ENABLE_RAW_PRESERVE_SELECTOR"],
+            "1",
+        )
+        raw_preserve_command = by_profile["raw_preserve_selector"]["command"]
+        self.assertIn("--dedupe-shard-samples", raw_preserve_command)
+        self.assertEqual(
+            raw_preserve_command[raw_preserve_command.index("--dedupe-shard-max-attempts") + 1],
+            "11",
+        )
+        self.assertNotIn("--kill-on-soft-timeout", raw_preserve_command)
+        self.assertIn("--reuse-completed-shards", raw_preserve_command)
+        self.assertIn("--launch-stagger-sec", raw_preserve_command)
+        self.assertEqual(
+            raw_preserve_command[raw_preserve_command.index("--launch-stagger-sec") + 1],
+            "0.1",
+        )
         flattened = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("sk-", flattened)
         self.assertNotIn("hf_", flattened)
@@ -158,6 +194,36 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertIn("--exclude-existing-hle-artifacts", cmd)
         self.assertNotIn("sk-", text)
         self.assertNotIn("hf_", text)
+
+    def test_reuse_completed_shards_marks_valid_payloads_without_rerun(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            spec = build_shard_specs(
+                eval_id="reuse",
+                total_sample_size=1,
+                shard_size=1,
+                seed_offset=0,
+                seed_stride=1,
+                run_dir=root / "run",
+                md_dir=root / "md",
+            )[0]
+            spec.out.parent.mkdir(parents=True, exist_ok=True)
+            spec.out.write_text(
+                json.dumps({
+                    "rows": [_row("p1", "raw", True)],
+                    "metrics": {"raw_content_persisted": False},
+                }),
+                encoding="utf-8",
+            )
+            state = ShardRunState(spec=spec, command=["should-not-run"])
+
+            summary = mark_reusable_completed_shards([state])
+
+        self.assertEqual(summary["reused_shard_count"], 1)
+        self.assertEqual(summary["pending_shard_count"], 0)
+        self.assertEqual(state.status, "completed")
+        self.assertEqual(state.returncode, 0)
+        self.assertTrue(state.reused_existing_payload)
 
     def test_build_shard_command_extends_max_scan_past_seed_offset(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -316,6 +382,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
                 soft_timeout_sec=0.02,
                 terminate_grace_sec=0.01,
                 kill_on_soft_timeout=False,
+                launch_stagger_sec=0.0,
                 env=os.environ.copy(),
             )
             heartbeat = json.loads((root / "heartbeat.json").read_text(encoding="utf-8"))
@@ -341,8 +408,16 @@ class TestHleParallelShardRunner(unittest.TestCase):
                 md_dir=root,
             )
             payloads = [
-                _payload([_row("p1", "raw", False), _row("p1", "assumption_agent_recursive_verify", True)]),
-                _payload([_row("p2", "raw", True), _row("p2", "assumption_agent_recursive_verify", True)]),
+                _payload([
+                    _row("p1", "raw", False),
+                    _row("p1", "hipporag_baseline", False),
+                    _row("p1", "assumption_agent_recursive_verify", True, component_efficacy=_agent_single_call_ce()),
+                ]),
+                _payload([
+                    _row("p2", "raw", True),
+                    _row("p2", "hipporag_baseline", True),
+                    _row("p2", "assumption_agent_recursive_verify", True, component_efficacy=_agent_single_call_ce()),
+                ]),
             ]
             states = [ShardRunState(spec=spec, command=[], status="completed", returncode=0) for spec in specs]
             payload = aggregate_parallel_payload(
@@ -375,6 +450,101 @@ class TestHleParallelShardRunner(unittest.TestCase):
         )
         self.assertIn("HLE Parallel Shard Evaluation", markdown)
         self.assertIn("Pollution Audit", markdown)
+        self.assertIn("Model Budget Fairness", markdown)
+
+    def test_model_budget_fairness_blocks_unfair_strong_child_agent_claim(self) -> None:
+        rows = [
+            _row("p1", "raw", False, model="gpt-5.4-mini"),
+            _row("p1", "hipporag_baseline", False, model="gpt-5.4-mini"),
+            _row(
+                "p1",
+                "assumption_agent_recursive_verify",
+                True,
+                model="gpt-5.4-mini",
+                component_efficacy=_agent_strong_child_ce(),
+            ),
+        ]
+
+        audit = build_model_budget_fairness_audit(rows=rows)
+
+        self.assertTrue(audit["gates"]["same_model_controls_present"])
+        self.assertFalse(audit["gates"]["strong_baseline_controls_present_if_needed"])
+        self.assertFalse(audit["gates"]["budget_matched_controls_present_if_needed"])
+        self.assertFalse(audit["gates"]["model_budget_fairness_accounted"])
+        self.assertEqual(audit["stronger_or_different_effective_models"], ["gpt-5.5"])
+        self.assertEqual(audit["missing_strong_baseline_controls"][0]["model"], "gpt-5.5")
+        self.assertEqual(
+            audit["missing_budget_matched_controls"][0]["missing_variants"],
+            ["raw_budget_matched", "hipporag_budget_matched"],
+        )
+
+    def test_model_budget_fairness_passes_with_same_strong_and_budget_controls(self) -> None:
+        rows = [
+            _row("p1", "raw", False, model="gpt-5.4-mini"),
+            _row("p1", "hipporag_baseline", False, model="gpt-5.4-mini"),
+            _row("p1", "raw", False, model="gpt-5.5"),
+            _row("p1", "hipporag_baseline", False, model="gpt-5.5"),
+            _row("p1", "raw_budget_matched", False, model="gpt-5.5"),
+            _row("p1", "hipporag_budget_matched", False, model="gpt-5.5"),
+            _row(
+                "p1",
+                "assumption_agent_recursive_verify",
+                True,
+                model="gpt-5.4-mini",
+                component_efficacy=_agent_strong_child_ce(),
+            ),
+        ]
+
+        audit = build_model_budget_fairness_audit(rows=rows)
+
+        self.assertTrue(audit["gates"]["same_model_controls_present"])
+        self.assertTrue(audit["gates"]["strong_baseline_controls_present_if_needed"])
+        self.assertTrue(audit["gates"]["budget_matched_controls_present_if_needed"])
+        self.assertTrue(audit["gates"]["model_budget_fairness_accounted"])
+        self.assertEqual(audit["failed_gates"], [])
+
+    def test_aggregate_paper_clean_fails_when_model_budget_fairness_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            specs = build_shard_specs(
+                eval_id="unfair",
+                total_sample_size=1,
+                shard_size=1,
+                seed_offset=0,
+                seed_stride=1,
+                run_dir=root,
+                md_dir=root,
+            )
+            rows = [
+                _row("p1", "raw", False, model="gpt-5.4-mini"),
+                _row("p1", "hipporag_baseline", False, model="gpt-5.4-mini"),
+                _row(
+                    "p1",
+                    "assumption_agent_recursive_verify",
+                    True,
+                    model="gpt-5.4-mini",
+                    component_efficacy=_agent_strong_child_ce(),
+                ),
+            ]
+            states = [ShardRunState(spec=specs[0], command=[], status="completed", returncode=0)]
+            payload = aggregate_parallel_payload(
+                eval_id="unfair",
+                specs=specs,
+                states=states,
+                shard_payloads=[_payload(rows)],
+                execute_live=True,
+                models="gpt-5.4-mini",
+                variants="raw,hipporag_baseline,assumption_agent_recursive_verify",
+                total_sample_size=1,
+                shard_size=1,
+                parallel_workers=1,
+                soft_timeout_sec=900,
+                kill_on_soft_timeout=False,
+            )
+
+        self.assertTrue(payload["pass"])
+        self.assertFalse(payload["paper_clean_pass"])
+        self.assertIn("model_budget_fairness_accounted", payload["paper_clean_failed_gates"])
 
     def test_runner_env_sets_retry_and_global_concurrency_without_secrets(self) -> None:
         env = build_runner_env(
@@ -567,6 +737,7 @@ def _row(
     variant: str,
     correct: bool,
     *,
+    model: str = "gpt-5.4-mini",
     error_type: str | None = None,
     component_efficacy: dict[str, object] | None = None,
 ) -> dict[str, object]:
@@ -574,7 +745,7 @@ def _row(
         "problem_id_hash": problem_id,
         "question_hash": f"q-{problem_id}",
         "answer_hash": f"a-{problem_id}",
-        "model": "gpt-5.4-mini",
+        "model": model,
         "variant": variant,
         "category": "text",
         "raw_subject": "synthetic",
@@ -588,6 +759,56 @@ def _row(
         "call_metadata": {},
         "component_efficacy": component_efficacy or {},
         "error": {"type": error_type, "message": "synthetic"} if error_type else None,
+    }
+
+
+def _agent_single_call_ce() -> dict[str, object]:
+    return {
+        "kind": "assumption_agent_recursive_verify",
+        "flags": {},
+        "recursive": {
+            "status": "disabled",
+            "planned_child_count": 0,
+            "child_count": 0,
+            "answered_child_count": 0,
+        },
+        "selection": {
+            "selection_method": "single_call_fallback",
+            "verifier_model_call": False,
+        },
+    }
+
+
+def _agent_strong_child_ce() -> dict[str, object]:
+    return {
+        "kind": "assumption_agent_recursive_verify",
+        "flags": {
+            "recursive_child_validation_activated": True,
+            "child_model_used": True,
+            "critic_model_used": True,
+        },
+        "recursive": {
+            "status": "activated",
+            "base_model": "gpt-5.4-mini",
+            "child_model": "gpt-5.5",
+            "planned_child_count": 4,
+            "child_count": 4,
+            "answered_child_count": 4,
+        },
+        "child_model": {
+            "status": "activated",
+            "base_model": "gpt-5.4-mini",
+            "child_model": "gpt-5.5",
+        },
+        "critic_model": {
+            "status": "activated",
+            "base_model": "gpt-5.4-mini",
+            "critic_model": "gpt-5.5",
+        },
+        "selection": {
+            "selection_method": "normalized_majority",
+            "verifier_model_call": True,
+        },
     }
 
 

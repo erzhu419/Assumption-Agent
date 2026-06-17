@@ -9,6 +9,7 @@ environment and never written to artifacts.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import os
 import subprocess
@@ -97,9 +98,24 @@ DEFAULT_ABLATION_PROFILES: tuple[ModuleAblationProfile, ...] = (
         env_overrides={"HLE_DISABLE_RECURSIVE_ASSUMPTION_RUNNER": "1"},
     ),
     ModuleAblationProfile(
+        name="no_recursive",
+        description="Alias for no_recursive_runner used by fresh paper ablation tables.",
+        env_overrides={"HLE_DISABLE_RECURSIVE_ASSUMPTION_RUNNER": "1"},
+    ),
+    ModuleAblationProfile(
         name="no_world_model_router",
         description="Disable world-model routing so context is not promoted by the cheap verifier.",
         env_overrides={"HLE_DISABLE_WORLD_MODEL_ROUTER": "1"},
+    ),
+    ModuleAblationProfile(
+        name="no_world_model",
+        description="Alias for no_world_model_router used by fresh paper ablation tables.",
+        env_overrides={"HLE_DISABLE_WORLD_MODEL_ROUTER": "1"},
+    ),
+    ModuleAblationProfile(
+        name="raw_preserve_selector",
+        description="Add a raw no-context base-model candidate and let the selector preserve it under uncertainty.",
+        env_overrides={"HLE_ENABLE_RAW_PRESERVE_SELECTOR": "1"},
     ),
 )
 
@@ -191,10 +207,20 @@ def build_profile_command(
         cmd.append("--exclude-existing-hle-artifacts")
     if args.exclude_artifact_glob:
         cmd.extend(["--exclude-artifact-glob", args.exclude_artifact_glob])
+    if getattr(args, "dedupe_shard_samples", False):
+        cmd.append("--dedupe-shard-samples")
+    if getattr(args, "dedupe_shard_max_attempts", None) is not None:
+        cmd.extend(["--dedupe-shard-max-attempts", str(args.dedupe_shard_max_attempts)])
     if args.soft_timeout_sec is not None:
         cmd.extend(["--soft-timeout-sec", str(args.soft_timeout_sec)])
     if args.terminate_grace_sec is not None:
         cmd.extend(["--terminate-grace-sec", str(args.terminate_grace_sec)])
+    if getattr(args, "launch_stagger_sec", 0.0):
+        cmd.extend(["--launch-stagger-sec", str(args.launch_stagger_sec)])
+    if getattr(args, "reuse_completed_shards", False):
+        cmd.append("--reuse-completed-shards")
+    if getattr(args, "kill_on_soft_timeout", False):
+        cmd.append("--kill-on-soft-timeout")
     if args.model_router_attempts is not None:
         cmd.extend(["--model-router-attempts", str(args.model_router_attempts)])
     if args.model_router_timeout is not None:
@@ -244,6 +270,7 @@ def build_ablation_plan(args: argparse.Namespace) -> dict[str, Any]:
         "performance_validation": True,
         "dry_run": bool(args.dry_run),
         "profile_count": len(profile_rows),
+        "profile_workers": max(1, int(getattr(args, "profile_workers", 1) or 1)),
         "sampling": {
             "total_sample_size": args.total_sample_size,
             "shard_size": args.shard_size,
@@ -267,43 +294,31 @@ def build_ablation_plan(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def run_ablation_profiles(plan: dict[str, Any], *, root: Path, run_dir: Path) -> dict[str, Any]:
-    results = []
-    for row in plan["profiles"]:
-        profile_name = str(row["profile"])
-        stdout_path = run_dir / profile_name / f"{plan['eval_id']}_{profile_name}.stdout.log"
-        stdout_path.parent.mkdir(parents=True, exist_ok=True)
-        env = os.environ.copy()
-        env.update({str(key): str(value) for key, value in (row.get("env_overrides") or {}).items()})
-        start = time.monotonic()
-        with stdout_path.open("w", encoding="utf-8") as handle:
-            completed = subprocess.run(
-                [str(item) for item in row["command"]],
-                cwd=str(root),
-                env=env,
-                stdout=handle,
-                stderr=subprocess.STDOUT,
-                text=True,
-                check=False,
-            )
-        elapsed = round(time.monotonic() - start, 4)
-        out_path = _profile_out_path(row["command"])
-        payload = _load_json(out_path)
-        results.append({
-            "profile": profile_name,
-            "returncode": completed.returncode,
-            "elapsed_sec": elapsed,
-            "stdout_out": str(stdout_path),
-            "payload_out": str(out_path) if out_path else "",
-            "payload_loaded": bool(payload),
-            "pass": None if not payload else payload.get("pass"),
-            "paper_clean_pass": None if not payload else payload.get("paper_clean_pass"),
-            "pollution_pass": None if not payload else payload.get("pollution_pass"),
-            "metrics": None if not payload else payload.get("metrics"),
-            "failed_gates": [] if not payload else payload.get("failed_gates", []),
-            "paper_clean_failed_gates": [] if not payload else payload.get("paper_clean_failed_gates", []),
-            "pollution_failed_gates": [] if not payload else payload.get("pollution_failed_gates", []),
-        })
+    profile_workers = max(1, int(plan.get("profile_workers") or 1))
+    profile_rows = list(plan["profiles"])
+    if profile_workers == 1 or len(profile_rows) <= 1:
+        results = [
+            _run_single_ablation_profile(row=row, root=root, run_dir=run_dir, eval_id=plan["eval_id"])
+            for row in profile_rows
+        ]
+    else:
+        indexed_results: list[tuple[int, dict[str, Any]]] = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(profile_workers, len(profile_rows))) as executor:
+            futures = {
+                executor.submit(
+                    _run_single_ablation_profile,
+                    row=row,
+                    root=root,
+                    run_dir=run_dir,
+                    eval_id=plan["eval_id"],
+                ): index
+                for index, row in enumerate(profile_rows)
+            }
+            for future in concurrent.futures.as_completed(futures):
+                indexed_results.append((futures[future], future.result()))
+        results = [row for _, row in sorted(indexed_results, key=lambda item: item[0])]
     plan = dict(plan)
+    plan["profile_workers"] = profile_workers
     plan["dry_run"] = False
     plan["profile_results"] = results
     plan["gates"] = dict(plan.get("gates") or {})
@@ -320,6 +335,49 @@ def run_ablation_profiles(plan: dict[str, Any], *, root: Path, run_dir: Path) ->
     })
     plan["module_ablation_summary"] = _module_ablation_summary(results)
     return plan
+
+
+def _run_single_ablation_profile(
+    *,
+    row: dict[str, Any],
+    root: Path,
+    run_dir: Path,
+    eval_id: str,
+) -> dict[str, Any]:
+    profile_name = str(row["profile"])
+    stdout_path = run_dir / profile_name / f"{eval_id}_{profile_name}.stdout.log"
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env.update({str(key): str(value) for key, value in (row.get("env_overrides") or {}).items()})
+    start = time.monotonic()
+    with stdout_path.open("w", encoding="utf-8") as handle:
+        completed = subprocess.run(
+            [str(item) for item in row["command"]],
+            cwd=str(root),
+            env=env,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
+    elapsed = round(time.monotonic() - start, 4)
+    out_path = _profile_out_path(row["command"])
+    payload = _load_json(out_path)
+    return {
+        "profile": profile_name,
+        "returncode": completed.returncode,
+        "elapsed_sec": elapsed,
+        "stdout_out": str(stdout_path),
+        "payload_out": str(out_path) if out_path else "",
+        "payload_loaded": bool(payload),
+        "pass": None if not payload else payload.get("pass"),
+        "paper_clean_pass": None if not payload else payload.get("paper_clean_pass"),
+        "pollution_pass": None if not payload else payload.get("pollution_pass"),
+        "metrics": None if not payload else payload.get("metrics"),
+        "failed_gates": [] if not payload else payload.get("failed_gates", []),
+        "paper_clean_failed_gates": [] if not payload else payload.get("paper_clean_failed_gates", []),
+        "pollution_failed_gates": [] if not payload else payload.get("pollution_failed_gates", []),
+    }
 
 
 def _module_ablation_summary(results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -379,6 +437,7 @@ def format_ablation_markdown(payload: dict[str, Any]) -> str:
         f"- eval id: `{payload['eval_id']}`",
         f"- dry run: `{payload.get('dry_run')}`",
         f"- profile count: `{payload.get('profile_count')}`",
+        f"- profile workers: `{payload.get('profile_workers')}`",
         f"- raw content persisted: `{payload.get('raw_content_persisted')}`",
         "",
         "## Gates",
@@ -426,6 +485,7 @@ def main() -> None:
     parser.add_argument("--root", default=".")
     parser.add_argument("--eval-id", default="hle_module_ablation_20260617")
     parser.add_argument("--profiles", default="")
+    parser.add_argument("--profile-workers", type=int, default=1)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--total-sample-size", type=int, default=12)
     parser.add_argument("--shard-size", type=int, default=1)
@@ -448,12 +508,17 @@ def main() -> None:
     parser.add_argument("--disable-evidence-bridge", action="store_true")
     parser.add_argument("--exclude-existing-hle-artifacts", action="store_true")
     parser.add_argument("--exclude-artifact-glob", default="phase four/assumption_graph/paper_readiness_20260604/hle*.json*")
+    parser.add_argument("--dedupe-shard-samples", action="store_true")
+    parser.add_argument("--dedupe-shard-max-attempts", type=int, default=25)
     parser.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))
     parser.add_argument("--md-dir", default=str(DEFAULT_MD_DIR))
     parser.add_argument("--out", default="")
     parser.add_argument("--md-out", default="")
     parser.add_argument("--soft-timeout-sec", type=float, default=None)
     parser.add_argument("--terminate-grace-sec", type=float, default=30.0)
+    parser.add_argument("--launch-stagger-sec", type=float, default=0.0)
+    parser.add_argument("--reuse-completed-shards", action="store_true")
+    parser.add_argument("--kill-on-soft-timeout", action="store_true")
     parser.add_argument("--model-router-attempts", type=int, default=None)
     parser.add_argument("--model-router-timeout", type=float, default=None)
     parser.add_argument("--model-router-per-attempt-timeout", type=float, default=None)

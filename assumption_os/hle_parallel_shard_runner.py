@@ -49,6 +49,8 @@ ERROR_EVENT_NAMES = {
     "critic_synthesis_child_error",
     "math_tool_child_error",
 }
+PAPER_CLEAN_STANDARD_CONTROL_VARIANTS = ("raw", "hipporag_baseline")
+PAPER_CLEAN_BUDGET_MATCHED_CONTROL_VARIANTS = ("raw_budget_matched", "hipporag_budget_matched")
 
 
 @dataclass(frozen=True)
@@ -75,6 +77,7 @@ class ShardRunState:
     soft_timeout_sent: bool = False
     soft_timeout_observed: bool = False
     hard_kill_sent: bool = False
+    reused_existing_payload: bool = False
     process_timeout_policy: str = "watch_only"
     error: str | None = None
     _stdout_handle: Any = field(default=None, repr=False, compare=False)
@@ -322,14 +325,15 @@ def run_parallel_shards(
     soft_timeout_sec: float | None,
     terminate_grace_sec: float,
     kill_on_soft_timeout: bool,
+    launch_stagger_sec: float,
     env: dict[str, str],
 ) -> list[ShardRunState]:
     if parallel_workers <= 0:
         raise ValueError("parallel_workers must be positive")
     heartbeat_path.parent.mkdir(parents=True, exist_ok=True)
-    pending = list(shard_states)
+    pending = [state for state in shard_states if state.status != "completed"]
     running: list[ShardRunState] = []
-    completed: list[ShardRunState] = []
+    completed: list[ShardRunState] = [state for state in shard_states if state.status == "completed"]
     last_heartbeat = 0.0
     while pending or running:
         now = time.monotonic()
@@ -351,6 +355,8 @@ def run_parallel_shards(
                 state.started_monotonic = time.monotonic()
                 state.status = "running"
                 running.append(state)
+                if launch_stagger_sec > 0 and pending and len(running) < parallel_workers:
+                    time.sleep(launch_stagger_sec)
             except Exception as exc:  # pragma: no cover - defensive subprocess path.
                 state.error = f"{type(exc).__name__}: {exc}"
                 state.status = "spawn_failed"
@@ -491,6 +497,48 @@ def load_shard_payloads(specs: list[ShardSpec]) -> list[dict[str, Any]]:
     return payloads
 
 
+def mark_reusable_completed_shards(states: list[ShardRunState]) -> dict[str, Any]:
+    """Mark shards with an existing valid payload as completed.
+
+    This lets expensive live HLE runs resume without rerunning already-scored
+    hashes.  The payload is still loaded through ``load_shard_payloads`` during
+    aggregation; this helper only prevents duplicate subprocess execution.
+    """
+    reused = 0
+    missing_or_invalid = 0
+    for state in states:
+        payload = _load_existing_shard_payload(state.spec.out)
+        if payload:
+            state.status = "completed"
+            state.returncode = 0
+            state.reused_existing_payload = True
+            reused += 1
+        else:
+            missing_or_invalid += 1
+    return {
+        "enabled": True,
+        "reused_shard_count": reused,
+        "pending_shard_count": missing_or_invalid,
+        "raw_content_persisted": False,
+    }
+
+
+def _load_existing_shard_payload(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if not payload.get("rows") and not payload.get("run_rows"):
+        return None
+    if payload.get("metrics", {}).get("raw_content_persisted") is not False:
+        return None
+    return payload
+
+
 def aggregate_parallel_payload(
     *,
     eval_id: str,
@@ -506,6 +554,8 @@ def aggregate_parallel_payload(
     soft_timeout_sec: float | None,
     kill_on_soft_timeout: bool = False,
     shard_sample_dedupe: dict[str, Any] | None = None,
+    reuse_completed_shards: dict[str, Any] | None = None,
+    launch_stagger_sec: float = 0.0,
 ) -> dict[str, Any]:
     run_rows = _merged_run_rows(shard_payloads)
     metrics = _parallel_metrics(run_rows=run_rows, shard_payloads=shard_payloads)
@@ -521,6 +571,7 @@ def aggregate_parallel_payload(
         error_stratification=error_stratification,
         execute_live=execute_live,
     )
+    model_budget_fairness_audit = build_model_budget_fairness_audit(rows=run_rows)
     failure_diagnostics = build_failure_diagnostics(rows=run_rows)
     gates = {
         "all_shards_finished_without_process_failure": all(
@@ -540,6 +591,7 @@ def aggregate_parallel_payload(
     paper_clean_gates["zero_top_level_live_errors"] = error_stratification["top_level_error_count"] == 0
     paper_clean_gates["zero_process_timeouts"] = error_stratification["process_timeout_count"] == 0
     paper_clean_gates["no_duplicate_sample_problems"] = metrics["duplicate_sample_problem_count"] == 0
+    paper_clean_gates.update(model_budget_fairness_audit["gates"])
     pollution_gates = pollution_audit["gates"]
     return {
         "eval_id": eval_id,
@@ -565,6 +617,8 @@ def aggregate_parallel_payload(
             "soft_timeout_sec": soft_timeout_sec,
             "process_timeout_policy": "terminate_and_kill" if kill_on_soft_timeout else "watch_only",
             "kill_on_soft_timeout": kill_on_soft_timeout,
+            "launch_stagger_sec": launch_stagger_sec,
+            "reuse_completed_shards": reuse_completed_shards or {"enabled": False},
             "raw_content_persisted": False,
         },
         "shards": [_shard_summary(state) for state in states],
@@ -572,6 +626,7 @@ def aggregate_parallel_payload(
         "metrics": metrics,
         "error_stratification": error_stratification,
         "pollution_audit": pollution_audit,
+        "model_budget_fairness_audit": model_budget_fairness_audit,
         "failure_diagnostics": failure_diagnostics,
         "pass": all(gates.values()),
         "paper_clean_pass": all(paper_clean_gates.values()),
@@ -598,6 +653,7 @@ def _shard_summary(state: ShardRunState) -> dict[str, Any]:
         "soft_timeout_sent": state.soft_timeout_sent,
         "soft_timeout_observed": state.soft_timeout_observed,
         "hard_kill_sent": state.hard_kill_sent,
+        "reused_existing_payload": state.reused_existing_payload,
         "process_timeout_policy": state.process_timeout_policy,
         "error": state.error,
     }
@@ -697,6 +753,199 @@ def _clean_shared_subset(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "by_variant": variant_metrics,
         }
     return out
+
+
+def build_model_budget_fairness_audit(*, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Audit whether Agent rows have fair model and call-budget controls.
+
+    This is a paper-clean gate, not a runner-health gate.  The runner can still
+    aggregate unfair experiments, but paper-facing claims must disclose and
+    satisfy same-model, strong-baseline, and budget-matched controls whenever
+    the Agent uses a stronger/different model or more calls.
+    """
+    present_by_model: dict[str, set[str]] = defaultdict(set)
+    row_count_by_model_variant: Counter[str] = Counter()
+    for row in rows:
+        model = _clean_model_name(row.get("model"))
+        variant = str(row.get("variant") or "")
+        if not model or not variant:
+            continue
+        present_by_model[model].add(variant)
+        row_count_by_model_variant[f"{model}::{variant}"] += 1
+
+    agent_rows = [row for row in rows if str(row.get("variant") or "").startswith("assumption_agent")]
+    agent_top_models = sorted({
+        model for model in (_clean_model_name(row.get("model")) for row in agent_rows) if model
+    })
+    metadata_complete = all(isinstance(row.get("component_efficacy"), dict) and bool(row.get("component_efficacy")) for row in agent_rows)
+
+    effective_records: list[dict[str, Any]] = []
+    stronger_or_different_models: set[str] = set()
+    budget_target_models: set[str] = set()
+    multi_call_agent_row_count = 0
+    for row in agent_rows:
+        top_model = _clean_model_name(row.get("model"))
+        entries = _agent_effective_model_entries(row)
+        different_models = sorted({
+            entry["model"]
+            for entry in entries
+            if entry.get("model") and top_model and entry["model"] != top_model
+        })
+        stronger_or_different_models.update(different_models)
+        multi_call = _agent_row_uses_more_than_single_call(row)
+        if multi_call:
+            multi_call_agent_row_count += 1
+            budget_target_models.update(different_models or ([top_model] if top_model else []))
+        effective_records.append({
+            "problem_id_hash": row.get("problem_id_hash"),
+            "variant": row.get("variant"),
+            "top_model": top_model,
+            "effective_models": entries,
+            "different_effective_models": different_models,
+            "multi_call_detected": multi_call,
+        })
+
+    missing_same_model_controls = _missing_controls(
+        present_by_model=present_by_model,
+        models=agent_top_models,
+        required_variants=PAPER_CLEAN_STANDARD_CONTROL_VARIANTS,
+    )
+    missing_strong_baseline_controls = _missing_controls(
+        present_by_model=present_by_model,
+        models=sorted(stronger_or_different_models),
+        required_variants=PAPER_CLEAN_STANDARD_CONTROL_VARIANTS,
+    )
+    missing_budget_matched_controls = _missing_controls(
+        present_by_model=present_by_model,
+        models=sorted(budget_target_models),
+        required_variants=PAPER_CLEAN_BUDGET_MATCHED_CONTROL_VARIANTS,
+    )
+
+    gates = {
+        "model_budget_metadata_complete": not agent_rows or metadata_complete,
+        "same_model_controls_present": not agent_rows or not missing_same_model_controls,
+        "strong_baseline_controls_present_if_needed": (
+            not stronger_or_different_models or not missing_strong_baseline_controls
+        ),
+        "budget_matched_controls_present_if_needed": (
+            multi_call_agent_row_count == 0 or not missing_budget_matched_controls
+        ),
+    }
+    gates["model_budget_fairness_accounted"] = all(gates.values())
+    return {
+        "audit_kind": "hle_model_budget_fairness_audit",
+        "agent_row_count": len(agent_rows),
+        "agent_top_models": agent_top_models,
+        "stronger_or_different_effective_models": sorted(stronger_or_different_models),
+        "multi_call_agent_row_count": multi_call_agent_row_count,
+        "budget_target_models": sorted(budget_target_models),
+        "required_standard_control_variants": list(PAPER_CLEAN_STANDARD_CONTROL_VARIANTS),
+        "required_budget_matched_control_variants": list(PAPER_CLEAN_BUDGET_MATCHED_CONTROL_VARIANTS),
+        "present_variants_by_model": {
+            model: sorted(variants)
+            for model, variants in sorted(present_by_model.items())
+        },
+        "row_count_by_model_variant": dict(sorted(row_count_by_model_variant.items())),
+        "missing_same_model_controls": missing_same_model_controls,
+        "missing_strong_baseline_controls": missing_strong_baseline_controls,
+        "missing_budget_matched_controls": missing_budget_matched_controls,
+        "agent_effective_model_records": effective_records[:20],
+        "gates": gates,
+        "failed_gates": [name for name, passed in gates.items() if not passed],
+        "raw_content_persisted": False,
+    }
+
+
+def _missing_controls(
+    *,
+    present_by_model: dict[str, set[str]],
+    models: list[str],
+    required_variants: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    missing: list[dict[str, Any]] = []
+    for model in models:
+        present = present_by_model.get(model, set())
+        absent = [variant for variant in required_variants if variant not in present]
+        if absent:
+            missing.append({
+                "model": model,
+                "missing_variants": absent,
+                "present_variants": sorted(present),
+            })
+    return missing
+
+
+def _clean_model_name(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _agent_effective_model_entries(row: dict[str, Any]) -> list[dict[str, str]]:
+    model = _clean_model_name(row.get("model"))
+    entries: list[dict[str, str]] = []
+    if model:
+        entries.append({"source": "top_level", "model": model})
+    ce = row.get("component_efficacy") if isinstance(row.get("component_efficacy"), dict) else {}
+    for section_name, model_key in (
+        ("recursive", "child_model"),
+        ("child_model", "child_model"),
+        ("critic_model", "critic_model"),
+        ("recursive_timeout_recovery", "recovery_model"),
+        ("child_model_failover", "failed_child_model"),
+        ("critic_synthesis_child", "critic_model"),
+    ):
+        section = ce.get(section_name) if isinstance(ce.get(section_name), dict) else {}
+        candidate = _clean_model_name(section.get(model_key))
+        if candidate:
+            entries.append({"source": section_name, "model": candidate})
+    deduped: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for entry in entries:
+        key = (entry["source"], entry["model"])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(entry)
+    return deduped
+
+
+def _agent_row_uses_more_than_single_call(row: dict[str, Any]) -> bool:
+    ce = row.get("component_efficacy") if isinstance(row.get("component_efficacy"), dict) else {}
+    recursive = ce.get("recursive") if isinstance(ce.get("recursive"), dict) else {}
+    selection = ce.get("selection") if isinstance(ce.get("selection"), dict) else {}
+    if int(recursive.get("planned_child_count") or 0) > 1:
+        return True
+    if int(recursive.get("child_count") or 0) > 1:
+        return True
+    if int(recursive.get("answered_child_count") or 0) > 1:
+        return True
+    if bool(selection.get("verifier_model_call")):
+        return True
+    for section_name in (
+        "claim_verifier",
+        "domain_rule_mc_verifier",
+        "mc_option_evidence_scorer",
+        "critic_synthesis_child",
+        "mc_option_sweep_candidates",
+        "counter_assumption_challenge",
+        "recursive_timeout_recovery",
+        "child_model_failover",
+    ):
+        section = ce.get(section_name) if isinstance(ce.get(section_name), dict) else {}
+        if section.get("status") == "activated":
+            return True
+    flags = ce.get("flags") if isinstance(ce.get("flags"), dict) else {}
+    return any(
+        bool(flags.get(key))
+        for key in (
+            "recursive_child_validation_activated",
+            "claim_verifier_activated",
+            "domain_rule_mc_verifier_activated",
+            "mc_option_evidence_scorer_activated",
+            "critic_synthesis_activated",
+            "mc_option_sweep_activated",
+            "counter_assumption_challenge_activated",
+        )
+    )
 
 
 def build_error_stratification(
@@ -1193,18 +1442,24 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
     metrics = payload["metrics"]
     errors = payload["error_stratification"]
     pollution = payload.get("pollution_audit") or {}
+    model_budget = payload.get("model_budget_fairness_audit") or {}
     diagnostics = payload.get("failure_diagnostics") or {}
     claim_guard = pollution.get("claim_guard") or {}
     runtime_policy = payload.get("runtime_policy") or {}
+    sampling = payload.get("sampling") or {}
     shard_dedupe = (payload.get("sampling") or {}).get("shard_sample_dedupe") or {"enabled": False}
+    reuse_summary = runtime_policy.get("reuse_completed_shards") or {"enabled": False}
     lines = [
         "# HLE Parallel Shard Evaluation",
         "",
         f"- pass: `{payload['pass']}`",
         f"- paper clean pass: `{payload['paper_clean_pass']}`",
         f"- pollution pass: `{payload.get('pollution_pass')}`",
+        f"- parallel workers: `{sampling.get('parallel_workers')}`",
+        f"- launch stagger sec: `{runtime_policy.get('launch_stagger_sec')}`",
         f"- process timeout policy: `{runtime_policy.get('process_timeout_policy')}`",
         f"- kill on soft timeout: `{runtime_policy.get('kill_on_soft_timeout')}`",
+        f"- reused completed shards: `{reuse_summary.get('reused_shard_count', 0)}`",
         f"- shard sample dedupe: `{shard_dedupe.get('status', shard_dedupe.get('enabled'))}`",
         f"- loaded shard payloads: `{payload['loaded_shard_payload_count']}/{payload['sampling']['planned_shard_count']}`",
         f"- sample count: `{metrics['sample_count']}`",
@@ -1218,6 +1473,7 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
         f"- failed gates: `{payload['failed_gates']}`",
         f"- paper-clean failed gates: `{payload['paper_clean_failed_gates']}`",
         f"- pollution failed gates: `{payload.get('pollution_failed_gates')}`",
+        f"- model-budget fairness failed gates: `{model_budget.get('failed_gates')}`",
         f"- recommended HLE claim scope: `{claim_guard.get('recommended_hle_claim_scope')}`",
         "",
         "## By Variant",
@@ -1283,6 +1539,26 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
         lines.append(f"| `context_pollution_summary` | `{key}` | `{value}` |")
     for key, value in sorted((pollution.get("gates") or {}).items()):
         lines.append(f"| `pollution_gate` | `{key}` | `{value}` |")
+    lines.extend([
+        "",
+        "## Model Budget Fairness",
+        "",
+        "| bucket | key | value |",
+        "| --- | --- | --- |",
+    ])
+    for key in (
+        "agent_row_count",
+        "agent_top_models",
+        "stronger_or_different_effective_models",
+        "multi_call_agent_row_count",
+        "budget_target_models",
+        "missing_same_model_controls",
+        "missing_strong_baseline_controls",
+        "missing_budget_matched_controls",
+    ):
+        lines.append(f"| `summary` | `{key}` | `{model_budget.get(key)}` |")
+    for key, value in sorted((model_budget.get("gates") or {}).items()):
+        lines.append(f"| `fairness_gate` | `{key}` | `{value}` |")
     lines.extend([
         "",
         "## Selection Credit",
@@ -1451,6 +1727,8 @@ def main() -> None:
     parser.add_argument("--heartbeat-out", default="")
     parser.add_argument("--poll-interval-sec", type=float, default=2.0)
     parser.add_argument("--heartbeat-interval-sec", type=float, default=10.0)
+    parser.add_argument("--launch-stagger-sec", type=float, default=0.0)
+    parser.add_argument("--reuse-completed-shards", action="store_true")
     parser.add_argument("--soft-timeout-sec", type=float, default=None)
     parser.add_argument("--terminate-grace-sec", type=float, default=30.0)
     parser.add_argument(
@@ -1470,6 +1748,11 @@ def main() -> None:
 
     root = Path(args.root).resolve()
     specs, states = build_payload_without_execution(args)
+    reuse_summary = (
+        mark_reusable_completed_shards(states)
+        if args.reuse_completed_shards
+        else {"enabled": False}
+    )
     run_dir = _path_arg(args.run_dir, root=root)
     out = _path_arg(args.out, root=root) if args.out else run_dir / f"{args.eval_id}.json"
     md_out = _path_arg(args.md_out, root=root) if args.md_out else _path_arg(args.md_dir, root=root) / f"{args.eval_id}.md"
@@ -1498,6 +1781,7 @@ def main() -> None:
         soft_timeout_sec=args.soft_timeout_sec,
         terminate_grace_sec=args.terminate_grace_sec,
         kill_on_soft_timeout=args.kill_on_soft_timeout,
+        launch_stagger_sec=max(0.0, float(args.launch_stagger_sec or 0.0)),
         env=env,
     )
     payloads = load_shard_payloads(specs)
@@ -1515,6 +1799,8 @@ def main() -> None:
         soft_timeout_sec=args.soft_timeout_sec,
         kill_on_soft_timeout=args.kill_on_soft_timeout,
         shard_sample_dedupe=getattr(args, "_shard_sample_dedupe_summary", {"enabled": False}),
+        reuse_completed_shards=reuse_summary,
+        launch_stagger_sec=max(0.0, float(args.launch_stagger_sec or 0.0)),
     )
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
@@ -1541,6 +1827,13 @@ def main() -> None:
         "pollution_audit": {
             "recommended_hle_claim_scope": payload["pollution_audit"]["claim_guard"]["recommended_hle_claim_scope"],
             "failed_gates": payload["pollution_failed_gates"],
+        },
+        "model_budget_fairness_audit": {
+            "failed_gates": payload["model_budget_fairness_audit"]["failed_gates"],
+            "stronger_or_different_effective_models": (
+                payload["model_budget_fairness_audit"]["stronger_or_different_effective_models"]
+            ),
+            "multi_call_agent_row_count": payload["model_budget_fairness_audit"]["multi_call_agent_row_count"],
         },
         "failure_diagnostics": {
             "agent_failure_buckets": payload["failure_diagnostics"]["agent_failure_buckets"],
