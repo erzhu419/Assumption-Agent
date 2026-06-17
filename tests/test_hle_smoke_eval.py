@@ -9,6 +9,8 @@ from assumption_os.hle_module_activation_audit import build_hle_module_activatio
 from assumption_os.hle_smoke_eval import (
     _aggregate_rows,
     _apply_math_candidate_claim_verifier,
+    _apply_verified_or_abstain_selection,
+    _build_agent_hipporag_child_context,
     _build_hle_evidence_bridge_context,
     _candidate_evidence_queries,
     _clean_evidence_text,
@@ -24,6 +26,7 @@ from assumption_os.hle_smoke_eval import (
     _execute_math_tool_plan_text,
     _extract_multiple_choice_options,
     _expected_but_missing_modules,
+    _filter_answer_bearing_evidence_results,
     _format_evidence_context,
     _has_two_vote_majority,
     _hipporag_style_rerank,
@@ -242,6 +245,115 @@ class HleSmokeEvalTest(unittest.TestCase):
             )
         self.assertIn("hipporag_context_answer", [spec["prompt_kind"] for spec in exact_hipporag_specs])
 
+    def test_answer_bearing_evidence_filter_blocks_generic_context(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which scientist discovered the X process?\nA. Ada Lovelace\nB. Marie Curie",
+        }
+        selected, certificate = _filter_answer_bearing_evidence_results(
+            problem=problem,
+            results=[
+                {"title": "Generic science", "snippet": "This article discusses laboratories and researchers.", "source": "wikipedia"},
+                {"title": "Ada Lovelace", "snippet": "Ada Lovelace wrote notes on computing machines.", "source": "wikipedia"},
+            ],
+            candidate_answers=[],
+            max_results=5,
+        )
+
+        self.assertEqual(selected, [])
+        self.assertEqual(certificate["status"], "blocked_non_answer_bearing")
+        self.assertEqual(certificate["selected_result_count"], 0)
+
+    def test_answer_bearing_evidence_filter_accepts_option_or_candidate_overlap(self):
+        mc_problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which scientist discovered the radium isolation process?\nA. Ada Lovelace\nB. Marie Curie",
+        }
+        selected, certificate = _filter_answer_bearing_evidence_results(
+            problem=mc_problem,
+            results=[
+                {"title": "Marie Curie", "snippet": "Marie Curie discovered radium isolation process evidence.", "source": "wikipedia"},
+            ],
+            candidate_answers=[],
+            max_results=5,
+        )
+
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(certificate["status"], "answer_bearing")
+        self.assertEqual(certificate["option_hit_labels"], ["B"])
+
+        exact_problem = {
+            "answer_type": "exactMatch",
+            "_question": "Name the scientist associated with radium isolation process.",
+        }
+        exact_selected, exact_certificate = _filter_answer_bearing_evidence_results(
+            problem=exact_problem,
+            results=[
+                {"title": "Marie Curie", "snippet": "Marie Curie is associated with the radium isolation process.", "source": "wikipedia"},
+            ],
+            candidate_answers=["Marie Curie"],
+            max_results=5,
+        )
+
+        self.assertEqual(len(exact_selected), 1)
+        self.assertEqual(exact_certificate["status"], "answer_bearing")
+        self.assertEqual(exact_certificate["candidate_hit_count"], 1)
+
+    def test_answer_bearing_evidence_filter_blocks_non_discriminative_option_context(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which scientist discovered the radium isolation process?\nA. Ada Lovelace\nB. Marie Curie",
+        }
+        selected, certificate = _filter_answer_bearing_evidence_results(
+            problem=problem,
+            results=[
+                {
+                    "title": "Radium isolation history",
+                    "snippet": "Ada Lovelace and Marie Curie are both mentioned while discussing discovered radium isolation process.",
+                    "source": "wikipedia",
+                },
+            ],
+            candidate_answers=[],
+            max_results=5,
+        )
+
+        self.assertEqual(selected, [])
+        self.assertEqual(certificate["status"], "blocked_non_discriminative_option_evidence")
+        self.assertEqual(certificate["option_hit_labels"], ["A", "B"])
+
+    def test_agent_hipporag_child_context_requires_answer_bearing_certificate(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Science",
+            "_question": "Which scientist discovered the radium isolation process?\nA. Ada Lovelace\nB. Marie Curie",
+        }
+
+        def fake_search(query, *, limit, timeout):
+            return [
+                {
+                    "title": "Radium isolation history",
+                    "snippet": "Ada Lovelace and Marie Curie are both mentioned while discussing discovered radium isolation process.",
+                    "source": "wikipedia",
+                }
+            ]
+
+        with patch("assumption_os.hle_smoke_eval._wikipedia_search", side_effect=fake_search):
+            context, summary = _build_agent_hipporag_child_context(
+                problem=problem,
+                eval_id="e",
+                call_id="c",
+                model="m",
+                logger=None,
+                context_max_chars=1200,
+            )
+
+        self.assertEqual(context, "")
+        self.assertEqual(summary["status"], "blocked_non_discriminative_option_evidence")
+        self.assertEqual(summary["answer_bearing_certificate"]["option_hit_labels"], ["A", "B"])
+
     def test_parse_verifier_choice(self):
         self.assertEqual(_parse_verifier_choice('{"choice": 2}', max_index=3), 2)
         self.assertEqual(_parse_verifier_choice("choose 3", max_index=3), 3)
@@ -376,10 +488,15 @@ class HleSmokeEvalTest(unittest.TestCase):
             exact_problem,
             {"world_model_router": {"decision": "abstain_to_raw_prompt"}, "prompt_context": ""},
         ))
-        self.assertTrue(_should_prime_evidence_bridge(
+        self.assertFalse(_should_prime_evidence_bridge(
             mc_problem,
             {"world_model_router": {"decision": "abstain_to_raw_prompt"}, "prompt_context": ""},
         ))
+        with patch.dict(os.environ, {"HLE_ENABLE_MC_EVIDENCE_BRIDGE": "1"}):
+            self.assertTrue(_should_prime_evidence_bridge(
+                mc_problem,
+                {"world_model_router": {"decision": "abstain_to_raw_prompt"}, "prompt_context": ""},
+            ))
         self.assertFalse(_should_prime_evidence_bridge(
             math_exact_problem,
             {"world_model_router": {"decision": "abstain_to_raw_prompt"}, "prompt_context": ""},
@@ -443,6 +560,54 @@ class HleSmokeEvalTest(unittest.TestCase):
         )
         self.assertEqual(direct_selection["selection_method"], "exact_direct_fallback")
         self.assertEqual(direct_selection["selected_answer"], "direct answer")
+
+    def test_verified_or_abstain_falls_back_to_direct_for_unverified_selection(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw\nB. context",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "context", "child_index": 2, "prompt_kind": "agent_context_answer", "parsed_answer": "B"},
+        ]
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "context",
+            "selected_answer": "B",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(problem=problem, attempts=attempts, selection=selection)
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "direct")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(gated["verified_or_abstain_gate"]["status"], "abstained")
+        self.assertEqual(gated["verified_or_abstain_gate"]["original_selection_method"], "normalized_majority")
+
+    def test_verified_or_abstain_allows_verified_selection(self):
+        problem = {
+            "answer_type": "exactMatch",
+            "_question": "Compute the answer.",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "41"},
+            {"child_id": "math", "child_index": 2, "prompt_kind": "math_tool_answer", "parsed_answer": "42"},
+        ]
+        selection = {
+            "selection_method": "verified_math_tool_priority",
+            "selected_child_id": "math",
+            "selected_answer": "42",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(problem=problem, attempts=attempts, selection=selection)
+
+        self.assertEqual(gated["selection_method"], "verified_math_tool_priority")
+        self.assertEqual(gated["selected_child_id"], "math")
+        self.assertEqual(gated["verified_or_abstain_gate"]["status"], "allowed")
 
         math_selection = _select_recursive_child_answer(
             problem=problem,
@@ -1507,6 +1672,7 @@ class HleSmokeEvalTest(unittest.TestCase):
             "question_hash": "qid",
             "raw_subject": "Computer Science",
             "category": "Computer Science/AI",
+            "answer_type": "exactMatch",
             "_question": 'Which paper introduced "Attention Is All You Need" in neural machine translation?',
         }
         queries = _candidate_evidence_queries(problem)
@@ -1545,9 +1711,11 @@ class HleSmokeEvalTest(unittest.TestCase):
                 call_id="c",
                 model="m",
                 logger=None,
+                candidate_answers=["Attention Is All You Need"],
             )
 
-        self.assertEqual(summary["selection_policy"], "hipporag_style_associative_rerank")
+        self.assertEqual(summary["selection_policy"], "answer_bearing_hipporag_style_associative_rerank")
+        self.assertEqual(summary["answer_bearing_certificate"]["status"], "answer_bearing")
         self.assertIn("Attention Is All You Need", bridge_context)
 
     def test_evidence_bridge_uses_domain_fallback_for_specialized_subjects(self):
@@ -1556,6 +1724,7 @@ class HleSmokeEvalTest(unittest.TestCase):
             "question_hash": "qid",
             "raw_subject": "Biology/Medicine",
             "category": "Biology/Medicine",
+            "answer_type": "exactMatch",
             "_question": 'Which option best matches "adenosine receptor antagonist" in sleep pharmacology?',
         }
 
@@ -1566,7 +1735,7 @@ class HleSmokeEvalTest(unittest.TestCase):
             return [
                 {
                     "title": "Caffeine and adenosine receptors",
-                    "snippet": "Caffeine is an antagonist at adenosine receptors and promotes wakefulness.",
+                    "snippet": "Caffeine is an antagonist at adenosine receptors in sleep pharmacology and promotes wakefulness.",
                     "source": "pubmed",
                 }
             ]
@@ -1581,10 +1750,12 @@ class HleSmokeEvalTest(unittest.TestCase):
                 call_id="c",
                 model="m",
                 logger=None,
+                candidate_answers=["Caffeine"],
             )
 
         self.assertEqual(summary["source"], "wikipedia_plus_domain_search")
         self.assertEqual(summary["source_counts"]["pubmed"], 1)
+        self.assertEqual(summary["answer_bearing_certificate"]["status"], "answer_bearing")
         self.assertIn("source=pubmed", bridge_context)
         self.assertIn("adenosine receptors", bridge_context)
 

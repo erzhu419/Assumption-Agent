@@ -1129,6 +1129,7 @@ def _call_recursive_verified_answer(
             call_id=call_id,
             model=model,
             logger=logger,
+            candidate_answers=[],
         )
         if evidence_context:
             agent_plan["hle_evidence_context"] = evidence_context
@@ -1219,6 +1220,11 @@ def _call_recursive_verified_answer(
             call_id=call_id,
             model=model,
             logger=logger,
+            candidate_answers=[
+                str(attempt.get("parsed_answer") or "")
+                for attempt in attempts
+                if str(attempt.get("parsed_answer") or "").strip()
+            ],
         )
         if evidence_context:
             agent_plan["hle_evidence_context"] = evidence_context
@@ -1333,6 +1339,7 @@ def _call_recursive_verified_answer(
         max_tokens=min(max_tokens, 384),
         evidence_context=str(agent_plan.get("hle_evidence_context") or ""),
     )
+    selection = _apply_verified_or_abstain_selection(problem=problem, attempts=attempts, selection=selection)
     underlying_calls += int(selection.get("underlying_model_calls", 0) or 0)
     selected_answer = selection.get("selected_answer") or _fallback_answer(attempts)
     selected_answer, canonical_summary = _canonicalize_exact_answer_candidate(problem, selected_answer)
@@ -1381,6 +1388,7 @@ def _call_recursive_verified_answer(
         "selected_child_id": selection.get("selected_child_id"),
         "selected_answer_hash": selected_hash,
         "verifier_model_call": bool(selection.get("verifier_model_call")),
+        "verified_or_abstain_gate": selection.get("verified_or_abstain_gate"),
     }
     stages = agent_plan.setdefault("stages", {})
     stages["recursive_child_validation"] = child_summary
@@ -1624,21 +1632,36 @@ def _build_agent_hipporag_child_context(
             errors.append(type(exc).__name__)
     docs = _dedupe_evidence_results(docs)
     ranked_docs = _hipporag_style_rerank(problem, docs)
-    context = _format_evidence_context([row["doc"] for row in ranked_docs[:5]], max_chars=context_max_chars)
+    selected_docs, answer_bearing_certificate = _filter_answer_bearing_evidence_results(
+        problem=problem,
+        results=[row["doc"] for row in ranked_docs[:5]],
+        candidate_answers=[],
+        max_results=5,
+    )
+    context = _format_evidence_context(selected_docs, max_chars=context_max_chars)
     summary = {
-        "status": "activated" if context else "no_results",
+        "status": (
+            "activated"
+            if context
+            else (
+                str(answer_bearing_certificate.get("status") or "blocked_non_answer_bearing")
+                if ranked_docs
+                else "no_results"
+            )
+        ),
         "source": "wikipedia_search_plus_hipporag_style_rerank",
         "query_count": len(queries),
         "query_hashes": [stable_hash({"query": query}) for query in queries],
         "candidate_doc_count": len(docs),
-        "selected_doc_count": min(len(ranked_docs), 5),
+        "selected_doc_count": len(selected_docs),
         "selected_doc_hashes": [
-            stable_hash({"title": row["doc"].get("title", ""), "snippet": row["doc"].get("snippet", "")})
-            for row in ranked_docs[:5]
+            stable_hash({"title": row.get("title", ""), "snippet": row.get("snippet", "")})
+            for row in selected_docs
         ],
         "top_scores": [round(float(row["score"]), 4) for row in ranked_docs[:5]],
         "entity_node_count": len(_hipporag_entity_nodes(problem, docs)),
         "context_char_count": len(context),
+        "answer_bearing_certificate": answer_bearing_certificate,
         "error_types": sorted(set(errors)),
         "underlying_model_calls": 0,
     }
@@ -4378,7 +4401,94 @@ def _select_recursive_child_answer(
             "selected_answer": selected["parsed_answer"],
             "underlying_model_calls": 0,
             "verifier_model_call": False,
-            }
+        }
+
+
+_VERIFIED_SELECTION_METHODS = {
+    "candidate_claim_verifier_priority",
+    "verified_math_tool_priority",
+    "source_grounded_verifier_choice",
+    "option_evidence_verifier_choice",
+}
+
+
+def _apply_verified_or_abstain_selection(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    selection: dict[str, Any],
+) -> dict[str, Any]:
+    if os.environ.get("HLE_DISABLE_VERIFIED_OR_ABSTAIN", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return selection
+    method = str(selection.get("selection_method") or "")
+    if method in _VERIFIED_SELECTION_METHODS:
+        out = dict(selection)
+        out["verified_or_abstain_gate"] = {
+            "status": "allowed",
+            "reason": "verified_selection_method",
+            "original_selection_method": method,
+        }
+        return out
+    fallback = _verified_or_abstain_fallback_candidate(problem=problem, attempts=attempts)
+    if not fallback:
+        out = dict(selection)
+        out["verified_or_abstain_gate"] = {
+            "status": "no_fallback",
+            "reason": "no_direct_candidate",
+            "original_selection_method": method,
+        }
+        return out
+    selected_child_id = selection.get("selected_child_id")
+    out = dict(selection)
+    out.update({
+        "selection_method": "verified_or_abstain_direct_fallback",
+        "selected_child_id": fallback.get("child_id"),
+        "selected_answer": fallback.get("parsed_answer"),
+        "verified_or_abstain_gate": {
+            "status": "abstained",
+            "reason": "unverified_selection_method",
+            "original_selection_method": method,
+            "original_selected_child_id": selected_child_id,
+            "fallback_prompt_kind": fallback.get("prompt_kind"),
+        },
+    })
+    return out
+
+
+def _verified_or_abstain_fallback_candidate(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    candidates: list[dict[str, Any]] = []
+    for attempt in attempts:
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        normalized_attempt = dict(attempt)
+        if problem.get("answer_type") == "multipleChoice":
+            canonical, canonical_summary = _canonicalize_multiple_choice_answer(problem, answer)
+            if canonical_summary.get("changed"):
+                normalized_attempt["parsed_answer"] = canonical
+                normalized_attempt["parsed_answer_hash"] = stable_hash({"answer": canonical})
+        elif _is_suspicious_exact_answer(answer):
+            continue
+        candidates.append(normalized_attempt)
+    if not candidates:
+        return None
+    preferred_prompt_kinds = [
+        "direct_short_answer",
+        "constraint_checked_answer",
+        "recursive_assumption_answer",
+    ]
+    for prompt_kind in preferred_prompt_kinds:
+        prompt_candidates = [
+            attempt for attempt in candidates
+            if attempt.get("prompt_kind") == prompt_kind
+        ]
+        if prompt_candidates:
+            return sorted(prompt_candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+    return sorted(candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
 
 
 def _select_hipporag_context_candidate(
@@ -4901,6 +5011,8 @@ def _should_prime_evidence_bridge(problem: dict[str, Any], agent_plan: dict[str,
         return False
     if _classify_hle_domain(problem) == "math":
         return False
+    if problem.get("answer_type") == "multipleChoice":
+        return os.environ.get("HLE_ENABLE_MC_EVIDENCE_BRIDGE", "").strip().lower() in {"1", "true", "yes", "on"}
     # HLE failures are often answer-bearing retrieval failures.  Keep
     # graph/morphism context as one candidate, but give the recursive verifier a
     # separate transient evidence child so closed-book self-consistency cannot
@@ -5101,6 +5213,7 @@ def _repair_exact_answer(
                 call_id=call_id,
                 model=model,
                 logger=logger,
+                candidate_answers=[selected_answer],
             )
             agent_plan["hle_evidence_context"] = evidence_context
             agent_plan["hle_evidence_bridge"] = evidence_summary
@@ -5224,6 +5337,7 @@ def _build_hle_evidence_bridge_context(
     call_id: str,
     model: str,
     logger: "_JsonlLogger | None",
+    candidate_answers: list[str] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     queries = _candidate_evidence_queries(problem)
     query_hashes = [stable_hash({"query": query}) for query in queries]
@@ -5252,12 +5366,21 @@ def _build_hle_evidence_bridge_context(
             errors.append(type(exc).__name__)
     unique_results = _dedupe_evidence_results(results)
     reranked_results = [row["doc"] for row in _hipporag_style_rerank(problem, unique_results)[:5]]
-    selected_results = reranked_results or unique_results[:5]
+    selected_results, answer_bearing_certificate = _filter_answer_bearing_evidence_results(
+        problem=problem,
+        results=reranked_results or unique_results[:5],
+        candidate_answers=candidate_answers or [],
+        max_results=5,
+    )
     evidence_context = _format_evidence_context(selected_results, max_chars=1800)
     summary = {
-        "status": "activated" if evidence_context else "no_results",
+        "status": (
+            "activated"
+            if evidence_context
+            else (str(answer_bearing_certificate.get("status") or "blocked_non_answer_bearing") if unique_results else "no_results")
+        ),
         "source": "wikipedia_plus_domain_search",
-        "selection_policy": "hipporag_style_associative_rerank",
+        "selection_policy": "answer_bearing_hipporag_style_associative_rerank",
         "query_count": len(queries),
         "query_hashes": query_hashes,
         "result_count": len(unique_results),
@@ -5268,10 +5391,91 @@ def _build_hle_evidence_bridge_context(
         ],
         "source_counts": dict(Counter(str(row.get("source") or "unknown") for row in unique_results)),
         "evidence_char_count": len(evidence_context),
+        "answer_bearing_certificate": answer_bearing_certificate,
         "error_types": sorted(set(errors)),
     }
     _log_hle_evidence_bridge_event(logger, eval_id=eval_id, call_id=call_id, problem=problem, model=model, summary=summary)
     return evidence_context, summary
+
+
+def _filter_answer_bearing_evidence_results(
+    *,
+    problem: dict[str, Any],
+    results: list[dict[str, str]],
+    candidate_answers: list[str],
+    max_results: int,
+) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    question, options = _split_multiple_choice_question(problem)
+    question_terms = _content_terms(question)
+    option_terms: dict[str, set[str]] = {
+        label: _content_terms(text)
+        for label, text in options.items()
+        if _content_terms(text)
+    }
+    exact_candidate_terms = [
+        _content_terms(answer)
+        for answer in candidate_answers
+        if answer and not _is_suspicious_exact_answer(answer)
+    ]
+    exact_candidate_terms = [terms for terms in exact_candidate_terms if terms]
+    selected: list[dict[str, str]] = []
+    label_hits: Counter[str] = Counter()
+    observed_option_hits: Counter[str] = Counter()
+    candidate_hit_count = 0
+    required_question_overlap = _evidence_question_overlap_required()
+    for row in results:
+        text = f"{row.get('title', '')} {row.get('snippet', '')}"
+        doc_terms = _content_terms(text)
+        if len(question_terms & doc_terms) < required_question_overlap:
+            continue
+        if problem.get("answer_type") == "multipleChoice":
+            hit_labels = [
+                label
+                for label, terms in option_terms.items()
+                if terms and len(terms & doc_terms) >= max(1, min(2, len(terms)))
+            ]
+            for label in hit_labels:
+                observed_option_hits[label] += 1
+            if len(hit_labels) != 1:
+                continue
+            for label in hit_labels:
+                label_hits[label] += 1
+        else:
+            if not exact_candidate_terms:
+                continue
+            if not any(len(terms & doc_terms) >= max(1, min(2, len(terms))) for terms in exact_candidate_terms):
+                continue
+            candidate_hit_count += 1
+        selected.append(row)
+        if len(selected) >= max_results:
+            break
+    if problem.get("answer_type") == "multipleChoice" and len(label_hits) != 1:
+        selected = []
+    certificate = {
+        "status": "answer_bearing" if selected else (
+            "blocked_non_discriminative_option_evidence"
+            if problem.get("answer_type") == "multipleChoice" and observed_option_hits
+            else "blocked_non_answer_bearing"
+        ),
+        "policy": "question_terms_plus_discriminative_option_or_candidate_overlap",
+        "question_term_overlap_required": required_question_overlap,
+        "candidate_answer_count": len([answer for answer in candidate_answers if str(answer or "").strip()]),
+        "option_count": len(option_terms),
+        "option_discriminative_required": problem.get("answer_type") == "multipleChoice",
+        "option_hit_labels": sorted(label_hits or observed_option_hits),
+        "candidate_hit_count": candidate_hit_count,
+        "input_result_count": len(results),
+        "selected_result_count": len(selected),
+        "raw_content_persisted": False,
+    }
+    return selected, certificate
+
+
+def _evidence_question_overlap_required() -> int:
+    try:
+        return max(1, int(os.environ.get("HLE_EVIDENCE_MIN_QUESTION_OVERLAP", "3")))
+    except ValueError:
+        return 3
 
 
 def _log_hle_evidence_bridge_event(
@@ -6510,6 +6714,11 @@ def _component_efficacy_from_plan(
         if isinstance(hit, dict) and hit.get("decision") == "transfer_supported"
     ]
     selection_method = str(selection.get("selection_method") or "")
+    verified_or_abstain_gate = (
+        selection.get("verified_or_abstain_gate", {})
+        if isinstance(selection.get("verified_or_abstain_gate"), dict)
+        else {}
+    )
     claim_status = str(claim_verifier.get("status") or "")
     claim_verified_count = int(claim_verifier.get("verified_count") or 0)
     claim_refuted_count = int(claim_verifier.get("refuted_count") or 0)
@@ -6533,6 +6742,8 @@ def _component_efficacy_from_plan(
         "generic_graph_context_only": bool(world_model.get("generic_graph_context_only")),
         "morphism_hit": bool(formal_hits or structural_hits),
         "strong_morphism_hit": bool(transfer_supported_hits),
+        "morphism_context_injected": bool(prompt.get("context_injected")) and bool(formal_hits or structural_hits),
+        "morphism_routing_only": bool(formal_hits or structural_hits) and not bool(prompt.get("context_injected")),
         "world_model_used_context": world_model.get("decision") == "use_context",
         "critic_model_used": critic_router.get("status") == "activated",
         "evidence_bridge_activated": evidence_status == "activated",
@@ -6593,6 +6804,9 @@ def _component_efficacy_from_plan(
             "normalized_majority",
             "math_exact_normalized_majority",
         },
+        "verified_or_abstain_allowed": verified_or_abstain_gate.get("status") == "allowed",
+        "verified_or_abstain_abstained": verified_or_abstain_gate.get("status") == "abstained",
+        "verified_or_abstain_no_fallback": verified_or_abstain_gate.get("status") == "no_fallback",
     })
     base.update({
         "kind": "assumption_agent_recursive_verify" if variant == "assumption_agent_recursive_verify" else "assumption_agent",
@@ -6710,6 +6924,7 @@ def _component_efficacy_from_plan(
             "status": selection.get("status"),
             "selection_method": selection_method or None,
             "verifier_model_call": bool(selection.get("verifier_model_call")),
+            "verified_or_abstain_gate": verified_or_abstain_gate or None,
         },
     })
     return base

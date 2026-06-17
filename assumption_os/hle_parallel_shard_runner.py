@@ -428,6 +428,7 @@ def aggregate_parallel_payload(
         error_stratification=error_stratification,
         execute_live=execute_live,
     )
+    failure_diagnostics = build_failure_diagnostics(rows=run_rows)
     gates = {
         "all_shards_finished_without_process_failure": all(
             state.status == "completed" for state in states
@@ -475,6 +476,7 @@ def aggregate_parallel_payload(
         "metrics": metrics,
         "error_stratification": error_stratification,
         "pollution_audit": pollution_audit,
+        "failure_diagnostics": failure_diagnostics,
         "pass": all(gates.values()),
         "paper_clean_pass": all(paper_clean_gates.values()),
         "pollution_pass": all(pollution_gates.values()),
@@ -608,15 +610,20 @@ def build_error_stratification(
     top_level_by_variant: Counter[str] = Counter()
     top_level_by_type: Counter[str] = Counter()
     top_level_by_variant_type: Counter[str] = Counter()
+    top_level_by_label: Counter[str] = Counter()
+    top_level_by_variant_label: Counter[str] = Counter()
     for row in rows:
         error = row.get("error") or {}
         if not error:
             continue
         variant = str(row.get("variant"))
         error_type = str(error.get("type") or "unknown")
+        error_label = _sanitize_error_label(error.get("message") or error_type)
         top_level_by_variant[variant] += 1
         top_level_by_type[error_type] += 1
         top_level_by_variant_type[f"{variant}::{error_type}"] += 1
+        top_level_by_label[error_label] += 1
+        top_level_by_variant_label[f"{variant}::{error_label}"] += 1
 
     jsonl_events = _jsonl_error_events(specs)
     process_status_counts = Counter(state.status for state in states)
@@ -626,10 +633,13 @@ def build_error_stratification(
         "top_level_errors_by_variant": dict(sorted(top_level_by_variant.items())),
         "top_level_errors_by_type": dict(sorted(top_level_by_type.items())),
         "top_level_errors_by_variant_type": dict(sorted(top_level_by_variant_type.items())),
+        "top_level_errors_by_label": dict(sorted(top_level_by_label.items())),
+        "top_level_errors_by_variant_label": dict(sorted(top_level_by_variant_label.items())),
         "jsonl_error_event_count": sum(jsonl_events["by_event"].values()),
         "jsonl_error_events_by_event": dict(sorted(jsonl_events["by_event"].items())),
         "jsonl_error_events_by_variant": dict(sorted(jsonl_events["by_variant"].items())),
         "jsonl_error_events_by_type": dict(sorted(jsonl_events["by_error_type"].items())),
+        "jsonl_error_events_by_label": dict(sorted(jsonl_events["by_error_label"].items())),
         "process_status_counts": dict(sorted(process_status_counts.items())),
         "process_timeout_count": process_timeout_count,
         "raw_content_persisted": False,
@@ -878,10 +888,164 @@ def _clean_shared_agent_advantage(clean_shared: dict[str, Any]) -> dict[str, Any
     return best_payload
 
 
+def build_failure_diagnostics(*, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    by_model_problem: dict[str, dict[str, dict[str, dict[str, Any]]]] = defaultdict(lambda: defaultdict(dict))
+    for row in rows:
+        by_model_problem[str(row.get("model"))][str(row.get("problem_id_hash"))][str(row.get("variant"))] = row
+
+    by_variant_answer_type: dict[str, Counter[str]] = defaultdict(Counter)
+    by_variant_domain: dict[str, Counter[str]] = defaultdict(Counter)
+    agent_failure_buckets: Counter[str] = Counter()
+    agent_gain_loss: Counter[str] = Counter()
+    agent_selection_buckets: Counter[str] = Counter()
+    verified_gate_buckets: Counter[str] = Counter()
+    agent_problem_count = 0
+
+    for row in rows:
+        variant = str(row.get("variant") or "unknown")
+        answer_type = str(row.get("answer_type") or "unknown")
+        domain = _diagnostic_domain(row)
+        outcome = "correct" if row.get("correct") else "wrong_or_error"
+        by_variant_answer_type[variant][f"{answer_type}::{outcome}"] += 1
+        by_variant_domain[variant][f"{domain}::{outcome}"] += 1
+
+    for model, by_problem in sorted(by_model_problem.items()):
+        del model
+        for _, by_variant in sorted(by_problem.items()):
+            agent_row = _first_agent_row(by_variant)
+            if not agent_row:
+                continue
+            agent_problem_count += 1
+            raw_row = by_variant.get("raw")
+            hippo_row = by_variant.get("hipporag_baseline") or by_variant.get("hipporag")
+            method = _selection_method(agent_row)
+            agent_selection_buckets[method] += 1
+            gate_status = _verified_gate_status(agent_row)
+            verified_gate_buckets[gate_status] += 1
+            agent_correct = bool(agent_row.get("correct"))
+            raw_correct = bool(raw_row and raw_row.get("correct"))
+            hippo_correct = bool(hippo_row and hippo_row.get("correct"))
+            if agent_correct and not raw_correct:
+                agent_gain_loss["agent_correct_raw_wrong"] += 1
+            if raw_correct and not agent_correct:
+                agent_gain_loss["raw_correct_agent_wrong_regression"] += 1
+            if not agent_correct and raw_row and not raw_correct:
+                agent_gain_loss["raw_also_wrong_agent_no_gain"] += 1
+            if not agent_correct and hippo_row and not hippo_correct:
+                agent_gain_loss["hipporag_also_wrong_agent_no_gain"] += 1
+            if not agent_correct and raw_row and hippo_row and not raw_correct and not hippo_correct:
+                agent_gain_loss["all_three_wrong"] += 1
+            if agent_correct and raw_row and hippo_row and not raw_correct and not hippo_correct:
+                agent_gain_loss["agent_only_correct"] += 1
+            if agent_correct:
+                continue
+            agent_failure_buckets["agent_wrong_or_error"] += 1
+            if agent_row.get("error"):
+                agent_failure_buckets["agent_endpoint_error"] += 1
+            if str(agent_row.get("answer_type")) == "exactMatch" and _diagnostic_domain(agent_row) == "math":
+                agent_failure_buckets["math_exact_failed"] += 1
+            if str(agent_row.get("answer_type")) == "multipleChoice":
+                agent_failure_buckets["multiple_choice_selection_failed"] += 1
+            flags = _row_flags(agent_row)
+            if flags.get("evidence_bridge_activated") or flags.get("evidence_child_executed"):
+                agent_failure_buckets["evidence_invalid_or_unhelpful"] += 1
+            if flags.get("agent_hipporag_context_activated") or flags.get("agent_hipporag_child_executed"):
+                agent_failure_buckets["hipporag_context_invalid_or_unhelpful"] += 1
+            if (
+                flags.get("morphism_hit")
+                and not flags.get("strong_morphism_hit")
+                and flags.get("morphism_context_injected")
+            ):
+                agent_failure_buckets["weak_morphism_unhelpful"] += 1
+            elif flags.get("morphism_hit") and not flags.get("strong_morphism_hit"):
+                agent_failure_buckets["weak_morphism_routing_only_not_credited"] += 1
+            if _selection_is_verifier_like(method):
+                agent_failure_buckets["verifier_or_arbitrator_wrong"] += 1
+            if flags.get("majority_only_selection"):
+                agent_failure_buckets["unverified_majority_wrong"] += 1
+            if flags.get("verified_or_abstain_abstained"):
+                agent_failure_buckets["verified_or_abstain_fallback_wrong"] += 1
+
+    return {
+        "diagnostic_kind": "hle_failure_diagnostics",
+        "agent_problem_count": agent_problem_count,
+        "by_variant_answer_type": {
+            variant: dict(sorted(counter.items()))
+            for variant, counter in sorted(by_variant_answer_type.items())
+        },
+        "by_variant_domain": {
+            variant: dict(sorted(counter.items()))
+            for variant, counter in sorted(by_variant_domain.items())
+        },
+        "agent_failure_buckets": dict(sorted(agent_failure_buckets.items())),
+        "agent_gain_loss": dict(sorted(agent_gain_loss.items())),
+        "agent_selection_methods": dict(sorted(agent_selection_buckets.items())),
+        "verified_or_abstain_gate_status": dict(sorted(verified_gate_buckets.items())),
+        "raw_content_persisted": False,
+    }
+
+
+def _first_agent_row(by_variant: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    for variant, row in sorted(by_variant.items()):
+        if str(variant).startswith("assumption_agent"):
+            return row
+    return None
+
+
+def _diagnostic_domain(row: dict[str, Any]) -> str:
+    text = " ".join([
+        str(row.get("category") or ""),
+        str(row.get("raw_subject") or ""),
+    ]).lower()
+    if any(token in text for token in ("math", "algebra", "geometry", "number theory", "combinatorics")):
+        return "math"
+    if any(token in text for token in ("physics", "chemistry", "biology", "medicine", "science")):
+        return "science"
+    if any(token in text for token in ("computer", "software", "program", "code", "algorithm")):
+        return "software_engineering"
+    if any(token in text for token in ("philosophy", "history", "law", "literature", "social")):
+        return "humanities_social_science"
+    return "hle_general"
+
+
+def _row_flags(row: dict[str, Any]) -> dict[str, Any]:
+    efficacy = row.get("component_efficacy")
+    if not isinstance(efficacy, dict):
+        return {}
+    flags = efficacy.get("flags")
+    return flags if isinstance(flags, dict) else {}
+
+
+def _verified_gate_status(row: dict[str, Any]) -> str:
+    efficacy = row.get("component_efficacy")
+    if not isinstance(efficacy, dict):
+        return "unknown"
+    selection = efficacy.get("selection")
+    if not isinstance(selection, dict):
+        return "unknown"
+    gate = selection.get("verified_or_abstain_gate")
+    if not isinstance(gate, dict):
+        return "not_recorded"
+    return str(gate.get("status") or "unknown")
+
+
+def _selection_is_verifier_like(method: str) -> bool:
+    return method in {
+        "verifier_choice",
+        "source_grounded_verifier_choice",
+        "counter_assumption_verifier_choice",
+        "option_evidence_verifier_choice",
+        "verifier_fallback_first",
+        "counter_assumption_verifier_fallback_first",
+        "counter_assumption_verifier_error_fallback_majority",
+    }
+
+
 def _jsonl_error_events(specs: list[ShardSpec]) -> dict[str, Counter[str]]:
     by_event: Counter[str] = Counter()
     by_variant: Counter[str] = Counter()
     by_error_type: Counter[str] = Counter()
+    by_error_label: Counter[str] = Counter()
     for spec in specs:
         if not spec.log_out.exists():
             continue
@@ -898,15 +1062,40 @@ def _jsonl_error_events(specs: list[ShardSpec]) -> dict[str, Counter[str]]:
                     by_event[name] += 1
                     by_variant[str(event.get("variant") or "unknown")] += 1
                     by_error_type[str(event.get("error_type") or "unknown")] += 1
+                    by_error_label[_sanitize_error_label(event.get("error") or event.get("error_type") or "unknown")] += 1
         except OSError:
             continue
-    return {"by_event": by_event, "by_variant": by_variant, "by_error_type": by_error_type}
+    return {
+        "by_event": by_event,
+        "by_variant": by_variant,
+        "by_error_type": by_error_type,
+        "by_error_label": by_error_label,
+    }
+
+
+def _sanitize_error_label(value: Any) -> str:
+    text = " ".join(str(value or "unknown").split())
+    if not text:
+        return "unknown"
+    # Keep endpoint/runtime labels, not prompt content or long provider payloads.
+    replacements = {
+        "Remote end closed connection without response": "RemoteDisconnected",
+        "The read operation timed out": "ReadTimeout",
+        "timed out": "Timeout",
+    }
+    for needle, label in replacements.items():
+        if needle.lower() in text.lower():
+            return label
+    if len(text) > 120:
+        return text[:117] + "..."
+    return text
 
 
 def format_parallel_markdown(payload: dict[str, Any]) -> str:
     metrics = payload["metrics"]
     errors = payload["error_stratification"]
     pollution = payload.get("pollution_audit") or {}
+    diagnostics = payload.get("failure_diagnostics") or {}
     claim_guard = pollution.get("claim_guard") or {}
     lines = [
         "# HLE Parallel Shard Evaluation",
@@ -963,9 +1152,12 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
         "top_level_errors_by_variant",
         "top_level_errors_by_type",
         "top_level_errors_by_variant_type",
+        "top_level_errors_by_label",
+        "top_level_errors_by_variant_label",
         "jsonl_error_events_by_event",
         "jsonl_error_events_by_variant",
         "jsonl_error_events_by_type",
+        "jsonl_error_events_by_label",
         "process_status_counts",
     ):
         for key, count in sorted((errors.get(bucket) or {}).items()):
@@ -999,6 +1191,27 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
         lines.append(
             f"| `{method}` | `{row['n']}` | `{row['correct']}` | `{row['error']}` | `{row['accuracy']}` |"
         )
+    lines.extend([
+        "",
+        "## Failure Diagnostics",
+        "",
+        "| bucket | key | count |",
+        "| --- | --- | ---: |",
+    ])
+    for bucket in (
+        "agent_failure_buckets",
+        "agent_gain_loss",
+        "agent_selection_methods",
+        "verified_or_abstain_gate_status",
+    ):
+        for key, value in sorted((diagnostics.get(bucket) or {}).items()):
+            lines.append(f"| `{bucket}` | `{key}` | `{value}` |")
+    for variant, counts in sorted((diagnostics.get("by_variant_answer_type") or {}).items()):
+        for key, value in sorted(counts.items()):
+            lines.append(f"| `by_variant_answer_type::{variant}` | `{key}` | `{value}` |")
+    for variant, counts in sorted((diagnostics.get("by_variant_domain") or {}).items()):
+        for key, value in sorted(counts.items()):
+            lines.append(f"| `by_variant_domain::{variant}` | `{key}` | `{value}` |")
     lines.extend([
         "",
         "## Shards",
@@ -1184,6 +1397,11 @@ def main() -> None:
         "pollution_audit": {
             "recommended_hle_claim_scope": payload["pollution_audit"]["claim_guard"]["recommended_hle_claim_scope"],
             "failed_gates": payload["pollution_failed_gates"],
+        },
+        "failure_diagnostics": {
+            "agent_failure_buckets": payload["failure_diagnostics"]["agent_failure_buckets"],
+            "agent_gain_loss": payload["failure_diagnostics"]["agent_gain_loss"],
+            "verified_or_abstain_gate_status": payload["failure_diagnostics"]["verified_or_abstain_gate_status"],
         },
         "failed_gates": payload["failed_gates"],
         "paper_clean_failed_gates": payload["paper_clean_failed_gates"],

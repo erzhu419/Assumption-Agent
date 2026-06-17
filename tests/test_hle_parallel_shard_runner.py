@@ -9,6 +9,7 @@ from assumption_os.hle_parallel_shard_runner import (
     ShardRunState,
     aggregate_parallel_payload,
     build_error_stratification,
+    build_failure_diagnostics,
     build_heartbeat,
     build_pollution_audit,
     build_runner_env,
@@ -149,7 +150,12 @@ class TestHleParallelShardRunner(unittest.TestCase):
                 md_dir=root,
             )
             specs[0].log_out.write_text(
-                json.dumps({"event": "recursive_child_timeout", "variant": "assumption_agent_recursive_verify", "error_type": "TimeoutError"}) + "\n",
+                json.dumps({
+                    "event": "recursive_child_timeout",
+                    "variant": "assumption_agent_recursive_verify",
+                    "error_type": "TimeoutError",
+                    "error": "model request failed: RemoteDisconnected",
+                }) + "\n",
                 encoding="utf-8",
             )
             rows = [
@@ -162,6 +168,8 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(errors["top_level_error_count"], 1)
         self.assertEqual(errors["top_level_errors_by_variant"], {"raw": 1})
         self.assertEqual(errors["jsonl_error_events_by_event"], {"recursive_child_timeout": 1})
+        self.assertEqual(errors["jsonl_error_events_by_label"], {"model request failed: RemoteDisconnected": 1})
+        self.assertEqual(errors["top_level_errors_by_label"], {"synthetic": 1})
         self.assertEqual(errors["process_timeout_count"], 1)
 
     def test_aggregate_parallel_payload_builds_clean_shared_subset(self) -> None:
@@ -350,6 +358,50 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(summary["graph_generic_harness_retrieved"], 1)
         self.assertEqual(summary["graph_context_discarded"], 1)
         self.assertNotIn("graph_context_used", summary)
+
+    def test_failure_diagnostics_bucket_agent_loss_sources(self) -> None:
+        agent = _row(
+            "p1",
+            "assumption_agent_recursive_verify",
+            False,
+            component_efficacy={
+                "flags": {
+                    "verified_or_abstain_abstained": True,
+                    "morphism_hit": True,
+                    "strong_morphism_hit": False,
+                    "morphism_context_injected": True,
+                },
+                "selection": {
+                    "selection_method": "verified_or_abstain_direct_fallback",
+                    "verified_or_abstain_gate": {"status": "abstained"},
+                },
+            },
+        )
+        agent.update({
+            "answer_type": "exactMatch",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+        })
+        rows = [
+            agent,
+            _row("p1", "raw", False),
+            _row("p1", "hipporag_baseline", False),
+        ]
+
+        diagnostics = build_failure_diagnostics(rows=rows)
+
+        self.assertEqual(diagnostics["agent_problem_count"], 1)
+        self.assertEqual(diagnostics["agent_failure_buckets"]["math_exact_failed"], 1)
+        self.assertEqual(diagnostics["agent_failure_buckets"]["weak_morphism_unhelpful"], 1)
+        self.assertEqual(diagnostics["agent_failure_buckets"]["verified_or_abstain_fallback_wrong"], 1)
+        self.assertEqual(diagnostics["agent_gain_loss"]["raw_also_wrong_agent_no_gain"], 1)
+        self.assertEqual(diagnostics["agent_gain_loss"]["hipporag_also_wrong_agent_no_gain"], 1)
+        self.assertEqual(diagnostics["agent_gain_loss"]["all_three_wrong"], 1)
+        self.assertEqual(
+            diagnostics["agent_selection_methods"]["verified_or_abstain_direct_fallback"],
+            1,
+        )
+        self.assertEqual(diagnostics["verified_or_abstain_gate_status"]["abstained"], 1)
 
 
 def _row(
