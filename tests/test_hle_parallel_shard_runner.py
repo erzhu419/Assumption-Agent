@@ -15,7 +15,6 @@ from assumption_os.hle_module_ablation_runner import (
 from assumption_os.hle_parallel_shard_runner import (
     ShardRunState,
     aggregate_parallel_payload,
-    attach_fixed_problem_hash_manifests,
     build_error_stratification,
     build_failure_diagnostics,
     build_heartbeat,
@@ -23,7 +22,6 @@ from assumption_os.hle_parallel_shard_runner import (
     build_runner_env,
     build_shard_command,
     build_shard_specs,
-    _dedupe_shard_specs_by_problem_pool,
     dedupe_shard_specs_by_sample_hash,
     format_parallel_markdown,
     run_parallel_shards,
@@ -35,12 +33,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
         return Namespace(
             root=tmp,
             eval_id="ablate",
-            profiles=(
-                "full,no_graph,no_evidence,no_morphism,no_option_evidence,"
-                "no_candidate_claim_verifier,verified_gate_off,no_world_model,"
-                "no_recursive,raw_preserve_selector"
-            ),
-            profile_workers=2,
+            profiles="full,no_graph,no_evidence,no_morphism,no_option_evidence,no_candidate_claim_verifier,verified_gate_off",
             dry_run=True,
             total_sample_size=3,
             shard_size=1,
@@ -50,7 +43,6 @@ class TestHleParallelShardRunner(unittest.TestCase):
             seed_stride=7,
             sample_answer_type="multipleChoice",
             sample_subject_contains="",
-            sample_problem_hashes_file="",
             models="gpt-5.4-mini",
             variants="raw,assumption_agent_recursive_verify,hipporag_baseline",
             execute_live=False,
@@ -64,15 +56,12 @@ class TestHleParallelShardRunner(unittest.TestCase):
             disable_evidence_bridge=False,
             exclude_existing_hle_artifacts=True,
             exclude_artifact_glob="phase four/assumption_graph/paper_readiness_20260604/hle*.json*",
-            dedupe_shard_samples=True,
-            dedupe_shard_max_attempts=11,
             run_dir=str(Path(tmp) / "runs"),
             md_dir=str(Path(tmp) / "md"),
             out="",
             md_out="",
             soft_timeout_sec=900,
             terminate_grace_sec=30,
-            kill_on_soft_timeout=False,
             model_router_attempts=2,
             model_router_timeout=7200,
             model_router_per_attempt_timeout=90,
@@ -105,7 +94,6 @@ class TestHleParallelShardRunner(unittest.TestCase):
             payload = build_ablation_plan(self._ablation_args(tmp))
 
         self.assertTrue(payload["gates"]["profiles_defined"])
-        self.assertEqual(payload["profile_workers"], 2)
         self.assertTrue(payload["gates"]["secrets_not_persisted"])
         self.assertFalse(payload["gates"]["raw_content_persisted"])
         by_profile = {row["profile"]: row for row in payload["profiles"]}
@@ -123,25 +111,6 @@ class TestHleParallelShardRunner(unittest.TestCase):
             by_profile["no_candidate_claim_verifier"]["env_overrides"]["HLE_DISABLE_CANDIDATE_CLAIM_VERIFIER"],
             "1",
         )
-        self.assertEqual(
-            by_profile["no_world_model"]["env_overrides"]["HLE_DISABLE_WORLD_MODEL_ROUTER"],
-            "1",
-        )
-        self.assertEqual(
-            by_profile["no_recursive"]["env_overrides"]["HLE_DISABLE_RECURSIVE_ASSUMPTION_RUNNER"],
-            "1",
-        )
-        self.assertEqual(
-            by_profile["raw_preserve_selector"]["env_overrides"]["HLE_ENABLE_RAW_PRESERVE_SELECTOR"],
-            "1",
-        )
-        raw_preserve_command = by_profile["raw_preserve_selector"]["command"]
-        self.assertIn("--dedupe-shard-samples", raw_preserve_command)
-        self.assertEqual(
-            raw_preserve_command[raw_preserve_command.index("--dedupe-shard-max-attempts") + 1],
-            "11",
-        )
-        self.assertNotIn("--kill-on-soft-timeout", raw_preserve_command)
         flattened = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("sk-", flattened)
         self.assertNotIn("hf_", flattened)
@@ -259,85 +228,6 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(deduped[1].seed_offset, 111)
         self.assertEqual(summary["accepted_shard_count"], 2)
         self.assertEqual(summary["remaps"][1]["attempt_count"], 3)
-        self.assertFalse(summary["raw_content_persisted"])
-
-    def test_attach_fixed_problem_hash_manifests_splits_hashes_per_shard(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            source = root / "hashes.json"
-            source.write_text(json.dumps(["h1", "h2", "h3"]), encoding="utf-8")
-            specs = build_shard_specs(
-                eval_id="fixed",
-                total_sample_size=3,
-                shard_size=1,
-                seed_offset=0,
-                seed_stride=1,
-                run_dir=root / "run",
-                md_dir=root / "md",
-            )
-
-            fixed_specs, summary = attach_fixed_problem_hash_manifests(
-                specs=specs,
-                problem_hashes_file=source,
-                manifest_dir=root / "manifests",
-            )
-            self.assertEqual(summary["status"], "completed")
-            self.assertEqual([json.loads(spec.sample_problem_hashes_file.read_text())[0] for spec in fixed_specs], ["h1", "h2", "h3"])
-            cmd = build_shard_command(
-                fixed_specs[0],
-                root=root,
-                max_scan=50,
-                models="gpt-5.4-mini",
-                variants="raw",
-                execute_live=False,
-                call_timeout=None,
-                max_tokens=128,
-                graph_dir=root / "graph",
-                agent_top_k=1,
-                agent_context_max_chars=100,
-                agent_child_mode="parallel_quorum",
-                agent_child_timeout=None,
-                evidence_bridge_enabled=True,
-                exclude_existing_hle_artifacts=False,
-                exclude_artifact_glob="",
-                sample_answer_type="multipleChoice",
-                sample_subject_contains="",
-            )
-            self.assertIn("--sample-problem-hashes-file", cmd)
-            self.assertFalse(summary["raw_content_persisted"])
-
-    def test_single_stream_dedupe_pool_preserves_first_window_semantics(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            specs = build_shard_specs(
-                eval_id="pool",
-                total_sample_size=2,
-                shard_size=1,
-                seed_offset=0,
-                seed_stride=10,
-                run_dir=root,
-                md_dir=root,
-            )
-            problems = [
-                {"id_hash": "same", "scanned_index": 1},
-                {"id_hash": "same", "scanned_index": 11},
-                {"id_hash": "unique", "scanned_index": 21},
-            ]
-
-            deduped, summary = _dedupe_shard_specs_by_problem_pool(
-                specs=specs,
-                problems=problems,
-                seed_stride=10,
-                max_attempts=3,
-                excluded_existing_problem_count=0,
-                mode="unit_pool",
-            )
-
-        self.assertEqual(deduped[0].seed_offset, 0)
-        self.assertEqual(deduped[1].seed_offset, 20)
-        self.assertEqual(summary["mode"], "unit_pool")
-        self.assertEqual(summary["accepted_shard_count"], 2)
-        self.assertEqual(summary["remaps"][1]["attempt_count"], 2)
         self.assertFalse(summary["raw_content_persisted"])
 
     def test_heartbeat_reports_latest_jsonl_event(self) -> None:

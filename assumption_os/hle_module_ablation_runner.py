@@ -54,6 +54,11 @@ DEFAULT_ABLATION_PROFILES: tuple[ModuleAblationProfile, ...] = (
         },
     ),
     ModuleAblationProfile(
+        name="no_candidate_claim_verifier",
+        description="Disable executable candidate-claim verifier for exact/math and MC math claims.",
+        env_overrides={"HLE_DISABLE_CANDIDATE_CLAIM_VERIFIER": "1"},
+    ),
+    ModuleAblationProfile(
         name="no_agent_hipporag",
         description="Disable agent-side HippoRAG child context and priority selection.",
         env_overrides={

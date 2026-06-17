@@ -56,14 +56,6 @@ HLE_OFFICIAL_SOURCES = [
 ]
 
 
-def _env_flag(name: str) -> bool:
-    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _recursive_assumption_runner_disabled() -> bool:
-    return _env_flag("HLE_DISABLE_RECURSIVE_ASSUMPTION_RUNNER")
-
-
 def build_hle_text_smoke_eval_payload(
     *,
     root: Path,
@@ -87,8 +79,6 @@ def build_hle_text_smoke_eval_payload(
     exclude_artifact_glob: str = "phase four/assumption_graph/paper_readiness_20260604/hle*.json*",
     sample_answer_type: str = "",
     sample_subject_contains: str = "",
-    sample_problem_hashes: list[str] | None = None,
-    sample_problem_hashes_file: Path | None = None,
 ) -> dict[str, Any]:
     root = root.resolve()
     models = models or ["gpt-5.5"]
@@ -101,10 +91,6 @@ def build_hle_text_smoke_eval_payload(
         if exclude_existing_hle_artifacts
         else set()
     )
-    fixed_problem_hashes = _normalize_problem_hashes(sample_problem_hashes)
-    if sample_problem_hashes_file:
-        fixed_problem_hashes.extend(_read_problem_hashes_file(sample_problem_hashes_file))
-        fixed_problem_hashes = _normalize_problem_hashes(fixed_problem_hashes)
     if access["dataset_accessible"]:
         sample_rows = _load_text_only_sample(
             sample_size=sample_size,
@@ -113,7 +99,6 @@ def build_hle_text_smoke_eval_payload(
             exclude_problem_hashes=excluded_problem_hashes,
             answer_type_filter=sample_answer_type,
             subject_contains=sample_subject_contains,
-            include_problem_hashes=fixed_problem_hashes,
         )
     run_rows: list[dict[str, Any]] = []
     logger = _JsonlLogger(log_out) if log_out else None
@@ -192,28 +177,7 @@ def build_hle_text_smoke_eval_payload(
                     )
                     started = time.monotonic()
                     try:
-                        if variant == "assumption_agent_recursive_verify" and _recursive_assumption_runner_disabled():
-                            stages = (agent_plan or {}).setdefault("stages", {})
-                            stages["recursive_child_validation"] = {
-                                "status": "disabled",
-                                "reason": "env_disabled",
-                                "child_count": 0,
-                                "planned_child_count": 0,
-                            }
-                            stages["multi_candidate_self_verifier"] = {
-                                "status": "disabled",
-                                "reason": "env_disabled",
-                                "verifier_model_call": False,
-                            }
-                            answer_text = _call_model(
-                                model=model,
-                                prompt=_prompt_for(problem, variant=variant, agent_plan=agent_plan),
-                                timeout=call_timeout,
-                                max_tokens=max_tokens,
-                            )
-                            api_summary["underlying_model_calls_executed"] += 1
-                            module_trace = _module_trace(problem, variant=variant, agent_plan=agent_plan)
-                        elif variant == "assumption_agent_recursive_verify":
+                        if variant == "assumption_agent_recursive_verify":
                             solved = _call_recursive_verified_answer(
                                 problem=problem,
                                 model=model,
@@ -364,9 +328,6 @@ def build_hle_text_smoke_eval_payload(
             "duplicate_with_excluded_problem_count": sum(1 for row in sample_rows if row["id_hash"] in excluded_problem_hashes),
             "sample_answer_type_filter": sample_answer_type,
             "sample_subject_contains_filter": sample_subject_contains,
-            "fixed_problem_hash_filter_enabled": bool(fixed_problem_hashes),
-            "fixed_problem_hash_filter_count": len(fixed_problem_hashes),
-            "sample_problem_hashes_file": str(sample_problem_hashes_file) if sample_problem_hashes_file else None,
             "sample_problem_hashes": [row["id_hash"] for row in sample_rows],
         },
         "models": models,
@@ -488,9 +449,6 @@ def format_markdown(payload: dict[str, Any]) -> str:
                 "critic_synthesis_selected",
                 "mc_option_sweep_activated",
                 "mc_option_sweep_selected",
-                "raw_preserve_selector_activated",
-                "raw_preserve_candidate_emitted",
-                "raw_preserve_candidate_selected",
                 "source_grounded_verifier_used",
                 "candidate_claim_override",
                 "counter_assumption_challenge_activated",
@@ -567,7 +525,6 @@ def _load_text_only_sample(
     exclude_problem_hashes: set[str] | None = None,
     answer_type_filter: str = "",
     subject_contains: str = "",
-    include_problem_hashes: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     from datasets import Image, load_dataset
 
@@ -575,14 +532,11 @@ def _load_text_only_sample(
     dataset = _cast_image_columns(dataset, Image)
     sample: list[dict[str, Any]] = []
     exclude_problem_hashes = exclude_problem_hashes or set()
-    fixed_hashes = _normalize_problem_hashes(include_problem_hashes)
-    fixed_set = set(fixed_hashes)
-    fixed_found: dict[str, dict[str, Any]] = {}
     scanned = 0
     skipped = 0
     for row in dataset:
         scanned += 1
-        if not fixed_hashes and scanned <= seed_offset:
+        if scanned <= seed_offset:
             continue
         if _has_image_payload(row):
             skipped += 1
@@ -610,15 +564,6 @@ def _load_text_only_sample(
                     break
                 continue
         problem = _problem_from_row(row, scanned=scanned, skipped_before=skipped)
-        if fixed_hashes:
-            if problem["id_hash"] not in fixed_set:
-                if scanned >= max_scan:
-                    break
-                continue
-            fixed_found.setdefault(problem["id_hash"], problem)
-            if len(fixed_found) >= min(sample_size, len(fixed_set)) or scanned >= max_scan:
-                break
-            continue
         if problem["id_hash"] in exclude_problem_hashes:
             skipped += 1
             if scanned >= max_scan:
@@ -627,43 +572,7 @@ def _load_text_only_sample(
         sample.append(problem)
         if len(sample) >= sample_size or scanned >= max_scan:
             break
-    if fixed_hashes:
-        return [fixed_found[item] for item in fixed_hashes if item in fixed_found][:sample_size]
     return sample
-
-
-def _normalize_problem_hashes(values: list[str] | None) -> list[str]:
-    seen: set[str] = set()
-    out: list[str] = []
-    for value in values or []:
-        text = str(value).strip()
-        if not text or text.startswith("#") or text in seen:
-            continue
-        seen.add(text)
-        out.append(text)
-    return out
-
-
-def _read_problem_hashes_file(path: Path) -> list[str]:
-    try:
-        data = path.read_text(encoding="utf-8")
-    except OSError:
-        return []
-    stripped = data.strip()
-    if not stripped:
-        return []
-    try:
-        parsed = json.loads(stripped)
-    except json.JSONDecodeError:
-        return _normalize_problem_hashes(stripped.splitlines())
-    if isinstance(parsed, list):
-        return _normalize_problem_hashes([str(item) for item in parsed])
-    if isinstance(parsed, dict):
-        for key in ("problem_hashes", "sample_problem_hashes", "hashes"):
-            values = parsed.get(key)
-            if isinstance(values, list):
-                return _normalize_problem_hashes([str(item) for item in values])
-    return []
 
 
 def _collect_existing_hle_problem_hashes(*, root: Path, artifact_glob: str) -> set[str]:
@@ -886,7 +795,11 @@ def _build_assumption_agent_plan(
             data=morphism_summary,
         )
 
-        recursive_disabled = top_k <= 0 or _recursive_assumption_runner_disabled()
+        recursive_disabled = (
+            top_k <= 0
+            or os.environ.get("HLE_DISABLE_RECURSIVE_ASSUMPTION_RUNNER", "").strip().lower()
+            in {"1", "true", "yes", "on"}
+        )
         if recursive_disabled:
             recursive_summary = {
                 "status": "disabled",
@@ -1211,14 +1124,10 @@ def _prompt_for(problem: dict[str, Any], *, variant: str, agent_plan: dict[str, 
     if variant.startswith("assumption_agent"):
         context = (agent_plan or {}).get("prompt_context", "")
         if context:
-            module_clause = (
-                "graph retrieval, structural morphism transfer, and a world-model route gate"
-                if _recursive_assumption_runner_disabled()
-                else "graph retrieval, structural morphism transfer, a world-model route gate, and a recursive applicability runner"
-            )
             return (
-                f"Solve this closed-book expert exam item. A bounded Assumption Agent has already run {module_clause}. "
-                "Use the retrieved context only if it genuinely helps; ignore irrelevant assumptions. "
+                "Solve this closed-book expert exam item. A bounded Assumption Agent has already run graph "
+                "retrieval, structural morphism transfer, a world-model route gate, and a recursive applicability "
+                "runner. Use the retrieved context only if it genuinely helps; ignore irrelevant assumptions. "
                 "Do not expose reasoning or mention the modules.\n\n"
                 f"{context}\n\n"
                 f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
@@ -1533,22 +1442,6 @@ def _call_recursive_verified_answer(
     if option_sweep_attempts:
         attempts.extend(option_sweep_attempts)
 
-    raw_preserve_summary: dict[str, Any] | None = None
-    raw_preserve_attempt, raw_preserve_summary = _maybe_run_raw_preserve_selector_child(
-        problem=problem,
-        attempts=attempts,
-        model=model,
-        eval_id=eval_id,
-        call_id=call_id,
-        logger=logger,
-        timeout=child_timeout if child_timeout is not None else timeout,
-        max_tokens=max_tokens,
-    )
-    if raw_preserve_attempt:
-        attempts.append(raw_preserve_attempt)
-        if raw_preserve_attempt.get("status") == "answered":
-            underlying_calls += 1
-
     selection = _select_recursive_child_answer(
         problem=problem,
         attempts=attempts,
@@ -1675,12 +1568,6 @@ def _call_recursive_verified_answer(
             and any(attempt.get("child_id") == selected_child_id for attempt in option_sweep_attempts)
         )
         stages["mc_option_sweep_candidates"] = option_sweep_summary
-    if raw_preserve_summary:
-        raw_preserve_summary["final_selection_method"] = selection.get("selection_method")
-        raw_preserve_summary["selected_raw_preserve_candidate"] = (
-            selection.get("selected_child_id") == raw_preserve_summary.get("child_id")
-        )
-        stages["raw_preserve_selector"] = raw_preserve_summary
     if canonical_summary.get("changed"):
         stages["answer_format_canonicalizer"] = canonical_summary
     if format_repair_summary:
@@ -1830,17 +1717,6 @@ def _call_recursive_verified_answer(
             stage="mc_option_sweep_candidates",
             data=option_sweep_summary,
         )
-    if raw_preserve_summary:
-        _agent_stage_log(
-            logger,
-            eval_id=eval_id,
-            call_id=call_id,
-            problem=problem,
-            model=model,
-            variant="assumption_agent_recursive_verify",
-            stage="raw_preserve_selector",
-            data=raw_preserve_summary,
-        )
     if canonical_summary.get("changed"):
         _agent_stage_log(
             logger,
@@ -1897,54 +1773,6 @@ def _agent_hipporag_child_enabled(problem: dict[str, Any]) -> bool:
     if os.environ.get("HLE_ENABLE_EXACT_AGENT_HIPPORAG_CHILD", "").strip().lower() in {"1", "true", "yes", "on"}:
         return problem.get("answer_type") in {"multipleChoice", "exactMatch"}
     return problem.get("answer_type") == "multipleChoice"
-
-
-def _maybe_run_raw_preserve_selector_child(
-    *,
-    problem: dict[str, Any],
-    attempts: list[dict[str, Any]],
-    model: str,
-    eval_id: str,
-    call_id: str,
-    logger: "_JsonlLogger | None",
-    timeout: float | None,
-    max_tokens: int,
-) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    if os.environ.get("HLE_ENABLE_RAW_PRESERVE_SELECTOR", "").strip().lower() not in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }:
-        return None, None
-    child_index = _timeout_recovery_child_index(attempts)
-    attempt = _run_child_attempt(
-        problem=problem,
-        spec={
-            "prompt_kind": "raw_preserve_selector_answer",
-            "prompt": _prompt_for(problem, variant="raw"),
-        },
-        child_index=child_index,
-        model=model,
-        eval_id=eval_id,
-        call_id=call_id,
-        logger=logger,
-        timeout=timeout,
-        max_tokens=max_tokens,
-    )
-    summary = {
-        "status": "activated",
-        "policy": "add_no_context_base_model_candidate_for_uncertainty_preservation",
-        "base_model": model,
-        "child_id": attempt.get("child_id"),
-        "child_index": attempt.get("child_index"),
-        "child_status": attempt.get("status"),
-        "child_error_type": attempt.get("error_type"),
-        "candidate_emitted": bool(str(attempt.get("parsed_answer") or "").strip()),
-        "candidate_answer_hash": attempt.get("parsed_answer_hash"),
-        "underlying_model_calls": 1 if attempt.get("status") == "answered" else 0,
-    }
-    return attempt, summary
 
 
 def _build_agent_hipporag_child_context(
@@ -6853,14 +6681,11 @@ def _verified_or_abstain_fallback_candidate(
         candidates.append(normalized_attempt)
     if not candidates:
         return None
-    preferred_prompt_kinds = []
-    if os.environ.get("HLE_ENABLE_RAW_PRESERVE_SELECTOR", "").strip().lower() in {"1", "true", "yes", "on"}:
-        preferred_prompt_kinds.append("raw_preserve_selector_answer")
-    preferred_prompt_kinds.extend([
+    preferred_prompt_kinds = [
         "direct_short_answer",
         "constraint_checked_answer",
         "recursive_assumption_answer",
-    ])
+    ]
     for prompt_kind in preferred_prompt_kinds:
         prompt_candidates = [
             attempt for attempt in candidates
@@ -9572,7 +9397,6 @@ def _component_efficacy_from_plan(
     option_evidence = stages.get("mc_option_evidence_scorer", {})
     critic_synthesis = stages.get("critic_synthesis_child", {})
     option_sweep = stages.get("mc_option_sweep_candidates", {})
-    raw_preserve = stages.get("raw_preserve_selector", {})
     counter_challenge = stages.get("counter_assumption_challenge", {})
 
     candidate_hashes = [value for value in recursive.get("candidate_answer_hashes", []) if value]
@@ -9675,9 +9499,6 @@ def _component_efficacy_from_plan(
         "critic_synthesis_selected": bool(critic_synthesis.get("selected_critic_synthesis")),
         "mc_option_sweep_activated": option_sweep.get("status") == "activated",
         "mc_option_sweep_selected": bool(option_sweep.get("selected_option_sweep_candidate")),
-        "raw_preserve_selector_activated": raw_preserve.get("status") == "activated",
-        "raw_preserve_candidate_emitted": bool(raw_preserve.get("candidate_emitted")),
-        "raw_preserve_candidate_selected": bool(raw_preserve.get("selected_raw_preserve_candidate")),
         "source_grounded_verifier_used": selection_method == "source_grounded_verifier_choice",
         "candidate_claim_override": selection_method == "candidate_claim_verifier_priority",
         "domain_rule_override": (
@@ -9854,15 +9675,6 @@ def _component_efficacy_from_plan(
             "covered_option_count_before": int(option_sweep.get("covered_option_count_before") or 0),
             "added_candidate_count": int(option_sweep.get("added_candidate_count") or 0),
             "selected_option_sweep_candidate": bool(option_sweep.get("selected_option_sweep_candidate")),
-        },
-        "raw_preserve_selector": {
-            "status": raw_preserve.get("status"),
-            "policy": raw_preserve.get("policy"),
-            "base_model": raw_preserve.get("base_model"),
-            "candidate_emitted": bool(raw_preserve.get("candidate_emitted")),
-            "selected_raw_preserve_candidate": bool(raw_preserve.get("selected_raw_preserve_candidate")),
-            "child_status": raw_preserve.get("child_status"),
-            "child_error_type": raw_preserve.get("child_error_type"),
         },
         "selection": {
             "status": selection.get("status"),
@@ -10099,7 +9911,6 @@ def main() -> None:
     parser.add_argument("--seed-offset", type=int, default=0)
     parser.add_argument("--sample-answer-type", default="")
     parser.add_argument("--sample-subject-contains", default="")
-    parser.add_argument("--sample-problem-hashes-file", default="")
     parser.add_argument("--models", default="gpt-5.5")
     parser.add_argument("--variants", default="raw,assumption_wrapper")
     parser.add_argument("--execute-live", action="store_true")
@@ -10150,7 +9961,6 @@ def main() -> None:
         exclude_artifact_glob=args.exclude_artifact_glob,
         sample_answer_type=args.sample_answer_type,
         sample_subject_contains=args.sample_subject_contains,
-        sample_problem_hashes_file=Path(args.sample_problem_hashes_file) if args.sample_problem_hashes_file else None,
     )
     out = Path(args.out)
     out = out if out.is_absolute() else root / out
