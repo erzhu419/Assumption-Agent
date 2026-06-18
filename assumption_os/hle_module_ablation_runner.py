@@ -117,6 +117,11 @@ DEFAULT_ABLATION_PROFILES: tuple[ModuleAblationProfile, ...] = (
         description="Add a raw no-context base-model candidate and let the selector preserve it under uncertainty.",
         env_overrides={"HLE_ENABLE_RAW_PRESERVE_SELECTOR": "1"},
     ),
+    ModuleAblationProfile(
+        name="hipporag_preserve_selector",
+        description="Add a same-model HippoRAG baseline candidate and prefer it when Agent selection is unverified.",
+        env_overrides={"HLE_ENABLE_COST_AWARE_HIPPORAG_PRESERVE_SELECTOR": "1"},
+    ),
 )
 
 

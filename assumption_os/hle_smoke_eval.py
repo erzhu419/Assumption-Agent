@@ -1666,6 +1666,23 @@ def _call_recursive_verified_answer(
         if raw_preserve_attempt.get("status") == "answered":
             underlying_calls += 1
 
+    hipporag_preserve_summary: dict[str, Any] | None = None
+    hipporag_preserve_attempt, hipporag_preserve_summary = _maybe_run_hipporag_preserve_selector_child(
+        problem=problem,
+        attempts=attempts,
+        agent_plan=agent_plan,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=child_timeout if child_timeout is not None else timeout,
+        max_tokens=max_tokens,
+    )
+    if hipporag_preserve_attempt:
+        attempts.append(hipporag_preserve_attempt)
+        if hipporag_preserve_attempt.get("status") == "answered":
+            underlying_calls += 1
+
     selection = _select_recursive_child_answer(
         problem=problem,
         attempts=attempts,
@@ -1792,6 +1809,18 @@ def _call_recursive_verified_answer(
             and any(attempt.get("child_id") == selected_child_id for attempt in option_sweep_attempts)
         )
         stages["mc_option_sweep_candidates"] = option_sweep_summary
+    if raw_preserve_summary:
+        raw_preserve_summary["final_selection_method"] = selection.get("selection_method")
+        raw_preserve_summary["selected_raw_preserve_candidate"] = (
+            selection.get("selected_child_id") == raw_preserve_summary.get("child_id")
+        )
+        stages["raw_preserve_selector"] = raw_preserve_summary
+    if hipporag_preserve_summary:
+        hipporag_preserve_summary["final_selection_method"] = selection.get("selection_method")
+        hipporag_preserve_summary["selected_hipporag_preserve_candidate"] = (
+            selection.get("selected_child_id") == hipporag_preserve_summary.get("child_id")
+        )
+        stages["hipporag_preserve_selector"] = hipporag_preserve_summary
     if canonical_summary.get("changed"):
         stages["answer_format_canonicalizer"] = canonical_summary
     if format_repair_summary:
@@ -2066,6 +2095,173 @@ def _maybe_run_raw_preserve_selector_child(
         "underlying_model_calls": 1 if attempt.get("status") == "answered" else 0,
     }
     return attempt, summary
+
+
+def _maybe_run_hipporag_preserve_selector_child(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    agent_plan: dict[str, Any] | None = None,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    env_forced = os.environ.get("HLE_ENABLE_HIPPORAG_PRESERVE_SELECTOR", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    trigger = _cost_aware_hipporag_preserve_trigger(
+        problem=problem,
+        attempts=attempts,
+        agent_plan=agent_plan or {},
+    )
+    if not env_forced and trigger.get("status") != "activated":
+        return None, None
+    child_index = _timeout_recovery_child_index(attempts)
+    baseline_plan = _build_hipporag_baseline_plan(
+        problem=problem,
+        eval_id=eval_id,
+        call_id=f"{call_id}_hipporag_preserve",
+        model=model,
+        logger=logger,
+        context_max_chars=2200,
+    )
+    stages = baseline_plan.get("stages", {}) if isinstance(baseline_plan, dict) else {}
+    retrieval = stages.get("hipporag_context_retrieval", {}) if isinstance(stages.get("hipporag_context_retrieval"), dict) else {}
+    rerank = stages.get("hipporag_associative_rerank", {}) if isinstance(stages.get("hipporag_associative_rerank"), dict) else {}
+    prompt = stages.get("prompt_builder", {}) if isinstance(stages.get("prompt_builder"), dict) else {}
+    retrieval_status = retrieval.get("status")
+    candidate_doc_count = int(retrieval.get("candidate_doc_count") or 0)
+    rerank_status = rerank.get("status")
+    selected_doc_count = int(rerank.get("selected_doc_count") or 0)
+    context_char_count = int(prompt.get("context_char_count") or 0)
+    has_usable_context = context_char_count > 0 and (selected_doc_count > 0 or candidate_doc_count > 0)
+    if not env_forced and not has_usable_context:
+        return None, {
+            "status": "blocked_non_answer_bearing",
+            "policy": "cost_aware_unverified_mc_hipporag_baseline_candidate",
+            "trigger": trigger,
+            "base_model": model,
+            "child_id": None,
+            "child_index": child_index,
+            "child_status": "skipped",
+            "child_error_type": None,
+            "candidate_emitted": False,
+            "candidate_answer_hash": None,
+            "retrieval_status": retrieval_status,
+            "retrieval_query_count": int(retrieval.get("query_count") or 0),
+            "candidate_doc_count": candidate_doc_count,
+            "rerank_status": rerank_status,
+            "selected_doc_count": selected_doc_count,
+            "context_char_count": context_char_count,
+            "baseline_plan_hash": stable_hash(baseline_plan),
+            "underlying_model_calls": 0,
+            "block_reason": "hipporag_preserve_requires_retrieved_context",
+        }
+    attempt = _run_child_attempt(
+        problem=problem,
+        spec={
+            "prompt_kind": "hipporag_preserve_selector_answer",
+            "prompt": _prompt_for(problem, variant="hipporag_baseline", agent_plan=baseline_plan),
+        },
+        child_index=child_index,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
+    attempt["preserve_context_char_count"] = context_char_count
+    attempt["preserve_selected_doc_count"] = selected_doc_count
+    attempt["preserve_candidate_doc_count"] = candidate_doc_count
+    summary = {
+        "status": "activated",
+        "policy": (
+            "env_forced_hipporag_baseline_candidate"
+            if env_forced
+            else "cost_aware_unverified_mc_hipporag_baseline_candidate"
+        ),
+        "trigger": trigger if not env_forced else {"status": "activated", "reason": "env_forced"},
+        "base_model": model,
+        "child_id": attempt.get("child_id"),
+        "child_index": attempt.get("child_index"),
+        "child_status": attempt.get("status"),
+        "child_error_type": attempt.get("error_type"),
+        "candidate_emitted": bool(str(attempt.get("parsed_answer") or "").strip()),
+        "candidate_answer_hash": attempt.get("parsed_answer_hash"),
+        "retrieval_status": retrieval_status,
+        "retrieval_query_count": int(retrieval.get("query_count") or 0),
+        "candidate_doc_count": candidate_doc_count,
+        "rerank_status": rerank_status,
+        "selected_doc_count": selected_doc_count,
+        "context_char_count": context_char_count,
+        "baseline_plan_hash": stable_hash(baseline_plan),
+        "underlying_model_calls": 1 if attempt.get("status") == "answered" else 0,
+    }
+    return attempt, summary
+
+
+def _cost_aware_hipporag_preserve_trigger(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    agent_plan: dict[str, Any],
+) -> dict[str, Any]:
+    if os.environ.get("HLE_DISABLE_COST_AWARE_HIPPORAG_PRESERVE_SELECTOR", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return {"status": "abstained", "reason": "disabled"}
+    enabled = os.environ.get("HLE_ENABLE_COST_AWARE_HIPPORAG_PRESERVE_SELECTOR", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not enabled:
+        return {"status": "abstained", "reason": "not_enabled"}
+    if problem.get("answer_type") != "multipleChoice":
+        return {"status": "abstained", "reason": "not_multiple_choice"}
+    valid = _valid_recursive_answer_attempts(problem=problem, attempts=attempts)
+    if not valid:
+        return {"status": "abstained", "reason": "no_valid_candidates"}
+    trusted_verified = [
+        attempt for attempt in valid
+        if attempt.get("candidate_verifier_state") == "verified"
+        and _is_trusted_candidate_verifier_attempt(attempt)
+    ]
+    if trusted_verified:
+        return {
+            "status": "abstained",
+            "reason": "trusted_verified_candidate_available",
+            "verified_count": len(trusted_verified),
+        }
+    normalized = {
+        _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type="multipleChoice")
+        for attempt in valid
+        if str(attempt.get("parsed_answer") or "").strip()
+    }
+    unique_count = len({value for value in normalized if value})
+    stages = agent_plan.get("stages") or {}
+    world_model = stages.get("world_model_router") if isinstance(stages.get("world_model_router"), dict) else {}
+    generic_graph_only = bool(world_model.get("generic_graph_context_only"))
+    graph_context_used = bool((stages.get("prompt_builder") or {}).get("context_injected")) if isinstance(stages.get("prompt_builder"), dict) else False
+    return {
+        "status": "activated",
+        "reason": "unverified_multiple_choice_baseline_preserve",
+        "unique_candidate_count": unique_count,
+        "valid_candidate_count": len(valid),
+        "generic_graph_context_only": generic_graph_only,
+        "graph_context_used": graph_context_used,
+    }
 
 
 def _cost_aware_raw_preserve_trigger(
@@ -7083,6 +7279,7 @@ def _verified_or_abstain_fallback_candidate(
     if not candidates:
         return None
     preferred_prompt_kinds = [
+        "hipporag_preserve_selector_answer",
         "raw_preserve_selector_answer",
         "direct_short_answer",
         "constraint_checked_answer",
@@ -7093,6 +7290,15 @@ def _verified_or_abstain_fallback_candidate(
             attempt for attempt in candidates
             if attempt.get("prompt_kind") == prompt_kind
         ]
+        if prompt_kind == "hipporag_preserve_selector_answer":
+            prompt_candidates = [
+                attempt for attempt in prompt_candidates
+                if int(attempt.get("preserve_context_char_count") or 0) > 0
+                and (
+                    int(attempt.get("preserve_selected_doc_count") or 0) > 0
+                    or int(attempt.get("preserve_candidate_doc_count") or 0) > 0
+                )
+            ]
         if prompt_candidates:
             return sorted(prompt_candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
     return sorted(candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
@@ -9251,6 +9457,18 @@ def _module_trace(problem: dict[str, Any], *, variant: str, agent_plan: dict[str
                 "reason": "recursive HLE answering can add a HippoRAG-style associative retrieval child without using gold answers",
             },
             {
+                "module": "raw_preserve_selector",
+                "expected": recursive_verify and problem.get("answer_type") == "multipleChoice",
+                "status": _stage_status(stages, "raw_preserve_selector") if stages.get("raw_preserve_selector") else "not_required",
+                "reason": "uncertain unverified selections can add a no-context raw baseline candidate for fallback auditing",
+            },
+            {
+                "module": "hipporag_preserve_selector",
+                "expected": recursive_verify and problem.get("answer_type") == "multipleChoice",
+                "status": _stage_status(stages, "hipporag_preserve_selector") if stages.get("hipporag_preserve_selector") else "not_required",
+                "reason": "uncertain unverified selections can add a same-model HippoRAG baseline candidate before direct fallback",
+            },
+            {
                 "module": "hle_math_tool_solver",
                 "expected": recursive_verify and _should_run_math_tool_child(problem),
                 "status": _stage_status(stages, "hle_math_tool_solver") if stages.get("hle_math_tool_solver") else "not_required",
@@ -9895,6 +10113,10 @@ def _component_efficacy_from_plan(
     critic_synthesis = stages.get("critic_synthesis_child", {})
     option_sweep = stages.get("mc_option_sweep_candidates", {})
     counter_challenge = stages.get("counter_assumption_challenge", {})
+    raw_preserve = stages.get("raw_preserve_selector", {})
+    raw_preserve = raw_preserve if isinstance(raw_preserve, dict) else {}
+    hipporag_preserve = stages.get("hipporag_preserve_selector", {})
+    hipporag_preserve = hipporag_preserve if isinstance(hipporag_preserve, dict) else {}
 
     candidate_hashes = [value for value in recursive.get("candidate_answer_hashes", []) if value]
     unique_candidate_count = len(set(candidate_hashes))
@@ -10026,6 +10248,12 @@ def _component_efficacy_from_plan(
         "verified_or_abstain_allowed": verified_or_abstain_gate.get("status") == "allowed",
         "verified_or_abstain_abstained": verified_or_abstain_gate.get("status") == "abstained",
         "verified_or_abstain_no_fallback": verified_or_abstain_gate.get("status") == "no_fallback",
+        "raw_preserve_selector_activated": raw_preserve.get("status") == "activated",
+        "raw_preserve_candidate_emitted": bool(raw_preserve.get("candidate_emitted")),
+        "raw_preserve_selected": bool(raw_preserve.get("selected_raw_preserve_candidate")),
+        "hipporag_preserve_selector_activated": hipporag_preserve.get("status") == "activated",
+        "hipporag_preserve_candidate_emitted": bool(hipporag_preserve.get("candidate_emitted")),
+        "hipporag_preserve_selected": bool(hipporag_preserve.get("selected_hipporag_preserve_candidate")),
     })
     base.update({
         "kind": "assumption_agent_recursive_verify" if variant == "assumption_agent_recursive_verify" else "assumption_agent",
@@ -10172,6 +10400,25 @@ def _component_efficacy_from_plan(
             "covered_option_count_before": int(option_sweep.get("covered_option_count_before") or 0),
             "added_candidate_count": int(option_sweep.get("added_candidate_count") or 0),
             "selected_option_sweep_candidate": bool(option_sweep.get("selected_option_sweep_candidate")),
+        },
+        "raw_preserve_selector": {
+            "status": raw_preserve.get("status"),
+            "policy": raw_preserve.get("policy"),
+            "trigger": raw_preserve.get("trigger"),
+            "candidate_emitted": bool(raw_preserve.get("candidate_emitted")),
+            "selected_raw_preserve_candidate": bool(raw_preserve.get("selected_raw_preserve_candidate")),
+        },
+        "hipporag_preserve_selector": {
+            "status": hipporag_preserve.get("status"),
+            "policy": hipporag_preserve.get("policy"),
+            "trigger": hipporag_preserve.get("trigger"),
+            "block_reason": hipporag_preserve.get("block_reason"),
+            "candidate_emitted": bool(hipporag_preserve.get("candidate_emitted")),
+            "selected_hipporag_preserve_candidate": bool(hipporag_preserve.get("selected_hipporag_preserve_candidate")),
+            "retrieval_status": hipporag_preserve.get("retrieval_status"),
+            "candidate_doc_count": int(hipporag_preserve.get("candidate_doc_count") or 0),
+            "selected_doc_count": int(hipporag_preserve.get("selected_doc_count") or 0),
+            "context_char_count": int(hipporag_preserve.get("context_char_count") or 0),
         },
         "selection": {
             "status": selection.get("status"),

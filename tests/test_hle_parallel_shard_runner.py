@@ -37,7 +37,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
             eval_id="ablate",
             profiles=(
                 "full,no_graph,no_evidence,no_morphism,no_option_evidence,no_candidate_claim_verifier,"
-                "no_world_model,no_recursive,raw_preserve_selector,verified_gate_off"
+                "no_world_model,no_recursive,raw_preserve_selector,hipporag_preserve_selector,verified_gate_off"
             ),
             profile_workers=1,
             dry_run=True,
@@ -132,6 +132,10 @@ class TestHleParallelShardRunner(unittest.TestCase):
         )
         self.assertEqual(
             by_profile["raw_preserve_selector"]["env_overrides"]["HLE_ENABLE_RAW_PRESERVE_SELECTOR"],
+            "1",
+        )
+        self.assertEqual(
+            by_profile["hipporag_preserve_selector"]["env_overrides"]["HLE_ENABLE_COST_AWARE_HIPPORAG_PRESERVE_SELECTOR"],
             "1",
         )
         raw_preserve_command = by_profile["raw_preserve_selector"]["command"]

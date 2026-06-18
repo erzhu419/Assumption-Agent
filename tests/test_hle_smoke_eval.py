@@ -24,6 +24,7 @@ from assumption_os.hle_smoke_eval import (
     _component_efficacy_from_plan,
     _component_efficacy_summary,
     _control_comparison,
+    _cost_aware_hipporag_preserve_trigger,
     _cost_aware_raw_preserve_trigger,
     _counter_assumption_challenge_trigger,
     _default_call_timeout,
@@ -45,6 +46,7 @@ from assumption_os.hle_smoke_eval import (
     _maybe_run_domain_rule_mc_verifier,
     _maybe_run_mc_option_evidence_scorer,
     _maybe_run_option_elimination_challenge,
+    _maybe_run_hipporag_preserve_selector_child,
     _maybe_run_raw_preserve_selector_child,
     _maybe_run_child_model_failover_child,
     _maybe_run_timeout_recovery_child,
@@ -1342,6 +1344,212 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(gated["selected_child_id"], "rawp")
         self.assertEqual(gated["selected_answer"], "A")
         self.assertEqual(gated["verified_or_abstain_gate"]["fallback_prompt_kind"], "raw_preserve_selector_answer")
+
+    def test_hipporag_preserve_selector_candidate_and_fallback_priority(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Biology/Medicine",
+            "raw_subject": "Ecology",
+            "_question": "Which option is correct?\nA. direct\nB. retrieved",
+        }
+        baseline_plan = {
+            "stages": {
+                "hipporag_context_retrieval": {
+                    "status": "activated",
+                    "query_count": 2,
+                    "candidate_doc_count": 3,
+                },
+                "hipporag_associative_rerank": {
+                    "status": "activated",
+                    "selected_doc_count": 2,
+                },
+                "prompt_builder": {
+                    "status": "activated",
+                    "context_char_count": 120,
+                },
+            },
+            "prompt_context": "supporting context",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "recursive", "child_index": 2, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "C"},
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_COST_AWARE_HIPPORAG_PRESERVE_SELECTOR": "1"}, clear=False), patch(
+            "assumption_os.hle_smoke_eval._build_hipporag_baseline_plan",
+            return_value=baseline_plan,
+        ) as build_plan, patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            return_value='{"answer":"B"}',
+        ) as call_model:
+            attempt, summary = _maybe_run_hipporag_preserve_selector_child(
+                problem=problem,
+                attempts=attempts,
+                agent_plan={"stages": {"world_model_router": {"generic_graph_context_only": True}}},
+                model="base-model",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertIsNotNone(summary)
+        self.assertEqual(attempt["prompt_kind"], "hipporag_preserve_selector_answer")
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(summary["status"], "activated")
+        self.assertEqual(summary["retrieval_status"], "activated")
+        self.assertEqual(summary["candidate_doc_count"], 3)
+        self.assertEqual(summary["underlying_model_calls"], 1)
+        build_plan.assert_called_once()
+        call_model.assert_called_once()
+
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=[
+                {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+                {"child_id": "rawp", "child_index": 2, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "C"},
+                {
+                    "child_id": "hipp",
+                    "child_index": 3,
+                    "prompt_kind": "hipporag_preserve_selector_answer",
+                    "parsed_answer": "B",
+                    "preserve_context_char_count": 120,
+                    "preserve_selected_doc_count": 2,
+                    "preserve_candidate_doc_count": 3,
+                },
+            ],
+            selection=selection,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "hipp")
+        self.assertEqual(gated["selected_answer"], "B")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["fallback_prompt_kind"],
+            "hipporag_preserve_selector_answer",
+        )
+
+    def test_hipporag_preserve_selector_blocks_contextless_candidate(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. direct\nB. retrieved",
+        }
+        baseline_plan = {
+            "stages": {
+                "hipporag_context_retrieval": {
+                    "status": "activated",
+                    "query_count": 2,
+                    "candidate_doc_count": 0,
+                },
+                "prompt_builder": {
+                    "status": "activated",
+                    "context_char_count": 0,
+                },
+            },
+            "prompt_context": "",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "recursive", "child_index": 2, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "C"},
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_COST_AWARE_HIPPORAG_PRESERVE_SELECTOR": "1"}, clear=False), patch(
+            "assumption_os.hle_smoke_eval._build_hipporag_baseline_plan",
+            return_value=baseline_plan,
+        ), patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            return_value='{"answer":"B"}',
+        ) as call_model:
+            attempt, summary = _maybe_run_hipporag_preserve_selector_child(
+                problem=problem,
+                attempts=attempts,
+                agent_plan={},
+                model="base-model",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+
+        self.assertIsNone(attempt)
+        self.assertIsNotNone(summary)
+        self.assertEqual(summary["status"], "blocked_non_answer_bearing")
+        self.assertEqual(summary["block_reason"], "hipporag_preserve_requires_retrieved_context")
+        self.assertEqual(summary["underlying_model_calls"], 0)
+        call_model.assert_not_called()
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=[
+                {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+                {"child_id": "rawp", "child_index": 2, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "C"},
+                {
+                    "child_id": "hipp",
+                    "child_index": 3,
+                    "prompt_kind": "hipporag_preserve_selector_answer",
+                    "parsed_answer": "B",
+                    "preserve_context_char_count": 0,
+                    "preserve_selected_doc_count": 0,
+                    "preserve_candidate_doc_count": 0,
+                },
+            ],
+            selection={
+                "selection_method": "normalized_majority",
+                "selected_child_id": "direct",
+                "selected_answer": "A",
+                "underlying_model_calls": 0,
+                "verifier_model_call": False,
+            },
+        )
+
+        self.assertEqual(gated["selected_child_id"], "rawp")
+        self.assertEqual(gated["verified_or_abstain_gate"]["fallback_prompt_kind"], "raw_preserve_selector_answer")
+
+    def test_cost_aware_hipporag_preserve_trigger_abstains_on_verified_candidate(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. a\nB. b",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "B"},
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_COST_AWARE_HIPPORAG_PRESERVE_SELECTOR": "1"}, clear=False):
+            trigger = _cost_aware_hipporag_preserve_trigger(problem=problem, attempts=attempts, agent_plan={})
+
+        self.assertEqual(trigger["status"], "activated")
+        self.assertEqual(trigger["reason"], "unverified_multiple_choice_baseline_preserve")
+
+        verified = attempts + [{
+            "child_id": "v",
+            "child_index": 3,
+            "prompt_kind": "candidate_claim_verifier_answer",
+            "parsed_answer": "B",
+            "candidate_verifier_state": "verified",
+        }]
+        with patch.dict(os.environ, {"HLE_ENABLE_COST_AWARE_HIPPORAG_PRESERVE_SELECTOR": "1"}, clear=False):
+            verified_trigger = _cost_aware_hipporag_preserve_trigger(problem=problem, attempts=verified, agent_plan={})
+
+        self.assertEqual(verified_trigger["status"], "abstained")
+        self.assertEqual(verified_trigger["reason"], "trusted_verified_candidate_available")
 
     def test_cost_aware_raw_preserve_trigger_is_narrow_and_unverified(self):
         problem = {

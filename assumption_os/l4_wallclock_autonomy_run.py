@@ -228,8 +228,8 @@ def build_l4_wallclock_autonomy_run_payload(
     wall_end_time = time.time()
     wall_end_monotonic = time.monotonic()
     wall_end_iso = _iso_now()
-    observed_seconds = max(0.0, wall_end_time - wall_start_time)
     observed_monotonic_seconds = max(0.0, wall_end_monotonic - wall_start_monotonic)
+    observed_seconds = max(0.0, wall_end_time - wall_start_time, observed_monotonic_seconds)
     replay = graph_journal.replay(initial_graph_hash=graph_hash(f"{eval_id}:candidate_graph_copy:genesis"))
     queue_replay = queue_journal.replay()
     all_cycles_have_required_fields = all(
