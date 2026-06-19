@@ -76,7 +76,7 @@ def build_hle_text_smoke_eval_payload(
     agent_child_timeout: float | None = None,
     evidence_bridge_enabled: bool = True,
     exclude_existing_hle_artifacts: bool = False,
-    exclude_artifact_glob: str = "phase four/assumption_graph/paper_readiness_20260604/hle*.json*",
+    exclude_artifact_glob: str = "phase four/assumption_graph/paper_readiness_20260604/hle_parallel_runs/hle*.json*",
     sample_answer_type: str = "",
     sample_subject_contains: str = "",
 ) -> dict[str, Any]:
@@ -122,6 +122,7 @@ def build_hle_text_smoke_eval_payload(
         "underlying_model_calls_executed": 0,
     }
     if execute_live and sample_rows:
+        same_run_baseline_cache: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
         for problem in sample_rows:
             for model in models:
                 for variant in variants:
@@ -147,6 +148,12 @@ def build_hle_text_smoke_eval_payload(
                             context_max_chars=agent_context_max_chars,
                         )
                         variant_plan = agent_plan
+                        _attach_same_run_baseline_cache(
+                            agent_plan=agent_plan,
+                            cache=same_run_baseline_cache,
+                            problem=problem,
+                            model=model,
+                        )
                     elif variant.startswith("hipporag"):
                         variant_plan = _build_hipporag_baseline_plan(
                             problem=problem,
@@ -261,6 +268,14 @@ def build_hle_text_smoke_eval_payload(
                             correct=bool(row["correct"]),
                             error=None,
                         )
+                        _update_same_run_baseline_cache(
+                            cache=same_run_baseline_cache,
+                            problem=problem,
+                            model=model,
+                            variant=variant,
+                            prediction=answer_text,
+                            plan=variant_plan or {},
+                        )
                         run_rows.append(row)
                         _log_event(
                             logger,
@@ -329,6 +344,7 @@ def build_hle_text_smoke_eval_payload(
                             },
                         )
     metrics = _metrics(sample_rows=sample_rows, run_rows=run_rows, api_summary=api_summary)
+    fair_baseline_gate = _agent_meets_best_control_gate(metrics)
     gates = {
         "official_dataset_accessible": access["dataset_accessible"],
         "text_only_sample_loaded": metrics["sample_count"] >= min(sample_size, 1),
@@ -341,6 +357,7 @@ def build_hle_text_smoke_eval_payload(
             not execute_live
             or metrics["scored_row_count"] == metrics["planned_live_model_calls"]
         ),
+        "agent_not_below_best_same_model_control": fair_baseline_gate["passed"],
     }
     return {
         "eval_id": eval_id,
@@ -371,6 +388,7 @@ def build_hle_text_smoke_eval_payload(
         "api_summary": api_summary,
         "rows": run_rows,
         "metrics": metrics,
+        "fair_baseline_gate": fair_baseline_gate,
         "gates": gates,
         "failed_gates": [name for name, passed in gates.items() if not passed],
         "pass": all(gates.values()),
@@ -427,6 +445,26 @@ def format_markdown(payload: dict[str, Any]) -> str:
             )
     lines.extend([
         "",
+        "## Route Credit",
+        "",
+        "| model | problems | agent acc | recoverable agent errors | unrecoverable agent errors | losses to controls | VOI actions |",
+        "| --- | ---: | ---: | ---: | ---: | --- | --- |",
+    ])
+    route_credit = metrics.get("route_credit_table", {})
+    for model, row in sorted((route_credit.get("by_model") or {}).items()):
+        losses = ", ".join(
+            f"{variant}:{count}" for variant, count in sorted(row.get("agent_loss_to_control_counts", {}).items())
+        ) or "none"
+        voi_actions = ", ".join(
+            f"{action}:{count}" for action, count in sorted(row.get("voi_recommended_action_counts", {}).items())
+        ) or "none"
+        lines.append(
+            f"| `{model}` | `{row['problem_count']}` | `{row['agent_accuracy']}` | "
+            f"`{row['recoverable_agent_error_count']}` | `{row['unrecoverable_agent_error_count']}` | "
+            f"`{losses}` | `{voi_actions}` |"
+        )
+    lines.extend([
+        "",
         "## Module Activation",
         "",
         "| model | variant | expected missing modules | activated modules |",
@@ -464,6 +502,10 @@ def format_markdown(payload: dict[str, Any]) -> str:
                 "graph_context_injected",
                 "evidence_bridge_activated",
                 "evidence_child_executed",
+                "structural_option_audit_activated",
+                "structural_option_audit_disagreed",
+                "structural_option_audit_selected",
+                "structural_option_audit_candidate_correct",
                 "agent_hipporag_context_activated",
                 "agent_hipporag_child_executed",
                 "hipporag_context_priority_used",
@@ -498,6 +540,9 @@ def format_markdown(payload: dict[str, Any]) -> str:
                 "forced_alternative_selected",
                 "counter_assumption_verifier_used",
                 "majority_only_selection",
+                "route_value_verifier_used",
+                "route_voi_recommended_preserve",
+                "route_voi_hard_gate_applied",
             )
             if row.get("flag_counts", {}).get(flag)
         ]
@@ -613,6 +658,15 @@ def _load_text_only_sample(
 
 def _collect_existing_hle_problem_hashes(*, root: Path, artifact_glob: str) -> set[str]:
     """Collect previous HLE problem hashes without reading or persisting raw HLE text."""
+    cache_path_text = os.environ.get("HLE_EXISTING_HASH_CACHE_PATH", "").strip()
+    if cache_path_text:
+        cached = _collect_existing_hle_problem_hashes_from_cache(
+            root=root,
+            artifact_glob=artifact_glob,
+            cache_path=Path(cache_path_text),
+        )
+        if cached is not None:
+            return cached
     hashes: set[str] = set()
     for path in root.glob(artifact_glob):
         if not path.is_file():
@@ -621,7 +675,88 @@ def _collect_existing_hle_problem_hashes(*, root: Path, artifact_glob: str) -> s
             _collect_problem_hashes_from_jsonl(path, hashes)
         elif path.suffix == ".json":
             _collect_problem_hashes_from_json(path, hashes)
+    if cache_path_text:
+        _write_existing_hle_problem_hash_cache(
+            root=root,
+            artifact_glob=artifact_glob,
+            cache_path=Path(cache_path_text),
+            hashes=hashes,
+        )
     return hashes
+
+
+def _existing_hle_hash_manifest(*, root: Path, artifact_glob: str) -> list[dict[str, Any]]:
+    manifest: list[dict[str, Any]] = []
+    for path in sorted(root.glob(artifact_glob)):
+        if not path.is_file():
+            continue
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        manifest.append({
+            "path_hash": stable_hash({"path": str(path.relative_to(root))}),
+            "suffix": path.suffix,
+            "size": stat.st_size,
+            "mtime_ns": stat.st_mtime_ns,
+        })
+    return manifest
+
+
+def _collect_existing_hle_problem_hashes_from_cache(
+    *,
+    root: Path,
+    artifact_glob: str,
+    cache_path: Path,
+) -> set[str] | None:
+    try:
+        data = json.loads(cache_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    allow_stale = os.environ.get("HLE_EXISTING_HASH_CACHE_ALLOW_STALE", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if data.get("artifact_glob") != artifact_glob:
+        return None
+    manifest = _existing_hle_hash_manifest(root=root, artifact_glob=artifact_glob)
+    if data.get("manifest") != manifest and not allow_stale:
+        return None
+    hashes = data.get("problem_id_hashes")
+    if not isinstance(hashes, list):
+        return None
+    return {str(value) for value in hashes if value}
+
+
+def _write_existing_hle_problem_hash_cache(
+    *,
+    root: Path,
+    artifact_glob: str,
+    cache_path: Path,
+    hashes: set[str],
+) -> None:
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "artifact_glob": artifact_glob,
+                    "manifest": _existing_hle_hash_manifest(root=root, artifact_glob=artifact_glob),
+                    "problem_id_hashes": sorted(hashes),
+                    "raw_content_persisted": False,
+                },
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+    except Exception:
+        return
 
 
 def _collect_problem_hashes_from_json(path: Path, hashes: set[str]) -> None:
@@ -1198,6 +1333,223 @@ def _is_budget_matched_control_variant(variant: str) -> bool:
     return variant in {"raw_budget_matched", "hipporag_budget_matched"}
 
 
+def _is_same_run_baseline_cache_variant(variant: str) -> bool:
+    return variant in {"raw", "raw_budget_matched", "hipporag_baseline", "hipporag_budget_matched"}
+
+
+def _same_run_baseline_cache_key(problem: dict[str, Any], model: str) -> tuple[str, str]:
+    return (str(problem.get("id_hash") or ""), str(model or ""))
+
+
+def _context_answer_support_for_mc(
+    *,
+    problem: dict[str, Any],
+    answer: str,
+    context: str,
+) -> dict[str, Any]:
+    if problem.get("answer_type") != "multipleChoice":
+        return {"supported": False, "overlap_count": 0, "question_overlap_count": 0, "option_hash": None}
+    label = _extract_choice(answer)
+    if not label:
+        return {"supported": False, "overlap_count": 0, "question_overlap_count": 0, "option_hash": None}
+    options, _ = _extract_multiple_choice_options(str(problem.get("_question") or ""))
+    option_text = str(options.get(label) or "").strip()
+    if not option_text or not str(context or "").strip():
+        return {
+            "supported": False,
+            "overlap_count": 0,
+            "question_overlap_count": 0,
+            "option_hash": stable_hash({"option_label": label}),
+        }
+    context_norm = _normalize_exact(context)
+    option_norm = _normalize_exact(option_text)
+    question_text = str(problem.get("_question") or "")
+    question_stem = re.split(r"\n\s*A[\.\)]|\s+A[\.\)]", question_text, maxsplit=1)[0]
+    if not question_stem.strip():
+        question_stem = question_text
+    for option_label, text in options.items():
+        if option_label and text:
+            question_stem = question_stem.replace(str(text), " ")
+    question_stopwords = {
+        "which", "what", "when", "where", "whose", "would", "could", "should", "there", "their",
+        "about", "answer", "option", "following", "correct", "best", "most", "least", "only",
+        "true", "false", "question", "select", "choose", "among", "given", "based", "statement",
+    }
+    question_tokens = {
+        token
+        for token in re.findall(r"[a-z0-9]{4,}", _normalize_exact(question_stem))
+        if token not in question_stopwords
+    }
+    question_overlap = sum(1 for token in question_tokens if token in context_norm)
+    tokens = {
+        token
+        for token in re.findall(r"[a-z0-9]{4,}", option_norm)
+        if token not in {"none", "both", "only", "true", "false", "above", "below"}
+    }
+    if not tokens:
+        return {
+            "supported": False,
+            "overlap_count": 0,
+            "question_overlap_count": int(question_overlap),
+            "option_hash": stable_hash({"option_label": label}),
+        }
+    overlap = sum(1 for token in tokens if token in context_norm)
+    option_supported = (
+        (len(option_norm) >= 6 and option_norm in context_norm)
+        or overlap >= 3
+        or (
+        overlap >= min(2, len(tokens)) and (overlap / max(1, len(tokens))) >= 0.45
+        )
+    )
+    question_supported = question_overlap >= min(2, max(1, len(question_tokens)))
+    supported = option_supported and (
+        question_supported
+        or (not question_tokens and overlap >= 3)
+    )
+    return {
+        "supported": bool(supported),
+        "overlap_count": int(overlap),
+        "question_overlap_count": int(question_overlap),
+        "option_hash": stable_hash({"option_label": label}),
+    }
+
+
+def _same_run_baseline_cache_entry(
+    *,
+    problem: dict[str, Any],
+    variant: str,
+    prediction: str,
+    plan: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not _is_same_run_baseline_cache_variant(variant):
+        return None
+    answer = _parse_answer_json(prediction) or str(prediction or "").strip()
+    if not answer:
+        return None
+    if problem.get("answer_type") == "multipleChoice":
+        answer, canonical_summary = _canonicalize_multiple_choice_answer(problem, answer)
+    else:
+        answer, canonical_summary = _canonicalize_exact_answer_candidate(problem, answer)
+        if _is_suspicious_exact_answer(answer):
+            return None
+    stages = (plan or {}).get("stages") if isinstance(plan, dict) else {}
+    stages = stages if isinstance(stages, dict) else {}
+    retrieval = stages.get("hipporag_context_retrieval") if isinstance(stages.get("hipporag_context_retrieval"), dict) else {}
+    rerank = stages.get("hipporag_associative_rerank") if isinstance(stages.get("hipporag_associative_rerank"), dict) else {}
+    prompt = stages.get("prompt_builder") if isinstance(stages.get("prompt_builder"), dict) else {}
+    budget = stages.get("budget_matched_control") if isinstance(stages.get("budget_matched_control"), dict) else {}
+    context = str((plan or {}).get("prompt_context") or "")
+    context_answer_support = _context_answer_support_for_mc(problem=problem, answer=answer, context=context)
+    return {
+        "variant": variant,
+        "answer": answer,
+        "answer_hash": stable_hash({"answer": answer}),
+        "prediction_hash": stable_hash({"prediction": prediction}),
+        "answer_type": problem.get("answer_type"),
+        "canonicalized": bool(canonical_summary.get("changed")) if isinstance(canonical_summary, dict) else False,
+        "context_char_count": int(prompt.get("context_char_count") or 0),
+        "candidate_doc_count": int(retrieval.get("candidate_doc_count") or 0),
+        "selected_doc_count": int(rerank.get("selected_doc_count") or 0),
+        "context_answer_supported": bool(context_answer_support.get("supported")),
+        "context_answer_overlap_count": int(context_answer_support.get("overlap_count") or 0),
+        "context_question_overlap_count": int(context_answer_support.get("question_overlap_count") or 0),
+        "context_answer_option_hash": context_answer_support.get("option_hash"),
+        "budget_matched": _is_budget_matched_control_variant(variant),
+        "budget_candidate_count": int(budget.get("candidate_count") or 0),
+        "budget_answered_candidate_count": int(budget.get("answered_candidate_count") or 0),
+        "budget_candidate_answer_hash_counts": dict(budget.get("candidate_answer_hash_counts") or {}),
+        "budget_selected_answer_hash": budget.get("selected_answer_hash"),
+        "budget_top_candidate_vote_count": int(budget.get("top_candidate_vote_count") or 0),
+        "budget_top_candidate_answer_hash": budget.get("top_candidate_answer_hash"),
+        "budget_strong_consensus": bool(budget.get("strong_consensus")),
+        "selection_method": budget.get("selection_method"),
+        "budget_verified_or_abstain_gate": budget.get("verified_or_abstain_gate"),
+        "source": "same_run_baseline_cache",
+    }
+
+
+def _update_same_run_baseline_cache(
+    *,
+    cache: dict[tuple[str, str], dict[str, dict[str, Any]]],
+    problem: dict[str, Any],
+    model: str,
+    variant: str,
+    prediction: str,
+    plan: dict[str, Any],
+) -> None:
+    entry = _same_run_baseline_cache_entry(
+        problem=problem,
+        variant=variant,
+        prediction=prediction,
+        plan=plan,
+    )
+    if not entry:
+        return
+    cache.setdefault(_same_run_baseline_cache_key(problem, model), {})[variant] = entry
+
+
+def _attach_same_run_baseline_cache(
+    *,
+    agent_plan: dict[str, Any] | None,
+    cache: dict[tuple[str, str], dict[str, dict[str, Any]]],
+    problem: dict[str, Any],
+    model: str,
+) -> None:
+    if not isinstance(agent_plan, dict):
+        return
+    entries = cache.get(_same_run_baseline_cache_key(problem, model), {})
+    if not entries:
+        return
+    agent_plan["hle_same_run_baseline_cache"] = {
+        variant: dict(entry)
+        for variant, entry in sorted(entries.items())
+    }
+    agent_plan.setdefault("stages", {})["same_run_baseline_cache"] = {
+        "status": "activated",
+        "policy": "same_problem_same_model_baseline_predictions_available",
+        "cached_variants": sorted(entries),
+        "cached_variant_count": len(entries),
+        "answer_hashes_by_variant": {
+            variant: entry.get("answer_hash")
+            for variant, entry in sorted(entries.items())
+        },
+        "borrowed_baseline_model_call_count": len(entries),
+    }
+
+
+def _same_run_cached_baseline(
+    agent_plan: dict[str, Any] | None,
+    variants: list[str],
+) -> dict[str, Any] | None:
+    if not isinstance(agent_plan, dict):
+        return None
+    cache = agent_plan.get("hle_same_run_baseline_cache")
+    if not isinstance(cache, dict):
+        return None
+    for variant in variants:
+        entry = cache.get(variant)
+        if isinstance(entry, dict) and str(entry.get("answer") or "").strip():
+            return entry
+    return None
+
+
+def _same_run_cached_baseline_entries(
+    agent_plan: dict[str, Any] | None,
+    variants: list[str],
+) -> list[dict[str, Any]]:
+    if not isinstance(agent_plan, dict):
+        return []
+    cache = agent_plan.get("hle_same_run_baseline_cache")
+    if not isinstance(cache, dict):
+        return []
+    entries: list[dict[str, Any]] = []
+    for variant in variants:
+        entry = cache.get(variant)
+        if isinstance(entry, dict) and str(entry.get("answer") or "").strip():
+            entries.append(entry)
+    return entries
+
+
 def _budget_control_base_variant(variant: str) -> str:
     return "hipporag_baseline" if variant.startswith("hipporag") else "raw"
 
@@ -1245,6 +1597,15 @@ def _call_budget_matched_control_answer(
     selected_answer = selection.get("selected_answer") or _fallback_answer(attempts)
     selected_hash = stable_hash({"answer": selected_answer})
     answered_count = sum(1 for attempt in attempts if attempt.get("status") == "answered")
+    answer_hash_counts = Counter(
+        attempt.get("parsed_answer_hash")
+        for attempt in attempts
+        if attempt.get("status") == "answered" and attempt.get("parsed_answer_hash")
+    )
+    top_candidate_answer_hash, top_candidate_vote_count = (None, 0)
+    if answer_hash_counts:
+        top_candidate_answer_hash, top_candidate_vote_count = answer_hash_counts.most_common(1)[0]
+    strong_consensus = top_candidate_vote_count >= min(3, max(1, answered_count))
     stages = variant_plan.setdefault("stages", {})
     stages["budget_matched_control"] = {
         "status": "activated",
@@ -1257,6 +1618,10 @@ def _call_budget_matched_control_answer(
         "candidate_answer_hashes": [
             attempt.get("parsed_answer_hash") for attempt in attempts if attempt.get("parsed_answer_hash")
         ],
+        "candidate_answer_hash_counts": dict(answer_hash_counts),
+        "top_candidate_answer_hash": top_candidate_answer_hash,
+        "top_candidate_vote_count": top_candidate_vote_count,
+        "strong_consensus": strong_consensus,
         "child_max_workers": batch.get("max_workers"),
         "selection_method": selection.get("selection_method"),
         "selected_child_id": selection.get("selected_child_id"),
@@ -1423,21 +1788,69 @@ def _call_recursive_verified_answer(
         if hipporag_summary:
             agent_plan.setdefault("stages", {})["agent_hipporag_context_bridge"] = hipporag_summary
     specs = _recursive_child_prompt_specs(problem, agent_plan=agent_plan)
-    child_result = _execute_recursive_child_attempts(
-        problem=problem,
-        specs=specs,
-        model=child_model,
-        eval_id=eval_id,
-        call_id=call_id,
-        logger=logger,
-        timeout=child_timeout if child_timeout is not None else timeout,
-        max_tokens=max_tokens,
-        mode=child_mode,
-    )
+    raw_preserve_summary: dict[str, Any] | None = None
+    raw_budget_preserve_summary: dict[str, Any] | None = None
+    hipporag_preserve_summary: dict[str, Any] | None = None
+    route_arbitrator_summary: dict[str, Any] | None = None
+    early_route_arbitrator_locked = False
+    pre_route_attempts: list[dict[str, Any]] = []
+    if _cache_first_route_arbitrator_enabled() and agent_plan.get("hle_same_run_baseline_cache"):
+        (
+            pre_route_attempts,
+            raw_preserve_summary,
+            raw_budget_preserve_summary,
+            hipporag_preserve_summary,
+        ) = _same_run_cache_route_candidates(
+            problem=problem,
+            agent_plan=agent_plan,
+            call_id=call_id,
+            start_index=10001,
+        )
+        if pre_route_attempts:
+            route_arbitrator_attempt, route_arbitrator_summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=pre_route_attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary=raw_budget_preserve_summary,
+                hipporag_preserve_summary=hipporag_preserve_summary,
+                call_id=call_id,
+            )
+            if route_arbitrator_attempt:
+                pre_route_attempts.append(route_arbitrator_attempt)
+                early_route_arbitrator_locked = _route_arbitrator_lock_decision(route_arbitrator_summary)
+    if early_route_arbitrator_locked:
+        skipped_prompt_kinds = [str(spec.get("prompt_kind") or "") for spec in specs]
+        skipped_branch_axes = [str(spec.get("branch_axis") or _child_branch_axis(spec["prompt_kind"])) for spec in specs]
+        child_result = {
+            "attempts": pre_route_attempts,
+            "underlying_model_calls": int((route_arbitrator_summary or {}).get("underlying_model_calls") or 0),
+            "execution_mode": "cache_first_route_arbitrator",
+            "serial_forced_reason": "",
+            "child_timeout_sec": child_timeout if child_timeout is not None else timeout,
+            "child_max_workers": 0,
+            "early_stop_reason": "cache_first_route_arbitrator_locked",
+            "skipped_prompt_kinds": skipped_prompt_kinds,
+            "skipped_branch_axes": skipped_branch_axes,
+        }
+    else:
+        child_result = _execute_recursive_child_attempts(
+            problem=problem,
+            specs=specs,
+            model=child_model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=max_tokens,
+            mode=child_mode,
+        )
+        if pre_route_attempts:
+            child_result["attempts"] = list(pre_route_attempts) + list(child_result.get("attempts") or [])
     attempts = child_result["attempts"]
     underlying_calls = int(child_result["underlying_model_calls"] or 0)
     early_stop_reason = child_result.get("early_stop_reason")
     skipped_prompt_kinds = child_result.get("skipped_prompt_kinds", [])
+    skipped_branch_axes = child_result.get("skipped_branch_axes", [])
     math_tool_summary: dict[str, Any] | None = None
     if _should_run_math_tool_child(problem):
         math_attempt = _run_math_tool_attempt(
@@ -1453,39 +1866,45 @@ def _call_recursive_verified_answer(
         math_tool_summary = math_attempt.get("tool_summary")
         underlying_calls += int(math_attempt.get("underlying_model_calls", 0) or 0)
     timeout_recovery_summary: dict[str, Any] | None = None
-    timeout_recovery_attempt, timeout_recovery_summary = _maybe_run_timeout_recovery_child(
-        problem=problem,
-        attempts=attempts,
-        math_tool_summary=math_tool_summary,
-        model=child_model,
-        eval_id=eval_id,
-        call_id=call_id,
-        logger=logger,
-        timeout=child_timeout if child_timeout is not None else timeout,
-        max_tokens=max_tokens,
-    )
+    endpoint_error_abort_summary = _endpoint_error_pressure_abort_summary(problem=problem, attempts=attempts)
+    endpoint_error_abort = endpoint_error_abort_summary.get("status") == "activated"
+    timeout_recovery_attempt = None
+    if not endpoint_error_abort:
+        timeout_recovery_attempt, timeout_recovery_summary = _maybe_run_timeout_recovery_child(
+            problem=problem,
+            attempts=attempts,
+            math_tool_summary=math_tool_summary,
+            model=child_model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=max_tokens,
+        )
     if timeout_recovery_attempt:
         attempts.append(timeout_recovery_attempt)
         if timeout_recovery_attempt.get("status") == "answered":
             underlying_calls += 1
     child_model_failover_summary: dict[str, Any] | None = None
-    child_model_failover_attempt, child_model_failover_summary = _maybe_run_child_model_failover_child(
-        problem=problem,
-        attempts=attempts,
-        base_model=model,
-        child_model=child_model,
-        eval_id=eval_id,
-        call_id=call_id,
-        logger=logger,
-        timeout=child_timeout if child_timeout is not None else timeout,
-        max_tokens=max_tokens,
-    )
+    child_model_failover_attempt = None
+    if not endpoint_error_abort:
+        child_model_failover_attempt, child_model_failover_summary = _maybe_run_child_model_failover_child(
+            problem=problem,
+            attempts=attempts,
+            base_model=model,
+            child_model=child_model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=max_tokens,
+        )
     if child_model_failover_attempt:
         attempts.append(child_model_failover_attempt)
         if child_model_failover_attempt.get("status") == "answered":
             underlying_calls += 1
     candidate_verifier_summary: dict[str, Any] | None = None
-    if _should_run_candidate_claim_verifier(problem):
+    if not endpoint_error_abort and _should_run_candidate_claim_verifier(problem):
         candidate_verifier_summary = _apply_math_candidate_claim_verifier(
             problem,
             attempts,
@@ -1508,11 +1927,57 @@ def _call_recursive_verified_answer(
     )
     if option_evidence_attempt:
         attempts.append(option_evidence_attempt)
+    selection_evidence_context = str(agent_plan.get("hle_evidence_context") or "")
+    evidence_guided_option_summary: dict[str, Any] | None = None
+    evidence_guided_option_attempt = None
+    evidence_guided_context = ""
+    if not endpoint_error_abort:
+        (
+            evidence_guided_option_attempt,
+            evidence_guided_option_summary,
+            evidence_guided_context,
+        ) = _maybe_run_evidence_guided_option_challenge(
+            problem=problem,
+            attempts=attempts,
+            option_evidence_summary=option_evidence_summary,
+            model=critic_model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=max_tokens,
+        )
+    if evidence_guided_option_attempt:
+        attempts.append(evidence_guided_option_attempt)
+        if evidence_guided_option_attempt.get("status") == "answered":
+            underlying_calls += 1
+    if evidence_guided_context and not selection_evidence_context:
+        selection_evidence_context = evidence_guided_context
+    structural_option_audit_summary: dict[str, Any] | None = None
+    structural_option_audit_attempt = None
+    if not endpoint_error_abort:
+        structural_option_audit_attempt, structural_option_audit_summary = _maybe_run_structural_option_audit_child(
+            problem=problem,
+            attempts=attempts,
+            option_evidence_summary=option_evidence_summary,
+            evidence_guided_option_summary=evidence_guided_option_summary,
+            evidence_context=selection_evidence_context,
+            model=critic_model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=max_tokens,
+        )
+    if structural_option_audit_attempt:
+        attempts.append(structural_option_audit_attempt)
+        if structural_option_audit_attempt.get("status") == "answered":
+            underlying_calls += 1
     domain_rule_summary: dict[str, Any] | None = None
     domain_rule_attempt, domain_rule_summary = _maybe_run_domain_rule_mc_verifier(
         problem=problem,
         attempts=attempts,
-        evidence_context=str(agent_plan.get("hle_evidence_context") or ""),
+        evidence_context=selection_evidence_context,
         eval_id=eval_id,
         call_id=call_id,
         model=model,
@@ -1520,7 +1985,12 @@ def _call_recursive_verified_answer(
     )
     if domain_rule_attempt:
         attempts.append(domain_rule_attempt)
-    if evidence_bridge_enabled and not agent_plan.get("hle_evidence_context") and _needs_evidence_grounded_child(problem, attempts):
+    if (
+        not endpoint_error_abort
+        and evidence_bridge_enabled
+        and not agent_plan.get("hle_evidence_context")
+        and _needs_evidence_grounded_child(problem, attempts)
+    ):
         evidence_context, evidence_summary = _build_hle_evidence_bridge_context(
             problem=problem,
             eval_id=eval_id,
@@ -1535,6 +2005,7 @@ def _call_recursive_verified_answer(
         )
         if evidence_context:
             agent_plan["hle_evidence_context"] = evidence_context
+            selection_evidence_context = evidence_context
             agent_plan["hle_evidence_bridge"] = evidence_summary
             supported_evidence_attempt, supported_evidence_summary = _maybe_add_answer_bearing_evidence_candidate(
                 problem=problem,
@@ -1568,20 +2039,105 @@ def _call_recursive_verified_answer(
             if evidence_attempt.get("status") == "answered":
                 underlying_calls += 1
 
-    counter_challenge_summary: dict[str, Any] | None = None
-    counter_challenge_attempt, counter_challenge_summary = _maybe_run_counter_assumption_challenge(
-        problem=problem,
-        attempts=attempts,
-        candidate_verifier_summary=candidate_verifier_summary,
-        math_tool_summary=math_tool_summary,
-        evidence_context=str(agent_plan.get("hle_evidence_context") or ""),
-        model=critic_model,
-        eval_id=eval_id,
-        call_id=call_id,
-        logger=logger,
-        timeout=child_timeout if child_timeout is not None else timeout,
-        max_tokens=max_tokens,
+    if (
+        not early_route_arbitrator_locked
+        and not endpoint_error_abort
+        and _route_arbitrator_enabled()
+        and agent_plan.get("hle_same_run_baseline_cache")
+    ):
+        if raw_preserve_summary is None:
+            raw_preserve_attempt, raw_preserve_summary = _maybe_run_raw_preserve_selector_child(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                model=model,
+                eval_id=eval_id,
+                call_id=call_id,
+                logger=logger,
+                timeout=child_timeout if child_timeout is not None else timeout,
+                max_tokens=max_tokens,
+            )
+            if raw_preserve_attempt:
+                attempts.append(raw_preserve_attempt)
+                if raw_preserve_attempt.get("status") == "answered":
+                    underlying_calls += 1
+
+        if raw_budget_preserve_summary is None:
+            raw_budget_preserve_attempt, raw_budget_preserve_summary = _maybe_run_raw_budget_preserve_selector_child(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                model=model,
+                eval_id=eval_id,
+                call_id=call_id,
+                logger=logger,
+                timeout=child_timeout if child_timeout is not None else timeout,
+                max_tokens=max_tokens,
+            )
+            if raw_budget_preserve_attempt:
+                attempts.append(raw_budget_preserve_attempt)
+            if raw_budget_preserve_summary:
+                raw_budget_underlying = int(raw_budget_preserve_summary.get("underlying_model_calls") or 0)
+                if raw_budget_underlying:
+                    underlying_calls += raw_budget_underlying
+
+        if hipporag_preserve_summary is None:
+            hipporag_preserve_attempt, hipporag_preserve_summary = _maybe_run_hipporag_preserve_selector_child(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                model=model,
+                eval_id=eval_id,
+                call_id=call_id,
+                logger=logger,
+                timeout=child_timeout if child_timeout is not None else timeout,
+                max_tokens=max_tokens,
+            )
+            if hipporag_preserve_attempt:
+                attempts.append(hipporag_preserve_attempt)
+                if hipporag_preserve_summary and hipporag_preserve_summary.get("underlying_model_calls") is not None:
+                    underlying_calls += int(hipporag_preserve_summary.get("underlying_model_calls") or 0)
+                elif hipporag_preserve_attempt.get("status") == "answered":
+                    underlying_calls += 1
+
+        route_arbitrator_attempt, route_arbitrator_summary = _maybe_add_route_arbitrator_candidate(
+            problem=problem,
+            attempts=attempts,
+            agent_plan=agent_plan,
+            raw_budget_preserve_summary=raw_budget_preserve_summary,
+            hipporag_preserve_summary=hipporag_preserve_summary,
+            call_id=call_id,
+            model=critic_model,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=max_tokens,
+        )
+        if route_arbitrator_attempt:
+            attempts.append(route_arbitrator_attempt)
+            early_route_arbitrator_locked = _route_arbitrator_lock_decision(route_arbitrator_summary)
+        if route_arbitrator_summary:
+            underlying_calls += int(route_arbitrator_summary.get("underlying_model_calls") or 0)
+
+    run_deep_challenges_after_route = (
+        os.environ.get("HLE_ROUTE_ARBITRATOR_RUN_DEEP_CHALLENGES", "").strip().lower()
+        in {"1", "true", "yes", "on"}
     )
+
+    counter_challenge_summary: dict[str, Any] | None = None
+    counter_challenge_attempt = None
+    if (not endpoint_error_abort) and (not early_route_arbitrator_locked or run_deep_challenges_after_route):
+        counter_challenge_attempt, counter_challenge_summary = _maybe_run_counter_assumption_challenge(
+            problem=problem,
+            attempts=attempts,
+            candidate_verifier_summary=candidate_verifier_summary,
+            math_tool_summary=math_tool_summary,
+            evidence_context=selection_evidence_context,
+            model=critic_model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=max_tokens,
+        )
     if counter_challenge_attempt:
         attempts.append(counter_challenge_attempt)
         if counter_challenge_attempt.get("status") == "answered":
@@ -1590,7 +2146,7 @@ def _call_recursive_verified_answer(
             problem=problem,
             attempts=attempts,
             counter_challenge_summary=counter_challenge_summary,
-            evidence_context=str(agent_plan.get("hle_evidence_context") or ""),
+            evidence_context=selection_evidence_context,
             model=critic_model,
             eval_id=eval_id,
             call_id=call_id,
@@ -1608,7 +2164,7 @@ def _call_recursive_verified_answer(
                 problem=problem,
                 attempts=attempts,
                 option_elimination_summary=option_elimination_summary,
-                evidence_context=str(agent_plan.get("hle_evidence_context") or ""),
+                evidence_context=selection_evidence_context,
                 model=critic_model,
                 eval_id=eval_id,
                 call_id=call_id,
@@ -1624,64 +2180,106 @@ def _call_recursive_verified_answer(
                     underlying_calls += 1
 
     critic_synthesis_summary: dict[str, Any] | None = None
-    critic_synthesis_attempt, critic_synthesis_summary = _maybe_run_critic_synthesis_child(
-        problem=problem,
-        attempts=attempts,
-        evidence_context=str(agent_plan.get("hle_evidence_context") or ""),
-        base_model=model,
-        critic_model=critic_model,
-        eval_id=eval_id,
-        call_id=call_id,
-        logger=logger,
-        timeout=child_timeout if child_timeout is not None else timeout,
-        max_tokens=max_tokens,
-    )
+    critic_synthesis_attempt = None
+    if (not endpoint_error_abort) and (not early_route_arbitrator_locked or run_deep_challenges_after_route):
+        critic_synthesis_attempt, critic_synthesis_summary = _maybe_run_critic_synthesis_child(
+            problem=problem,
+            attempts=attempts,
+            evidence_context=selection_evidence_context,
+            base_model=model,
+            critic_model=critic_model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=max_tokens,
+        )
     if critic_synthesis_attempt:
         attempts.append(critic_synthesis_attempt)
         if critic_synthesis_attempt.get("status") == "answered":
             underlying_calls += 1
 
     option_sweep_summary: dict[str, Any] | None = None
-    option_sweep_attempts, option_sweep_summary = _maybe_add_mc_option_sweep_candidates(
-        problem=problem,
-        attempts=attempts,
-    )
+    option_sweep_attempts = []
+    if not endpoint_error_abort:
+        option_sweep_attempts, option_sweep_summary = _maybe_add_mc_option_sweep_candidates(
+            problem=problem,
+            attempts=attempts,
+        )
     if option_sweep_attempts:
         attempts.extend(option_sweep_attempts)
 
-    raw_preserve_summary: dict[str, Any] | None = None
-    raw_preserve_attempt, raw_preserve_summary = _maybe_run_raw_preserve_selector_child(
-        problem=problem,
-        attempts=attempts,
-        agent_plan=agent_plan,
-        model=model,
-        eval_id=eval_id,
-        call_id=call_id,
-        logger=logger,
-        timeout=child_timeout if child_timeout is not None else timeout,
-        max_tokens=max_tokens,
-    )
-    if raw_preserve_attempt:
-        attempts.append(raw_preserve_attempt)
-        if raw_preserve_attempt.get("status") == "answered":
-            underlying_calls += 1
+    if raw_preserve_summary is None and not endpoint_error_abort:
+        raw_preserve_attempt, raw_preserve_summary = _maybe_run_raw_preserve_selector_child(
+            problem=problem,
+            attempts=attempts,
+            agent_plan=agent_plan,
+            model=model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=max_tokens,
+        )
+        if raw_preserve_attempt:
+            attempts.append(raw_preserve_attempt)
+            if raw_preserve_attempt.get("status") == "answered":
+                underlying_calls += 1
 
-    hipporag_preserve_summary: dict[str, Any] | None = None
-    hipporag_preserve_attempt, hipporag_preserve_summary = _maybe_run_hipporag_preserve_selector_child(
-        problem=problem,
-        attempts=attempts,
-        agent_plan=agent_plan,
-        model=model,
-        eval_id=eval_id,
-        call_id=call_id,
-        logger=logger,
-        timeout=child_timeout if child_timeout is not None else timeout,
-        max_tokens=max_tokens,
-    )
-    if hipporag_preserve_attempt:
-        attempts.append(hipporag_preserve_attempt)
-        if hipporag_preserve_attempt.get("status") == "answered":
-            underlying_calls += 1
+    if raw_budget_preserve_summary is None and not endpoint_error_abort:
+        raw_budget_preserve_attempt, raw_budget_preserve_summary = _maybe_run_raw_budget_preserve_selector_child(
+            problem=problem,
+            attempts=attempts,
+            agent_plan=agent_plan,
+            model=model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=max_tokens,
+        )
+        if raw_budget_preserve_attempt:
+            attempts.append(raw_budget_preserve_attempt)
+        if raw_budget_preserve_summary:
+            raw_budget_underlying = int(raw_budget_preserve_summary.get("underlying_model_calls") or 0)
+            if raw_budget_underlying:
+                underlying_calls += raw_budget_underlying
+
+    if hipporag_preserve_summary is None and not endpoint_error_abort:
+        hipporag_preserve_attempt, hipporag_preserve_summary = _maybe_run_hipporag_preserve_selector_child(
+            problem=problem,
+            attempts=attempts,
+            agent_plan=agent_plan,
+            model=model,
+            eval_id=eval_id,
+            call_id=call_id,
+            logger=logger,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=max_tokens,
+        )
+        if hipporag_preserve_attempt:
+            attempts.append(hipporag_preserve_attempt)
+            if hipporag_preserve_summary and hipporag_preserve_summary.get("underlying_model_calls") is not None:
+                underlying_calls += int(hipporag_preserve_summary.get("underlying_model_calls") or 0)
+            elif hipporag_preserve_attempt.get("status") == "answered":
+                underlying_calls += 1
+
+    if route_arbitrator_summary is None and not endpoint_error_abort:
+        route_arbitrator_attempt, route_arbitrator_summary = _maybe_add_route_arbitrator_candidate(
+            problem=problem,
+            attempts=attempts,
+            agent_plan=agent_plan,
+            raw_budget_preserve_summary=raw_budget_preserve_summary,
+            hipporag_preserve_summary=hipporag_preserve_summary,
+            call_id=call_id,
+            model=critic_model,
+            timeout=child_timeout if child_timeout is not None else timeout,
+            max_tokens=max_tokens,
+        )
+        if route_arbitrator_attempt:
+            attempts.append(route_arbitrator_attempt)
+        if route_arbitrator_summary:
+            underlying_calls += int(route_arbitrator_summary.get("underlying_model_calls") or 0)
 
     selection = _select_recursive_child_answer(
         problem=problem,
@@ -1692,7 +2290,7 @@ def _call_recursive_verified_answer(
         logger=logger,
         timeout=_recursive_verifier_timeout(child_timeout if child_timeout is not None else timeout),
         max_tokens=min(max_tokens, 384),
-        evidence_context=str(agent_plan.get("hle_evidence_context") or ""),
+        evidence_context=selection_evidence_context,
     )
     selection = _apply_verified_or_abstain_selection(problem=problem, attempts=attempts, selection=selection)
     underlying_calls += int(selection.get("underlying_model_calls", 0) or 0)
@@ -1720,6 +2318,14 @@ def _call_recursive_verified_answer(
         format_repair_summary = repair.get("stage_summary")
     selected_hash = stable_hash({"answer": selected_answer})
     answered_count = sum(1 for attempt in attempts if attempt.get("status") == "answered")
+    executed_branch_axes = _child_branch_axes_for_attempts(attempts)
+    answered_branch_axes = _child_branch_axes_for_attempts([
+        attempt for attempt in attempts if attempt.get("status") == "answered"
+    ])
+    planned_branch_axes = [str(spec.get("branch_axis") or _child_branch_axis(spec["prompt_kind"])) for spec in specs]
+    required_branch_axes = sorted(_required_child_branch_axes_before_early_stop(problem))
+    executed_required_branch_axes = sorted(set(executed_branch_axes) & set(required_branch_axes))
+    answered_required_branch_axes = sorted(set(answered_branch_axes) & set(required_branch_axes))
     child_summary = {
         "status": "activated",
         "execution_mode": child_result.get("execution_mode"),
@@ -1735,10 +2341,35 @@ def _call_recursive_verified_answer(
         "early_stopped": bool(early_stop_reason),
         "early_stop_reason": early_stop_reason,
         "skipped_prompt_kinds": skipped_prompt_kinds,
+        "planned_branch_axes": planned_branch_axes,
+        "executed_branch_axes": executed_branch_axes,
+        "answered_branch_axes": answered_branch_axes,
+        "skipped_branch_axes": skipped_branch_axes,
+        "planned_unique_branch_axis_count": len(set(planned_branch_axes)),
+        "executed_unique_branch_axis_count": len(set(executed_branch_axes)),
+        "answered_unique_branch_axis_count": len(set(answered_branch_axes)),
+        "required_branch_axes_before_early_stop": required_branch_axes,
+        "executed_required_branch_axes": executed_required_branch_axes,
+        "answered_required_branch_axes": answered_required_branch_axes,
+        "core_orthogonal_axes_covered": set(required_branch_axes).issubset(set(executed_branch_axes)),
+        "core_orthogonal_axes_answered": set(required_branch_axes).issubset(set(answered_branch_axes)),
+        "orthogonal_branch_coverage": round(
+            len(set(executed_branch_axes)) / max(1, len(set(planned_branch_axes))),
+            4,
+        ),
         "prompt_kinds": [attempt["prompt_kind"] for attempt in attempts],
+        "selected_prompt_kind": next(
+            (
+                str(attempt.get("prompt_kind") or "")
+                for attempt in attempts
+                if attempt.get("child_id") == selection.get("selected_child_id")
+            ),
+            "",
+        ),
         "candidate_answer_hashes": [
             attempt.get("parsed_answer_hash") for attempt in attempts if attempt.get("parsed_answer_hash")
         ],
+        "endpoint_error_pressure_abort": endpoint_error_abort_summary,
     }
     verifier_summary = {
         "status": "activated",
@@ -1751,6 +2382,8 @@ def _call_recursive_verified_answer(
     stages = agent_plan.setdefault("stages", {})
     stages["recursive_child_validation"] = child_summary
     stages["multi_candidate_self_verifier"] = verifier_summary
+    if endpoint_error_abort_summary.get("status") == "activated":
+        stages["endpoint_error_pressure_abort"] = endpoint_error_abort_summary
     if math_tool_summary:
         stages["hle_math_tool_solver"] = math_tool_summary
     if timeout_recovery_summary:
@@ -1773,6 +2406,18 @@ def _call_recursive_verified_answer(
             selection.get("selected_child_id") == domain_rule_summary.get("child_id")
         )
         stages["domain_rule_mc_verifier"] = domain_rule_summary
+    if evidence_guided_option_summary:
+        evidence_guided_option_summary["final_selection_method"] = selection.get("selection_method")
+        evidence_guided_option_summary["selected_evidence_guided_option_candidate"] = (
+            selection.get("selected_child_id") == evidence_guided_option_summary.get("child_id")
+        )
+        stages["evidence_guided_option_challenge"] = evidence_guided_option_summary
+    if structural_option_audit_summary:
+        structural_option_audit_summary["final_selection_method"] = selection.get("selection_method")
+        structural_option_audit_summary["selected_structural_option_audit"] = (
+            selection.get("selected_child_id") == structural_option_audit_summary.get("child_id")
+        )
+        stages["structural_option_audit_child"] = structural_option_audit_summary
     if option_evidence_summary:
         option_evidence_summary["final_selection_method"] = selection.get("selection_method")
         option_evidence_summary["selected_option_evidence_candidate"] = (
@@ -1815,12 +2460,25 @@ def _call_recursive_verified_answer(
             selection.get("selected_child_id") == raw_preserve_summary.get("child_id")
         )
         stages["raw_preserve_selector"] = raw_preserve_summary
+    if raw_budget_preserve_summary:
+        raw_budget_preserve_summary["final_selection_method"] = selection.get("selection_method")
+        raw_budget_preserve_summary["selected_raw_budget_preserve_candidate"] = (
+            selection.get("selected_child_id") == raw_budget_preserve_summary.get("child_id")
+        )
+        stages["raw_budget_preserve_selector"] = raw_budget_preserve_summary
     if hipporag_preserve_summary:
         hipporag_preserve_summary["final_selection_method"] = selection.get("selection_method")
         hipporag_preserve_summary["selected_hipporag_preserve_candidate"] = (
             selection.get("selected_child_id") == hipporag_preserve_summary.get("child_id")
         )
         stages["hipporag_preserve_selector"] = hipporag_preserve_summary
+    if route_arbitrator_summary:
+        route_arbitrator_summary["route_locked"] = bool(early_route_arbitrator_locked)
+        route_arbitrator_summary["final_selection_method"] = selection.get("selection_method")
+        route_arbitrator_summary["selected_route_arbitrator_candidate"] = (
+            selection.get("selected_child_id") == route_arbitrator_summary.get("child_id")
+        )
+        stages["route_arbitrator"] = route_arbitrator_summary
     if canonical_summary.get("changed"):
         stages["answer_format_canonicalizer"] = canonical_summary
     if format_repair_summary:
@@ -1839,6 +2497,17 @@ def _call_recursive_verified_answer(
         stage="recursive_child_validation",
         data=child_summary,
     )
+    if stages.get("same_run_baseline_cache"):
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="same_run_baseline_cache",
+            data=stages["same_run_baseline_cache"],
+        )
     if stages.get("critic_model_router"):
         _agent_stage_log(
             logger,
@@ -1926,6 +2595,28 @@ def _call_recursive_verified_answer(
             stage="domain_rule_mc_verifier",
             data=domain_rule_summary,
         )
+    if evidence_guided_option_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="evidence_guided_option_challenge",
+            data=evidence_guided_option_summary,
+        )
+    if structural_option_audit_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="structural_option_audit_child",
+            data=structural_option_audit_summary,
+        )
     if option_evidence_summary:
         _agent_stage_log(
             logger,
@@ -1969,6 +2660,50 @@ def _call_recursive_verified_answer(
             variant="assumption_agent_recursive_verify",
             stage="mc_option_sweep_candidates",
             data=option_sweep_summary,
+        )
+    if raw_preserve_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="raw_preserve_selector",
+            data=raw_preserve_summary,
+        )
+    if raw_budget_preserve_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="raw_budget_preserve_selector",
+            data=raw_budget_preserve_summary,
+        )
+    if hipporag_preserve_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="hipporag_preserve_selector",
+            data=hipporag_preserve_summary,
+        )
+    if route_arbitrator_summary:
+        _agent_stage_log(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            variant="assumption_agent_recursive_verify",
+            stage="route_arbitrator",
+            data=route_arbitrator_summary,
         )
     if canonical_summary.get("changed"):
         _agent_stage_log(
@@ -2063,6 +2798,52 @@ def _maybe_run_raw_preserve_selector_child(
     if not env_forced and trigger.get("status") != "activated":
         return None, None
     child_index = _timeout_recovery_child_index(attempts)
+    cached = _same_run_cached_baseline(agent_plan, ["raw"])
+    if cached:
+        answer = str(cached.get("answer") or "").strip()
+        child_id = stable_hash({
+            "call_id": call_id,
+            "child_index": child_index,
+            "prompt_kind": "raw_preserve_selector_answer",
+            "same_run_cache_variant": cached.get("variant"),
+            "answer_hash": cached.get("answer_hash"),
+        })
+        attempt = {
+            "child_id": child_id,
+            "child_index": child_index,
+            "prompt_kind": "raw_preserve_selector_answer",
+            "branch_axis": _child_branch_axis("raw_preserve_selector_answer"),
+            "orthogonal_branch_id": _child_branch_id(
+                problem,
+                prompt_kind="raw_preserve_selector_answer",
+                branch_axis=_child_branch_axis("raw_preserve_selector_answer"),
+            ),
+            "parsed_answer": answer,
+            "parsed_answer_hash": stable_hash({"answer": answer}) if answer else None,
+            "prediction_hash": stable_hash({
+                "same_run_cache_variant": cached.get("variant"),
+                "answer_hash": cached.get("answer_hash"),
+            }),
+            "latency_sec": 0.0,
+            "status": "answered" if answer else "no_answer",
+            "same_run_baseline_cache_variant": cached.get("variant"),
+        }
+        summary = {
+            "status": "activated" if answer else "no_candidate",
+            "policy": "same_run_raw_baseline_cache_candidate",
+            "trigger": trigger if not env_forced else {"status": "activated", "reason": "env_forced"},
+            "base_model": model,
+            "child_id": child_id,
+            "child_index": child_index,
+            "child_status": attempt.get("status"),
+            "child_error_type": None,
+            "candidate_emitted": bool(answer),
+            "candidate_answer_hash": attempt.get("parsed_answer_hash"),
+            "same_run_cache_variant": cached.get("variant"),
+            "borrowed_baseline_model_calls": 1,
+            "underlying_model_calls": 0,
+        }
+        return attempt, summary
     attempt = _run_child_attempt(
         problem=problem,
         spec={
@@ -2097,6 +2878,239 @@ def _maybe_run_raw_preserve_selector_child(
     return attempt, summary
 
 
+def _maybe_run_raw_budget_preserve_selector_child(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    agent_plan: dict[str, Any] | None = None,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    env_forced = os.environ.get("HLE_ENABLE_RAW_BUDGET_PRESERVE_SELECTOR", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    trigger = _cost_aware_raw_budget_preserve_trigger(
+        problem=problem,
+        attempts=attempts,
+        agent_plan=agent_plan or {},
+    )
+    if not env_forced and trigger.get("status") != "activated":
+        return None, None
+
+    base_child_index = _timeout_recovery_child_index(attempts)
+    cached = _same_run_cached_baseline(agent_plan, ["raw_budget_matched"])
+    if cached:
+        answer = str(cached.get("answer") or "").strip()
+        aggregate_child_id = stable_hash({
+            "call_id": call_id,
+            "child_index": base_child_index,
+            "prompt_kind": "raw_budget_preserve_selector_answer",
+            "same_run_cache_variant": cached.get("variant"),
+            "answer_hash": cached.get("answer_hash"),
+        })
+        attempt = {
+            "child_id": aggregate_child_id,
+            "child_index": base_child_index,
+            "prompt_kind": "raw_budget_preserve_selector_answer",
+            "branch_axis": _child_branch_axis("raw_budget_preserve_selector_answer"),
+            "orthogonal_branch_id": _child_branch_id(
+                problem,
+                prompt_kind="raw_budget_preserve_selector_answer",
+                branch_axis=_child_branch_axis("raw_budget_preserve_selector_answer"),
+            ),
+            "parsed_answer": answer,
+            "parsed_answer_hash": stable_hash({"answer": answer}) if answer else None,
+            "prediction_hash": stable_hash({
+                "same_run_cache_variant": cached.get("variant"),
+                "answer_hash": cached.get("answer_hash"),
+            }),
+            "latency_sec": 0.0,
+            "status": "answered" if answer else "no_answer",
+            "raw_budget_selection_method": "same_run_raw_budget_cache",
+            "same_run_baseline_cache_variant": cached.get("variant"),
+        }
+        top_vote_count = int(cached.get("budget_top_candidate_vote_count") or 0)
+        strong_consensus = bool(cached.get("budget_strong_consensus"))
+        summary = {
+            "status": "activated" if answer else "no_candidate",
+            "policy": "same_run_raw_budget_matched_cache_candidate",
+            "trigger": trigger if not env_forced else {"status": "activated", "reason": "env_forced"},
+            "base_model": model,
+            "child_id": aggregate_child_id,
+            "child_index": base_child_index,
+            "child_status": attempt.get("status"),
+            "child_error_type": None,
+            "candidate_emitted": bool(answer),
+            "candidate_answer_hash": attempt.get("parsed_answer_hash"),
+            "candidate_count": int(cached.get("budget_candidate_count") or 0),
+            "answered_candidate_count": int(cached.get("budget_answered_candidate_count") or 0),
+            "error_candidate_count": 0,
+            "candidate_prompt_kinds": [],
+            "candidate_answer_hashes": [cached.get("answer_hash")] if cached.get("answer_hash") else [],
+            "candidate_answer_hash_counts": {},
+            "top_candidate_answer_hash": cached.get("answer_hash"),
+            "top_candidate_vote_count": top_vote_count,
+            "strong_consensus": strong_consensus,
+            "verified_selection_allowed": False,
+            "child_max_workers": 0,
+            "selection_method": "same_run_raw_budget_cache",
+            "child_selection_method": cached.get("selection_method"),
+            "selected_child_id": None,
+            "selected_answer_hash": attempt.get("parsed_answer_hash"),
+            "verifier_model_call": False,
+            "verified_or_abstain_gate": None,
+            "same_run_cache_variant": cached.get("variant"),
+            "borrowed_baseline_model_calls": 1,
+            "underlying_model_calls": 0,
+        }
+        return attempt, summary
+    selector_plan: dict[str, Any] = {}
+    specs = _budget_matched_control_prompt_specs(
+        problem,
+        variant="raw_budget_matched",
+        variant_plan=selector_plan,
+    )
+    batch = _run_child_batch(
+        problem=problem,
+        specs=specs,
+        start_index=base_child_index,
+        model=model,
+        variant="raw_budget_preserve_selector",
+        eval_id=eval_id,
+        call_id=f"{call_id}_raw_budget_preserve",
+        logger=logger,
+        timeout=timeout,
+        max_tokens=max_tokens,
+        max_workers=_budget_matched_control_workers(len(specs)),
+    )
+    child_attempts = list(batch.get("attempts") or [])
+    selection = _select_recursive_child_answer(
+        problem=problem,
+        attempts=child_attempts,
+        model=model,
+        eval_id=eval_id,
+        call_id=f"{call_id}_raw_budget_preserve_selector",
+        logger=logger,
+        timeout=timeout,
+        max_tokens=min(max_tokens, 384),
+        evidence_context="",
+    )
+    selection = _apply_verified_or_abstain_selection(problem=problem, attempts=child_attempts, selection=selection)
+    selected_answer = selection.get("selected_answer") or _fallback_answer(child_attempts)
+    answer_hash_counts = Counter(
+        child.get("parsed_answer_hash")
+        for child in child_attempts
+        if child.get("status") == "answered" and child.get("parsed_answer_hash")
+    )
+    top_answer_hash, top_vote_count = (None, 0)
+    if answer_hash_counts:
+        top_answer_hash, top_vote_count = answer_hash_counts.most_common(1)[0]
+    top_consensus_attempt = next(
+        (
+            child for child in child_attempts
+            if child.get("status") == "answered"
+            and child.get("parsed_answer_hash") == top_answer_hash
+        ),
+        None,
+    )
+    verified_gate = selection.get("verified_or_abstain_gate")
+    verified_gate = verified_gate if isinstance(verified_gate, dict) else {}
+    verified_selection_allowed = (
+        selection.get("selection_method") in _VERIFIED_SELECTION_METHODS
+        and verified_gate.get("status") == "allowed"
+    )
+    strong_consensus = top_vote_count >= min(3, max(1, answered_count := sum(
+        1 for child in child_attempts if child.get("status") == "answered"
+    )))
+    if strong_consensus and top_consensus_attempt:
+        selected_answer = str(top_consensus_attempt.get("parsed_answer") or "").strip()
+        selected_child_id = top_consensus_attempt.get("child_id")
+        raw_budget_selection_method = "raw_budget_top_vote_consensus"
+    else:
+        selected_child_id = selection.get("selected_child_id")
+        raw_budget_selection_method = str(selection.get("selection_method") or "")
+    candidate_allowed = bool(selected_answer) and strong_consensus
+    if env_forced and not selected_answer:
+        selected_answer = selection.get("selected_answer") or _fallback_answer(child_attempts)
+    aggregate_child_index = base_child_index + len(specs)
+    aggregate_child_id = stable_hash({
+        "call_id": call_id,
+        "child_index": aggregate_child_index,
+        "prompt_kind": "raw_budget_preserve_selector_answer",
+    })
+    attempt = {
+        "child_id": aggregate_child_id,
+        "child_index": aggregate_child_index,
+        "prompt_kind": "raw_budget_preserve_selector_answer",
+        "parsed_answer": selected_answer,
+        "parsed_answer_hash": stable_hash({"answer": selected_answer}) if selected_answer else None,
+        "prediction_hash": stable_hash({
+            "selection": selection.get("selection_method"),
+            "answer": selected_answer,
+            "candidate_hashes": [
+                child.get("parsed_answer_hash") for child in child_attempts if child.get("parsed_answer_hash")
+            ],
+        }),
+        "latency_sec": None,
+        "status": "answered" if selected_answer else "no_answer",
+        "raw_budget_child_ids": [child.get("child_id") for child in child_attempts],
+        "raw_budget_selection_method": raw_budget_selection_method,
+    }
+    answered_count = sum(1 for child in child_attempts if child.get("status") == "answered")
+    summary = {
+        "status": "activated" if selected_answer else "no_candidate",
+        "policy": (
+            "env_forced_raw_budget_matched_candidate"
+            if env_forced
+            else "cost_aware_raw_budget_matched_regression_guard"
+        ),
+        "trigger": trigger if not env_forced else {"status": "activated", "reason": "env_forced"},
+        "base_model": model,
+        "child_id": aggregate_child_id,
+        "child_index": aggregate_child_index,
+        "child_status": attempt.get("status"),
+        "child_error_type": attempt.get("error_type"),
+        "candidate_emitted": bool(str(selected_answer or "").strip()),
+        "candidate_answer_hash": attempt.get("parsed_answer_hash"),
+        "candidate_count": len(child_attempts),
+        "answered_candidate_count": answered_count,
+        "error_candidate_count": len(child_attempts) - answered_count,
+        "candidate_prompt_kinds": [child.get("prompt_kind") for child in child_attempts],
+        "candidate_answer_hashes": [
+            child.get("parsed_answer_hash") for child in child_attempts if child.get("parsed_answer_hash")
+        ],
+        "candidate_answer_hash_counts": dict(answer_hash_counts),
+        "top_candidate_answer_hash": top_answer_hash,
+        "top_candidate_vote_count": top_vote_count,
+        "strong_consensus": strong_consensus,
+        "verified_selection_allowed": verified_selection_allowed,
+        "child_max_workers": batch.get("max_workers"),
+        "selection_method": raw_budget_selection_method,
+        "child_selection_method": selection.get("selection_method"),
+        "selected_child_id": selected_child_id,
+        "selected_answer_hash": attempt.get("parsed_answer_hash"),
+        "verifier_model_call": bool(selection.get("verifier_model_call")),
+        "verified_or_abstain_gate": selection.get("verified_or_abstain_gate"),
+        "underlying_model_calls": int(batch.get("underlying_model_calls") or 0)
+        + int(selection.get("underlying_model_calls") or 0),
+    }
+    if not env_forced and not candidate_allowed:
+        summary.update({
+            "status": "blocked_weak_consensus",
+            "candidate_emitted": False,
+            "block_reason": "raw_budget_preserve_requires_verified_selection_or_3_vote_consensus",
+        })
+        return None, summary
+    return attempt, summary
+
+
 def _maybe_run_hipporag_preserve_selector_child(
     *,
     problem: dict[str, Any],
@@ -2109,12 +3123,19 @@ def _maybe_run_hipporag_preserve_selector_child(
     timeout: float | None,
     max_tokens: int,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    env_forced = os.environ.get("HLE_ENABLE_HIPPORAG_PRESERVE_SELECTOR", "").strip().lower() in {
+    budget_preserve_enabled = (
+        os.environ.get("HLE_ENABLE_HIPPORAG_BUDGET_PRESERVE_SELECTOR", "").strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
+    env_forced = (
+        os.environ.get("HLE_ENABLE_HIPPORAG_PRESERVE_SELECTOR", "").strip().lower() in {
         "1",
         "true",
         "yes",
         "on",
-    }
+        }
+        or budget_preserve_enabled
+    )
     trigger = _cost_aware_hipporag_preserve_trigger(
         problem=problem,
         attempts=attempts,
@@ -2123,6 +3144,118 @@ def _maybe_run_hipporag_preserve_selector_child(
     if not env_forced and trigger.get("status") != "activated":
         return None, None
     child_index = _timeout_recovery_child_index(attempts)
+    hipporag_cached_entries = _same_run_cached_baseline_entries(
+        agent_plan,
+        ["hipporag_budget_matched", "hipporag_baseline"],
+    )
+    cached = hipporag_cached_entries[0] if hipporag_cached_entries else None
+    if cached:
+        context_char_count = int(cached.get("context_char_count") or 0)
+        selected_doc_count = int(cached.get("selected_doc_count") or 0)
+        candidate_doc_count = int(cached.get("candidate_doc_count") or 0)
+        has_usable_context = context_char_count > 0 and (selected_doc_count > 0 or candidate_doc_count > 0)
+        answer = str(cached.get("answer") or "").strip()
+        answer_norm = _normalize_for_selection(answer, answer_type=problem.get("answer_type") or "exactMatch")
+        agreeing_variants = [
+            str(entry.get("variant") or "")
+            for entry in hipporag_cached_entries
+            if _normalize_for_selection(
+                str(entry.get("answer") or ""),
+                answer_type=problem.get("answer_type") or "exactMatch",
+            ) == answer_norm
+        ]
+        aggregate_child_id = stable_hash({
+            "call_id": call_id,
+            "child_index": child_index,
+            "prompt_kind": "hipporag_preserve_selector_answer",
+            "same_run_cache_variant": cached.get("variant"),
+            "answer_hash": cached.get("answer_hash"),
+        })
+        attempt = {
+            "child_id": aggregate_child_id,
+            "child_index": child_index,
+            "prompt_kind": "hipporag_preserve_selector_answer",
+            "branch_axis": _child_branch_axis("hipporag_preserve_selector_answer"),
+            "orthogonal_branch_id": _child_branch_id(
+                problem,
+                prompt_kind="hipporag_preserve_selector_answer",
+                branch_axis=_child_branch_axis("hipporag_preserve_selector_answer"),
+            ),
+            "parsed_answer": answer,
+            "parsed_answer_hash": stable_hash({"answer": answer}) if answer else None,
+            "prediction_hash": stable_hash({
+                "same_run_cache_variant": cached.get("variant"),
+                "answer_hash": cached.get("answer_hash"),
+            }),
+            "latency_sec": 0.0,
+            "status": "answered" if answer else "no_answer",
+            "preserve_context_char_count": context_char_count,
+            "preserve_selected_doc_count": selected_doc_count,
+            "preserve_candidate_doc_count": candidate_doc_count,
+            "hipporag_budget_selection_method": "same_run_hipporag_cache",
+            "same_run_baseline_cache_variant": cached.get("variant"),
+            "same_run_cache_has_usable_context": has_usable_context,
+            "same_route_agreement_count": len(agreeing_variants),
+            "same_route_agreeing_variants": agreeing_variants,
+            "budget_matched": cached.get("variant") == "hipporag_budget_matched",
+            "budget_candidate_count": int(cached.get("budget_candidate_count") or 0),
+            "budget_answered_candidate_count": int(cached.get("budget_answered_candidate_count") or 0),
+            "budget_top_candidate_vote_count": int(cached.get("budget_top_candidate_vote_count") or 0),
+            "budget_strong_consensus": bool(cached.get("budget_strong_consensus")),
+            "budget_selected_answer_hash": cached.get("budget_selected_answer_hash"),
+            "budget_top_candidate_answer_hash": cached.get("budget_top_candidate_answer_hash"),
+            "budget_candidate_answer_hash_counts": dict(cached.get("budget_candidate_answer_hash_counts") or {}),
+            "budget_verified_or_abstain_gate": cached.get("budget_verified_or_abstain_gate"),
+            "context_answer_supported": bool(cached.get("context_answer_supported")),
+            "context_answer_overlap_count": int(cached.get("context_answer_overlap_count") or 0),
+            "context_question_overlap_count": int(cached.get("context_question_overlap_count") or 0),
+            "context_answer_option_hash": cached.get("context_answer_option_hash"),
+        }
+        policy = (
+            "same_run_hipporag_cache_candidate"
+            if has_usable_context
+            else "same_run_hipporag_cache_candidate_no_context"
+        )
+        summary = {
+            "status": "activated" if answer else "no_candidate",
+            "policy": policy,
+            "trigger": trigger if not env_forced else {"status": "activated", "reason": "env_forced"},
+            "base_model": model,
+            "child_id": aggregate_child_id,
+            "child_index": child_index,
+            "child_status": attempt.get("status"),
+            "child_error_type": None,
+            "candidate_emitted": bool(answer),
+            "candidate_answer_hash": attempt.get("parsed_answer_hash"),
+            "retrieval_status": "same_run_cache" if has_usable_context else "same_run_cache_no_context",
+            "retrieval_query_count": 0,
+            "candidate_doc_count": candidate_doc_count,
+            "rerank_status": "same_run_cache" if has_usable_context else "same_run_cache_no_context",
+            "selected_doc_count": selected_doc_count,
+            "context_char_count": context_char_count,
+            "same_run_cache_has_usable_context": has_usable_context,
+            "baseline_plan_hash": None,
+            "budget_matched": cached.get("variant") == "hipporag_budget_matched",
+            "candidate_count": int(cached.get("budget_candidate_count") or 0),
+            "answered_candidate_count": int(cached.get("budget_answered_candidate_count") or 0),
+            "selection_method": "same_run_hipporag_cache",
+            "verified_or_abstain_gate": None,
+            "same_run_cache_variant": cached.get("variant"),
+            "same_route_agreement_count": len(agreeing_variants),
+            "same_route_agreeing_variants": agreeing_variants,
+            "budget_top_candidate_vote_count": int(cached.get("budget_top_candidate_vote_count") or 0),
+            "budget_top_candidate_answer_hash": cached.get("budget_top_candidate_answer_hash"),
+            "budget_selected_answer_hash": cached.get("budget_selected_answer_hash"),
+            "budget_strong_consensus": bool(cached.get("budget_strong_consensus")),
+            "budget_verified_or_abstain_gate": cached.get("budget_verified_or_abstain_gate"),
+            "context_answer_supported": bool(cached.get("context_answer_supported")),
+            "context_answer_overlap_count": int(cached.get("context_answer_overlap_count") or 0),
+            "context_question_overlap_count": int(cached.get("context_question_overlap_count") or 0),
+            "context_answer_option_hash": cached.get("context_answer_option_hash"),
+            "borrowed_baseline_model_calls": 1,
+            "underlying_model_calls": 0,
+        }
+        return attempt, summary
     baseline_plan = _build_hipporag_baseline_plan(
         problem=problem,
         eval_id=eval_id,
@@ -2140,6 +3273,7 @@ def _maybe_run_hipporag_preserve_selector_child(
     rerank_status = rerank.get("status")
     selected_doc_count = int(rerank.get("selected_doc_count") or 0)
     context_char_count = int(prompt.get("context_char_count") or 0)
+    context_text = str(baseline_plan.get("prompt_context") or "")
     has_usable_context = context_char_count > 0 and (selected_doc_count > 0 or candidate_doc_count > 0)
     if not env_forced and not has_usable_context:
         return None, {
@@ -2163,6 +3297,119 @@ def _maybe_run_hipporag_preserve_selector_child(
             "underlying_model_calls": 0,
             "block_reason": "hipporag_preserve_requires_retrieved_context",
         }
+    if budget_preserve_enabled and has_usable_context:
+        specs = _budget_matched_control_prompt_specs(
+            problem,
+            variant="hipporag_budget_matched",
+            variant_plan=baseline_plan,
+        )
+        batch = _run_child_batch(
+            problem=problem,
+            specs=specs,
+            start_index=child_index,
+            model=model,
+            variant="hipporag_budget_preserve_selector",
+            eval_id=eval_id,
+            call_id=f"{call_id}_hipporag_budget_preserve",
+            logger=logger,
+            timeout=timeout,
+            max_tokens=max_tokens,
+            max_workers=_budget_matched_control_workers(len(specs)),
+        )
+        child_attempts = list(batch.get("attempts") or [])
+        selection = _select_recursive_child_answer(
+            problem=problem,
+            attempts=child_attempts,
+            model=model,
+            eval_id=eval_id,
+            call_id=f"{call_id}_hipporag_budget_preserve_selector",
+            logger=logger,
+            timeout=timeout,
+            max_tokens=min(max_tokens, 384),
+            evidence_context="",
+        )
+        selection = _apply_verified_or_abstain_selection(problem=problem, attempts=child_attempts, selection=selection)
+        selected_answer = selection.get("selected_answer") or _fallback_answer(child_attempts)
+        aggregate_child_index = child_index + len(specs)
+        aggregate_child_id = stable_hash({
+            "call_id": call_id,
+            "child_index": aggregate_child_index,
+            "prompt_kind": "hipporag_preserve_selector_answer",
+            "mode": "budget_matched",
+        })
+        attempt = {
+            "child_id": aggregate_child_id,
+            "child_index": aggregate_child_index,
+            "prompt_kind": "hipporag_preserve_selector_answer",
+            "branch_axis": _child_branch_axis("hipporag_preserve_selector_answer"),
+            "orthogonal_branch_id": _child_branch_id(
+                problem,
+                prompt_kind="hipporag_preserve_selector_answer",
+                branch_axis=_child_branch_axis("hipporag_preserve_selector_answer"),
+            ),
+            "parsed_answer": selected_answer,
+            "parsed_answer_hash": stable_hash({"answer": selected_answer}) if selected_answer else None,
+            "prediction_hash": stable_hash({
+                "mode": "hipporag_budget_preserve_selector",
+                "selection": selection.get("selection_method"),
+                "answer": selected_answer,
+                "candidate_hashes": [
+                    child.get("parsed_answer_hash") for child in child_attempts if child.get("parsed_answer_hash")
+                ],
+            }),
+            "latency_sec": None,
+            "status": "answered" if selected_answer else "no_answer",
+            "preserve_context_char_count": context_char_count,
+            "preserve_selected_doc_count": selected_doc_count,
+            "preserve_candidate_doc_count": candidate_doc_count,
+            "hipporag_budget_child_ids": [child.get("child_id") for child in child_attempts],
+            "hipporag_budget_selection_method": selection.get("selection_method"),
+        }
+        context_answer_support = _context_answer_support_for_mc(
+            problem=problem,
+            answer=str(selected_answer or ""),
+            context=context_text,
+        )
+        attempt["budget_matched"] = True
+        attempt["context_answer_supported"] = bool(context_answer_support.get("supported"))
+        attempt["context_answer_overlap_count"] = int(context_answer_support.get("overlap_count") or 0)
+        attempt["context_question_overlap_count"] = int(context_answer_support.get("question_overlap_count") or 0)
+        attempt["context_answer_option_hash"] = context_answer_support.get("option_hash")
+        summary = {
+            "status": "activated" if selected_answer else "no_candidate",
+            "policy": (
+                "env_forced_hipporag_budget_matched_candidate"
+                if env_forced
+                else "cost_aware_unverified_mc_hipporag_budget_matched_candidate"
+            ),
+            "trigger": trigger if not env_forced else {"status": "activated", "reason": "env_forced"},
+            "base_model": model,
+            "child_id": aggregate_child_id,
+            "child_index": aggregate_child_index,
+            "child_status": attempt.get("status"),
+            "child_error_type": attempt.get("error_type"),
+            "candidate_emitted": bool(str(selected_answer or "").strip()),
+            "candidate_answer_hash": attempt.get("parsed_answer_hash"),
+            "retrieval_status": retrieval_status,
+            "retrieval_query_count": int(retrieval.get("query_count") or 0),
+            "candidate_doc_count": candidate_doc_count,
+            "rerank_status": rerank_status,
+            "selected_doc_count": selected_doc_count,
+            "context_char_count": context_char_count,
+            "context_answer_supported": bool(context_answer_support.get("supported")),
+            "context_answer_overlap_count": int(context_answer_support.get("overlap_count") or 0),
+            "context_question_overlap_count": int(context_answer_support.get("question_overlap_count") or 0),
+            "context_answer_option_hash": context_answer_support.get("option_hash"),
+            "baseline_plan_hash": stable_hash(baseline_plan),
+            "budget_matched": True,
+            "candidate_count": len(child_attempts),
+            "answered_candidate_count": sum(1 for child in child_attempts if child.get("status") == "answered"),
+            "selection_method": selection.get("selection_method"),
+            "verified_or_abstain_gate": selection.get("verified_or_abstain_gate"),
+            "underlying_model_calls": int(batch.get("underlying_model_calls") or 0)
+            + int(selection.get("underlying_model_calls") or 0),
+        }
+        return attempt, summary
     attempt = _run_child_attempt(
         problem=problem,
         spec={
@@ -2180,6 +3427,15 @@ def _maybe_run_hipporag_preserve_selector_child(
     attempt["preserve_context_char_count"] = context_char_count
     attempt["preserve_selected_doc_count"] = selected_doc_count
     attempt["preserve_candidate_doc_count"] = candidate_doc_count
+    context_answer_support = _context_answer_support_for_mc(
+        problem=problem,
+        answer=str(attempt.get("parsed_answer") or ""),
+        context=context_text,
+    )
+    attempt["context_answer_supported"] = bool(context_answer_support.get("supported"))
+    attempt["context_answer_overlap_count"] = int(context_answer_support.get("overlap_count") or 0)
+    attempt["context_question_overlap_count"] = int(context_answer_support.get("question_overlap_count") or 0)
+    attempt["context_answer_option_hash"] = context_answer_support.get("option_hash")
     summary = {
         "status": "activated",
         "policy": (
@@ -2201,9 +3457,1511 @@ def _maybe_run_hipporag_preserve_selector_child(
         "rerank_status": rerank_status,
         "selected_doc_count": selected_doc_count,
         "context_char_count": context_char_count,
+        "context_answer_supported": bool(context_answer_support.get("supported")),
+        "context_answer_overlap_count": int(context_answer_support.get("overlap_count") or 0),
+        "context_question_overlap_count": int(context_answer_support.get("question_overlap_count") or 0),
+        "context_answer_option_hash": context_answer_support.get("option_hash"),
         "baseline_plan_hash": stable_hash(baseline_plan),
         "underlying_model_calls": 1 if attempt.get("status") == "answered" else 0,
     }
+    return attempt, summary
+
+
+def _route_arbitrator_enabled() -> bool:
+    return os.environ.get("HLE_ENABLE_ROUTE_ARBITRATOR", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _route_value_verifier_enabled() -> bool:
+    return os.environ.get("HLE_DISABLE_ROUTE_VALUE_VERIFIER", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _route_consensus_guard_enabled() -> bool:
+    return os.environ.get("HLE_DISABLE_ROUTE_CONSENSUS_GUARD", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _budget_echo_guard_enabled() -> bool:
+    return os.environ.get("HLE_DISABLE_BUDGET_ECHO_GUARD", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _llm_route_arbitrator_enabled() -> bool:
+    return os.environ.get("HLE_ENABLE_LLM_ROUTE_ARBITRATOR", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _cache_first_route_arbitrator_enabled() -> bool:
+    if not _route_arbitrator_enabled():
+        return False
+    return os.environ.get("HLE_DISABLE_CACHE_FIRST_ROUTE_ARBITRATOR", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _same_run_cache_route_attempt(
+    *,
+    problem: dict[str, Any],
+    entry: dict[str, Any],
+    prompt_kind: str,
+    child_index: int,
+    call_id: str,
+    hipporag_entries: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    answer = str(entry.get("answer") or "").strip()
+    if not answer:
+        return None
+    variant = str(entry.get("variant") or "")
+    child_id = stable_hash({
+        "call_id": call_id,
+        "child_index": child_index,
+        "prompt_kind": prompt_kind,
+        "same_run_cache_variant": variant,
+        "answer_hash": entry.get("answer_hash"),
+    })
+    attempt = {
+        "child_id": child_id,
+        "child_index": child_index,
+        "prompt_kind": prompt_kind,
+        "branch_axis": _child_branch_axis(prompt_kind),
+        "orthogonal_branch_id": _child_branch_id(
+            problem,
+            prompt_kind=prompt_kind,
+            branch_axis=_child_branch_axis(prompt_kind),
+        ),
+        "parsed_answer": answer,
+        "parsed_answer_hash": stable_hash({"answer": answer}) if answer else None,
+        "prediction_hash": stable_hash({
+            "same_run_cache_variant": variant,
+            "answer_hash": entry.get("answer_hash"),
+        }),
+        "latency_sec": 0.0,
+        "status": "answered" if answer else "no_answer",
+        "same_run_baseline_cache_variant": variant,
+    }
+    if prompt_kind == "raw_budget_preserve_selector_answer":
+        attempt.update({
+            "raw_budget_selection_method": "same_run_raw_budget_cache",
+            "budget_matched": True,
+            "budget_candidate_count": int(entry.get("budget_candidate_count") or 0),
+            "budget_answered_candidate_count": int(entry.get("budget_answered_candidate_count") or 0),
+            "budget_top_candidate_vote_count": int(entry.get("budget_top_candidate_vote_count") or 0),
+            "budget_strong_consensus": bool(entry.get("budget_strong_consensus")),
+            "budget_selected_answer_hash": entry.get("budget_selected_answer_hash"),
+            "budget_top_candidate_answer_hash": entry.get("budget_top_candidate_answer_hash"),
+            "budget_candidate_answer_hash_counts": dict(entry.get("budget_candidate_answer_hash_counts") or {}),
+            "budget_verified_or_abstain_gate": entry.get("budget_verified_or_abstain_gate"),
+        })
+    if prompt_kind == "hipporag_preserve_selector_answer":
+        context_char_count = int(entry.get("context_char_count") or 0)
+        selected_doc_count = int(entry.get("selected_doc_count") or 0)
+        candidate_doc_count = int(entry.get("candidate_doc_count") or 0)
+        variant_is_budget = variant == "hipporag_budget_matched"
+        has_budget_candidates = int(entry.get("budget_candidate_count") or 0) > 0
+        if (
+            context_char_count <= 0
+            or (selected_doc_count <= 0 and candidate_doc_count <= 0)
+        ) and not (variant_is_budget and has_budget_candidates):
+            return None
+        answer_norm = _normalize_for_selection(answer, answer_type=problem.get("answer_type") or "exactMatch")
+        agreeing_variants = [
+            str(other.get("variant") or "")
+            for other in (hipporag_entries or [])
+            if _normalize_for_selection(
+                str(other.get("answer") or ""),
+                answer_type=problem.get("answer_type") or "exactMatch",
+            ) == answer_norm
+        ]
+        attempt.update({
+            "preserve_context_char_count": context_char_count,
+            "preserve_selected_doc_count": selected_doc_count,
+            "preserve_candidate_doc_count": candidate_doc_count,
+            "hipporag_budget_selection_method": "same_run_hipporag_cache",
+            "same_route_agreement_count": len(agreeing_variants),
+            "same_route_agreeing_variants": agreeing_variants,
+            "budget_matched": variant_is_budget,
+            "budget_candidate_count": int(entry.get("budget_candidate_count") or 0),
+            "budget_answered_candidate_count": int(entry.get("budget_answered_candidate_count") or 0),
+            "budget_top_candidate_vote_count": int(entry.get("budget_top_candidate_vote_count") or 0),
+            "budget_strong_consensus": bool(entry.get("budget_strong_consensus")),
+            "budget_selected_answer_hash": entry.get("budget_selected_answer_hash"),
+            "budget_top_candidate_answer_hash": entry.get("budget_top_candidate_answer_hash"),
+            "budget_candidate_answer_hash_counts": dict(entry.get("budget_candidate_answer_hash_counts") or {}),
+            "budget_verified_or_abstain_gate": entry.get("budget_verified_or_abstain_gate"),
+            "context_answer_supported": bool(entry.get("context_answer_supported")),
+            "context_answer_overlap_count": int(entry.get("context_answer_overlap_count") or 0),
+            "context_question_overlap_count": int(entry.get("context_question_overlap_count") or 0),
+            "context_answer_option_hash": entry.get("context_answer_option_hash"),
+        })
+    return attempt
+
+
+def _same_run_cache_route_candidates(
+    *,
+    problem: dict[str, Any],
+    agent_plan: dict[str, Any] | None,
+    call_id: str,
+    start_index: int = 1,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None, dict[str, Any] | None, dict[str, Any] | None]:
+    if problem.get("answer_type") != "multipleChoice":
+        return [], None, None, None
+    cache_entries = _same_run_cached_baseline_entries(
+        agent_plan,
+        ["raw", "raw_budget_matched", "hipporag_baseline", "hipporag_budget_matched"],
+    )
+    if not cache_entries:
+        return [], None, None, None
+    by_variant = {str(entry.get("variant") or ""): entry for entry in cache_entries}
+    hipporag_entries = [
+        entry for entry in cache_entries
+        if str(entry.get("variant") or "").startswith("hipporag")
+    ]
+    attempts: list[dict[str, Any]] = []
+    raw_summary: dict[str, Any] | None = None
+    raw_budget_summary: dict[str, Any] | None = None
+    hipporag_summary: dict[str, Any] | None = None
+    specs = [
+        ("raw", "raw_preserve_selector_answer"),
+        ("raw_budget_matched", "raw_budget_preserve_selector_answer"),
+        ("hipporag_baseline", "hipporag_preserve_selector_answer"),
+        ("hipporag_budget_matched", "hipporag_preserve_selector_answer"),
+    ]
+    for variant, prompt_kind in specs:
+        entry = by_variant.get(variant)
+        if not entry:
+            continue
+        attempt = _same_run_cache_route_attempt(
+            problem=problem,
+            entry=entry,
+            prompt_kind=prompt_kind,
+            child_index=start_index + len(attempts),
+            call_id=call_id,
+            hipporag_entries=hipporag_entries,
+        )
+        if not attempt:
+            continue
+        attempts.append(attempt)
+        if variant == "raw":
+            raw_summary = {
+                "status": "activated",
+                "policy": "cache_first_raw_baseline_candidate",
+                "trigger": {"status": "activated", "reason": "cache_first_route_arbitrator"},
+                "child_id": attempt.get("child_id"),
+                "child_index": attempt.get("child_index"),
+                "child_status": attempt.get("status"),
+                "candidate_emitted": True,
+                "candidate_answer_hash": attempt.get("parsed_answer_hash"),
+                "same_run_cache_variant": variant,
+                "borrowed_baseline_model_calls": 1,
+                "underlying_model_calls": 0,
+            }
+        elif variant == "raw_budget_matched":
+            raw_budget_summary = {
+                "status": "activated",
+                "policy": "cache_first_raw_budget_matched_candidate",
+                "trigger": {"status": "activated", "reason": "cache_first_route_arbitrator"},
+                "child_id": attempt.get("child_id"),
+                "child_index": attempt.get("child_index"),
+                "child_status": attempt.get("status"),
+                "candidate_emitted": True,
+                "candidate_answer_hash": attempt.get("parsed_answer_hash"),
+                "candidate_count": int(entry.get("budget_candidate_count") or 0),
+                "answered_candidate_count": int(entry.get("budget_answered_candidate_count") or 0),
+                "candidate_answer_hash_counts": dict(entry.get("budget_candidate_answer_hash_counts") or {}),
+                "top_candidate_answer_hash": entry.get("budget_top_candidate_answer_hash"),
+                "top_candidate_vote_count": int(entry.get("budget_top_candidate_vote_count") or 0),
+                "strong_consensus": bool(entry.get("budget_strong_consensus")),
+                "selection_method": "same_run_raw_budget_cache",
+                "selected_answer_hash": attempt.get("parsed_answer_hash"),
+                "verified_or_abstain_gate": entry.get("budget_verified_or_abstain_gate"),
+                "same_run_cache_variant": variant,
+                "borrowed_baseline_model_calls": 1,
+                "underlying_model_calls": 0,
+            }
+        elif variant.startswith("hipporag"):
+            if hipporag_summary is None:
+                hipporag_summary = {
+                    "status": "activated",
+                    "policy": "cache_first_hipporag_family_candidates",
+                    "trigger": {"status": "activated", "reason": "cache_first_route_arbitrator"},
+                    "candidate_emitted": True,
+                    "candidate_variants": [],
+                    "candidate_answer_hashes": [],
+                    "candidate_doc_count": 0,
+                    "selected_doc_count": 0,
+                    "context_char_count": 0,
+                    "budget_matched_variant_count": 0,
+                    "context_answer_supported_variant_count": 0,
+                    "underlying_model_calls": 0,
+                }
+            hipporag_summary["candidate_variants"].append(variant)
+            hipporag_summary["candidate_answer_hashes"].append(attempt.get("parsed_answer_hash"))
+            hipporag_summary["candidate_doc_count"] += int(entry.get("candidate_doc_count") or 0)
+            hipporag_summary["selected_doc_count"] += int(entry.get("selected_doc_count") or 0)
+            hipporag_summary["context_char_count"] += int(entry.get("context_char_count") or 0)
+            hipporag_summary["budget_matched_variant_count"] += int(variant == "hipporag_budget_matched")
+            hipporag_summary["context_answer_supported_variant_count"] += int(
+                bool(entry.get("context_answer_supported"))
+            )
+            if hipporag_summary.get("child_id") is None:
+                hipporag_summary.update({
+                    "child_id": attempt.get("child_id"),
+                    "child_index": attempt.get("child_index"),
+                    "child_status": attempt.get("status"),
+                    "candidate_answer_hash": attempt.get("parsed_answer_hash"),
+                    "retrieval_status": "same_run_cache",
+                    "selection_method": "same_run_hipporag_cache",
+                    "same_run_cache_variant": variant,
+                    "borrowed_baseline_model_calls": 1,
+                })
+    return attempts, raw_summary, raw_budget_summary, hipporag_summary
+
+
+def _route_arbitrator_should_lock(summary: dict[str, Any] | None) -> bool:
+    if not isinstance(summary, dict):
+        return False
+    if summary.get("status") != "activated" or not summary.get("candidate_emitted"):
+        return False
+    selected_score = float(summary.get("selected_route_score") or 0.0)
+    runner_up = float(summary.get("runner_up_score") or 0.0)
+    margin = selected_score - runner_up
+    selected_route = str(summary.get("selected_route_type") or "")
+    if selected_route == "raw_budget_consensus":
+        if os.environ.get("HLE_ENABLE_RAW_BUDGET_CACHE_FIRST_LOCK", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
+            return bool(summary.get("raw_budget_strong_consensus")) or margin >= 1.5
+        return False
+    if summary.get("selected_route_trusted"):
+        return True
+    if selected_route == "hipporag_preserve":
+        if not summary.get("selected_route_trusted"):
+            return False
+        for row in summary.get("route_scores") or []:
+            if (
+                row.get("route_type") == "hipporag_preserve"
+                and row.get("score") == summary.get("selected_route_score")
+            ):
+                return bool(row.get("context_answer_supported")) and (
+                    bool(row.get("budget_strong_consensus"))
+                    or int(row.get("baseline_cache_support_count") or 0) >= 2
+                    or margin >= 2.0
+                )
+        return margin >= 2.5
+    if selected_route in {"raw_preserve", "direct"}:
+        return margin >= 2.5
+    return margin >= 3.0
+
+
+def _route_value_of_information_hard_gate_enabled() -> bool:
+    return os.environ.get("HLE_ENABLE_ROUTE_VOI_HARD_GATE", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _route_value_of_information_gate_summary(summary: dict[str, Any] | None) -> dict[str, Any]:
+    """Diagnose whether opening more route/challenge branches has useful expected value.
+
+    The summary is intentionally metadata-only.  It never stores HLE text or
+    predictions, only route types, scores, hashes, and reason tags already
+    produced by the route arbitrator.
+    """
+    if not isinstance(summary, dict) or summary.get("status") != "activated":
+        return {
+            "status": "not_required",
+            "reason": "route_arbitrator_not_activated",
+            "hard_gate_enabled": _route_value_of_information_hard_gate_enabled(),
+            "hard_gate_applied": False,
+        }
+    selected_route = str(summary.get("selected_route_type") or "")
+    route_scores = [
+        row for row in (summary.get("route_scores") or [])
+        if isinstance(row, dict)
+    ]
+    selected_child_id = summary.get("selected_route_child_id")
+    selected_rows = [
+        row for row in route_scores
+        if row.get("child_id") == selected_child_id
+        or row.get("route_type") == selected_route and row.get("score") == summary.get("selected_route_score")
+    ]
+    selected_row = selected_rows[0] if selected_rows else {}
+    selected_norm_hash = str(selected_row.get("normalized_answer_hash") or "")
+    profile = selected_row.get("value_profile")
+    profile = profile if isinstance(profile, dict) else {}
+    tags = set(str(tag) for tag in profile.get("reason_tags", []) or [])
+    risks = set(str(risk) for risk in profile.get("risk_tags", []) or [])
+    selected_score = float(summary.get("selected_route_score") or 0.0)
+    runner_up = float(summary.get("runner_up_score") or 0.0)
+    margin = round(selected_score - runner_up, 4)
+    trusted = bool(summary.get("selected_route_trusted"))
+    selected_trust_reason = str(summary.get("selected_route_trust_reason") or "")
+    raw_budget_strong = bool(summary.get("raw_budget_strong_consensus"))
+    raw_budget_votes = int(summary.get("raw_budget_top_vote_count") or 0)
+    credible_counter_routes = []
+    for row in route_scores:
+        if row.get("child_id") == selected_child_id:
+            continue
+        if selected_norm_hash and str(row.get("normalized_answer_hash") or "") == selected_norm_hash:
+            continue
+        row_profile = row.get("value_profile")
+        row_profile = row_profile if isinstance(row_profile, dict) else {}
+        row_tags = set(str(tag) for tag in row_profile.get("reason_tags", []) or [])
+        row_confidence = str(row_profile.get("confidence") or "").lower()
+        row_score = float(row.get("score") or 0.0)
+        if (
+            row_confidence in {"verified", "high"}
+            or bool(row.get("context_answer_supported"))
+            or "answer_bearing_retrieval" in row_tags
+            or int(row.get("baseline_cache_support_count") or 0) >= 3
+        ) and row_score >= runner_up:
+            credible_counter_routes.append({
+                "route_type": row.get("route_type"),
+                "prompt_kind": row.get("prompt_kind"),
+                "score": row.get("score"),
+                "confidence": row_confidence or None,
+                "answer_hash": row.get("answer_hash"),
+                "normalized_answer_hash": row.get("normalized_answer_hash"),
+            })
+
+    answer_bearing = (
+        selected_route == "answer_bearing_evidence"
+        or bool(selected_row.get("context_answer_supported"))
+        or "answer_bearing_retrieval" in tags
+        or "allowed_retrieval_budget_counter_to_raw_budget" in tags
+    )
+    route_family_consensus = bool(summary.get("route_consensus"))
+    hard_gate_enabled = _route_value_of_information_hard_gate_enabled()
+    answer_bearing_counter_trust = selected_trust_reason in {
+        "answer_bearing_hipporag_counter_to_budget_echo",
+        "baseline_supported_answer_bearing_hipporag_family_route",
+        "answer_bearing_hipporag_route",
+    }
+
+    status = "continue_exploration"
+    reason = "route_uncertainty_or_counter_routes_have_value"
+    preserve_route = False
+    if trusted and route_family_consensus and margin >= 2.0 and not credible_counter_routes:
+        status = "preserve_route"
+        reason = "trusted_route_family_consensus_low_marginal_voi"
+        preserve_route = True
+    elif (
+        selected_route == "raw_budget_consensus"
+        and trusted
+        and raw_budget_strong
+        and raw_budget_votes >= 3
+        and not credible_counter_routes
+        and "conflicts_with_strong_retrieval_budget_counter" not in risks
+    ):
+        status = "preserve_route"
+        reason = "strong_raw_budget_consensus_without_credible_counter_low_marginal_voi"
+        preserve_route = True
+    elif (
+        trusted
+        and selected_route == "hipporag_preserve"
+        and answer_bearing
+        and margin >= 2.0
+        and (not credible_counter_routes or answer_bearing_counter_trust)
+    ):
+        status = "preserve_route"
+        reason = "trusted_answer_bearing_hipporag_route_low_marginal_voi"
+        preserve_route = True
+    elif not trusted and not credible_counter_routes:
+        status = "continue_exploration"
+        reason = "selected_route_untrusted_and_no_safe_route_to_preserve"
+
+    return {
+        "status": status,
+        "reason": reason,
+        "hard_gate_enabled": hard_gate_enabled,
+        "hard_gate_applied": False,
+        "recommended_action": "preserve_route" if preserve_route else "continue_exploration",
+        "selected_route_type": selected_route,
+        "selected_route_trusted": trusted,
+        "selected_route_trust_reason": summary.get("selected_route_trust_reason"),
+        "selected_route_score": summary.get("selected_route_score"),
+        "runner_up_score": summary.get("runner_up_score"),
+        "score_margin": margin,
+        "route_consensus": route_family_consensus,
+        "raw_budget_strong_consensus": raw_budget_strong,
+        "raw_budget_top_vote_count": raw_budget_votes,
+        "selected_route_answer_bearing": bool(answer_bearing),
+        "selected_route_risk_tags": sorted(risks),
+        "credible_counter_route_count": len(credible_counter_routes),
+        "credible_counter_routes": credible_counter_routes[:4],
+    }
+
+
+def _route_value_of_information_gate_should_lock(summary: dict[str, Any] | None) -> bool:
+    if not _route_value_of_information_hard_gate_enabled():
+        return False
+    gate = (summary or {}).get("value_of_information_gate") if isinstance(summary, dict) else None
+    if not isinstance(gate, dict):
+        return False
+    return gate.get("status") == "preserve_route" and gate.get("recommended_action") == "preserve_route"
+
+
+def _route_arbitrator_lock_decision(summary: dict[str, Any] | None) -> bool:
+    if not isinstance(summary, dict):
+        return False
+    gate = summary.get("value_of_information_gate")
+    if isinstance(gate, dict):
+        if gate.get("status") == "continue_exploration" or gate.get("recommended_action") == "continue_exploration":
+            return False
+    if _route_value_of_information_gate_should_lock(summary):
+        gate = summary.setdefault("value_of_information_gate", {})
+        if isinstance(gate, dict):
+            gate["hard_gate_applied"] = True
+        return True
+    return _route_arbitrator_should_lock(summary)
+
+
+def _llm_route_arbitrator_prompt(
+    *,
+    problem: dict[str, Any],
+    scored: list[dict[str, Any]],
+) -> str:
+    route_rows = []
+    for index, row in enumerate(scored[:8], start=1):
+        route_rows.append({
+            "route_id": index,
+            "route_type": row.get("route_type"),
+            "answer": row.get("answer"),
+            "heuristic_score": row.get("route_score"),
+            "baseline_support_variants": row.get("baseline_cache_support_variants"),
+            "base_pair_consensus": bool(row.get("base_pair_consensus")),
+            "budget_matched": bool(row.get("budget_matched")),
+            "budget_strong_consensus": bool(row.get("budget_strong_consensus")),
+            "budget_top_candidate_vote_count": row.get("budget_top_candidate_vote_count"),
+            "context_answer_supported": bool(row.get("context_answer_supported")),
+            "context_answer_overlap_count": row.get("context_answer_overlap_count"),
+            "context_question_overlap_count": row.get("context_question_overlap_count"),
+            "same_route_agreement_count": row.get("same_route_agreement_count"),
+        })
+    return (
+        "You are a route arbitrator for a multiple-choice QA agent. Choose which existing route's answer "
+        "should be preserved. Do not solve by majority alone. Prefer a route with answer-bearing evidence, "
+        "a reliable verified/budget signal, or a clear constraint match. Treat unsupported retrieval context "
+        "as weak even if several routes agree. If the best choice is uncertain, choose the safest baseline route.\n\n"
+        "Return JSON only: {\"route_id\": <integer>, \"confidence\": \"low|medium|high\", "
+        "\"reason_tag\": \"...\"}.\n\n"
+        f"Question:\n{problem.get('_question')}\n\n"
+        f"Candidate routes:\n{json.dumps(route_rows, ensure_ascii=False, indent=2)}"
+    )
+
+
+def _strip_json_code_fences(text: str) -> str:
+    stripped = str(text or "").strip()
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```(?:json)?\s*", "", stripped, flags=re.IGNORECASE)
+        stripped = re.sub(r"\s*```$", "", stripped)
+    return stripped.strip()
+
+
+def _maybe_select_route_with_llm(
+    *,
+    problem: dict[str, Any],
+    scored: list[dict[str, Any]],
+    model: str | None,
+    timeout: float | None,
+    max_tokens: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if not _llm_route_arbitrator_enabled() or not model:
+        return None, None
+    if len(scored) < 2:
+        return None, {"status": "abstained", "reason": "too_few_routes", "underlying_model_calls": 0}
+    prompt = _llm_route_arbitrator_prompt(problem=problem, scored=scored)
+    started = time.monotonic()
+    try:
+        response = _call_model(
+            model=model,
+            prompt=prompt,
+            timeout=timeout,
+            max_tokens=min(max_tokens, 256),
+        )
+    except Exception as exc:
+        return None, {
+            "status": "error",
+            "error_type": type(exc).__name__,
+            "underlying_model_calls": 1,
+            "latency_sec": round(time.monotonic() - started, 4),
+        }
+    latency = round(time.monotonic() - started, 4)
+    try:
+        parsed = json.loads(_strip_json_code_fences(response))
+    except Exception:
+        parsed = {}
+    route_id = parsed.get("route_id")
+    try:
+        route_index = int(route_id) - 1
+    except (TypeError, ValueError):
+        route_index = -1
+    if route_index < 0 or route_index >= min(len(scored), 8):
+        return None, {
+            "status": "invalid_choice",
+            "route_id": route_id,
+            "response_hash": stable_hash({"response": response}),
+            "underlying_model_calls": 1,
+            "latency_sec": latency,
+        }
+    selected = scored[route_index]
+    return selected, {
+        "status": "activated",
+        "route_id": route_index + 1,
+        "selected_route_type": selected.get("route_type"),
+        "selected_route_prompt_kind": selected.get("prompt_kind"),
+        "selected_answer_hash": selected.get("answer_hash"),
+        "confidence": parsed.get("confidence"),
+        "reason_tag": parsed.get("reason_tag"),
+        "response_hash": stable_hash({"response": response}),
+        "underlying_model_calls": 1,
+        "latency_sec": latency,
+    }
+
+
+def _route_arbitrator_trust_decision(
+    selected: dict[str, Any],
+    *,
+    runner_up_score: float,
+    raw_budget_strong_consensus: bool,
+    raw_budget_top_vote_count: int,
+    raw_budget_norm: str,
+    llm_route_summary: dict[str, Any] | None,
+) -> dict[str, Any]:
+    route_type = str(selected.get("route_type") or "")
+    selected_norm = str(selected.get("normalized_answer") or "")
+    selected_score = float(selected.get("route_score") or 0.0)
+    margin = selected_score - float(runner_up_score or 0.0)
+    baseline_support_count = int(selected.get("baseline_cache_support_count") or 0)
+    context_supported = bool(selected.get("context_answer_supported"))
+    context_answer_overlap = int(selected.get("context_answer_overlap_count") or 0)
+    context_question_overlap = int(selected.get("context_question_overlap_count") or 0)
+    context_option_linked = bool(selected.get("context_answer_option_hash"))
+    same_route_agreement = int(selected.get("same_route_agreement_count") or 0)
+    budget_strong = bool(selected.get("budget_strong_consensus"))
+    budget_votes = int(selected.get("budget_top_candidate_vote_count") or 0)
+    llm_confidence = str((llm_route_summary or {}).get("confidence") or "").lower()
+    value_profile = selected.get("route_value_profile") if isinstance(selected.get("route_value_profile"), dict) else {}
+    value_confidence = str(value_profile.get("confidence") or "").lower()
+    value_risks = set(str(risk) for risk in value_profile.get("risk_tags", []) or [])
+    value_tags = set(str(tag) for tag in value_profile.get("reason_tags", []) or [])
+    conflicts_strong_raw_budget = (
+        raw_budget_strong_consensus
+        and bool(raw_budget_norm)
+        and selected_norm != raw_budget_norm
+    )
+
+    if (
+        value_profile.get("route_consensus")
+        and baseline_support_count >= 3
+        and "unverified_route_family_consensus" not in value_risks
+    ):
+        if route_type == "hipporag_preserve" and not context_supported:
+            return {"trusted": False, "reason": "hipporag_family_consensus_without_answer_bearing_certificate"}
+        return {"trusted": True, "reason": "route_family_consensus"}
+
+    if route_type == "answer_bearing_evidence":
+        return {"trusted": True, "reason": "answer_bearing_evidence_route"}
+
+    if route_type == "raw_budget_consensus":
+        if "conflicts_with_strong_retrieval_budget_counter" in value_risks:
+            return {"trusted": False, "reason": "raw_budget_conflicts_with_retrieval_budget_counter"}
+        if "conflicts_with_raw_hipporag_base_pair" in value_risks:
+            return {"trusted": False, "reason": "raw_budget_conflicts_with_raw_hipporag_base_pair"}
+        if raw_budget_strong_consensus and raw_budget_top_vote_count >= 3:
+            return {"trusted": True, "reason": "strong_raw_budget_consensus"}
+        if baseline_support_count >= 3 and margin >= 2.0:
+            return {"trusted": True, "reason": "multi_baseline_raw_budget_support"}
+        return {"trusted": False, "reason": "raw_budget_support_below_trust_threshold"}
+
+    if "unverified_route_family_consensus" in value_risks and not (
+        route_type == "answer_bearing_evidence"
+        or context_supported
+        or context_answer_overlap > 0
+    ):
+        return {"trusted": False, "reason": "unverified_route_family_consensus"}
+
+    if route_type == "hipporag_preserve":
+        if (
+            not context_supported
+            and "answer_bearing_retrieval" not in value_tags
+            and "option_linked_retrieval" not in value_tags
+        ):
+            return {"trusted": False, "reason": "hipporag_context_not_answer_bearing"}
+        if (
+            conflicts_strong_raw_budget
+            and value_confidence in {"verified", "high"}
+            and "independent_hipporag_counter_to_budget_echo" in value_tags
+            and "answer_bearing_retrieval" in value_tags
+            and (
+                context_supported
+                or (
+                    context_answer_overlap >= 2
+                    and context_question_overlap >= 4
+                    and int(selected.get("selected_doc_count") or 0) >= 2
+                )
+            )
+            and margin >= 2.0
+        ):
+            return {"trusted": True, "reason": "answer_bearing_hipporag_counter_to_budget_echo"}
+        if conflicts_strong_raw_budget and not (
+            (
+                baseline_support_count >= 3
+                and same_route_agreement >= 2
+                and budget_strong
+                and budget_votes >= 3
+                and context_answer_overlap >= 1
+            )
+            or (
+                "allowed_retrieval_budget_counter_to_raw_budget" in value_tags
+                and budget_strong
+                and budget_votes >= 3
+                and context_question_overlap >= 4
+            )
+        ):
+            return {"trusted": False, "reason": "conflicts_with_strong_raw_budget_without_enough_evidence"}
+        if (
+            value_confidence in {"verified", "high"}
+            and budget_strong
+            and budget_votes >= 3
+            and "low_baseline_support_in_fragmented_pool" in value_risks
+            and not context_supported
+            and context_answer_overlap < 2
+        ):
+            return {"trusted": False, "reason": "budgeted_retrieval_fragmented_low_support"}
+        if (
+            value_confidence in {"verified", "high"}
+            and budget_strong
+            and budget_votes >= 3
+            and (
+                context_supported
+                or context_answer_overlap >= 2
+                or same_route_agreement >= 2
+                or (
+                    "raw_and_hipporag_budget_pair_consensus" in value_tags
+                    and baseline_support_count >= 2
+                )
+            )
+        ):
+            return {"trusted": True, "reason": "high_value_budgeted_retrieval_route"}
+        if (
+            conflicts_strong_raw_budget
+            and value_confidence in {"verified", "high"}
+            and "allowed_retrieval_budget_counter_to_raw_budget" in value_tags
+            and "low_baseline_support_in_fragmented_pool" not in value_risks
+            and budget_strong
+            and budget_votes >= 3
+            and context_question_overlap >= 4
+            and (context_answer_overlap >= 1 or context_option_linked)
+        ):
+            return {"trusted": True, "reason": "retrieval_budget_counter_to_raw_budget"}
+        if (
+            value_confidence in {"verified", "high"}
+            and baseline_support_count >= 3
+            and same_route_agreement >= 2
+            and "answer_bearing_retrieval" in value_tags
+            and context_supported
+            and not conflicts_strong_raw_budget
+        ):
+            return {"trusted": True, "reason": "baseline_supported_answer_bearing_hipporag_family_route"}
+        if (
+            (
+                context_supported
+                or (
+                    context_question_overlap >= 4
+                    and context_answer_overlap >= 2
+                    and int(selected.get("selected_doc_count") or 0) >= 2
+                )
+            )
+            and (
+                baseline_support_count >= 2
+                or same_route_agreement >= 2
+                or (budget_strong and budget_votes >= 3)
+            )
+        ):
+            return {"trusted": True, "reason": "answer_bearing_hipporag_route"}
+        if llm_confidence == "high" and margin >= 2.5 and baseline_support_count >= 2:
+            return {"trusted": True, "reason": "high_confidence_llm_route_with_baseline_support"}
+        return {"trusted": False, "reason": "hipporag_support_below_trust_threshold"}
+
+    if route_type in {"raw_preserve", "direct"}:
+        if baseline_support_count >= 3 and margin >= 3.0 and not conflicts_strong_raw_budget:
+            return {"trusted": True, "reason": "high_margin_baseline_family_route"}
+        return {"trusted": False, "reason": "direct_or_raw_route_not_independently_verified"}
+
+    return {"trusted": False, "reason": "unsupported_route_type"}
+
+
+def _hipporag_preserve_attempt_has_context(attempt: dict[str, Any]) -> bool:
+    return (
+        int(attempt.get("preserve_context_char_count") or 0) > 0
+        and (
+            int(attempt.get("preserve_selected_doc_count") or 0) > 0
+            or int(attempt.get("preserve_candidate_doc_count") or 0) > 0
+        )
+    )
+
+
+def _route_arbitrator_route_type(prompt_kind: str) -> str:
+    prompt_kind = str(prompt_kind or "")
+    if prompt_kind == "raw_budget_preserve_selector_answer":
+        return "raw_budget_consensus"
+    if prompt_kind == "hipporag_preserve_selector_answer":
+        return "hipporag_preserve"
+    if prompt_kind == "raw_preserve_selector_answer":
+        return "raw_preserve"
+    if prompt_kind == "direct_short_answer":
+        return "direct"
+    if prompt_kind in {
+        "evidence_bridge_answer",
+        "evidence_grounded_answer",
+        "answer_bearing_evidence_candidate",
+        "mc_option_evidence_scorer_answer",
+        "domain_rule_mc_verifier_answer",
+    }:
+        return "answer_bearing_evidence"
+    if prompt_kind in {
+        "recursive_assumption_answer",
+        "constraint_checked_answer",
+        "skeptical_recheck_answer",
+        "literal_constraint_answer",
+        "option_matrix_reasoner_answer",
+        "option_elimination_answer",
+        "counter_assumption_challenge_answer",
+        "option_elimination_challenge_answer",
+        "forced_alternative_answer",
+        "critic_synthesis_answer",
+        "mc_option_sweep_candidate",
+        "agent_context_answer",
+        "hipporag_context_answer",
+    }:
+        return "recursive_child"
+    return "other"
+
+
+def _route_arbitrator_route_priority(route_type: str) -> int:
+    return {
+        "answer_bearing_evidence": 90,
+        "raw_budget_consensus": 80,
+        "hipporag_preserve": 75,
+        "raw_preserve": 65,
+        "direct": 60,
+        "recursive_child": 50,
+        "other": 10,
+    }.get(str(route_type or ""), 0)
+
+
+def _route_arbitrator_component_score(value: float, *, limit: float | None = None) -> float:
+    if limit is None:
+        return round(float(value), 4)
+    return round(min(float(value), float(limit)), 4)
+
+
+def _route_arbitrator_has_retrieval_budget_counter_signal(record: dict[str, Any]) -> bool:
+    if record.get("route_type") != "hipporag_preserve":
+        return False
+    if not bool(record.get("budget_matched")):
+        return False
+    if not bool(record.get("budget_strong_consensus")):
+        return False
+    if int(record.get("budget_top_candidate_vote_count") or 0) < 3:
+        return False
+    if int(record.get("context_question_overlap_count") or 0) < 4:
+        return False
+    return bool(record.get("context_answer_supported")) or bool(record.get("context_answer_option_hash"))
+
+
+def _route_arbitrator_has_answer_bearing_retrieval_signal(record: dict[str, Any]) -> bool:
+    if record.get("route_type") != "hipporag_preserve":
+        return False
+    return (
+        bool(record.get("context_answer_supported"))
+        or int(record.get("context_answer_overlap_count") or 0) > 0
+        or bool(record.get("context_answer_option_hash"))
+    )
+
+
+def _route_arbitrator_has_independent_hippo_counter_signal(record: dict[str, Any]) -> bool:
+    if record.get("route_type") != "hipporag_preserve":
+        return False
+    return bool(record.get("context_answer_supported")) or int(record.get("context_answer_overlap_count") or 0) > 0
+
+
+def _route_arbitrator_value_profile(
+    record: dict[str, Any],
+    *,
+    support_count: int,
+    non_hipporag_support_count: int,
+    raw_budget_strong_consensus: bool,
+    raw_budget_top_vote_count: int,
+    raw_budget_norm: str,
+    retrieval_budget_counter_norms: set[str] | None = None,
+    independent_hippo_counter_norms: set[str] | None = None,
+    route_consensus: bool = False,
+) -> dict[str, Any]:
+    route_type = str(record.get("route_type") or "")
+    norm = str(record.get("normalized_answer") or "")
+    baseline_support_count = int(record.get("baseline_cache_support_count") or 0)
+    baseline_unique_answer_count = int(record.get("baseline_cache_unique_answer_count") or 0)
+    same_route_agreement_count = int(record.get("same_route_agreement_count") or 0)
+    budget_votes = int(record.get("budget_top_candidate_vote_count") or 0)
+    budget_strong = bool(record.get("budget_strong_consensus"))
+    is_budget_matched = bool(record.get("budget_matched"))
+    context_supported = bool(record.get("context_answer_supported"))
+    context_answer_overlap = int(record.get("context_answer_overlap_count") or 0)
+    context_question_overlap = int(record.get("context_question_overlap_count") or 0)
+    context_option_linked = bool(record.get("context_answer_option_hash"))
+    selected_docs = int(record.get("selected_doc_count") or 0)
+    candidate_docs = int(record.get("candidate_doc_count") or 0)
+    context_chars = int(record.get("context_char_count") or 0)
+    retrieval_budget_counter_norms = retrieval_budget_counter_norms or set()
+    independent_hippo_counter_norms = independent_hippo_counter_norms or set()
+
+    components: dict[str, float] = {}
+    tags: list[str] = []
+    risks: list[str] = []
+
+    components["answer_support"] = _route_arbitrator_component_score(float(support_count) * 0.65)
+    if baseline_support_count:
+        components["baseline_support"] = _route_arbitrator_component_score(
+            baseline_support_count * 1.10
+            + (1.8 if baseline_support_count >= 3 else 0.8 if baseline_support_count == 2 else 0.0)
+        )
+        tags.append(f"baseline_support_{baseline_support_count}")
+    if record.get("base_pair_consensus"):
+        components["base_pair_consensus"] = 1.7
+        tags.append("raw_hipporag_base_pair_consensus")
+    route_has_answer_bearing_signal = (
+        route_type == "answer_bearing_evidence"
+        or context_supported
+        or context_answer_overlap > 0
+    )
+    if route_consensus:
+        if route_has_answer_bearing_signal:
+            components["route_family_consensus"] = 3.5 if baseline_support_count >= 3 else 2.0
+        else:
+            components["route_family_consensus"] = 0.8 if baseline_support_count >= 3 else 0.4
+            risks.append("unverified_route_family_consensus")
+        tags.append("route_family_consensus")
+    if record.get("budget_pair_consensus"):
+        components["budget_pair_consensus"] = 4.0 + (0.8 if budget_strong else 0.0)
+        tags.append("raw_and_hipporag_budget_pair_consensus")
+
+    if route_type == "answer_bearing_evidence":
+        components["route_prior"] = 3.5
+        tags.append("answer_bearing_evidence_route")
+    elif route_type == "raw_budget_consensus":
+        components["route_prior"] = 0.9
+        components["budget_consensus"] = _route_arbitrator_component_score(
+            min(max(raw_budget_top_vote_count, 0), 5) * 0.55 + (1.6 if raw_budget_strong_consensus else 0.0)
+        )
+        if raw_budget_strong_consensus:
+            tags.append("raw_budget_strong_consensus")
+        if record.get("competing_base_pair_consensus_exists") and not record.get("budget_pair_consensus"):
+            components["base_pair_counter_penalty"] = -8.0
+            risks.append("conflicts_with_raw_hipporag_base_pair")
+        if any(counter_norm and counter_norm != norm for counter_norm in retrieval_budget_counter_norms):
+            components["retrieval_budget_counter_penalty"] = -5.0
+            risks.append("conflicts_with_strong_retrieval_budget_counter")
+        if any(counter_norm and counter_norm != norm for counter_norm in independent_hippo_counter_norms):
+            components["independent_hipporag_counter_penalty"] = -6.0
+            risks.append("conflicts_with_independent_answer_bearing_hipporag_counter")
+    elif route_type == "hipporag_preserve":
+        components["route_prior"] = 0.7
+        retrieval_value = 0.0
+        retrieval_value += min(selected_docs, 5) * 0.25
+        retrieval_value += min(candidate_docs, 10) * 0.06
+        retrieval_value += min(context_chars / 1000.0, 1.4)
+        retrieval_value += min(context_question_overlap, 8) * 0.18
+        if context_supported or context_answer_overlap > 0:
+            retrieval_value += 3.6 + min(context_answer_overlap, 3) * 0.45
+            tags.append("answer_bearing_retrieval")
+        elif context_option_linked:
+            if is_budget_matched and budget_strong:
+                retrieval_value += 1.6
+                tags.append("option_linked_retrieval")
+            else:
+                retrieval_value = min(retrieval_value, 1.0) + 0.5
+                tags.append("weak_option_linked_retrieval")
+                risks.append("weak_option_linked_retrieval_without_budget")
+        else:
+            if not (is_budget_matched and budget_strong):
+                retrieval_value = min(retrieval_value, 0.7)
+            components["unsupported_retrieval_penalty"] = -2.0
+            risks.append("retrieval_not_answer_bearing")
+        components["retrieval_evidence"] = _route_arbitrator_component_score(retrieval_value)
+        if is_budget_matched:
+            components["budgeted_retrieval"] = 1.0
+            tags.append("budget_matched_retrieval")
+        if budget_strong:
+            components["retrieval_budget_consensus"] = _route_arbitrator_component_score(
+                min(max(budget_votes, 0), 5) * 0.65 + 1.8
+            )
+            tags.append("retrieval_budget_strong_consensus")
+        if (not is_budget_matched) and norm in independent_hippo_counter_norms:
+            if context_supported or context_answer_overlap > 0:
+                components["independent_hipporag_counter"] = 8.0
+                tags.append("independent_hipporag_counter_to_budget_echo")
+            else:
+                components["weak_independent_hipporag_counter"] = 1.2
+                risks.append("weak_option_linked_independent_hipporag_counter")
+        if (
+            is_budget_matched
+            and independent_hippo_counter_norms
+            and raw_budget_norm
+            and norm == raw_budget_norm
+        ):
+            components["budget_echo_independent_hippo_penalty"] = -14.0
+            risks.append("budgeted_retrieval_echoes_raw_against_independent_hipporag")
+        if same_route_agreement_count >= 2:
+            components["same_route_agreement"] = 1.8
+            tags.append("hipporag_family_agreement")
+        elif same_route_agreement_count == 1:
+            components["same_route_agreement"] = 0.5
+        if non_hipporag_support_count > 0:
+            components["non_retrieval_support"] = 0.9
+        elif same_route_agreement_count < 2 and not (is_budget_matched and budget_strong):
+            components["retrieval_isolated_penalty"] = -2.0
+            risks.append("retrieval_isolated_from_non_retrieval_routes")
+    elif route_type == "raw_preserve":
+        components["route_prior"] = 0.5
+        if support_count >= 2:
+            components["direct_family_support"] = 0.8
+    elif route_type == "direct":
+        components["route_prior"] = 0.3
+        if support_count >= 2:
+            components["direct_family_support"] = 0.6
+    elif route_type == "recursive_child":
+        components["route_prior"] = 0.2
+
+    if raw_budget_strong_consensus and raw_budget_norm and norm != raw_budget_norm:
+        if route_type == "hipporag_preserve" and _route_arbitrator_has_retrieval_budget_counter_signal(record):
+            components["strong_raw_budget_conflict_penalty"] = -0.2
+            components["retrieval_budget_counter_signal"] = 2.0
+            tags.append("allowed_retrieval_budget_counter_to_raw_budget")
+        elif route_type == "hipporag_preserve" and norm in independent_hippo_counter_norms:
+            components["strong_raw_budget_conflict_penalty"] = -2.0
+            tags.append("allowed_independent_hipporag_counter_to_budget_echo")
+        elif context_supported and same_route_agreement_count >= 2:
+            components["strong_raw_budget_conflict_penalty"] = -1.5
+        elif context_supported and context_answer_overlap >= 1:
+            components["strong_raw_budget_conflict_penalty"] = -2.0
+        else:
+            components["strong_raw_budget_conflict_penalty"] = -13.0 if route_type == "hipporag_preserve" else -6.0
+            risks.append("conflicts_with_strong_raw_budget")
+    if record.get("competing_base_pair_consensus_exists") and record.get("budget_pair_consensus"):
+        if budget_strong and raw_budget_top_vote_count >= 3:
+            components["competing_base_pair_penalty"] = -0.4
+            tags.append("budget_pair_allowed_against_base_pair")
+        else:
+            components["competing_base_pair_penalty"] = -2.5
+            risks.append("competes_with_base_pair_consensus")
+    if baseline_unique_answer_count >= 3 and baseline_support_count <= 1 and route_type != "answer_bearing_evidence":
+        components["fragmented_baseline_penalty"] = -0.8
+        risks.append("low_baseline_support_in_fragmented_pool")
+
+    total = round(sum(components.values()), 4)
+    if (
+        route_type == "answer_bearing_evidence"
+        or (context_supported and context_answer_overlap >= 1 and baseline_support_count >= 2)
+        or (route_consensus and route_has_answer_bearing_signal and baseline_support_count >= 3)
+    ):
+        confidence = "verified"
+    elif total >= 9.0 and not any(risk in risks for risk in {
+        "retrieval_not_answer_bearing",
+        "conflicts_with_strong_raw_budget",
+        "conflicts_with_strong_retrieval_budget_counter",
+        "unverified_route_family_consensus",
+    }):
+        confidence = "high"
+    elif total >= 5.5:
+        confidence = "medium"
+    else:
+        confidence = "low"
+    return {
+        "value_score": total,
+        "confidence": confidence,
+        "components": components,
+        "reason_tags": tags,
+        "risk_tags": risks,
+        "route_consensus": bool(route_consensus),
+    }
+
+
+def _route_arbitrator_baseline_cache_support(
+    *,
+    problem: dict[str, Any],
+    agent_plan: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(agent_plan, dict):
+        return {
+            "count_by_norm": {},
+            "variants_by_norm": {},
+            "base_pair_norms": [],
+            "unique_answer_count": 0,
+            "variant_count": 0,
+        }
+    entries = _same_run_cached_baseline_entries(
+        agent_plan,
+        ["raw", "raw_budget_matched", "hipporag_baseline", "hipporag_budget_matched"],
+    )
+    variants_by_norm: dict[str, list[str]] = defaultdict(list)
+    for entry in entries:
+        answer = str(entry.get("answer") or "").strip()
+        norm = _normalize_for_selection(answer, answer_type=problem.get("answer_type") or "exactMatch")
+        if not norm:
+            continue
+        variant = str(entry.get("variant") or "")
+        if variant and variant not in variants_by_norm[norm]:
+            variants_by_norm[norm].append(variant)
+    return {
+        "count_by_norm": {norm: len(variants) for norm, variants in variants_by_norm.items()},
+        "variants_by_norm": {norm: sorted(variants) for norm, variants in variants_by_norm.items()},
+        "base_pair_norms": sorted(
+            norm
+            for norm, variants in variants_by_norm.items()
+            if "raw" in variants and "hipporag_baseline" in variants
+        ),
+        "unique_answer_count": len(variants_by_norm),
+        "variant_count": sum(len(variants) for variants in variants_by_norm.values()),
+    }
+
+
+def _route_arbitrator_candidate_records(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    agent_plan: dict[str, Any] | None = None,
+    raw_budget_preserve_summary: dict[str, Any] | None,
+    hipporag_preserve_summary: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    valid = _valid_recursive_answer_attempts(problem=problem, attempts=attempts)
+    cache_support = _route_arbitrator_baseline_cache_support(problem=problem, agent_plan=agent_plan)
+    cache_counts = cache_support.get("count_by_norm") if isinstance(cache_support.get("count_by_norm"), dict) else {}
+    cache_variants = (
+        cache_support.get("variants_by_norm") if isinstance(cache_support.get("variants_by_norm"), dict) else {}
+    )
+    base_pair_norms = set(cache_support.get("base_pair_norms") or [])
+    records: list[dict[str, Any]] = []
+    retained_route_prompts = {
+        "direct_short_answer",
+        "raw_preserve_selector_answer",
+        "raw_budget_preserve_selector_answer",
+        "hipporag_preserve_selector_answer",
+        "answer_bearing_evidence_candidate",
+        "mc_option_evidence_scorer_answer",
+        "domain_rule_mc_verifier_answer",
+    }
+    seen_route_keys: set[tuple[str, str, str]] = set()
+    for attempt in valid:
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        normalized_answer = _normalize_for_selection(answer, answer_type=problem.get("answer_type") or "exactMatch")
+        if not normalized_answer:
+            continue
+        prompt_kind = str(attempt.get("prompt_kind") or "")
+        if prompt_kind not in retained_route_prompts:
+            continue
+        dedupe_key = (
+            prompt_kind,
+            normalized_answer,
+            str(attempt.get("same_run_baseline_cache_variant") or ""),
+        )
+        if dedupe_key in seen_route_keys:
+            continue
+        seen_route_keys.add(dedupe_key)
+        route_type = _route_arbitrator_route_type(prompt_kind)
+        if route_type == "other":
+            continue
+        summary: dict[str, Any] = {}
+        if route_type == "raw_budget_consensus" and isinstance(raw_budget_preserve_summary, dict):
+            summary = raw_budget_preserve_summary
+        elif route_type == "hipporag_preserve" and isinstance(hipporag_preserve_summary, dict):
+            summary = hipporag_preserve_summary
+        baseline_support_variants = list(cache_variants.get(normalized_answer, []) or [])
+        records.append({
+            "attempt": attempt,
+            "route_type": route_type,
+            "prompt_kind": prompt_kind,
+            "child_id": attempt.get("child_id"),
+            "child_index": int(attempt.get("child_index") or 0),
+            "answer": answer,
+            "answer_hash": attempt.get("parsed_answer_hash") or stable_hash({"answer": answer}),
+            "normalized_answer": normalized_answer,
+            "normalized_answer_hash": stable_hash({"normalized_answer": normalized_answer}),
+            "trusted_verified": (
+                attempt.get("candidate_verifier_state") == "verified"
+                and _is_trusted_candidate_verifier_attempt(attempt)
+            ),
+            "context_char_count": int(attempt.get("preserve_context_char_count") or 0),
+            "selected_doc_count": int(attempt.get("preserve_selected_doc_count") or 0),
+            "candidate_doc_count": int(attempt.get("preserve_candidate_doc_count") or 0),
+            "same_route_agreement_count": int(attempt.get("same_route_agreement_count") or 0),
+            "same_route_agreeing_variants": list(attempt.get("same_route_agreeing_variants") or []),
+            "same_run_cache_variant": attempt.get("same_run_baseline_cache_variant"),
+            "budget_matched": bool(attempt.get("budget_matched")),
+            "budget_strong_consensus": bool(attempt.get("budget_strong_consensus")),
+            "budget_top_candidate_vote_count": int(attempt.get("budget_top_candidate_vote_count") or 0),
+            "budget_selected_answer_hash": attempt.get("budget_selected_answer_hash"),
+            "budget_top_candidate_answer_hash": attempt.get("budget_top_candidate_answer_hash"),
+            "context_answer_supported": bool(attempt.get("context_answer_supported")),
+            "context_answer_overlap_count": int(attempt.get("context_answer_overlap_count") or 0),
+            "context_question_overlap_count": int(attempt.get("context_question_overlap_count") or 0),
+            "context_answer_option_hash": attempt.get("context_answer_option_hash"),
+            "baseline_cache_support_count": int(cache_counts.get(normalized_answer, 0) or 0),
+            "baseline_cache_support_variants": baseline_support_variants,
+            "base_pair_consensus": normalized_answer in base_pair_norms,
+            "competing_base_pair_consensus_exists": bool(base_pair_norms and normalized_answer not in base_pair_norms),
+            "budget_pair_consensus": (
+                "raw_budget_matched" in baseline_support_variants
+                and "hipporag_budget_matched" in baseline_support_variants
+            ),
+            "baseline_cache_unique_answer_count": int(cache_support.get("unique_answer_count") or 0),
+            "baseline_cache_variant_count": int(cache_support.get("variant_count") or 0),
+            "summary": summary,
+        })
+    return records
+
+
+def _score_route_arbitrator_record(
+    record: dict[str, Any],
+    *,
+    support_count: int,
+    non_hipporag_support_count: int,
+    raw_budget_strong_consensus: bool,
+    raw_budget_top_vote_count: int,
+    raw_budget_norm: str,
+    retrieval_budget_counter_norms: set[str] | None = None,
+    independent_hippo_counter_norms: set[str] | None = None,
+    route_consensus: bool = False,
+) -> float:
+    profile = _route_arbitrator_value_profile(
+        record,
+        support_count=support_count,
+        non_hipporag_support_count=non_hipporag_support_count,
+        raw_budget_strong_consensus=raw_budget_strong_consensus,
+        raw_budget_top_vote_count=raw_budget_top_vote_count,
+        raw_budget_norm=raw_budget_norm,
+        retrieval_budget_counter_norms=retrieval_budget_counter_norms,
+        independent_hippo_counter_norms=independent_hippo_counter_norms,
+        route_consensus=route_consensus,
+    )
+    return float(profile.get("value_score") or 0.0)
+
+
+def _maybe_add_route_arbitrator_candidate(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    agent_plan: dict[str, Any] | None = None,
+    raw_budget_preserve_summary: dict[str, Any] | None = None,
+    hipporag_preserve_summary: dict[str, Any] | None = None,
+    call_id: str = "",
+    model: str | None = None,
+    timeout: float | None = None,
+    max_tokens: int = 384,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if not _route_arbitrator_enabled():
+        return None, None
+    if not _route_value_verifier_enabled():
+        return None, {
+            "status": "abstained",
+            "reason": "route_value_verifier_disabled",
+            "policy": "route_level_value_verifier",
+            "route_value_verifier_enabled": False,
+            "route_consensus_guard_enabled": _route_consensus_guard_enabled(),
+            "budget_echo_guard_enabled": _budget_echo_guard_enabled(),
+            "underlying_model_calls": 0,
+        }
+    if problem.get("answer_type") != "multipleChoice":
+        return None, {"status": "abstained", "reason": "not_multiple_choice", "underlying_model_calls": 0}
+    records = _route_arbitrator_candidate_records(
+        problem=problem,
+        attempts=attempts,
+        agent_plan=agent_plan,
+        raw_budget_preserve_summary=raw_budget_preserve_summary,
+        hipporag_preserve_summary=hipporag_preserve_summary,
+    )
+    if not records:
+        return None, {"status": "abstained", "reason": "no_route_candidates", "underlying_model_calls": 0}
+    if any(record.get("trusted_verified") for record in records):
+        return None, {
+            "status": "abstained",
+            "reason": "trusted_verified_candidate_available",
+            "route_count": len(records),
+            "underlying_model_calls": 0,
+        }
+    route_types = {str(record.get("route_type") or "") for record in records}
+    answer_norms = {str(record.get("normalized_answer") or "") for record in records if record.get("normalized_answer")}
+    if len(route_types) < 2:
+        return None, {
+            "status": "abstained",
+            "reason": "single_route_only",
+            "route_count": len(records),
+            "route_types": sorted(route_types),
+            "underlying_model_calls": 0,
+        }
+    routes_agree = len(answer_norms) < 2
+    route_consensus = routes_agree and _route_consensus_guard_enabled()
+    if routes_agree and not route_consensus:
+        return None, {
+            "status": "abstained",
+            "reason": "routes_agree",
+            "route_count": len(records),
+            "route_types": sorted(route_types),
+            "unique_answer_count": len(answer_norms),
+            "route_value_verifier_enabled": True,
+            "route_consensus_guard_enabled": False,
+            "budget_echo_guard_enabled": _budget_echo_guard_enabled(),
+            "underlying_model_calls": 0,
+        }
+
+    answer_support = Counter(str(record.get("normalized_answer") or "") for record in records)
+    non_hipporag_support = Counter(
+        str(record.get("normalized_answer") or "")
+        for record in records
+        if record.get("route_type") != "hipporag_preserve"
+    )
+    baseline_cache_support = _route_arbitrator_baseline_cache_support(problem=problem, agent_plan=agent_plan)
+    raw_budget = raw_budget_preserve_summary if isinstance(raw_budget_preserve_summary, dict) else {}
+    raw_budget_strong = bool(raw_budget.get("strong_consensus"))
+    raw_budget_top_vote_count = int(raw_budget.get("top_candidate_vote_count") or 0)
+    raw_budget_records = [record for record in records if record.get("route_type") == "raw_budget_consensus"]
+    raw_budget_norm = str(raw_budget_records[0].get("normalized_answer") or "") if raw_budget_records else ""
+    retrieval_budget_counter_norms = {
+        str(record.get("normalized_answer") or "")
+        for record in records
+        if _route_arbitrator_has_retrieval_budget_counter_signal(record)
+    }
+    independent_hippo_counter_norms: set[str] = set()
+    if _budget_echo_guard_enabled():
+        budget_echoes_raw = any(
+            record.get("route_type") == "hipporag_preserve"
+            and bool(record.get("budget_matched"))
+            and raw_budget_norm
+            and str(record.get("normalized_answer") or "") == raw_budget_norm
+            for record in records
+        )
+        independent_hippo_counter_norms = {
+            str(record.get("normalized_answer") or "")
+            for record in records
+            if budget_echoes_raw
+            and record.get("route_type") == "hipporag_preserve"
+            and not bool(record.get("budget_matched"))
+            and raw_budget_norm
+            and str(record.get("normalized_answer") or "") != raw_budget_norm
+            and _route_arbitrator_has_independent_hippo_counter_signal(record)
+        }
+    scored: list[dict[str, Any]] = []
+    for record in records:
+        norm = str(record.get("normalized_answer") or "")
+        profile = _route_arbitrator_value_profile(
+            record,
+            support_count=int(answer_support.get(norm, 0)),
+            non_hipporag_support_count=int(non_hipporag_support.get(norm, 0)),
+            raw_budget_strong_consensus=raw_budget_strong,
+            raw_budget_top_vote_count=raw_budget_top_vote_count,
+            raw_budget_norm=raw_budget_norm,
+            retrieval_budget_counter_norms=retrieval_budget_counter_norms,
+            independent_hippo_counter_norms=independent_hippo_counter_norms,
+            route_consensus=route_consensus,
+        )
+        scored.append({
+            **record,
+            "route_score": float(profile.get("value_score") or 0.0),
+            "route_value_profile": profile,
+        })
+    if route_consensus:
+        consensus_candidates = [
+            row for row in scored
+            if int(row.get("baseline_cache_support_count") or 0) >= 3
+            or bool((row.get("route_value_profile") or {}).get("route_consensus"))
+        ]
+        if not consensus_candidates or len(records) < 3:
+            return None, {
+                "status": "abstained",
+                "reason": "routes_agree",
+                "route_count": len(records),
+                "route_types": sorted(route_types),
+                "unique_answer_count": len(answer_norms),
+                "underlying_model_calls": 0,
+            }
+    sorted_scored = sorted(
+        scored,
+        key=lambda row: (
+            -float(row.get("route_score") or 0.0),
+            -_route_arbitrator_route_priority(str(row.get("route_type") or "")),
+            int(row.get("child_index") or 0),
+        ),
+    )
+    selected = sorted_scored[0]
+    llm_route_summary: dict[str, Any] | None = None
+    llm_selected, llm_route_summary = _maybe_select_route_with_llm(
+        problem=problem,
+        scored=sorted_scored,
+        model=model,
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
+    if llm_selected:
+        selected = llm_selected
+    second_score = float(sorted_scored[1].get("route_score") or 0.0) if len(sorted_scored) > 1 else 0.0
+    selected_answer = str(selected.get("answer") or "").strip()
+    trust_decision = _route_arbitrator_trust_decision(
+        selected,
+        runner_up_score=second_score,
+        raw_budget_strong_consensus=raw_budget_strong,
+        raw_budget_top_vote_count=raw_budget_top_vote_count,
+        raw_budget_norm=raw_budget_norm,
+        llm_route_summary=llm_route_summary,
+    )
+    aggregate_child_index = _timeout_recovery_child_index(attempts)
+    child_id = stable_hash({
+        "call_id": call_id,
+        "child_index": aggregate_child_index,
+        "prompt_kind": "route_arbitrator_answer",
+        "selected_route_child_id": selected.get("child_id"),
+    })
+    attempt = {
+        "child_id": child_id,
+        "child_index": aggregate_child_index,
+        "prompt_kind": "route_arbitrator_answer",
+        "branch_axis": _child_branch_axis("route_arbitrator_answer"),
+        "orthogonal_branch_id": _child_branch_id(
+            problem,
+            prompt_kind="route_arbitrator_answer",
+            branch_axis=_child_branch_axis("route_arbitrator_answer"),
+        ),
+        "parsed_answer": selected_answer,
+        "parsed_answer_hash": stable_hash({"answer": selected_answer}) if selected_answer else None,
+        "prediction_hash": stable_hash({
+            "route_arbitrator": True,
+            "selected_route_type": selected.get("route_type"),
+            "selected_child_id": selected.get("child_id"),
+            "selected_answer_hash": selected.get("answer_hash"),
+            "route_answer_hashes": [row.get("answer_hash") for row in scored],
+        }),
+        "latency_sec": 0.0,
+        "status": "answered" if selected_answer else "no_answer",
+        "route_arbitrator_selected_route": selected.get("route_type"),
+        "route_arbitrator_selected_child_id": selected.get("child_id"),
+        "route_arbitrator_score": selected.get("route_score"),
+        "route_arbitrator_trusted": bool(trust_decision.get("trusted")),
+        "route_arbitrator_trust_reason": trust_decision.get("reason"),
+        "route_value_score": selected.get("route_score"),
+        "route_value_confidence": (selected.get("route_value_profile") or {}).get("confidence"),
+        "route_value_profile": selected.get("route_value_profile"),
+    }
+    if trust_decision.get("trusted"):
+        attempt.update({
+            "candidate_verifier_state": "verified",
+            "candidate_verifier_trust": "route_arbitrator_evidence_gate",
+        })
+    summary = {
+        "status": "activated" if selected_answer else "no_candidate",
+        "policy": "route_level_value_verifier",
+        "route_value_verifier_enabled": True,
+        "route_consensus_guard_enabled": _route_consensus_guard_enabled(),
+        "budget_echo_guard_enabled": _budget_echo_guard_enabled(),
+        "child_id": child_id,
+        "child_index": aggregate_child_index,
+        "candidate_emitted": bool(selected_answer),
+        "candidate_answer_hash": attempt.get("parsed_answer_hash"),
+        "selected_route_type": selected.get("route_type"),
+        "selected_route_child_id": selected.get("child_id"),
+        "selected_route_prompt_kind": selected.get("prompt_kind"),
+        "selected_route_score": selected.get("route_score"),
+        "selected_route_value_profile": selected.get("route_value_profile"),
+        "route_consensus": bool(route_consensus),
+        "retrieval_budget_counter_norm_count": len(retrieval_budget_counter_norms),
+        "independent_hippo_counter_norm_count": len(independent_hippo_counter_norms),
+        "runner_up_score": round(second_score, 4),
+        "selected_route_trusted": bool(trust_decision.get("trusted")),
+        "selected_route_trust_reason": trust_decision.get("reason"),
+        "route_count": len(scored),
+        "route_types": sorted(route_types),
+        "unique_answer_count": len(answer_norms),
+        "answer_support_hash_counts": {
+            stable_hash({"normalized_answer": norm}): count
+            for norm, count in sorted(answer_support.items())
+        },
+        "baseline_cache_support_hash_counts": {
+            stable_hash({"normalized_answer": norm}): count
+            for norm, count in sorted((baseline_cache_support.get("count_by_norm") or {}).items())
+        },
+        "baseline_cache_unique_answer_count": int(baseline_cache_support.get("unique_answer_count") or 0),
+        "baseline_cache_variant_count": int(baseline_cache_support.get("variant_count") or 0),
+        "raw_budget_strong_consensus": raw_budget_strong,
+        "raw_budget_top_vote_count": raw_budget_top_vote_count,
+        "hipporag_context_route_count": sum(1 for row in scored if row.get("route_type") == "hipporag_preserve"),
+        "route_scores": [
+            {
+                "route_type": row.get("route_type"),
+                "prompt_kind": row.get("prompt_kind"),
+                "child_id": row.get("child_id"),
+                "answer_hash": row.get("answer_hash"),
+                "normalized_answer_hash": row.get("normalized_answer_hash"),
+                "score": row.get("route_score"),
+                "value_profile": row.get("route_value_profile"),
+                "context_char_count": row.get("context_char_count"),
+                "selected_doc_count": row.get("selected_doc_count"),
+                "candidate_doc_count": row.get("candidate_doc_count"),
+                "same_route_agreement_count": row.get("same_route_agreement_count"),
+                "same_route_agreeing_variants": row.get("same_route_agreeing_variants"),
+                "same_run_cache_variant": row.get("same_run_cache_variant"),
+                "budget_matched": bool(row.get("budget_matched")),
+                "budget_top_candidate_vote_count": row.get("budget_top_candidate_vote_count"),
+                "budget_strong_consensus": bool(row.get("budget_strong_consensus")),
+                "context_answer_supported": bool(row.get("context_answer_supported")),
+                "context_answer_overlap_count": row.get("context_answer_overlap_count"),
+                "context_question_overlap_count": row.get("context_question_overlap_count"),
+                "context_answer_option_hash": row.get("context_answer_option_hash"),
+                "baseline_cache_support_count": row.get("baseline_cache_support_count"),
+                "baseline_cache_support_variants": row.get("baseline_cache_support_variants"),
+                "base_pair_consensus": bool(row.get("base_pair_consensus")),
+                "budget_pair_consensus": bool(row.get("budget_pair_consensus")),
+                "competing_base_pair_consensus_exists": bool(row.get("competing_base_pair_consensus_exists")),
+            }
+            for row in sorted_scored
+        ],
+        "llm_route_arbitrator": llm_route_summary,
+        "underlying_model_calls": int((llm_route_summary or {}).get("underlying_model_calls") or 0),
+    }
+    summary["value_of_information_gate"] = _route_value_of_information_gate_summary(summary)
+    gate = summary.get("value_of_information_gate")
+    if isinstance(gate, dict):
+        attempt["route_value_of_information_gate_status"] = gate.get("status")
+        attempt["route_value_of_information_recommended_action"] = gate.get("recommended_action")
     return attempt, summary
 
 
@@ -2367,6 +5125,127 @@ def _cost_aware_raw_preserve_trigger(
     }
 
 
+def _cost_aware_raw_budget_preserve_trigger(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    agent_plan: dict[str, Any],
+) -> dict[str, Any]:
+    if os.environ.get("HLE_DISABLE_COST_AWARE_RAW_BUDGET_PRESERVE_SELECTOR", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return {"status": "abstained", "reason": "disabled"}
+    enabled = os.environ.get("HLE_ENABLE_COST_AWARE_RAW_BUDGET_PRESERVE_SELECTOR", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not enabled:
+        return {"status": "abstained", "reason": "not_enabled"}
+    if problem.get("answer_type") != "multipleChoice":
+        return {"status": "abstained", "reason": "not_multiple_choice"}
+    valid = _valid_recursive_answer_attempts(problem=problem, attempts=attempts)
+    if not valid:
+        return {"status": "abstained", "reason": "no_valid_candidates"}
+    trusted_verified = [
+        attempt for attempt in valid
+        if attempt.get("candidate_verifier_state") == "verified"
+        and _is_trusted_candidate_verifier_attempt(attempt)
+    ]
+    if trusted_verified:
+        return {
+            "status": "abstained",
+            "reason": "trusted_verified_candidate_available",
+            "verified_count": len(trusted_verified),
+        }
+
+    normalized = {
+        _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type="multipleChoice")
+        for attempt in valid
+        if str(attempt.get("parsed_answer") or "").strip()
+    }
+    unique_count = len({value for value in normalized if value})
+    prompt_kinds = {str(attempt.get("prompt_kind") or "") for attempt in valid}
+    stages = agent_plan.get("stages") or {}
+    domain = _classify_hle_domain(problem)
+    text = " ".join([
+        str(problem.get("category") or ""),
+        str(problem.get("raw_subject") or ""),
+    ]).lower()
+    world_model = stages.get("world_model_router") or agent_plan.get("world_model_router") or {}
+    world_model = world_model if isinstance(world_model, dict) else {}
+    generic_graph_only = bool(world_model.get("generic_graph_context_only"))
+    prompt_builder = stages.get("prompt_builder") if isinstance(stages.get("prompt_builder"), dict) else {}
+    graph_context_used = bool(prompt_builder.get("context_injected"))
+    morphism = stages.get("structural_morphism_transfer")
+    morphism = morphism if isinstance(morphism, dict) else {}
+    structural_hits = list(morphism.get("structural_morphism_hits", []) or [])
+    formal_hits = list(morphism.get("formal_mapping_hits", []) or [])
+    transfer_supported_hits = [
+        hit for hit in structural_hits
+        if isinstance(hit, dict) and hit.get("decision") == "transfer_supported"
+    ]
+    weak_morphism_only = bool(structural_hits or formal_hits) and not bool(transfer_supported_hits)
+    high_regression_domain = (
+        domain == "humanities_social_science"
+        or "social" in text
+        or "humanit" in text
+        or "history" in text
+        or "law" in text
+    )
+    recursive_pressure = any(
+        kind in prompt_kinds
+        for kind in {
+            "counter_assumption_challenge_answer",
+            "option_elimination_challenge_answer",
+            "forced_alternative_answer",
+            "critic_synthesis_answer",
+            "hipporag_context_answer",
+            "raw_preserve_selector_answer",
+        }
+    )
+    high_divergence = unique_count >= 3
+    route_uncertain = any([
+        high_divergence,
+        high_regression_domain,
+        generic_graph_only,
+        graph_context_used,
+        weak_morphism_only,
+        recursive_pressure,
+    ])
+    if route_uncertain and unique_count >= 2:
+        return {
+            "status": "activated",
+            "reason": "unverified_mc_route_uncertain_use_raw_budget_preserve",
+            "domain": domain,
+            "unique_candidate_count": unique_count,
+            "valid_candidate_count": len(valid),
+            "high_regression_domain": high_regression_domain,
+            "high_divergence": high_divergence,
+            "generic_graph_context_only": generic_graph_only,
+            "graph_context_used": graph_context_used,
+            "weak_morphism_only": weak_morphism_only,
+            "recursive_pressure": recursive_pressure,
+        }
+    return {
+        "status": "abstained",
+        "reason": "risk_below_threshold",
+        "domain": domain,
+        "unique_candidate_count": unique_count,
+        "valid_candidate_count": len(valid),
+        "high_regression_domain": high_regression_domain,
+        "high_divergence": high_divergence,
+        "generic_graph_context_only": generic_graph_only,
+        "graph_context_used": graph_context_used,
+        "weak_morphism_only": weak_morphism_only,
+        "recursive_pressure": recursive_pressure,
+    }
+
+
 def _build_agent_hipporag_child_context(
     *,
     problem: dict[str, Any],
@@ -2432,10 +5311,231 @@ def _build_agent_hipporag_child_context(
     return context, summary
 
 
+_CHILD_BRANCH_AXIS_BY_PROMPT_KIND = {
+    "direct_short_answer": "closed_book_direct",
+    "constraint_checked_answer": "format_constraint",
+    "skeptical_recheck_answer": "skeptical_recheck",
+    "literal_constraint_answer": "literal_constraint",
+    "option_elimination_answer": "option_elimination",
+    "option_elimination_baseline_answer": "option_elimination",
+    "option_matrix_reasoner_answer": "option_matrix_reasoning",
+    "code_semantics_answer": "code_semantics",
+    "recursive_assumption_answer": "assumption_falsification",
+    "agent_context_answer": "assumption_graph_transfer",
+    "hipporag_context_answer": "hipporag_retrieval_bridge",
+    "evidence_bridge_answer": "external_evidence_bridge",
+    "evidence_grounded_answer": "answer_bearing_evidence",
+    "answer_bearing_evidence_candidate": "answer_bearing_evidence",
+    "decomposition_answer": "subproblem_decomposition",
+    "adversarial_alternative_answer": "adversarial_boundary_search",
+    "counter_assumption_challenge_answer": "counter_assumption_challenge",
+    "option_elimination_challenge_answer": "option_elimination",
+    "forced_alternative_answer": "forced_alternative",
+    "critic_synthesis_answer": "critic_synthesis",
+    "structural_option_audit_answer": "structural_option_audit",
+    "mc_option_sweep_candidate": "option_sweep",
+    "mc_option_evidence_scorer_answer": "option_specific_evidence",
+    "evidence_guided_option_challenge_answer": "option_specific_evidence",
+    "domain_rule_mc_verifier_answer": "domain_rule_verifier",
+    "math_tool_answer": "executable_math_tool",
+    "candidate_claim_verifier_answer": "executable_claim_verifier",
+    "timeout_recovery_answer": "timeout_recovery",
+    "child_model_failover_answer": "model_failover",
+    "raw_preserve_selector_answer": "raw_preserve_baseline",
+    "raw_budget_preserve_selector_answer": "budget_matched_raw_consensus",
+    "hipporag_preserve_selector_answer": "hipporag_preserve_baseline",
+    "route_arbitrator_answer": "route_arbitration",
+}
+
+
+_CHILD_BRANCH_INSTRUCTIONS = {
+    "closed_book_direct": "Solve closed-book. Do not use retrieved context, analogies, or graph priors.",
+    "format_constraint": "Optimize only output contract, units, sign, option label, and exact wording compliance.",
+    "skeptical_recheck": "Re-solve from scratch and test the obvious answer against traps and exclusions.",
+    "literal_constraint": "Match every explicit textual constraint literally before using broad priors.",
+    "option_elimination": "Treat the task as option-by-option elimination and reject contradicted options.",
+    "option_matrix_reasoning": "Treat every option as a separate discrete hypothesis leaf and compare the minimal discriminating constraint for each.",
+    "code_semantics": "Analyze executable/static code semantics before choosing among compile/runtime options.",
+    "assumption_falsification": "Propose competing assumptions, falsify the weaker one, and answer from the survivor.",
+    "assumption_graph_transfer": "Use only the retrieved assumption graph or morphism context if it directly constrains the answer.",
+    "hipporag_retrieval_bridge": "Use only the retrieval bridge as evidence; ignore assumption graph priors.",
+    "external_evidence_bridge": "Use only answer-bearing external evidence and abstain from generic context.",
+    "answer_bearing_evidence": "Choose an answer only if concrete evidence supports the entity, option, or value.",
+    "subproblem_decomposition": "Decompose the problem into target, constraints, and exclusions before answering.",
+    "adversarial_boundary_search": "Search for a boundary case or less obvious answer forced by the wording.",
+    "counter_assumption_challenge": "Challenge the current majority with an incompatible assumption family.",
+    "forced_alternative": "Force a plausible alternative path, then keep it only if constraints support it.",
+    "critic_synthesis": "Arbitrate between incompatible candidates; do not add a new first-impression answer.",
+    "structural_option_audit": "Re-evaluate each option as a discrete hypothesis and prefer the least-assumption survivor.",
+    "option_specific_evidence": "Score evidence separately for each option and answer only from the strongest supported option.",
+    "executable_math_tool": "Use executable symbolic or numeric verification rather than verbal plausibility.",
+    "executable_claim_verifier": "Convert a candidate into a checkable claim and verify or refute it.",
+    "raw_preserve_baseline": "Preserve the raw baseline unless another branch has verified evidence.",
+    "budget_matched_raw_consensus": "Use budget-matched raw consensus as a conservative baseline-preserving branch.",
+    "hipporag_preserve_baseline": "Preserve the HippoRAG baseline unless another branch has verified evidence.",
+    "route_arbitration": "Choose among raw-budget, HippoRAG, direct, and recursive routes using explicit evidence metadata.",
+}
+
+
+def _child_branch_axis(prompt_kind: str) -> str:
+    prompt_kind = str(prompt_kind or "")
+    if prompt_kind in _CHILD_BRANCH_AXIS_BY_PROMPT_KIND:
+        return _CHILD_BRANCH_AXIS_BY_PROMPT_KIND[prompt_kind]
+    return re.sub(r"[^a-z0-9]+", "_", prompt_kind.lower()).strip("_") or "unknown_child_axis"
+
+
+def _child_branch_id(problem: dict[str, Any], *, prompt_kind: str, branch_axis: str) -> str:
+    problem_key = (
+        problem.get("id_hash")
+        or problem.get("question_hash")
+        or stable_hash({"question": problem.get("_question") or ""})
+    )
+    return stable_hash({
+        "problem": problem_key,
+        "prompt_kind": prompt_kind,
+        "branch_axis": branch_axis,
+    })
+
+
+def _orthogonal_child_prompt_prefix(*, branch_axis: str, prompt_kind: str) -> str:
+    instruction = _CHILD_BRANCH_INSTRUCTIONS.get(branch_axis, "Use this branch's distinct search policy.")
+    return (
+        f"You are recursive child branch `{branch_axis}` for prompt `{prompt_kind}`. "
+        "Do not imitate other child branches; this branch is a discrete search leaf with its own failure mode. "
+        f"{instruction}\n\n"
+    )
+
+
+def _allow_duplicate_child_branch_axes() -> bool:
+    return os.environ.get("HLE_ALLOW_DUPLICATE_CHILD_BRANCH_AXES", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _orthogonal_child_early_stop_guard_enabled() -> bool:
+    return os.environ.get("HLE_DISABLE_ORTHOGONAL_CHILD_EARLY_STOP_GUARD", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _min_orthogonal_child_axes_before_early_stop(problem: dict[str, Any]) -> int:
+    env_value = os.environ.get("HLE_MIN_ORTHOGONAL_CHILD_AXES_BEFORE_EARLY_STOP", "").strip()
+    if env_value:
+        try:
+            return max(1, min(8, int(env_value)))
+        except ValueError:
+            pass
+    if problem.get("answer_type") == "multipleChoice":
+        return 6
+    return 3
+
+
+def _child_attempt_branch_axis(attempt: dict[str, Any]) -> str:
+    return str(attempt.get("branch_axis") or _child_branch_axis(str(attempt.get("prompt_kind") or "")))
+
+
+def _child_branch_axes_for_attempts(attempts: list[dict[str, Any]]) -> list[str]:
+    return [_child_attempt_branch_axis(attempt) for attempt in attempts]
+
+
+def _valid_child_branch_axis_count(problem: dict[str, Any], attempts: list[dict[str, Any]]) -> int:
+    valid = _valid_recursive_answer_attempts(problem=problem, attempts=attempts)
+    return len({axis for axis in _child_branch_axes_for_attempts(valid) if axis})
+
+
+def _required_child_branch_axes_before_early_stop(problem: dict[str, Any]) -> set[str]:
+    if os.environ.get("HLE_DISABLE_CORE_ORTHOGONAL_AXES_BEFORE_EARLY_STOP", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return set()
+    if problem.get("answer_type") != "multipleChoice":
+        return set()
+    return {
+        "closed_book_direct",
+        "format_constraint",
+        "assumption_falsification",
+        "option_matrix_reasoning",
+        "option_elimination",
+        "adversarial_boundary_search",
+    }
+
+
+def _core_orthogonal_axes_covered_for_early_stop(
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+) -> bool:
+    required = _required_child_branch_axes_before_early_stop(problem)
+    if not required:
+        return True
+    valid = _valid_recursive_answer_attempts(problem=problem, attempts=attempts)
+    axes = {axis for axis in _child_branch_axes_for_attempts(valid) if axis}
+    return required.issubset(axes)
+
+
+def _orthogonalize_child_prompt_specs(
+    problem: dict[str, Any],
+    specs: list[dict[str, Any]],
+    *,
+    agent_plan: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    allow_duplicates = _allow_duplicate_child_branch_axes()
+    retained: list[dict[str, Any]] = []
+    seen_axes: set[str] = set()
+    skipped: list[dict[str, str]] = []
+    for spec in specs:
+        prompt_kind = str(spec.get("prompt_kind") or "")
+        branch_axis = str(spec.get("branch_axis") or _child_branch_axis(prompt_kind))
+        if branch_axis in seen_axes and not allow_duplicates:
+            skipped.append({"prompt_kind": prompt_kind, "branch_axis": branch_axis})
+            continue
+        seen_axes.add(branch_axis)
+        orthogonal_id = str(
+            spec.get("orthogonal_branch_id")
+            or _child_branch_id(problem, prompt_kind=prompt_kind, branch_axis=branch_axis)
+        )
+        prompt = str(spec.get("prompt") or "")
+        if "You are recursive child branch `" not in prompt:
+            prompt = _orthogonal_child_prompt_prefix(branch_axis=branch_axis, prompt_kind=prompt_kind) + prompt
+        out = dict(spec)
+        out["branch_axis"] = branch_axis
+        out["orthogonal_branch_id"] = orthogonal_id
+        out["prompt"] = prompt
+        retained.append(out)
+
+    if agent_plan is not None:
+        required_axes = sorted(_required_child_branch_axes_before_early_stop(problem))
+        planned_axes = [str(spec.get("branch_axis") or "") for spec in retained]
+        agent_plan.setdefault("stages", {})["recursive_child_diversity_planner"] = {
+            "status": "activated",
+            "policy": "orthogonal_branch_axis_dedup",
+            "planned_child_count_raw": len(specs),
+            "planned_child_count": len(retained),
+            "planned_branch_axes": planned_axes,
+            "unique_branch_axis_count": len(set(planned_axes)),
+            "duplicate_branch_axes_removed": len(skipped),
+            "skipped_duplicate_branch_axes": skipped,
+            "allow_duplicate_branch_axes": allow_duplicates,
+            "min_axes_before_early_stop": _min_orthogonal_child_axes_before_early_stop(problem),
+            "required_axes_before_early_stop": required_axes,
+            "required_axes_planned": sorted(set(planned_axes) & set(required_axes)),
+            "required_axes_missing_from_plan": sorted(set(required_axes) - set(planned_axes)),
+        }
+    return retained
+
+
 def _execute_recursive_child_attempts(
     *,
     problem: dict[str, Any],
-    specs: list[dict[str, str]],
+    specs: list[dict[str, Any]],
     model: str,
     eval_id: str,
     call_id: str,
@@ -2480,6 +5580,7 @@ def _execute_recursive_child_attempts(
     if _can_stop_recursive_children_early(problem, attempts) and not retrieval_child_pending:
         early_stop_reason = "two_vote_majority"
         skipped_prompt_kinds = [row["prompt_kind"] for row in specs[len(attempts):]]
+        skipped_branch_axes = [str(row.get("branch_axis") or _child_branch_axis(row["prompt_kind"])) for row in specs[len(attempts):]]
         _log_recursive_child_early_stop(
             logger,
             eval_id=eval_id,
@@ -2490,12 +5591,15 @@ def _execute_recursive_child_attempts(
             executed_child_count=len(attempts),
             planned_child_count=len(specs),
             skipped_prompt_kinds=skipped_prompt_kinds,
+            executed_branch_axes=_child_branch_axes_for_attempts(attempts),
+            skipped_branch_axes=skipped_branch_axes,
         )
         return {
             "attempts": attempts,
             "underlying_model_calls": first_batch["underlying_model_calls"],
             "early_stop_reason": early_stop_reason,
             "skipped_prompt_kinds": skipped_prompt_kinds,
+            "skipped_branch_axes": skipped_branch_axes,
             "execution_mode": "parallel_quorum",
             "child_timeout_sec": timeout,
             "child_max_workers": first_batch["max_workers"],
@@ -2519,6 +5623,7 @@ def _execute_recursive_child_attempts(
         "underlying_model_calls": first_batch["underlying_model_calls"] + rest_batch["underlying_model_calls"],
         "early_stop_reason": None,
         "skipped_prompt_kinds": [],
+        "skipped_branch_axes": [],
         "execution_mode": "parallel_quorum",
         "child_timeout_sec": timeout,
         "child_max_workers": max(first_batch["max_workers"], rest_batch["max_workers"]),
@@ -2538,7 +5643,7 @@ def _force_serial_child_execution_reason(*, mode: str, timeout: float | None) ->
 def _execute_recursive_child_attempts_serial(
     *,
     problem: dict[str, Any],
-    specs: list[dict[str, str]],
+    specs: list[dict[str, Any]],
     model: str,
     eval_id: str,
     call_id: str,
@@ -2550,6 +5655,7 @@ def _execute_recursive_child_attempts_serial(
     underlying_calls = 0
     early_stop_reason = None
     skipped_prompt_kinds: list[str] = []
+    skipped_branch_axes: list[str] = []
     for index, spec in enumerate(specs, start=1):
         attempt = _run_child_attempt(
             problem=problem,
@@ -2568,6 +5674,10 @@ def _execute_recursive_child_attempts_serial(
         if _can_stop_recursive_children_early(problem, attempts):
             early_stop_reason = "two_vote_majority"
             skipped_prompt_kinds = [row["prompt_kind"] for row in specs[index:]]
+            skipped_branch_axes = [
+                str(row.get("branch_axis") or _child_branch_axis(row["prompt_kind"]))
+                for row in specs[index:]
+            ]
             _log_recursive_child_early_stop(
                 logger,
                 eval_id=eval_id,
@@ -2578,6 +5688,8 @@ def _execute_recursive_child_attempts_serial(
                 executed_child_count=len(attempts),
                 planned_child_count=len(specs),
                 skipped_prompt_kinds=skipped_prompt_kinds,
+                executed_branch_axes=_child_branch_axes_for_attempts(attempts),
+                skipped_branch_axes=skipped_branch_axes,
             )
             break
     return {
@@ -2585,6 +5697,7 @@ def _execute_recursive_child_attempts_serial(
         "underlying_model_calls": underlying_calls,
         "early_stop_reason": early_stop_reason,
         "skipped_prompt_kinds": skipped_prompt_kinds,
+        "skipped_branch_axes": skipped_branch_axes,
         "execution_mode": "serial",
         "child_timeout_sec": timeout,
         "child_max_workers": 1,
@@ -2594,7 +5707,7 @@ def _execute_recursive_child_attempts_serial(
 def _run_child_batch(
     *,
     problem: dict[str, Any],
-    specs: list[dict[str, str]],
+    specs: list[dict[str, Any]],
     start_index: int,
     model: str,
     eval_id: str,
@@ -2610,7 +5723,7 @@ def _run_child_batch(
     max_workers = max(1, min(max_workers, len(specs)))
     attempts: list[dict[str, Any]] = []
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
-    future_specs: dict[concurrent.futures.Future, tuple[dict[str, str], int]] = {}
+    future_specs: dict[concurrent.futures.Future, tuple[dict[str, Any], int]] = {}
     batch_started = time.monotonic()
     try:
         for offset, spec in enumerate(specs):
@@ -2665,7 +5778,7 @@ def _run_child_batch(
 def _child_timeout_attempt(
     *,
     problem: dict[str, Any],
-    spec: dict[str, str],
+    spec: dict[str, Any],
     child_index: int,
     model: str,
     variant: str,
@@ -2676,10 +5789,17 @@ def _child_timeout_attempt(
     latency_sec: float,
 ) -> dict[str, Any]:
     child_id = stable_hash({"call_id": call_id, "child_index": child_index, "prompt_kind": spec["prompt_kind"]})
+    branch_axis = str(spec.get("branch_axis") or _child_branch_axis(spec["prompt_kind"]))
+    orthogonal_branch_id = str(
+        spec.get("orthogonal_branch_id")
+        or _child_branch_id(problem, prompt_kind=spec["prompt_kind"], branch_axis=branch_axis)
+    )
     attempt = {
         "child_id": child_id,
         "child_index": child_index,
         "prompt_kind": spec["prompt_kind"],
+        "branch_axis": branch_axis,
+        "orthogonal_branch_id": orthogonal_branch_id,
         "parsed_answer": "",
         "parsed_answer_hash": None,
         "prediction_hash": None,
@@ -2699,6 +5819,8 @@ def _child_timeout_attempt(
             "model": model,
             "variant": variant,
             "prompt_kind": spec["prompt_kind"],
+            "branch_axis": branch_axis,
+            "orthogonal_branch_id": orthogonal_branch_id,
             "latency_sec": latency_sec,
             "timeout_sec": timeout,
         },
@@ -2709,7 +5831,7 @@ def _child_timeout_attempt(
 def _run_child_attempt(
     *,
     problem: dict[str, Any],
-    spec: dict[str, str],
+    spec: dict[str, Any],
     child_index: int,
     model: str,
     eval_id: str,
@@ -2720,6 +5842,11 @@ def _run_child_attempt(
     variant: str = "assumption_agent_recursive_verify",
 ) -> dict[str, Any]:
     child_id = stable_hash({"call_id": call_id, "child_index": child_index, "prompt_kind": spec["prompt_kind"]})
+    branch_axis = str(spec.get("branch_axis") or _child_branch_axis(spec["prompt_kind"]))
+    orthogonal_branch_id = str(
+        spec.get("orthogonal_branch_id")
+        or _child_branch_id(problem, prompt_kind=spec["prompt_kind"], branch_axis=branch_axis)
+    )
     _log_event(
         logger,
         {
@@ -2733,6 +5860,8 @@ def _run_child_attempt(
             "model": model,
             "variant": variant,
             "prompt_kind": spec["prompt_kind"],
+            "branch_axis": branch_axis,
+            "orthogonal_branch_id": orthogonal_branch_id,
             "timeout_sec": timeout,
         },
     )
@@ -2745,6 +5874,8 @@ def _run_child_attempt(
             "child_id": child_id,
             "child_index": child_index,
             "prompt_kind": spec["prompt_kind"],
+            "branch_axis": branch_axis,
+            "orthogonal_branch_id": orthogonal_branch_id,
             "parsed_answer": parsed,
             "parsed_answer_hash": stable_hash({"answer": parsed}),
             "prediction_hash": stable_hash({"prediction": text}),
@@ -2766,6 +5897,8 @@ def _run_child_attempt(
                 "model": model,
                 "variant": variant,
                 "prompt_kind": spec["prompt_kind"],
+                "branch_axis": branch_axis,
+                "orthogonal_branch_id": orthogonal_branch_id,
                 "latency_sec": attempt["latency_sec"],
                 "parsed_answer_hash": attempt["parsed_answer_hash"],
                 "prediction_hash": attempt["prediction_hash"],
@@ -2777,6 +5910,8 @@ def _run_child_attempt(
             "child_id": child_id,
             "child_index": child_index,
             "prompt_kind": spec["prompt_kind"],
+            "branch_axis": branch_axis,
+            "orthogonal_branch_id": orthogonal_branch_id,
             "parsed_answer": "",
             "parsed_answer_hash": None,
             "prediction_hash": None,
@@ -2796,6 +5931,8 @@ def _run_child_attempt(
                 "model": model,
                 "variant": variant,
                 "prompt_kind": spec["prompt_kind"],
+                "branch_axis": branch_axis,
+                "orthogonal_branch_id": orthogonal_branch_id,
                 "latency_sec": attempt["latency_sec"],
                 "error_type": type(exc).__name__,
                 "error": str(exc)[:240],
@@ -3071,6 +6208,72 @@ def _valid_recursive_answer_attempts(
     return valid
 
 
+def _endpoint_error_pressure_abort_summary(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if os.environ.get("HLE_DISABLE_ENDPOINT_ERROR_PRESSURE_ABORT", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return {"status": "disabled", "reason": "disabled"}
+    model_attempts = [
+        attempt for attempt in attempts
+        if str(attempt.get("prompt_kind") or "")
+        and attempt.get("prompt_kind") not in {
+            "route_arbitrator_answer",
+            "answer_bearing_evidence_candidate",
+            "mc_option_sweep_candidate",
+        }
+    ]
+    if not model_attempts:
+        return {"status": "not_required", "reason": "no_model_child_attempts"}
+    valid = _valid_recursive_answer_attempts(problem=problem, attempts=model_attempts)
+    error_attempts = [
+        attempt for attempt in model_attempts
+        if attempt.get("status") in {"error", "timeout"}
+    ]
+    network_error_count = sum(
+        1 for attempt in error_attempts
+        if str(attempt.get("error_type") or "") in {"RuntimeError", "TimeoutError", "ChildTimeout"}
+    )
+    error_count = len(error_attempts)
+    total = len(model_attempts)
+    error_ratio = error_count / max(1, total)
+    if len(valid) == 0 and error_count >= 2 and error_ratio >= 0.75:
+        return {
+            "status": "activated",
+            "reason": "all_or_most_recursive_children_failed_with_endpoint_errors",
+            "model_child_attempt_count": total,
+            "valid_candidate_count": 0,
+            "error_child_count": error_count,
+            "network_error_child_count": network_error_count,
+            "error_ratio": round(error_ratio, 4),
+        }
+    if error_count >= 5 and error_ratio >= 0.8 and len(valid) <= 1:
+        return {
+            "status": "activated",
+            "reason": "endpoint_error_pressure_with_insufficient_candidates",
+            "model_child_attempt_count": total,
+            "valid_candidate_count": len(valid),
+            "error_child_count": error_count,
+            "network_error_child_count": network_error_count,
+            "error_ratio": round(error_ratio, 4),
+        }
+    return {
+        "status": "not_required",
+        "reason": "candidate_or_error_pressure_below_abort_threshold",
+        "model_child_attempt_count": total,
+        "valid_candidate_count": len(valid),
+        "error_child_count": error_count,
+        "network_error_child_count": network_error_count,
+        "error_ratio": round(error_ratio, 4),
+    }
+
+
 def _timeout_recovery_answer_prompt(problem: dict[str, Any], *, trigger: dict[str, Any]) -> str:
     answer_type = problem.get("answer_type") or "exactMatch"
     output_contract = (
@@ -3123,6 +6326,8 @@ def _log_recursive_child_early_stop(
     executed_child_count: int,
     planned_child_count: int,
     skipped_prompt_kinds: list[str],
+    executed_branch_axes: list[str],
+    skipped_branch_axes: list[str],
 ) -> None:
     _log_event(
         logger,
@@ -3138,12 +6343,22 @@ def _log_recursive_child_early_stop(
             "executed_child_count": executed_child_count,
             "planned_child_count": planned_child_count,
             "skipped_prompt_kinds": skipped_prompt_kinds,
+            "executed_branch_axes": executed_branch_axes,
+            "skipped_branch_axes": skipped_branch_axes,
+            "executed_unique_branch_axis_count": len(set(executed_branch_axes)),
         },
     )
 
 
 def _can_stop_recursive_children_early(problem: dict[str, Any], attempts: list[dict[str, Any]]) -> bool:
     if not _has_two_vote_majority(attempts, answer_type=problem["answer_type"]):
+        return False
+    if (
+        _orthogonal_child_early_stop_guard_enabled()
+        and _valid_child_branch_axis_count(problem, attempts) < _min_orthogonal_child_axes_before_early_stop(problem)
+    ):
+        return False
+    if not _core_orthogonal_axes_covered_for_early_stop(problem, attempts):
         return False
     if problem.get("answer_type") == "multipleChoice":
         prompt_kinds = {str(attempt.get("prompt_kind") or "") for attempt in attempts}
@@ -3383,6 +6598,12 @@ def _apply_math_reference_to_multiple_choice_options(
             "reference_error_type": reference.get("error_type"),
         }
     verified_label = matching_labels[0]
+    if backend == "sympy_mc_option_deterministic":
+        candidate_verifier_trust = "deterministic_mc_reference"
+    elif _trust_llm_reference_planner_enabled():
+        candidate_verifier_trust = "trusted_llm_reference_planner"
+    else:
+        candidate_verifier_trust = "weak_llm_reference_planner"
     verified = 0
     refuted = 0
     inconclusive = 0
@@ -3404,6 +6625,7 @@ def _apply_math_reference_to_multiple_choice_options(
         candidate_hashes.append(stable_hash({"candidate_answer": label, "state": state}))
         attempt["candidate_verifier_state"] = state
         attempt["candidate_verifier_backend"] = backend
+        attempt["candidate_verifier_trust"] = candidate_verifier_trust
         attempt["candidate_verifier_operation"] = reference.get("operation")
         attempt["candidate_verifier_claim_hash"] = stable_hash({
             "reference_answer": reference_answer,
@@ -3430,6 +6652,7 @@ def _apply_math_reference_to_multiple_choice_options(
         "status": "answered",
         "candidate_verifier_state": "verified",
         "candidate_verifier_backend": backend,
+        "candidate_verifier_trust": candidate_verifier_trust,
         "candidate_verifier_operation": reference.get("operation"),
         "candidate_verifier_claim_hash": stable_hash({
             "reference_answer": reference_answer,
@@ -3446,6 +6669,7 @@ def _apply_math_reference_to_multiple_choice_options(
         "reference_operation": reference.get("operation"),
         "reference_answer_hash": stable_hash({"answer": reference_answer}),
         "verified_option_hash": stable_hash({"option_label": verified_label}),
+        "candidate_verifier_trust": candidate_verifier_trust,
         "verified_count": verified,
         "refuted_count": refuted,
         "inconclusive_count": inconclusive,
@@ -4450,6 +7674,13 @@ def _should_run_candidate_claim_verifier(problem: dict[str, Any]) -> bool:
     if os.environ.get("HLE_DISABLE_CANDIDATE_CLAIM_VERIFIER", "").strip().lower() in {"1", "true", "yes", "on"}:
         return False
     if problem.get("answer_type") == "multipleChoice":
+        if os.environ.get("HLE_DISABLE_MC_CANDIDATE_CLAIM_VERIFIER", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
+            return False
         _, options = _split_multiple_choice_question(problem)
         return _is_math_like_problem(problem) and len(options) >= 2
     return _should_run_math_tool_child(problem)
@@ -5644,7 +8875,7 @@ def _format_sympy_operation_answer(operation: str, value: Any) -> str:
     return _format_sympy_answer(value)
 
 
-def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[str, Any] | None = None) -> list[dict[str, str]]:
+def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     question = problem["_question"]
     answer_type = problem["answer_type"]
     output = (
@@ -5706,6 +8937,36 @@ def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[s
                 ),
             },
         ])
+    if answer_type == "multipleChoice":
+        if _is_code_compile_mc_question(problem):
+            specs.insert(1, {
+                "prompt_kind": "code_semantics_answer",
+                "prompt": _code_semantics_answer_prompt(problem),
+            })
+        specs.extend([
+            {
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "prompt": _option_matrix_reasoner_prompt(problem),
+            },
+            {
+                "prompt_kind": "option_elimination_answer",
+                "prompt": (
+                    "Solve through an independent option-elimination path. Evaluate every listed option against "
+                    "the exact wording of the question. Reject any option contradicted by a constraint, scope, "
+                    "time frame, definition, or requested relation. Return only JSON.\n\n"
+                    f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
+                ),
+            },
+            {
+                "prompt_kind": "adversarial_alternative_answer",
+                "prompt": (
+                    "Solve as an adversarial boundary branch. Assume the most common or first-impression option "
+                    "may be a lure. Look for the option forced by an edge case, negation, qualifier, or entity "
+                    "disambiguation. Return only JSON.\n\n"
+                    f"Answer type: {answer_type}\nQuestion:\n{question}\n\n{output}"
+                ),
+            },
+        ])
     evidence_context = str((agent_plan or {}).get("hle_evidence_context") or "")
     if evidence_context:
         specs.insert(1, {
@@ -5739,7 +9000,49 @@ def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[s
             specs.insert(insert_index, context_spec)
         else:
             specs.append(context_spec)
-    return specs
+    return _orthogonalize_child_prompt_specs(problem, specs, agent_plan=agent_plan)
+
+
+def _option_matrix_reasoner_prompt(problem: dict[str, Any]) -> str:
+    return (
+        "Solve this multiple-choice item as a discrete option matrix, not as a first-impression vote. "
+        "Internally create one row per option. For each row identify: the exact claim the option would make true, "
+        "the single strongest clue in the question for it, the single strongest contradiction or missing condition, "
+        "and the minimal discriminating fact that separates it from the other options. Penalize options that only "
+        "sound familiar but do not satisfy the exact requested relation, negation, scope, date, entity, or mechanism. "
+        "Choose the option with the best surviving discriminating constraint, even if it is not the most common "
+        "answer. Return JSON only: {\"answer\":\"A\"}.\n\n"
+        f"Question:\n{problem['_question']}"
+    )
+
+
+def _is_code_compile_mc_question(problem: dict[str, Any]) -> bool:
+    if problem.get("answer_type") != "multipleChoice":
+        return False
+    question = str(problem.get("_question") or "")
+    lower = question.lower()
+    if "```" not in question:
+        return False
+    return any(token in lower for token in (
+        "compile",
+        "compiler",
+        "borrow checker",
+        "type check",
+        "runtime error",
+        "will this code",
+        "will the following",
+    ))
+
+
+def _code_semantics_answer_prompt(problem: dict[str, Any]) -> str:
+    return (
+        "Solve this multiple-choice code item through a static/code-semantics branch. Treat the code block as "
+        "the primary evidence. Internally determine: whether the code compiles/type-checks, whether warnings "
+        "matter for the option wording, whether runtime behavior is relevant, and whether phrases such as "
+        "\"unsafe code under the hood\" refer to explicit unsafe blocks versus standard-library implementation "
+        "details. Do not answer from general popularity or retrieval. Return JSON only: {\"answer\":\"A\"}.\n\n"
+        f"Question:\n{problem['_question']}"
+    )
 
 
 def _exact_trajectory_search_enabled() -> bool:
@@ -6316,6 +9619,7 @@ def _maybe_run_mc_option_evidence_scorer(
         option_rows.append({
             "label": label,
             "score": score_detail["score"],
+            "rank_score": _option_evidence_rank_score(score_detail),
             "query_hash": stable_hash({"query": query}),
             "doc_count": len(docs),
             "support_doc_count": score_detail["support_doc_count"],
@@ -6327,27 +9631,38 @@ def _maybe_run_mc_option_evidence_scorer(
                 for doc in docs[:2]
             ],
         })
-    ranked = sorted(option_rows, key=lambda row: (-float(row["score"]), row["label"]))
+    ranked = sorted(option_rows, key=lambda row: (-float(row["rank_score"]), -float(row["score"]), row["label"]))
     if not ranked:
         return None, {"status": "no_results", "reason": "no_option_scores"}
     top = ranked[0]
     runner_up = ranked[1] if len(ranked) > 1 else {"score": 0.0}
     top_score = float(top["score"])
+    top_rank_score = float(top.get("rank_score") or 0.0)
     margin = top_score - float(runner_up.get("score") or 0.0)
+    rank_margin = top_rank_score - float(runner_up.get("rank_score") or 0.0)
     top_support_doc_count = int(top.get("support_doc_count") or 0)
     runner_up_support_doc_count = int(runner_up.get("support_doc_count") or 0)
     top_ambiguous_doc_count = int(top.get("ambiguous_doc_count") or 0)
+    any_ambiguous_doc_count = sum(int(row.get("ambiguous_doc_count") or 0) for row in option_rows)
+    min_verified_score = 16.0
+    env_min_score = os.environ.get("HLE_OPTION_EVIDENCE_MIN_VERIFIED_SCORE", "").strip()
+    if env_min_score:
+        try:
+            min_verified_score = max(0.0, min(40.0, float(env_min_score)))
+        except ValueError:
+            pass
     confidence = (
         top_score >= 6.0
-        and margin >= 2.0
-        and top_support_doc_count >= 2
+        and top_score >= min_verified_score
+        and rank_margin >= 2.0
+        and top_support_doc_count >= 3
         and top_support_doc_count > runner_up_support_doc_count
         and top_ambiguous_doc_count == 0
     )
     status = "activated" if confidence else "weak_margin"
     if not confidence and top_score >= 4.0 and top_support_doc_count <= 0:
         status = "blocked_non_discriminative_option_evidence"
-    if not confidence and top_ambiguous_doc_count > 0:
+    if not confidence and any_ambiguous_doc_count > 0:
         status = "blocked_ambiguous_option_evidence"
     if not confidence and top_score >= 6.0 and top_support_doc_count <= runner_up_support_doc_count:
         status = "blocked_weak_support_count"
@@ -6355,16 +9670,21 @@ def _maybe_run_mc_option_evidence_scorer(
         "status": status,
         "source": "wikipedia_plus_domain_option_search",
         "score_policy": "discriminative_option_support_v2",
+        "min_verified_score": round(min_verified_score, 4),
         "option_count": len(options),
         "top_option_hash": stable_hash({"option_label": top["label"]}),
         "top_option_answer_hash": stable_hash({"answer": str(top["label"])}),
         "top_score": round(top_score, 4),
+        "top_rank_score": round(top_rank_score, 4),
         "runner_up_score": round(float(runner_up.get("score") or 0.0), 4),
+        "runner_up_rank_score": round(float(runner_up.get("rank_score") or 0.0), 4),
         "margin": round(margin, 4),
+        "rank_margin": round(rank_margin, 4),
         "candidate_emitted": bool(confidence),
         "candidate_verifier_state": "verified" if confidence else "not_verified",
         "top_support_doc_count": top_support_doc_count,
         "top_ambiguous_doc_count": top_ambiguous_doc_count,
+        "any_ambiguous_doc_count": any_ambiguous_doc_count,
         "runner_up_support_doc_count": runner_up_support_doc_count,
         "query_hashes": [row["query_hash"] for row in option_rows],
         "doc_count_by_option_hash": {
@@ -6381,6 +9701,10 @@ def _maybe_run_mc_option_evidence_scorer(
         },
         "top_doc_hashes": top.get("doc_hashes", []),
         "top_supporting_doc_hashes": top.get("supporting_doc_hashes", []),
+        "runner_up_option_hash": stable_hash({"option_label": runner_up.get("label")}) if runner_up.get("label") else None,
+        "runner_up_option_answer_hash": (
+            stable_hash({"answer": str(runner_up.get("label"))}) if runner_up.get("label") else None
+        ),
         "error_types": sorted(set(errors)),
         "underlying_model_calls": 0,
     }
@@ -6538,6 +9862,418 @@ def _maybe_run_domain_rule_mc_verifier(
         logger,
         {
             "event": "domain_rule_mc_verifier",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "problem_id_hash": problem["id_hash"],
+            "question_hash": problem["question_hash"],
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "stage_status": summary["status"],
+            "stage_data": summary,
+        },
+    )
+    return attempt, summary
+
+
+def _maybe_run_evidence_guided_option_challenge(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    option_evidence_summary: dict[str, Any] | None,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
+    if problem.get("answer_type") != "multipleChoice":
+        return None, None, ""
+    if os.environ.get("HLE_DISABLE_EVIDENCE_GUIDED_OPTION_CHALLENGE", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return None, {"status": "disabled", "reason": "env_disabled"}, ""
+    if any(attempt.get("prompt_kind") == "evidence_guided_option_challenge_answer" for attempt in attempts):
+        return None, {"status": "abstained", "reason": "already_executed"}, ""
+    route_like_prompt_kinds = {
+        "route_arbitrator_answer",
+        "raw_preserve_selector_answer",
+        "raw_budget_preserve_selector_answer",
+        "hipporag_preserve_selector_answer",
+    }
+    if any(
+        attempt.get("candidate_verifier_state") == "verified"
+        and _is_trusted_candidate_verifier_attempt(attempt)
+        and attempt.get("prompt_kind") not in route_like_prompt_kinds
+        for attempt in attempts
+    ):
+        return None, {"status": "not_required", "reason": "verified_candidate_available"}, ""
+
+    stem, options = _split_multiple_choice_question(problem)
+    if len(options) < 2:
+        return None, {"status": "abstained", "reason": "options_not_parsed"}, ""
+    top_status = str((option_evidence_summary or {}).get("status") or "")
+    if top_status == "activated":
+        return None, {"status": "not_required", "reason": "option_evidence_already_verified"}, ""
+
+    context, context_summary = _build_option_evidence_challenge_context(
+        problem=problem,
+        stem=stem,
+        options=options,
+    )
+    if not context:
+        summary = {
+            "status": "abstained",
+            "reason": context_summary.get("reason") or "no_option_evidence_context",
+            **context_summary,
+            "underlying_model_calls": 0,
+        }
+        _log_event(
+            logger,
+            {
+                "event": "evidence_guided_option_challenge",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "question_hash": problem["question_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "stage_status": summary["status"],
+                "stage_data": summary,
+            },
+        )
+        return None, summary, ""
+
+    attempt = _run_child_attempt(
+        problem=problem,
+        spec={
+            "prompt_kind": "evidence_guided_option_challenge_answer",
+            "prompt": _evidence_guided_option_challenge_prompt(
+                problem,
+                option_evidence_context=context,
+            ),
+        },
+        child_index=len(attempts) + 1,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
+    if attempt.get("status") == "answered":
+        attempt["candidate_verifier_state"] = "not_verified"
+        attempt["candidate_verifier_backend"] = "evidence_guided_option_challenge"
+        attempt["tool_confidence"] = "unverified_evidence_guided_variation"
+    answer = str(attempt.get("parsed_answer") or "").strip()
+    summary = {
+        "status": "activated",
+        "reason": "unverified_option_specific_evidence_variation",
+        "child_id": attempt.get("child_id"),
+        "child_status": attempt.get("status"),
+        "candidate_emitted": bool(answer),
+        "candidate_verifier_state": "not_verified",
+        "candidate_answer_hash": stable_hash({"answer": answer}) if answer else None,
+        "option_count": len(options),
+        "source": "option_specific_evidence_challenge",
+        "score_policy": context_summary.get("score_policy"),
+        "context_hash": stable_hash({"option_evidence_challenge_context": context}),
+        "context_char_count": len(context),
+        "top_option_answer_hash": context_summary.get("top_option_answer_hash"),
+        "top_rank_score": context_summary.get("top_rank_score"),
+        "top_support_doc_count": context_summary.get("top_support_doc_count"),
+        "any_ambiguous_doc_count": context_summary.get("any_ambiguous_doc_count"),
+        "context_option_count": context_summary.get("context_option_count"),
+        "doc_count_by_option_hash": context_summary.get("doc_count_by_option_hash", {}),
+        "support_doc_count_by_option_hash": context_summary.get("support_doc_count_by_option_hash", {}),
+        "underlying_model_calls": 1 if attempt.get("status") == "answered" else 0,
+    }
+    if problem.get("_answer"):
+        gold_for_eval, _ = _canonicalize_multiple_choice_answer(problem, str(problem.get("_answer") or ""))
+        summary["candidate_correct_for_eval"] = _is_correct(answer, gold_for_eval, answer_type="multipleChoice")
+    _log_event(
+        logger,
+        {
+            "event": "evidence_guided_option_challenge",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "problem_id_hash": problem["id_hash"],
+            "question_hash": problem["question_hash"],
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "stage_status": summary["status"],
+            "stage_data": summary,
+        },
+    )
+    return attempt, summary, context
+
+
+def _build_option_evidence_challenge_context(
+    *,
+    problem: dict[str, Any],
+    stem: str,
+    options: dict[str, str],
+) -> tuple[str, dict[str, Any]]:
+    stem_terms = _content_terms(stem or problem.get("_question", ""))
+    option_terms_by_label = {
+        label: _content_terms(text)
+        for label, text in options.items()
+        if _content_terms(text)
+    }
+    option_text_by_label = dict(options)
+    docs_by_label: dict[str, list[dict[str, str]]] = {}
+    option_rows: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for label, option_text in sorted(options.items()):
+        query = _option_evidence_query(stem, option_text, problem)
+        docs: list[dict[str, str]] = []
+        if query:
+            try:
+                docs = _wikipedia_search(query, limit=3, timeout=6.0)
+                if len(docs) < 3 or _should_use_domain_evidence_search(problem):
+                    docs.extend(_domain_evidence_search(query, problem=problem, limit=2, timeout=8.0))
+                docs = _dedupe_evidence_results(docs)
+            except Exception as exc:
+                errors.append(type(exc).__name__)
+        docs_by_label[label] = docs
+        detail = _score_option_evidence_detail(
+            stem_terms=stem_terms,
+            option_label=label,
+            option_text=option_text,
+            option_terms_by_label=option_terms_by_label,
+            option_text_by_label=option_text_by_label,
+            docs=docs,
+        )
+        option_rows.append({
+            "label": label,
+            "rank_score": _option_evidence_rank_score(detail),
+            "score": detail["score"],
+            "support_doc_count": detail["support_doc_count"],
+            "ambiguous_doc_count": detail["ambiguous_doc_count"],
+            "unsupported_doc_count": detail["unsupported_doc_count"],
+            "doc_count": len(docs),
+        })
+    if not any(docs_by_label.values()):
+        return "", {
+            "status": "abstained",
+            "reason": "no_option_evidence_docs",
+            "option_count": len(options),
+            "error_types": sorted(set(errors)),
+        }
+    ranked = sorted(option_rows, key=lambda row: (-float(row["rank_score"]), -float(row["score"]), row["label"]))
+    total_support_doc_count = sum(int(row.get("support_doc_count") or 0) for row in option_rows)
+    if total_support_doc_count <= 0:
+        return "", {
+            "status": "abstained",
+            "reason": "no_discriminative_support_docs",
+            "option_count": len(options),
+            "context_option_count": sum(1 for docs in docs_by_label.values() if docs),
+            "context_doc_count": sum(len(docs) for docs in docs_by_label.values()),
+            "total_support_doc_count": total_support_doc_count,
+            "error_types": sorted(set(errors)),
+        }
+    context = _option_evidence_context(options=options, docs_by_label=docs_by_label)
+    if not context:
+        return "", {
+            "status": "abstained",
+            "reason": "empty_option_evidence_context",
+            "option_count": len(options),
+            "error_types": sorted(set(errors)),
+        }
+    top = ranked[0] if ranked else {}
+    return context, {
+        "status": "context_built",
+        "score_policy": "discriminative_option_support_v2_challenge_context",
+        "option_count": len(options),
+        "context_option_count": sum(1 for docs in docs_by_label.values() if docs),
+        "context_doc_count": sum(len(docs) for docs in docs_by_label.values()),
+        "top_option_hash": stable_hash({"option_label": top.get("label")}) if top.get("label") else None,
+        "top_option_answer_hash": stable_hash({"answer": str(top.get("label"))}) if top.get("label") else None,
+        "top_rank_score": round(float(top.get("rank_score") or 0.0), 4),
+        "top_support_doc_count": int(top.get("support_doc_count") or 0),
+        "any_ambiguous_doc_count": sum(int(row.get("ambiguous_doc_count") or 0) for row in option_rows),
+        "doc_count_by_option_hash": {
+            stable_hash({"option_label": row["label"]}): int(row.get("doc_count") or 0)
+            for row in option_rows
+        },
+        "support_doc_count_by_option_hash": {
+            stable_hash({"option_label": row["label"]}): int(row.get("support_doc_count") or 0)
+            for row in option_rows
+        },
+        "error_types": sorted(set(errors)),
+    }
+
+
+def _evidence_guided_option_challenge_prompt(
+    problem: dict[str, Any],
+    *,
+    option_evidence_context: str,
+) -> str:
+    return (
+        "Run an evidence-guided multiple-choice challenge. Treat the evidence below as noisy retrieval, not as "
+        "proof. For each option, ask whether the evidence actually connects the option to the exact question "
+        "stem and whether it rules out close distractors. If retrieval is irrelevant or ambiguous, rely on the "
+        "question wording instead. Do not pick an option merely because it has more snippets. Return JSON only: "
+        "{\"answer\":\"A\"}.\n\n"
+        "Option-specific retrieved evidence:\n"
+        f"{option_evidence_context}\n\n"
+        f"Question:\n{problem['_question']}"
+    )
+
+
+def _structural_option_audit_prompt(
+    problem: dict[str, Any],
+    *,
+    candidate_distribution: dict[str, int],
+    missing_labels: list[str],
+    evidence_context: str = "",
+) -> str:
+    distribution = ", ".join(f"{label}:{count}" for label, count in sorted(candidate_distribution.items())) or "none"
+    missing = ", ".join(missing_labels) or "none"
+    evidence_block = (
+        "Transient evidence, only if directly answer-bearing:\n"
+        f"{evidence_context}\n\n"
+        if evidence_context
+        else ""
+    )
+    return (
+        "Run a structural option audit as an orthogonal hypothesis branch. The current ensemble distribution is "
+        "shown below, but it may be collapsed on a familiar wrong attractor. Do not vote by popularity. Internally "
+        "build one row per option and compare the minimum necessary condition that would make each option true. "
+        "Prefer the option whose claim is forced by the exact wording with the fewest unstated assumptions; penalize "
+        "options that are merely associated with the topic, restate a common fact, or miss a qualifier, negation, "
+        "scope, relation, date, unit, or entity boundary. If every alternative fails a necessary condition, keep the "
+        "majority. Return JSON only: {\"answer\":\"A\"}.\n\n"
+        f"{evidence_block}"
+        f"Current candidate distribution: {distribution}\n"
+        f"Option labels not yet argued by any child: {missing}\n"
+        f"Question:\n{problem['_question']}"
+    )
+
+
+def _maybe_run_structural_option_audit_child(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    option_evidence_summary: dict[str, Any] | None,
+    evidence_guided_option_summary: dict[str, Any] | None,
+    evidence_context: str,
+    model: str,
+    eval_id: str,
+    call_id: str,
+    logger: "_JsonlLogger | None",
+    timeout: float | None,
+    max_tokens: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if problem.get("answer_type") != "multipleChoice":
+        return None, None
+    if os.environ.get("HLE_DISABLE_STRUCTURAL_OPTION_AUDIT", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return None, {"status": "disabled", "reason": "env_disabled"}
+    if any(attempt.get("prompt_kind") == "structural_option_audit_answer" for attempt in attempts):
+        return None, {"status": "abstained", "reason": "already_executed"}
+    labels, _ = _extract_multiple_choice_options(str(problem.get("_question") or ""))
+    if len(labels) < 2:
+        return None, {"status": "abstained", "reason": "options_not_parsed"}
+    if any(
+        attempt.get("candidate_verifier_state") == "verified"
+        and _is_trusted_candidate_verifier_attempt(attempt)
+        and attempt.get("prompt_kind") not in {
+            "route_arbitrator_answer",
+            "raw_preserve_selector_answer",
+            "raw_budget_preserve_selector_answer",
+            "hipporag_preserve_selector_answer",
+        }
+        for attempt in attempts
+    ):
+        return None, {"status": "not_required", "reason": "verified_candidate_available"}
+
+    valid_norms: list[str] = []
+    for attempt in attempts:
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        valid_norms.append(_normalize_for_selection(answer, answer_type="multipleChoice"))
+    if len(valid_norms) < 3:
+        return None, {"status": "not_required", "reason": "too_few_candidate_answers"}
+    counts = Counter(norm for norm in valid_norms if norm)
+    if not counts:
+        return None, {"status": "not_required", "reason": "no_normalized_candidates"}
+    top_norm, top_count = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0]
+    unique_count = len(counts)
+    missing_labels = [label for label in sorted(labels) if label not in counts]
+    option_evidence_status = str((option_evidence_summary or {}).get("status") or "")
+    evidence_guided_status = str((evidence_guided_option_summary or {}).get("status") or "")
+    weak_evidence = option_evidence_status not in {"activated"} and evidence_guided_status not in {"activated_verified"}
+    collapsed = top_count >= max(3, len(valid_norms) - 1) or unique_count <= 2
+    if not collapsed and not (weak_evidence and missing_labels):
+        return None, {
+            "status": "not_required",
+            "reason": "candidate_space_already_diverse",
+            "valid_candidate_count": len(valid_norms),
+            "unique_candidate_count": unique_count,
+            "top_candidate_count": top_count,
+        }
+
+    attempt = _run_child_attempt(
+        problem=problem,
+        spec={
+            "prompt_kind": "structural_option_audit_answer",
+            "prompt": _structural_option_audit_prompt(
+                problem,
+                candidate_distribution=dict(counts),
+                missing_labels=missing_labels,
+                evidence_context=evidence_context,
+            ),
+        },
+        child_index=len(attempts) + 1,
+        model=model,
+        eval_id=eval_id,
+        call_id=call_id,
+        logger=logger,
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
+    answer = str(attempt.get("parsed_answer") or "").strip()
+    answer_norm = _normalize_for_selection(answer, answer_type="multipleChoice") if answer else ""
+    if attempt.get("status") == "answered":
+        attempt["candidate_verifier_state"] = "not_verified"
+        attempt["candidate_verifier_backend"] = "structural_option_audit"
+        attempt["tool_confidence"] = "structural_option_audit_unverified"
+    summary = {
+        "status": "activated",
+        "reason": "collapsed_or_weak_evidence_candidate_space_needs_structural_audit",
+        "child_id": attempt.get("child_id"),
+        "child_status": attempt.get("status"),
+        "candidate_emitted": bool(answer),
+        "candidate_verifier_state": "not_verified",
+        "candidate_answer_hash": stable_hash({"answer": answer}) if answer else None,
+        "candidate_disagreed_with_majority": bool(answer_norm and answer_norm != top_norm),
+        "valid_candidate_count_before": len(valid_norms),
+        "unique_candidate_count_before": unique_count,
+        "top_candidate_count_before": top_count,
+        "top_candidate_answer_hash": stable_hash({"answer": top_norm}),
+        "missing_option_count_before": len(missing_labels),
+        "missing_option_hashes": [stable_hash({"option_label": label}) for label in missing_labels],
+        "option_evidence_status": option_evidence_status,
+        "evidence_guided_option_status": evidence_guided_status,
+        "evidence_context_used": bool(evidence_context),
+        "underlying_model_calls": 1 if attempt.get("status") == "answered" else 0,
+    }
+    if problem.get("_answer"):
+        gold_for_eval, _ = _canonicalize_multiple_choice_answer(problem, str(problem.get("_answer") or ""))
+        summary["candidate_correct_for_eval"] = _is_correct(answer, gold_for_eval, answer_type="multipleChoice")
+    _log_event(
+        logger,
+        {
+            "event": "structural_option_audit_child",
             "eval_id": eval_id,
             "call_id": call_id,
             "problem_id_hash": problem["id_hash"],
@@ -6750,12 +10486,14 @@ def _score_option_evidence_detail(
         )
         supports_current = option_label in supporting_labels
         supports_other = any(label != option_label for label in supporting_labels)
-        if supports_current and not supports_other:
+        option_overlap = len(option_terms & doc_terms)
+        title_overlap = len(option_terms & title_terms)
+        stem_overlap = len(stem_terms & doc_terms)
+        min_stem_overlap = _option_evidence_min_stem_overlap(stem_terms)
+        question_supported = stem_overlap >= min_stem_overlap
+        if supports_current and not supports_other and question_supported:
             support_doc_count += 1
             supporting_doc_hashes.append(stable_hash({"title": doc.get("title", ""), "snippet": doc.get("snippet", "")}))
-            option_overlap = len(option_terms & doc_terms)
-            title_overlap = len(option_terms & title_terms)
-            stem_overlap = len(stem_terms & doc_terms)
             phrase_bonus = 4.0 if _normalized_phrase_present(option_text, text) else 0.0
             score += (
                 (2.0 * option_overlap)
@@ -6778,6 +10516,27 @@ def _score_option_evidence_detail(
     }
 
 
+def _option_evidence_min_stem_overlap(stem_terms: set[str]) -> int:
+    if not stem_terms:
+        return 0
+    env_value = os.environ.get("HLE_OPTION_EVIDENCE_MIN_STEM_OVERLAP", "").strip()
+    if env_value:
+        try:
+            return max(0, min(5, int(env_value)))
+        except ValueError:
+            pass
+    return min(2, len(stem_terms))
+
+
+def _option_evidence_rank_score(score_detail: dict[str, Any]) -> float:
+    """Rank option evidence by support stability, not just lexical overlap."""
+    score = float(score_detail.get("score") or 0.0)
+    support_count = int(score_detail.get("support_doc_count") or 0)
+    ambiguous_count = int(score_detail.get("ambiguous_doc_count") or 0)
+    unsupported_count = int(score_detail.get("unsupported_doc_count") or 0)
+    return round(score + (5.0 * support_count) - (8.0 * ambiguous_count) - (0.25 * unsupported_count), 4)
+
+
 def _option_evidence_supporting_labels(
     *,
     text: str,
@@ -6787,13 +10546,15 @@ def _option_evidence_supporting_labels(
     option_text_by_label: dict[str, str],
 ) -> set[str]:
     labels: set[str] = set()
+    distinctive_terms_by_label = _distinctive_option_terms_by_label(option_terms_by_label)
     for label, option_terms in option_terms_by_label.items():
         if not option_terms:
             continue
+        distinctive_terms = distinctive_terms_by_label.get(label) or option_terms
         option_text = option_text_by_label.get(label, "")
-        term_overlap = len(option_terms & doc_terms)
-        title_overlap = len(option_terms & title_terms)
-        min_term_support = 1 if len(option_terms) <= 2 else 2
+        term_overlap = len(distinctive_terms & doc_terms)
+        title_overlap = len(distinctive_terms & title_terms)
+        min_term_support = 1 if len(distinctive_terms) <= 2 else 2
         if (
             _normalized_phrase_present(option_text, text)
             or title_overlap >= min_term_support
@@ -6801,6 +10562,16 @@ def _option_evidence_supporting_labels(
         ):
             labels.add(label)
     return labels
+
+
+def _distinctive_option_terms_by_label(option_terms_by_label: dict[str, set[str]]) -> dict[str, set[str]]:
+    term_counts: Counter[str] = Counter()
+    for terms in option_terms_by_label.values():
+        term_counts.update(set(terms))
+    distinctive: dict[str, set[str]] = {}
+    for label, terms in option_terms_by_label.items():
+        distinctive[label] = {term for term in terms if term_counts[term] == 1}
+    return distinctive
 
 
 def _normalized_phrase_present(phrase: str, text: str) -> bool:
@@ -6812,6 +10583,52 @@ def _normalized_phrase_present(phrase: str, text: str) -> bool:
 
 def _normalize_evidence_phrase(text: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9+.-]+", " ", str(text or "").lower())).strip()
+
+
+def _should_defer_trusted_route_to_evidence_challenge(
+    *,
+    problem: dict[str, Any],
+    route_attempt: dict[str, Any],
+    valid: list[dict[str, Any]],
+) -> bool:
+    if os.environ.get("HLE_DISABLE_ROUTE_DEFER_TO_EVIDENCE_CHALLENGE", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return False
+    if problem.get("answer_type") != "multipleChoice":
+        return False
+    if str(route_attempt.get("route_value_of_information_gate_status") or "") != "continue_exploration":
+        return False
+    route_answer = str(route_attempt.get("parsed_answer") or "").strip()
+    if not route_answer:
+        return False
+    route_norm = _normalize_for_selection(route_answer, answer_type="multipleChoice")
+    challenge_prompt_kinds = {
+        "evidence_guided_option_challenge_answer",
+        "counter_assumption_challenge_answer",
+        "option_elimination_challenge_answer",
+        "forced_alternative_answer",
+        "critic_synthesis_answer",
+        "code_semantics_answer",
+        "option_matrix_reasoner_answer",
+        "structural_option_audit_answer",
+    }
+    for attempt in valid:
+        if attempt is route_attempt:
+            continue
+        if attempt.get("prompt_kind") not in challenge_prompt_kinds:
+            continue
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        if attempt.get("candidate_verifier_state") == "refuted" and _is_trusted_candidate_verifier_attempt(attempt):
+            continue
+        if _normalize_for_selection(answer, answer_type="multipleChoice") != route_norm:
+            return True
+    return False
 
 
 def _select_recursive_child_answer(
@@ -6867,10 +10684,43 @@ def _select_recursive_child_answer(
                 "underlying_model_calls": 0,
                 "verifier_model_call": False,
             }
+        trusted_route_candidates = [
+            attempt for attempt in valid
+            if problem["answer_type"] == "multipleChoice"
+            and _route_value_verifier_enabled()
+            and attempt.get("prompt_kind") == "route_arbitrator_answer"
+            and bool(attempt.get("route_arbitrator_trusted"))
+            and attempt.get("candidate_verifier_state") == "verified"
+            and _is_trusted_candidate_verifier_attempt(attempt)
+            and str(attempt.get("route_value_confidence") or "").lower() in {"verified", "high"}
+            and str(attempt.get("route_value_of_information_gate_status") or "") != "continue_exploration"
+            and str(attempt.get("route_value_of_information_recommended_action") or "") != "continue_exploration"
+            and not _should_defer_trusted_route_to_evidence_challenge(
+                problem=problem,
+                route_attempt=attempt,
+                valid=valid,
+            )
+        ]
+        if trusted_route_candidates:
+            selected = sorted(
+                trusted_route_candidates,
+                key=lambda row: (
+                    -float(row.get("route_value_score") or row.get("route_arbitrator_score") or 0.0),
+                    int(row.get("child_index", 0) or 0),
+                ),
+            )[0]
+            return {
+                "selection_method": "route_value_verifier_choice",
+                "selected_child_id": selected["child_id"],
+                "selected_answer": selected["parsed_answer"],
+                "underlying_model_calls": 0,
+                "verifier_model_call": False,
+            }
         verified_candidates = [
             attempt for attempt in valid
             if attempt.get("candidate_verifier_state") == "verified"
             and _is_trusted_candidate_verifier_attempt(attempt)
+            and attempt.get("prompt_kind") != "route_arbitrator_answer"
         ]
         if verified_candidates:
             selected = sorted(verified_candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
@@ -6992,7 +10842,11 @@ def _select_recursive_child_answer(
                 }
         evidence_candidates = [
             attempt for attempt in valid
-            if attempt.get("prompt_kind") in {"evidence_bridge_answer", "evidence_grounded_answer"}
+            if attempt.get("prompt_kind") in {
+                "evidence_bridge_answer",
+                "evidence_grounded_answer",
+                "evidence_guided_option_challenge_answer",
+            }
         ]
         if problem["answer_type"] != "multipleChoice" and evidence_candidates:
             top_attempts = ranked[0][1]
@@ -7179,6 +11033,7 @@ def _trust_llm_reference_planner_enabled() -> bool:
 _VERIFIED_SELECTION_METHODS = {
     "candidate_claim_verifier_priority",
     "counter_assumption_verifier_choice",
+    "route_value_verifier_choice",
     "verified_math_tool_priority",
     "verifier_choice",
     "source_grounded_verifier_choice",
@@ -7279,8 +11134,10 @@ def _verified_or_abstain_fallback_candidate(
     if not candidates:
         return None
     preferred_prompt_kinds = [
-        "hipporag_preserve_selector_answer",
+        "route_arbitrator_answer",
+        "raw_budget_preserve_selector_answer",
         "raw_preserve_selector_answer",
+        "hipporag_preserve_selector_answer",
         "direct_short_answer",
         "constraint_checked_answer",
         "recursive_assumption_answer",
@@ -7290,6 +11147,15 @@ def _verified_or_abstain_fallback_candidate(
             attempt for attempt in candidates
             if attempt.get("prompt_kind") == prompt_kind
         ]
+        if prompt_kind == "route_arbitrator_answer":
+            prompt_candidates = [
+                attempt for attempt in prompt_candidates
+                if bool(attempt.get("route_arbitrator_trusted"))
+                or (
+                    attempt.get("candidate_verifier_state") == "verified"
+                    and _is_trusted_candidate_verifier_attempt(attempt)
+                )
+            ]
         if prompt_kind == "hipporag_preserve_selector_answer":
             prompt_candidates = [
                 attempt for attempt in prompt_candidates
@@ -7414,27 +11280,122 @@ def _select_after_counter_assumption_challenge(
     if not ranked or len(ranked[0][1]) < 2:
         return None
     top_norm = ranked[0][0]
+    trusted_preserve_routes = [
+        attempt for attempt in valid
+        if attempt.get("prompt_kind") == "route_arbitrator_answer"
+        and bool(attempt.get("route_arbitrator_trusted"))
+        and (
+            str(attempt.get("route_value_of_information_gate_status") or "") == "preserve_route"
+            or str(attempt.get("route_value_of_information_recommended_action") or "") == "preserve_route"
+        )
+        and str(attempt.get("parsed_answer") or "").strip()
+    ]
+    if trusted_preserve_routes:
+        selected = sorted(
+            trusted_preserve_routes,
+            key=lambda row: (
+                -float(row.get("route_value_score") or row.get("route_arbitrator_score") or 0.0),
+                int(row.get("child_index", 0) or 0),
+            ),
+        )[0]
+        return {
+            "selection_method": "route_value_verifier_choice",
+            "selected_child_id": selected["child_id"],
+            "selected_answer": selected["parsed_answer"],
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
     option_evidence_arbitrator_enabled = _option_evidence_arbitrator_enabled()
     challenge_prompt_kinds = {
         "counter_assumption_challenge_answer",
         "option_elimination_challenge_answer",
         "forced_alternative_answer",
         "critic_synthesis_answer",
+        "evidence_guided_option_challenge_answer",
+        "code_semantics_answer",
+        "option_matrix_reasoner_answer",
+        "structural_option_audit_answer",
     }
+    option_sweep_voi_hard_counter = _option_sweep_voi_hard_counter_trigger_enabled(valid)
     if option_evidence_arbitrator_enabled:
         challenge_prompt_kinds.add("mc_option_evidence_scorer_answer")
-    if _option_sweep_counter_trigger_enabled():
+    if _option_sweep_counter_trigger_enabled() or option_sweep_voi_hard_counter:
         challenge_prompt_kinds.add("mc_option_sweep_candidate")
     challenge_candidates = [
         attempt for attempt in valid
         if attempt.get("prompt_kind") in challenge_prompt_kinds
         and str(attempt.get("parsed_answer") or "").strip()
     ]
-    if not any(
-        _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type=problem["answer_type"]) != top_norm
-        for attempt in challenge_candidates
-    ):
+    baseline_preserve_prompt_kinds = {
+        "raw_preserve_selector_answer",
+        "raw_budget_preserve_selector_answer",
+        "hipporag_preserve_selector_answer",
+    }
+    baseline_preserve_norms = [
+        _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type=problem["answer_type"])
+        for attempt in valid
+        if attempt.get("prompt_kind") in baseline_preserve_prompt_kinds
+        and str(attempt.get("parsed_answer") or "").strip()
+    ]
+    baseline_family_consensus_norm = ""
+    if len(baseline_preserve_norms) >= 3:
+        preserve_counts = Counter(norm for norm in baseline_preserve_norms if norm)
+        if preserve_counts:
+            top_preserve_norm, top_preserve_count = sorted(
+                preserve_counts.items(),
+                key=lambda item: (-item[1], item[0]),
+            )[0]
+            if top_preserve_count >= 3:
+                baseline_family_consensus_norm = top_preserve_norm
+    hard_challenge_prompt_kinds = {
+        "counter_assumption_challenge_answer",
+        "option_elimination_challenge_answer",
+        "critic_synthesis_answer",
+        "evidence_guided_option_challenge_answer",
+        "code_semantics_answer",
+        "option_matrix_reasoner_answer",
+        "structural_option_audit_answer",
+    }
+    if option_evidence_arbitrator_enabled:
+        hard_challenge_prompt_kinds.add("mc_option_evidence_scorer_answer")
+    if option_sweep_voi_hard_counter:
+        hard_challenge_prompt_kinds.add("mc_option_sweep_candidate")
+    hard_disagreeing_challenges = [
+        attempt for attempt in challenge_candidates
+        if attempt.get("prompt_kind") in hard_challenge_prompt_kinds
+        and _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type=problem["answer_type"]) != top_norm
+    ]
+    if not hard_disagreeing_challenges:
         return None
+    if baseline_family_consensus_norm and baseline_family_consensus_norm == top_norm:
+        evidence_disagreement = [
+            attempt for attempt in hard_disagreeing_challenges
+            if attempt.get("prompt_kind") == "mc_option_evidence_scorer_answer"
+            and attempt.get("candidate_verifier_state") == "verified"
+        ]
+        structural_disagreement = [
+            attempt for attempt in hard_disagreeing_challenges
+            if attempt.get("prompt_kind") in {
+                "option_matrix_reasoner_answer",
+                "code_semantics_answer",
+                "critic_synthesis_answer",
+                "structural_option_audit_answer",
+            }
+        ]
+        structural_audit_disagreement = [
+            attempt for attempt in hard_disagreeing_challenges
+            if attempt.get("prompt_kind") == "structural_option_audit_answer"
+        ]
+        allow_structural_over_baseline = os.environ.get(
+            "HLE_ALLOW_STRUCTURAL_COUNTER_OVER_BASELINE_CONSENSUS",
+            "",
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        if not evidence_disagreement and not (
+            (allow_structural_over_baseline or bool(structural_audit_disagreement))
+            and structural_disagreement
+            and _route_voi_allows_structural_counter_verifier(valid)
+        ):
+            return None
     verifier_valid = valid
     if not option_evidence_arbitrator_enabled:
         verifier_valid = [
@@ -7520,8 +11481,72 @@ def _option_evidence_arbitrator_enabled() -> bool:
     return os.environ.get("HLE_ENABLE_OPTION_EVIDENCE_ARBITRATOR", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _route_voi_allows_structural_counter_verifier(valid: list[dict[str, Any]]) -> bool:
+    route_attempts = [
+        attempt for attempt in valid
+        if attempt.get("prompt_kind") == "route_arbitrator_answer"
+    ]
+    if not route_attempts:
+        return True
+    for attempt in route_attempts:
+        status = str(attempt.get("route_value_of_information_gate_status") or "")
+        action = str(attempt.get("route_value_of_information_recommended_action") or "")
+        if status == "continue_exploration" or action == "continue_exploration":
+            return True
+    return False
+
+
 def _option_sweep_counter_trigger_enabled() -> bool:
     return os.environ.get("HLE_ENABLE_OPTION_SWEEP_COUNTER_TRIGGER", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _option_sweep_voi_hard_counter_trigger_enabled(valid: list[dict[str, Any]]) -> bool:
+    """Allow full-option-space verifier only when the route policy asks to explore.
+
+    `mc_option_sweep_candidate` is deliberately not evidence: it merely
+    guarantees that every finite MC label is available to the verifier.  It
+    should therefore stay inert unless a separate value-of-information signal
+    says the route consensus is not worth preserving.
+    """
+    if os.environ.get("HLE_DISABLE_OPTION_SWEEP_VOI_COUNTER", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return False
+    if os.environ.get("HLE_ENABLE_OPTION_SWEEP_VOI_COUNTER", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return False
+    if not any(attempt.get("prompt_kind") == "mc_option_sweep_candidate" for attempt in valid):
+        return False
+    if any(
+        attempt.get("candidate_verifier_state") == "verified"
+        and _is_trusted_candidate_verifier_attempt(attempt)
+        and attempt.get("prompt_kind") not in {
+            "route_arbitrator_answer",
+            "raw_preserve_selector_answer",
+            "raw_budget_preserve_selector_answer",
+            "hipporag_preserve_selector_answer",
+        }
+        for attempt in valid
+    ):
+        return False
+    route_attempts = [
+        attempt for attempt in valid
+        if attempt.get("prompt_kind") == "route_arbitrator_answer"
+    ]
+    if not route_attempts:
+        return False
+    return any(
+        str(attempt.get("route_value_of_information_gate_status") or "") == "continue_exploration"
+        or str(attempt.get("route_value_of_information_recommended_action") or "") == "continue_exploration"
+        for attempt in route_attempts
+    )
 
 
 def _math_tool_child_timeout(timeout: float | None) -> float | None:
@@ -7843,7 +11868,7 @@ def _should_prime_evidence_bridge(problem: dict[str, Any], agent_plan: dict[str,
     if _classify_hle_domain(problem) == "math":
         return False
     if problem.get("answer_type") == "multipleChoice":
-        return os.environ.get("HLE_ENABLE_MC_EVIDENCE_BRIDGE", "").strip().lower() in {"1", "true", "yes", "on"}
+        return os.environ.get("HLE_DISABLE_MC_EVIDENCE_BRIDGE", "").strip().lower() not in {"1", "true", "yes", "on"}
     # HLE failures are often answer-bearing retrieval failures.  Keep
     # graph/morphism context as one candidate, but give the recursive verifier a
     # separate transient evidence child so closed-book self-consistency cannot
@@ -7984,14 +12009,14 @@ def _canonicalize_multiple_choice_answer(problem: dict[str, Any], answer: str) -
 def _extract_explicit_choice_label(text: str) -> str:
     raw = str(text or "").strip()
     upper = raw.upper()
-    direct = re.fullmatch(r"([A-H])(?:[\).:：])?", upper)
+    direct = re.fullmatch(r"([A-Z])(?:[\).:：])?", upper)
     if direct:
         return direct.group(1)
-    prefix = re.match(r"^\s*([A-H])[\).:：]\s+", upper)
+    prefix = re.match(r"^\s*([A-Z])[\).:：]\s+", upper)
     if prefix:
         return prefix.group(1)
     match = re.search(
-        r"\b(?:option|choice|answer|ans|final\s+answer)\s*(?:is|=|:)?\s*([A-H])\b",
+        r"\b(?:option|choice|answer|ans|final\s+answer)\s*(?:is|=|:)?\s*([A-Z])\b",
         raw,
         flags=re.IGNORECASE,
     )
@@ -8652,7 +12677,7 @@ _EVIDENCE_QUERY_STOPWORDS = {
 
 def _clean_evidence_query(text: str) -> str:
     text = html.unescape(str(text or ""))
-    text = re.sub(r"\b[A-E]\s*[\).:]", " ", text)
+    text = re.sub(r"\b[A-Z]\s*[\).:]", " ", text)
     text = re.sub(r"[^A-Za-z0-9_+.' -]+", " ", text)
     text = re.sub(r"\s+", " ", text).strip(" .'-")
     if len(text) < 3:
@@ -8957,7 +12982,7 @@ def _split_multiple_choice_question(problem: dict[str, Any]) -> tuple[str, dict[
 def _extract_multiple_choice_options(question: str) -> tuple[dict[str, str], int | None]:
     text = str(question or "")
     pattern = re.compile(
-        r"(?:^|\n)\s*([A-H])[\).:：]\s*(.*?)(?=(?:\n\s*[A-H][\).:：]\s*)|\Z)",
+        r"(?:^|\n)\s*([A-Z])[\).:：]\s*(.*?)(?=(?:\n\s*[A-Z][\).:：]\s*)|\Z)",
         flags=re.DOTALL,
     )
     matches = list(pattern.finditer(text))
@@ -9461,6 +13486,16 @@ def _module_trace(problem: dict[str, Any], *, variant: str, agent_plan: dict[str
                 "expected": recursive_verify and problem.get("answer_type") == "multipleChoice",
                 "status": _stage_status(stages, "raw_preserve_selector") if stages.get("raw_preserve_selector") else "not_required",
                 "reason": "uncertain unverified selections can add a no-context raw baseline candidate for fallback auditing",
+            },
+            {
+                "module": "raw_budget_preserve_selector",
+                "expected": recursive_verify and problem.get("answer_type") == "multipleChoice",
+                "status": (
+                    _stage_status(stages, "raw_budget_preserve_selector")
+                    if stages.get("raw_budget_preserve_selector")
+                    else "not_required"
+                ),
+                "reason": "uncertain unverified selections can add a same-model budget-matched raw self-consistency candidate",
             },
             {
                 "module": "hipporag_preserve_selector",
@@ -10097,9 +14132,13 @@ def _component_efficacy_from_plan(
     graph = stages.get("assumption_graph_retrieval", {})
     morphism = stages.get("structural_morphism_transfer", {})
     world_model = stages.get("world_model_router", {})
+    same_run_cache = stages.get("same_run_baseline_cache", {})
+    same_run_cache = same_run_cache if isinstance(same_run_cache, dict) else {}
     critic_router = stages.get("critic_model_router", {})
     child_router = stages.get("child_model_router", {})
     prompt = stages.get("prompt_builder", {})
+    diversity_planner = stages.get("recursive_child_diversity_planner", {})
+    diversity_planner = diversity_planner if isinstance(diversity_planner, dict) else {}
     recursive = stages.get("recursive_child_validation", {})
     selection = stages.get("multi_candidate_self_verifier", {})
     timeout_recovery = stages.get("recursive_timeout_recovery_child", {})
@@ -10110,18 +14149,31 @@ def _component_efficacy_from_plan(
     domain_rule = stages.get("domain_rule_mc_verifier", {})
     math_tool = stages.get("hle_math_tool_solver", {})
     option_evidence = stages.get("mc_option_evidence_scorer", {})
+    evidence_guided_option = stages.get("evidence_guided_option_challenge", {})
+    structural_option_audit = stages.get("structural_option_audit_child", {})
+    structural_option_audit = structural_option_audit if isinstance(structural_option_audit, dict) else {}
     critic_synthesis = stages.get("critic_synthesis_child", {})
     option_sweep = stages.get("mc_option_sweep_candidates", {})
     counter_challenge = stages.get("counter_assumption_challenge", {})
     raw_preserve = stages.get("raw_preserve_selector", {})
     raw_preserve = raw_preserve if isinstance(raw_preserve, dict) else {}
+    raw_budget_preserve = stages.get("raw_budget_preserve_selector", {})
+    raw_budget_preserve = raw_budget_preserve if isinstance(raw_budget_preserve, dict) else {}
     hipporag_preserve = stages.get("hipporag_preserve_selector", {})
     hipporag_preserve = hipporag_preserve if isinstance(hipporag_preserve, dict) else {}
+    route_arbitrator = stages.get("route_arbitrator", {})
+    route_arbitrator = route_arbitrator if isinstance(route_arbitrator, dict) else {}
+    route_voi = route_arbitrator.get("value_of_information_gate", {})
+    route_voi = route_voi if isinstance(route_voi, dict) else {}
 
     candidate_hashes = [value for value in recursive.get("candidate_answer_hashes", []) if value]
     unique_candidate_count = len(set(candidate_hashes))
     prompt_kinds = [str(value) for value in recursive.get("prompt_kinds", [])]
     skipped_prompt_kinds = [str(value) for value in recursive.get("skipped_prompt_kinds", [])]
+    planned_branch_axes = [str(value) for value in recursive.get("planned_branch_axes", []) if value]
+    executed_branch_axes = [str(value) for value in recursive.get("executed_branch_axes", []) if value]
+    answered_branch_axes = [str(value) for value in recursive.get("answered_branch_axes", []) if value]
+    skipped_branch_axes = [str(value) for value in recursive.get("skipped_branch_axes", []) if value]
     formal_hits = list(morphism.get("formal_mapping_hits", []) or [])
     structural_hits = list(morphism.get("structural_morphism_hits", []) or [])
     transfer_supported_hits = [
@@ -10160,6 +14212,7 @@ def _component_efficacy_from_plan(
         "morphism_context_injected": bool(prompt.get("context_injected")) and bool(formal_hits or structural_hits),
         "morphism_routing_only": bool(formal_hits or structural_hits) and not bool(prompt.get("context_injected")),
         "world_model_used_context": world_model.get("decision") == "use_context",
+        "same_run_baseline_cache_available": same_run_cache.get("status") == "activated",
         "critic_model_used": critic_router.get("status") == "activated",
         "child_model_used": child_router.get("status") == "activated",
         "evidence_bridge_activated": evidence_status == "activated",
@@ -10168,6 +14221,7 @@ def _component_efficacy_from_plan(
                 "evidence_bridge_answer",
                 "evidence_grounded_answer",
                 "answer_bearing_evidence_candidate",
+                "evidence_guided_option_challenge_answer",
             }
             for kind in prompt_kinds
         ),
@@ -10178,6 +14232,12 @@ def _component_efficacy_from_plan(
         "agent_hipporag_child_executed": "hipporag_context_answer" in prompt_kinds,
         "hipporag_context_priority_used": selection_method == "hipporag_context_priority",
         "recursive_child_validation_activated": recursive.get("status") == "activated",
+        "recursive_child_diversity_planner_activated": diversity_planner.get("status") == "activated",
+        "orthogonal_child_branches_planned": int(recursive.get("planned_unique_branch_axis_count") or 0) >= 3,
+        "orthogonal_child_branches_executed": int(recursive.get("executed_unique_branch_axis_count") or 0) >= 3,
+        "orthogonal_child_branches_answered": int(recursive.get("answered_unique_branch_axis_count") or 0) >= 3,
+        "core_orthogonal_child_axes_covered": bool(recursive.get("core_orthogonal_axes_covered")),
+        "core_orthogonal_child_axes_answered": bool(recursive.get("core_orthogonal_axes_answered")),
         "recursive_diverse_candidates": unique_candidate_count >= 2,
         "recursive_collapsed_consensus": bool(candidate_hashes) and unique_candidate_count <= 1,
         "recursive_timeout_pressure": int(recursive.get("error_child_count") or 0) > 0,
@@ -10200,6 +14260,12 @@ def _component_efficacy_from_plan(
         "claim_verifier_verified_candidate": claim_verified_count > 0,
         "claim_verifier_refuted_candidate": claim_refuted_count > 0,
         "claim_verifier_no_executable_claim": claim_status == "no_executable_claim",
+        "code_semantics_child_planned": "code_semantics" in planned_branch_axes,
+        "code_semantics_child_executed": "code_semantics_answer" in prompt_kinds,
+        "code_semantics_child_selected": recursive.get("selected_prompt_kind") == "code_semantics_answer",
+        "option_matrix_child_planned": "option_matrix_reasoning" in planned_branch_axes,
+        "option_matrix_child_executed": "option_matrix_reasoner_answer" in prompt_kinds,
+        "option_matrix_child_selected": recursive.get("selected_prompt_kind") == "option_matrix_reasoner_answer",
         "domain_rule_mc_verifier_activated": domain_rule.get("status") == "activated",
         "domain_rule_mc_verifier_selected": bool(domain_rule.get("selected_domain_rule_candidate")),
         "domain_rule_mc_verifier_correct": domain_rule.get("candidate_correct_for_eval") is True,
@@ -10209,6 +14275,22 @@ def _component_efficacy_from_plan(
         "mc_option_evidence_candidate_selected": bool(option_evidence.get("selected_option_evidence_candidate")),
         "verified_option_evidence_override": selection_method == "verified_option_evidence_priority",
         "mc_option_evidence_candidate_correct": option_evidence.get("candidate_correct_for_eval") is True,
+        "evidence_guided_option_challenge_activated": evidence_guided_option.get("status") == "activated",
+        "evidence_guided_option_candidate_emitted": bool(evidence_guided_option.get("candidate_emitted")),
+        "evidence_guided_option_candidate_selected": bool(
+            evidence_guided_option.get("selected_evidence_guided_option_candidate")
+        ),
+        "evidence_guided_option_candidate_correct": evidence_guided_option.get("candidate_correct_for_eval") is True,
+        "structural_option_audit_activated": structural_option_audit.get("status") == "activated",
+        "structural_option_audit_disagreed": bool(
+            structural_option_audit.get("candidate_disagreed_with_majority")
+        ),
+        "structural_option_audit_selected": bool(
+            structural_option_audit.get("selected_structural_option_audit")
+        ),
+        "structural_option_audit_candidate_correct": (
+            structural_option_audit.get("candidate_correct_for_eval") is True
+        ),
         "option_evidence_verifier_used": selection_method in {
             "option_evidence_verifier_choice",
             "verified_option_evidence_priority",
@@ -10251,9 +14333,39 @@ def _component_efficacy_from_plan(
         "raw_preserve_selector_activated": raw_preserve.get("status") == "activated",
         "raw_preserve_candidate_emitted": bool(raw_preserve.get("candidate_emitted")),
         "raw_preserve_selected": bool(raw_preserve.get("selected_raw_preserve_candidate")),
+        "raw_budget_preserve_selector_activated": raw_budget_preserve.get("status") == "activated",
+        "raw_budget_preserve_candidate_emitted": bool(raw_budget_preserve.get("candidate_emitted")),
+        "raw_budget_preserve_selected": bool(raw_budget_preserve.get("selected_raw_budget_preserve_candidate")),
         "hipporag_preserve_selector_activated": hipporag_preserve.get("status") == "activated",
         "hipporag_preserve_candidate_emitted": bool(hipporag_preserve.get("candidate_emitted")),
         "hipporag_preserve_selected": bool(hipporag_preserve.get("selected_hipporag_preserve_candidate")),
+        "route_arbitrator_activated": route_arbitrator.get("status") == "activated",
+        "route_arbitrator_candidate_emitted": bool(route_arbitrator.get("candidate_emitted")),
+        "route_arbitrator_selected": bool(route_arbitrator.get("selected_route_arbitrator_candidate")),
+        "route_arbitrator_trusted": bool(route_arbitrator.get("selected_route_trusted")),
+        "route_arbitrator_untrusted_candidate": (
+            bool(route_arbitrator.get("candidate_emitted"))
+            and not bool(route_arbitrator.get("selected_route_trusted"))
+        ),
+        "route_value_verifier_enabled": bool(
+            route_arbitrator.get("route_value_verifier_enabled", _route_value_verifier_enabled())
+        ),
+        "route_consensus_guard_enabled": bool(
+            route_arbitrator.get("route_consensus_guard_enabled", _route_consensus_guard_enabled())
+        ),
+        "budget_echo_guard_enabled": bool(
+            route_arbitrator.get("budget_echo_guard_enabled", _budget_echo_guard_enabled())
+        ),
+        "route_value_verifier_used": selection_method == "route_value_verifier_choice",
+        "route_arbitrator_consensus_guard": bool(route_arbitrator.get("route_consensus")),
+        "route_arbitrator_locked": bool(route_arbitrator.get("route_locked")),
+        "route_arbitrator_chose_hipporag": route_arbitrator.get("selected_route_type") == "hipporag_preserve",
+        "route_arbitrator_chose_raw_budget": route_arbitrator.get("selected_route_type") == "raw_budget_consensus",
+        "route_arbitrator_chose_direct": route_arbitrator.get("selected_route_type") == "direct",
+        "route_voi_recommended_preserve": route_voi.get("recommended_action") == "preserve_route",
+        "route_voi_hard_gate_enabled": bool(route_voi.get("hard_gate_enabled")),
+        "route_voi_hard_gate_applied": bool(route_voi.get("hard_gate_applied")),
+        "route_voi_low_marginal_value": route_voi.get("status") == "preserve_route",
     })
     base.update({
         "kind": "assumption_agent_recursive_verify" if variant == "assumption_agent_recursive_verify" else "assumption_agent",
@@ -10277,6 +14389,15 @@ def _component_efficacy_from_plan(
             "generic_graph_context_only": bool(world_model.get("generic_graph_context_only")),
             "expected_utility": world_model.get("expected_utility"),
             "predicted_regression_risk": world_model.get("predicted_regression_risk"),
+        },
+        "same_run_baseline_cache": {
+            "status": same_run_cache.get("status"),
+            "policy": same_run_cache.get("policy"),
+            "cached_variants": list(same_run_cache.get("cached_variants", []) or []),
+            "cached_variant_count": int(same_run_cache.get("cached_variant_count") or 0),
+            "borrowed_baseline_model_call_count": int(
+                same_run_cache.get("borrowed_baseline_model_call_count") or 0
+            ),
         },
         "critic_model": {
             "status": critic_router.get("status"),
@@ -10317,10 +14438,39 @@ def _component_efficacy_from_plan(
             "answered_child_count": int(recursive.get("answered_child_count") or 0),
             "error_child_count": int(recursive.get("error_child_count") or 0),
             "unique_candidate_count": unique_candidate_count,
+            "planned_branch_axes": planned_branch_axes,
+            "executed_branch_axes": executed_branch_axes,
+            "answered_branch_axes": answered_branch_axes,
+            "skipped_branch_axes": skipped_branch_axes,
+            "planned_unique_branch_axis_count": int(recursive.get("planned_unique_branch_axis_count") or 0),
+            "executed_unique_branch_axis_count": int(recursive.get("executed_unique_branch_axis_count") or 0),
+            "answered_unique_branch_axis_count": int(recursive.get("answered_unique_branch_axis_count") or 0),
+            "required_branch_axes_before_early_stop": list(
+                recursive.get("required_branch_axes_before_early_stop", []) or []
+            ),
+            "executed_required_branch_axes": list(recursive.get("executed_required_branch_axes", []) or []),
+            "answered_required_branch_axes": list(recursive.get("answered_required_branch_axes", []) or []),
+            "core_orthogonal_axes_covered": bool(recursive.get("core_orthogonal_axes_covered")),
+            "core_orthogonal_axes_answered": bool(recursive.get("core_orthogonal_axes_answered")),
+            "orthogonal_branch_coverage": recursive.get("orthogonal_branch_coverage"),
+            "diversity_planner": {
+                "status": diversity_planner.get("status"),
+                "policy": diversity_planner.get("policy"),
+                "planned_child_count_raw": int(diversity_planner.get("planned_child_count_raw") or 0),
+                "duplicate_branch_axes_removed": int(diversity_planner.get("duplicate_branch_axes_removed") or 0),
+                "min_axes_before_early_stop": diversity_planner.get("min_axes_before_early_stop"),
+                "required_axes_before_early_stop": list(
+                    diversity_planner.get("required_axes_before_early_stop", []) or []
+                ),
+                "required_axes_missing_from_plan": list(
+                    diversity_planner.get("required_axes_missing_from_plan", []) or []
+                ),
+            },
             "early_stopped": bool(recursive.get("early_stopped")),
             "early_stop_reason": recursive.get("early_stop_reason"),
             "prompt_kinds": prompt_kinds,
             "skipped_prompt_kinds": skipped_prompt_kinds,
+            "selected_prompt_kind": recursive.get("selected_prompt_kind"),
         },
         "recursive_timeout_recovery": {
             "status": timeout_recovery.get("status"),
@@ -10370,6 +14520,38 @@ def _component_efficacy_from_plan(
             "top_ambiguous_doc_count": int(option_evidence.get("top_ambiguous_doc_count") or 0),
             "selected_option_evidence_candidate": bool(option_evidence.get("selected_option_evidence_candidate")),
         },
+        "evidence_guided_option_challenge": {
+            "status": evidence_guided_option.get("status"),
+            "reason": evidence_guided_option.get("reason"),
+            "candidate_emitted": bool(evidence_guided_option.get("candidate_emitted")),
+            "candidate_verifier_state": evidence_guided_option.get("candidate_verifier_state"),
+            "candidate_correct_for_eval": evidence_guided_option.get("candidate_correct_for_eval"),
+            "selected_evidence_guided_option_candidate": bool(
+                evidence_guided_option.get("selected_evidence_guided_option_candidate")
+            ),
+            "context_char_count": int(evidence_guided_option.get("context_char_count") or 0),
+            "context_option_count": int(evidence_guided_option.get("context_option_count") or 0),
+            "top_rank_score": evidence_guided_option.get("top_rank_score"),
+            "top_support_doc_count": int(evidence_guided_option.get("top_support_doc_count") or 0),
+            "any_ambiguous_doc_count": int(evidence_guided_option.get("any_ambiguous_doc_count") or 0),
+        },
+        "structural_option_audit_child": {
+            "status": structural_option_audit.get("status"),
+            "reason": structural_option_audit.get("reason"),
+            "candidate_emitted": bool(structural_option_audit.get("candidate_emitted")),
+            "candidate_verifier_state": structural_option_audit.get("candidate_verifier_state"),
+            "candidate_disagreed_with_majority": bool(
+                structural_option_audit.get("candidate_disagreed_with_majority")
+            ),
+            "selected_structural_option_audit": bool(
+                structural_option_audit.get("selected_structural_option_audit")
+            ),
+            "candidate_correct_for_eval": structural_option_audit.get("candidate_correct_for_eval"),
+            "valid_candidate_count_before": int(structural_option_audit.get("valid_candidate_count_before") or 0),
+            "unique_candidate_count_before": int(structural_option_audit.get("unique_candidate_count_before") or 0),
+            "top_candidate_count_before": int(structural_option_audit.get("top_candidate_count_before") or 0),
+            "missing_option_count_before": int(structural_option_audit.get("missing_option_count_before") or 0),
+        },
         "counter_assumption_challenge": {
             "status": counter_challenge.get("status"),
             "reason": counter_challenge.get("reason"),
@@ -10408,6 +14590,22 @@ def _component_efficacy_from_plan(
             "candidate_emitted": bool(raw_preserve.get("candidate_emitted")),
             "selected_raw_preserve_candidate": bool(raw_preserve.get("selected_raw_preserve_candidate")),
         },
+        "raw_budget_preserve_selector": {
+            "status": raw_budget_preserve.get("status"),
+            "policy": raw_budget_preserve.get("policy"),
+            "trigger": raw_budget_preserve.get("trigger"),
+            "candidate_emitted": bool(raw_budget_preserve.get("candidate_emitted")),
+            "selected_raw_budget_preserve_candidate": bool(
+                raw_budget_preserve.get("selected_raw_budget_preserve_candidate")
+            ),
+            "candidate_count": int(raw_budget_preserve.get("candidate_count") or 0),
+            "answered_candidate_count": int(raw_budget_preserve.get("answered_candidate_count") or 0),
+            "selection_method": raw_budget_preserve.get("selection_method"),
+            "child_selection_method": raw_budget_preserve.get("child_selection_method"),
+            "top_candidate_vote_count": raw_budget_preserve.get("top_candidate_vote_count"),
+            "strong_consensus": bool(raw_budget_preserve.get("strong_consensus")),
+            "block_reason": raw_budget_preserve.get("block_reason"),
+        },
         "hipporag_preserve_selector": {
             "status": hipporag_preserve.get("status"),
             "policy": hipporag_preserve.get("policy"),
@@ -10416,9 +14614,50 @@ def _component_efficacy_from_plan(
             "candidate_emitted": bool(hipporag_preserve.get("candidate_emitted")),
             "selected_hipporag_preserve_candidate": bool(hipporag_preserve.get("selected_hipporag_preserve_candidate")),
             "retrieval_status": hipporag_preserve.get("retrieval_status"),
+            "budget_matched": bool(hipporag_preserve.get("budget_matched")),
+            "candidate_count": int(hipporag_preserve.get("candidate_count") or 0),
+            "answered_candidate_count": int(hipporag_preserve.get("answered_candidate_count") or 0),
+            "selection_method": hipporag_preserve.get("selection_method"),
             "candidate_doc_count": int(hipporag_preserve.get("candidate_doc_count") or 0),
             "selected_doc_count": int(hipporag_preserve.get("selected_doc_count") or 0),
             "context_char_count": int(hipporag_preserve.get("context_char_count") or 0),
+        },
+        "route_arbitrator": {
+            "status": route_arbitrator.get("status"),
+            "policy": route_arbitrator.get("policy"),
+            "route_value_verifier_enabled": bool(
+                route_arbitrator.get("route_value_verifier_enabled", _route_value_verifier_enabled())
+            ),
+            "route_consensus_guard_enabled": bool(
+                route_arbitrator.get("route_consensus_guard_enabled", _route_consensus_guard_enabled())
+            ),
+            "budget_echo_guard_enabled": bool(
+                route_arbitrator.get("budget_echo_guard_enabled", _budget_echo_guard_enabled())
+            ),
+            "candidate_emitted": bool(route_arbitrator.get("candidate_emitted")),
+            "selected_route_arbitrator_candidate": bool(route_arbitrator.get("selected_route_arbitrator_candidate")),
+            "selected_route_type": route_arbitrator.get("selected_route_type"),
+            "selected_route_prompt_kind": route_arbitrator.get("selected_route_prompt_kind"),
+            "route_count": int(route_arbitrator.get("route_count") or 0),
+            "route_types": list(route_arbitrator.get("route_types", []) or []),
+            "unique_answer_count": int(route_arbitrator.get("unique_answer_count") or 0),
+            "selected_route_score": route_arbitrator.get("selected_route_score"),
+            "runner_up_score": route_arbitrator.get("runner_up_score"),
+            "selected_route_value_profile": route_arbitrator.get("selected_route_value_profile"),
+            "route_consensus": bool(route_arbitrator.get("route_consensus")),
+            "retrieval_budget_counter_norm_count": int(
+                route_arbitrator.get("retrieval_budget_counter_norm_count") or 0
+            ),
+            "independent_hippo_counter_norm_count": int(
+                route_arbitrator.get("independent_hippo_counter_norm_count") or 0
+            ),
+            "selected_route_trusted": bool(route_arbitrator.get("selected_route_trusted")),
+            "selected_route_trust_reason": route_arbitrator.get("selected_route_trust_reason"),
+            "route_locked": bool(route_arbitrator.get("route_locked")),
+            "raw_budget_strong_consensus": bool(route_arbitrator.get("raw_budget_strong_consensus")),
+            "raw_budget_top_vote_count": int(route_arbitrator.get("raw_budget_top_vote_count") or 0),
+            "hipporag_context_route_count": int(route_arbitrator.get("hipporag_context_route_count") or 0),
+            "value_of_information_gate": route_voi or None,
         },
         "selection": {
             "status": selection.get("status"),
@@ -10494,6 +14733,7 @@ def _metrics(*, sample_rows: list[dict[str, Any]], run_rows: list[dict[str, Any]
         "module_activation_summary": _module_activation_summary(run_rows),
         "expected_but_missing_modules": _expected_but_missing_modules(run_rows),
         "component_efficacy_summary": _component_efficacy_summary(run_rows),
+        "route_credit_table": _route_credit_table(run_rows),
         "raw_content_persisted": False,
     }
 
@@ -10547,6 +14787,254 @@ def _control_comparison(run_rows: list[dict[str, Any]]) -> dict[str, Any]:
             }
         comparisons[model] = model_comparison
     return comparisons
+
+
+def _agent_meets_best_control_gate(metrics: dict[str, Any]) -> dict[str, Any]:
+    by_model_variant = metrics.get("by_model_variant", {}) if isinstance(metrics, dict) else {}
+    control_variants = ("raw", "raw_budget_matched", "hipporag_baseline", "hipporag_budget_matched")
+    details: dict[str, Any] = {}
+    passed = True
+    model_names = sorted({
+        str(key).split("::", 1)[0]
+        for key in by_model_variant
+        if "::" in str(key)
+    })
+    for model in model_names:
+        agent_key = f"{model}::assumption_agent_recursive_verify"
+        agent_metrics = by_model_variant.get(agent_key)
+        if not isinstance(agent_metrics, dict):
+            continue
+        agent_accuracy = agent_metrics.get("accuracy")
+        control_rows = []
+        for variant in control_variants:
+            control_key = f"{model}::{variant}"
+            control_metrics = by_model_variant.get(control_key)
+            if not isinstance(control_metrics, dict):
+                continue
+            control_accuracy = control_metrics.get("accuracy")
+            if control_accuracy is None:
+                continue
+            control_rows.append({
+                "variant": variant,
+                "accuracy": control_accuracy,
+                "n": control_metrics.get("n"),
+            })
+        if agent_accuracy is None or not control_rows:
+            continue
+        best_control = max(control_rows, key=lambda row: float(row.get("accuracy") or 0.0))
+        margin = round(float(agent_accuracy) - float(best_control.get("accuracy") or 0.0), 4)
+        model_passed = margin >= 0.0
+        passed = passed and model_passed
+        details[model] = {
+            "passed": model_passed,
+            "agent_accuracy": agent_accuracy,
+            "best_control_variant": best_control.get("variant"),
+            "best_control_accuracy": best_control.get("accuracy"),
+            "agent_minus_best_control": margin,
+            "controls": control_rows,
+        }
+    return {
+        "passed": passed,
+        "policy": "Agent must not score below the best same-model control present in the run.",
+        "details": details,
+    }
+
+
+def _route_credit_table(run_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Per-problem route credit assignment without persisting HLE content."""
+    control_variants = ("raw", "raw_budget_matched", "hipporag_baseline", "hipporag_budget_matched")
+    agent_variant = "assumption_agent_recursive_verify"
+    grouped: dict[tuple[str, str], dict[str, dict[str, Any]]] = defaultdict(dict)
+    for row in run_rows:
+        model = str(row.get("model") or "")
+        problem_hash = str(row.get("problem_id_hash") or "")
+        variant = str(row.get("variant") or "")
+        if not model or not problem_hash or not variant:
+            continue
+        grouped[(model, problem_hash)][variant] = row
+
+    by_model: dict[str, dict[str, Any]] = {}
+    problem_summaries: list[dict[str, Any]] = []
+    for (model, problem_hash), variants in sorted(grouped.items()):
+        agent_row = variants.get(agent_variant)
+        if not isinstance(agent_row, dict):
+            continue
+        model_summary = by_model.setdefault(model, {
+            "problem_count": 0,
+            "complete_control_problem_count": 0,
+            "agent_correct_count": 0,
+            "agent_wrong_or_error_count": 0,
+            "agent_unique_correct_count": 0,
+            "recoverable_agent_error_count": 0,
+            "unrecoverable_agent_error_count": 0,
+            "endpoint_error_problem_count": 0,
+            "correct_by_variant": Counter(),
+            "error_by_variant": Counter(),
+            "agent_loss_to_control_counts": Counter(),
+            "agent_gain_over_control_counts": Counter(),
+            "control_family_correct_counts": Counter(),
+            "agent_selection_method_counts": Counter(),
+            "agent_selection_method_correct_counts": Counter(),
+            "agent_selected_route_type_counts": Counter(),
+            "agent_selected_route_type_correct_counts": Counter(),
+            "agent_selected_route_type_recoverable_loss_counts": Counter(),
+            "voi_status_counts": Counter(),
+            "voi_recommended_action_counts": Counter(),
+            "voi_preserve_correct_count": 0,
+            "voi_preserve_count": 0,
+            "problem_summaries": [],
+        })
+        control_rows = {
+            variant: variants.get(variant)
+            for variant in control_variants
+            if isinstance(variants.get(variant), dict)
+        }
+        agent_correct = bool(agent_row.get("correct"))
+        correct_control_variants = [
+            variant for variant, row in control_rows.items()
+            if bool(row.get("correct"))
+        ]
+        error_control_variants = [
+            variant for variant, row in control_rows.items()
+            if row.get("error")
+        ]
+        all_error_variants = [
+            variant for variant, row in variants.items()
+            if row.get("error")
+        ]
+        efficacy = agent_row.get("component_efficacy")
+        efficacy = efficacy if isinstance(efficacy, dict) else {}
+        selection = efficacy.get("selection")
+        selection = selection if isinstance(selection, dict) else {}
+        route = efficacy.get("route_arbitrator")
+        route = route if isinstance(route, dict) else {}
+        voi = route.get("value_of_information_gate")
+        voi = voi if isinstance(voi, dict) else {}
+        selection_method = str(selection.get("selection_method") or "none")
+        selected_route_type = str(route.get("selected_route_type") or "none")
+        recoverable_controls = [] if agent_correct else correct_control_variants
+        control_family_correct = {
+            "raw_family": any(variant in correct_control_variants for variant in ("raw", "raw_budget_matched")),
+            "hipporag_family": any(
+                variant in correct_control_variants for variant in ("hipporag_baseline", "hipporag_budget_matched")
+            ),
+            "budget_family": any(
+                variant in correct_control_variants for variant in ("raw_budget_matched", "hipporag_budget_matched")
+            ),
+        }
+
+        model_summary["problem_count"] += 1
+        if len(control_rows) == len(control_variants):
+            model_summary["complete_control_problem_count"] += 1
+        model_summary["agent_correct_count"] += int(agent_correct)
+        model_summary["agent_wrong_or_error_count"] += int(not agent_correct)
+        model_summary["agent_unique_correct_count"] += int(agent_correct and not correct_control_variants)
+        model_summary["recoverable_agent_error_count"] += int(bool(recoverable_controls))
+        model_summary["unrecoverable_agent_error_count"] += int((not agent_correct) and not correct_control_variants)
+        model_summary["endpoint_error_problem_count"] += int(bool(all_error_variants))
+        model_summary["agent_selection_method_counts"][selection_method] += 1
+        model_summary["agent_selected_route_type_counts"][selected_route_type] += 1
+        if agent_correct:
+            model_summary["agent_selection_method_correct_counts"][selection_method] += 1
+            model_summary["agent_selected_route_type_correct_counts"][selected_route_type] += 1
+        if recoverable_controls:
+            model_summary["agent_selected_route_type_recoverable_loss_counts"][selected_route_type] += 1
+        for variant, row in variants.items():
+            if row.get("correct"):
+                model_summary["correct_by_variant"][variant] += 1
+            if row.get("error"):
+                model_summary["error_by_variant"][variant] += 1
+        for variant in correct_control_variants:
+            if not agent_correct:
+                model_summary["agent_loss_to_control_counts"][variant] += 1
+        for variant, row in control_rows.items():
+            if agent_correct and not bool(row.get("correct")):
+                model_summary["agent_gain_over_control_counts"][variant] += 1
+        for family, is_correct in control_family_correct.items():
+            if is_correct:
+                model_summary["control_family_correct_counts"][family] += 1
+        voi_status = str(voi.get("status") or "none")
+        voi_action = str(voi.get("recommended_action") or "none")
+        model_summary["voi_status_counts"][voi_status] += 1
+        model_summary["voi_recommended_action_counts"][voi_action] += 1
+        if voi_action == "preserve_route":
+            model_summary["voi_preserve_count"] += 1
+            model_summary["voi_preserve_correct_count"] += int(agent_correct)
+
+        problem_summary = {
+            "model": model,
+            "problem_id_hash": problem_hash,
+            "answer_type": agent_row.get("answer_type"),
+            "agent_correct": agent_correct,
+            "control_correct_variants": correct_control_variants,
+            "control_error_variants": error_control_variants,
+            "recoverable_control_variants": recoverable_controls,
+            "all_controls_wrong_or_error": (not correct_control_variants),
+            "agent_selection_method": selection_method,
+            "agent_selected_route_type": selected_route_type,
+            "agent_selected_route_trust_reason": route.get("selected_route_trust_reason"),
+            "route_voi_status": voi_status,
+            "route_voi_recommended_action": voi_action,
+            "endpoint_error_variants": all_error_variants,
+        }
+        model_summary["problem_summaries"].append(problem_summary)
+        problem_summaries.append(problem_summary)
+
+    finalized_by_model: dict[str, dict[str, Any]] = {}
+    for model, summary in sorted(by_model.items()):
+        n = int(summary["problem_count"] or 0)
+        route_counts: Counter[str] = summary["agent_selected_route_type_counts"]
+        selection_counts: Counter[str] = summary["agent_selection_method_counts"]
+        finalized_by_model[model] = {
+            "problem_count": n,
+            "complete_control_problem_count": int(summary["complete_control_problem_count"]),
+            "agent_correct_count": int(summary["agent_correct_count"]),
+            "agent_accuracy": None if not n else round(summary["agent_correct_count"] / n, 4),
+            "agent_wrong_or_error_count": int(summary["agent_wrong_or_error_count"]),
+            "agent_unique_correct_count": int(summary["agent_unique_correct_count"]),
+            "recoverable_agent_error_count": int(summary["recoverable_agent_error_count"]),
+            "unrecoverable_agent_error_count": int(summary["unrecoverable_agent_error_count"]),
+            "endpoint_error_problem_count": int(summary["endpoint_error_problem_count"]),
+            "correct_by_variant": dict(sorted(summary["correct_by_variant"].items())),
+            "error_by_variant": dict(sorted(summary["error_by_variant"].items())),
+            "agent_loss_to_control_counts": dict(sorted(summary["agent_loss_to_control_counts"].items())),
+            "agent_gain_over_control_counts": dict(sorted(summary["agent_gain_over_control_counts"].items())),
+            "control_family_correct_counts": dict(sorted(summary["control_family_correct_counts"].items())),
+            "agent_selection_method_counts": dict(sorted(selection_counts.items())),
+            "agent_selection_method_accuracy": {
+                method: round(summary["agent_selection_method_correct_counts"][method] / count, 4)
+                for method, count in sorted(selection_counts.items())
+                if count
+            },
+            "agent_selected_route_type_counts": dict(sorted(route_counts.items())),
+            "agent_selected_route_type_accuracy": {
+                route_type: round(summary["agent_selected_route_type_correct_counts"][route_type] / count, 4)
+                for route_type, count in sorted(route_counts.items())
+                if count
+            },
+            "agent_selected_route_type_recoverable_loss_counts": dict(
+                sorted(summary["agent_selected_route_type_recoverable_loss_counts"].items())
+            ),
+            "voi_status_counts": dict(sorted(summary["voi_status_counts"].items())),
+            "voi_recommended_action_counts": dict(sorted(summary["voi_recommended_action_counts"].items())),
+            "voi_preserve_count": int(summary["voi_preserve_count"]),
+            "voi_preserve_accuracy": None
+            if not summary["voi_preserve_count"]
+            else round(summary["voi_preserve_correct_count"] / summary["voi_preserve_count"], 4),
+            "problem_summaries": summary["problem_summaries"],
+        }
+    return {
+        "policy": (
+            "Metadata-only route credit assignment.  It reports when the agent loses to an already-run "
+            "same-model control and separates recoverable selector errors from all-route failures."
+        ),
+        "control_variants": list(control_variants),
+        "agent_variant": agent_variant,
+        "model_count": len(finalized_by_model),
+        "problem_count": len(problem_summaries),
+        "by_model": finalized_by_model,
+        "problem_summaries": problem_summaries,
+    }
 
 
 def _module_activation_summary(run_rows: list[dict[str, Any]]) -> dict[str, dict[str, dict[str, int]]]:
@@ -10670,7 +15158,7 @@ def main() -> None:
     parser.add_argument("--exclude-existing-hle-artifacts", action="store_true")
     parser.add_argument(
         "--exclude-artifact-glob",
-        default="phase four/assumption_graph/paper_readiness_20260604/hle*.json*",
+        default="phase four/assumption_graph/paper_readiness_20260604/hle_parallel_runs/hle*.json*",
     )
     parser.add_argument("--hard-exit-after-write", action="store_true")
     parser.add_argument("--out", default=str(DEFAULT_OUT))

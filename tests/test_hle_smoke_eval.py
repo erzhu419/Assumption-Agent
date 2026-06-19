@@ -25,11 +25,13 @@ from assumption_os.hle_smoke_eval import (
     _component_efficacy_summary,
     _control_comparison,
     _cost_aware_hipporag_preserve_trigger,
+    _cost_aware_raw_budget_preserve_trigger,
     _cost_aware_raw_preserve_trigger,
     _counter_assumption_challenge_trigger,
     _default_call_timeout,
     _deterministic_math_tool_answer,
     _execute_math_tool_plan_text,
+    _endpoint_error_pressure_abort_summary,
     _extract_multiple_choice_options,
     _expected_but_missing_modules,
     _filter_answer_bearing_evidence_results,
@@ -42,11 +44,15 @@ from assumption_os.hle_smoke_eval import (
     _model_router_subprocess_calls_enabled,
     _maybe_run_forced_alternative_challenge,
     _maybe_run_critic_synthesis_child,
+    _maybe_add_route_arbitrator_candidate,
     _maybe_add_mc_option_sweep_candidates,
     _maybe_run_domain_rule_mc_verifier,
+    _maybe_run_evidence_guided_option_challenge,
     _maybe_run_mc_option_evidence_scorer,
+    _maybe_run_structural_option_audit_child,
     _maybe_run_option_elimination_challenge,
     _maybe_run_hipporag_preserve_selector_child,
+    _maybe_run_raw_budget_preserve_selector_child,
     _maybe_run_raw_preserve_selector_child,
     _maybe_run_child_model_failover_child,
     _maybe_run_timeout_recovery_child,
@@ -58,6 +64,7 @@ from assumption_os.hle_smoke_eval import (
     _model_router_extra_body,
     _needs_exact_answer_repair,
     _needs_evidence_grounded_child,
+    _orthogonalize_child_prompt_specs,
     _parse_answer_json,
     _parse_verifier_choice,
     _prompt_for,
@@ -76,6 +83,11 @@ from assumption_os.hle_smoke_eval import (
     _should_run_candidate_claim_verifier,
     _should_use_agent_context,
     _should_prime_evidence_bridge,
+    _same_run_cache_route_candidates,
+    _route_arbitrator_should_lock,
+    _route_arbitrator_lock_decision,
+    _route_credit_table,
+    _route_value_of_information_gate_summary,
     build_hle_text_smoke_eval_payload,
 )
 
@@ -83,6 +95,21 @@ from assumption_os.hle_smoke_eval import (
 class HleSmokeEvalTest(unittest.TestCase):
     def test_parse_answer_json(self):
         self.assertEqual(_parse_answer_json('{"answer": "D"}'), "D")
+
+    def test_extract_multiple_choice_options_supports_beyond_h(self):
+        question = (
+            "Which axiom is inconsistent?\n\n"
+            "Answer Choices:\n"
+            "A. Propositional extensionality\n"
+            "H. Excluded middle\n"
+            "I. Markov's principle"
+        )
+        options, first_start = _extract_multiple_choice_options(question)
+
+        self.assertIsNotNone(first_start)
+        self.assertEqual(options["A"], "Propositional extensionality")
+        self.assertEqual(options["H"], "Excluded middle")
+        self.assertEqual(options["I"], "Markov's principle")
         self.assertEqual(_parse_answer_json('```json\n{"answer": "Z+Z"}\n```'), "Z+Z")
         self.assertIsNone(_parse_answer_json("not json"))
 
@@ -229,13 +256,23 @@ class HleSmokeEvalTest(unittest.TestCase):
             "_question": "secret gated question",
         }
 
-        self.assertEqual(len(_recursive_child_prompt_specs(problem, agent_plan={})), 3)
+        plan = {}
+        base_specs = _recursive_child_prompt_specs(problem, agent_plan=plan)
+        self.assertEqual(len(base_specs), 3)
+        self.assertEqual(len({spec["branch_axis"] for spec in base_specs}), len(base_specs))
+        self.assertTrue(all(spec.get("orthogonal_branch_id") for spec in base_specs))
+        self.assertTrue(all("recursive child branch" in spec["prompt"] for spec in base_specs))
+        self.assertEqual(
+            plan["stages"]["recursive_child_diversity_planner"]["unique_branch_axis_count"],
+            3,
+        )
         with patch.dict(os.environ, {"HLE_ENABLE_EXACT_TRAJECTORY_SEARCH": "1"}):
             trajectory_specs = _recursive_child_prompt_specs(problem, agent_plan={})
         self.assertEqual(
             [spec["prompt_kind"] for spec in trajectory_specs[3:6]],
             ["decomposition_answer", "adversarial_alternative_answer", "literal_constraint_answer"],
         )
+        self.assertEqual(len({spec["branch_axis"] for spec in trajectory_specs}), len(trajectory_specs))
         specs = _recursive_child_prompt_specs(problem, agent_plan={"prompt_context": "graph context"})
         self.assertEqual(len(specs), 4)
         self.assertEqual(specs[-1]["prompt_kind"], "agent_context_answer")
@@ -245,6 +282,10 @@ class HleSmokeEvalTest(unittest.TestCase):
             agent_plan={"prompt_context": "graph context"},
         )
         self.assertEqual(mc_specs[1]["prompt_kind"], "agent_context_answer")
+        mc_kinds = [spec["prompt_kind"] for spec in mc_specs]
+        mc_axes = [spec["branch_axis"] for spec in mc_specs]
+        self.assertIn("option_matrix_reasoner_answer", mc_kinds)
+        self.assertIn("option_matrix_reasoning", mc_axes)
 
         evidence_specs = _recursive_child_prompt_specs(
             problem,
@@ -273,6 +314,50 @@ class HleSmokeEvalTest(unittest.TestCase):
                 agent_plan={"hipporag_prompt_context": "[Evidence 1] source=wikipedia; title=H; snippet=R."},
             )
         self.assertIn("hipporag_context_answer", [spec["prompt_kind"] for spec in exact_hipporag_specs])
+
+    def test_recursive_child_prompt_specs_include_code_semantics_for_compile_mc(self):
+        problem = {
+            "id_hash": "p",
+            "question_hash": "q",
+            "answer_type": "multipleChoice",
+            "category": "Engineering",
+            "raw_subject": "Computer Engineering",
+            "_question": (
+                "Will the following Rust code compile?\n"
+                "```\nfn main() { println!(\"hi\"); }\n```\n"
+                "A. It compiles\nB. It does not compile"
+            ),
+        }
+
+        specs = _recursive_child_prompt_specs(problem, agent_plan={})
+        kinds = [spec["prompt_kind"] for spec in specs]
+        axes = [spec["branch_axis"] for spec in specs]
+
+        self.assertIn("code_semantics_answer", kinds)
+        self.assertIn("code_semantics", axes)
+        self.assertLess(kinds.index("code_semantics_answer"), kinds.index("option_elimination_answer"))
+        self.assertIn("option_matrix_reasoner_answer", kinds)
+
+    def test_orthogonal_child_planner_deduplicates_same_axis_specs(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. one\nB. two",
+        }
+        plan = {}
+        specs = _orthogonalize_child_prompt_specs(
+            problem,
+            [
+                {"prompt_kind": "direct_short_answer", "prompt": "first"},
+                {"prompt_kind": "direct_short_answer", "prompt": "duplicate"},
+                {"prompt_kind": "constraint_checked_answer", "prompt": "constraint"},
+            ],
+            agent_plan=plan,
+        )
+        self.assertEqual([spec["prompt_kind"] for spec in specs], ["direct_short_answer", "constraint_checked_answer"])
+        self.assertEqual([spec["branch_axis"] for spec in specs], ["closed_book_direct", "format_constraint"])
+        summary = plan["stages"]["recursive_child_diversity_planner"]
+        self.assertEqual(summary["duplicate_branch_axes_removed"], 1)
+        self.assertEqual(summary["skipped_duplicate_branch_axes"][0]["branch_axis"], "closed_book_direct")
 
     def test_answer_bearing_evidence_filter_blocks_generic_context(self):
         problem = {
@@ -540,6 +625,133 @@ class HleSmokeEvalTest(unittest.TestCase):
             answer_type="exactMatch",
         ))
 
+    def test_endpoint_error_pressure_abort_requires_error_storm_without_candidates(self):
+        problem = {"answer_type": "multipleChoice", "_question": "Which option?\nA. one\nB. two"}
+        errors = [
+            {"prompt_kind": "direct_short_answer", "status": "error", "error_type": "RuntimeError", "parsed_answer": ""},
+            {"prompt_kind": "constraint_checked_answer", "status": "error", "error_type": "RuntimeError", "parsed_answer": ""},
+            {"prompt_kind": "recursive_assumption_answer", "status": "error", "error_type": "RuntimeError", "parsed_answer": ""},
+        ]
+        summary = _endpoint_error_pressure_abort_summary(problem=problem, attempts=errors)
+        self.assertEqual(summary["status"], "activated")
+        self.assertEqual(summary["valid_candidate_count"], 0)
+
+        with_candidate = errors + [
+            {"prompt_kind": "option_elimination_answer", "status": "answered", "parsed_answer": "A"},
+            {"prompt_kind": "adversarial_alternative_answer", "status": "answered", "parsed_answer": "B"},
+        ]
+        summary = _endpoint_error_pressure_abort_summary(problem=problem, attempts=with_candidate)
+        self.assertEqual(summary["status"], "not_required")
+
+    def test_route_credit_table_separates_recoverable_selector_loss(self):
+        rows = [
+            {"model": "m", "variant": "raw", "problem_id_hash": "p1", "answer_type": "multipleChoice", "correct": False, "error": None},
+            {"model": "m", "variant": "raw_budget_matched", "problem_id_hash": "p1", "answer_type": "multipleChoice", "correct": True, "error": None},
+            {"model": "m", "variant": "hipporag_baseline", "problem_id_hash": "p1", "answer_type": "multipleChoice", "correct": False, "error": None},
+            {"model": "m", "variant": "hipporag_budget_matched", "problem_id_hash": "p1", "answer_type": "multipleChoice", "correct": False, "error": None},
+            {
+                "model": "m",
+                "variant": "assumption_agent_recursive_verify",
+                "problem_id_hash": "p1",
+                "answer_type": "multipleChoice",
+                "correct": False,
+                "error": None,
+                "component_efficacy": {
+                    "selection": {"selection_method": "route_value_verifier_choice"},
+                    "route_arbitrator": {
+                        "selected_route_type": "hipporag_preserve",
+                        "selected_route_trust_reason": "answer_bearing_hipporag_route",
+                        "value_of_information_gate": {
+                            "status": "continue_exploration",
+                            "recommended_action": "continue_exploration",
+                        },
+                    },
+                },
+            },
+            {"model": "m", "variant": "raw", "problem_id_hash": "p2", "answer_type": "multipleChoice", "correct": False, "error": None},
+            {"model": "m", "variant": "raw_budget_matched", "problem_id_hash": "p2", "answer_type": "multipleChoice", "correct": False, "error": None},
+            {"model": "m", "variant": "hipporag_baseline", "problem_id_hash": "p2", "answer_type": "multipleChoice", "correct": False, "error": None},
+            {"model": "m", "variant": "hipporag_budget_matched", "problem_id_hash": "p2", "answer_type": "multipleChoice", "correct": False, "error": None},
+            {
+                "model": "m",
+                "variant": "assumption_agent_recursive_verify",
+                "problem_id_hash": "p2",
+                "answer_type": "multipleChoice",
+                "correct": True,
+                "error": None,
+                "component_efficacy": {
+                    "selection": {"selection_method": "candidate_claim_verifier_priority"},
+                    "route_arbitrator": {"selected_route_type": "answer_bearing_evidence"},
+                },
+            },
+        ]
+
+        table = _route_credit_table(rows)
+        model_table = table["by_model"]["m"]
+
+        self.assertEqual(model_table["problem_count"], 2)
+        self.assertEqual(model_table["recoverable_agent_error_count"], 1)
+        self.assertEqual(model_table["unrecoverable_agent_error_count"], 0)
+        self.assertEqual(model_table["agent_unique_correct_count"], 1)
+        self.assertEqual(model_table["agent_loss_to_control_counts"], {"raw_budget_matched": 1})
+        self.assertEqual(
+            model_table["agent_selected_route_type_recoverable_loss_counts"],
+            {"hipporag_preserve": 1},
+        )
+
+    def test_route_voi_gate_is_diagnostic_by_default_and_lockable_by_env(self):
+        summary = {
+            "status": "activated",
+            "candidate_emitted": True,
+            "selected_route_type": "raw_budget_consensus",
+            "selected_route_child_id": "rawb",
+            "selected_route_score": 12.0,
+            "runner_up_score": 7.0,
+            "selected_route_trusted": True,
+            "selected_route_trust_reason": "strong_raw_budget_consensus",
+            "raw_budget_strong_consensus": True,
+            "raw_budget_top_vote_count": 4,
+            "route_scores": [
+                {
+                    "route_type": "raw_budget_consensus",
+                    "prompt_kind": "raw_budget_preserve_selector_answer",
+                    "child_id": "rawb",
+                    "score": 12.0,
+                    "value_profile": {
+                        "confidence": "high",
+                        "reason_tags": ["raw_budget_strong_consensus"],
+                        "risk_tags": [],
+                    },
+                    "baseline_cache_support_count": 2,
+                    "answer_hash": "ha",
+                    "normalized_answer_hash": "hna",
+                },
+                {
+                    "route_type": "hipporag_preserve",
+                    "prompt_kind": "hipporag_preserve_selector_answer",
+                    "child_id": "hippo",
+                    "score": 7.0,
+                    "value_profile": {
+                        "confidence": "medium",
+                        "reason_tags": ["weak_option_linked_retrieval"],
+                        "risk_tags": ["weak_option_linked_retrieval_without_budget"],
+                    },
+                    "context_answer_supported": False,
+                    "baseline_cache_support_count": 1,
+                    "answer_hash": "hb",
+                    "normalized_answer_hash": "hnb",
+                },
+            ],
+        }
+        summary["value_of_information_gate"] = _route_value_of_information_gate_summary(summary)
+
+        self.assertEqual(summary["value_of_information_gate"]["status"], "preserve_route")
+        self.assertFalse(_route_arbitrator_lock_decision(summary))
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_VOI_HARD_GATE": "1"}, clear=False):
+            summary["value_of_information_gate"] = _route_value_of_information_gate_summary(summary)
+            self.assertTrue(_route_arbitrator_lock_decision(summary))
+            self.assertTrue(summary["value_of_information_gate"]["hard_gate_applied"])
+
     def test_exact_early_stop_requires_independent_context_child(self):
         math_problem = {
             "answer_type": "exactMatch",
@@ -563,8 +775,13 @@ class HleSmokeEvalTest(unittest.TestCase):
         with_recursive = direct_constraint + [
             {"prompt_kind": "recursive_assumption_answer", "parsed_answer": "42"},
         ]
+        under_diverse_two_vote = [
+            {"prompt_kind": "direct_short_answer", "parsed_answer": "42"},
+            {"prompt_kind": "recursive_assumption_answer", "parsed_answer": "42"},
+        ]
 
         self.assertFalse(_can_stop_recursive_children_early(math_problem, direct_constraint))
+        self.assertFalse(_can_stop_recursive_children_early(math_problem, under_diverse_two_vote))
         self.assertTrue(_can_stop_recursive_children_early(math_problem, direct_evidence))
         self.assertTrue(_can_stop_recursive_children_early(math_problem, with_recursive))
         self.assertFalse(_can_stop_recursive_children_early(non_math_problem, direct_constraint))
@@ -583,8 +800,17 @@ class HleSmokeEvalTest(unittest.TestCase):
         mc_with_context = mc_direct_evidence + [
             {"prompt_kind": "agent_context_answer", "parsed_answer": "B"},
         ]
+        mc_core_axes = [
+            {"prompt_kind": "direct_short_answer", "parsed_answer": "B"},
+            {"prompt_kind": "constraint_checked_answer", "parsed_answer": "B"},
+            {"prompt_kind": "recursive_assumption_answer", "parsed_answer": "B"},
+            {"prompt_kind": "option_matrix_reasoner_answer", "parsed_answer": "B"},
+            {"prompt_kind": "option_elimination_answer", "parsed_answer": "C"},
+            {"prompt_kind": "adversarial_alternative_answer", "parsed_answer": "B"},
+        ]
         self.assertFalse(_can_stop_recursive_children_early(mc_problem, mc_direct_evidence))
-        self.assertTrue(_can_stop_recursive_children_early(mc_problem, mc_with_context))
+        self.assertFalse(_can_stop_recursive_children_early(mc_problem, mc_with_context))
+        self.assertTrue(_can_stop_recursive_children_early(mc_problem, mc_core_axes))
 
     def test_parallel_child_batch_records_wall_clock_timeouts(self):
         problem = {
@@ -1140,12 +1366,12 @@ class HleSmokeEvalTest(unittest.TestCase):
             exact_problem,
             {"world_model_router": {"decision": "abstain_to_raw_prompt"}, "prompt_context": ""},
         ))
-        self.assertFalse(_should_prime_evidence_bridge(
+        self.assertTrue(_should_prime_evidence_bridge(
             mc_problem,
             {"world_model_router": {"decision": "abstain_to_raw_prompt"}, "prompt_context": ""},
         ))
-        with patch.dict(os.environ, {"HLE_ENABLE_MC_EVIDENCE_BRIDGE": "1"}):
-            self.assertTrue(_should_prime_evidence_bridge(
+        with patch.dict(os.environ, {"HLE_DISABLE_MC_EVIDENCE_BRIDGE": "1"}):
+            self.assertFalse(_should_prime_evidence_bridge(
                 mc_problem,
                 {"world_model_router": {"decision": "abstain_to_raw_prompt"}, "prompt_context": ""},
             ))
@@ -1432,11 +1658,11 @@ class HleSmokeEvalTest(unittest.TestCase):
         )
 
         self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
-        self.assertEqual(gated["selected_child_id"], "hipp")
-        self.assertEqual(gated["selected_answer"], "B")
+        self.assertEqual(gated["selected_child_id"], "rawp")
+        self.assertEqual(gated["selected_answer"], "C")
         self.assertEqual(
             gated["verified_or_abstain_gate"]["fallback_prompt_kind"],
-            "hipporag_preserve_selector_answer",
+            "raw_preserve_selector_answer",
         )
 
     def test_hipporag_preserve_selector_blocks_contextless_candidate(self):
@@ -1518,6 +1744,241 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertEqual(gated["selected_child_id"], "rawp")
         self.assertEqual(gated["verified_or_abstain_gate"]["fallback_prompt_kind"], "raw_preserve_selector_answer")
+
+    def test_preserve_selectors_use_same_run_baseline_cache_without_extra_calls(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. wrong\nB. raw\nC. hippo",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {
+                    "variant": "raw",
+                    "answer": "B",
+                    "answer_hash": "raw-hash",
+                },
+                "raw_budget_matched": {
+                    "variant": "raw_budget_matched",
+                    "answer": "B",
+                    "answer_hash": "raw-budget-hash",
+                    "budget_candidate_count": 5,
+                    "budget_answered_candidate_count": 5,
+                    "budget_top_candidate_vote_count": 4,
+                    "budget_strong_consensus": True,
+                    "selection_method": "same_run_control",
+                },
+                "hipporag_budget_matched": {
+                    "variant": "hipporag_budget_matched",
+                    "answer": "C",
+                    "answer_hash": "hippo-budget-hash",
+                    "context_char_count": 800,
+                    "candidate_doc_count": 4,
+                    "selected_doc_count": 2,
+                    "budget_candidate_count": 5,
+                    "budget_answered_candidate_count": 5,
+                    "selection_method": "same_run_control",
+                },
+            }
+        }
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_RAW_PRESERVE_SELECTOR": "1",
+                "HLE_ENABLE_RAW_BUDGET_PRESERVE_SELECTOR": "1",
+                "HLE_ENABLE_HIPPORAG_PRESERVE_SELECTOR": "1",
+            },
+            clear=False,
+        ), patch("assumption_os.hle_smoke_eval._call_model") as call_model, patch(
+            "assumption_os.hle_smoke_eval._build_hipporag_baseline_plan"
+        ) as build_hippo:
+            raw_attempt, raw_summary = _maybe_run_raw_preserve_selector_child(
+                problem=problem,
+                attempts=[],
+                agent_plan=agent_plan,
+                model="m",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+            raw_budget_attempt, raw_budget_summary = _maybe_run_raw_budget_preserve_selector_child(
+                problem=problem,
+                attempts=[raw_attempt],
+                agent_plan=agent_plan,
+                model="m",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+            hippo_attempt, hippo_summary = _maybe_run_hipporag_preserve_selector_child(
+                problem=problem,
+                attempts=[raw_attempt, raw_budget_attempt],
+                agent_plan=agent_plan,
+                model="m",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+
+        call_model.assert_not_called()
+        build_hippo.assert_not_called()
+        self.assertEqual(raw_attempt["parsed_answer"], "B")
+        self.assertEqual(raw_summary["policy"], "same_run_raw_baseline_cache_candidate")
+        self.assertEqual(raw_summary["underlying_model_calls"], 0)
+        self.assertEqual(raw_budget_attempt["parsed_answer"], "B")
+        self.assertEqual(raw_budget_summary["policy"], "same_run_raw_budget_matched_cache_candidate")
+        self.assertTrue(raw_budget_summary["strong_consensus"])
+        self.assertEqual(raw_budget_summary["top_candidate_vote_count"], 4)
+        self.assertEqual(hippo_attempt["parsed_answer"], "C")
+        self.assertEqual(hippo_summary["policy"], "same_run_hipporag_cache_candidate")
+        self.assertEqual(hippo_summary["context_char_count"], 800)
+        self.assertEqual(hippo_summary["underlying_model_calls"], 0)
+
+    def test_hipporag_preserve_selector_emits_contextless_same_run_cache_candidate(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw\nB. retrieved",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "hipporag_baseline": {
+                    "variant": "hipporag_baseline",
+                    "answer": "B",
+                    "answer_hash": "hippo-hash",
+                    "context_char_count": 0,
+                    "candidate_doc_count": 0,
+                    "selected_doc_count": 0,
+                },
+            }
+        }
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_HIPPORAG_PRESERVE_SELECTOR": "1"},
+            clear=False,
+        ), patch("assumption_os.hle_smoke_eval._call_model") as call_model, patch(
+            "assumption_os.hle_smoke_eval._build_hipporag_baseline_plan"
+        ) as build_hippo:
+            attempt, summary = _maybe_run_hipporag_preserve_selector_child(
+                problem=problem,
+                attempts=[],
+                agent_plan=agent_plan,
+                model="m",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+
+        call_model.assert_not_called()
+        build_hippo.assert_not_called()
+        self.assertIsNotNone(attempt)
+        self.assertIsNotNone(summary)
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertFalse(attempt["same_run_cache_has_usable_context"])
+        self.assertEqual(summary["policy"], "same_run_hipporag_cache_candidate_no_context")
+        self.assertEqual(summary["retrieval_status"], "same_run_cache_no_context")
+        self.assertEqual(summary["context_char_count"], 0)
+        self.assertEqual(summary["underlying_model_calls"], 0)
+
+    def test_hipporag_preserve_selector_can_use_budget_matched_candidates(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Biology/Medicine",
+            "raw_subject": "Ecology",
+            "_question": "Which option is correct?\nA. direct\nB. retrieved",
+        }
+        baseline_plan = {
+            "stages": {
+                "hipporag_context_retrieval": {
+                    "status": "activated",
+                    "query_count": 2,
+                    "candidate_doc_count": 3,
+                },
+                "hipporag_associative_rerank": {
+                    "status": "activated",
+                    "selected_doc_count": 2,
+                },
+                "prompt_builder": {
+                    "status": "activated",
+                    "context_char_count": 120,
+                },
+            },
+            "prompt_context": "supporting context",
+        }
+        child_attempts = [
+            {
+                "child_id": "hippo-budget-a",
+                "child_index": 10,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hash-b",
+                "status": "answered",
+            },
+            {
+                "child_id": "hippo-budget-b",
+                "child_index": 11,
+                "prompt_kind": "constraint_checked_answer",
+                "parsed_answer": "C",
+                "parsed_answer_hash": "hash-c",
+                "status": "answered",
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_HIPPORAG_BUDGET_PRESERVE_SELECTOR": "1"}, clear=False), patch(
+            "assumption_os.hle_smoke_eval._build_hipporag_baseline_plan",
+            return_value=baseline_plan,
+        ), patch(
+            "assumption_os.hle_smoke_eval._run_child_batch",
+            return_value={"attempts": child_attempts, "underlying_model_calls": 2, "max_workers": 2},
+        ) as run_batch, patch(
+            "assumption_os.hle_smoke_eval._select_recursive_child_answer",
+            return_value={
+                "selection_method": "verified_or_abstain_direct_fallback",
+                "selected_child_id": "hippo-budget-a",
+                "selected_answer": "B",
+                "underlying_model_calls": 0,
+                "verifier_model_call": False,
+            },
+        ):
+            attempt, summary = _maybe_run_hipporag_preserve_selector_child(
+                problem=problem,
+                attempts=[
+                    {
+                        "child_id": "direct",
+                        "child_index": 1,
+                        "prompt_kind": "direct_short_answer",
+                        "parsed_answer": "A",
+                    }
+                ],
+                agent_plan={},
+                model="base-model",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["prompt_kind"], "hipporag_preserve_selector_answer")
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(attempt["branch_axis"], "hipporag_preserve_baseline")
+        self.assertTrue(summary["budget_matched"])
+        self.assertEqual(summary["candidate_count"], 2)
+        self.assertEqual(summary["answered_candidate_count"], 2)
+        self.assertEqual(summary["underlying_model_calls"], 2)
+        run_batch.assert_called_once()
 
     def test_cost_aware_hipporag_preserve_trigger_abstains_on_verified_candidate(self):
         problem = {
@@ -1645,6 +2106,2172 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertIsNone(skipped_attempt)
         self.assertIsNone(skipped_summary)
         no_call_model.assert_not_called()
+
+    def test_cost_aware_raw_budget_preserve_trigger_catches_uncertain_unverified_routes(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which mechanism best explains this?\nA. a\nB. b\nC. c\nD. d",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "B"},
+            {"child_id": "c3", "child_index": 3, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "C"},
+        ]
+        agent_plan = {
+            "stages": {
+                "world_model_router": {"generic_graph_context_only": True},
+                "structural_morphism_transfer": {
+                    "structural_morphism_hits": [{"decision": "repair_level"}],
+                    "formal_mapping_hits": [],
+                },
+            }
+        }
+        with patch.dict(os.environ, {"HLE_ENABLE_COST_AWARE_RAW_BUDGET_PRESERVE_SELECTOR": "1"}, clear=False):
+            trigger = _cost_aware_raw_budget_preserve_trigger(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(trigger["status"], "activated")
+        self.assertEqual(trigger["reason"], "unverified_mc_route_uncertain_use_raw_budget_preserve")
+        self.assertTrue(trigger["generic_graph_context_only"])
+        self.assertTrue(trigger["weak_morphism_only"])
+
+        verified_attempts = attempts + [{
+            "child_id": "v",
+            "child_index": 4,
+            "prompt_kind": "candidate_claim_verifier_answer",
+            "parsed_answer": "B",
+            "candidate_verifier_state": "verified",
+        }]
+        with patch.dict(os.environ, {"HLE_ENABLE_COST_AWARE_RAW_BUDGET_PRESERVE_SELECTOR": "1"}, clear=False):
+            verified_trigger = _cost_aware_raw_budget_preserve_trigger(
+                problem=problem,
+                attempts=verified_attempts,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(verified_trigger["status"], "abstained")
+        self.assertEqual(verified_trigger["reason"], "trusted_verified_candidate_available")
+
+    def test_raw_budget_preserve_selector_runs_budget_matched_candidates(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which mechanism best explains this?\nA. a\nB. b\nC. c\nD. d",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "B"},
+            {"child_id": "c3", "child_index": 3, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "C"},
+        ]
+        child_attempts = [
+            {
+                "child_id": "rb1",
+                "child_index": 4,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "C",
+                "parsed_answer_hash": "hC",
+                "status": "answered",
+            },
+            {
+                "child_id": "rb2",
+                "child_index": 5,
+                "prompt_kind": "constraint_checked_answer",
+                "parsed_answer": "C",
+                "parsed_answer_hash": "hC",
+                "status": "answered",
+            },
+            {
+                "child_id": "rb3",
+                "child_index": 6,
+                "prompt_kind": "skeptical_recheck_answer",
+                "parsed_answer": "C",
+                "parsed_answer_hash": "hC",
+                "status": "answered",
+            },
+            {
+                "child_id": "rb4",
+                "child_index": 7,
+                "prompt_kind": "literal_constraint_answer",
+                "parsed_answer": "D",
+                "parsed_answer_hash": "hD",
+                "status": "answered",
+            },
+            {
+                "child_id": "rb5",
+                "child_index": 8,
+                "prompt_kind": "option_elimination_baseline_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hB",
+                "status": "answered",
+            },
+        ]
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_COST_AWARE_RAW_BUDGET_PRESERVE_SELECTOR": "1"},
+            clear=False,
+        ), patch(
+            "assumption_os.hle_smoke_eval._run_child_batch",
+            return_value={"attempts": child_attempts, "underlying_model_calls": 5, "max_workers": 5},
+        ) as run_batch, patch(
+            "assumption_os.hle_smoke_eval._select_recursive_child_answer",
+            return_value={
+                "selection_method": "normalized_majority",
+                "selected_child_id": "rb4",
+                "selected_answer": "D",
+                "underlying_model_calls": 0,
+                "verifier_model_call": False,
+            },
+        ) as select_answer:
+            attempt, summary = _maybe_run_raw_budget_preserve_selector_child(
+                problem=problem,
+                attempts=attempts,
+                agent_plan={"stages": {"world_model_router": {"generic_graph_context_only": True}}},
+                model="base-model",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertIsNotNone(summary)
+        self.assertEqual(attempt["prompt_kind"], "raw_budget_preserve_selector_answer")
+        self.assertEqual(attempt["parsed_answer"], "C")
+        self.assertEqual(summary["status"], "activated")
+        self.assertEqual(summary["candidate_count"], 5)
+        self.assertEqual(summary["answered_candidate_count"], 5)
+        self.assertEqual(summary["top_candidate_vote_count"], 3)
+        self.assertEqual(summary["selection_method"], "raw_budget_top_vote_consensus")
+        self.assertEqual(summary["selected_child_id"], "rb1")
+        self.assertEqual(summary["underlying_model_calls"], 5)
+        run_batch.assert_called_once()
+        select_answer.assert_called_once()
+
+    def test_raw_budget_preserve_selector_blocks_weak_consensus_candidate(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which mechanism best explains this?\nA. a\nB. b\nC. c\nD. d",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "B"},
+            {"child_id": "c3", "child_index": 3, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "C"},
+        ]
+        child_attempts = [
+            {
+                "child_id": f"rb{idx}",
+                "child_index": idx + 3,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": answer,
+                "parsed_answer_hash": f"h{answer}",
+                "status": "answered",
+            }
+            for idx, answer in enumerate(["A", "B", "C", "D", "E"], start=1)
+        ]
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_COST_AWARE_RAW_BUDGET_PRESERVE_SELECTOR": "1"},
+            clear=False,
+        ), patch(
+            "assumption_os.hle_smoke_eval._run_child_batch",
+            return_value={"attempts": child_attempts, "underlying_model_calls": 5, "max_workers": 5},
+        ), patch(
+            "assumption_os.hle_smoke_eval._select_recursive_child_answer",
+            return_value={
+                "selection_method": "normalized_majority",
+                "selected_child_id": "rb1",
+                "selected_answer": "A",
+                "underlying_model_calls": 0,
+                "verifier_model_call": False,
+            },
+        ):
+            attempt, summary = _maybe_run_raw_budget_preserve_selector_child(
+                problem=problem,
+                attempts=attempts,
+                agent_plan={"stages": {"world_model_router": {"generic_graph_context_only": True}}},
+                model="base-model",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+
+        self.assertIsNone(attempt)
+        self.assertIsNotNone(summary)
+        self.assertEqual(summary["status"], "blocked_weak_consensus")
+        self.assertEqual(summary["top_candidate_vote_count"], 1)
+        self.assertFalse(summary["candidate_emitted"])
+        self.assertEqual(summary["underlying_model_calls"], 5)
+
+    def test_raw_budget_preserve_selector_has_fallback_priority(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw\nB. hippo\nC. budget",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "rawp", "child_index": 2, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "hipp",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 120,
+                "preserve_selected_doc_count": 1,
+                "preserve_candidate_doc_count": 1,
+            },
+            {
+                "child_id": "rawbp",
+                "child_index": 4,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "C",
+            },
+        ]
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+        gated = _apply_verified_or_abstain_selection(problem=problem, attempts=attempts, selection=selection)
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "rawbp")
+        self.assertEqual(gated["selected_answer"], "C")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["fallback_prompt_kind"],
+            "raw_budget_preserve_selector_answer",
+        )
+
+    def test_route_arbitrator_prefers_contextual_hipporag_when_supported_and_raw_budget_is_weak(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. direct\nB. retrieved\nC. raw budget",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "B"},
+            {
+                "child_id": "rawbp",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "C",
+            },
+            {
+                "child_id": "hipp",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 900,
+                "preserve_selected_doc_count": 2,
+                "preserve_candidate_doc_count": 4,
+                "context_answer_supported": True,
+                "context_answer_overlap_count": 2,
+                "context_question_overlap_count": 2,
+                "same_route_agreement_count": 2,
+            },
+        ]
+        raw_budget_summary = {
+            "status": "activated",
+            "strong_consensus": False,
+            "top_candidate_vote_count": 1,
+        }
+        hipporag_summary = {
+            "status": "activated",
+            "context_char_count": 900,
+            "selected_doc_count": 2,
+            "candidate_doc_count": 4,
+        }
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                raw_budget_preserve_summary=raw_budget_summary,
+                hipporag_preserve_summary=hipporag_summary,
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertIsNotNone(summary)
+        self.assertEqual(attempt["prompt_kind"], "route_arbitrator_answer")
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(summary["status"], "activated")
+        self.assertEqual(summary["selected_route_type"], "hipporag_preserve")
+        self.assertEqual(summary["route_count"], 3)
+        self.assertEqual(summary["unique_answer_count"], 2)
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts + [attempt],
+            selection={
+                "selection_method": "normalized_majority",
+                "selected_child_id": "direct",
+                "selected_answer": "A",
+                "underlying_model_calls": 0,
+                "verifier_model_call": False,
+            },
+        )
+        self.assertEqual(gated["selected_child_id"], attempt["child_id"])
+        self.assertEqual(gated["selected_answer"], "B")
+        self.assertEqual(gated["verified_or_abstain_gate"]["fallback_prompt_kind"], "route_arbitrator_answer")
+
+    def test_route_arbitrator_keeps_strong_raw_budget_consensus(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. direct\nB. retrieved\nC. raw budget",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {
+                "child_id": "rawbp",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "C",
+            },
+            {
+                "child_id": "hipp",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 500,
+                "preserve_selected_doc_count": 1,
+                "preserve_candidate_doc_count": 2,
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 3,
+                },
+                hipporag_preserve_summary={
+                    "status": "activated",
+                    "context_char_count": 500,
+                    "selected_doc_count": 1,
+                    "candidate_doc_count": 2,
+                },
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "C")
+        self.assertEqual(summary["selected_route_type"], "raw_budget_consensus")
+        self.assertTrue(summary["raw_budget_strong_consensus"])
+        self.assertFalse(_route_arbitrator_should_lock(summary))
+        with patch.dict(os.environ, {"HLE_ENABLE_RAW_BUDGET_CACHE_FIRST_LOCK": "1"}, clear=False):
+            self.assertTrue(_route_arbitrator_should_lock(summary))
+
+    def test_route_arbitrator_penalizes_unsupported_hipporag_context(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. direct\nB. retrieved\nC. raw budget",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {
+                "child_id": "rawbp",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "C",
+            },
+            {
+                "child_id": "hipp",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 2200,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 8,
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": False,
+                    "top_candidate_vote_count": 1,
+                },
+                hipporag_preserve_summary={
+                    "status": "activated",
+                    "context_char_count": 2200,
+                    "selected_doc_count": 5,
+                    "candidate_doc_count": 8,
+                },
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertNotEqual(summary["selected_route_type"], "hipporag_preserve")
+
+    def test_route_arbitrator_retains_contextless_hipporag_cache_as_low_trust_route(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw budget\nB. retrieved",
+        }
+        attempts = [
+            {
+                "child_id": "rawbp",
+                "child_index": 1,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "A",
+            },
+            {
+                "child_id": "hipp",
+                "child_index": 2,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "same_run_baseline_cache_variant": "hipporag_baseline",
+                "preserve_context_char_count": 0,
+                "preserve_selected_doc_count": 0,
+                "preserve_candidate_doc_count": 0,
+            },
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "A"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "B"},
+            }
+        }
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 3,
+                },
+                hipporag_preserve_summary={
+                    "status": "activated",
+                    "policy": "same_run_hipporag_cache_candidate_no_context",
+                    "context_char_count": 0,
+                    "selected_doc_count": 0,
+                    "candidate_doc_count": 0,
+                },
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(summary["hipporag_context_route_count"], 1)
+        hippo_rows = [
+            row for row in summary["route_scores"]
+            if row["prompt_kind"] == "hipporag_preserve_selector_answer"
+        ]
+        self.assertEqual(len(hippo_rows), 1)
+        self.assertIn("retrieval_not_answer_bearing", hippo_rows[0]["value_profile"]["risk_tags"])
+        if summary["selected_route_type"] == "hipporag_preserve":
+            self.assertFalse(summary["selected_route_trusted"])
+
+    def test_route_arbitrator_keeps_strong_raw_budget_over_unsupported_hipporag_family(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw family\nB. unsupported hippo\nC. raw budget",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "C"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "B"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "B"},
+            }
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "rawb",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "C",
+            },
+            {
+                "child_id": "hippo-base",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1200,
+                "preserve_selected_doc_count": 4,
+                "preserve_candidate_doc_count": 8,
+                "same_run_baseline_cache_variant": "hipporag_baseline",
+                "same_route_agreement_count": 2,
+                "same_route_agreeing_variants": ["hipporag_baseline", "hipporag_budget_matched"],
+                "context_answer_supported": False,
+            },
+            {
+                "child_id": "hippo-budget",
+                "child_index": 4,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1200,
+                "preserve_selected_doc_count": 4,
+                "preserve_candidate_doc_count": 8,
+                "same_run_baseline_cache_variant": "hipporag_budget_matched",
+                "same_route_agreement_count": 2,
+                "same_route_agreeing_variants": ["hipporag_baseline", "hipporag_budget_matched"],
+                "budget_matched": True,
+                "budget_strong_consensus": True,
+                "budget_top_candidate_vote_count": 4,
+                "context_answer_supported": False,
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 3,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 1200},
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "C")
+        self.assertEqual(summary["selected_route_type"], "raw_budget_consensus")
+
+    def test_route_arbitrator_blocks_raw_budget_when_raw_and_hipporag_base_pair_disagree(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. base pair\nB. budget",
+        }
+        attempts = [
+            {
+                "child_id": "rawp",
+                "child_index": 1,
+                "prompt_kind": "raw_preserve_selector_answer",
+                "parsed_answer": "A",
+            },
+            {
+                "child_id": "rawbp",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "B",
+            },
+            {
+                "child_id": "hipp",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "A",
+                "same_run_baseline_cache_variant": "hipporag_baseline",
+                "preserve_context_char_count": 1200,
+                "preserve_selected_doc_count": 2,
+                "preserve_candidate_doc_count": 4,
+                "context_answer_supported": True,
+                "context_answer_overlap_count": 1,
+                "context_question_overlap_count": 4,
+            },
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "B"},
+            }
+        }
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 5,
+                },
+                hipporag_preserve_summary={
+                    "status": "activated",
+                    "context_char_count": 1200,
+                    "selected_doc_count": 2,
+                    "candidate_doc_count": 4,
+                    "context_answer_supported": True,
+                    "context_answer_overlap_count": 1,
+                    "context_question_overlap_count": 4,
+                },
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        raw_budget_rows = [
+            row for row in summary["route_scores"]
+            if row["route_type"] == "raw_budget_consensus"
+        ]
+        self.assertEqual(len(raw_budget_rows), 1)
+        self.assertIn(
+            "conflicts_with_raw_hipporag_base_pair",
+            raw_budget_rows[0]["value_profile"]["risk_tags"],
+        )
+        if summary["selected_route_type"] == "raw_budget_consensus":
+            self.assertFalse(summary["selected_route_trusted"])
+            self.assertEqual(
+                summary["selected_route_trust_reason"],
+                "raw_budget_conflicts_with_raw_hipporag_base_pair",
+            )
+
+    def test_route_arbitrator_uses_hipporag_same_route_consensus(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. direct\nB. retrieved\nC. raw budget",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {
+                "child_id": "rawbp",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "C",
+            },
+            {
+                "child_id": "hipp",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1200,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 7,
+                "same_route_agreement_count": 2,
+                "context_answer_supported": True,
+                "context_answer_overlap_count": 3,
+                "context_question_overlap_count": 2,
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 3,
+                },
+                hipporag_preserve_summary={
+                    "status": "activated",
+                    "context_char_count": 1200,
+                    "selected_doc_count": 5,
+                    "candidate_doc_count": 7,
+                },
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(summary["selected_route_type"], "hipporag_preserve")
+
+    def test_route_arbitrator_uses_cache_multi_arm_support_for_hipporag_budget(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. direct\nB. retrieved budget\nC. raw budget\nD. hippo baseline",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "C"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "D"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "B"},
+            }
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "rawp", "child_index": 2, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "rawbp",
+                "child_index": 3,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "C",
+            },
+            {
+                "child_id": "hipp",
+                "child_index": 4,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1600,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 11,
+                "same_run_baseline_cache_variant": "hipporag_budget_matched",
+                "budget_matched": True,
+                "context_answer_supported": True,
+                "context_answer_overlap_count": 3,
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 3,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 1600},
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(summary["selected_route_type"], "hipporag_preserve")
+        self.assertEqual(summary["baseline_cache_unique_answer_count"], 4)
+
+    def test_cache_first_route_candidates_keep_distinct_hipporag_arms(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": (
+                "Which option is best?\n"
+                "A. raw choice\n"
+                "B. raw budget choice\n"
+                "C. hippo base choice\n"
+                "D. answer bearing hippo budget choice"
+            ),
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A", "answer_hash": "ha"},
+                "raw_budget_matched": {
+                    "variant": "raw_budget_matched",
+                    "answer": "B",
+                    "answer_hash": "hb",
+                    "budget_candidate_count": 5,
+                    "budget_answered_candidate_count": 5,
+                    "budget_top_candidate_vote_count": 2,
+                    "budget_strong_consensus": False,
+                },
+                "hipporag_baseline": {
+                    "variant": "hipporag_baseline",
+                    "answer": "C",
+                    "answer_hash": "hc",
+                    "context_char_count": 900,
+                    "candidate_doc_count": 4,
+                    "selected_doc_count": 2,
+                    "context_answer_supported": False,
+                },
+                "hipporag_budget_matched": {
+                    "variant": "hipporag_budget_matched",
+                    "answer": "D",
+                    "answer_hash": "hd",
+                    "context_char_count": 1200,
+                    "candidate_doc_count": 5,
+                    "selected_doc_count": 3,
+                    "context_answer_supported": True,
+                    "context_answer_overlap_count": 4,
+                    "context_question_overlap_count": 3,
+                    "budget_candidate_count": 5,
+                    "budget_answered_candidate_count": 5,
+                    "budget_top_candidate_vote_count": 4,
+                    "budget_strong_consensus": True,
+                },
+            }
+        }
+        attempts, raw_summary, raw_budget_summary, hippo_summary = _same_run_cache_route_candidates(
+            problem=problem,
+            agent_plan=agent_plan,
+            call_id="c",
+            start_index=100,
+        )
+        self.assertEqual(len(attempts), 4)
+        self.assertIsNotNone(raw_summary)
+        self.assertIsNotNone(raw_budget_summary)
+        self.assertIsNotNone(hippo_summary)
+        hippo_variants = {
+            attempt.get("same_run_baseline_cache_variant")
+            for attempt in attempts
+            if attempt.get("prompt_kind") == "hipporag_preserve_selector_answer"
+        }
+        self.assertEqual(hippo_variants, {"hipporag_baseline", "hipporag_budget_matched"})
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            route_attempt, route_summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary=raw_budget_summary,
+                hipporag_preserve_summary=hippo_summary,
+                call_id="c",
+            )
+        self.assertIsNotNone(route_attempt)
+        self.assertEqual(route_attempt["parsed_answer"], "D")
+        self.assertEqual(route_summary["selected_route_type"], "hipporag_preserve")
+        self.assertTrue(route_summary["selected_route_trusted"])
+        self.assertEqual(route_attempt["candidate_verifier_state"], "verified")
+        self.assertEqual(route_summary["route_count"], 4)
+        self.assertTrue(_route_arbitrator_should_lock(route_summary))
+
+    def test_cache_first_route_keeps_hipporag_budget_arm_without_context_stats(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is best?\nA. raw\nB. hippo budget\nC. raw budget",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A", "answer_hash": "ha"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "C", "answer_hash": "hc"},
+                "hipporag_baseline": {
+                    "variant": "hipporag_baseline",
+                    "answer": "A",
+                    "answer_hash": "ha",
+                    "context_char_count": 900,
+                    "candidate_doc_count": 4,
+                    "selected_doc_count": 2,
+                },
+                "hipporag_budget_matched": {
+                    "variant": "hipporag_budget_matched",
+                    "answer": "B",
+                    "answer_hash": "hb",
+                    "budget_candidate_count": 5,
+                    "budget_answered_candidate_count": 5,
+                    "budget_top_candidate_vote_count": 3,
+                    "budget_strong_consensus": True,
+                },
+            }
+        }
+        attempts, _, _, hippo_summary = _same_run_cache_route_candidates(
+            problem=problem,
+            agent_plan=agent_plan,
+            call_id="c",
+            start_index=100,
+        )
+        hippo_variants = {
+            attempt.get("same_run_baseline_cache_variant")
+            for attempt in attempts
+            if attempt.get("prompt_kind") == "hipporag_preserve_selector_answer"
+        }
+        self.assertIn("hipporag_budget_matched", hippo_variants)
+        self.assertIn("hipporag_budget_matched", hippo_summary["candidate_variants"])
+
+    def test_route_arbitrator_keeps_raw_budget_when_cache_supports_raw_family(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw family\nB. retrieved\nC. hippo baseline",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "A"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "C"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "B"},
+            }
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {
+                "child_id": "rawbp",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "A",
+            },
+            {
+                "child_id": "hipp",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1600,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 11,
+                "same_run_baseline_cache_variant": "hipporag_budget_matched",
+                "budget_matched": True,
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 3,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 1600},
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "A")
+        self.assertEqual(summary["selected_route_type"], "raw_budget_consensus")
+
+    def test_route_arbitrator_abstains_without_route_conflict(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. same\nB. other",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {
+                "child_id": "rawbp",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "A",
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                raw_budget_preserve_summary={"status": "activated", "strong_consensus": True},
+                call_id="c",
+            )
+
+        self.assertIsNone(attempt)
+        self.assertEqual(summary["status"], "abstained")
+        self.assertEqual(summary["reason"], "routes_agree")
+
+    def test_route_value_verifier_promotes_strong_budgeted_retrieval_counter(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": (
+                "Which option is best?\n"
+                "A. raw family\nB. budgeted retrieved counter\nC. other"
+            ),
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "A"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "A"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "B"},
+            }
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "rawb",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "A",
+            },
+            {
+                "child_id": "hippo-base",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "A",
+                "preserve_context_char_count": 1200,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 9,
+                "same_run_baseline_cache_variant": "hipporag_baseline",
+                "same_route_agreement_count": 1,
+                "same_route_agreeing_variants": ["hipporag_baseline"],
+                "context_question_overlap_count": 8,
+                "context_answer_option_hash": "ha",
+            },
+            {
+                "child_id": "hippo-budget",
+                "child_index": 4,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1400,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 10,
+                "same_run_baseline_cache_variant": "hipporag_budget_matched",
+                "same_route_agreement_count": 1,
+                "same_route_agreeing_variants": ["hipporag_budget_matched"],
+                "budget_matched": True,
+                "budget_strong_consensus": True,
+                "budget_top_candidate_vote_count": 4,
+                "context_question_overlap_count": 8,
+                "context_answer_supported": True,
+                "context_answer_overlap_count": 1,
+                "context_answer_option_hash": "hb",
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 5,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 2600},
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(summary["selected_route_type"], "hipporag_preserve")
+        self.assertTrue(summary["selected_route_trusted"])
+        self.assertEqual(summary["selected_route_trust_reason"], "high_value_budgeted_retrieval_route")
+        self.assertGreater(summary["retrieval_budget_counter_norm_count"], 0)
+        self.assertEqual(attempt["route_value_confidence"], "high")
+
+    def test_route_value_promotes_option_linked_budgeted_retrieval_counter(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is best?\nA. raw family\nB. budget retrieval counter\nC. other",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "A"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "A"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "B"},
+            }
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {"child_id": "rawb", "child_index": 2, "prompt_kind": "raw_budget_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "hippo-base",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "A",
+                "preserve_context_char_count": 1200,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 9,
+                "same_run_baseline_cache_variant": "hipporag_baseline",
+                "same_route_agreement_count": 1,
+                "same_route_agreeing_variants": ["hipporag_baseline"],
+                "context_question_overlap_count": 8,
+                "context_answer_option_hash": "ha",
+            },
+            {
+                "child_id": "hippo-budget",
+                "child_index": 4,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1500,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 10,
+                "same_run_baseline_cache_variant": "hipporag_budget_matched",
+                "same_route_agreement_count": 1,
+                "same_route_agreeing_variants": ["hipporag_budget_matched"],
+                "budget_matched": True,
+                "budget_strong_consensus": True,
+                "budget_top_candidate_vote_count": 4,
+                "context_question_overlap_count": 8,
+                "context_answer_option_hash": "hb",
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 5,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 2700},
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(summary["selected_route_type"], "hipporag_preserve")
+        self.assertTrue(summary["selected_route_trusted"])
+        self.assertEqual(summary["selected_route_trust_reason"], "retrieval_budget_counter_to_raw_budget")
+        self.assertIn(
+            "retrieval_budget_counter_signal",
+            summary["selected_route_value_profile"]["components"],
+        )
+
+    def test_route_value_verifier_can_be_disabled_for_ablation(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is best?\nA. raw family\nB. retrieved counter",
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {"child_id": "rawb", "child_index": 2, "prompt_kind": "raw_budget_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "hippo-budget",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1400,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 10,
+                "budget_matched": True,
+                "budget_strong_consensus": True,
+                "budget_top_candidate_vote_count": 4,
+                "context_question_overlap_count": 8,
+                "context_answer_option_hash": "hb",
+            },
+        ]
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_ROUTE_ARBITRATOR": "1", "HLE_DISABLE_ROUTE_VALUE_VERIFIER": "1"},
+            clear=False,
+        ):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 5,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 1400},
+                call_id="c",
+            )
+
+        self.assertIsNone(attempt)
+        self.assertEqual(summary["reason"], "route_value_verifier_disabled")
+        self.assertFalse(summary["route_value_verifier_enabled"])
+
+    def test_route_value_trusts_answer_bearing_independent_hipporag_counter(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option follows from the retrieved physics evidence?\nA. raw majority\nB. retrieved counter",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {
+                    "variant": "raw_budget_matched",
+                    "answer": "A",
+                    "budget_top_candidate_vote_count": 5,
+                    "budget_strong_consensus": True,
+                },
+                "hipporag_baseline": {
+                    "variant": "hipporag_baseline",
+                    "answer": "B",
+                    "context_char_count": 1080,
+                    "selected_doc_count": 5,
+                    "candidate_doc_count": 10,
+                    "context_answer_supported": True,
+                    "context_answer_overlap_count": 3,
+                    "context_question_overlap_count": 5,
+                    "context_answer_option_hash": "hb",
+                },
+                "hipporag_budget_matched": {
+                    "variant": "hipporag_budget_matched",
+                    "answer": "A",
+                    "budget_top_candidate_vote_count": 2,
+                    "budget_strong_consensus": False,
+                    "context_char_count": 1059,
+                    "selected_doc_count": 5,
+                    "candidate_doc_count": 5,
+                    "context_answer_supported": True,
+                    "context_answer_overlap_count": 3,
+                    "context_question_overlap_count": 3,
+                    "context_answer_option_hash": "ha",
+                },
+            }
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "rawb",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "A",
+                "budget_matched": True,
+                "budget_strong_consensus": True,
+                "budget_top_candidate_vote_count": 5,
+            },
+            {
+                "child_id": "hippo-base",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1080,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 10,
+                "same_run_baseline_cache_variant": "hipporag_baseline",
+                "same_route_agreement_count": 1,
+                "same_route_agreeing_variants": ["hipporag_baseline"],
+                "context_answer_supported": True,
+                "context_answer_overlap_count": 3,
+                "context_question_overlap_count": 5,
+                "context_answer_option_hash": "hb",
+            },
+            {
+                "child_id": "hippo-budget",
+                "child_index": 4,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "A",
+                "preserve_context_char_count": 1059,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 5,
+                "same_run_baseline_cache_variant": "hipporag_budget_matched",
+                "same_route_agreement_count": 1,
+                "same_route_agreeing_variants": ["hipporag_budget_matched"],
+                "budget_matched": True,
+                "budget_strong_consensus": False,
+                "budget_top_candidate_vote_count": 2,
+                "context_answer_supported": True,
+                "context_answer_overlap_count": 3,
+                "context_question_overlap_count": 3,
+                "context_answer_option_hash": "ha",
+            },
+            {"child_id": "direct", "child_index": 5, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 5,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 2139},
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(summary["selected_route_type"], "hipporag_preserve")
+        self.assertTrue(summary["selected_route_trusted"])
+        self.assertEqual(
+            summary["selected_route_trust_reason"],
+            "answer_bearing_hipporag_counter_to_budget_echo",
+        )
+        self.assertEqual(summary["independent_hippo_counter_norm_count"], 1)
+        self.assertEqual(summary["value_of_information_gate"]["recommended_action"], "preserve_route")
+
+    def test_route_value_does_not_trust_fragmented_weak_budgeted_retrieval(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is best?\nA. raw\nB. hippo base\nC. budgeted retrieval",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {
+                    "variant": "raw_budget_matched",
+                    "answer": "A",
+                    "budget_top_candidate_vote_count": 5,
+                    "budget_strong_consensus": True,
+                },
+                "hipporag_baseline": {
+                    "variant": "hipporag_baseline",
+                    "answer": "B",
+                    "context_char_count": 1099,
+                    "selected_doc_count": 5,
+                    "candidate_doc_count": 9,
+                    "context_answer_supported": False,
+                    "context_answer_overlap_count": 0,
+                    "context_question_overlap_count": 4,
+                    "context_answer_option_hash": "hb",
+                },
+                "hipporag_budget_matched": {
+                    "variant": "hipporag_budget_matched",
+                    "answer": "C",
+                    "budget_top_candidate_vote_count": 4,
+                    "budget_strong_consensus": True,
+                    "context_char_count": 1099,
+                    "selected_doc_count": 5,
+                    "candidate_doc_count": 9,
+                    "context_answer_supported": False,
+                    "context_answer_overlap_count": 1,
+                    "context_question_overlap_count": 4,
+                    "context_answer_option_hash": "hc",
+                },
+            }
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "rawb",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "A",
+                "budget_matched": True,
+                "budget_strong_consensus": True,
+                "budget_top_candidate_vote_count": 5,
+            },
+            {
+                "child_id": "hippo-base",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1099,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 9,
+                "same_run_baseline_cache_variant": "hipporag_baseline",
+                "same_route_agreement_count": 1,
+                "same_route_agreeing_variants": ["hipporag_baseline"],
+                "context_answer_supported": False,
+                "context_answer_overlap_count": 0,
+                "context_question_overlap_count": 4,
+                "context_answer_option_hash": "hb",
+            },
+            {
+                "child_id": "hippo-budget",
+                "child_index": 4,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "C",
+                "preserve_context_char_count": 1099,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 9,
+                "same_run_baseline_cache_variant": "hipporag_budget_matched",
+                "same_route_agreement_count": 1,
+                "same_route_agreeing_variants": ["hipporag_budget_matched"],
+                "budget_matched": True,
+                "budget_strong_consensus": True,
+                "budget_top_candidate_vote_count": 4,
+                "context_answer_supported": False,
+                "context_answer_overlap_count": 1,
+                "context_question_overlap_count": 4,
+                "context_answer_option_hash": "hc",
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 5,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 2198},
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(summary["selected_route_type"], "hipporag_preserve")
+        self.assertFalse(summary["selected_route_trusted"])
+        self.assertEqual(
+            summary["selected_route_trust_reason"],
+            "budgeted_retrieval_fragmented_low_support",
+        )
+
+    def test_route_consensus_guard_keeps_unverified_consensus_diagnostic(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. consensus\nB. challenge",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "A"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "A"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "A"},
+            }
+        }
+        base_attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "rawb", "child_index": 2, "prompt_kind": "raw_budget_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "hippo", "child_index": 3, "prompt_kind": "hipporag_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha", "preserve_context_char_count": 900, "preserve_selected_doc_count": 3},
+            {"child_id": "direct", "child_index": 4, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            route_attempt, route_summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=base_attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": False,
+                    "top_candidate_vote_count": 2,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 900},
+                call_id="c",
+            )
+
+        self.assertIsNotNone(route_attempt)
+        self.assertTrue(route_summary["route_consensus"])
+        self.assertFalse(route_summary["selected_route_trusted"])
+        self.assertEqual(route_summary["selected_route_trust_reason"], "raw_budget_support_below_trust_threshold")
+        self.assertEqual(route_attempt.get("candidate_verifier_state"), None)
+        self.assertFalse(_route_arbitrator_lock_decision(route_summary))
+        self.assertIn(
+            "unverified_route_family_consensus",
+            route_summary["selected_route_value_profile"]["risk_tags"],
+        )
+        attempts = base_attempts + [
+            route_attempt,
+            {"child_id": "challenge", "child_index": 20, "prompt_kind": "option_elimination_challenge_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1"}, clear=False):
+            with patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
+
+        call_model.assert_not_called()
+        self.assertEqual(selection["selection_method"], "normalized_majority")
+        self.assertEqual(selection["selected_answer"], "A")
+
+    def test_route_consensus_guard_still_trusts_answer_bearing_consensus(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. consensus\nB. challenge",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "A"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "A"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "A"},
+            }
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "rawb", "child_index": 2, "prompt_kind": "raw_budget_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {
+                "child_id": "hippo",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+                "preserve_context_char_count": 900,
+                "preserve_selected_doc_count": 3,
+                "context_answer_supported": True,
+                "context_answer_overlap_count": 2,
+                "context_question_overlap_count": 3,
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            route_attempt, route_summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 4,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 900},
+                call_id="c",
+            )
+
+        self.assertIsNotNone(route_attempt)
+        self.assertTrue(route_summary["route_consensus"])
+        self.assertTrue(route_summary["selected_route_trusted"])
+        self.assertEqual(route_summary["selected_route_trust_reason"], "route_family_consensus")
+        self.assertTrue(_route_arbitrator_lock_decision(route_summary))
+        continue_summary = dict(route_summary)
+        continue_summary["value_of_information_gate"] = {
+            "status": "continue_exploration",
+            "recommended_action": "continue_exploration",
+        }
+        self.assertFalse(_route_arbitrator_lock_decision(continue_summary))
+
+    def test_route_consensus_guard_can_be_disabled_for_ablation(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. consensus\nB. challenge",
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {"child_id": "rawb", "child_index": 2, "prompt_kind": "raw_budget_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "hippo",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "A",
+                "preserve_context_char_count": 900,
+                "preserve_selected_doc_count": 3,
+            },
+        ]
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_ROUTE_ARBITRATOR": "1", "HLE_DISABLE_ROUTE_CONSENSUS_GUARD": "1"},
+            clear=False,
+        ):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 4,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 900},
+                call_id="c",
+            )
+
+        self.assertIsNone(attempt)
+        self.assertEqual(summary["reason"], "routes_agree")
+        self.assertFalse(summary["route_consensus_guard_enabled"])
+
+    def test_route_value_verifier_prefers_independent_hipporag_over_budget_echo(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is best?\nA. raw echo\nB. independent retrieval\nC. other",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "A"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "B"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "A"},
+            }
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {"child_id": "rawb", "child_index": 2, "prompt_kind": "raw_budget_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "hippo-base",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1200,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 10,
+                "same_run_baseline_cache_variant": "hipporag_baseline",
+                "same_route_agreement_count": 1,
+                "same_route_agreeing_variants": ["hipporag_baseline"],
+                "context_answer_overlap_count": 1,
+                "context_question_overlap_count": 8,
+                "context_answer_option_hash": "hb",
+            },
+            {
+                "child_id": "hippo-budget",
+                "child_index": 4,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "A",
+                "preserve_context_char_count": 1200,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 10,
+                "same_run_baseline_cache_variant": "hipporag_budget_matched",
+                "same_route_agreement_count": 1,
+                "same_route_agreeing_variants": ["hipporag_budget_matched"],
+                "budget_matched": True,
+                "budget_strong_consensus": True,
+                "budget_top_candidate_vote_count": 4,
+                "context_answer_overlap_count": 1,
+                "context_question_overlap_count": 8,
+                "context_answer_option_hash": "ha",
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 4,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 2400},
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(summary["selected_route_type"], "hipporag_preserve")
+        self.assertEqual(summary["independent_hippo_counter_norm_count"], 1)
+        self.assertIn(
+            "independent_hipporag_counter_to_budget_echo",
+            summary["selected_route_value_profile"]["reason_tags"],
+        )
+
+    def test_route_value_trusts_three_control_answer_bearing_hipporag_family(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is best?\nA. raw only\nB. family supported\nC. other",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "B"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "B"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "B"},
+            }
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "rawb",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "B",
+                "budget_matched": True,
+                "budget_strong_consensus": True,
+                "budget_top_candidate_vote_count": 4,
+            },
+            {
+                "child_id": "hippo-base",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1200,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 8,
+                "same_run_baseline_cache_variant": "hipporag_baseline",
+                "same_route_agreement_count": 2,
+                "same_route_agreeing_variants": ["hipporag_baseline", "hipporag_budget_matched"],
+                "context_answer_supported": True,
+                "context_question_overlap_count": 1,
+                "context_answer_overlap_count": 2,
+                "context_answer_option_hash": "hb",
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 4,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 1200},
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertTrue(summary["selected_route_trusted"])
+        self.assertEqual(
+            summary["selected_route_trust_reason"],
+            "baseline_supported_answer_bearing_hipporag_family_route",
+        )
+
+    def test_route_value_blocks_hipporag_family_without_answer_bearing_certificate(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is best?\nA. consensus\nB. alternative",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "A"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "A"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "A"},
+            }
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "rawb",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "A",
+                "budget_matched": True,
+                "budget_strong_consensus": True,
+                "budget_top_candidate_vote_count": 4,
+            },
+            {
+                "child_id": "hippo",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "A",
+                "preserve_context_char_count": 1200,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 8,
+                "same_run_baseline_cache_variant": "hipporag_baseline",
+                "same_route_agreement_count": 2,
+                "same_route_agreeing_variants": ["hipporag_baseline", "hipporag_budget_matched"],
+                "context_question_overlap_count": 5,
+                "context_answer_overlap_count": 2,
+                "context_answer_option_hash": "ha",
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            _, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 4,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 1200},
+                call_id="c",
+            )
+
+        self.assertFalse(summary["selected_route_trusted"])
+        self.assertEqual(
+            summary["selected_route_trust_reason"],
+            "hipporag_family_consensus_without_answer_bearing_certificate",
+        )
+        self.assertEqual(
+            summary["value_of_information_gate"]["recommended_action"],
+            "continue_exploration",
+        )
+
+    def test_route_value_trusts_raw_budget_before_unverified_family_risk(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is best?\nA. budget consensus\nB. alternative",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "A"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "A"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "A"},
+            }
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "rawb",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "A",
+                "budget_matched": True,
+                "budget_strong_consensus": True,
+                "budget_top_candidate_vote_count": 5,
+            },
+            {
+                "child_id": "hippo",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "A",
+                "preserve_context_char_count": 900,
+                "preserve_selected_doc_count": 3,
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            _, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 5,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 900},
+                call_id="c",
+            )
+
+        self.assertEqual(summary["selected_route_type"], "raw_budget_consensus")
+        self.assertTrue(summary["selected_route_trusted"])
+        self.assertEqual(summary["selected_route_trust_reason"], "strong_raw_budget_consensus")
+
+    def test_route_value_prefers_budget_pair_over_weak_option_linked_base_pair(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is best?\nA. base pair\nB. budget pair\nC. other",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "B"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "A"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "B"},
+            }
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "rawb",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "B",
+                "budget_matched": True,
+                "budget_strong_consensus": True,
+                "budget_top_candidate_vote_count": 3,
+            },
+            {
+                "child_id": "hippo-base",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "A",
+                "preserve_context_char_count": 1400,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 8,
+                "same_run_baseline_cache_variant": "hipporag_baseline",
+                "same_route_agreement_count": 1,
+                "same_route_agreeing_variants": ["hipporag_baseline"],
+                "context_question_overlap_count": 6,
+                "context_answer_overlap_count": 0,
+                "context_answer_option_hash": "ha",
+            },
+            {
+                "child_id": "hippo-budget",
+                "child_index": 4,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1200,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 8,
+                "same_run_baseline_cache_variant": "hipporag_budget_matched",
+                "same_route_agreement_count": 1,
+                "same_route_agreeing_variants": ["hipporag_budget_matched"],
+                "budget_matched": True,
+                "budget_strong_consensus": True,
+                "budget_top_candidate_vote_count": 4,
+                "context_question_overlap_count": 5,
+                "context_answer_overlap_count": 0,
+                "context_answer_option_hash": "hb",
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 3,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 2600},
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertIn(summary["selected_route_type"], {"raw_budget_consensus", "hipporag_preserve"})
+        self.assertTrue(summary["selected_route_trusted"])
+        self.assertIn(
+            "raw_and_hipporag_budget_pair_consensus",
+            summary["selected_route_value_profile"]["reason_tags"],
+        )
+
+    def test_budget_echo_guard_can_be_disabled_for_ablation(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is best?\nA. raw echo\nB. independent retrieval\nC. other",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "A"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "B"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "A"},
+            }
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {"child_id": "rawb", "child_index": 2, "prompt_kind": "raw_budget_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "hippo-base",
+                "child_index": 3,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1200,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 10,
+                "same_run_baseline_cache_variant": "hipporag_baseline",
+                "same_route_agreement_count": 1,
+                "same_route_agreeing_variants": ["hipporag_baseline"],
+                "context_answer_overlap_count": 1,
+                "context_question_overlap_count": 8,
+                "context_answer_option_hash": "hb",
+            },
+            {
+                "child_id": "hippo-budget",
+                "child_index": 4,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "A",
+                "preserve_context_char_count": 1200,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 10,
+                "same_run_baseline_cache_variant": "hipporag_budget_matched",
+                "same_route_agreement_count": 1,
+                "same_route_agreeing_variants": ["hipporag_budget_matched"],
+                "budget_matched": True,
+                "budget_strong_consensus": True,
+                "budget_top_candidate_vote_count": 4,
+                "context_answer_overlap_count": 1,
+                "context_question_overlap_count": 8,
+                "context_answer_option_hash": "ha",
+            },
+        ]
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_ROUTE_ARBITRATOR": "1", "HLE_DISABLE_BUDGET_ECHO_GUARD": "1"},
+            clear=False,
+        ):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                raw_budget_preserve_summary={
+                    "status": "activated",
+                    "strong_consensus": True,
+                    "top_candidate_vote_count": 4,
+                },
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 2400},
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(summary["independent_hippo_counter_norm_count"], 0)
+        self.assertFalse(summary["budget_echo_guard_enabled"])
+        self.assertNotIn(
+            "independent_hipporag_counter_to_budget_echo",
+            summary["selected_route_value_profile"]["reason_tags"],
+        )
+
+    def test_llm_route_arbitrator_can_override_heuristic_route(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. heuristic\nB. llm selected",
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "hippo",
+                "child_index": 2,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 900,
+                "preserve_selected_doc_count": 2,
+                "preserve_candidate_doc_count": 4,
+                "context_answer_supported": True,
+                "context_answer_overlap_count": 2,
+                "context_question_overlap_count": 2,
+            },
+        ]
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_ROUTE_ARBITRATOR": "1", "HLE_ENABLE_LLM_ROUTE_ARBITRATOR": "1"},
+            clear=False,
+        ), patch(
+            "assumption_os.hle_smoke_eval._call_model",
+            return_value='{"route_id":1,"confidence":"high","reason_tag":"answer_bearing"}',
+        ) as call_model:
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                model="m",
+                timeout=None,
+                max_tokens=64,
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(summary["llm_route_arbitrator"]["status"], "activated")
+        self.assertEqual(summary["underlying_model_calls"], 1)
+        call_model.assert_called_once()
+
+    def test_route_arbitrator_does_not_trust_unsupported_hipporag_route(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw\nB. retrieved",
+        }
+        attempts = [
+            {"child_id": "raw", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A"},
+            {
+                "child_id": "hippo",
+                "child_index": 2,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "preserve_context_char_count": 1200,
+                "preserve_selected_doc_count": 5,
+                "preserve_candidate_doc_count": 7,
+                "same_route_agreement_count": 2,
+                "context_answer_supported": False,
+            },
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_ROUTE_ARBITRATOR": "1"}, clear=False):
+            attempt, summary = _maybe_add_route_arbitrator_candidate(
+                problem=problem,
+                attempts=attempts,
+                hipporag_preserve_summary={"status": "activated", "context_char_count": 1200},
+                call_id="c",
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertFalse(summary["selected_route_trusted"])
+        self.assertNotEqual(attempt.get("candidate_verifier_state"), "verified")
+
+    def test_untrusted_route_arbitrator_candidate_does_not_lock_deep_challenges(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. direct\nB. retrieved",
+            "choices": ["A. direct", "B. retrieved"],
+        }
+        plan = {
+            "stages": {},
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "A"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "B"},
+            },
+        }
+        execute_result = {
+            "attempts": [
+                {
+                    "child_id": "direct",
+                    "child_index": 1,
+                    "prompt_kind": "direct_short_answer",
+                    "parsed_answer": "A",
+                    "parsed_answer_hash": "hA",
+                    "status": "answered",
+                    "branch_axis": "closed_book_direct",
+                },
+                {
+                    "child_id": "format",
+                    "child_index": 2,
+                    "prompt_kind": "literal_constraint_answer",
+                    "parsed_answer": "A",
+                    "parsed_answer_hash": "hA",
+                    "status": "answered",
+                    "branch_axis": "format_constraint",
+                },
+            ],
+            "underlying_model_calls": 2,
+            "early_stop_reason": None,
+            "skipped_prompt_kinds": [],
+            "skipped_branch_axes": [],
+            "execution_mode": "parallel_quorum",
+            "serial_forced_reason": None,
+            "child_timeout_sec": 30,
+            "child_max_workers": 2,
+        }
+        route_attempt = {
+            "child_id": "route",
+            "child_index": 3,
+            "prompt_kind": "route_arbitrator_answer",
+            "parsed_answer": "B",
+            "parsed_answer_hash": "hB",
+            "status": "answered",
+            "route_arbitrator_trusted": False,
+        }
+        route_summary = {
+            "status": "activated",
+            "candidate_emitted": True,
+            "child_id": "route",
+            "selected_route_type": "hipporag_preserve",
+            "selected_route_trusted": False,
+            "selected_route_trust_reason": "hipporag_context_not_answer_bearing",
+            "selected_route_score": 3.0,
+            "runner_up_score": 1.0,
+            "underlying_model_calls": 0,
+        }
+        selection = {
+            "status": "activated",
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_ROUTE_ARBITRATOR": "1",
+                "HLE_DISABLE_CACHE_FIRST_ROUTE_ARBITRATOR": "1",
+            },
+            clear=False,
+        ):
+            with patch("assumption_os.hle_smoke_eval._execute_recursive_child_attempts", return_value=execute_result):
+                with patch("assumption_os.hle_smoke_eval._should_run_math_tool_child", return_value=False):
+                    with patch("assumption_os.hle_smoke_eval._maybe_run_timeout_recovery_child", return_value=(None, None)):
+                        with patch("assumption_os.hle_smoke_eval._maybe_run_child_model_failover_child", return_value=(None, None)):
+                            with patch("assumption_os.hle_smoke_eval._should_run_candidate_claim_verifier", return_value=False):
+                                with patch("assumption_os.hle_smoke_eval._maybe_run_mc_option_evidence_scorer", return_value=(None, None)):
+                                    with patch("assumption_os.hle_smoke_eval._maybe_run_domain_rule_mc_verifier", return_value=(None, None)):
+                                        with patch("assumption_os.hle_smoke_eval._maybe_run_raw_preserve_selector_child", return_value=(None, None)):
+                                            with patch("assumption_os.hle_smoke_eval._maybe_run_raw_budget_preserve_selector_child", return_value=(None, None)):
+                                                with patch("assumption_os.hle_smoke_eval._maybe_run_hipporag_preserve_selector_child", return_value=(None, None)):
+                                                    with patch("assumption_os.hle_smoke_eval._maybe_add_route_arbitrator_candidate", return_value=(route_attempt, route_summary)):
+                                                        with patch("assumption_os.hle_smoke_eval._maybe_run_counter_assumption_challenge", return_value=(None, None)) as counter:
+                                                            with patch("assumption_os.hle_smoke_eval._maybe_run_critic_synthesis_child", return_value=(None, None)):
+                                                                with patch("assumption_os.hle_smoke_eval._maybe_add_mc_option_sweep_candidates", return_value=([], None)):
+                                                                    with patch("assumption_os.hle_smoke_eval._select_recursive_child_answer", return_value=selection):
+                                                                        result = _call_recursive_verified_answer(
+                                                                            problem=problem,
+                                                                            model="gpt-5.4-mini",
+                                                                            agent_plan=plan,
+                                                                            eval_id="e",
+                                                                            call_id="call",
+                                                                            logger=None,
+                                                                            timeout=60,
+                                                                            child_mode="parallel_quorum",
+                                                                            child_timeout=30,
+                                                                            max_tokens=128,
+                                                                            evidence_bridge_enabled=False,
+                                                                        )
+
+        self.assertEqual(json.loads(result["answer_text"])["answer"], "A")
+        counter.assert_called_once()
+        self.assertFalse(plan["stages"]["route_arbitrator"]["route_locked"])
+        self.assertFalse(plan["stages"]["route_arbitrator"]["selected_route_trusted"])
 
     def test_verified_or_abstain_allows_verified_selection(self):
         problem = {
@@ -2205,6 +4832,8 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(first_start, len("Compute $6*7$."))
         self.assertEqual(options["B"], "42")
         self.assertTrue(_should_run_candidate_claim_verifier(problem))
+        with patch.dict(os.environ, {"HLE_DISABLE_MC_CANDIDATE_CLAIM_VERIFIER": "1"}, clear=False):
+            self.assertFalse(_should_run_candidate_claim_verifier(problem))
 
         attempts = [
             {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "status": "answered"},
@@ -2304,7 +4933,14 @@ class HleSmokeEvalTest(unittest.TestCase):
             {"child_id": "c2", "child_index": 2, "prompt_kind": "agent_context_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
             {"child_id": "c3", "child_index": 3, "prompt_kind": "counter_assumption_challenge_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
         ]
-        with patch.dict(os.environ, {"HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1"}):
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1",
+                "HLE_ENABLE_OPTION_SWEEP_VOI_COUNTER": "1",
+                "HLE_ALLOW_STRUCTURAL_COUNTER_OVER_BASELINE_CONSENSUS": "1",
+            },
+        ):
             with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}'):
                 selection = _select_recursive_child_answer(
                     problem=problem,
@@ -2436,18 +5072,23 @@ class HleSmokeEvalTest(unittest.TestCase):
                         "title": "Transformer (deep learning architecture)",
                         "snippet": "The Transformer architecture was introduced in the paper Attention Is All You Need.",
                     },
+                    {
+                        "title": "Transformer paper",
+                        "snippet": "Attention Is All You Need is the paper that introduced the Transformer architecture.",
+                    },
                 ]
             return [{"title": "Unrelated", "snippet": "No matching architecture evidence."}]
 
         with patch("assumption_os.hle_smoke_eval._wikipedia_search", side_effect=fake_search):
-            attempt, summary = _maybe_run_mc_option_evidence_scorer(
-                problem=problem,
-                attempts=[],
-                eval_id="e",
-                call_id="c",
-                model="m",
-                logger=None,
-            )
+            with patch("assumption_os.hle_smoke_eval._domain_evidence_search", return_value=[]):
+                attempt, summary = _maybe_run_mc_option_evidence_scorer(
+                    problem=problem,
+                    attempts=[],
+                    eval_id="e",
+                    call_id="c",
+                    model="m",
+                    logger=None,
+                )
 
         self.assertIsNotNone(attempt)
         self.assertEqual(attempt["prompt_kind"], "mc_option_evidence_scorer_answer")
@@ -2457,7 +5098,7 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(summary["status"], "activated")
         self.assertTrue(summary["candidate_emitted"])
         self.assertEqual(summary["candidate_verifier_state"], "verified")
-        self.assertGreaterEqual(summary["top_support_doc_count"], 1)
+        self.assertGreaterEqual(summary["top_support_doc_count"], 3)
         self.assertEqual(summary["top_ambiguous_doc_count"], 0)
         self.assertTrue(summary["candidate_correct_for_eval"])
 
@@ -2481,20 +5122,488 @@ class HleSmokeEvalTest(unittest.TestCase):
             ]
 
         with patch("assumption_os.hle_smoke_eval._wikipedia_search", side_effect=fake_search):
-            attempt, summary = _maybe_run_mc_option_evidence_scorer(
-                problem=problem,
-                attempts=[],
-                eval_id="e",
-                call_id="c",
-                model="m",
-                logger=None,
-            )
+            with patch("assumption_os.hle_smoke_eval._domain_evidence_search", return_value=[]):
+                attempt, summary = _maybe_run_mc_option_evidence_scorer(
+                    problem=problem,
+                    attempts=[],
+                    eval_id="e",
+                    call_id="c",
+                    model="m",
+                    logger=None,
+                )
 
         self.assertIsNone(attempt)
         self.assertEqual(summary["status"], "blocked_ambiguous_option_evidence")
         self.assertFalse(summary["candidate_emitted"])
         self.assertEqual(summary["candidate_verifier_state"], "not_verified")
-        self.assertGreaterEqual(summary["top_ambiguous_doc_count"], 1)
+        self.assertGreaterEqual(summary["any_ambiguous_doc_count"], 1)
+
+    def test_mc_option_evidence_scorer_blocks_low_absolute_support_score(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": (
+                "Which option names the relevant mechanism in coupled oscillators?\n"
+                "A. Alpha coupling\nB. Beta lock\nC. Gamma drift"
+            ),
+            "_answer": "B",
+        }
+
+        def fake_search(query, *, limit, timeout):
+            if "Beta lock" in query:
+                return [
+                    {"title": "Beta", "snippet": "Relevant mechanism for coupled oscillators."},
+                    {"title": "Beta overview", "snippet": "Mechanism note for coupled oscillators."},
+                ]
+            return [{"title": "Unrelated", "snippet": "No support."}]
+
+        with patch("assumption_os.hle_smoke_eval._wikipedia_search", side_effect=fake_search):
+            with patch("assumption_os.hle_smoke_eval._domain_evidence_search", return_value=[]):
+                attempt, summary = _maybe_run_mc_option_evidence_scorer(
+                    problem=problem,
+                    attempts=[],
+                    eval_id="e",
+                    call_id="c",
+                    model="m",
+                    logger=None,
+                )
+
+        self.assertIsNone(attempt)
+        self.assertFalse(summary["candidate_emitted"])
+        self.assertEqual(summary["candidate_verifier_state"], "not_verified")
+        self.assertGreaterEqual(summary["top_support_doc_count"], 2)
+        self.assertLess(summary["top_score"], summary["min_verified_score"])
+
+    def test_mc_option_evidence_ranks_stable_support_over_single_high_overlap_doc(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": (
+                "Which option names the principle introduced for stable transformer sequence modeling?\n"
+                "A. Alpha Principle\nB. Beta Principle\nC. Gamma Principle"
+            ),
+            "_answer": "B",
+        }
+
+        def fake_search(query, *, limit, timeout):
+            if "Alpha Principle" in query:
+                return [
+                    {
+                        "title": "Alpha Principle stable transformer sequence modeling",
+                        "snippet": (
+                            "Alpha Principle Alpha Principle Alpha Principle is discussed with stable "
+                            "transformer sequence modeling terminology."
+                        ),
+                    }
+                ]
+            if "Beta Principle" in query:
+                return [
+                    {
+                        "title": "Beta Principle",
+                        "snippet": "Beta Principle was introduced for stable transformer sequence modeling.",
+                    },
+                    {
+                        "title": "Stable sequence modeling",
+                        "snippet": "The method known as Beta Principle is used for stable transformer sequence modeling.",
+                    },
+                    {
+                        "title": "Beta Principle sequence modeling",
+                        "snippet": "Stable transformer sequence modeling uses the Beta Principle.",
+                    },
+                ]
+            return [{"title": "Gamma note", "snippet": "Gamma Principle is unrelated."}]
+
+        with patch("assumption_os.hle_smoke_eval._wikipedia_search", side_effect=fake_search):
+            with patch("assumption_os.hle_smoke_eval._domain_evidence_search", return_value=[]):
+                attempt, summary = _maybe_run_mc_option_evidence_scorer(
+                    problem=problem,
+                    attempts=[],
+                    eval_id="e",
+                    call_id="c",
+                    model="m",
+                    logger=None,
+                )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(summary["status"], "activated")
+        self.assertEqual(summary["top_support_doc_count"], 3)
+        self.assertGreater(summary["rank_margin"], 0)
+        self.assertTrue(summary["candidate_correct_for_eval"])
+
+    def test_mc_option_evidence_requires_question_stem_support(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Engineering",
+            "raw_subject": "Computer Engineering",
+            "_question": (
+                "Which method reduces timing hazards in asynchronous circuit arbitration?\n"
+                "A. Alpha Synchronizer\nB. Beta Protocol\nC. Gamma Filter"
+            ),
+            "_answer": "C",
+        }
+
+        def fake_search(query, *, limit, timeout):
+            if "Alpha Synchronizer" in query:
+                return [
+                    {"title": "Alpha Synchronizer", "snippet": "Alpha Synchronizer is a named method."},
+                    {"title": "Alpha Synchronizer overview", "snippet": "The Alpha Synchronizer method is widely cited."},
+                ]
+            return [{"title": "Unrelated", "snippet": "No support."}]
+
+        with patch("assumption_os.hle_smoke_eval._wikipedia_search", side_effect=fake_search):
+            with patch("assumption_os.hle_smoke_eval._domain_evidence_search", return_value=[]):
+                attempt, summary = _maybe_run_mc_option_evidence_scorer(
+                    problem=problem,
+                    attempts=[],
+                    eval_id="e",
+                    call_id="c",
+                    model="m",
+                    logger=None,
+                )
+
+        self.assertIsNone(attempt)
+        self.assertFalse(summary["candidate_emitted"])
+        self.assertEqual(summary["candidate_verifier_state"], "not_verified")
+        self.assertEqual(summary["top_support_doc_count"], 0)
+
+    def test_evidence_guided_option_challenge_emits_unverified_variation(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": (
+                "Which principle predicts restoring opposition to an imposed perturbation?\n"
+                "A. Unrelated Rule\nB. Lenz law\nC. Random drift"
+            ),
+            "_answer": "B",
+        }
+
+        def fake_search(query, *, limit, timeout):
+            if "Lenz" in query:
+                return [
+                    {
+                        "title": "Lenz's law",
+                        "snippet": (
+                            "Lenz law is a principle predicting restoring opposition to an imposed "
+                            "perturbation: an induced current opposes the change that produced it."
+                        ),
+                    }
+                ]
+            return [{"title": "Unrelated", "snippet": "No direct support."}]
+
+        def fake_child(**kwargs):
+            return {
+                "child_id": "eg1",
+                "child_index": kwargs["child_index"],
+                "prompt_kind": kwargs["spec"]["prompt_kind"],
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+                "prediction_hash": "pb",
+                "latency_sec": 0.1,
+                "status": "answered",
+            }
+
+        with patch("assumption_os.hle_smoke_eval._wikipedia_search", side_effect=fake_search):
+            with patch("assumption_os.hle_smoke_eval._domain_evidence_search", return_value=[]):
+                with patch("assumption_os.hle_smoke_eval._run_child_attempt", side_effect=fake_child):
+                    attempt, summary, context = _maybe_run_evidence_guided_option_challenge(
+                        problem=problem,
+                        attempts=[
+                            {
+                                "child_id": "c1",
+                                "child_index": 1,
+                                "prompt_kind": "direct_short_answer",
+                                "parsed_answer": "A",
+                                "parsed_answer_hash": "ha",
+                            }
+                        ],
+                        option_evidence_summary={"status": "weak_margin"},
+                        model="m",
+                        eval_id="e",
+                        call_id="c",
+                        logger=None,
+                        timeout=1,
+                        max_tokens=64,
+                    )
+
+        self.assertIsNotNone(attempt)
+        self.assertIn("Option B", context)
+        self.assertEqual(attempt["prompt_kind"], "evidence_guided_option_challenge_answer")
+        self.assertEqual(attempt["candidate_verifier_state"], "not_verified")
+        self.assertEqual(summary["status"], "activated")
+        self.assertTrue(summary["candidate_emitted"])
+        self.assertTrue(summary["candidate_correct_for_eval"])
+
+    def test_evidence_guided_option_challenge_blocks_context_without_support_docs(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Which option is correct?\nA. alpha\nB. beta\nC. gamma",
+        }
+
+        def fake_search(query, *, limit, timeout):
+            return [{"title": "Generic", "snippet": "This snippet does not connect any option to the question."}]
+
+        with patch("assumption_os.hle_smoke_eval._wikipedia_search", side_effect=fake_search):
+            with patch("assumption_os.hle_smoke_eval._domain_evidence_search", return_value=[]):
+                with patch("assumption_os.hle_smoke_eval._run_child_attempt") as child:
+                    attempt, summary, context = _maybe_run_evidence_guided_option_challenge(
+                        problem=problem,
+                        attempts=[],
+                        option_evidence_summary={"status": "weak_margin"},
+                        model="m",
+                        eval_id="e",
+                        call_id="c",
+                        logger=None,
+                        timeout=1,
+                        max_tokens=64,
+                    )
+
+        child.assert_not_called()
+        self.assertIsNone(attempt)
+        self.assertEqual(context, "")
+        self.assertEqual(summary["status"], "abstained")
+        self.assertEqual(summary["reason"], "no_discriminative_support_docs")
+        self.assertEqual(summary["underlying_model_calls"], 0)
+
+    def test_structural_option_audit_triggers_on_collapsed_unverified_mc_candidates(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": "Which option is correct?\nA. consensus\nB. least-assumption alternative\nC. distractor",
+            "_answer": "B",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "A"},
+            {"child_id": "c3", "child_index": 3, "prompt_kind": "option_matrix_reasoner_answer", "parsed_answer": "A"},
+        ]
+
+        def fake_child(**kwargs):
+            return {
+                "child_id": "audit",
+                "child_index": kwargs["child_index"],
+                "prompt_kind": kwargs["spec"]["prompt_kind"],
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+                "prediction_hash": "pb",
+                "latency_sec": 0.1,
+                "status": "answered",
+            }
+
+        with patch("assumption_os.hle_smoke_eval._run_child_attempt", side_effect=fake_child) as child:
+            attempt, summary = _maybe_run_structural_option_audit_child(
+                problem=problem,
+                attempts=attempts,
+                option_evidence_summary={"status": "weak_margin"},
+                evidence_guided_option_summary={"status": "abstained"},
+                evidence_context="",
+                model="m",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=1,
+                max_tokens=64,
+            )
+
+        child.assert_called_once()
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["prompt_kind"], "structural_option_audit_answer")
+        self.assertEqual(attempt["candidate_verifier_state"], "not_verified")
+        self.assertEqual(summary["status"], "activated")
+        self.assertTrue(summary["candidate_disagreed_with_majority"])
+        self.assertTrue(summary["candidate_correct_for_eval"])
+
+    def test_evidence_guided_option_challenge_ignores_route_verified_gate(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": (
+                "Which principle predicts restoring opposition to an imposed perturbation?\n"
+                "A. Unrelated Rule\nB. Lenz law"
+            ),
+        }
+
+        def fake_search(query, *, limit, timeout):
+            return [{
+                "title": "Lenz's law",
+                "snippet": (
+                    "Lenz law is the principle predicting restoring opposition to an imposed perturbation; "
+                    "it opposes the change that produced it."
+                ),
+            }]
+
+        def fake_child(**kwargs):
+            return {
+                "child_id": "eg2",
+                "child_index": kwargs["child_index"],
+                "prompt_kind": kwargs["spec"]["prompt_kind"],
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+                "prediction_hash": "pb",
+                "latency_sec": 0.1,
+                "status": "answered",
+            }
+
+        with patch("assumption_os.hle_smoke_eval._wikipedia_search", side_effect=fake_search):
+            with patch("assumption_os.hle_smoke_eval._domain_evidence_search", return_value=[]):
+                with patch("assumption_os.hle_smoke_eval._run_child_attempt", side_effect=fake_child):
+                    attempt, summary, _ = _maybe_run_evidence_guided_option_challenge(
+                        problem=problem,
+                        attempts=[
+                            {
+                                "child_id": "route",
+                                "child_index": 1,
+                                "prompt_kind": "route_arbitrator_answer",
+                                "parsed_answer": "A",
+                                "parsed_answer_hash": "ha",
+                                "candidate_verifier_state": "verified",
+                                "candidate_verifier_trust": "route_arbitrator_evidence_gate",
+                            }
+                        ],
+                        option_evidence_summary={"status": "weak_margin"},
+                        model="m",
+                        eval_id="e",
+                        call_id="c",
+                        logger=None,
+                        timeout=1,
+                        max_tokens=64,
+                    )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(summary["status"], "activated")
+        self.assertEqual(summary["reason"], "unverified_option_specific_evidence_variation")
+
+    def test_unverified_evidence_guided_option_challenge_does_not_bypass_gate(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. direct\nB. evidence-guided",
+        }
+        attempts = [
+            {
+                "child_id": "c1",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "c2",
+                "child_index": 2,
+                "prompt_kind": "evidence_guided_option_challenge_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+                "candidate_verifier_state": "not_verified",
+            },
+        ]
+
+        with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}'):
+            selection = _select_recursive_child_answer(
+                problem=problem,
+                attempts=attempts,
+                model="m",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=1,
+                max_tokens=32,
+                evidence_context="Option B: weak retrieved support.",
+            )
+        gated = _apply_verified_or_abstain_selection(problem=problem, attempts=attempts, selection=selection)
+
+        self.assertEqual(selection["selection_method"], "verifier_choice")
+        self.assertEqual(selection["selected_answer"], "B")
+        self.assertEqual(gated["selection_method"], "verifier_choice")
+        self.assertEqual(gated["verified_or_abstain_gate"]["status"], "allowed")
+        self.assertEqual(gated["verified_or_abstain_gate"]["reason"], "verified_selection_method")
+        bypass_selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "c2",
+            "selected_answer": "B",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+        bypass_gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=bypass_selection,
+        )
+        self.assertEqual(bypass_gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(bypass_gated["selected_answer"], "A")
+
+    def test_route_voi_continue_exploration_defers_to_evidence_challenge_verifier(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. route\nB. evidence challenge",
+        }
+        attempts = [
+            {
+                "child_id": "route",
+                "child_index": 1,
+                "prompt_kind": "route_arbitrator_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+                "candidate_verifier_state": "verified",
+                "candidate_verifier_trust": "route_arbitrator_evidence_gate",
+                "route_arbitrator_trusted": True,
+                "route_value_confidence": "high",
+                "route_value_score": 10.0,
+                "route_value_of_information_gate_status": "continue_exploration",
+            },
+            {
+                "child_id": "eg",
+                "child_index": 2,
+                "prompt_kind": "evidence_guided_option_challenge_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+                "candidate_verifier_state": "not_verified",
+            },
+        ]
+
+        with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}'):
+            selection = _select_recursive_child_answer(
+                problem=problem,
+                attempts=attempts,
+                model="m",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=1,
+                max_tokens=32,
+                evidence_context="Option B has retrieved evidence.",
+            )
+
+        self.assertEqual(selection["selection_method"], "verifier_choice")
+        self.assertEqual(selection["selected_child_id"], "eg")
+        self.assertEqual(selection["selected_answer"], "B")
 
     def test_verified_option_evidence_priority_can_override_unverified_majority(self):
         problem = {
@@ -2646,6 +5755,252 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(selection["selection_method"], "counter_assumption_verifier_choice")
         self.assertEqual(selection["selected_child_id"], "c3")
         self.assertEqual(selection["selected_answer"], "B")
+
+    def test_baseline_family_consensus_blocks_counter_verifier_override(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. consensus\nB. challenge",
+        }
+        attempts = [
+            {"child_id": "rawp", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "rawbp", "child_index": 2, "prompt_kind": "raw_budget_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "hipp", "child_index": 3, "prompt_kind": "hipporag_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha", "preserve_context_char_count": 200, "preserve_selected_doc_count": 1},
+            {"child_id": "direct", "child_index": 4, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "elim", "child_index": 5, "prompt_kind": "option_elimination_challenge_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1"}):
+            with patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
+
+        call_model.assert_not_called()
+        self.assertEqual(selection["selection_method"], "normalized_majority")
+        self.assertEqual(selection["selected_answer"], "A")
+
+    def test_option_matrix_disagreement_can_trigger_verifier_when_route_voi_explores(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. consensus\nB. matrix",
+        }
+        attempts = [
+            {"child_id": "rawp", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "rawbp", "child_index": 2, "prompt_kind": "raw_budget_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "hipp", "child_index": 3, "prompt_kind": "hipporag_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha", "preserve_context_char_count": 200, "preserve_selected_doc_count": 1},
+            {"child_id": "direct", "child_index": 4, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {
+                "child_id": "route",
+                "child_index": 5,
+                "prompt_kind": "route_arbitrator_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+                "route_arbitrator_trusted": False,
+                "candidate_verifier_state": "not_verified",
+                "route_value_of_information_gate_status": "continue_exploration",
+                "route_value_of_information_recommended_action": "continue_exploration",
+            },
+            {"child_id": "matrix", "child_index": 6, "prompt_kind": "option_matrix_reasoner_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+        ]
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1",
+                "HLE_ENABLE_OPTION_SWEEP_VOI_COUNTER": "1",
+                "HLE_ALLOW_STRUCTURAL_COUNTER_OVER_BASELINE_CONSENSUS": "1",
+            },
+        ):
+            with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}') as call_model:
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
+
+        call_model.assert_called_once()
+        self.assertEqual(selection["selection_method"], "counter_assumption_verifier_choice")
+        self.assertEqual(selection["selected_child_id"], "matrix")
+        self.assertEqual(selection["selected_answer"], "B")
+
+    def test_structural_option_audit_can_trigger_verifier_when_route_voi_explores(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. consensus\nB. structural audit",
+        }
+        attempts = [
+            {"child_id": "rawp", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "rawbp", "child_index": 2, "prompt_kind": "raw_budget_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "hipp", "child_index": 3, "prompt_kind": "hipporag_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha", "preserve_context_char_count": 200, "preserve_selected_doc_count": 1},
+            {"child_id": "direct", "child_index": 4, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {
+                "child_id": "route",
+                "child_index": 5,
+                "prompt_kind": "route_arbitrator_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+                "route_arbitrator_trusted": False,
+                "candidate_verifier_state": "not_verified",
+                "route_value_of_information_gate_status": "continue_exploration",
+                "route_value_of_information_recommended_action": "continue_exploration",
+            },
+            {"child_id": "audit", "child_index": 6, "prompt_kind": "structural_option_audit_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1"}, clear=False):
+            with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}') as call_model:
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
+
+        call_model.assert_called_once()
+        self.assertEqual(selection["selection_method"], "counter_assumption_verifier_choice")
+        self.assertEqual(selection["selected_child_id"], "audit")
+        self.assertEqual(selection["selected_answer"], "B")
+
+    def test_trusted_preserve_route_blocks_counter_verifier_override(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. trusted route\nB. noisy counter",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+            {"child_id": "matrix", "child_index": 2, "prompt_kind": "option_matrix_reasoner_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+            {
+                "child_id": "route",
+                "child_index": 3,
+                "prompt_kind": "route_arbitrator_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+                "route_arbitrator_trusted": True,
+                "route_value_score": 9.0,
+                "route_value_of_information_gate_status": "preserve_route",
+                "route_value_of_information_recommended_action": "preserve_route",
+            },
+            {"child_id": "audit", "child_index": 4, "prompt_kind": "structural_option_audit_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1"}, clear=False):
+            with patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
+
+        call_model.assert_not_called()
+        self.assertEqual(selection["selection_method"], "route_value_verifier_choice")
+        self.assertEqual(selection["selected_child_id"], "route")
+        self.assertEqual(selection["selected_answer"], "A")
+
+    def test_baseline_family_majority_blocks_structural_counter_by_default(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. consensus\nB. isolated counter",
+        }
+        attempts = [
+            {"child_id": "rawp", "child_index": 1, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "rawbp", "child_index": 2, "prompt_kind": "raw_budget_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "hipp", "child_index": 3, "prompt_kind": "hipporag_preserve_selector_answer", "parsed_answer": "A", "parsed_answer_hash": "ha", "preserve_context_char_count": 200, "preserve_selected_doc_count": 1},
+            {"child_id": "hippb", "child_index": 4, "prompt_kind": "hipporag_preserve_selector_answer", "parsed_answer": "B", "parsed_answer_hash": "hb", "preserve_context_char_count": 200, "preserve_selected_doc_count": 1, "budget_matched": True},
+            {"child_id": "matrix", "child_index": 5, "prompt_kind": "option_matrix_reasoner_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1"}, clear=False):
+            with patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
+
+        call_model.assert_not_called()
+        self.assertEqual(selection["selection_method"], "normalized_majority")
+        self.assertEqual(selection["selected_answer"], "A")
+
+    def test_route_value_continue_exploration_does_not_priority_select_route(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. majority\nB. route",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {
+                "child_id": "route",
+                "child_index": 3,
+                "prompt_kind": "route_arbitrator_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+                "candidate_verifier_state": "verified",
+                "route_arbitrator_trusted": True,
+                "route_value_confidence": "high",
+                "route_value_of_information_gate_status": "continue_exploration",
+                "route_value_of_information_recommended_action": "continue_exploration",
+            },
+        ]
+
+        selection = _select_recursive_child_answer(
+            problem=problem,
+            attempts=attempts,
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=1,
+            max_tokens=32,
+        )
+
+        self.assertEqual(selection["selection_method"], "normalized_majority")
+        self.assertEqual(selection["selected_answer"], "A")
 
     def test_option_evidence_conflict_is_diagnostic_by_default(self):
         problem = {
@@ -2955,8 +6310,226 @@ class HleSmokeEvalTest(unittest.TestCase):
                     timeout=1,
                     max_tokens=32,
                 )
+        self.assertEqual(selection["selection_method"], "normalized_majority")
+        self.assertEqual(selection["selected_answer"], "A")
+
+    def test_route_voi_continue_allows_full_option_space_counter_verifier(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. majority\nB. hidden correct\nC. distractor",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {
+                "child_id": "route",
+                "child_index": 3,
+                "prompt_kind": "route_arbitrator_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+                "candidate_verifier_state": "verified",
+                "candidate_verifier_trust": "route_arbitrator_evidence_gate",
+                "route_arbitrator_trusted": True,
+                "route_value_confidence": "high",
+                "route_value_of_information_gate_status": "continue_exploration",
+                "route_value_of_information_recommended_action": "continue_exploration",
+            },
+        ]
+        added, summary = _maybe_add_mc_option_sweep_candidates(problem=problem, attempts=attempts)
+        self.assertEqual(summary["status"], "activated")
+        attempts.extend(added)
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1",
+                "HLE_ENABLE_OPTION_SWEEP_VOI_COUNTER": "1",
+            },
+        ):
+            with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}') as call_model:
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="gpt-5.4-mini",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
+
+        self.assertEqual(call_model.call_count, 1)
         self.assertEqual(selection["selection_method"], "counter_assumption_verifier_choice")
         self.assertEqual(selection["selected_answer"], "B")
+
+    def test_route_voi_continue_option_sweep_counter_is_opt_in(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. majority\nB. hidden correct\nC. distractor",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {
+                "child_id": "route",
+                "child_index": 3,
+                "prompt_kind": "route_arbitrator_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+                "candidate_verifier_state": "verified",
+                "candidate_verifier_trust": "route_arbitrator_evidence_gate",
+                "route_arbitrator_trusted": True,
+                "route_value_confidence": "high",
+                "route_value_of_information_gate_status": "continue_exploration",
+                "route_value_of_information_recommended_action": "continue_exploration",
+            },
+        ]
+        added, _ = _maybe_add_mc_option_sweep_candidates(problem=problem, attempts=attempts)
+        attempts.extend(added)
+
+        with patch.dict(os.environ, {"HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1"}):
+            with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}') as call_model:
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="gpt-5.4-mini",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
+
+        self.assertEqual(call_model.call_count, 0)
+        self.assertEqual(selection["selection_method"], "normalized_majority")
+        self.assertEqual(selection["selected_answer"], "A")
+
+    def test_route_voi_preserve_blocks_full_option_space_counter_verifier(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. majority\nB. hidden correct\nC. distractor",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {
+                "child_id": "route",
+                "child_index": 3,
+                "prompt_kind": "route_arbitrator_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+                "candidate_verifier_state": "verified",
+                "candidate_verifier_trust": "route_arbitrator_evidence_gate",
+                "route_arbitrator_trusted": True,
+                "route_value_confidence": "high",
+                "route_value_of_information_gate_status": "preserve_route",
+                "route_value_of_information_recommended_action": "preserve_route",
+            },
+        ]
+        added, _ = _maybe_add_mc_option_sweep_candidates(problem=problem, attempts=attempts)
+        attempts.extend(added)
+
+        with patch.dict(os.environ, {"HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1"}):
+            with patch("assumption_os.hle_smoke_eval._call_model", return_value='{"choice":2}') as call_model:
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="gpt-5.4-mini",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
+
+        self.assertEqual(call_model.call_count, 0)
+        self.assertEqual(selection["selection_method"], "route_value_verifier_choice")
+        self.assertEqual(selection["selected_answer"], "A")
+
+    def test_verified_or_abstain_prefers_raw_budget_over_single_raw_fallback(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. raw\nB. budget",
+        }
+        attempts = [
+            {
+                "child_id": "raw",
+                "child_index": 1,
+                "prompt_kind": "raw_preserve_selector_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "budget",
+                "child_index": 2,
+                "prompt_kind": "raw_budget_preserve_selector_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+        ]
+
+        selection = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection={
+                "selection_method": "normalized_majority",
+                "selected_child_id": "raw",
+                "selected_answer": "A",
+            },
+        )
+
+        self.assertEqual(selection["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(selection["selected_child_id"], "budget")
+        self.assertEqual(selection["selected_answer"], "B")
+        self.assertEqual(selection["verified_or_abstain_gate"]["fallback_prompt_kind"], "raw_budget_preserve_selector_answer")
+
+    def test_forced_alternative_alone_does_not_trigger_counter_verifier(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. majority\nB. forced alternative",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "agent_context_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "c3", "child_index": 3, "prompt_kind": "forced_alternative_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+        ]
+        with patch.dict(os.environ, {"HLE_ENABLE_COUNTER_ASSUMPTION_VERIFIER": "1"}):
+            with patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=1,
+                    max_tokens=32,
+                )
+
+        call_model.assert_not_called()
+        self.assertEqual(selection["selection_method"], "normalized_majority")
+        self.assertEqual(selection["selected_child_id"], "c1")
+        self.assertEqual(selection["selected_answer"], "A")
 
     def test_forced_alternative_runs_after_option_elimination_confirms_majority(self):
         problem = {
@@ -3608,6 +7181,74 @@ class HleSmokeEvalTest(unittest.TestCase):
             hashes = _collect_existing_hle_problem_hashes(root=root, artifact_glob="hle_text_smoke*.json*")
 
         self.assertEqual(hashes, {"p1", "p2"})
+
+    def test_collect_existing_hle_problem_hashes_reads_parallel_run_default_layout(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_dir = root / "phase four" / "assumption_graph" / "paper_readiness_20260604" / "hle_parallel_runs"
+            run_dir.mkdir(parents=True)
+            (run_dir / "hle_old.json").write_text(
+                __import__("json").dumps({"rows": [{"problem_id_hash": "parallel-old"}]}),
+                encoding="utf-8",
+            )
+
+            hashes = _collect_existing_hle_problem_hashes(
+                root=root,
+                artifact_glob="phase four/assumption_graph/paper_readiness_20260604/hle_parallel_runs/hle*.json*",
+            )
+
+        self.assertEqual(hashes, {"parallel-old"})
+
+    def test_collect_existing_hle_problem_hashes_can_use_stale_frozen_cache(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "hle_text_smoke_a.json").write_text(
+                __import__("json").dumps({"rows": [{"problem_id_hash": "fresh"}]}),
+                encoding="utf-8",
+            )
+            cache = root / "frozen_hash_cache.json"
+            cache.write_text(
+                __import__("json").dumps(
+                    {
+                        "artifact_glob": "hle_text_smoke*.json*",
+                        "manifest": [{"path_hash": "stale"}],
+                        "problem_id_hashes": ["frozen"],
+                        "raw_content_persisted": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {"HLE_EXISTING_HASH_CACHE_PATH": str(cache)}, clear=False):
+                default_hashes = _collect_existing_hle_problem_hashes(
+                    root=root,
+                    artifact_glob="hle_text_smoke*.json*",
+                )
+            cache.write_text(
+                __import__("json").dumps(
+                    {
+                        "artifact_glob": "hle_text_smoke*.json*",
+                        "manifest": [{"path_hash": "stale"}],
+                        "problem_id_hashes": ["frozen"],
+                        "raw_content_persisted": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                os.environ,
+                {
+                    "HLE_EXISTING_HASH_CACHE_PATH": str(cache),
+                    "HLE_EXISTING_HASH_CACHE_ALLOW_STALE": "1",
+                },
+                clear=False,
+            ):
+                frozen_hashes = _collect_existing_hle_problem_hashes(
+                    root=root,
+                    artifact_glob="hle_text_smoke*.json*",
+                )
+
+        self.assertEqual(default_hashes, {"fresh"})
+        self.assertEqual(frozen_hashes, {"frozen"})
 
     def test_control_comparison_reports_agent_vs_controls(self):
         rows = [
