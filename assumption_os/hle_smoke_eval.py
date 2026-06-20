@@ -3838,11 +3838,23 @@ def _route_value_of_information_gate_summary(summary: dict[str, Any] | None) -> 
         row_tags = set(str(tag) for tag in row_profile.get("reason_tags", []) or [])
         row_confidence = str(row_profile.get("confidence") or "").lower()
         row_score = float(row.get("score") or 0.0)
+        budgeted_retrieval_disagreement = (
+            selected_route == "raw_budget_consensus"
+            and row.get("route_type") == "hipporag_preserve"
+            and bool(row.get("budget_matched"))
+            and bool(row.get("budget_strong_consensus"))
+            and int(row.get("budget_top_candidate_vote_count") or 0) >= 3
+            and (
+                bool(row.get("context_answer_option_hash"))
+                or int(row.get("context_answer_overlap_count") or 0) > 0
+            )
+        )
         if (
             row_confidence in {"verified", "high"}
             or bool(row.get("context_answer_supported"))
             or "answer_bearing_retrieval" in row_tags
             or int(row.get("baseline_cache_support_count") or 0) >= 3
+            or budgeted_retrieval_disagreement
         ) and row_score >= runner_up:
             credible_counter_routes.append({
                 "route_type": row.get("route_type"),
@@ -3851,6 +3863,16 @@ def _route_value_of_information_gate_summary(summary: dict[str, Any] | None) -> 
                 "confidence": row_confidence or None,
                 "answer_hash": row.get("answer_hash"),
                 "normalized_answer_hash": row.get("normalized_answer_hash"),
+            })
+        elif budgeted_retrieval_disagreement:
+            credible_counter_routes.append({
+                "route_type": row.get("route_type"),
+                "prompt_kind": row.get("prompt_kind"),
+                "score": row.get("score"),
+                "confidence": row_confidence or None,
+                "answer_hash": row.get("answer_hash"),
+                "normalized_answer_hash": row.get("normalized_answer_hash"),
+                "credible_counter_kind": "budgeted_retrieval_disagreement",
             })
 
     answer_bearing = (
@@ -4879,6 +4901,8 @@ def _maybe_add_route_arbitrator_candidate(
         "route_arbitrator_trusted": bool(trust_decision.get("trusted")),
         "route_arbitrator_trust_reason": trust_decision.get("reason"),
         "route_value_score": selected.get("route_score"),
+        "route_value_runner_up_score": round(second_score, 4),
+        "route_value_score_margin": round(float(selected.get("route_score") or 0.0) - second_score, 4),
         "route_value_confidence": (selected.get("route_value_profile") or {}).get("confidence"),
         "route_value_profile": selected.get("route_value_profile"),
     }
@@ -10600,6 +10624,18 @@ def _should_defer_trusted_route_to_evidence_challenge(
         return False
     if problem.get("answer_type") != "multipleChoice":
         return False
+    if _trusted_route_should_yield_to_structural_counter(
+        problem=problem,
+        route_attempt=route_attempt,
+        valid=valid,
+    ):
+        return True
+    if _trusted_route_should_yield_to_budgeted_retrieval_counter(
+        problem=problem,
+        route_attempt=route_attempt,
+        valid=valid,
+    ):
+        return True
     if str(route_attempt.get("route_value_of_information_gate_status") or "") != "continue_exploration":
         return False
     route_answer = str(route_attempt.get("parsed_answer") or "").strip()
@@ -10629,6 +10665,151 @@ def _should_defer_trusted_route_to_evidence_challenge(
         if _normalize_for_selection(answer, answer_type="multipleChoice") != route_norm:
             return True
     return False
+
+
+def _trusted_route_should_yield_to_structural_counter(
+    *,
+    problem: dict[str, Any],
+    route_attempt: dict[str, Any],
+    valid: list[dict[str, Any]],
+) -> bool:
+    if os.environ.get("HLE_DISABLE_STRUCTURAL_COUNTER_PRESERVE_DEFER", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return False
+    if problem.get("answer_type") != "multipleChoice":
+        return False
+    if route_attempt.get("prompt_kind") != "route_arbitrator_answer":
+        return False
+    if str(route_attempt.get("route_arbitrator_selected_route") or "") != "raw_budget_consensus":
+        return False
+    if str(route_attempt.get("route_arbitrator_trust_reason") or "") != "strong_raw_budget_consensus":
+        return False
+    if not (
+        str(route_attempt.get("route_value_of_information_gate_status") or "") == "preserve_route"
+        or str(route_attempt.get("route_value_of_information_recommended_action") or "") == "preserve_route"
+    ):
+        return False
+    try:
+        margin = float(route_attempt.get("route_value_score_margin"))
+    except (TypeError, ValueError):
+        return False
+    if margin > 1.5:
+        return False
+    route_norm = _normalize_for_selection(
+        str(route_attempt.get("parsed_answer") or ""),
+        answer_type=problem.get("answer_type") or "multipleChoice",
+    )
+    if not route_norm:
+        return False
+    for attempt in valid:
+        if attempt is route_attempt:
+            continue
+        if attempt.get("prompt_kind") != "structural_option_audit_answer":
+            continue
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        if (
+            attempt.get("candidate_verifier_state") == "refuted"
+            and _is_trusted_candidate_verifier_attempt(attempt)
+        ):
+            continue
+        if _normalize_for_selection(answer, answer_type=problem.get("answer_type") or "multipleChoice") != route_norm:
+            return True
+    return False
+
+
+def _trusted_route_should_yield_to_budgeted_retrieval_counter(
+    *,
+    problem: dict[str, Any],
+    route_attempt: dict[str, Any],
+    valid: list[dict[str, Any]],
+) -> bool:
+    if os.environ.get("HLE_DISABLE_BUDGETED_RETRIEVAL_COUNTER_PRESERVE_DEFER", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return False
+    if problem.get("answer_type") != "multipleChoice":
+        return False
+    if route_attempt.get("prompt_kind") != "route_arbitrator_answer":
+        return False
+    if str(route_attempt.get("route_arbitrator_selected_route") or "") != "raw_budget_consensus":
+        return False
+    if str(route_attempt.get("route_arbitrator_trust_reason") or "") != "strong_raw_budget_consensus":
+        return False
+    if not (
+        str(route_attempt.get("route_value_of_information_gate_status") or "") == "preserve_route"
+        or str(route_attempt.get("route_value_of_information_recommended_action") or "") == "preserve_route"
+    ):
+        return False
+    try:
+        margin = float(route_attempt.get("route_value_score_margin"))
+    except (TypeError, ValueError):
+        return False
+    if margin > 3.5:
+        return False
+    route_norm = _normalize_for_selection(
+        str(route_attempt.get("parsed_answer") or ""),
+        answer_type=problem.get("answer_type") or "multipleChoice",
+    )
+    if not route_norm:
+        return False
+    for attempt in valid:
+        if attempt is route_attempt:
+            continue
+        if attempt.get("prompt_kind") != "hipporag_preserve_selector_answer":
+            continue
+        if not bool(attempt.get("budget_matched")):
+            continue
+        if not bool(attempt.get("budget_strong_consensus")):
+            continue
+        if int(attempt.get("budget_top_candidate_vote_count") or 0) < 3:
+            continue
+        if not (
+            bool(attempt.get("context_answer_option_hash"))
+            or int(attempt.get("context_answer_overlap_count") or 0) > 0
+        ):
+            continue
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        if _normalize_for_selection(answer, answer_type=problem.get("answer_type") or "multipleChoice") != route_norm:
+            return True
+    return False
+
+
+def _is_budgeted_retrieval_counter_attempt(
+    *,
+    problem: dict[str, Any],
+    attempt: dict[str, Any],
+    top_norm: str,
+) -> bool:
+    if problem.get("answer_type") != "multipleChoice":
+        return False
+    if attempt.get("prompt_kind") != "hipporag_preserve_selector_answer":
+        return False
+    if not bool(attempt.get("budget_matched")):
+        return False
+    if not bool(attempt.get("budget_strong_consensus")):
+        return False
+    if int(attempt.get("budget_top_candidate_vote_count") or 0) < 3:
+        return False
+    if not (
+        bool(attempt.get("context_answer_option_hash"))
+        or int(attempt.get("context_answer_overlap_count") or 0) > 0
+    ):
+        return False
+    answer = str(attempt.get("parsed_answer") or "").strip()
+    if not answer:
+        return False
+    return _normalize_for_selection(answer, answer_type=problem.get("answer_type") or "multipleChoice") != top_norm
 
 
 def _select_recursive_child_answer(
@@ -11291,20 +11472,34 @@ def _select_after_counter_assumption_challenge(
         and str(attempt.get("parsed_answer") or "").strip()
     ]
     if trusted_preserve_routes:
-        selected = sorted(
-            trusted_preserve_routes,
-            key=lambda row: (
-                -float(row.get("route_value_score") or row.get("route_arbitrator_score") or 0.0),
-                int(row.get("child_index", 0) or 0),
-            ),
-        )[0]
-        return {
-            "selection_method": "route_value_verifier_choice",
-            "selected_child_id": selected["child_id"],
-            "selected_answer": selected["parsed_answer"],
-            "underlying_model_calls": 0,
-            "verifier_model_call": False,
-        }
+        non_yielding_preserve_routes = [
+            attempt for attempt in trusted_preserve_routes
+            if not _trusted_route_should_yield_to_structural_counter(
+                problem=problem,
+                route_attempt=attempt,
+                valid=valid,
+            )
+            and not _trusted_route_should_yield_to_budgeted_retrieval_counter(
+                problem=problem,
+                route_attempt=attempt,
+                valid=valid,
+            )
+        ]
+        if non_yielding_preserve_routes:
+            selected = sorted(
+                non_yielding_preserve_routes,
+                key=lambda row: (
+                    -float(row.get("route_value_score") or row.get("route_arbitrator_score") or 0.0),
+                    int(row.get("child_index", 0) or 0),
+                ),
+            )[0]
+            return {
+                "selection_method": "route_value_verifier_choice",
+                "selected_child_id": selected["child_id"],
+                "selected_answer": selected["parsed_answer"],
+                "underlying_model_calls": 0,
+                "verifier_model_call": False,
+            }
     option_evidence_arbitrator_enabled = _option_evidence_arbitrator_enabled()
     challenge_prompt_kinds = {
         "counter_assumption_challenge_answer",
@@ -11326,6 +11521,18 @@ def _select_after_counter_assumption_challenge(
         if attempt.get("prompt_kind") in challenge_prompt_kinds
         and str(attempt.get("parsed_answer") or "").strip()
     ]
+    budgeted_retrieval_challenge_candidates = [
+        attempt for attempt in valid
+        if _is_budgeted_retrieval_counter_attempt(
+            problem=problem,
+            attempt=attempt,
+            top_norm=top_norm,
+        )
+    ]
+    challenge_candidates.extend(
+        attempt for attempt in budgeted_retrieval_challenge_candidates
+        if attempt not in challenge_candidates
+    )
     baseline_preserve_prompt_kinds = {
         "raw_preserve_selector_answer",
         "raw_budget_preserve_selector_answer",
@@ -11362,7 +11569,14 @@ def _select_after_counter_assumption_challenge(
         hard_challenge_prompt_kinds.add("mc_option_sweep_candidate")
     hard_disagreeing_challenges = [
         attempt for attempt in challenge_candidates
-        if attempt.get("prompt_kind") in hard_challenge_prompt_kinds
+        if (
+            attempt.get("prompt_kind") in hard_challenge_prompt_kinds
+            or _is_budgeted_retrieval_counter_attempt(
+                problem=problem,
+                attempt=attempt,
+                top_norm=top_norm,
+            )
+        )
         and _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type=problem["answer_type"]) != top_norm
     ]
     if not hard_disagreeing_challenges:
@@ -11386,6 +11600,23 @@ def _select_after_counter_assumption_challenge(
             attempt for attempt in hard_disagreeing_challenges
             if attempt.get("prompt_kind") == "structural_option_audit_answer"
         ]
+        budgeted_retrieval_disagreement = [
+            attempt for attempt in hard_disagreeing_challenges
+            if _is_budgeted_retrieval_counter_attempt(
+                problem=problem,
+                attempt=attempt,
+                top_norm=top_norm,
+            )
+        ]
+        route_yields_to_budgeted_retrieval = any(
+            attempt.get("prompt_kind") == "route_arbitrator_answer"
+            and _trusted_route_should_yield_to_budgeted_retrieval_counter(
+                problem=problem,
+                route_attempt=attempt,
+                valid=valid,
+            )
+            for attempt in valid
+        )
         allow_structural_over_baseline = os.environ.get(
             "HLE_ALLOW_STRUCTURAL_COUNTER_OVER_BASELINE_CONSENSUS",
             "",
@@ -11393,7 +11624,10 @@ def _select_after_counter_assumption_challenge(
         if not evidence_disagreement and not (
             (allow_structural_over_baseline or bool(structural_audit_disagreement))
             and structural_disagreement
-            and _route_voi_allows_structural_counter_verifier(valid)
+            and _route_voi_allows_structural_counter_verifier(valid, problem=problem)
+        ) and not (
+            budgeted_retrieval_disagreement
+            and route_yields_to_budgeted_retrieval
         ):
             return None
     verifier_valid = valid
@@ -11481,7 +11715,11 @@ def _option_evidence_arbitrator_enabled() -> bool:
     return os.environ.get("HLE_ENABLE_OPTION_EVIDENCE_ARBITRATOR", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _route_voi_allows_structural_counter_verifier(valid: list[dict[str, Any]]) -> bool:
+def _route_voi_allows_structural_counter_verifier(
+    valid: list[dict[str, Any]],
+    *,
+    problem: dict[str, Any] | None = None,
+) -> bool:
     route_attempts = [
         attempt for attempt in valid
         if attempt.get("prompt_kind") == "route_arbitrator_answer"
@@ -11492,6 +11730,12 @@ def _route_voi_allows_structural_counter_verifier(valid: list[dict[str, Any]]) -
         status = str(attempt.get("route_value_of_information_gate_status") or "")
         action = str(attempt.get("route_value_of_information_recommended_action") or "")
         if status == "continue_exploration" or action == "continue_exploration":
+            return True
+        if problem is not None and _trusted_route_should_yield_to_structural_counter(
+            problem=problem,
+            route_attempt=attempt,
+            valid=valid,
+        ):
             return True
     return False
 
