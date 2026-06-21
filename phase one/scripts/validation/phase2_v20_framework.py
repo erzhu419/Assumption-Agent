@@ -109,6 +109,12 @@ EXECUTE_V20 = """# 你要解决下面的问题。
 
 ## 次要参考（仅在与 PRIMARY FRAME 一致时纳入）
 
+## 可执行假设约束（若触发条件匹配，必须落实）
+{assumption_operator_block}
+
+若上面的 OperatorSpec 触发条件匹配，最终答案必须体现对应 required slots；不要只复述 Claim 或原则名称。
+可执行假设约束高于下面的次要参考，但低于 PRIMARY FRAME。
+
 {assumption_context_block}
 
 {domain_execution_block}
@@ -141,6 +147,9 @@ REFLECT_PROMPT_V20 = """草稿已产。
 ## 重写版本
 {rewritten_problem}
 
+## 可执行假设约束
+{assumption_operator_block}
+
 ## 草稿
 {draft}
 
@@ -148,8 +157,38 @@ REFLECT_PROMPT_V20 = """草稿已产。
 1. 草稿是否按 PRIMARY FRAME 作答？滑回了错误 frame 吗？
 2. 草稿是针对 original 还是 rewritten？如果重写凸显了什么但 draft 没 address，补上。
 3. 踩了 anti_patterns 里的某条吗？
+4. 若 OperatorSpec 触发，草稿是否填了 required slots？有没有把假设当装饰性建议而非执行约束？
 
 输出最终答案（不要 audit 过程）。不超过 650 字。
+"""
+
+OPERATOR_REPAIR_PROMPT_V20 = """最终答案已生成，但程序化 OperatorSpec 检查发现 required slots 没有被完整落实。
+
+## 原问题
+{problem}
+
+## Primary Frame
+{frame_summary}
+
+## 重写版本
+{rewritten_problem}
+
+## 可执行假设约束
+{assumption_operator_block}
+
+## 当前答案
+{answer}
+
+## 缺失/薄弱的 required slots
+{missing_slot_report}
+
+## 修复要求
+- 保持当前答案的核心判断和结构，不要另起炉灶。
+- 只补足缺失 required slots，使答案体现具体变量、边界、指标、对照、验收或回滚等可检查内容。
+- 不要解释检查过程，不要说“我补充了”。
+- 不超过 650 字。
+
+输出修复后的最终答案：
 """
 
 
@@ -246,10 +285,57 @@ def build_assumption_context(
     skip_domains: set[str] | None = None,
     trace_recorder=None,
 ) -> str:
+    return build_assumption_prompt_materials(
+        graph_bundle,
+        problem,
+        meta,
+        pid,
+        dom,
+        diff,
+        coverage_tags=coverage_tags,
+        skip_domains=skip_domains,
+        trace_recorder=trace_recorder,
+        operatorize=False,
+        operator_domains=None,
+        operator_skip_domains=None,
+    )["context_block"]
+
+
+def build_assumption_prompt_materials(
+    graph_bundle,
+    problem: str,
+    meta: dict,
+    pid: str,
+    dom: str,
+    diff: str,
+    coverage_tags: list[str] | None = None,
+    skip_domains: set[str] | None = None,
+    trace_recorder=None,
+    operatorize: bool = True,
+    operator_domains: set[str] | None = None,
+    operator_skip_domains: set[str] | None = None,
+    operator_max_specs: int = 2,
+) -> dict:
+    empty = {
+        "context_block": "",
+        "operator_block": "",
+        "diagnostics": {
+            "retrieved_assumption_ids": [],
+            "operator_count": 0,
+            "operator_source_ids": [],
+            "operator_source_types": [],
+            "operator_specs": [],
+            "required_slot_count": 0,
+            "verifier_check_count": 0,
+            "operator_gate_status": "not_available",
+            "operator_gate_reason": "no_graph_bundle",
+        },
+    }
     if not graph_bundle:
-        return ""
+        return empty
     if skip_domains and dom in skip_domains:
-        return ""
+        empty["diagnostics"]["operator_gate_reason"] = "domain_in_graph_skip_list"
+        return empty
     (
         graph,
         formatter,
@@ -306,8 +392,35 @@ def build_assumption_context(
             _remove_nodes_from_result(result, set(candidates) - set(target_ids))
         if force_proposal_route and route_domain_ok and route_difficulty_ok:
             _force_nodes_into_result(result, graph, target_ids)
+    nodes = list(getattr(result.subgraph, "nodes", [])) if result else []
+    operator_block = ""
+    operator_summary = {
+        "operator_count": 0,
+        "operator_source_ids": [],
+        "operator_source_types": [],
+        "operator_specs": [],
+        "required_slot_count": 0,
+        "verifier_check_count": 0,
+    }
+    from assumption_os.operator_specs import operator_gate_decision
+
+    operator_gate = operator_gate_decision(
+        dom,
+        enabled=operatorize,
+        allowed_domains=operator_domains,
+        skipped_domains=operator_skip_domains,
+    )
+    if operator_gate.enabled and nodes:
+        from assumption_os.operator_specs import (
+            build_operator_specs,
+            format_operator_specs,
+            operator_trace_summary,
+        )
+
+        operator_specs = build_operator_specs(nodes, max_specs=max(1, operator_max_specs))
+        operator_block = format_operator_specs(operator_specs, max_specs=max(1, operator_max_specs))
+        operator_summary = operator_trace_summary(operator_specs)
     if trace_recorder and getattr(trace_recorder, "enabled", False):
-        nodes = list(getattr(result.subgraph, "nodes", [])) if result else []
         trace_recorder.record_retrieval(
             problem_id=pid,
             component="phase2_assumption_graph_retrieval",
@@ -320,6 +433,8 @@ def build_assumption_context(
                 "node_types": [str(getattr(node.type, "value", node.type)) for node in nodes],
                 "policy_notes": list(getattr(result, "policy_notes", [])) if result else [],
                 "coverage_tags": coverage_tags or [],
+                "operator_gate": operator_gate.to_dict(),
+                **operator_summary,
             },
             metadata={
                 "skip_domains": sorted(skip_domains or []),
@@ -327,7 +442,36 @@ def build_assumption_context(
                 "route_scope_proposals": route_scope_proposals,
             },
         )
-    return policy_formatter(result, formatter, max_nodes=8)
+    context_block = policy_formatter(result, formatter, max_nodes=8)
+    return {
+        "context_block": context_block,
+        "operator_block": operator_block,
+        "diagnostics": {
+            "retrieved_assumption_ids": [node.id for node in nodes],
+            "assumption_context_chars": len(context_block),
+            "assumption_operator_chars": len(operator_block),
+            "operator_gate_status": operator_gate.status,
+            "operator_gate_reason": operator_gate.reason,
+            "operator_gate_allowed_domains": operator_gate.allowed_domains,
+            "operator_gate_skipped_domains": operator_gate.skipped_domains,
+            **operator_summary,
+        },
+    }
+
+
+def format_application_missing_slot_report(application_audit: dict) -> str:
+    lines: list[str] = []
+    for row in application_audit.get("operators", []):
+        missing = row.get("missing_slots", [])
+        if not missing and row.get("used"):
+            continue
+        lines.append(
+            f"- {row.get('source_id')}: missing={missing or []}; "
+            f"filled={row.get('filled_slots', [])}; "
+            f"decorative={row.get('decorative', False)}; "
+            f"misapplied={row.get('misapplied', False)}"
+        )
+    return "\n".join(lines) if lines else "- no missing slots"
 
 
 def _force_nodes_into_result(result, graph, node_ids: list[str]) -> None:
@@ -399,6 +543,16 @@ def main():
                     help="use intent-aware math/science bypass prompts for research-bridge and science-decision rows")
     ap.add_argument("--disable-domain-execution-template", action="store_true",
                     help="disable domain execution templates that are enabled with --assumption-graph")
+    ap.add_argument("--disable-assumption-operators", action="store_true",
+                    help="disable OperatorSpec constraints compiled from retrieved assumption nodes")
+    ap.add_argument("--assumption-operator-domains", default="daily_life",
+                    help="comma-separated domains where OperatorSpec constraints may be injected; use 'all' or empty for all domains")
+    ap.add_argument("--assumption-operator-skip-domains", default="",
+                    help="comma-separated domains where OperatorSpec constraints are blocked even if graph context is active")
+    ap.add_argument("--assumption-operator-max-specs", type=int, default=2,
+                    help="maximum OperatorSpec constraints injected per problem")
+    ap.add_argument("--disable-assumption-operator-repair", action="store_true",
+                    help="disable one bounded repair pass when OperatorSpec required slots are not filled")
     ap.add_argument("--runtime-trace-events-out", default=None,
                     help="optional JSONL path for first-party LLM/retrieval runtime trace events")
     ap.add_argument("--runtime-trace-summary-out", default=None,
@@ -457,6 +611,8 @@ def main():
         route_scope_proposals=args.assumption_route_scope_proposals,
     )
     assumption_graph_skip_domains = parse_csv_set(args.assumption_graph_skip_domains)
+    assumption_operator_domains = parse_csv_set(args.assumption_operator_domains)
+    assumption_operator_skip_domains = parse_csv_set(args.assumption_operator_skip_domains)
     domain_execution_enabled = bool(args.assumption_graph) and not args.disable_domain_execution_template
     trace_recorder = None
     if args.runtime_trace_events_out or args.runtime_trace_summary_out or args.runtime_trace_writeback:
@@ -508,6 +664,16 @@ def main():
                         "draft_cached": pid in drafts,
                         "frame": cached_meta.get("frame"),
                         "bypass_route": cached_meta.get("bypass_route"),
+                        "assumption_retrieved_ids": cached_meta.get("assumption_retrieved_ids", []),
+                        "assumption_operator_count": cached_meta.get("assumption_operator_count", 0),
+                        "assumption_operator_ids": cached_meta.get("assumption_operator_ids", []),
+                        "assumption_operator_chars": cached_meta.get("assumption_operator_chars", 0),
+                        "assumption_operator_gate_status": cached_meta.get("assumption_operator_gate_status"),
+                        "assumption_operator_gate_reason": cached_meta.get("assumption_operator_gate_reason"),
+                        "assumption_operator_gate_allowed_domains": cached_meta.get("assumption_operator_gate_allowed_domains", []),
+                        "assumption_operator_gate_skipped_domains": cached_meta.get("assumption_operator_gate_skipped_domains", []),
+                        "assumption_application_fidelity": cached_meta.get("assumption_application_fidelity"),
+                        "assumption_decorative_use_count": cached_meta.get("assumption_decorative_use_count"),
                     },
                 )
             continue
@@ -614,12 +780,34 @@ def main():
                     cross += [e for e in pre_mined if e not in cross][:3 - len(cross)]
                 w_blocks.append(format_wisdom_with_cases(w, cross, same_dom_ex))
             wisdom_case_block = "\n\n---\n\n".join(w_blocks) if w_blocks else "  (无)"
-            assumption_context_block = build_assumption_context(
+            assumption_materials = build_assumption_prompt_materials(
                 assumption_graph, problem, m, pid, dom, diff,
                 coverage_tags=p.get("coverage_tags", []),
                 skip_domains=assumption_graph_skip_domains,
                 trace_recorder=trace_recorder,
+                operatorize=not args.disable_assumption_operators,
+                operator_domains=assumption_operator_domains,
+                operator_skip_domains=assumption_operator_skip_domains,
+                operator_max_specs=args.assumption_operator_max_specs,
             )
+            assumption_context_block = assumption_materials["context_block"]
+            assumption_operator_block = assumption_materials["operator_block"] or "  (无)"
+            assumption_diagnostics = assumption_materials["diagnostics"]
+            if assumption_graph:
+                m["domain"] = dom
+                m["difficulty"] = diff
+                m["assumption_retrieved_ids"] = assumption_diagnostics.get("retrieved_assumption_ids", [])
+                m["assumption_context_chars"] = assumption_diagnostics.get("assumption_context_chars", 0)
+                m["assumption_operator_count"] = assumption_diagnostics.get("operator_count", 0)
+                m["assumption_operator_ids"] = assumption_diagnostics.get("operator_source_ids", [])
+                m["assumption_operator_specs"] = assumption_diagnostics.get("operator_specs", [])
+                m["assumption_operator_chars"] = assumption_diagnostics.get("assumption_operator_chars", 0)
+                m["assumption_operator_gate_status"] = assumption_diagnostics.get("operator_gate_status")
+                m["assumption_operator_gate_reason"] = assumption_diagnostics.get("operator_gate_reason")
+                m["assumption_operator_gate_allowed_domains"] = assumption_diagnostics.get("operator_gate_allowed_domains", [])
+                m["assumption_operator_gate_skipped_domains"] = assumption_diagnostics.get("operator_gate_skipped_domains", [])
+                meta[pid] = m
+                cache_save(meta_path, meta)
             domain_execution_block = build_domain_execution_block(
                 domain_execution_enabled, dom, problem, m)
 
@@ -635,6 +823,7 @@ def main():
                         problem=problem,
                         rewritten_problem=m.get("rewritten_problem", problem),
                         what_changed=m.get("what_changed", ""),
+                        assumption_operator_block=assumption_operator_block,
                         assumption_context_block=assumption_context_block,
                         domain_execution_block=domain_execution_block,
                         priors_block=format_priors(priors),
@@ -656,6 +845,11 @@ def main():
                                 "difficulty": diff,
                                 "wisdom_count": len(wisdom_entries),
                                 "has_assumption_context": bool(assumption_context_block.strip()),
+                                "assumption_operator_count": assumption_diagnostics.get("operator_count", 0),
+                                "assumption_operator_ids": assumption_diagnostics.get("operator_source_ids", []),
+                                "assumption_operator_chars": assumption_diagnostics.get("assumption_operator_chars", 0),
+                                "assumption_operator_gate_status": assumption_diagnostics.get("operator_gate_status"),
+                                "assumption_operator_gate_reason": assumption_diagnostics.get("operator_gate_reason"),
                                 "has_domain_execution_block": bool(domain_execution_block.strip()),
                                 "max_tokens": 1100,
                                 "temperature": 0.3,
@@ -671,9 +865,73 @@ def main():
                 r2 = _generate_with_retry(get_client(), REFLECT_PROMPT_V20.format(
                     problem=problem, frame_summary=frame_summary,
                     rewritten_problem=m.get("rewritten_problem", problem),
+                    assumption_operator_block=assumption_operator_block,
                     draft=draft
                 ), max_tokens=1100, temperature=0.3)
                 answers[pid] = r2["text"].strip()
+                if assumption_diagnostics.get("operator_specs"):
+                    from assumption_os.application_fidelity import audit_answer_application
+
+                    application_audit = audit_answer_application(
+                        answers[pid],
+                        assumption_diagnostics.get("operator_specs", []),
+                    )
+                    if (
+                        not application_audit.get("pass", True)
+                        and not args.disable_assumption_operator_repair
+                    ):
+                        before_audit = application_audit
+                        repair = _generate_with_retry(get_client(), OPERATOR_REPAIR_PROMPT_V20.format(
+                            problem=problem,
+                            frame_summary=frame_summary,
+                            rewritten_problem=m.get("rewritten_problem", problem),
+                            assumption_operator_block=assumption_operator_block,
+                            answer=answers[pid],
+                            missing_slot_report=format_application_missing_slot_report(application_audit),
+                        ), max_tokens=1100, temperature=0.2)
+                        answers[pid] = repair["text"].strip()
+                        application_audit = audit_answer_application(
+                            answers[pid],
+                            assumption_diagnostics.get("operator_specs", []),
+                        )
+                        m["assumption_application_repair_attempted"] = True
+                        m["assumption_application_audit_before_repair"] = before_audit
+                        m["assumption_application_fidelity_before_repair"] = before_audit.get("application_fidelity")
+                        if trace_recorder:
+                            trace_recorder.record_llm_call(
+                                problem_id=pid,
+                                component="phase2_operator_slot_repair",
+                                prompt_kind="operator_repair_v20",
+                                assumption="A bounded repair pass can convert decorative operator use into filled required slots.",
+                                expected_effect="Improve OperatorSpec application fidelity without changing the primary frame.",
+                                observed_effect=(
+                                    f"fidelity_before={before_audit.get('application_fidelity')}; "
+                                    f"fidelity_after={application_audit.get('application_fidelity')}"
+                                ),
+                                artifacts={
+                                    "domain": dom,
+                                    "difficulty": diff,
+                                    "missing_slot_report": format_application_missing_slot_report(before_audit),
+                                    "assumption_operator_ids": assumption_diagnostics.get("operator_source_ids", []),
+                                    "application_fidelity_before": before_audit.get("application_fidelity"),
+                                    "application_fidelity_after": application_audit.get("application_fidelity"),
+                                    "decorative_use_count_before": before_audit.get("decorative_use_count"),
+                                    "decorative_use_count_after": application_audit.get("decorative_use_count"),
+                                    "max_tokens": 1100,
+                                    "temperature": 0.2,
+                                },
+                            )
+                    else:
+                        m["assumption_application_repair_attempted"] = False
+                    m["assumption_application_audit"] = application_audit
+                    m["assumption_application_fidelity"] = application_audit.get("application_fidelity")
+                    m["assumption_slot_completion_rate"] = application_audit.get("slot_completion_rate")
+                    m["assumption_used_ids"] = application_audit.get("used_assumption_ids", [])
+                    m["assumption_ignored_ids"] = application_audit.get("ignored_assumption_ids", [])
+                    m["assumption_misapplied_ids"] = application_audit.get("misapplied_assumption_ids", [])
+                    m["assumption_decorative_use_count"] = application_audit.get("decorative_use_count", 0)
+                    meta[pid] = m
+                    cache_save(meta_path, meta)
                 cache_save(answers_path, answers)
                 if trace_recorder:
                     trace_recorder.record_llm_call(
@@ -687,6 +945,12 @@ def main():
                             "domain": dom,
                             "difficulty": diff,
                             "draft_chars": len(draft),
+                            "assumption_operator_count": assumption_diagnostics.get("operator_count", 0),
+                            "assumption_operator_ids": assumption_diagnostics.get("operator_source_ids", []),
+                            "assumption_operator_gate_status": assumption_diagnostics.get("operator_gate_status"),
+                            "assumption_operator_gate_reason": assumption_diagnostics.get("operator_gate_reason"),
+                            "assumption_application_fidelity": m.get("assumption_application_fidelity"),
+                            "assumption_decorative_use_count": m.get("assumption_decorative_use_count"),
                             "max_tokens": 1100,
                             "temperature": 0.3,
                         },
