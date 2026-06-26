@@ -99,7 +99,9 @@ from assumption_os.hle_smoke_eval import (
     _model_router_per_attempt_timeout,
     _model_router_extra_body,
     _model_router_subprocess_process_timeout,
+    _acquire_model_router_slot,
     _remove_stale_model_router_slots,
+    _release_model_router_slot,
     _needs_exact_answer_repair,
     _needs_evidence_grounded_child,
     _orthogonalize_child_prompt_specs,
@@ -280,6 +282,51 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertTrue(access["dataset_accessible"])
         self.assertEqual(access["dataset_source"], "local_disk")
+
+    def test_live_eval_writes_model_router_events_to_shard_jsonl_by_default(self):
+        from datasets import Dataset
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_path = root / "hle_local_test"
+            log_out = root / "eval.jsonl"
+            Dataset.from_list([
+                {
+                    "id": "local-1",
+                    "question": "Which statement is correct?\nA. Alpha\nB. Beta",
+                    "answer": "A",
+                    "answer_type": "multipleChoice",
+                    "category": "Science",
+                    "raw_subject": "Biology",
+                }
+            ]).save_to_disk(str(dataset_path))
+
+            def fake_call_model(**kwargs):
+                from assumption_os import hle_smoke_eval as smoke_eval
+
+                smoke_eval._model_router_log_event({"event_type": "unit_model_router_seen"})
+                return '{"answer":"A"}'
+
+            with patch.dict(os.environ, {"HLE_DATASET_LOCAL_PATH": str(dataset_path)}, clear=True):
+                with patch("assumption_os.hle_smoke_eval._call_model", side_effect=fake_call_model):
+                    payload = build_hle_text_smoke_eval_payload(
+                        root=root,
+                        eval_id="unit_router_log_default",
+                        sample_size=1,
+                        max_scan=5,
+                        models=["gpt-5.4-mini"],
+                        variants=["raw"],
+                        execute_live=True,
+                        log_out=log_out,
+                    )
+                restored_value = os.environ.get("HLE_MODEL_ROUTER_LOG_PATH")
+
+            events = [json.loads(line) for line in log_out.read_text(encoding="utf-8").splitlines()]
+
+        self.assertTrue(payload["pass"])
+        self.assertIsNone(restored_value)
+        router_event = next(event for event in events if event.get("event") == "unit_model_router_seen")
+        self.assertFalse(router_event["raw_content_persisted"])
 
     def test_extract_multiple_choice_options_supports_beyond_h(self):
         question = (
@@ -4923,6 +4970,24 @@ class HleSmokeEvalTest(unittest.TestCase):
 
             self.assertFalse(lock_path.exists())
 
+    def test_model_router_slot_cleanup_logs_dead_pid_removal(self):
+        with TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            log_path = directory / "router.jsonl"
+            lock_path = directory / "slot_000.lock"
+            lock_path.write_text(json.dumps({"pid": 123456, "thread_id": 1}), encoding="utf-8")
+
+            with patch.dict(os.environ, {"MODEL_ROUTER_LOG_PATH": str(log_path)}, clear=True):
+                with patch("assumption_os.hle_smoke_eval._model_router_pid_is_alive", return_value=False):
+                    _remove_stale_model_router_slots(directory=directory, ttl_sec=7200)
+
+            events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+
+        self.assertFalse(lock_path.exists())
+        self.assertEqual(events[0]["event"], "model_router_slot_stale_removed")
+        self.assertEqual(events[0]["reason"], "owner_exited")
+        self.assertIn("slot_dir_hash", events[0])
+
     def test_model_router_slot_cleanup_keeps_live_pid_before_ttl(self):
         with TemporaryDirectory() as tmp:
             directory = Path(tmp)
@@ -4933,6 +4998,35 @@ class HleSmokeEvalTest(unittest.TestCase):
                 _remove_stale_model_router_slots(directory=directory, ttl_sec=7200)
 
             self.assertTrue(lock_path.exists())
+
+    def test_model_router_slot_acquire_release_logs_wait_lifecycle(self):
+        with TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            log_path = directory / "router.jsonl"
+            with patch.dict(os.environ, {"MODEL_ROUTER_LOG_PATH": str(log_path)}, clear=True):
+                slot = _acquire_model_router_slot(
+                    directory=directory,
+                    limit=1,
+                    ttl_sec=7200,
+                    wait_sec=1,
+                    model="gpt-5.4-mini",
+                )
+                self.assertTrue(slot.exists())
+                _release_model_router_slot(slot)
+
+            events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+
+        event_names = [event["event"] for event in events]
+        self.assertEqual(
+            event_names,
+            [
+                "model_router_slot_wait_start",
+                "model_router_slot_acquired",
+                "model_router_slot_released",
+            ],
+        )
+        self.assertEqual(events[1]["slot_index"], 0)
+        self.assertIn("wait_latency_sec", events[1])
 
     def test_api_env_candidates_include_key_and_base_failover(self):
         with patch.dict(
@@ -5041,6 +5135,8 @@ class HleSmokeEvalTest(unittest.TestCase):
         )
         self.assertEqual(events[1]["candidate_index"], 0)
         self.assertEqual(events[3]["candidate_index"], 1)
+        self.assertEqual(events[0]["event"], events[0]["event_type"])
+        self.assertFalse(events[0]["raw_content_persisted"])
         joined_events = json.dumps(events, sort_keys=True)
         self.assertNotIn("primary-key", joined_events)
         self.assertNotIn("secondary-key", joined_events)

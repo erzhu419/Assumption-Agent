@@ -126,228 +126,244 @@ def build_hle_text_smoke_eval_payload(
         "excluded_existing_problem_count": len(excluded_problem_hashes),
         "underlying_model_calls_executed": 0,
     }
-    if execute_live and sample_rows:
-        same_run_baseline_cache: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
-        for problem in sample_rows:
-            for model in models:
-                for variant in variants:
-                    call_id = stable_hash({
-                        "eval_id": eval_id,
-                        "problem_id_hash": problem["id_hash"],
-                        "model": model,
-                        "variant": variant,
-                    })
-                    agent_plan = None
-                    variant_plan = None
-                    if variant.startswith("assumption_agent"):
-                        agent_plan = _build_assumption_agent_plan(
-                            root=root,
-                            graph_dir=graph_dir,
-                            problem=problem,
-                            eval_id=eval_id,
-                            call_id=call_id,
-                            model=model,
-                            agent_variant=variant,
-                            logger=logger,
-                            top_k=agent_top_k,
-                            context_max_chars=agent_context_max_chars,
-                        )
-                        variant_plan = agent_plan
-                        _attach_same_run_baseline_cache(
-                            agent_plan=agent_plan,
-                            cache=same_run_baseline_cache,
-                            problem=problem,
-                            model=model,
-                        )
-                    elif variant.startswith("hipporag"):
-                        variant_plan = _build_hipporag_baseline_plan(
-                            problem=problem,
-                            eval_id=eval_id,
-                            call_id=call_id,
-                            model=model,
-                            logger=logger,
-                            context_max_chars=agent_context_max_chars,
-                        )
-                    module_trace = _module_trace(problem, variant=variant, agent_plan=variant_plan)
-                    _log_event(
-                        logger,
-                        {
-                            "event": "call_start",
+    router_log_env_key = ""
+    previous_router_log_path = ""
+    if execute_live and log_out and not (
+        os.environ.get("MODEL_ROUTER_LOG_PATH", "").strip()
+        or os.environ.get("HLE_MODEL_ROUTER_LOG_PATH", "").strip()
+    ):
+        router_log_env_key = "HLE_MODEL_ROUTER_LOG_PATH"
+        previous_router_log_path = os.environ.get(router_log_env_key, "")
+        os.environ[router_log_env_key] = str(log_out)
+    try:
+        if execute_live and sample_rows:
+            same_run_baseline_cache: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
+            for problem in sample_rows:
+                for model in models:
+                    for variant in variants:
+                        call_id = stable_hash({
                             "eval_id": eval_id,
-                            "call_id": call_id,
                             "problem_id_hash": problem["id_hash"],
-                            "question_hash": problem["question_hash"],
                             "model": model,
                             "variant": variant,
-                            "category": problem["category"],
-                            "raw_subject": problem["raw_subject"],
-                            "answer_type": problem["answer_type"],
-                            "call_timeout_sec": api_summary["call_timeout_sec"],
-                            "max_tokens": max_tokens,
-                            "module_trace": module_trace,
-                        },
-                    )
-                    started = time.monotonic()
-                    try:
-                        if variant == "assumption_agent_recursive_verify" and _recursive_answering_disabled():
-                            answer_text = _call_model(
-                                model=model,
-                                prompt=_prompt_for(problem, variant=variant, agent_plan=agent_plan),
-                                timeout=call_timeout,
-                                max_tokens=max_tokens,
-                            )
-                            api_summary["underlying_model_calls_executed"] += 1
-                            (agent_plan or {}).setdefault("stages", {})["recursive_child_validation"] = {
-                                "status": "disabled",
-                                "reason": "env_disabled",
-                                "child_count": 0,
-                                "underlying_model_calls": 0,
-                            }
-                            (agent_plan or {}).setdefault("stages", {})["multi_candidate_self_verifier"] = {
-                                "status": "disabled",
-                                "reason": "recursive_runner_disabled",
-                                "underlying_model_calls": 0,
-                            }
-                            module_trace = _module_trace(problem, variant=variant, agent_plan=agent_plan)
-                        elif variant == "assumption_agent_recursive_verify":
-                            solved = _call_recursive_verified_answer(
+                        })
+                        agent_plan = None
+                        variant_plan = None
+                        if variant.startswith("assumption_agent"):
+                            agent_plan = _build_assumption_agent_plan(
+                                root=root,
+                                graph_dir=graph_dir,
                                 problem=problem,
-                                model=model,
-                                agent_plan=agent_plan or {},
                                 eval_id=eval_id,
                                 call_id=call_id,
+                                model=model,
+                                agent_variant=variant,
                                 logger=logger,
-                                timeout=call_timeout,
-                                child_mode=agent_child_mode,
-                                child_timeout=agent_child_timeout,
-                                max_tokens=max_tokens,
-                                evidence_bridge_enabled=evidence_bridge_enabled,
+                                top_k=agent_top_k,
+                                context_max_chars=agent_context_max_chars,
                             )
-                            answer_text = solved["answer_text"]
-                            api_summary["underlying_model_calls_executed"] += solved["underlying_model_calls"]
-                            module_trace = _module_trace(problem, variant=variant, agent_plan=agent_plan)
-                        elif _is_budget_matched_control_variant(variant):
-                            variant_plan = variant_plan or {"stages": {}}
-                            solved = _call_budget_matched_control_answer(
+                            variant_plan = agent_plan
+                            _attach_same_run_baseline_cache(
+                                agent_plan=agent_plan,
+                                cache=same_run_baseline_cache,
+                                problem=problem,
+                                model=model,
+                            )
+                        elif variant.startswith("hipporag"):
+                            variant_plan = _build_hipporag_baseline_plan(
+                                problem=problem,
+                                eval_id=eval_id,
+                                call_id=call_id,
+                                model=model,
+                                logger=logger,
+                                context_max_chars=agent_context_max_chars,
+                            )
+                        module_trace = _module_trace(problem, variant=variant, agent_plan=variant_plan)
+                        _log_event(
+                            logger,
+                            {
+                                "event": "call_start",
+                                "eval_id": eval_id,
+                                "call_id": call_id,
+                                "problem_id_hash": problem["id_hash"],
+                                "question_hash": problem["question_hash"],
+                                "model": model,
+                                "variant": variant,
+                                "category": problem["category"],
+                                "raw_subject": problem["raw_subject"],
+                                "answer_type": problem["answer_type"],
+                                "call_timeout_sec": api_summary["call_timeout_sec"],
+                                "max_tokens": max_tokens,
+                                "module_trace": module_trace,
+                            },
+                        )
+                        started = time.monotonic()
+                        try:
+                            if variant == "assumption_agent_recursive_verify" and _recursive_answering_disabled():
+                                answer_text = _call_model(
+                                    model=model,
+                                    prompt=_prompt_for(problem, variant=variant, agent_plan=agent_plan),
+                                    timeout=call_timeout,
+                                    max_tokens=max_tokens,
+                                )
+                                api_summary["underlying_model_calls_executed"] += 1
+                                (agent_plan or {}).setdefault("stages", {})["recursive_child_validation"] = {
+                                    "status": "disabled",
+                                    "reason": "env_disabled",
+                                    "child_count": 0,
+                                    "underlying_model_calls": 0,
+                                }
+                                (agent_plan or {}).setdefault("stages", {})["multi_candidate_self_verifier"] = {
+                                    "status": "disabled",
+                                    "reason": "recursive_runner_disabled",
+                                    "underlying_model_calls": 0,
+                                }
+                                module_trace = _module_trace(problem, variant=variant, agent_plan=agent_plan)
+                            elif variant == "assumption_agent_recursive_verify":
+                                solved = _call_recursive_verified_answer(
+                                    problem=problem,
+                                    model=model,
+                                    agent_plan=agent_plan or {},
+                                    eval_id=eval_id,
+                                    call_id=call_id,
+                                    logger=logger,
+                                    timeout=call_timeout,
+                                    child_mode=agent_child_mode,
+                                    child_timeout=agent_child_timeout,
+                                    max_tokens=max_tokens,
+                                    evidence_bridge_enabled=evidence_bridge_enabled,
+                                )
+                                answer_text = solved["answer_text"]
+                                api_summary["underlying_model_calls_executed"] += solved["underlying_model_calls"]
+                                module_trace = _module_trace(problem, variant=variant, agent_plan=agent_plan)
+                            elif _is_budget_matched_control_variant(variant):
+                                variant_plan = variant_plan or {"stages": {}}
+                                solved = _call_budget_matched_control_answer(
+                                    problem=problem,
+                                    model=model,
+                                    variant=variant,
+                                    variant_plan=variant_plan,
+                                    eval_id=eval_id,
+                                    call_id=call_id,
+                                    logger=logger,
+                                    timeout=call_timeout,
+                                    max_tokens=max_tokens,
+                                )
+                                answer_text = solved["answer_text"]
+                                api_summary["underlying_model_calls_executed"] += solved["underlying_model_calls"]
+                                module_trace = _module_trace(problem, variant=variant, agent_plan=variant_plan)
+                            else:
+                                answer_text = _call_model(
+                                    model=model,
+                                    prompt=_prompt_for(problem, variant=variant, agent_plan=variant_plan),
+                                    timeout=call_timeout,
+                                    max_tokens=max_tokens,
+                                )
+                                api_summary["underlying_model_calls_executed"] += 1
+                            latency = round(time.monotonic() - started, 4)
+                            api_summary["live_model_calls_executed"] += 1
+                            row = _score_prediction(
                                 problem=problem,
                                 model=model,
                                 variant=variant,
-                                variant_plan=variant_plan,
-                                eval_id=eval_id,
-                                call_id=call_id,
-                                logger=logger,
-                                timeout=call_timeout,
-                                max_tokens=max_tokens,
+                                prediction=answer_text,
+                                module_trace=module_trace,
+                                call_metadata={
+                                    "call_id": call_id,
+                                    "latency_sec": latency,
+                                    "timeout_sec": api_summary["call_timeout_sec"],
+                                    "max_tokens": max_tokens,
+                                    "agent_plan_hash": stable_hash(variant_plan or {}),
+                                },
                             )
-                            answer_text = solved["answer_text"]
-                            api_summary["underlying_model_calls_executed"] += solved["underlying_model_calls"]
-                            module_trace = _module_trace(problem, variant=variant, agent_plan=variant_plan)
-                        else:
-                            answer_text = _call_model(
+                            row["component_efficacy"] = _component_efficacy_from_plan(
+                                problem=problem,
+                                variant=variant,
+                                plan=variant_plan or {},
+                                correct=bool(row["correct"]),
+                                error=None,
+                            )
+                            _update_same_run_baseline_cache(
+                                cache=same_run_baseline_cache,
+                                problem=problem,
                                 model=model,
-                                prompt=_prompt_for(problem, variant=variant, agent_plan=variant_plan),
-                                timeout=call_timeout,
-                                max_tokens=max_tokens,
+                                variant=variant,
+                                prediction=answer_text,
+                                plan=variant_plan or {},
                             )
-                            api_summary["underlying_model_calls_executed"] += 1
-                        latency = round(time.monotonic() - started, 4)
-                        api_summary["live_model_calls_executed"] += 1
-                        row = _score_prediction(
-                            problem=problem,
-                            model=model,
-                            variant=variant,
-                            prediction=answer_text,
-                            module_trace=module_trace,
-                            call_metadata={
-                                "call_id": call_id,
-                                "latency_sec": latency,
-                                "timeout_sec": api_summary["call_timeout_sec"],
-                                "max_tokens": max_tokens,
-                                "agent_plan_hash": stable_hash(variant_plan or {}),
-                            },
-                        )
-                        row["component_efficacy"] = _component_efficacy_from_plan(
-                            problem=problem,
-                            variant=variant,
-                            plan=variant_plan or {},
-                            correct=bool(row["correct"]),
-                            error=None,
-                        )
-                        _update_same_run_baseline_cache(
-                            cache=same_run_baseline_cache,
-                            problem=problem,
-                            model=model,
-                            variant=variant,
-                            prediction=answer_text,
-                            plan=variant_plan or {},
-                        )
-                        run_rows.append(row)
-                        _log_event(
-                            logger,
-                            {
-                                "event": "call_end",
-                                "eval_id": eval_id,
-                                "call_id": call_id,
+                            run_rows.append(row)
+                            _log_event(
+                                logger,
+                                {
+                                    "event": "call_end",
+                                    "eval_id": eval_id,
+                                    "call_id": call_id,
+                                    "problem_id_hash": problem["id_hash"],
+                                    "model": model,
+                                    "variant": variant,
+                                    "latency_sec": latency,
+                                    "correct": row["correct"],
+                                    "prediction_hash": row["prediction_hash"],
+                                    "module_trace": module_trace,
+                                    "component_efficacy": row["component_efficacy"],
+                                    "agent_decision": (agent_plan or {}).get("world_model_router", {}).get("decision"),
+                                },
+                            )
+                        except Exception as exc:  # pragma: no cover - live API path.
+                            latency = round(time.monotonic() - started, 4)
+                            api_summary["live_model_call_errors"].append({
                                 "problem_id_hash": problem["id_hash"],
                                 "model": model,
                                 "variant": variant,
-                                "latency_sec": latency,
-                                "correct": row["correct"],
-                                "prediction_hash": row["prediction_hash"],
-                                "module_trace": module_trace,
-                                "component_efficacy": row["component_efficacy"],
-                                "agent_decision": (agent_plan or {}).get("world_model_router", {}).get("decision"),
-                            },
-                        )
-                    except Exception as exc:  # pragma: no cover - live API path.
-                        latency = round(time.monotonic() - started, 4)
-                        api_summary["live_model_call_errors"].append({
-                            "problem_id_hash": problem["id_hash"],
-                            "model": model,
-                            "variant": variant,
-                            "error_type": type(exc).__name__,
-                            "error": str(exc)[:300],
-                            "latency_sec": latency,
-                        })
-                        error_row = _error_row(
-                            problem=problem,
-                            model=model,
-                            variant=variant,
-                            exc=exc,
-                            module_trace=module_trace,
-                            call_metadata={
-                                "call_id": call_id,
-                                "latency_sec": latency,
-                                "timeout_sec": api_summary["call_timeout_sec"],
-                                "max_tokens": max_tokens,
-                                "agent_plan_hash": stable_hash(variant_plan or {}),
-                            },
-                        )
-                        error_row["component_efficacy"] = _component_efficacy_from_plan(
-                            problem=problem,
-                            variant=variant,
-                            plan=variant_plan or {},
-                            correct=False,
-                            error={"type": type(exc).__name__},
-                        )
-                        run_rows.append(error_row)
-                        _log_event(
-                            logger,
-                            {
-                                "event": "call_error",
-                                "eval_id": eval_id,
-                                "call_id": call_id,
-                                "problem_id_hash": problem["id_hash"],
-                                "model": model,
-                                "variant": variant,
-                                "latency_sec": latency,
                                 "error_type": type(exc).__name__,
                                 "error": str(exc)[:300],
-                                "module_trace": module_trace,
-                                "component_efficacy": error_row["component_efficacy"],
-                                "agent_decision": (agent_plan or {}).get("world_model_router", {}).get("decision"),
-                            },
-                        )
+                                "latency_sec": latency,
+                            })
+                            error_row = _error_row(
+                                problem=problem,
+                                model=model,
+                                variant=variant,
+                                exc=exc,
+                                module_trace=module_trace,
+                                call_metadata={
+                                    "call_id": call_id,
+                                    "latency_sec": latency,
+                                    "timeout_sec": api_summary["call_timeout_sec"],
+                                    "max_tokens": max_tokens,
+                                    "agent_plan_hash": stable_hash(variant_plan or {}),
+                                },
+                            )
+                            error_row["component_efficacy"] = _component_efficacy_from_plan(
+                                problem=problem,
+                                variant=variant,
+                                plan=variant_plan or {},
+                                correct=False,
+                                error={"type": type(exc).__name__},
+                            )
+                            run_rows.append(error_row)
+                            _log_event(
+                                logger,
+                                {
+                                    "event": "call_error",
+                                    "eval_id": eval_id,
+                                    "call_id": call_id,
+                                    "problem_id_hash": problem["id_hash"],
+                                    "model": model,
+                                    "variant": variant,
+                                    "latency_sec": latency,
+                                    "error_type": type(exc).__name__,
+                                    "error": str(exc)[:300],
+                                    "module_trace": module_trace,
+                                    "component_efficacy": error_row["component_efficacy"],
+                                    "agent_decision": (agent_plan or {}).get("world_model_router", {}).get("decision"),
+                                },
+                            )
+    finally:
+        if router_log_env_key:
+            if previous_router_log_path:
+                os.environ[router_log_env_key] = previous_router_log_path
+            else:
+                os.environ.pop(router_log_env_key, None)
     metrics = _metrics(sample_rows=sample_rows, run_rows=run_rows, api_summary=api_summary)
     fair_baseline_gate = _agent_meets_best_control_gate(metrics)
     operator_activation = metrics.get("operator_activation_summary", {})
@@ -36212,6 +36228,7 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
     deadline = None if timeout is None else time.monotonic() + timeout
     last_error: Exception | None = None
     for attempt in range(max_attempts):
+        attempt_started = time.monotonic()
         candidate_index = _model_router_candidate_index(env_candidates, attempt)
         env = _model_router_env_for_attempt(env_candidates, attempt)
         _model_router_log_event(
@@ -36247,6 +36264,7 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
                     "attempt": attempt + 1,
                     "max_attempts": max_attempts,
                     "subprocess": False,
+                    "latency_sec": round(time.monotonic() - attempt_started, 4),
                     **_model_router_candidate_metadata(
                         env=env,
                         candidate_index=candidate_index,
@@ -36276,6 +36294,7 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
                     "transient": transient,
                     "will_retry": will_retry,
                     "error_message": _model_error_message(exc),
+                    "latency_sec": round(time.monotonic() - attempt_started, 4),
                     **_model_router_candidate_metadata(
                         env=env,
                         candidate_index=candidate_index,
@@ -36323,6 +36342,7 @@ def _call_model_via_subprocess(
     deadline = None if timeout is None else time.monotonic() + timeout
     last_error: Exception | None = None
     for attempt in range(max_attempts):
+        attempt_started = time.monotonic()
         candidate_index = _model_router_candidate_index(env_candidates, attempt)
         env = _model_router_env_for_attempt(env_candidates, attempt)
         _model_router_log_event(
@@ -36348,6 +36368,7 @@ def _call_model_via_subprocess(
                     "attempt": attempt + 1,
                     "max_attempts": max_attempts,
                     "subprocess": True,
+                    "latency_sec": round(time.monotonic() - attempt_started, 4),
                     **_model_router_candidate_metadata(
                         env=env,
                         candidate_index=candidate_index,
@@ -36370,6 +36391,7 @@ def _call_model_via_subprocess(
                     "transient": transient,
                     "will_retry": will_retry,
                     "error_message": _model_error_message(exc),
+                    "latency_sec": round(time.monotonic() - attempt_started, 4),
                     **_model_router_candidate_metadata(
                         env=env,
                         candidate_index=candidate_index,
@@ -36489,6 +36511,9 @@ def _model_router_log_event(event: dict[str, Any]) -> None:
     safe_event.pop("api_key", None)
     safe_event.pop("prompt", None)
     safe_event.pop("payload", None)
+    if "event" not in safe_event:
+        safe_event["event"] = str(safe_event.get("event_type") or "model_router_event")
+    safe_event.setdefault("raw_content_persisted", False)
     safe_event.setdefault("timestamp_utc", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
     try:
         path = Path(path_text)
@@ -36677,7 +36702,18 @@ def _acquire_model_router_slot(
     model: str,
 ) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
+    started = time.monotonic()
     deadline = time.monotonic() + wait_sec
+    _model_router_log_event(
+        {
+            "event_type": "model_router_slot_wait_start",
+            "model": model,
+            "limit": max(1, limit),
+            "ttl_sec": ttl_sec,
+            "wait_sec": wait_sec,
+            "slot_dir_hash": stable_hash({"slot_dir": str(directory)})[:16],
+        }
+    )
     while True:
         _remove_stale_model_router_slots(directory=directory, ttl_sec=ttl_sec)
         for slot_index in range(max(1, limit)):
@@ -36699,8 +36735,29 @@ def _acquire_model_router_slot(
                         sort_keys=True,
                     )
                 )
+            _model_router_log_event(
+                {
+                    "event_type": "model_router_slot_acquired",
+                    "model": model,
+                    "limit": max(1, limit),
+                    "slot_index": slot_index,
+                    "slot_name": path.name,
+                    "wait_latency_sec": round(time.monotonic() - started, 4),
+                    "slot_dir_hash": stable_hash({"slot_dir": str(directory)})[:16],
+                }
+            )
             return path
         if time.monotonic() >= deadline:
+            _model_router_log_event(
+                {
+                    "event_type": "model_router_slot_wait_error",
+                    "model": model,
+                    "limit": max(1, limit),
+                    "wait_latency_sec": round(time.monotonic() - started, 4),
+                    "error_label": "model_router_global_concurrency_wait_exceeded",
+                    "slot_dir_hash": stable_hash({"slot_dir": str(directory)})[:16],
+                }
+            )
             raise TimeoutError("model_router_global_concurrency_wait_exceeded")
         time.sleep(0.05 + random.uniform(0.0, 0.15))
 
@@ -36713,6 +36770,15 @@ def _remove_stale_model_router_slots(*, directory: Path, ttl_sec: float) -> None
             owner_exited = _model_router_slot_owner_exited(path)
             if ttl_expired or owner_exited:
                 path.unlink()
+                _model_router_log_event(
+                    {
+                        "event_type": "model_router_slot_stale_removed",
+                        "slot_name": path.name,
+                        "reason": "owner_exited" if owner_exited else "ttl_expired",
+                        "ttl_sec": ttl_sec,
+                        "slot_dir_hash": stable_hash({"slot_dir": str(directory)})[:16],
+                    }
+                )
         except OSError:
             continue
 
@@ -36743,6 +36809,13 @@ def _model_router_pid_is_alive(pid: int) -> bool:
 def _release_model_router_slot(path: Path) -> None:
     try:
         path.unlink()
+        _model_router_log_event(
+            {
+                "event_type": "model_router_slot_released",
+                "slot_name": path.name,
+                "slot_dir_hash": stable_hash({"slot_dir": str(path.parent)})[:16],
+            }
+        )
     except FileNotFoundError:
         pass
 
