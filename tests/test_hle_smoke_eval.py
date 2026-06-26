@@ -99,6 +99,7 @@ from assumption_os.hle_smoke_eval import (
     _model_router_per_attempt_timeout,
     _model_router_extra_body,
     _model_router_subprocess_process_timeout,
+    _remove_stale_model_router_slots,
     _needs_exact_answer_repair,
     _needs_evidence_grounded_child,
     _orthogonalize_child_prompt_specs,
@@ -4910,6 +4911,28 @@ class HleSmokeEvalTest(unittest.TestCase):
             self.assertEqual(_model_router_subprocess_process_timeout(request_timeout=10.0), 2.0)
         with patch.dict(os.environ, {"MODEL_ROUTER_SUBPROCESS_NO_BYTE_TIMEOUT_SEC": "none"}, clear=True):
             self.assertIsNone(_model_router_subprocess_process_timeout(request_timeout=None))
+
+    def test_model_router_slot_cleanup_reclaims_dead_pid_before_ttl(self):
+        with TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            lock_path = directory / "slot_000.lock"
+            lock_path.write_text(json.dumps({"pid": 123456, "thread_id": 1}), encoding="utf-8")
+
+            with patch("assumption_os.hle_smoke_eval._model_router_pid_is_alive", return_value=False):
+                _remove_stale_model_router_slots(directory=directory, ttl_sec=7200)
+
+            self.assertFalse(lock_path.exists())
+
+    def test_model_router_slot_cleanup_keeps_live_pid_before_ttl(self):
+        with TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            lock_path = directory / "slot_000.lock"
+            lock_path.write_text(json.dumps({"pid": os.getpid(), "thread_id": 1}), encoding="utf-8")
+
+            with patch("assumption_os.hle_smoke_eval._model_router_pid_is_alive", return_value=True):
+                _remove_stale_model_router_slots(directory=directory, ttl_sec=7200)
+
+            self.assertTrue(lock_path.exists())
 
     def test_api_env_candidates_include_key_and_base_failover(self):
         with patch.dict(

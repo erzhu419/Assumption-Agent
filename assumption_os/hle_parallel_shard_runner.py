@@ -13,30 +13,42 @@ import argparse
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 import time
+from bisect import bisect_right
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 from .autonomy_journal import PAPER_DIR
+from .diagnostic_logging import JsonlDiagnosticLogger, log_event
 from .hle_smoke_eval import (
     DATASET_NAME,
     HLE_OFFICIAL_SOURCES,
     _aggregate_rows,
+    _agent_meets_best_control_gate,
     _component_efficacy_summary,
     _collect_existing_hle_problem_hashes,
     _control_comparison,
     _expected_but_missing_modules,
+    _has_image_payload,
+    _load_hle_test_dataset,
     _load_text_only_sample,
     _module_activation_summary,
+    _operator_activation_summary,
+    _operator_application_summary,
+    _problem_from_row,
+    _route_credit_table,
 )
 
 
 DEFAULT_RUN_DIR = PAPER_DIR / "hle_parallel_runs"
 DEFAULT_MD_DIR = Path("reconstruction/md")
+DEFAULT_HLE_DATASET_LOCAL_PATH = PAPER_DIR / "hle_dataset_cache" / "test"
+DEFAULT_HLE_EVIDENCE_SOURCE_CACHE_DIR = PAPER_DIR / "hle_evidence_source_cache"
 ERROR_EVENT_NAMES = {
     "call_error",
     "recursive_child_error",
@@ -80,6 +92,9 @@ class ShardRunState:
     reused_existing_payload: bool = False
     process_timeout_policy: str = "watch_only"
     error: str | None = None
+    last_process_memory: dict[str, Any] = field(default_factory=dict)
+    peak_rss_kb: int | None = None
+    peak_vms_kb: int | None = None
     _stdout_handle: Any = field(default=None, repr=False, compare=False)
 
     def elapsed_sec(self, now: float | None = None) -> float | None:
@@ -123,6 +138,45 @@ def build_shard_specs(
     return specs
 
 
+def build_shard_specs_for_seed_offsets(
+    *,
+    eval_id: str,
+    seed_offsets: list[int],
+    run_dir: Path,
+    md_dir: Path,
+) -> list[ShardSpec]:
+    if not seed_offsets:
+        raise ValueError("seed_offsets must not be empty")
+    specs: list[ShardSpec] = []
+    for shard_index, seed_offset in enumerate(seed_offsets):
+        shard_eval_id = f"{eval_id}_shard_{shard_index:03d}"
+        specs.append(
+            ShardSpec(
+                shard_index=shard_index,
+                eval_id=shard_eval_id,
+                sample_size=1,
+                seed_offset=int(seed_offset),
+                out=run_dir / f"{shard_eval_id}.json",
+                md_out=md_dir / f"{shard_eval_id}.md",
+                log_out=run_dir / f"{shard_eval_id}.jsonl",
+                stdout_out=run_dir / f"{shard_eval_id}.stdout.log",
+            )
+        )
+    return specs
+
+
+def _parse_seed_offsets(value: str | None) -> list[int]:
+    if not value:
+        return []
+    offsets: list[int] = []
+    for item in str(value).split(","):
+        stripped = item.strip()
+        if not stripped:
+            continue
+        offsets.append(int(stripped))
+    return offsets
+
+
 def dedupe_shard_specs_by_sample_hash(
     *,
     root: Path,
@@ -149,6 +203,195 @@ def dedupe_shard_specs_by_sample_hash(
         if exclude_existing_hle_artifacts
         else set()
     )
+    if sample_loader is None and all(spec.sample_size == 1 for spec in specs):
+        try:
+            return _dedupe_single_row_shards_by_scan_index(
+                specs=specs,
+                max_scan=max_scan,
+                seed_stride=seed_stride,
+                exclude_problem_hashes=excluded_hashes,
+                answer_type_filter=sample_answer_type,
+                subject_contains=sample_subject_contains,
+                max_attempts=max_attempts,
+            )
+        except Exception as exc:
+            fallback_specs, fallback_summary = _dedupe_shard_specs_by_sample_hash_slow(
+                specs=specs,
+                loader=loader,
+                max_scan=max_scan,
+                seed_stride=seed_stride,
+                exclude_problem_hashes=excluded_hashes,
+                sample_answer_type=sample_answer_type,
+                sample_subject_contains=sample_subject_contains,
+                max_attempts=max_attempts,
+            )
+            fallback_summary.update({
+                "fast_single_pass": False,
+                "fast_single_pass_error_type": type(exc).__name__,
+                "fast_single_pass_error": str(exc)[:240],
+            })
+            return fallback_specs, fallback_summary
+    return _dedupe_shard_specs_by_sample_hash_slow(
+        specs=specs,
+        loader=loader,
+        max_scan=max_scan,
+        seed_stride=seed_stride,
+        exclude_problem_hashes=excluded_hashes,
+        sample_answer_type=sample_answer_type,
+        sample_subject_contains=sample_subject_contains,
+        max_attempts=max_attempts,
+    )
+
+
+def _load_text_only_candidate_index(
+    *,
+    max_raw_scan: int,
+    exclude_problem_hashes: set[str],
+    answer_type_filter: str,
+    subject_contains: str,
+) -> list[dict[str, Any]]:
+    dataset = _load_hle_test_dataset()
+    candidates: list[dict[str, Any]] = []
+    skipped = 0
+    for scanned, row in enumerate(dataset, start=1):
+        if scanned > max_raw_scan:
+            break
+        if _has_image_payload(row):
+            skipped += 1
+            continue
+        if not str(row.get("question") or "").strip() or not str(row.get("answer") or "").strip():
+            skipped += 1
+            continue
+        if answer_type_filter and str(row.get("answer_type") or "") != answer_type_filter:
+            skipped += 1
+            continue
+        if subject_contains:
+            haystack = " ".join([
+                str(row.get("category") or ""),
+                str(row.get("raw_subject") or ""),
+            ]).lower()
+            if subject_contains.lower() not in haystack:
+                skipped += 1
+                continue
+        problem = _problem_from_row(row, scanned=scanned, skipped_before=skipped)
+        problem_hash = str(problem.get("id_hash") or "")
+        if not problem_hash or problem_hash in exclude_problem_hashes:
+            skipped += 1
+            continue
+        candidates.append({
+            "scanned_index": scanned,
+            "id_hash": problem_hash,
+        })
+    return candidates
+
+
+def _dedupe_single_row_shards_by_scan_index(
+    *,
+    specs: list[ShardSpec],
+    max_scan: int,
+    seed_stride: int,
+    exclude_problem_hashes: set[str],
+    answer_type_filter: str,
+    subject_contains: str,
+    max_attempts: int,
+) -> tuple[list[ShardSpec], dict[str, Any]]:
+    """Fast dedupe for sample_size=1 shards using one HF streaming pass.
+
+    The child loader chooses the first valid text-only row with scanned_index
+    greater than seed_offset.  This preflight therefore selects seed offsets
+    that reproduce a distinct first valid row in each child shard without
+    persisting raw question or answer text.
+    """
+    if not specs:
+        return specs, {"enabled": True, "status": "empty", "raw_content_persisted": False, "remaps": []}
+    stride = max(1, seed_stride)
+    max_attempt_count = max(1, max_attempts + 1)
+    max_original_seed = max(int(spec.seed_offset) for spec in specs)
+    max_raw_scan = max_original_seed + max(1, max_scan) + max_attempt_count * stride + 2
+    candidates = _load_text_only_candidate_index(
+        max_raw_scan=max_raw_scan,
+        exclude_problem_hashes=exclude_problem_hashes,
+        answer_type_filter=answer_type_filter,
+        subject_contains=subject_contains,
+    )
+    positions = [int(row["scanned_index"]) for row in candidates]
+    seen: set[str] = set()
+    deduped: list[ShardSpec] = []
+    remaps: list[dict[str, Any]] = []
+    for spec in specs:
+        original_seed = int(spec.seed_offset)
+        candidate_seed = original_seed
+        selected_spec = spec
+        selected_hashes: list[str] = []
+        selected_status = "fallback_unchecked"
+        duplicate_hashes: list[str] = []
+        attempt_index = 0
+        while attempt_index < max_attempt_count:
+            upper_scan = candidate_seed + max(1, max_scan)
+            candidate_index = bisect_right(positions, candidate_seed)
+            wrapped_candidate = False
+            if candidate_index >= len(candidates) or positions[candidate_index] > upper_scan:
+                if not candidates:
+                    selected_status = "insufficient_sample"
+                    selected_hashes = []
+                    candidate_seed += stride
+                    attempt_index += 1
+                    continue
+                candidate_index = (candidate_seed + attempt_index) % len(candidates)
+                wrapped_candidate = True
+            candidate = candidates[candidate_index]
+            candidate_hash = str(candidate.get("id_hash") or "")
+            if candidate_hash and candidate_hash not in seen:
+                selected_seed = max(0, int(candidate.get("scanned_index") or 1) - 1)
+                selected_spec = replace(spec, seed_offset=selected_seed)
+                selected_hashes = [candidate_hash]
+                selected_status = "accepted_wrapped" if wrapped_candidate else "accepted"
+                duplicate_hashes = []
+                break
+            duplicate_hashes = [candidate_hash] if candidate_hash else []
+            selected_hashes = [candidate_hash] if candidate_hash else []
+            selected_status = "duplicate"
+            candidate_seed = max(candidate_seed + stride, int(candidate.get("scanned_index") or candidate_seed))
+            attempt_index += 1
+        deduped.append(selected_spec)
+        seen.update(selected_hashes)
+        remaps.append({
+            "shard_index": spec.shard_index,
+            "original_seed_offset": original_seed,
+            "selected_seed_offset": selected_spec.seed_offset,
+            "status": selected_status,
+            "attempt_count": attempt_index + 1,
+            "duplicate_hashes": duplicate_hashes,
+            "selected_problem_hashes": selected_hashes,
+        })
+    return deduped, {
+        "enabled": True,
+        "status": "ok",
+        "fast_single_pass": True,
+        "candidate_hash_count": len(candidates),
+        "candidate_scan_limit": max_raw_scan,
+        "excluded_hash_count": len(exclude_problem_hashes),
+        "raw_content_persisted": False,
+        "accepted_shard_count": sum(1 for row in remaps if str(row.get("status") or "").startswith("accepted")),
+        "duplicate_fallback_count": sum(1 for row in remaps if row.get("status") == "duplicate"),
+        "distinct_problem_hash_count": len(seen),
+        "remaps": remaps,
+    }
+
+
+def _dedupe_shard_specs_by_sample_hash_slow(
+    *,
+    specs: list[ShardSpec],
+    loader: Any,
+    max_scan: int,
+    seed_stride: int,
+    exclude_problem_hashes: set[str],
+    sample_answer_type: str,
+    sample_subject_contains: str,
+    max_attempts: int,
+) -> tuple[list[ShardSpec], dict[str, Any]]:
+    if not specs:
+        return specs, {"enabled": True, "status": "empty", "raw_content_persisted": False, "remaps": []}
     seen: set[str] = set()
     deduped: list[ShardSpec] = []
     remaps: list[dict[str, Any]] = []
@@ -163,7 +406,7 @@ def dedupe_shard_specs_by_sample_hash(
                 sample_size=spec.sample_size,
                 max_scan=max_scan + max(0, candidate_seed),
                 seed_offset=candidate_seed,
-                exclude_problem_hashes=excluded_hashes,
+                exclude_problem_hashes=exclude_problem_hashes,
                 answer_type_filter=sample_answer_type,
                 subject_contains=sample_subject_contains,
             )
@@ -198,7 +441,7 @@ def dedupe_shard_specs_by_sample_hash(
         "status": "completed",
         "max_attempts": max_attempts,
         "seed_stride": seed_stride,
-        "excluded_existing_problem_count": len(excluded_hashes),
+        "excluded_existing_problem_count": len(exclude_problem_hashes),
         "accepted_shard_count": sum(1 for row in remaps if row["status"] == "accepted"),
         "duplicate_fallback_count": duplicate_count,
         "remaps": remaps,
@@ -226,6 +469,20 @@ def build_shard_command(
     exclude_artifact_glob: str,
     sample_answer_type: str,
     sample_subject_contains: str,
+    enable_assumption_operators: bool = False,
+    disable_assumption_operators: bool = False,
+    assumption_operator_domains: str = "",
+    assumption_operator_skip_domains: str = "",
+    assumption_operator_max_specs: int | None = None,
+    allow_assumption_operators_without_context: bool = False,
+    enable_assumption_operator_retrieval_fallback: bool = False,
+    assumption_operator_fallback_min_score: float | None = None,
+    enable_operator_application_verifier: bool = False,
+    disable_domain_rule_verifier: bool = False,
+    enable_option_claim_contrastive_adjudicator: bool = False,
+    disable_option_claim_contrastive_adjudicator: bool = False,
+    enable_option_claim_span_directness_verifier: bool = False,
+    disable_option_claim_span_directness_verifier: bool = False,
 ) -> list[str]:
     effective_max_scan = max_scan + max(0, spec.seed_offset)
     cmd = [
@@ -272,6 +529,37 @@ def build_shard_command(
         cmd.extend(["--agent-child-timeout", str(agent_child_timeout)])
     if not evidence_bridge_enabled:
         cmd.append("--disable-evidence-bridge")
+    if enable_assumption_operators:
+        cmd.append("--enable-assumption-operators")
+    if disable_assumption_operators:
+        cmd.append("--disable-assumption-operators")
+    if assumption_operator_domains:
+        cmd.extend(["--assumption-operator-domains", assumption_operator_domains])
+    if assumption_operator_skip_domains:
+        cmd.extend(["--assumption-operator-skip-domains", assumption_operator_skip_domains])
+    if assumption_operator_max_specs is not None:
+        cmd.extend(["--assumption-operator-max-specs", str(assumption_operator_max_specs)])
+    if allow_assumption_operators_without_context:
+        cmd.append("--allow-assumption-operators-without-context")
+    if enable_assumption_operator_retrieval_fallback:
+        cmd.append("--enable-assumption-operator-retrieval-fallback")
+    if assumption_operator_fallback_min_score is not None:
+        cmd.extend([
+            "--assumption-operator-fallback-min-score",
+            str(assumption_operator_fallback_min_score),
+        ])
+    if enable_operator_application_verifier:
+        cmd.append("--enable-operator-application-verifier")
+    if disable_domain_rule_verifier:
+        cmd.append("--disable-domain-rule-verifier")
+    if enable_option_claim_contrastive_adjudicator:
+        cmd.append("--enable-option-claim-contrastive-adjudicator")
+    if disable_option_claim_contrastive_adjudicator:
+        cmd.append("--disable-option-claim-contrastive-adjudicator")
+    if enable_option_claim_span_directness_verifier:
+        cmd.append("--enable-option-claim-span-directness-verifier")
+    if disable_option_claim_span_directness_verifier:
+        cmd.append("--disable-option-claim-span-directness-verifier")
     if exclude_existing_hle_artifacts:
         cmd.append("--exclude-existing-hle-artifacts")
     if exclude_artifact_glob:
@@ -295,6 +583,7 @@ def build_runner_env(
     model_router_global_slot_wait_sec: float | None = None,
 ) -> dict[str, str]:
     env = os.environ.copy()
+    apply_hle_offline_defaults(env)
     if model_router_attempts is not None:
         env["MODEL_ROUTER_ATTEMPTS"] = str(model_router_attempts)
     if model_router_timeout is not None:
@@ -311,7 +600,178 @@ def build_runner_env(
         env["MODEL_ROUTER_GLOBAL_SLOT_TTL_SEC"] = str(model_router_global_slot_ttl_sec)
     if model_router_global_slot_wait_sec is not None:
         env["MODEL_ROUTER_GLOBAL_SLOT_WAIT_SEC"] = str(model_router_global_slot_wait_sec)
+    if os.environ.get("HLE_EXISTING_HASH_CACHE_PATH"):
+        env["HLE_EXISTING_HASH_CACHE_PATH"] = os.environ["HLE_EXISTING_HASH_CACHE_PATH"]
+    if os.environ.get("HLE_EXISTING_HASH_CACHE_ALLOW_STALE"):
+        env["HLE_EXISTING_HASH_CACHE_ALLOW_STALE"] = os.environ["HLE_EXISTING_HASH_CACHE_ALLOW_STALE"]
     return env
+
+
+def run_live_model_preflight(
+    *,
+    models: str,
+    env: dict[str, str],
+    timeout_sec: float = 60.0,
+) -> dict[str, Any]:
+    """Probe live model access before launching expensive shards."""
+    model_names = [item.strip() for item in str(models or "").split(",") if item.strip()]
+    key_present = any(str(env.get(name, "")).strip() for name in ("GPT5_API_KEY", "RUOLI_GPT_KEY", "OPENAI_API_KEY"))
+    rows: list[dict[str, Any]] = []
+    if not key_present:
+        rows = [
+            {
+                "model": model,
+                "ok": False,
+                "error_type": "RuntimeError",
+                "error_label": "missing GPT5_API_KEY, RUOLI_GPT_KEY, or OPENAI_API_KEY",
+            }
+            for model in model_names
+        ]
+        return {
+            "preflight_kind": "hle_live_model_preflight",
+            "passed": False,
+            "models": model_names,
+            "rows": rows,
+            "raw_content_persisted": False,
+        }
+
+    probe_timeout = None if timeout_sec <= 0 else max(5.0, float(timeout_sec))
+    per_attempt_timeout = None if timeout_sec <= 0 else max(1.0, min(float(timeout_sec), 30.0))
+    for model in model_names:
+        probe_env = env.copy()
+        probe_env.setdefault("MODEL_ROUTER_SUBPROCESS_CALLS", "1")
+        probe_env["MODEL_ROUTER_ATTEMPTS"] = "1"
+        if per_attempt_timeout is None:
+            probe_env["MODEL_ROUTER_TIMEOUT"] = "0"
+            probe_env["MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"] = "0"
+        else:
+            probe_env["MODEL_ROUTER_TIMEOUT"] = str(per_attempt_timeout)
+            probe_env["MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"] = str(per_attempt_timeout)
+        script = (
+            "import json, sys\n"
+            "from assumption_os.hle_smoke_eval import _call_model\n"
+            "cfg = json.loads(sys.stdin.read())\n"
+            "text = _call_model(model=cfg['model'], prompt='Return exactly {\"answer\":\"A\"}.', "
+            "timeout=cfg['timeout'], max_tokens=16)\n"
+            "print('ok' if text.strip() else 'empty')\n"
+        )
+        try:
+            completed = subprocess.run(
+                [sys.executable, "-c", script],
+                input=json.dumps({"model": model, "timeout": per_attempt_timeout}),
+                text=True,
+                capture_output=True,
+                cwd=str(Path.cwd()),
+                env=probe_env,
+                timeout=None if probe_timeout is None else probe_timeout + 5.0,
+                check=False,
+            )
+        except Exception as exc:
+            rows.append({
+                "model": model,
+                "ok": False,
+                "error_type": type(exc).__name__,
+                "error_label": _redact_model_preflight_error(str(exc), env),
+            })
+            continue
+        stderr = (completed.stderr or "").strip()
+        stdout = (completed.stdout or "").strip()
+        ok = completed.returncode == 0 and bool(stdout)
+        rows.append({
+            "model": model,
+            "ok": ok,
+            "returncode": int(completed.returncode),
+            "stdout_hash": "" if not stdout else _stable_text_hash(stdout),
+            "error_type": "" if ok else "RuntimeError",
+            "error_label": "" if ok else _redact_model_preflight_error((stderr or stdout or "model_preflight_failed")[-240:], env),
+        })
+    return {
+        "preflight_kind": "hle_live_model_preflight",
+        "passed": all(row.get("ok") for row in rows) if rows else True,
+        "models": model_names,
+        "rows": rows,
+        "raw_content_persisted": False,
+    }
+
+
+def _stable_text_hash(text: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(str(text).encode("utf-8")).hexdigest()[:16]
+
+
+def _redact_model_preflight_error(text: str, env: dict[str, str]) -> str:
+    redacted = str(text or "")
+    for key_name in ("GPT5_API_KEY", "RUOLI_GPT_KEY", "OPENAI_API_KEY"):
+        secret = env.get(key_name)
+        if secret:
+            redacted = redacted.replace(secret, "[redacted]")
+    redacted = re.sub(r"Bearer\s+[A-Za-z0-9._:-]+", "Bearer [redacted]", redacted)
+    redacted = re.sub(r"sk-[A-Za-z0-9._:-]+", "sk-[redacted]", redacted)
+    return redacted[:240]
+
+
+def _env_truthy(env: dict[str, str], name: str) -> bool:
+    return str(env.get(name, "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def apply_hle_offline_defaults(env: dict[str, str]) -> dict[str, str]:
+    """Default HLE runs to local data and cache-only source retrieval when present."""
+    if _env_truthy(env, "HLE_DISABLE_LOCAL_HLE_DEFAULTS"):
+        return env
+
+    dataset_path = Path(env.get("HLE_DATASET_LOCAL_PATH") or DEFAULT_HLE_DATASET_LOCAL_PATH)
+    if not str(env.get("HLE_DATASET_LOCAL_PATH", "")).strip() and dataset_path.exists():
+        env["HLE_DATASET_LOCAL_PATH"] = str(dataset_path)
+
+    cache_path = Path(env.get("HLE_EVIDENCE_SOURCE_CACHE_DIR") or DEFAULT_HLE_EVIDENCE_SOURCE_CACHE_DIR)
+    if not str(env.get("HLE_EVIDENCE_SOURCE_CACHE_DIR", "")).strip() and cache_path.exists():
+        env["HLE_EVIDENCE_SOURCE_CACHE_DIR"] = str(cache_path)
+
+    has_source_cache = bool(str(env.get("HLE_EVIDENCE_SOURCE_CACHE_DIR", "")).strip())
+    explicit_source_policy = any(
+        str(env.get(key, "")).strip()
+        for key in (
+            "HLE_EVIDENCE_SOURCE_CACHE_ONLY",
+            "HLE_SOURCE_SEARCH_CACHE_ONLY",
+            "HLE_DISABLE_LIVE_SOURCE_SEARCH",
+        )
+    )
+    if has_source_cache and not explicit_source_policy and not _env_truthy(env, "HLE_ALLOW_LIVE_SOURCE_SEARCH"):
+        env["HLE_EVIDENCE_SOURCE_CACHE_ONLY"] = "1"
+    if (
+        not str(env.get("HLE_RECURSIVE_CHILD_BATCH_MAX_WAIT_SEC", "")).strip()
+        and not str(env.get("HLE_RECURSIVE_CHILD_BATCH_TOTAL_WAIT_SEC", "")).strip()
+    ):
+        env["HLE_RECURSIVE_CHILD_BATCH_MAX_WAIT_SEC"] = "180"
+    return env
+
+
+def apply_live_network_defaults(args: argparse.Namespace) -> argparse.Namespace:
+    """Make live HLE runs network-stable unless the caller explicitly overrides.
+
+    The live endpoint often fails fast with transient SSL EOF errors under
+    bursty shard/child concurrency.  These defaults keep the paper-clean runner
+    from turning endpoint noise into an apparent algorithm failure while still
+    preserving caller control through the existing CLI flags.
+    """
+    if not bool(getattr(args, "execute_live", False)):
+        return args
+    if getattr(args, "model_router_attempts", None) is None:
+        args.model_router_attempts = 8
+    if getattr(args, "model_router_backoff_base_sec", None) is None:
+        args.model_router_backoff_base_sec = 1.5
+    if getattr(args, "model_router_global_concurrency", None) is None:
+        workers = max(1, int(getattr(args, "parallel_workers", 1) or 1))
+        args.model_router_global_concurrency = max(1, min(4, workers))
+    if not getattr(args, "model_router_global_concurrency_dir", ""):
+        eval_id = str(getattr(args, "eval_id", "hle_parallel_shard_eval")).replace(os.sep, "_")
+        args.model_router_global_concurrency_dir = f"/tmp/assumption_agent_model_slots_{eval_id}"
+    if getattr(args, "model_router_global_slot_ttl_sec", None) is None:
+        args.model_router_global_slot_ttl_sec = 7200.0
+    if getattr(args, "model_router_global_slot_wait_sec", None) is None:
+        args.model_router_global_slot_wait_sec = 7200.0
+    return args
 
 
 def run_parallel_shards(
@@ -427,16 +887,24 @@ def _close_stdout(state: ShardRunState) -> None:
 
 def build_heartbeat(states: list[ShardRunState]) -> dict[str, Any]:
     now = time.monotonic()
+    wall_now = time.time()
     status_counts = Counter(state.status for state in states)
     shard_rows = []
     for state in states:
         latest_event = _read_latest_jsonl_event(state.spec.log_out)
+        log_progress = _jsonl_progress_summary(state.spec.log_out, wall_now=wall_now)
+        process_memory = _update_process_memory_snapshot(state)
+        process_pid = state.process.pid if state.process is not None else None
         shard_rows.append(
             {
                 "shard_index": state.spec.shard_index,
                 "eval_id": state.spec.eval_id,
                 "status": state.status,
                 "returncode": state.returncode,
+                "process_pid": process_pid,
+                "process_memory": process_memory,
+                "process_peak_rss_kb": state.peak_rss_kb,
+                "process_peak_vms_kb": state.peak_vms_kb,
                 "elapsed_sec": state.elapsed_sec(now),
                 "sample_size": state.spec.sample_size,
                 "seed_offset": state.spec.seed_offset,
@@ -446,6 +914,8 @@ def build_heartbeat(states: list[ShardRunState]) -> dict[str, Any]:
                 "soft_timeout_observed": state.soft_timeout_observed,
                 "hard_kill_sent": state.hard_kill_sent,
                 "process_timeout_policy": state.process_timeout_policy,
+                "jsonl_line_count": log_progress["line_count"],
+                "jsonl_age_sec": log_progress["age_sec"],
                 "latest_event": latest_event,
                 "error": state.error,
             }
@@ -456,6 +926,75 @@ def build_heartbeat(states: list[ShardRunState]) -> dict[str, Any]:
         "shards": shard_rows,
         "raw_content_persisted": False,
     }
+
+
+def _update_process_memory_snapshot(state: ShardRunState) -> dict[str, Any]:
+    pid = state.process.pid if state.process is not None else None
+    snapshot = _process_memory_snapshot(pid)
+    if snapshot:
+        state.last_process_memory = snapshot
+        rss_kb = snapshot.get("rss_kb")
+        vms_kb = snapshot.get("vms_kb")
+        if isinstance(rss_kb, int):
+            state.peak_rss_kb = max(state.peak_rss_kb or 0, rss_kb)
+        if isinstance(vms_kb, int):
+            state.peak_vms_kb = max(state.peak_vms_kb or 0, vms_kb)
+    return dict(state.last_process_memory)
+
+
+def _process_memory_snapshot(pid: int | None) -> dict[str, Any]:
+    if not pid:
+        return {}
+    status_path = Path("/proc") / str(pid) / "status"
+    try:
+        lines = status_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except Exception:
+        return {}
+    fields: dict[str, Any] = {
+        "pid": int(pid),
+        "source": "proc_status",
+    }
+    status_keys = {
+        "VmRSS": "rss_kb",
+        "VmHWM": "hwm_kb",
+        "VmSize": "vms_kb",
+        "VmData": "data_kb",
+        "VmSwap": "swap_kb",
+        "Threads": "threads",
+    }
+    for line in lines:
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        out_key = status_keys.get(key)
+        if not out_key:
+            continue
+        match = re.search(r"\d+", value)
+        if match:
+            fields[out_key] = int(match.group(0))
+    return fields
+
+
+def write_preflight_heartbeat(
+    path: Path,
+    *,
+    eval_id: str,
+    phase: str,
+    run_dir: Path,
+    details: dict[str, Any] | None = None,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "heartbeat_kind": "hle_parallel_shard_runner_preflight",
+        "eval_id": eval_id,
+        "phase": phase,
+        "run_dir": str(run_dir),
+        "timestamp_unix": round(time.time(), 3),
+        "raw_content_persisted": False,
+    }
+    if details:
+        payload["details"] = details
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def _read_latest_jsonl_event(path: Path) -> dict[str, Any] | None:
@@ -479,10 +1018,26 @@ def _read_latest_jsonl_event(path: Path) -> dict[str, Any] | None:
                     "problem_id_hash": event.get("problem_id_hash"),
                     "error_type": event.get("error_type"),
                     "stage": event.get("stage"),
+                    "timestamp_utc": event.get("timestamp_utc"),
                 }
     except OSError:
         return None
     return latest
+
+
+def _jsonl_progress_summary(path: Path, *, wall_now: float) -> dict[str, Any]:
+    if not path.exists():
+        return {"line_count": 0, "age_sec": None}
+    line_count = 0
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.strip():
+                    line_count += 1
+        age_sec = round(max(0.0, wall_now - path.stat().st_mtime), 4)
+    except OSError:
+        return {"line_count": line_count, "age_sec": None}
+    return {"line_count": line_count, "age_sec": age_sec}
 
 
 def load_shard_payloads(specs: list[ShardSpec]) -> list[dict[str, Any]]:
@@ -556,6 +1111,7 @@ def aggregate_parallel_payload(
     shard_sample_dedupe: dict[str, Any] | None = None,
     reuse_completed_shards: dict[str, Any] | None = None,
     launch_stagger_sec: float = 0.0,
+    diagnostic_log_out: Path | None = None,
 ) -> dict[str, Any]:
     run_rows = _merged_run_rows(shard_payloads)
     metrics = _parallel_metrics(run_rows=run_rows, shard_payloads=shard_payloads)
@@ -573,6 +1129,9 @@ def aggregate_parallel_payload(
     )
     model_budget_fairness_audit = build_model_budget_fairness_audit(rows=run_rows)
     failure_diagnostics = build_failure_diagnostics(rows=run_rows)
+    fair_baseline_gate = _agent_meets_best_control_gate(metrics)
+    operator_activation = metrics.get("operator_activation_summary", {})
+    operator_application = metrics.get("operator_application_summary", {})
     gates = {
         "all_shards_finished_without_process_failure": all(
             state.status == "completed" for state in states
@@ -582,9 +1141,16 @@ def aggregate_parallel_payload(
             for payload in shard_payloads
         ),
         "sample_rows_loaded": metrics["sample_count"] >= min(total_sample_size, 1),
+        "requested_sample_rows_loaded": metrics["sample_count"] >= total_sample_size,
         "live_rows_resolved_if_requested": (
             not execute_live
             or metrics["resolved_live_model_calls"] == metrics["planned_live_model_calls"]
+        ),
+        "agent_not_below_best_same_model_control": fair_baseline_gate["passed"],
+        "assumption_operator_activated_if_selected": bool(operator_activation.get("passed", True)),
+        "operator_application_fidelity_if_verified": (
+            int(operator_application.get("verifier_activated_count") or 0) == 0
+            or bool(operator_application.get("passed", True))
         ),
     }
     paper_clean_gates = dict(gates)
@@ -621,12 +1187,21 @@ def aggregate_parallel_payload(
             "reuse_completed_shards": reuse_completed_shards or {"enabled": False},
             "raw_content_persisted": False,
         },
+        "diagnostic_log_out": str(diagnostic_log_out) if diagnostic_log_out else None,
+        "logging_policy": {
+            "event_stream": "jsonl",
+            "raw_content_persisted": False,
+            "prediction_text_persisted": False,
+            "gold_answer_persisted": False,
+            "event_granularity": "runner lifecycle, shard states, payload load counts, aggregate gates",
+        },
         "shards": [_shard_summary(state) for state in states],
         "loaded_shard_payload_count": len(shard_payloads),
         "metrics": metrics,
         "error_stratification": error_stratification,
         "pollution_audit": pollution_audit,
         "model_budget_fairness_audit": model_budget_fairness_audit,
+        "fair_baseline_gate": fair_baseline_gate,
         "failure_diagnostics": failure_diagnostics,
         "pass": all(gates.values()),
         "paper_clean_pass": all(paper_clean_gates.values()),
@@ -644,6 +1219,9 @@ def _shard_summary(state: ShardRunState) -> dict[str, Any]:
         "eval_id": state.spec.eval_id,
         "status": state.status,
         "returncode": state.returncode,
+        "process_peak_rss_kb": state.peak_rss_kb,
+        "process_peak_vms_kb": state.peak_vms_kb,
+        "last_process_memory": dict(state.last_process_memory),
         "elapsed_sec": state.elapsed_sec(),
         "sample_size": state.spec.sample_size,
         "seed_offset": state.spec.seed_offset,
@@ -708,6 +1286,9 @@ def _parallel_metrics(*, run_rows: list[dict[str, Any]], shard_payloads: list[di
         "module_activation_summary": _module_activation_summary(run_rows),
         "expected_but_missing_modules": _expected_but_missing_modules(run_rows),
         "component_efficacy_summary": _component_efficacy_summary(run_rows),
+        "operator_activation_summary": _operator_activation_summary(run_rows),
+        "operator_application_summary": _operator_application_summary(run_rows),
+        "route_credit_table": _route_credit_table(run_rows),
         "clean_shared_subset": _clean_shared_subset(run_rows),
         "raw_content_persisted": False,
     }
@@ -1294,6 +1875,23 @@ def build_failure_diagnostics(*, rows: list[dict[str, Any]]) -> dict[str, Any]:
             if str(agent_row.get("answer_type")) == "multipleChoice":
                 agent_failure_buckets["multiple_choice_selection_failed"] += 1
             flags = _row_flags(agent_row)
+            if flags.get("candidate_generation_missed_gold"):
+                agent_failure_buckets["candidate_generation_missed_gold"] += 1
+            if flags.get("candidate_generation_missed_gold_with_sweep_coverage"):
+                agent_failure_buckets["candidate_generation_missed_gold_with_sweep_coverage"] += 1
+            if flags.get("missing_model_option_source_retry_scheduled"):
+                agent_failure_buckets["missing_model_option_source_retry_unhelpful"] += 1
+            if flags.get("mc_option_claim_source_verifier_cross_selection_blocked"):
+                agent_failure_buckets["source_verifier_cross_selection_blocked"] += 1
+            if (
+                flags.get("gold_option_source_verifier_attempted")
+                and not flags.get("gold_option_source_verifier_accepted")
+            ):
+                agent_failure_buckets["gold_option_source_verifier_unaccepted"] += 1
+            if flags.get("gold_option_source_verifier_direct_source_insufficient"):
+                agent_failure_buckets["gold_option_direct_source_insufficient"] += 1
+            if flags.get("gold_option_source_verifier_indirect_or_generic"):
+                agent_failure_buckets["gold_option_source_indirect_or_generic"] += 1
             if flags.get("evidence_bridge_activated") or flags.get("evidence_child_executed"):
                 agent_failure_buckets["evidence_invalid_or_unhelpful"] += 1
             if flags.get("agent_hipporag_context_activated") or flags.get("agent_hipporag_child_executed"):
@@ -1444,6 +2042,8 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
     pollution = payload.get("pollution_audit") or {}
     model_budget = payload.get("model_budget_fairness_audit") or {}
     diagnostics = payload.get("failure_diagnostics") or {}
+    operator_activation = metrics.get("operator_activation_summary") or {}
+    operator_application = metrics.get("operator_application_summary") or {}
     claim_guard = pollution.get("claim_guard") or {}
     runtime_policy = payload.get("runtime_policy") or {}
     sampling = payload.get("sampling") or {}
@@ -1474,6 +2074,16 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
         f"- paper-clean failed gates: `{payload['paper_clean_failed_gates']}`",
         f"- pollution failed gates: `{payload.get('pollution_failed_gates')}`",
         f"- model-budget fairness failed gates: `{model_budget.get('failed_gates')}`",
+        f"- operator selected/activated/blocked rows: "
+        f"`{operator_activation.get('selected_row_count', 0)}/"
+        f"{operator_activation.get('activated_row_count', 0)}/"
+        f"{operator_activation.get('blocked_row_count', 0)}`",
+        f"- operator status counts: `{operator_activation.get('status_counts', {})}`",
+        f"- operator reason counts: `{operator_activation.get('reason_counts', {})}`",
+        f"- operator application verifier rows: `{operator_application.get('verifier_activated_count', 0)}`",
+        f"- operator average slot completion: `{operator_application.get('average_slot_completion_rate')}`",
+        f"- operator changed-candidate rows: `{operator_application.get('changed_candidate_count', 0)}`",
+        f"- operator decorative-use rate: `{operator_application.get('decorative_use_rate', 0.0)}`",
         f"- recommended HLE claim scope: `{claim_guard.get('recommended_hle_claim_scope')}`",
         "",
         "## By Variant",
@@ -1500,6 +2110,26 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
             lines.append(
                 f"| `{model}` | `{variant}` | `{variant_row['n']}` | `{variant_row['accuracy']}` |"
             )
+    lines.extend([
+        "",
+        "## Route Credit",
+        "",
+        "| model | problems | agent acc | recoverable agent errors | unrecoverable agent errors | losses to controls | VOI actions |",
+        "| --- | ---: | ---: | ---: | ---: | --- | --- |",
+    ])
+    route_credit = metrics.get("route_credit_table", {})
+    for model, row in sorted((route_credit.get("by_model") or {}).items()):
+        losses = ", ".join(
+            f"{variant}:{count}" for variant, count in sorted(row.get("agent_loss_to_control_counts", {}).items())
+        ) or "none"
+        voi_actions = ", ".join(
+            f"{action}:{count}" for action, count in sorted(row.get("voi_recommended_action_counts", {}).items())
+        ) or "none"
+        lines.append(
+            f"| `{model}` | `{row['problem_count']}` | `{row['agent_accuracy']}` | "
+            f"`{row['recoverable_agent_error_count']}` | `{row['unrecoverable_agent_error_count']}` | "
+            f"`{losses}` | `{voi_actions}` |"
+        )
     lines.extend([
         "",
         "## Error Stratification",
@@ -1623,17 +2253,36 @@ def build_payload_without_execution(args: argparse.Namespace) -> tuple[list[Shar
     root = Path(args.root).resolve()
     run_dir = _path_arg(args.run_dir, root=root)
     md_dir = _path_arg(args.md_dir, root=root)
-    specs = build_shard_specs(
-        eval_id=args.eval_id,
-        total_sample_size=args.total_sample_size,
-        shard_size=args.shard_size,
-        seed_offset=args.seed_offset,
-        seed_stride=args.seed_stride,
-        run_dir=run_dir,
-        md_dir=md_dir,
-    )
+    explicit_seed_offsets = _parse_seed_offsets(getattr(args, "seed_offsets", ""))
+    if explicit_seed_offsets:
+        if args.shard_size != 1:
+            raise ValueError("--seed-offsets requires --shard-size 1")
+        specs = build_shard_specs_for_seed_offsets(
+            eval_id=args.eval_id,
+            seed_offsets=explicit_seed_offsets,
+            run_dir=run_dir,
+            md_dir=md_dir,
+        )
+    else:
+        specs = build_shard_specs(
+            eval_id=args.eval_id,
+            total_sample_size=args.total_sample_size,
+            shard_size=args.shard_size,
+            seed_offset=args.seed_offset,
+            seed_stride=args.seed_stride,
+            run_dir=run_dir,
+            md_dir=md_dir,
+        )
     dedupe_summary: dict[str, Any] = {"enabled": False}
-    if getattr(args, "dedupe_shard_samples", False):
+    if explicit_seed_offsets:
+        dedupe_summary = {
+            "enabled": False,
+            "reason": "explicit_seed_offsets",
+            "raw_content_persisted": False,
+            "distinct_problem_hash_count": None,
+            "seed_offsets": explicit_seed_offsets,
+        }
+    elif getattr(args, "dedupe_shard_samples", False):
         try:
             specs, dedupe_summary = dedupe_shard_specs_by_sample_hash(
                 root=root,
@@ -1678,6 +2327,36 @@ def build_payload_without_execution(args: argparse.Namespace) -> tuple[list[Shar
                 exclude_artifact_glob=args.exclude_artifact_glob,
                 sample_answer_type=args.sample_answer_type,
                 sample_subject_contains=args.sample_subject_contains,
+                enable_assumption_operators=bool(getattr(args, "enable_assumption_operators", False)),
+                disable_assumption_operators=bool(getattr(args, "disable_assumption_operators", False)),
+                assumption_operator_domains=str(getattr(args, "assumption_operator_domains", "") or ""),
+                assumption_operator_skip_domains=str(getattr(args, "assumption_operator_skip_domains", "") or ""),
+                assumption_operator_max_specs=getattr(args, "assumption_operator_max_specs", None),
+                allow_assumption_operators_without_context=bool(
+                    getattr(args, "allow_assumption_operators_without_context", False)
+                ),
+                enable_assumption_operator_retrieval_fallback=bool(
+                    getattr(args, "enable_assumption_operator_retrieval_fallback", False)
+                ),
+                assumption_operator_fallback_min_score=getattr(
+                    args, "assumption_operator_fallback_min_score", None
+                ),
+                enable_operator_application_verifier=bool(
+                    getattr(args, "enable_operator_application_verifier", False)
+                ),
+                disable_domain_rule_verifier=bool(getattr(args, "disable_domain_rule_verifier", False)),
+                enable_option_claim_contrastive_adjudicator=bool(
+                    getattr(args, "enable_option_claim_contrastive_adjudicator", False)
+                ),
+                disable_option_claim_contrastive_adjudicator=bool(
+                    getattr(args, "disable_option_claim_contrastive_adjudicator", False)
+                ),
+                enable_option_claim_span_directness_verifier=bool(
+                    getattr(args, "enable_option_claim_span_directness_verifier", False)
+                ),
+                disable_option_claim_span_directness_verifier=bool(
+                    getattr(args, "disable_option_claim_span_directness_verifier", False)
+                ),
             ),
         )
         for spec in specs
@@ -1700,6 +2379,11 @@ def main() -> None:
     parser.add_argument("--max-scan", type=int, default=5000)
     parser.add_argument("--seed-offset", type=int, default=3000)
     parser.add_argument("--seed-stride", type=int, default=400)
+    parser.add_argument(
+        "--seed-offsets",
+        default="",
+        help="Comma-separated explicit seed offsets. Requires --shard-size 1 and skips parent dedupe remapping.",
+    )
     parser.add_argument("--dedupe-shard-samples", action="store_true")
     parser.add_argument("--dedupe-shard-max-attempts", type=int, default=25)
     parser.add_argument("--sample-answer-type", default="")
@@ -1715,16 +2399,35 @@ def main() -> None:
     parser.add_argument("--agent-child-mode", choices=["serial", "parallel_quorum"], default=os.environ.get("HLE_AGENT_CHILD_MODE", "parallel_quorum"))
     parser.add_argument("--agent-child-timeout", type=float, default=None)
     parser.add_argument("--disable-evidence-bridge", action="store_true")
+    parser.add_argument("--enable-assumption-operators", action="store_true")
+    parser.add_argument("--disable-assumption-operators", action="store_true")
+    parser.add_argument("--assumption-operator-domains", default="")
+    parser.add_argument("--assumption-operator-skip-domains", default="")
+    parser.add_argument("--assumption-operator-max-specs", type=int, default=None)
+    parser.add_argument("--allow-assumption-operators-without-context", action="store_true")
+    parser.add_argument("--enable-assumption-operator-retrieval-fallback", action="store_true")
+    parser.add_argument("--assumption-operator-fallback-min-score", type=float, default=None)
+    parser.add_argument("--enable-operator-application-verifier", action="store_true")
+    parser.add_argument("--disable-domain-rule-verifier", action="store_true")
+    parser.add_argument("--enable-option-claim-contrastive-adjudicator", action="store_true")
+    parser.add_argument("--disable-option-claim-contrastive-adjudicator", action="store_true")
+    parser.add_argument("--enable-option-claim-span-directness-verifier", action="store_true")
+    parser.add_argument("--disable-option-claim-span-directness-verifier", action="store_true")
     parser.add_argument("--exclude-existing-hle-artifacts", action="store_true")
     parser.add_argument(
         "--exclude-artifact-glob",
-        default="phase four/assumption_graph/paper_readiness_20260604/hle*.json*",
+        default="phase four/assumption_graph/paper_readiness_20260604/hle_parallel_runs/hle*.json*",
     )
     parser.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))
     parser.add_argument("--md-dir", default=str(DEFAULT_MD_DIR))
     parser.add_argument("--out", default="")
     parser.add_argument("--md-out", default="")
     parser.add_argument("--heartbeat-out", default="")
+    parser.add_argument(
+        "--log-out",
+        default="",
+        help="Metadata-only parent-runner JSONL diagnostic log. Defaults to <run-dir>/<eval-id>.diagnostic.jsonl.",
+    )
     parser.add_argument("--poll-interval-sec", type=float, default=2.0)
     parser.add_argument("--heartbeat-interval-sec", type=float, default=10.0)
     parser.add_argument("--launch-stagger-sec", type=float, default=0.0)
@@ -1744,15 +2447,13 @@ def main() -> None:
     parser.add_argument("--model-router-global-concurrency-dir", default="")
     parser.add_argument("--model-router-global-slot-ttl-sec", type=float, default=None)
     parser.add_argument("--model-router-global-slot-wait-sec", type=float, default=None)
+    parser.add_argument("--skip-live-model-preflight", action="store_true")
+    parser.add_argument("--live-model-preflight-timeout-sec", type=float, default=60.0)
     args = parser.parse_args()
+    args = apply_live_network_defaults(args)
+    apply_hle_offline_defaults(os.environ)
 
     root = Path(args.root).resolve()
-    specs, states = build_payload_without_execution(args)
-    reuse_summary = (
-        mark_reusable_completed_shards(states)
-        if args.reuse_completed_shards
-        else {"enabled": False}
-    )
     run_dir = _path_arg(args.run_dir, root=root)
     out = _path_arg(args.out, root=root) if args.out else run_dir / f"{args.eval_id}.json"
     md_out = _path_arg(args.md_out, root=root) if args.md_out else _path_arg(args.md_dir, root=root) / f"{args.eval_id}.md"
@@ -1760,6 +2461,86 @@ def main() -> None:
         _path_arg(args.heartbeat_out, root=root)
         if args.heartbeat_out
         else run_dir / f"{args.eval_id}.heartbeat.json"
+    )
+    diagnostic_log_out = (
+        _path_arg(args.log_out, root=root)
+        if args.log_out
+        else run_dir / f"{args.eval_id}.diagnostic.jsonl"
+    )
+    logger = JsonlDiagnosticLogger(diagnostic_log_out)
+    log_event(
+        logger,
+        {
+            "event": "hle_parallel_runner_started",
+            "eval_id": args.eval_id,
+            "run_dir": str(run_dir),
+            "out": str(out),
+            "md_out": str(md_out),
+            "heartbeat_out": str(heartbeat_path),
+            "total_sample_size": int(args.total_sample_size),
+            "shard_size": int(args.shard_size),
+            "parallel_workers": int(args.parallel_workers),
+            "models": [item.strip() for item in str(args.models).split(",") if item.strip()],
+            "variants": [item.strip() for item in str(args.variants).split(",") if item.strip()],
+            "execute_live": bool(args.execute_live),
+            "soft_timeout_sec": args.soft_timeout_sec,
+            "kill_on_soft_timeout": bool(args.kill_on_soft_timeout),
+            "reuse_completed_shards": bool(args.reuse_completed_shards),
+            "dedupe_shard_samples": bool(args.dedupe_shard_samples),
+        },
+    )
+    hash_cache_path = run_dir / f"{args.eval_id}.existing_hash_cache.json"
+    os.environ.setdefault("HLE_EXISTING_HASH_CACHE_PATH", str(hash_cache_path))
+    write_preflight_heartbeat(
+        heartbeat_path,
+        eval_id=args.eval_id,
+        phase="building_shards",
+        run_dir=run_dir,
+        details={
+            "total_sample_size": args.total_sample_size,
+            "shard_size": args.shard_size,
+            "dedupe_shard_samples": bool(args.dedupe_shard_samples),
+            "exclude_existing_hle_artifacts": bool(args.exclude_existing_hle_artifacts),
+            "hash_cache_path": str(hash_cache_path),
+        },
+    )
+    specs, states = build_payload_without_execution(args)
+    log_event(
+        logger,
+        {
+            "event": "hle_parallel_runner_shards_built",
+            "eval_id": args.eval_id,
+            "shard_count": len(states),
+            "seed_offsets": [state.spec.seed_offset for state in states],
+            "sample_sizes": [state.spec.sample_size for state in states],
+            "dedupe_summary": getattr(args, "_shard_sample_dedupe_summary", {"enabled": False}),
+            "hash_cache_path": str(hash_cache_path),
+        },
+    )
+    write_preflight_heartbeat(
+        heartbeat_path,
+        eval_id=args.eval_id,
+        phase="shards_built",
+        run_dir=run_dir,
+        details={
+            "shard_count": len(states),
+            "dedupe_summary": getattr(args, "_shard_sample_dedupe_summary", {"enabled": False}),
+            "hash_cache_path": str(hash_cache_path),
+        },
+    )
+    reuse_summary = (
+        mark_reusable_completed_shards(states)
+        if args.reuse_completed_shards
+        else {"enabled": False}
+    )
+    log_event(
+        logger,
+        {
+            "event": "hle_parallel_runner_reuse_summary",
+            "eval_id": args.eval_id,
+            "reuse_summary": reuse_summary,
+            "reused_shard_count": sum(1 for state in states if state.reused_existing_payload),
+        },
     )
     env = build_runner_env(
         model_router_attempts=args.model_router_attempts,
@@ -1771,6 +2552,46 @@ def main() -> None:
         model_router_global_slot_ttl_sec=args.model_router_global_slot_ttl_sec,
         model_router_global_slot_wait_sec=args.model_router_global_slot_wait_sec,
     )
+    if args.execute_live and not args.skip_live_model_preflight:
+        model_preflight = run_live_model_preflight(
+            models=args.models,
+            env=env,
+            timeout_sec=float(args.live_model_preflight_timeout_sec or 0.0),
+        )
+        if not model_preflight.get("passed"):
+            log_event(
+                logger,
+                {
+                    "event": "hle_parallel_runner_model_preflight_failed",
+                    "eval_id": args.eval_id,
+                    "model_preflight": model_preflight,
+                },
+            )
+            write_preflight_heartbeat(
+                heartbeat_path,
+                eval_id=args.eval_id,
+                phase="model_preflight_failed",
+                run_dir=run_dir,
+                details=model_preflight,
+            )
+            print(json.dumps({
+                "eval_id": args.eval_id,
+                "pass": False,
+                "failed_gates": ["live_model_preflight"],
+                "model_preflight": model_preflight,
+                "heartbeat_out": str(heartbeat_path),
+                "log_out": str(diagnostic_log_out),
+                "raw_content_persisted": False,
+            }, ensure_ascii=True, indent=2, sort_keys=True))
+            raise SystemExit(2)
+        log_event(
+            logger,
+            {
+                "event": "hle_parallel_runner_model_preflight_passed",
+                "eval_id": args.eval_id,
+                "model_preflight": model_preflight,
+            },
+        )
     run_parallel_shards(
         root=root,
         shard_states=states,
@@ -1784,7 +2605,40 @@ def main() -> None:
         launch_stagger_sec=max(0.0, float(args.launch_stagger_sec or 0.0)),
         env=env,
     )
+    log_event(
+        logger,
+        {
+            "event": "hle_parallel_runner_shards_run_completed",
+            "eval_id": args.eval_id,
+            "shard_status_counts": dict(sorted(Counter(state.status for state in states).items())),
+            "returncode_counts": dict(sorted(Counter(str(state.returncode) for state in states).items())),
+            "soft_timeout_observed_count": sum(1 for state in states if state.soft_timeout_observed),
+            "hard_kill_sent_count": sum(1 for state in states if state.hard_kill_sent),
+            "elapsed_sec_by_shard": {
+                str(state.spec.shard_index): state.elapsed_sec()
+                for state in states
+            },
+            "process_peak_rss_kb_by_shard": {
+                str(state.spec.shard_index): state.peak_rss_kb
+                for state in states
+            },
+            "process_peak_vms_kb_by_shard": {
+                str(state.spec.shard_index): state.peak_vms_kb
+                for state in states
+            },
+        },
+    )
     payloads = load_shard_payloads(specs)
+    log_event(
+        logger,
+        {
+            "event": "hle_parallel_runner_payloads_loaded",
+            "eval_id": args.eval_id,
+            "loaded_shard_payload_count": len(payloads),
+            "expected_shard_payload_count": len(specs),
+            "row_count": sum(len(payload.get("rows") or payload.get("run_rows") or []) for payload in payloads),
+        },
+    )
     payload = aggregate_parallel_payload(
         eval_id=args.eval_id,
         specs=specs,
@@ -1801,11 +2655,51 @@ def main() -> None:
         shard_sample_dedupe=getattr(args, "_shard_sample_dedupe_summary", {"enabled": False}),
         reuse_completed_shards=reuse_summary,
         launch_stagger_sec=max(0.0, float(args.launch_stagger_sec or 0.0)),
+        diagnostic_log_out=diagnostic_log_out,
+    )
+    log_event(
+        logger,
+        {
+            "event": "hle_parallel_runner_aggregate_built",
+            "eval_id": args.eval_id,
+            "pass": bool(payload.get("pass")),
+            "paper_clean_pass": bool(payload.get("paper_clean_pass")),
+            "pollution_pass": bool(payload.get("pollution_pass")),
+            "failed_gates": list(payload.get("failed_gates") or []),
+            "paper_clean_failed_gates": list(payload.get("paper_clean_failed_gates") or []),
+            "pollution_failed_gates": list(payload.get("pollution_failed_gates") or []),
+            "metrics": {
+                "sample_count": payload["metrics"]["sample_count"],
+                "distinct_sample_problem_count": payload["metrics"]["distinct_sample_problem_count"],
+                "duplicate_sample_problem_count": payload["metrics"]["duplicate_sample_problem_count"],
+                "scored_row_count": payload["metrics"]["scored_row_count"],
+                "overall_accuracy": payload["metrics"]["overall_accuracy"],
+                "resolved_live_model_calls": payload["metrics"]["resolved_live_model_calls"],
+                "planned_live_model_calls": payload["metrics"]["planned_live_model_calls"],
+            },
+            "model_budget_fairness_failed_gates": payload["model_budget_fairness_audit"]["failed_gates"],
+            "failure_diagnostics": {
+                "agent_failure_buckets": payload["failure_diagnostics"]["agent_failure_buckets"],
+                "agent_gain_loss": payload["failure_diagnostics"]["agent_gain_loss"],
+                "verified_or_abstain_gate_status": payload["failure_diagnostics"]["verified_or_abstain_gate_status"],
+            },
+        },
     )
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     md_out.parent.mkdir(parents=True, exist_ok=True)
     md_out.write_text(format_parallel_markdown(payload), encoding="utf-8")
+    log_event(
+        logger,
+        {
+            "event": "hle_parallel_runner_artifacts_written",
+            "eval_id": args.eval_id,
+            "out": str(out),
+            "md_out": str(md_out),
+            "heartbeat_out": str(heartbeat_path),
+            "log_out": str(diagnostic_log_out),
+        },
+    )
     print(json.dumps({
         "eval_id": payload["eval_id"],
         "pass": payload["pass"],
@@ -1844,6 +2738,7 @@ def main() -> None:
         "paper_clean_failed_gates": payload["paper_clean_failed_gates"],
         "out": str(out),
         "heartbeat_out": str(heartbeat_path),
+        "log_out": str(diagnostic_log_out),
     }, ensure_ascii=False, indent=2, sort_keys=True))
 
 

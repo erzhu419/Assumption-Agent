@@ -36706,15 +36706,38 @@ def _acquire_model_router_slot(
 
 
 def _remove_stale_model_router_slots(*, directory: Path, ttl_sec: float) -> None:
-    if ttl_sec <= 0:
-        return
     now = time.time()
     for path in directory.glob("slot_*.lock"):
         try:
-            if now - path.stat().st_mtime > ttl_sec:
+            ttl_expired = ttl_sec > 0 and now - path.stat().st_mtime > ttl_sec
+            owner_exited = _model_router_slot_owner_exited(path)
+            if ttl_expired or owner_exited:
                 path.unlink()
         except OSError:
             continue
+
+
+def _model_router_slot_owner_exited(path: Path) -> bool:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    pid = data.get("pid")
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    return not _model_router_pid_is_alive(pid)
+
+
+def _model_router_pid_is_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return True
+    return True
 
 
 def _release_model_router_slot(path: Path) -> None:

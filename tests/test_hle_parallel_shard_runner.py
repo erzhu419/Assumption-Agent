@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
 from argparse import Namespace
 from pathlib import Path
+from unittest.mock import patch
 
 from assumption_os.hle_module_ablation_runner import (
     build_ablation_plan,
@@ -15,6 +17,8 @@ from assumption_os.hle_module_ablation_runner import (
 from assumption_os.hle_parallel_shard_runner import (
     ShardRunState,
     aggregate_parallel_payload,
+    apply_hle_offline_defaults,
+    apply_live_network_defaults,
     build_error_stratification,
     build_failure_diagnostics,
     build_heartbeat,
@@ -23,9 +27,11 @@ from assumption_os.hle_parallel_shard_runner import (
     build_runner_env,
     build_shard_command,
     build_shard_specs,
+    build_shard_specs_for_seed_offsets,
     dedupe_shard_specs_by_sample_hash,
     format_parallel_markdown,
     mark_reusable_completed_shards,
+    run_live_model_preflight,
     run_parallel_shards,
 )
 
@@ -61,7 +67,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
             agent_child_timeout=45,
             disable_evidence_bridge=False,
             exclude_existing_hle_artifacts=True,
-            exclude_artifact_glob="phase four/assumption_graph/paper_readiness_20260604/hle*.json*",
+            exclude_artifact_glob="phase four/assumption_graph/paper_readiness_20260604/hle_parallel_runs/hle*.json*",
             dedupe_shard_samples=True,
             dedupe_shard_max_attempts=11,
             run_dir=str(Path(tmp) / "runs"),
@@ -99,6 +105,20 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual([spec.sample_size for spec in specs], [3, 3, 1])
         self.assertEqual([spec.seed_offset for spec in specs], [100, 111, 122])
         self.assertEqual([spec.eval_id for spec in specs], ["fresh30_shard_000", "fresh30_shard_001", "fresh30_shard_002"])
+
+    def test_build_shard_specs_for_explicit_seed_offsets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "runs"
+            md_dir = Path(tmp) / "md"
+            specs = build_shard_specs_for_seed_offsets(
+                eval_id="explicit",
+                seed_offsets=[498, 499, 527],
+                run_dir=run_dir,
+                md_dir=md_dir,
+            )
+        self.assertEqual([spec.sample_size for spec in specs], [1, 1, 1])
+        self.assertEqual([spec.seed_offset for spec in specs], [498, 499, 527])
+        self.assertEqual([spec.eval_id for spec in specs], ["explicit_shard_000", "explicit_shard_001", "explicit_shard_002"])
 
     def test_module_ablation_plan_builds_real_toggles_without_secrets(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -190,11 +210,29 @@ class TestHleParallelShardRunner(unittest.TestCase):
                 exclude_artifact_glob="artifacts/*.json*",
                 sample_answer_type="multipleChoice",
                 sample_subject_contains="chem",
+                enable_assumption_operators=True,
+                assumption_operator_domains="science,hle_general",
+                assumption_operator_max_specs=3,
+                enable_assumption_operator_retrieval_fallback=True,
+                assumption_operator_fallback_min_score=0.2,
+                enable_operator_application_verifier=True,
+                disable_domain_rule_verifier=True,
+                enable_option_claim_contrastive_adjudicator=True,
+                enable_option_claim_span_directness_verifier=True,
             )
         text = " ".join(cmd)
         self.assertIn("--hard-exit-after-write", cmd)
         self.assertIn("--execute-live", cmd)
         self.assertIn("--disable-evidence-bridge", cmd)
+        self.assertIn("--enable-assumption-operators", cmd)
+        self.assertIn("--assumption-operator-domains science,hle_general", text)
+        self.assertIn("--assumption-operator-max-specs 3", text)
+        self.assertIn("--enable-assumption-operator-retrieval-fallback", cmd)
+        self.assertIn("--assumption-operator-fallback-min-score 0.2", text)
+        self.assertIn("--enable-operator-application-verifier", cmd)
+        self.assertIn("--disable-domain-rule-verifier", cmd)
+        self.assertIn("--enable-option-claim-contrastive-adjudicator", cmd)
+        self.assertIn("--enable-option-claim-span-directness-verifier", cmd)
         self.assertIn("--exclude-existing-hle-artifacts", cmd)
         self.assertNotIn("sk-", text)
         self.assertNotIn("hf_", text)
@@ -300,6 +338,88 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(summary["remaps"][1]["attempt_count"], 3)
         self.assertFalse(summary["raw_content_persisted"])
 
+    def test_dedupe_single_row_shards_uses_fast_scan_index(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            specs = build_shard_specs(
+                eval_id="dedupe-fast",
+                total_sample_size=3,
+                shard_size=1,
+                seed_offset=498,
+                seed_stride=1,
+                run_dir=root,
+                md_dir=root,
+            )
+            candidates = [
+                {"scanned_index": 499, "id_hash": "a"},
+                {"scanned_index": 500, "id_hash": "b"},
+                {"scanned_index": 527, "id_hash": "c"},
+            ]
+            with patch(
+                "assumption_os.hle_parallel_shard_runner._load_text_only_candidate_index",
+                return_value=candidates,
+            ) as load_index:
+                deduped, summary = dedupe_shard_specs_by_sample_hash(
+                    root=root,
+                    specs=specs,
+                    max_scan=1000,
+                    seed_stride=1,
+                    exclude_existing_hle_artifacts=False,
+                    exclude_artifact_glob="unused",
+                    sample_answer_type="multipleChoice",
+                    sample_subject_contains="",
+                    max_attempts=4,
+                )
+
+        self.assertTrue(summary["fast_single_pass"])
+        self.assertEqual(summary["distinct_problem_hash_count"], 3)
+        self.assertEqual([spec.seed_offset for spec in deduped], [498, 499, 526])
+        self.assertEqual(
+            [row["selected_problem_hashes"] for row in summary["remaps"]],
+            [["a"], ["b"], ["c"]],
+        )
+        load_index.assert_called_once()
+
+    def test_dedupe_single_row_shards_wraps_seed_offsets_past_candidate_tail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            specs = build_shard_specs(
+                eval_id="dedupe-wrap",
+                total_sample_size=2,
+                shard_size=1,
+                seed_offset=2600,
+                seed_stride=43,
+                run_dir=root,
+                md_dir=root,
+            )
+            candidates = [
+                {"scanned_index": 17, "id_hash": "early-a"},
+                {"scanned_index": 271, "id_hash": "early-b"},
+                {"scanned_index": 2471, "id_hash": "tail-c"},
+            ]
+            with patch(
+                "assumption_os.hle_parallel_shard_runner._load_text_only_candidate_index",
+                return_value=candidates,
+            ):
+                deduped, summary = dedupe_shard_specs_by_sample_hash(
+                    root=root,
+                    specs=specs,
+                    max_scan=8000,
+                    seed_stride=43,
+                    exclude_existing_hle_artifacts=False,
+                    exclude_artifact_glob="unused",
+                    sample_answer_type="multipleChoice",
+                    sample_subject_contains="",
+                    max_attempts=4,
+                )
+
+        self.assertEqual(summary["accepted_shard_count"], 2)
+        self.assertEqual(summary["distinct_problem_hash_count"], 2)
+        self.assertTrue(all(row["status"] == "accepted_wrapped" for row in summary["remaps"]))
+        self.assertEqual(len({spec.seed_offset for spec in deduped}), 2)
+        self.assertTrue(all(spec.seed_offset in {16, 270, 2470} for spec in deduped))
+        self.assertFalse(summary["raw_content_persisted"])
+
     def test_heartbeat_reports_latest_jsonl_event(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -323,7 +443,48 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(heartbeat["status_counts"], {"running": 1})
         self.assertEqual(heartbeat["shards"][0]["latest_event"]["event"], "call_error")
         self.assertEqual(heartbeat["shards"][0]["latest_event"]["error_type"], "RuntimeError")
+        self.assertEqual(heartbeat["shards"][0]["jsonl_line_count"], 2)
+        self.assertIsInstance(heartbeat["shards"][0]["jsonl_age_sec"], float)
         self.assertFalse(heartbeat["raw_content_persisted"])
+
+    def test_heartbeat_includes_running_shard_memory_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            spec = build_shard_specs(
+                eval_id="memhb",
+                total_sample_size=1,
+                shard_size=1,
+                seed_offset=7,
+                seed_stride=1,
+                run_dir=root,
+                md_dir=root,
+            )[0]
+            process = subprocess.Popen(
+                [sys.executable, "-c", "import time; buf='x'*1000000; time.sleep(2)"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+            try:
+                state = ShardRunState(
+                    spec=spec,
+                    command=[sys.executable, "-m", "x"],
+                    status="running",
+                    process=process,
+                )
+                heartbeat = build_heartbeat([state])
+            finally:
+                process.terminate()
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=2)
+
+        shard = heartbeat["shards"][0]
+        self.assertEqual(shard["process_pid"], process.pid)
+        self.assertGreater(shard["process_memory"]["rss_kb"], 0)
+        self.assertEqual(shard["process_peak_rss_kb"], state.peak_rss_kb)
 
     def test_error_stratification_counts_rows_jsonl_and_timeouts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -437,6 +598,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
                 parallel_workers=2,
                 soft_timeout_sec=900,
                 kill_on_soft_timeout=False,
+                diagnostic_log_out=root / "agg.diagnostic.jsonl",
             )
             markdown = format_parallel_markdown(payload)
         self.assertTrue(payload["pass"])
@@ -448,6 +610,8 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(clean["assumption_agent_recursive_verify"]["accuracy"], 1.0)
         self.assertEqual(clean["raw"]["accuracy"], 0.5)
         self.assertTrue(payload["pollution_pass"])
+        self.assertEqual(payload["diagnostic_log_out"], str(root / "agg.diagnostic.jsonl"))
+        self.assertEqual(payload["logging_policy"]["event_stream"], "jsonl")
         self.assertEqual(
             payload["pollution_audit"]["claim_guard"]["recommended_hle_claim_scope"],
             "full_resolved_rows",
@@ -455,6 +619,46 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertIn("HLE Parallel Shard Evaluation", markdown)
         self.assertIn("Pollution Audit", markdown)
         self.assertIn("Model Budget Fairness", markdown)
+
+    def test_aggregate_fails_when_requested_sample_rows_are_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            specs = build_shard_specs(
+                eval_id="partial",
+                total_sample_size=2,
+                shard_size=1,
+                seed_offset=0,
+                seed_stride=1,
+                run_dir=root,
+                md_dir=root,
+            )
+            payloads = [
+                _payload([
+                    _row("p1", "raw", False),
+                    _row("p1", "hipporag_baseline", False),
+                    _row("p1", "assumption_agent_recursive_verify", True, component_efficacy=_agent_single_call_ce()),
+                ])
+            ]
+            states = [ShardRunState(spec=spec, command=[], status="completed", returncode=0) for spec in specs]
+            payload = aggregate_parallel_payload(
+                eval_id="partial",
+                specs=specs,
+                states=states,
+                shard_payloads=payloads,
+                execute_live=True,
+                models="gpt-5.4-mini",
+                variants="raw,hipporag_baseline,assumption_agent_recursive_verify",
+                total_sample_size=2,
+                shard_size=1,
+                parallel_workers=2,
+                soft_timeout_sec=900,
+                kill_on_soft_timeout=False,
+            )
+
+        self.assertFalse(payload["pass"])
+        self.assertFalse(payload["paper_clean_pass"])
+        self.assertIn("requested_sample_rows_loaded", payload["failed_gates"])
+        self.assertEqual(payload["metrics"]["sample_count"], 1)
 
     def test_model_budget_fairness_blocks_unfair_strong_child_agent_claim(self) -> None:
         rows = [
@@ -550,6 +754,73 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertFalse(payload["paper_clean_pass"])
         self.assertIn("model_budget_fairness_accounted", payload["paper_clean_failed_gates"])
 
+    def test_aggregate_fails_when_selected_operator_never_activates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            specs = build_shard_specs(
+                eval_id="operator-noop",
+                total_sample_size=1,
+                shard_size=1,
+                seed_offset=0,
+                seed_stride=1,
+                run_dir=root,
+                md_dir=root,
+            )
+            operator_noop_ce = {
+                "kind": "assumption_agent_recursive_verify",
+                "flags": {
+                    "operator_specs_requested": True,
+                    "operator_specs_activated": False,
+                    "operator_context_injected": False,
+                    "operator_specs_blocked": True,
+                },
+                "operator_specs": {
+                    "status": "skipped",
+                    "reason": "generic_harness_graph_context_only",
+                    "operator_count": 0,
+                    "operator_source_types": [],
+                },
+                "selection": {"selection_method": "normalized_majority"},
+            }
+            rows = [
+                _row("p1", "raw", False, model="gpt-5.4-mini"),
+                _row("p1", "hipporag_baseline", False, model="gpt-5.4-mini"),
+                _row("p1", "raw_budget_matched", False, model="gpt-5.4-mini"),
+                _row("p1", "hipporag_budget_matched", False, model="gpt-5.4-mini"),
+                _row(
+                    "p1",
+                    "assumption_agent_recursive_verify",
+                    True,
+                    model="gpt-5.4-mini",
+                    component_efficacy=operator_noop_ce,
+                ),
+            ]
+            states = [ShardRunState(spec=specs[0], command=[], status="completed", returncode=0)]
+            payload = aggregate_parallel_payload(
+                eval_id="operator-noop",
+                specs=specs,
+                states=states,
+                shard_payloads=[_payload(rows)],
+                execute_live=True,
+                models="gpt-5.4-mini",
+                variants=(
+                    "raw,hipporag_baseline,raw_budget_matched,hipporag_budget_matched,"
+                    "assumption_agent_recursive_verify"
+                ),
+                total_sample_size=1,
+                shard_size=1,
+                parallel_workers=1,
+                soft_timeout_sec=900,
+                kill_on_soft_timeout=False,
+            )
+
+        self.assertFalse(payload["pass"])
+        self.assertIn("assumption_operator_activated_if_selected", payload["failed_gates"])
+        summary = payload["metrics"]["operator_activation_summary"]
+        self.assertEqual(summary["selected_row_count"], 1)
+        self.assertEqual(summary["activated_row_count"], 0)
+        self.assertEqual(summary["reason_counts"]["generic_harness_graph_context_only"], 1)
+
     def test_runner_env_sets_retry_and_global_concurrency_without_secrets(self) -> None:
         env = build_runner_env(
             model_router_attempts=7,
@@ -584,6 +855,161 @@ class TestHleParallelShardRunner(unittest.TestCase):
         )
         self.assertNotIn("sk-", configured_values)
         self.assertNotIn("hf_", configured_values)
+
+    def test_runner_env_defaults_recursive_child_batch_cap(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            env = build_runner_env(
+                model_router_attempts=None,
+                model_router_timeout=None,
+            )
+        self.assertEqual(env["HLE_RECURSIVE_CHILD_BATCH_MAX_WAIT_SEC"], "180")
+
+        with patch.dict(os.environ, {"HLE_RECURSIVE_CHILD_BATCH_MAX_WAIT_SEC": "90"}, clear=True):
+            env = build_runner_env(
+                model_router_attempts=None,
+                model_router_timeout=None,
+            )
+        self.assertEqual(env["HLE_RECURSIVE_CHILD_BATCH_MAX_WAIT_SEC"], "90")
+
+    def test_live_model_preflight_fails_fast_without_model_key(self) -> None:
+        with patch("assumption_os.hle_parallel_shard_runner.subprocess.run") as run:
+            payload = run_live_model_preflight(
+                models="gpt-5.4-mini",
+                env={},
+                timeout_sec=5,
+            )
+
+        self.assertFalse(payload["passed"])
+        self.assertEqual(payload["rows"][0]["error_type"], "RuntimeError")
+        self.assertIn("missing", payload["rows"][0]["error_label"])
+        run.assert_not_called()
+
+    def test_live_model_preflight_redacts_model_key_from_error(self) -> None:
+        secret = "secret-model-key"
+        completed = subprocess.CompletedProcess(
+            args=["python"],
+            returncode=1,
+            stdout="",
+            stderr=f"HTTP Error 401 with {secret}",
+        )
+        with patch("assumption_os.hle_parallel_shard_runner.subprocess.run", return_value=completed):
+            payload = run_live_model_preflight(
+                models="gpt-5.4-mini",
+                env={"RUOLI_GPT_KEY": secret},
+                timeout_sec=5,
+            )
+
+        serialized = json.dumps(payload)
+        self.assertFalse(payload["passed"])
+        self.assertIn("[redacted]", serialized)
+        self.assertNotIn(secret, serialized)
+        self.assertFalse(payload["raw_content_persisted"])
+
+    def test_runner_env_defaults_to_local_hle_and_cache_only_sources_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_path = root / "hle_dataset_cache" / "test"
+            cache_path = root / "hle_evidence_source_cache"
+            dataset_path.mkdir(parents=True)
+            cache_path.mkdir(parents=True)
+            with patch(
+                "assumption_os.hle_parallel_shard_runner.DEFAULT_HLE_DATASET_LOCAL_PATH",
+                dataset_path,
+            ), patch(
+                "assumption_os.hle_parallel_shard_runner.DEFAULT_HLE_EVIDENCE_SOURCE_CACHE_DIR",
+                cache_path,
+            ), patch.dict(os.environ, {}, clear=True):
+                env = build_runner_env(model_router_attempts=None, model_router_timeout=None)
+
+        self.assertEqual(env["HLE_DATASET_LOCAL_PATH"], str(dataset_path))
+        self.assertEqual(env["HLE_EVIDENCE_SOURCE_CACHE_DIR"], str(cache_path))
+        self.assertEqual(env["HLE_EVIDENCE_SOURCE_CACHE_ONLY"], "1")
+
+    def test_hle_offline_defaults_preserve_explicit_source_policy_and_opt_out(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_path = root / "hle_dataset_cache" / "test"
+            cache_path = root / "hle_evidence_source_cache"
+            dataset_path.mkdir(parents=True)
+            cache_path.mkdir(parents=True)
+            with patch(
+                "assumption_os.hle_parallel_shard_runner.DEFAULT_HLE_DATASET_LOCAL_PATH",
+                dataset_path,
+            ), patch(
+                "assumption_os.hle_parallel_shard_runner.DEFAULT_HLE_EVIDENCE_SOURCE_CACHE_DIR",
+                cache_path,
+            ):
+                env = {
+                    "HLE_DATASET_LOCAL_PATH": "/custom/hle",
+                    "HLE_EVIDENCE_SOURCE_CACHE_DIR": "/custom/cache",
+                    "HLE_ALLOW_LIVE_SOURCE_SEARCH": "1",
+                }
+                apply_hle_offline_defaults(env)
+
+                disabled_env = {"HLE_DISABLE_LOCAL_HLE_DEFAULTS": "1"}
+                apply_hle_offline_defaults(disabled_env)
+
+        self.assertEqual(env["HLE_DATASET_LOCAL_PATH"], "/custom/hle")
+        self.assertEqual(env["HLE_EVIDENCE_SOURCE_CACHE_DIR"], "/custom/cache")
+        self.assertNotIn("HLE_EVIDENCE_SOURCE_CACHE_ONLY", env)
+        self.assertEqual(disabled_env, {"HLE_DISABLE_LOCAL_HLE_DEFAULTS": "1"})
+
+    def test_live_network_defaults_stabilize_execute_live_without_overriding_user_values(self) -> None:
+        args = Namespace(
+            execute_live=True,
+            eval_id="eval/live",
+            parallel_workers=8,
+            model_router_attempts=None,
+            model_router_backoff_base_sec=None,
+            model_router_global_concurrency=None,
+            model_router_global_concurrency_dir="",
+            model_router_global_slot_ttl_sec=None,
+            model_router_global_slot_wait_sec=None,
+        )
+        apply_live_network_defaults(args)
+
+        self.assertEqual(args.model_router_attempts, 8)
+        self.assertEqual(args.model_router_backoff_base_sec, 1.5)
+        self.assertEqual(args.model_router_global_concurrency, 4)
+        self.assertIn("eval_live", args.model_router_global_concurrency_dir)
+        self.assertEqual(args.model_router_global_slot_ttl_sec, 7200.0)
+        self.assertEqual(args.model_router_global_slot_wait_sec, 7200.0)
+
+        explicit = Namespace(
+            execute_live=True,
+            eval_id="eval",
+            parallel_workers=8,
+            model_router_attempts=3,
+            model_router_backoff_base_sec=0.5,
+            model_router_global_concurrency=2,
+            model_router_global_concurrency_dir="/tmp/custom-slots",
+            model_router_global_slot_ttl_sec=30,
+            model_router_global_slot_wait_sec=60,
+        )
+        apply_live_network_defaults(explicit)
+
+        self.assertEqual(explicit.model_router_attempts, 3)
+        self.assertEqual(explicit.model_router_backoff_base_sec, 0.5)
+        self.assertEqual(explicit.model_router_global_concurrency, 2)
+        self.assertEqual(explicit.model_router_global_concurrency_dir, "/tmp/custom-slots")
+        self.assertEqual(explicit.model_router_global_slot_ttl_sec, 30)
+        self.assertEqual(explicit.model_router_global_slot_wait_sec, 60)
+
+        dry = Namespace(
+            execute_live=False,
+            eval_id="eval",
+            parallel_workers=8,
+            model_router_attempts=None,
+            model_router_backoff_base_sec=None,
+            model_router_global_concurrency=None,
+            model_router_global_concurrency_dir="",
+            model_router_global_slot_ttl_sec=None,
+            model_router_global_slot_wait_sec=None,
+        )
+        apply_live_network_defaults(dry)
+
+        self.assertIsNone(dry.model_router_attempts)
+        self.assertIsNone(dry.model_router_global_concurrency)
 
     def test_pollution_audit_tracks_generic_context_selection_and_endpoint_scope(self) -> None:
         rows = [
@@ -734,6 +1160,59 @@ class TestHleParallelShardRunner(unittest.TestCase):
             1,
         )
         self.assertEqual(diagnostics["verified_or_abstain_gate_status"]["abstained"], 1)
+
+    def test_failure_diagnostics_bucket_candidate_generation_missed_gold(self) -> None:
+        rows = [
+            _row(
+                "p1",
+                "assumption_agent_recursive_verify",
+                False,
+                component_efficacy={
+                    "flags": {
+                        "candidate_generation_missed_gold": True,
+                        "candidate_generation_missed_gold_with_sweep_coverage": True,
+                        "missing_model_option_source_retry_scheduled": True,
+                        "mc_option_claim_source_verifier_cross_selection_blocked": True,
+                        "gold_option_source_verifier_attempted": True,
+                        "gold_option_source_verifier_accepted": False,
+                        "gold_option_source_verifier_direct_source_insufficient": True,
+                        "gold_option_source_verifier_indirect_or_generic": True,
+                    },
+                    "selection": {"selection_method": "verified_or_abstain_direct_fallback"},
+                },
+            ),
+            _row("p1", "raw", False),
+            _row("p1", "hipporag_baseline", False),
+        ]
+
+        diagnostics = build_failure_diagnostics(rows=rows)
+
+        self.assertEqual(diagnostics["agent_failure_buckets"]["candidate_generation_missed_gold"], 1)
+        self.assertEqual(
+            diagnostics["agent_failure_buckets"]["candidate_generation_missed_gold_with_sweep_coverage"],
+            1,
+        )
+        self.assertEqual(
+            diagnostics["agent_failure_buckets"]["missing_model_option_source_retry_unhelpful"],
+            1,
+        )
+        self.assertEqual(
+            diagnostics["agent_failure_buckets"]["source_verifier_cross_selection_blocked"],
+            1,
+        )
+        self.assertEqual(
+            diagnostics["agent_failure_buckets"]["gold_option_source_verifier_unaccepted"],
+            1,
+        )
+        self.assertEqual(
+            diagnostics["agent_failure_buckets"]["gold_option_direct_source_insufficient"],
+            1,
+        )
+        self.assertEqual(
+            diagnostics["agent_failure_buckets"]["gold_option_source_indirect_or_generic"],
+            1,
+        )
+        self.assertEqual(diagnostics["agent_failure_buckets"]["multiple_choice_selection_failed"], 1)
 
 
 def _row(
