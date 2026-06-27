@@ -232,6 +232,10 @@ def build_profile_command(
         cmd.extend(["--model-router-timeout", str(args.model_router_timeout)])
     if args.model_router_per_attempt_timeout is not None:
         cmd.extend(["--model-router-per-attempt-timeout", str(args.model_router_per_attempt_timeout)])
+    if getattr(args, "model_router_subprocess_calls", False):
+        cmd.append("--model-router-subprocess-calls")
+    if getattr(args, "model_router_no_byte_timeout_sec", None) is not None:
+        cmd.extend(["--model-router-no-byte-timeout-sec", str(args.model_router_no_byte_timeout_sec)])
     if args.model_router_backoff_base_sec is not None:
         cmd.extend(["--model-router-backoff-base-sec", str(args.model_router_backoff_base_sec)])
     if args.model_router_global_concurrency is not None:
@@ -512,7 +516,10 @@ def main() -> None:
     parser.add_argument("--agent-child-timeout", type=float, default=None)
     parser.add_argument("--disable-evidence-bridge", action="store_true")
     parser.add_argument("--exclude-existing-hle-artifacts", action="store_true")
-    parser.add_argument("--exclude-artifact-glob", default="phase four/assumption_graph/paper_readiness_20260604/hle*.json*")
+    parser.add_argument(
+        "--exclude-artifact-glob",
+        default="phase four/assumption_graph/paper_readiness_20260604/hle_parallel_runs/hle*.json*",
+    )
     parser.add_argument("--dedupe-shard-samples", action="store_true")
     parser.add_argument("--dedupe-shard-max-attempts", type=int, default=25)
     parser.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))
@@ -527,6 +534,8 @@ def main() -> None:
     parser.add_argument("--model-router-attempts", type=int, default=None)
     parser.add_argument("--model-router-timeout", type=float, default=None)
     parser.add_argument("--model-router-per-attempt-timeout", type=float, default=None)
+    parser.add_argument("--model-router-subprocess-calls", action="store_true")
+    parser.add_argument("--model-router-no-byte-timeout-sec", type=float, default=None)
     parser.add_argument("--model-router-backoff-base-sec", type=float, default=None)
     parser.add_argument("--model-router-global-concurrency", type=int, default=None)
     parser.add_argument("--model-router-global-concurrency-dir", default="")

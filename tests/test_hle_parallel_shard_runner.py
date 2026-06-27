@@ -31,6 +31,8 @@ from assumption_os.hle_parallel_shard_runner import (
     dedupe_shard_specs_by_sample_hash,
     format_parallel_markdown,
     mark_reusable_completed_shards,
+    model_router_policy_from_env,
+    model_router_primary_key_present,
     run_live_model_preflight,
     run_parallel_shards,
 )
@@ -82,6 +84,8 @@ class TestHleParallelShardRunner(unittest.TestCase):
             model_router_attempts=2,
             model_router_timeout=7200,
             model_router_per_attempt_timeout=90,
+            model_router_subprocess_calls=True,
+            model_router_no_byte_timeout_sec=120,
             model_router_backoff_base_sec=1.25,
             model_router_global_concurrency=1,
             model_router_global_concurrency_dir=str(Path(tmp) / "slots"),
@@ -170,6 +174,11 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(
             raw_preserve_command[raw_preserve_command.index("--launch-stagger-sec") + 1],
             "0.1",
+        )
+        self.assertIn("--model-router-subprocess-calls", raw_preserve_command)
+        self.assertEqual(
+            raw_preserve_command[raw_preserve_command.index("--model-router-no-byte-timeout-sec") + 1],
+            "120",
         )
         flattened = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("sk-", flattened)
@@ -825,7 +834,10 @@ class TestHleParallelShardRunner(unittest.TestCase):
         env = build_runner_env(
             model_router_attempts=7,
             model_router_timeout=7200,
+            parallel_workers=4,
             model_router_per_attempt_timeout=90,
+            model_router_subprocess_calls=True,
+            model_router_no_byte_timeout_sec=120,
             model_router_backoff_base_sec=1.25,
             model_router_global_concurrency=2,
             model_router_global_concurrency_dir="/tmp/hle-slots",
@@ -835,17 +847,28 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(env["MODEL_ROUTER_ATTEMPTS"], "7")
         self.assertEqual(env["MODEL_ROUTER_TIMEOUT"], "7200")
         self.assertEqual(env["MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"], "90")
+        self.assertEqual(env["MODEL_ROUTER_SUBPROCESS_CALLS"], "1")
+        self.assertEqual(env["MODEL_ROUTER_SUBPROCESS_NO_BYTE_TIMEOUT_SEC"], "120")
+        self.assertEqual(env["HLE_PARALLEL_SHARD_WORKERS"], "4")
         self.assertEqual(env["MODEL_ROUTER_BACKOFF_BASE_SEC"], "1.25")
         self.assertEqual(env["MODEL_ROUTER_GLOBAL_CONCURRENCY"], "2")
         self.assertEqual(env["MODEL_ROUTER_GLOBAL_CONCURRENCY_DIR"], "/tmp/hle-slots")
         self.assertEqual(env["MODEL_ROUTER_GLOBAL_SLOT_TTL_SEC"], "1800")
         self.assertEqual(env["MODEL_ROUTER_GLOBAL_SLOT_WAIT_SEC"], "2400")
+        policy = model_router_policy_from_env(env)
+        self.assertEqual(policy["subprocess_calls"], "1")
+        self.assertEqual(policy["subprocess_no_byte_timeout_sec"], "120")
+        self.assertEqual(policy["parallel_shard_workers"], "4")
+        self.assertFalse(policy["raw_content_persisted"])
         configured_values = " ".join(
             env[key]
             for key in (
                 "MODEL_ROUTER_ATTEMPTS",
                 "MODEL_ROUTER_TIMEOUT",
                 "MODEL_ROUTER_PER_ATTEMPT_TIMEOUT",
+                "MODEL_ROUTER_SUBPROCESS_CALLS",
+                "MODEL_ROUTER_SUBPROCESS_NO_BYTE_TIMEOUT_SEC",
+                "HLE_PARALLEL_SHARD_WORKERS",
                 "MODEL_ROUTER_BACKOFF_BASE_SEC",
                 "MODEL_ROUTER_GLOBAL_CONCURRENCY",
                 "MODEL_ROUTER_GLOBAL_CONCURRENCY_DIR",
@@ -883,6 +906,13 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(payload["rows"][0]["error_type"], "RuntimeError")
         self.assertIn("missing", payload["rows"][0]["error_label"])
         run.assert_not_called()
+
+    def test_model_router_primary_key_present_ignores_fallback_only(self) -> None:
+        self.assertFalse(model_router_primary_key_present({}))
+        self.assertFalse(model_router_primary_key_present({"MODEL_ROUTER_FALLBACK_API_KEYS": "sk-fallback"}))
+        self.assertTrue(model_router_primary_key_present({"GPT5_API_KEY": "sk-primary"}))
+        self.assertTrue(model_router_primary_key_present({"RUOLI_GPT_KEY": "sk-primary"}))
+        self.assertTrue(model_router_primary_key_present({"OPENAI_API_KEY": "sk-primary"}))
 
     def test_live_model_preflight_redacts_model_key_from_error(self) -> None:
         secret = "secret-model-key"

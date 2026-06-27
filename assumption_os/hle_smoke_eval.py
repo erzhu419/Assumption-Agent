@@ -1899,6 +1899,9 @@ def _budget_matched_control_workers(candidate_count: int) -> int:
             return max(1, min(candidate_count, int(value)))
         except ValueError:
             pass
+    router_cap = _router_aware_child_worker_cap()
+    if router_cap is not None:
+        return max(1, min(candidate_count, router_cap))
     return max(1, min(candidate_count, 5))
 
 
@@ -7041,7 +7044,7 @@ def _execute_recursive_child_attempts(
         logger=logger,
         timeout=timeout,
         max_tokens=max_tokens,
-        max_workers=2,
+        max_workers=_agent_parallel_child_max_workers(min(len(specs), 2), timeout=timeout),
     )
     attempts = first_batch["attempts"]
     early_stop_reason = None
@@ -7110,9 +7113,48 @@ def _agent_parallel_child_max_workers(candidate_count: int, *, timeout: float | 
             return max(1, min(candidate_count, int(value)))
         except ValueError:
             pass
+    router_cap = _router_aware_child_worker_cap()
+    if router_cap is not None:
+        return max(1, min(candidate_count, router_cap))
     if timeout is not None and _force_serial_child_execution_reason(mode="parallel_quorum", timeout=timeout):
         return max(1, min(candidate_count, 2))
     return max(1, min(candidate_count, 8))
+
+
+def _router_aware_child_worker_cap() -> int | None:
+    if os.environ.get("HLE_DISABLE_ROUTER_AWARE_CHILD_WORKER_CAP", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return None
+    explicit = os.environ.get("HLE_ROUTER_AWARE_CHILD_WORKERS_PER_SHARD", "").strip()
+    if explicit:
+        try:
+            return max(1, int(explicit))
+        except ValueError:
+            pass
+    if os.environ.get("HLE_ENABLE_ROUTER_AWARE_CHILD_WORKER_CAP", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return None
+    try:
+        global_limit = int(os.environ.get("MODEL_ROUTER_GLOBAL_CONCURRENCY", "0") or 0)
+    except ValueError:
+        global_limit = 0
+    if global_limit <= 0:
+        return None
+    try:
+        shard_workers = int(os.environ.get("HLE_PARALLEL_SHARD_WORKERS", "0") or 0)
+    except ValueError:
+        shard_workers = 0
+    if shard_workers > 0:
+        return max(1, global_limit // max(1, shard_workers))
+    return 1
 
 
 def _recursive_child_batch_max_wait_sec(timeout: float | None) -> float | None:
@@ -11895,6 +11937,10 @@ def _maybe_run_mc_option_evidence_scorer(
                 "candidate_verifier_backend": "mc_option_evidence_scorer",
                 "candidate_verifier_trust": "weak_retrieval_margin",
                 "option_evidence_top_support_doc_count": top_support_doc_count,
+                "option_evidence_top_score": summary["top_score"],
+                "option_evidence_margin": summary["margin"],
+                "option_evidence_rank_margin": summary["rank_margin"],
+                "option_evidence_top_ambiguous_doc_count": top_ambiguous_doc_count,
                 "option_evidence_any_ambiguous_doc_count": any_ambiguous_doc_count,
             }
             if context_hint:
@@ -12719,6 +12765,18 @@ def _maybe_run_mc_option_claim_evidence_verifier(
     early_sweep_gap_missing_label_set = set(early_sweep_only_option_labels) & set(
         early_missing_model_labels
     )
+    early_sweep_gap_missing_label_source = (
+        "observed_sweep_only_candidates"
+        if early_sweep_gap_missing_label_set
+        else "none"
+    )
+    if (
+        early_finite_sweep_retry_coverage
+        and not early_sweep_gap_missing_label_set
+        and len(early_missing_model_labels) >= 3
+    ):
+        early_sweep_gap_missing_label_set = set(early_missing_model_labels)
+        early_sweep_gap_missing_label_source = "prospective_finite_sweep_missing_options"
     docs_by_label: dict[str, list[dict[str, str]]] = {}
     preferred_doc_hashes_by_label: dict[str, list[str]] = {}
     sweep_gap_backfill_summary_by_label: dict[str, dict[str, Any]] = {}
@@ -12849,6 +12907,25 @@ def _maybe_run_mc_option_claim_evidence_verifier(
             str(doc.get("answer_web_cache_sweep_task_kind") or "unknown")
             for doc in answer_web_cache_sweep_docs
         ))
+        answer_web_cache_sweep_path_counts = dict(Counter(
+            str(doc.get("answer_web_cache_sweep_path") or "unknown")
+            for doc in answer_web_cache_sweep_docs
+        ))
+        answer_web_cache_sweep_general_relation_directish_count = sum(
+            1
+            for doc in answer_web_cache_sweep_docs
+            if _json_truthy(doc.get("answer_web_cache_sweep_general_relation_directish_signal"))
+        )
+        answer_web_cache_sweep_relation_slot_covered_count = sum(
+            1
+            for doc in answer_web_cache_sweep_docs
+            if int(str(doc.get("answer_web_cache_sweep_relation_slot_covered_count") or "0")) > 0
+        )
+        answer_web_cache_sweep_relation_proximity_count = sum(
+            1
+            for doc in answer_web_cache_sweep_docs
+            if _json_truthy(doc.get("answer_web_cache_sweep_relation_proximity"))
+        )
         sweep_gap_backfill_doc_count = int(
             retrieval_stage_counts.get("sweep_gap_local_relation_backfill") or 0
         )
@@ -12887,6 +12964,16 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 answer_web_cache_sweep_short_option_signal_count
             ),
             "answer_web_cache_sweep_task_kind_counts": answer_web_cache_sweep_task_kind_counts,
+            "answer_web_cache_sweep_path_counts": answer_web_cache_sweep_path_counts,
+            "answer_web_cache_sweep_general_relation_directish_count": (
+                answer_web_cache_sweep_general_relation_directish_count
+            ),
+            "answer_web_cache_sweep_relation_slot_covered_count": (
+                answer_web_cache_sweep_relation_slot_covered_count
+            ),
+            "answer_web_cache_sweep_relation_proximity_count": (
+                answer_web_cache_sweep_relation_proximity_count
+            ),
             "local_relation_corpus_doc_count": local_relation_doc_count,
             "local_relation_query_expansion_doc_count": local_relation_query_expansion_doc_count,
             "sweep_gap_local_relation_backfill_doc_count": sweep_gap_backfill_doc_count,
@@ -12935,6 +13022,16 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                     answer_web_cache_sweep_short_option_signal_count
                 ),
                 "answer_web_cache_sweep_task_kind_counts": answer_web_cache_sweep_task_kind_counts,
+                "answer_web_cache_sweep_path_counts": answer_web_cache_sweep_path_counts,
+                "answer_web_cache_sweep_general_relation_directish_count": (
+                    answer_web_cache_sweep_general_relation_directish_count
+                ),
+                "answer_web_cache_sweep_relation_slot_covered_count": (
+                    answer_web_cache_sweep_relation_slot_covered_count
+                ),
+                "answer_web_cache_sweep_relation_proximity_count": (
+                    answer_web_cache_sweep_relation_proximity_count
+                ),
                 "local_relation_corpus_doc_count": local_relation_doc_count,
                 "local_relation_query_expansion_doc_count": local_relation_query_expansion_doc_count,
                 "sweep_gap_local_relation_backfill_doc_count": sweep_gap_backfill_doc_count,
@@ -13359,6 +13456,15 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 "refute_doc_count": int(verifier_row.get("refute_doc_count") or 0),
                 "ambiguous_doc_count": int(verifier_row.get("ambiguous_doc_count") or 0),
                 "doc_count": int(verifier_row.get("doc_count") or 0),
+                "answer_web_cache_sweep_doc_count": int(
+                    verifier_row.get("answer_web_cache_sweep_doc_count") or 0
+                ),
+                "answer_web_cache_sweep_general_relation_directish_count": int(
+                    verifier_row.get(
+                        "answer_web_cache_sweep_general_relation_directish_count"
+                    )
+                    or 0
+                ),
                 "local_relation_corpus_doc_count": int(
                     verifier_row.get("local_relation_corpus_doc_count") or 0
                 ),
@@ -14298,6 +14404,12 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         "missing_model_source_retry_limit": missing_retry_limit,
         "missing_model_source_retry_effective_limit": missing_retry_effective_limit,
         "finite_sweep_retry_coverage_enabled": bool(finite_sweep_retry_coverage),
+        "sweep_gap_missing_label_source": early_sweep_gap_missing_label_source,
+        "sweep_gap_missing_option_count": len(early_sweep_gap_missing_label_set),
+        "sweep_gap_missing_option_hashes": [
+            stable_hash({"option_label": label})
+            for label in sorted(early_sweep_gap_missing_label_set)
+        ],
         "missing_model_source_retry_count": len(missing_retry_rows),
         "missing_model_refuted_low_support_retry_count": sum(
             1
@@ -14789,8 +14901,40 @@ def _maybe_run_mc_option_claim_evidence_verifier(
             for row in option_rows
             if row.get("answer_web_cache_sweep_task_kind_counts")
         },
+        "answer_web_cache_sweep_path_counts_by_option_hash": {
+            stable_hash({"option_label": row["label"]}): dict(
+                row.get("answer_web_cache_sweep_path_counts") or {}
+            )
+            for row in option_rows
+            if row.get("answer_web_cache_sweep_path_counts")
+        },
+        "answer_web_cache_sweep_general_relation_directish_count_by_option_hash": {
+            stable_hash({"option_label": row["label"]}): int(
+                row.get("answer_web_cache_sweep_general_relation_directish_count") or 0
+            )
+            for row in option_rows
+            if int(row.get("answer_web_cache_sweep_general_relation_directish_count") or 0) > 0
+        },
+        "answer_web_cache_sweep_relation_slot_covered_count_by_option_hash": {
+            stable_hash({"option_label": row["label"]}): int(
+                row.get("answer_web_cache_sweep_relation_slot_covered_count") or 0
+            )
+            for row in option_rows
+            if int(row.get("answer_web_cache_sweep_relation_slot_covered_count") or 0) > 0
+        },
+        "answer_web_cache_sweep_relation_proximity_count_by_option_hash": {
+            stable_hash({"option_label": row["label"]}): int(
+                row.get("answer_web_cache_sweep_relation_proximity_count") or 0
+            )
+            for row in option_rows
+            if int(row.get("answer_web_cache_sweep_relation_proximity_count") or 0) > 0
+        },
         "answer_web_cache_sweep_total_doc_count": sum(
             int(row.get("answer_web_cache_sweep_doc_count") or 0)
+            for row in option_rows
+        ),
+        "answer_web_cache_sweep_general_relation_directish_total_count": sum(
+            int(row.get("answer_web_cache_sweep_general_relation_directish_count") or 0)
             for row in option_rows
         ),
         "local_relation_query_expansion_doc_count_by_option_hash": {
@@ -20599,6 +20743,8 @@ def _maybe_run_domain_rule_mc_verifier(
         "option_count": len(options),
         "evidence_required": bool(decision.get("evidence_required")),
         "evidence_context_hash": stable_hash({"evidence_context": evidence_context}) if evidence_context else "",
+        "rule_diagnostics": dict(decision.get("diagnostics") or {}),
+        "rule_candidate_option_hashes": list(decision.get("candidate_option_hashes", []) or []),
         "underlying_model_calls": 0,
     }
     if problem.get("_answer"):
@@ -21766,6 +21912,13 @@ def _domain_rule_mc_decision(
     bio = _bacterial_cross_resistance_minimality_decision(problem=problem, stem=stem, options=options)
     if bio:
         return bio
+    effect_direction = _ecology_voc_latitude_effect_direction_decision(
+        problem=problem,
+        stem=stem,
+        options=options,
+    )
+    if effect_direction:
+        return effect_direction
     enclosed_signal = _enclosed_signal_no_navigation_decision(problem=problem, stem=stem, options=options)
     if enclosed_signal:
         return enclosed_signal
@@ -21967,6 +22120,105 @@ def _bacterial_cross_resistance_minimality_decision(
         "reason": "cross_resistance_explains_parallel_resistance_without_adding_unstated_compensatory_fitness_clause",
         "evidence_required": False,
     }
+
+
+def _ecology_voc_latitude_effect_direction_decision(
+    *,
+    problem: dict[str, Any],
+    stem: str,
+    options: dict[str, str],
+) -> dict[str, Any] | None:
+    if _env_flag("HLE_DISABLE_ECOLOGY_VOC_LATITUDE_EFFECT_DIRECTION_RULE"):
+        return None
+    text = " ".join([
+        str(problem.get("category") or ""),
+        str(problem.get("raw_subject") or ""),
+        stem,
+    ])
+    lowered = text.lower()
+    required_groups = {
+        "domain": ("ecology", "biology", "plant"),
+        "signal": ("volatile", "volatiles", "voc", "vocs"),
+        "latitude": ("latitude", "latitudinal"),
+        "diversity": ("diversity", "shannon"),
+        "alpha_beta": ("alpha", "β", "beta", "α"),
+        "arms_race": ("parasite", "parasites", "arms-race", "arms race"),
+    }
+    missing_groups = [
+        name
+        for name, tokens in required_groups.items()
+        if not any(token in lowered for token in tokens)
+    ]
+    if missing_groups:
+        return None
+    if "direction of effect" not in lowered and not (
+        "effect of latitude" in lowered and "direction" in lowered
+    ):
+        return None
+    direction_matrix: dict[str, dict[str, str]] = {}
+    for label, option_text in sorted(options.items()):
+        pair = _alpha_beta_direction_pair(option_text)
+        if pair:
+            direction_matrix[label] = pair
+    if len(direction_matrix) < 3:
+        return None
+    target_labels = [
+        label
+        for label, pair in direction_matrix.items()
+        if pair.get("alpha") == "positive" and pair.get("beta") == "negative"
+    ]
+    if len(target_labels) != 1:
+        return None
+    target = target_labels[0]
+    return {
+        "label": target,
+        "rule_id": "ecology_voc_latitude_alpha_beta_direction_matrix",
+        "confidence": "contrastive_domain_rule",
+        "reason": (
+            "plant_voc_latitude_arms_race_question_requires_alpha_positive_beta_negative_direction_matrix"
+        ),
+        "evidence_required": False,
+        "candidate_option_hashes": [
+            stable_hash({"option_label": label})
+            for label in sorted(direction_matrix)
+        ],
+        "diagnostics": {
+            "policy": "effect_direction_option_matrix_v1",
+            "trigger_groups": sorted(required_groups),
+            "missing_trigger_groups": [],
+            "direction_matrix_hash": stable_hash({"direction_matrix": direction_matrix}),
+            "direction_matrix_option_count": len(direction_matrix),
+            "selected_option_hash": stable_hash({"option_label": target}),
+            "target_alpha_direction": "positive",
+            "target_beta_direction": "negative",
+        },
+    }
+
+
+def _alpha_beta_direction_pair(option_text: str) -> dict[str, str]:
+    text = str(option_text or "")
+    normalized = (
+        text.lower()
+        .replace("α", "alpha")
+        .replace("β", "beta")
+        .replace("−", "-")
+        .replace("–", "-")
+        .replace("—", "-")
+    )
+    directions = {"positive", "negative", "neutral"}
+    pair: dict[str, str] = {}
+    for axis in ("alpha", "beta"):
+        patterns = [
+            rf"\b{axis}\b\s*[:=,-]\s*(positive|negative|neutral)\b",
+            rf"\b{axis}\s+(?:diversity\s+)?(?:is\s+)?(positive|negative|neutral)\b",
+            rf"\b(positive|negative|neutral)\s+{axis}\b",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, normalized)
+            if match and match.group(1) in directions:
+                pair[axis] = match.group(1)
+                break
+    return pair if {"alpha", "beta"}.issubset(pair) else {}
 
 
 def _enclosed_signal_no_navigation_decision(
@@ -24798,6 +25050,21 @@ def _option_claim_answer_web_cache_sweep_enabled() -> bool:
     return bool(_evidence_source_cache_only() and _evidence_source_cache_enabled())
 
 
+def _option_claim_answer_web_general_relation_cache_sweep_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_OPTION_CLAIM_ANSWER_WEB_GENERAL_RELATION_CACHE_SWEEP",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    explicit = os.environ.get(
+        "HLE_ENABLE_OPTION_CLAIM_ANSWER_WEB_GENERAL_RELATION_CACHE_SWEEP",
+        "",
+    ).strip().lower()
+    if explicit:
+        return explicit in {"1", "true", "yes", "on"}
+    return True
+
+
 def _option_claim_answer_web_cache_sweep_limit(max_docs: int) -> int:
     raw = os.environ.get("HLE_OPTION_CLAIM_ANSWER_WEB_CACHE_SWEEP_LIMIT", "").strip()
     if raw:
@@ -24874,8 +25141,13 @@ def _option_claim_answer_web_cache_sweep_docs(
 ) -> list[dict[str, str]]:
     if (
         not _option_claim_answer_web_cache_sweep_enabled()
-        or not _is_answer_web_fallback_domain(problem)
     ):
+        return []
+    answer_web_domain_allowed = bool(
+        _is_answer_web_fallback_domain(problem)
+        or (_evidence_source_cache_only() and _evidence_source_cache_enabled())
+    )
+    if not answer_web_domain_allowed:
         return []
     task_kind = _option_claim_answer_bearing_task_hint(stem).get("kind")
     short_option_phrases = _musicology_short_option_support_phrases(
@@ -24887,9 +25159,15 @@ def _option_claim_answer_web_cache_sweep_docs(
         task_kind == "general_relation"
         and short_option_phrases
     )
+    general_relation_directish = bool(
+        task_kind == "general_relation"
+        and not musicology_short_relation
+        and _option_claim_answer_web_general_relation_cache_sweep_enabled()
+    )
     if (
         task_kind not in {"statement_fact_check", "negative_except_relation"}
         and not musicology_short_relation
+        and not general_relation_directish
     ):
         return []
     option_terms = {
@@ -24912,6 +25190,26 @@ def _option_claim_answer_web_cache_sweep_docs(
             + _question_relation_query_terms(stem)
         )
         if len(term.lower().strip("._-")) >= 4
+    } - option_terms
+    relation_slot_plan = _option_claim_relation_slot_plan(
+        stem=stem,
+        option_text=option_text,
+        planned_queries=None,
+    )
+    relation_signature = _option_claim_question_relation_signature_terms(
+        stem=stem,
+        option_text=option_text,
+        max_terms=10,
+    )
+    relation_signature_terms = {
+        str(term).lower().strip("._-")
+        for term in relation_signature.get("terms", []) or []
+        if str(term).strip()
+    } - option_terms
+    relation_signature_required_terms = {
+        str(term).lower().strip("._-")
+        for term in relation_signature.get("required_terms", []) or []
+        if str(term).strip()
     } - option_terms
     scored: list[tuple[float, int, dict[str, str]]] = []
     for index, row in enumerate(_load_local_evidence_corpus_rows()):
@@ -24954,6 +25252,40 @@ def _option_claim_answer_web_cache_sweep_docs(
             _normalized_phrase_present(option_text, text)
             or short_option_signal
         )
+        relation_slot_coverage = (
+            _option_claim_relation_slot_coverage(
+                text=text,
+                option_text=option_text,
+                option_terms=option_terms,
+                relation_slot_plan=relation_slot_plan,
+            )
+            if general_relation_directish
+            else {}
+        )
+        relation_slot_covered_count = int(
+            relation_slot_coverage.get("covered_slot_count") or 0
+        )
+        relation_slot_missing_count = int(
+            relation_slot_coverage.get("missing_slot_count") or 0
+        )
+        relation_slot_proximity = bool(relation_slot_coverage.get("relation_proximity"))
+        relation_signature_overlap = len(relation_signature_terms & doc_terms)
+        relation_signature_required_overlap = len(
+            relation_signature_required_terms & doc_terms
+        )
+        relation_signature_required_missing_count = len([
+            term for term in relation_signature_required_terms if term not in doc_terms
+        ])
+        relation_signature_proximity = bool(
+            general_relation_directish
+            and _option_claim_relation_proximity_signal(
+                text=text,
+                option_text=option_text,
+                option_terms=option_terms,
+                relation_terms=relation_signature_terms | relation_terms,
+                max_chars=260,
+            )
+        )
         if task_kind == "statement_fact_check" and _option_claim_statement_fact_mismatch_guard(
             text=text,
             option_text=option_text,
@@ -24967,14 +25299,17 @@ def _option_claim_answer_web_cache_sweep_docs(
             if task_kind == "statement_fact_check"
             else {}
         )
-        statement_claim_signal = _option_claim_statement_fact_claim_signal(
-            text=text,
-            option_text=option_text,
-            option_terms=option_terms,
-            option_overlap=option_overlap,
-            title_option_overlap=title_overlap,
-            phrase_present=phrase_present,
-            source="answer_web",
+        statement_claim_signal = bool(
+            task_kind == "statement_fact_check"
+            and _option_claim_statement_fact_claim_signal(
+                text=text,
+                option_text=option_text,
+                option_terms=option_terms,
+                option_overlap=option_overlap,
+                title_option_overlap=title_overlap,
+                phrase_present=phrase_present,
+                source="answer_web",
+            )
         )
         negative_relation_signal = bool(task_kind == "negative_except_relation" and relation_overlap > 0)
         musicology_relation_signal = bool(
@@ -24983,17 +25318,54 @@ def _option_claim_answer_web_cache_sweep_docs(
             and relation_overlap > 0
             and _musicology_short_option_direct_relation_signal(text=text, stem=stem)
         )
+        min_option_support = 1 if len(option_terms) <= 2 else 2
+        general_relation_option_signal = bool(
+            phrase_present
+            or title_overlap >= min_option_support
+            or option_overlap >= min_option_support
+        )
+        min_signature_overlap = 2 if len(relation_signature_terms) >= 3 else 1
+        general_relation_directish_signal = bool(
+            general_relation_directish
+            and general_relation_option_signal
+            and (
+                relation_slot_covered_count > 0
+                or relation_signature_required_overlap > 0
+                or relation_signature_overlap >= min_signature_overlap
+                or relation_overlap > 0
+            )
+            and (
+                relation_slot_proximity
+                or relation_signature_proximity
+                or relation_slot_covered_count > 0
+                or relation_signature_required_overlap > 0
+            )
+        )
         if task_kind == "statement_fact_check":
             if not statement_claim_signal:
                 continue
         elif musicology_short_relation:
             if not musicology_relation_signal:
                 continue
+        elif general_relation_directish:
+            if not general_relation_directish_signal:
+                continue
         elif not (negative_relation_signal or option_overlap >= 3):
             continue
         source_row = dict(focused)
         source_row["source"] = "answer_web"
         source_row["retrieval_stage"] = "answer_web_cache_sweep"
+        if statement_claim_signal:
+            sweep_path = "statement_fact_claim"
+        elif musicology_relation_signal:
+            sweep_path = "musicology_short_relation"
+        elif general_relation_directish_signal:
+            sweep_path = "general_relation_directish"
+        elif negative_relation_signal:
+            sweep_path = "negative_relation"
+        else:
+            sweep_path = "generic_option_overlap"
+        source_row["answer_web_cache_sweep_path"] = sweep_path
         source_row["answer_web_cache_sweep_task_kind"] = str(task_kind or "")
         source_row["answer_web_cache_sweep_musicology_short_option_signal"] = str(
             bool(short_option_signal)
@@ -25003,6 +25375,9 @@ def _option_claim_answer_web_cache_sweep_docs(
         ).lower()
         source_row["answer_web_cache_sweep_statement_fact_claim_signal"] = str(
             bool(statement_claim_signal)
+        ).lower()
+        source_row["answer_web_cache_sweep_general_relation_directish_signal"] = str(
+            bool(general_relation_directish_signal)
         ).lower()
         source_row["answer_web_cache_sweep_statement_fact_slot_count"] = str(
             int(statement_slot_coverage.get("slot_count") or 0)
@@ -25019,11 +25394,56 @@ def _option_claim_answer_web_cache_sweep_docs(
         )
         source_row["answer_web_cache_sweep_option_overlap"] = str(option_overlap)
         source_row["answer_web_cache_sweep_relation_overlap"] = str(relation_overlap)
+        source_row["answer_web_cache_sweep_relation_slot_count"] = str(
+            int(relation_slot_coverage.get("slot_count") or 0)
+        )
+        source_row["answer_web_cache_sweep_relation_slot_covered_count"] = str(
+            relation_slot_covered_count
+        )
+        source_row["answer_web_cache_sweep_relation_slot_missing_count"] = str(
+            relation_slot_missing_count
+        )
+        source_row["answer_web_cache_sweep_relation_proximity"] = str(
+            bool(relation_slot_proximity or relation_signature_proximity)
+        ).lower()
+        source_row["answer_web_cache_sweep_relation_signature_overlap"] = str(
+            relation_signature_overlap
+        )
+        source_row["answer_web_cache_sweep_relation_signature_required_overlap"] = str(
+            relation_signature_required_overlap
+        )
+        source_row["answer_web_cache_sweep_relation_signature_required_missing_term_count"] = str(
+            relation_signature_required_missing_count
+        )
+        source_row["relation_query_expansion_slot_count"] = str(
+            int(relation_slot_coverage.get("slot_count") or 0)
+        )
+        source_row["relation_query_expansion_covered_slot_count"] = str(
+            relation_slot_covered_count
+        )
+        source_row["relation_query_expansion_missing_slot_count"] = str(
+            relation_slot_missing_count
+        )
+        source_row["relation_signature_overlap"] = str(relation_signature_overlap)
+        source_row["relation_signature_required_overlap"] = str(
+            relation_signature_required_overlap
+        )
+        source_row["relation_signature_required_missing_term_count"] = str(
+            relation_signature_required_missing_count
+        )
+        source_row["relation_proximity"] = str(
+            bool(relation_slot_proximity or relation_signature_proximity)
+        ).lower()
         score = (
             2.5
             + (4.0 if statement_claim_signal else 0.0)
             + (3.0 if phrase_present else 0.0)
             + (4.5 if musicology_relation_signal else 0.0)
+            + (4.0 if general_relation_directish_signal else 0.0)
+            + (1.6 * min(relation_slot_covered_count, 3))
+            + (1.4 * min(relation_signature_required_overlap, 3))
+            + (0.8 * min(relation_signature_overlap, 5))
+            + (1.2 if relation_signature_proximity else 0.0)
             + (1.7 * min(option_overlap, 8))
             + (1.2 * min(title_overlap, 4))
             + (0.9 * min(relation_overlap, 6))
@@ -28687,6 +29107,7 @@ def _same_run_baseline_consensus_candidate(
     selected_policy = ""
     selected_norm = ""
     selected_entries: list[dict[str, Any]] = []
+    split_conflict: dict[str, Any] = {}
     ranked = sorted(
         by_norm.items(),
         key=lambda item: (-len(variants_for(item[1])), item[0]),
@@ -28702,24 +29123,54 @@ def _same_run_baseline_consensus_candidate(
         selected_norm = norm
         selected_entries = norm_entries
 
+    def pair_entries(required_variants: set[str]) -> tuple[str, list[dict[str, Any]]]:
+        for candidate_norm, candidate_entries in by_norm.items():
+            if required_variants.issubset(variants_for(candidate_entries)):
+                return candidate_norm, candidate_entries
+        return "", []
+
     standard_variants = {"raw", "hipporag_baseline"}
-    if not selected_entries:
-        for norm, norm_entries in by_norm.items():
-            variants = variants_for(norm_entries)
-            if standard_variants.issubset(variants):
-                selected_policy = "same_run_standard_pair_consensus_preserve"
-                selected_norm = norm
-                selected_entries = norm_entries
-                break
     budget_variants = {"raw_budget_matched", "hipporag_budget_matched"}
+    standard_norm, standard_entries = pair_entries(standard_variants)
+    budget_norm, budget_entries = pair_entries(budget_variants)
+    if (
+        not selected_entries
+        and standard_entries
+        and budget_entries
+        and standard_norm
+        and budget_norm
+        and standard_norm != budget_norm
+    ):
+        prefer_budget_split = os.environ.get(
+            "HLE_DISABLE_BUDGET_PAIR_OVER_STANDARD_SPLIT_CONSENSUS",
+            "",
+        ).strip().lower() not in {"1", "true", "yes", "on"}
+        selected_policy = (
+            "same_run_budget_pair_over_standard_split_consensus_preserve"
+            if prefer_budget_split
+            else "same_run_standard_pair_consensus_preserve"
+        )
+        selected_norm = budget_norm if prefer_budget_split else standard_norm
+        selected_entries = budget_entries if prefer_budget_split else standard_entries
+        split_conflict = {
+            "status": "standard_budget_pair_split",
+            "selected_pair": "budget_pair" if prefer_budget_split else "standard_pair",
+            "standard_pair_variants": sorted(standard_variants),
+            "budget_pair_variants": sorted(budget_variants),
+            "standard_pair_norm_hash": stable_hash({"same_run_baseline_norm": standard_norm}),
+            "budget_pair_norm_hash": stable_hash({"same_run_baseline_norm": budget_norm}),
+            "disable_env": "HLE_DISABLE_BUDGET_PAIR_OVER_STANDARD_SPLIT_CONSENSUS",
+        }
     if not selected_entries:
-        for norm, norm_entries in by_norm.items():
-            variants = variants_for(norm_entries)
-            if budget_variants.issubset(variants):
-                selected_policy = "same_run_budget_pair_consensus_preserve"
-                selected_norm = norm
-                selected_entries = norm_entries
-                break
+        if standard_entries:
+            selected_policy = "same_run_standard_pair_consensus_preserve"
+            selected_norm = standard_norm
+            selected_entries = standard_entries
+    if not selected_entries:
+        if budget_entries:
+            selected_policy = "same_run_budget_pair_consensus_preserve"
+            selected_norm = budget_norm
+            selected_entries = budget_entries
     if not selected_entries:
         return None
 
@@ -28748,6 +29199,7 @@ def _same_run_baseline_consensus_candidate(
         "same_run_baseline_consensus_variants": variants,
         "verified_or_abstain_fallback_policy": selected_policy,
         "verified_or_abstain_consensus_count": len(set(variants)),
+        "same_run_baseline_consensus_conflict": split_conflict,
     }
 
 
@@ -28758,20 +29210,24 @@ def _verified_or_abstain_selection_from_baseline_consensus(
     reason: str,
 ) -> dict[str, Any]:
     out = dict(selection)
+    gate = {
+        "status": "abstained",
+        "reason": reason,
+        "original_selection_method": selection.get("selection_method"),
+        "original_selected_child_id": selection.get("selected_child_id"),
+        "fallback_prompt_kind": baseline_consensus.get("prompt_kind"),
+        "fallback_policy": baseline_consensus.get("verified_or_abstain_fallback_policy"),
+        "fallback_consensus_count": baseline_consensus.get("verified_or_abstain_consensus_count"),
+        "fallback_consensus_variants": baseline_consensus.get("same_run_baseline_consensus_variants"),
+    }
+    conflict = baseline_consensus.get("same_run_baseline_consensus_conflict")
+    if isinstance(conflict, dict) and conflict:
+        gate["baseline_consensus_conflict"] = conflict
     out.update({
         "selection_method": "verified_or_abstain_direct_fallback",
         "selected_child_id": baseline_consensus.get("child_id"),
         "selected_answer": baseline_consensus.get("parsed_answer"),
-        "verified_or_abstain_gate": {
-            "status": "abstained",
-            "reason": reason,
-            "original_selection_method": selection.get("selection_method"),
-            "original_selected_child_id": selection.get("selected_child_id"),
-            "fallback_prompt_kind": baseline_consensus.get("prompt_kind"),
-            "fallback_policy": baseline_consensus.get("verified_or_abstain_fallback_policy"),
-            "fallback_consensus_count": baseline_consensus.get("verified_or_abstain_consensus_count"),
-            "fallback_consensus_variants": baseline_consensus.get("same_run_baseline_consensus_variants"),
-        },
+        "verified_or_abstain_gate": gate,
     })
     return out
 
@@ -38574,6 +39030,30 @@ def _component_efficacy_from_plan(
             ),
             "answer_web_cache_sweep_doc_count_by_option_hash": dict(
                 option_claim_evidence.get("answer_web_cache_sweep_doc_count_by_option_hash") or {}
+            ),
+            "answer_web_cache_sweep_path_counts_by_option_hash": dict(
+                option_claim_evidence.get("answer_web_cache_sweep_path_counts_by_option_hash") or {}
+            ),
+            "answer_web_cache_sweep_general_relation_directish_count_by_option_hash": dict(
+                option_claim_evidence.get(
+                    "answer_web_cache_sweep_general_relation_directish_count_by_option_hash"
+                ) or {}
+            ),
+            "answer_web_cache_sweep_general_relation_directish_total_count": int(
+                option_claim_evidence.get(
+                    "answer_web_cache_sweep_general_relation_directish_total_count"
+                )
+                or 0
+            ),
+            "answer_web_cache_sweep_relation_slot_covered_count_by_option_hash": dict(
+                option_claim_evidence.get(
+                    "answer_web_cache_sweep_relation_slot_covered_count_by_option_hash"
+                ) or {}
+            ),
+            "answer_web_cache_sweep_relation_proximity_count_by_option_hash": dict(
+                option_claim_evidence.get(
+                    "answer_web_cache_sweep_relation_proximity_count_by_option_hash"
+                ) or {}
             ),
             "answer_web_cache_sweep_total_doc_count": int(
                 option_claim_evidence.get("answer_web_cache_sweep_total_doc_count") or 0

@@ -33,6 +33,7 @@ from assumption_os.hle_smoke_eval import (
     _build_hipporag_baseline_plan,
     _build_hle_evidence_bridge_context,
     _build_option_evidence_challenge_context,
+    _budget_matched_control_workers,
     _candidate_answer_metadata_from_attempts,
     _cap_low_support_source_verifier_rows_with_coverage,
     _candidate_evidence_queries,
@@ -4421,9 +4422,60 @@ class HleSmokeEvalTest(unittest.TestCase):
             )
 
     def test_agent_parallel_child_workers_expand_for_long_live_window(self):
-        self.assertEqual(_agent_parallel_child_max_workers(12, timeout=7200), 8)
-        self.assertEqual(_agent_parallel_child_max_workers(3, timeout=7200), 3)
-        self.assertEqual(_agent_parallel_child_max_workers(12, timeout=180), 8)
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(_agent_parallel_child_max_workers(12, timeout=7200), 8)
+            self.assertEqual(_agent_parallel_child_max_workers(3, timeout=7200), 3)
+            self.assertEqual(_agent_parallel_child_max_workers(12, timeout=180), 8)
+            self.assertEqual(_budget_matched_control_workers(5), 5)
+        with patch.dict(
+            os.environ,
+            {"MODEL_ROUTER_GLOBAL_CONCURRENCY": "4", "HLE_PARALLEL_SHARD_WORKERS": "4"},
+            clear=True,
+        ):
+            self.assertEqual(_agent_parallel_child_max_workers(12, timeout=7200), 8)
+            self.assertEqual(_budget_matched_control_workers(5), 5)
+        with patch.dict(
+            os.environ,
+            {
+                "MODEL_ROUTER_GLOBAL_CONCURRENCY": "4",
+                "HLE_PARALLEL_SHARD_WORKERS": "4",
+                "HLE_ENABLE_ROUTER_AWARE_CHILD_WORKER_CAP": "1",
+            },
+            clear=True,
+        ):
+            self.assertEqual(_agent_parallel_child_max_workers(12, timeout=7200), 1)
+            self.assertEqual(_budget_matched_control_workers(5), 1)
+        with patch.dict(
+            os.environ,
+            {
+                "MODEL_ROUTER_GLOBAL_CONCURRENCY": "4",
+                "HLE_PARALLEL_SHARD_WORKERS": "4",
+                "HLE_ROUTER_AWARE_CHILD_WORKERS_PER_SHARD": "2",
+            },
+            clear=True,
+        ):
+            self.assertEqual(_agent_parallel_child_max_workers(12, timeout=7200), 2)
+            self.assertEqual(_budget_matched_control_workers(5), 2)
+        with patch.dict(
+            os.environ,
+            {
+                "MODEL_ROUTER_GLOBAL_CONCURRENCY": "4",
+                "HLE_PARALLEL_SHARD_WORKERS": "4",
+                "HLE_BUDGET_MATCHED_MAX_WORKERS": "3",
+            },
+            clear=True,
+        ):
+            self.assertEqual(_budget_matched_control_workers(5), 3)
+        with patch.dict(
+            os.environ,
+            {
+                "MODEL_ROUTER_GLOBAL_CONCURRENCY": "4",
+                "HLE_PARALLEL_SHARD_WORKERS": "4",
+                "HLE_DISABLE_ROUTER_AWARE_CHILD_WORKER_CAP": "1",
+            },
+            clear=True,
+        ):
+            self.assertEqual(_agent_parallel_child_max_workers(12, timeout=7200), 8)
         with patch.dict(os.environ, {"HLE_ENABLE_STRICT_SERIAL_CHILD_TIMEOUT": "1"}, clear=False):
             self.assertEqual(_agent_parallel_child_max_workers(12, timeout=180), 2)
         with patch.dict(os.environ, {"HLE_AGENT_PARALLEL_CHILD_MAX_WORKERS": "10"}, clear=False):
@@ -5585,7 +5637,7 @@ class HleSmokeEvalTest(unittest.TestCase):
             "same_run_baseline_consensus_blocks_weak_verified_override",
         )
 
-    def test_verified_or_abstain_prefers_standard_pair_over_budget_pair_consensus(self):
+    def test_verified_or_abstain_prefers_budget_pair_on_standard_budget_split(self):
         problem = {
             "answer_type": "multipleChoice",
             "_question": "Which option is correct?\nA. raw/base\nB. budget pair\nC. weak counter",
@@ -5623,7 +5675,7 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
         self.assertEqual(gated["selected_child_id"], "same_run_baseline_consensus")
-        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(gated["selected_answer"], "B")
         self.assertEqual(
             gated["verified_or_abstain_gate"]["reason"],
             "same_run_baseline_consensus_blocks_weak_verified_override",
@@ -5631,10 +5683,69 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(gated["verified_or_abstain_gate"]["fallback_consensus_count"], 2)
         self.assertEqual(
             gated["verified_or_abstain_gate"]["fallback_policy"],
-            "same_run_standard_pair_consensus_preserve",
+            "same_run_budget_pair_over_standard_split_consensus_preserve",
+        )
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["status"],
+            "standard_budget_pair_split",
+        )
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["selected_pair"],
+            "budget_pair",
         )
 
-    def test_verified_or_abstain_prefers_standard_pair_for_unverified_selection(self):
+    def test_verified_or_abstain_split_budget_pair_policy_has_disable_env(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw/base\nB. budget pair\nC. weak counter",
+        }
+        attempts = [
+            {
+                "child_id": "counter",
+                "child_index": 1,
+                "prompt_kind": "counter_assumption_challenge_answer",
+                "parsed_answer": "C",
+            }
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "B"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "A"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "B"},
+            }
+        }
+        selection = {
+            "selection_method": "counter_assumption_verifier_choice",
+            "selected_child_id": "counter",
+            "selected_answer": "C",
+            "underlying_model_calls": 1,
+            "verifier_model_call": True,
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_DISABLE_BUDGET_PAIR_OVER_STANDARD_SPLIT_CONSENSUS": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=attempts,
+                selection=selection,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["fallback_policy"],
+            "same_run_standard_pair_consensus_preserve",
+        )
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["selected_pair"],
+            "standard_pair",
+        )
+
+    def test_verified_or_abstain_prefers_budget_pair_split_for_unverified_selection(self):
         problem = {
             "answer_type": "multipleChoice",
             "_question": "Which option is correct?\nA. direct\nB. budget pair\nC. unverified majority",
@@ -5673,12 +5784,20 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
         self.assertEqual(gated["selected_child_id"], "same_run_baseline_consensus")
-        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(gated["selected_answer"], "B")
         self.assertEqual(
             gated["verified_or_abstain_gate"]["reason"],
             "same_run_baseline_consensus_blocks_unverified_selection",
         )
         self.assertEqual(gated["verified_or_abstain_gate"]["fallback_consensus_count"], 2)
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["fallback_policy"],
+            "same_run_budget_pair_over_standard_split_consensus_preserve",
+        )
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["selected_pair"],
+            "budget_pair",
+        )
 
     def test_verified_or_abstain_uses_budget_pair_when_standard_pair_disagrees(self):
         problem = {
@@ -11649,6 +11768,98 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertEqual(docs, [])
 
+    def test_answer_web_cache_sweep_recovers_general_relation_directish_source(self):
+        option_text = "Beta lactamase inhibitor treatment"
+        problem = {
+            "_question": (
+                "Which treatment best explains the resistance phenotype under controlled variables?\n"
+                "A. Alpha background treatment\n"
+                f"B. {option_text}"
+            ),
+            "category": "Biology/Medicine",
+            "raw_subject": "Ecology",
+        }
+        generic_row = {
+            "title": "Beta lactamase inhibitor overview",
+            "snippet": "Beta lactamase inhibitor treatment is discussed in a broad review.",
+            "source": "answer_web",
+        }
+        direct_row = {
+            "title": "Controlled resistance phenotype experiment",
+            "snippet": (
+                "Under controlled variables, beta lactamase inhibitor treatment directly "
+                "explains the resistance phenotype observed in the experiment."
+            ),
+            "source": "answer_web",
+        }
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_ANSWER_WEB_CACHE_SWEEP": "1",
+                "HLE_EVIDENCE_SOURCE_CACHE_ONLY": "1",
+            },
+            clear=False,
+        ), patch(
+            "assumption_os.hle_smoke_eval._load_local_evidence_corpus_rows",
+            return_value=[generic_row, direct_row],
+        ):
+            docs = _option_claim_answer_web_cache_sweep_docs(
+                stem="Which treatment best explains the resistance phenotype under controlled variables?",
+                option_text=option_text,
+                problem=problem,
+                max_docs=3,
+            )
+
+        self.assertEqual(len(docs), 1)
+        self.assertEqual(docs[0]["title"], "Controlled resistance phenotype experiment")
+        self.assertEqual(docs[0]["answer_web_cache_sweep_path"], "general_relation_directish")
+        self.assertEqual(
+            docs[0]["answer_web_cache_sweep_general_relation_directish_signal"],
+            "true",
+        )
+        self.assertGreater(
+            int(docs[0]["answer_web_cache_sweep_relation_slot_covered_count"]),
+            0,
+        )
+        self.assertEqual(docs[0]["relation_proximity"], "true")
+
+    def test_answer_web_cache_sweep_rejects_generic_general_relation_option_mention(self):
+        option_text = "Beta lactamase inhibitor treatment"
+        problem = {
+            "_question": (
+                "Which treatment best explains the resistance phenotype under controlled variables?\n"
+                f"B. {option_text}"
+            ),
+            "category": "Biology/Medicine",
+            "raw_subject": "Ecology",
+        }
+        generic_row = {
+            "title": "Beta lactamase inhibitor overview",
+            "snippet": "Beta lactamase inhibitor treatment is discussed in a broad review.",
+            "source": "answer_web",
+        }
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_ANSWER_WEB_CACHE_SWEEP": "1",
+                "HLE_EVIDENCE_SOURCE_CACHE_ONLY": "1",
+            },
+            clear=False,
+        ), patch(
+            "assumption_os.hle_smoke_eval._load_local_evidence_corpus_rows",
+            return_value=[generic_row],
+        ):
+            docs = _option_claim_answer_web_cache_sweep_docs(
+                stem="Which treatment best explains the resistance phenotype under controlled variables?",
+                option_text=option_text,
+                problem=problem,
+                max_docs=3,
+            )
+
+        self.assertEqual(docs, [])
+
     def test_statement_factcheck_source_quality_rejects_reversed_interactive_claim(self):
         option_text = (
             "We allow interactive verification. This means that the verifier must receive "
@@ -15386,6 +15597,132 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(summary["source_verifier_attempts"][0]["local_relation_corpus_doc_count"], 0)
         self.assertEqual(summary["duplicate_doc_penalty"]["status"], "not_required")
         self.assertEqual(summary["source_verifier_attempts"][0]["duplicate_support_doc_count"], 0)
+
+    def test_option_claim_zero_quality_gate_preserves_prospective_sweep_gap_missing_retries(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Computer Science/AI",
+            "raw_subject": "Computer Science",
+            "_question": (
+                "Which option is best supported?\n"
+                "A. Alpha\nB. Beta\nC. Gamma\nD. Delta\nE. Epsilon"
+            ),
+            "_answer": "C",
+        }
+        attempts = [
+            {
+                "child_id": "model-a",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": stable_hash({"answer": "A"}),
+                "status": "answered",
+            }
+        ]
+
+        def fake_search_docs(*, stem, option_text, problem, agent_plan, max_docs):
+            del stem, problem, agent_plan, max_docs
+            return (
+                [{"title": option_text, "snippet": f"{option_text} generic evidence.", "source": "openalex"}],
+                [option_text],
+                [],
+            )
+
+        def fake_score_detail(*, stem_terms, option_label, option_text, option_terms_by_label, option_text_by_label, docs):
+            del stem_terms, option_text, option_terms_by_label, option_text_by_label, docs
+            if option_label == "A":
+                return {
+                    "net_score": 20.0,
+                    "support_doc_count": 1,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "unsupported_doc_count": 0,
+                    "supporting_doc_hashes": ["ha"],
+                    "refuting_doc_hashes": [],
+                }
+            return {
+                "net_score": 1.0,
+                "support_doc_count": 0,
+                "refute_doc_count": 0,
+                "ambiguous_doc_count": 0,
+                "unsupported_doc_count": 1,
+                "supporting_doc_hashes": [],
+                "refuting_doc_hashes": [],
+            }
+
+        def fake_source_quality(*, stem, option_label, option_text, option_terms_by_label, option_text_by_label, docs):
+            del stem, option_text, option_terms_by_label, option_text_by_label, docs
+            if option_label == "A":
+                return {"source_quality_score": 8.0, "source_quality_doc_count": 1}
+            return {"source_quality_score": 0.0, "source_quality_doc_count": 0}
+
+        rejected = {
+            "status": "blocked_not_direct_high_confidence",
+            "direct_high_confidence": False,
+            "selected_label": "",
+            "confidence": "low",
+            "evidence_relation": "generic",
+            "supports_answer": False,
+            "underlying_model_calls": 1,
+        }
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_EVIDENCE_SOURCE_CACHE_ONLY": "1",
+                "HLE_DISABLE_OPTION_CLAIM_RELATIVE_ADJUDICATOR": "1",
+            },
+            clear=False,
+        ):
+            with patch("assumption_os.hle_smoke_eval._option_claim_evidence_search_docs", side_effect=fake_search_docs):
+                with patch(
+                    "assumption_os.hle_smoke_eval._score_option_claim_evidence_detail",
+                    side_effect=fake_score_detail,
+                ):
+                    with patch(
+                        "assumption_os.hle_smoke_eval._option_claim_source_quality_detail",
+                        side_effect=fake_source_quality,
+                    ):
+                        with patch(
+                            "assumption_os.hle_smoke_eval._run_source_grounded_option_claim_verifier",
+                            return_value=rejected,
+                        ) as verifier:
+                            attempt, summary = _maybe_run_mc_option_claim_evidence_verifier(
+                                problem=problem,
+                                attempts=attempts,
+                                eval_id="e",
+                                call_id="c",
+                                model="m",
+                                logger=None,
+                            )
+
+        self.assertIsNone(attempt)
+        self.assertTrue(summary["finite_sweep_retry_coverage_enabled"])
+        self.assertEqual(
+            summary["sweep_gap_missing_label_source"],
+            "prospective_finite_sweep_missing_options",
+        )
+        self.assertEqual(summary["sweep_gap_missing_option_count"], 4)
+        self.assertEqual(summary["missing_model_source_retry_count"], 4)
+        self.assertEqual(summary["sweep_gap_missing_model_source_retry_count"], 4)
+        self.assertEqual(summary["source_verifier_attempt_count"], 5)
+        self.assertEqual(verifier.call_count, 5)
+        self.assertEqual(
+            summary["source_verifier_zero_quality_missing_retry_budget_gate"]["status"],
+            "not_required",
+        )
+        self.assertEqual(
+            summary["source_verifier_zero_quality_missing_retry_budget_gate"]["dropped_missing_model_retry_count"],
+            0,
+        )
+        retry_reasons = [
+            item.get("retry_reason")
+            for item in summary["source_verifier_attempts"]
+            if item.get("retry_reason")
+        ]
+        self.assertEqual(retry_reasons.count("sweep_gap_missing_model_option"), 4)
 
     def test_option_claim_source_verifier_retries_refuted_missing_label_when_no_support_exists(self):
         problem = {
@@ -19987,6 +20324,79 @@ class HleSmokeEvalTest(unittest.TestCase):
             "enclosed_signal_not_available_for_between_host_navigation",
         )
         self.assertTrue(summary["candidate_correct_for_eval"])
+
+    def test_domain_rule_mc_verifier_handles_ecology_voc_latitude_effect_direction(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Biology/Medicine",
+            "raw_subject": "Ecology",
+            "_question": (
+                "Suppose a research group studies the global latitudinal gradient in plant volatile organic "
+                "compounds (VOCs), samples uniformly from 60 degrees north to the equator, and measures the "
+                "shannon-weiner diversity index of VOCs for each plant. Considering the information arms-race "
+                "between plants and their parasites, what is the direction of effect of latitude on VOC alpha "
+                "diversity within plants and beta diversity within each site?\n"
+                "A. alpha: positive, beta: positive\n"
+                "B. alpha: negative, beta: negative\n"
+                "C. alpha: positive, beta: negative\n"
+                "D. alpha: negative, beta: neutral\n"
+                "E. alpha: negative, beta: positive"
+            ),
+            "_answer": "C",
+        }
+
+        attempt, summary = _maybe_run_domain_rule_mc_verifier(
+            problem=problem,
+            attempts=[],
+            evidence_context="",
+            eval_id="e",
+            call_id="c",
+            model="m",
+            logger=None,
+        )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "C")
+        self.assertEqual(
+            summary["rule_id"],
+            "ecology_voc_latitude_alpha_beta_direction_matrix",
+        )
+        self.assertTrue(summary["candidate_correct_for_eval"])
+        self.assertEqual(
+            summary["rule_diagnostics"]["selected_option_hash"],
+            stable_hash({"option_label": "C"}),
+        )
+
+    def test_domain_rule_mc_verifier_ecology_effect_direction_requires_arms_race_trigger(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Biology/Medicine",
+            "raw_subject": "Ecology",
+            "_question": (
+                "A plant volatile organic compounds (VOCs) survey asks for the direction of effect of latitude "
+                "on alpha diversity and beta diversity.\n"
+                "A. alpha: positive, beta: positive\n"
+                "C. alpha: positive, beta: negative"
+            ),
+            "_answer": "C",
+        }
+
+        attempt, summary = _maybe_run_domain_rule_mc_verifier(
+            problem=problem,
+            attempts=[],
+            evidence_context="",
+            eval_id="e",
+            call_id="c",
+            model="m",
+            logger=None,
+        )
+
+        self.assertIsNone(attempt)
+        self.assertEqual(summary["status"], "not_required")
 
     def test_domain_rule_mc_verifier_requires_lso_evidence_for_ontario_screen(self):
         problem = {

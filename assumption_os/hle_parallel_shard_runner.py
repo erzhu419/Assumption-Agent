@@ -575,7 +575,10 @@ def build_runner_env(
     *,
     model_router_attempts: int | None,
     model_router_timeout: float | None,
+    parallel_workers: int | None = None,
     model_router_per_attempt_timeout: float | None = None,
+    model_router_subprocess_calls: bool | None = None,
+    model_router_no_byte_timeout_sec: float | None = None,
     model_router_backoff_base_sec: float | None = None,
     model_router_global_concurrency: int | None = None,
     model_router_global_concurrency_dir: str | None = None,
@@ -584,12 +587,18 @@ def build_runner_env(
 ) -> dict[str, str]:
     env = os.environ.copy()
     apply_hle_offline_defaults(env)
+    if parallel_workers is not None:
+        env["HLE_PARALLEL_SHARD_WORKERS"] = str(max(1, int(parallel_workers)))
     if model_router_attempts is not None:
         env["MODEL_ROUTER_ATTEMPTS"] = str(model_router_attempts)
     if model_router_timeout is not None:
         env["MODEL_ROUTER_TIMEOUT"] = str(model_router_timeout)
     if model_router_per_attempt_timeout is not None:
         env["MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"] = str(model_router_per_attempt_timeout)
+    if model_router_subprocess_calls is not None:
+        env["MODEL_ROUTER_SUBPROCESS_CALLS"] = "1" if model_router_subprocess_calls else "0"
+    if model_router_no_byte_timeout_sec is not None:
+        env["MODEL_ROUTER_SUBPROCESS_NO_BYTE_TIMEOUT_SEC"] = str(model_router_no_byte_timeout_sec)
     if model_router_backoff_base_sec is not None:
         env["MODEL_ROUTER_BACKOFF_BASE_SEC"] = str(model_router_backoff_base_sec)
     if model_router_global_concurrency is not None:
@@ -607,6 +616,30 @@ def build_runner_env(
     return env
 
 
+def model_router_policy_from_env(env: dict[str, str]) -> dict[str, Any]:
+    return {
+        "attempts": env.get("MODEL_ROUTER_ATTEMPTS"),
+        "timeout_sec": env.get("MODEL_ROUTER_TIMEOUT"),
+        "per_attempt_timeout_sec": env.get("MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"),
+        "subprocess_calls": env.get("MODEL_ROUTER_SUBPROCESS_CALLS"),
+        "subprocess_no_byte_timeout_sec": env.get("MODEL_ROUTER_SUBPROCESS_NO_BYTE_TIMEOUT_SEC")
+        or env.get("MODEL_ROUTER_NO_BYTE_TIMEOUT_SEC"),
+        "backoff_base_sec": env.get("MODEL_ROUTER_BACKOFF_BASE_SEC"),
+        "global_concurrency": env.get("MODEL_ROUTER_GLOBAL_CONCURRENCY"),
+        "global_slot_ttl_sec": env.get("MODEL_ROUTER_GLOBAL_SLOT_TTL_SEC"),
+        "global_slot_wait_sec": env.get("MODEL_ROUTER_GLOBAL_SLOT_WAIT_SEC"),
+        "parallel_shard_workers": env.get("HLE_PARALLEL_SHARD_WORKERS"),
+        "router_aware_child_worker_cap_enabled": env.get("HLE_ENABLE_ROUTER_AWARE_CHILD_WORKER_CAP"),
+        "router_aware_child_workers_per_shard": env.get("HLE_ROUTER_AWARE_CHILD_WORKERS_PER_SHARD"),
+        "router_aware_child_worker_cap_disabled": env.get("HLE_DISABLE_ROUTER_AWARE_CHILD_WORKER_CAP"),
+        "raw_content_persisted": False,
+    }
+
+
+def model_router_primary_key_present(env: dict[str, str]) -> bool:
+    return any(str(env.get(name, "")).strip() for name in ("GPT5_API_KEY", "RUOLI_GPT_KEY", "OPENAI_API_KEY"))
+
+
 def run_live_model_preflight(
     *,
     models: str,
@@ -615,9 +648,8 @@ def run_live_model_preflight(
 ) -> dict[str, Any]:
     """Probe live model access before launching expensive shards."""
     model_names = [item.strip() for item in str(models or "").split(",") if item.strip()]
-    key_present = any(str(env.get(name, "")).strip() for name in ("GPT5_API_KEY", "RUOLI_GPT_KEY", "OPENAI_API_KEY"))
     rows: list[dict[str, Any]] = []
-    if not key_present:
+    if not model_router_primary_key_present(env):
         rows = [
             {
                 "model": model,
@@ -1112,6 +1144,7 @@ def aggregate_parallel_payload(
     reuse_completed_shards: dict[str, Any] | None = None,
     launch_stagger_sec: float = 0.0,
     diagnostic_log_out: Path | None = None,
+    model_router_policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_rows = _merged_run_rows(shard_payloads)
     metrics = _parallel_metrics(run_rows=run_rows, shard_payloads=shard_payloads)
@@ -1185,6 +1218,7 @@ def aggregate_parallel_payload(
             "kill_on_soft_timeout": kill_on_soft_timeout,
             "launch_stagger_sec": launch_stagger_sec,
             "reuse_completed_shards": reuse_completed_shards or {"enabled": False},
+            "model_router": model_router_policy or {},
             "raw_content_persisted": False,
         },
         "diagnostic_log_out": str(diagnostic_log_out) if diagnostic_log_out else None,
@@ -2442,6 +2476,8 @@ def main() -> None:
     parser.add_argument("--model-router-attempts", type=int, default=None)
     parser.add_argument("--model-router-timeout", type=float, default=None)
     parser.add_argument("--model-router-per-attempt-timeout", type=float, default=None)
+    parser.add_argument("--model-router-subprocess-calls", action="store_true")
+    parser.add_argument("--model-router-no-byte-timeout-sec", type=float, default=None)
     parser.add_argument("--model-router-backoff-base-sec", type=float, default=None)
     parser.add_argument("--model-router-global-concurrency", type=int, default=None)
     parser.add_argument("--model-router-global-concurrency-dir", default="")
@@ -2485,6 +2521,17 @@ def main() -> None:
             "execute_live": bool(args.execute_live),
             "soft_timeout_sec": args.soft_timeout_sec,
             "kill_on_soft_timeout": bool(args.kill_on_soft_timeout),
+            "model_router": {
+                "attempts": args.model_router_attempts,
+                "timeout_sec": args.model_router_timeout,
+                "per_attempt_timeout_sec": args.model_router_per_attempt_timeout,
+                "subprocess_calls": bool(args.model_router_subprocess_calls),
+                "subprocess_no_byte_timeout_sec": args.model_router_no_byte_timeout_sec,
+                "global_concurrency": args.model_router_global_concurrency,
+                "global_slot_ttl_sec": args.model_router_global_slot_ttl_sec,
+                "global_slot_wait_sec": args.model_router_global_slot_wait_sec,
+                "raw_content_persisted": False,
+            },
             "reuse_completed_shards": bool(args.reuse_completed_shards),
             "dedupe_shard_samples": bool(args.dedupe_shard_samples),
         },
@@ -2545,13 +2592,48 @@ def main() -> None:
     env = build_runner_env(
         model_router_attempts=args.model_router_attempts,
         model_router_timeout=args.model_router_timeout,
+        parallel_workers=args.parallel_workers,
         model_router_per_attempt_timeout=args.model_router_per_attempt_timeout,
+        model_router_subprocess_calls=True if args.model_router_subprocess_calls else None,
+        model_router_no_byte_timeout_sec=args.model_router_no_byte_timeout_sec,
         model_router_backoff_base_sec=args.model_router_backoff_base_sec,
         model_router_global_concurrency=args.model_router_global_concurrency,
         model_router_global_concurrency_dir=args.model_router_global_concurrency_dir,
         model_router_global_slot_ttl_sec=args.model_router_global_slot_ttl_sec,
         model_router_global_slot_wait_sec=args.model_router_global_slot_wait_sec,
     )
+    if args.execute_live and not model_router_primary_key_present(env):
+        model_preflight = run_live_model_preflight(
+            models=args.models,
+            env=env,
+            timeout_sec=0.0,
+        )
+        log_event(
+            logger,
+            {
+                "event": "hle_parallel_runner_model_key_missing",
+                "eval_id": args.eval_id,
+                "model_preflight": model_preflight,
+                "skip_live_model_preflight": bool(args.skip_live_model_preflight),
+            },
+        )
+        write_preflight_heartbeat(
+            heartbeat_path,
+            eval_id=args.eval_id,
+            phase="model_key_missing",
+            run_dir=run_dir,
+            details=model_preflight,
+        )
+        print(json.dumps({
+            "eval_id": args.eval_id,
+            "pass": False,
+            "failed_gates": ["live_model_primary_key_present"],
+            "model_preflight": model_preflight,
+            "heartbeat_out": str(heartbeat_path),
+            "log_out": str(diagnostic_log_out),
+            "raw_content_persisted": False,
+        }, ensure_ascii=True, indent=2, sort_keys=True))
+        raise SystemExit(2)
     if args.execute_live and not args.skip_live_model_preflight:
         model_preflight = run_live_model_preflight(
             models=args.models,
@@ -2656,6 +2738,7 @@ def main() -> None:
         reuse_completed_shards=reuse_summary,
         launch_stagger_sec=max(0.0, float(args.launch_stagger_sec or 0.0)),
         diagnostic_log_out=diagnostic_log_out,
+        model_router_policy=model_router_policy_from_env(env),
     )
     log_event(
         logger,
