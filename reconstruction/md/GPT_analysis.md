@@ -2248,3 +2248,182 @@ controlled-variable / relation-span directness 还需要继续攻。
 3. 保持最新 pushed baseline 为 7/12；
    后续只有 >7/12，或 7/12 但 latency/provenance/fidelity 明显更好，才允许 push。
 ```
+
+# 21. 2026-06-27 no-gold guard + raw/raw-budget no-harm gate + latest-baseline rerun
+
+目标：
+
+```text
+1. 确认 decision-time agent / recursive child / verifier 不读取 HLE _answer。
+2. 修复 same-run raw / raw_budget control 正确时被弱 operator 或弱 budget-pair selection 覆盖的回退风险。
+3. 在最新 pushed 12-seed baseline cohort 上重新跑 fair A/B；
+   只有超过最新最好 baseline 才允许 push。
+```
+
+代码变更：
+
+```text
+no-gold decision guard:
+  - HLE problem 包装为 _HleProblem；
+  - 在 assumption plan / prompt / budget control / child call / verifier prompt 等 decision phases 禁止读取 _answer；
+  - 评分阶段仍允许读取 gold answer。
+
+raw baseline no-harm gate:
+  - 弱 selection 覆盖 same-run raw 时，除非有 source-grounded/direct counterevidence，否则保留 raw；
+  - 支持 raw preserve child 和 same-run raw cache；
+  - 支持 raw + another control corroboration 胜过 source-insufficient HippoRAG preserve。
+
+raw_budget baseline no-harm gate:
+  - 当 raw_budget_matched 在同轮有 verified / strong consensus 支撑时，
+    弱 operator override 必须提供强 counterevidence 才能覆盖。
+
+observability:
+  - model-router slot/attempt、verifier、source/directness、operator defer/apply 继续写 JSONL；
+  - 新增 component flags 记录 no-harm gate 是否触发。
+```
+
+验证：
+
+```text
+unit:
+  python3 -m unittest tests.test_hle_smoke_eval -q
+  result: pass
+
+lint-ish:
+  git diff --check -- assumption_os/hle_smoke_eval.py tests/test_hle_smoke_eval.py reconstruction/md/GPT_analysis.md
+  result: pass
+```
+
+heldout sanity run：
+
+```text
+eval_id:
+  hle_noharm_raw_and_rawbudget_heldout_n6_mini_20260627
+
+seeds:
+  1231,1315,1457,1463,1401,1487
+
+result:
+  assumption_agent_recursive_verify: 2/6
+  raw: 1/6
+  raw_budget_matched: 1/6
+  hipporag_baseline: 1/6
+  hipporag_budget_matched: 1/6
+
+gates:
+  paper_clean: pass
+  pollution: pass
+  model_budget_fairness_audit: pass
+  process_timeout_count: 0
+  top_level_error_count: 0
+
+operator application:
+  application_coverage_rate: 0.0
+  note: heldout n=6 证明 no-harm 不退且赢 controls，但不是 OperatorSpec application 胜利。
+```
+
+latest-baseline cohort fair A/B：
+
+```text
+eval_id:
+  hle_noharm_raw_and_rawbudget_splitbaseline_n12_mini_20260627
+
+seeds:
+  16,27,32,54,60,115,185,191,280,966,830,1219
+
+variants:
+  raw
+  raw_budget_matched
+  hipporag_baseline
+  hipporag_budget_matched
+  assumption_agent_recursive_verify
+
+model:
+  gpt-5.4-mini
+
+source mode:
+  HLE local dataset
+  local evidence source cache only
+  live source search disabled
+
+timeout/watchdog:
+  model-router no-byte watchdog 180s
+  no process timeout
+  no top-level error
+```
+
+结果：
+
+```text
+assumption_agent_recursive_verify: 8/12 = 0.6667
+raw: 3/12 = 0.2500
+raw_budget_matched: 2/12 = 0.1667
+hipporag_baseline: 3/12 = 0.2500
+hipporag_budget_matched: 3/12 = 0.2500
+
+paper_clean: pass
+pollution: pass
+model_budget_fairness_audit: pass
+planned/resolved model calls: 60/60
+agent_loss_to_control_counts: {}
+```
+
+OperatorSpec / fidelity：
+
+```text
+operator_application_summary:
+  selected_row_count: 12
+  applied_row_count: 2
+  deferred_not_applied_count: 10
+  application_coverage_rate: 0.1667
+  average_slot_completion_rate: 1.0
+  changed_candidate_count: 2
+  decorative_use_count: 0
+  decorative_use_rate: 0.0
+  used_assumption_ids:
+    framework_dependency_aware_controlled_intervention: 1
+    framework_structural_transfer_analogy: 1
+
+Interpretation:
+  这次不再是 0 coverage；
+  但大多数 row 仍由 no-harm / verified-or-abstain / programmatic solver 保守接管。
+```
+
+对 latest baseline：
+
+```text
+previous latest pushed baseline:
+  hle_operator_splitbudget_policy_cap180_n12_mini_20260627
+
+previous latest pushed agent score:
+  7/12
+
+new score:
+  8/12
+
+结论：
+  满足“只和最新最好 baseline 比”的 push 条件；
+  新 baseline 更新为 hle_noharm_raw_and_rawbudget_splitbaseline_n12_mini_20260627。
+```
+
+caveat：
+
+```text
+1. 提升不应全部归因于 OperatorSpec；
+   主要来自 raw/raw_budget no-harm gate、保守 verifier、以及少量真实 operator application。
+2. source verifier 仍是主要瓶颈：
+   gold-side source 经常被判 generic / indirect / direct_source_insufficient。
+3. long-tail latency 仍明显：
+   12-seed run 主要耗在 self-contained / source-grounded / minority candidate verifier。
+```
+
+下一刀：
+
+```text
+1. 做 HLE verifier path 的 total per-call / per-problem budget cap，
+   保持 8/12 不退同时降低 long-tail latency。
+2. 继续修 source-side direct relation acceptance：
+   direct-ish cached evidence 如何转为 accepted candidate direct relation span。
+3. 单独统计 no-harm gate hit 的 gain/loss，
+   区分 raw-preserve、raw-budget-preserve、source-grounded override 三类贡献。
+```

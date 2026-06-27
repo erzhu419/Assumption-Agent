@@ -12,10 +12,12 @@ from unittest.mock import patch
 
 from assumption_os.hle_module_activation_audit import build_hle_module_activation_audit_payload
 from assumption_os.hle_smoke_eval import (
+    GoldAccessDuringDecisionError,
     _LOCAL_EVIDENCE_CORPUS_CACHE,
     _LOCAL_EVIDENCE_CORPUS_CACHE_ORDER,
     _OPTION_CLAIM_VERIFIER_BUDGET_USED,
     _OPTION_CLAIM_VERIFIER_SPAN_DIRECTNESS_BUDGET_USED,
+    _HleProblem,
     _JsonlLogger,
     _aggregate_rows,
     _apply_math_candidate_claim_verifier,
@@ -100,6 +102,8 @@ from assumption_os.hle_smoke_eval import (
     _model_router_per_attempt_timeout,
     _model_router_extra_body,
     _model_router_subprocess_process_timeout,
+    _no_gold_decision_guarded,
+    _no_gold_decision_phase,
     _acquire_model_router_slot,
     _remove_stale_model_router_slots,
     _release_model_router_slot,
@@ -382,7 +386,7 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertFalse(_is_correct("Z+Z", "Z + Z", answer_type="exactMatch"))
 
     def test_score_prediction_does_not_persist_hle_content(self):
-        problem = {
+        problem = _HleProblem({
             "id_hash": "pid",
             "question_hash": "qid",
             "answer_hash": "aid",
@@ -391,7 +395,7 @@ class HleSmokeEvalTest(unittest.TestCase):
             "answer_type": "multipleChoice",
             "_question": "secret gated question",
             "_answer": "B",
-        }
+        })
         row = _score_prediction(problem=problem, model="m", variant="raw", prediction='{"answer":"B"}')
 
         self.assertTrue(row["correct"])
@@ -400,6 +404,95 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertFalse(row["gold_answer_persisted"])
         self.assertNotIn("_question", row)
         self.assertNotIn("_answer", row)
+
+    def test_no_gold_decision_phase_blocks_reference_answer_reads(self):
+        problem = _HleProblem({
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_hash": "aid",
+            "category": "Science",
+            "raw_subject": "Biology",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. Alpha\nB. Beta",
+            "_answer": "B",
+        })
+
+        with patch.dict(os.environ, {"HLE_DISABLE_NO_GOLD_DECISION_GUARD": ""}, clear=False):
+            with _no_gold_decision_phase("unit_test"):
+                with self.assertRaises(GoldAccessDuringDecisionError):
+                    _ = problem["_answer"]
+                with self.assertRaises(GoldAccessDuringDecisionError):
+                    _ = problem.get("_answer")
+                with self.assertRaises(GoldAccessDuringDecisionError):
+                    _ = "_answer" in problem
+
+        row = _score_prediction(problem=problem, model="m", variant="raw", prediction='{"answer":"B"}')
+        self.assertTrue(row["correct"])
+
+    def test_no_gold_guarded_decision_function_raises_on_gold_read(self):
+        problem = _HleProblem({
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_hash": "aid",
+            "category": "Science",
+            "raw_subject": "Biology",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. Alpha\nB. Beta",
+            "_answer": "B",
+        })
+
+        @_no_gold_decision_guarded("unit_guarded_reader")
+        def guarded_reader(row):
+            return row["_answer"]
+
+        with patch.dict(os.environ, {"HLE_DISABLE_NO_GOLD_DECISION_GUARD": ""}, clear=False):
+            with self.assertRaises(GoldAccessDuringDecisionError):
+                guarded_reader(problem)
+
+    def test_recursive_selector_runs_without_gold_access(self):
+        problem = _HleProblem({
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_hash": "aid",
+            "category": "Science",
+            "raw_subject": "Biology",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. Alpha\nB. Beta",
+            "_answer": "B",
+        })
+        attempts = [
+            {
+                "child_id": "c1",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+                "status": "answered",
+            },
+            {
+                "child_id": "c2",
+                "child_index": 2,
+                "prompt_kind": "constraint_checked_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+                "status": "answered",
+            },
+        ]
+
+        selection = _select_recursive_child_answer(
+            problem=problem,
+            attempts=attempts,
+            model="m",
+            eval_id="e",
+            call_id="c",
+            logger=None,
+            timeout=1.0,
+            max_tokens=64,
+            allow_self_contained_adjudicator=False,
+        )
+
+        self.assertEqual(selection["selection_method"], "normalized_majority")
+        self.assertEqual(selection["selected_answer"], "A")
 
     def test_aggregate_rows(self):
         rows = [
@@ -5879,6 +5972,370 @@ class HleSmokeEvalTest(unittest.TestCase):
             gated["verified_or_abstain_gate"]["reason"],
             "same_run_baseline_consensus_blocks_unverified_selection",
         )
+
+    def test_raw_baseline_noharm_blocks_weak_budget_pair_override(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw\nB. budget pair\nC. hippo",
+        }
+        attempts = [
+            {
+                "child_id": "rawp",
+                "child_index": 1,
+                "prompt_kind": "raw_preserve_selector_answer",
+                "parsed_answer": "A",
+                "same_run_baseline_cache_variant": "raw",
+            },
+            {
+                "child_id": "direct",
+                "child_index": 2,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "B",
+            },
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "B"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "C"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "B"},
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "B",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "rawp")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["reason"],
+            "raw_baseline_noharm_blocks_weak_override",
+        )
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["fallback_policy"],
+            "same_run_raw_baseline_noharm_preserve",
+        )
+
+    def test_raw_baseline_noharm_precedes_unverified_budget_pair_consensus(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw\nB. budget pair\nC. weak selected",
+        }
+        attempts = [
+            {
+                "child_id": "rawp",
+                "child_index": 1,
+                "prompt_kind": "raw_preserve_selector_answer",
+                "parsed_answer": "A",
+                "same_run_baseline_cache_variant": "raw",
+            },
+            {
+                "child_id": "direct",
+                "child_index": 2,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "C",
+            },
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "B"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "C"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "B"},
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "C",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "rawp")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["reason"],
+            "raw_baseline_noharm_blocks_weak_override",
+        )
+
+    def test_raw_baseline_noharm_uses_same_run_raw_cache_without_child(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw\nB. weak override",
+        }
+        attempts = [
+            {
+                "child_id": "direct",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "B",
+            },
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "B",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "same_run_raw_baseline_noharm")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["reason"],
+            "raw_baseline_noharm_blocks_weak_override",
+        )
+
+    def test_raw_baseline_noharm_corroborated_raw_beats_hipporag_preserve(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw\nB. retrieved",
+        }
+        attempts = [
+            {
+                "child_id": "rawp",
+                "child_index": 1,
+                "prompt_kind": "raw_preserve_selector_answer",
+                "parsed_answer": "A",
+                "same_run_baseline_cache_variant": "raw",
+            },
+            {
+                "child_id": "hipp",
+                "child_index": 2,
+                "prompt_kind": "hipporag_preserve_selector_answer",
+                "parsed_answer": "B",
+                "same_run_baseline_cache_variant": "hipporag_baseline",
+                "source_insufficient_hipporag_preserve": True,
+                "preserve_context_char_count": 120,
+                "preserve_selected_doc_count": 2,
+                "preserve_candidate_doc_count": 3,
+                "context_answer_supported": True,
+                "context_answer_overlap_count": 3,
+                "context_question_overlap_count": 2,
+            },
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "B"},
+                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "A"},
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "hipp",
+            "selected_answer": "B",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "rawp")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["reason"],
+            "raw_baseline_noharm_blocks_weak_override",
+        )
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["fallback_consensus_variants"],
+            ["hipporag_budget_matched", "raw"],
+        )
+
+    def test_raw_baseline_noharm_allows_source_grounded_counterevidence(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw\nB. source grounded",
+        }
+        attempts = [
+            {
+                "child_id": "source",
+                "child_index": 1,
+                "prompt_kind": "mc_option_claim_evidence_answer",
+                "parsed_answer": "B",
+                "candidate_verifier_state": "verified",
+                "candidate_verifier_trust": "source_grounded",
+                "tool_confidence": "source_grounded_option_claim_evidence",
+                "top_support_doc_count": 2,
+            },
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+            }
+        }
+        selection = {
+            "selection_method": "candidate_claim_verifier_priority",
+            "selected_child_id": "source",
+            "selected_answer": "B",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "candidate_claim_verifier_priority")
+        self.assertEqual(gated["selected_child_id"], "source")
+        self.assertEqual(gated["selected_answer"], "B")
+        self.assertEqual(gated["verified_or_abstain_gate"]["status"], "allowed")
+        self.assertEqual(gated["verified_or_abstain_gate"]["reason"], "verified_selection_method")
+
+    def test_raw_budget_baseline_noharm_blocks_weak_operator_override(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw\nB. budget\nC. operator",
+        }
+        attempts = [
+            {
+                "child_id": "op",
+                "child_index": 1,
+                "prompt_kind": "operator_application_answer",
+                "parsed_answer": "C",
+                "operator_application_audit": {
+                    "decorative_use": False,
+                    "slot_completion_rate": 1.0,
+                    "used_operator_ids": ["op"],
+                    "required_slots_filled": ["slot"],
+                },
+            },
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw_budget_matched": {
+                    "variant": "raw_budget_matched",
+                    "answer": "B",
+                    "budget_strong_consensus": True,
+                    "budget_top_candidate_vote_count": 4,
+                },
+            }
+        }
+        selection = {
+            "selection_method": "operator_application_fidelity_choice",
+            "selected_child_id": "op",
+            "selected_answer": "C",
+            "operator_application_selection": {
+                "slot_completion_rate": 1.0,
+                "used_operator_ids": ["op"],
+                "required_slots_filled": ["slot"],
+            },
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "same_run_raw_budget_baseline_noharm")
+        self.assertEqual(gated["selected_answer"], "B")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["reason"],
+            "raw_budget_baseline_noharm_blocks_weak_override",
+        )
+
+    def test_raw_budget_baseline_noharm_allows_source_grounded_operator(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw\nB. budget\nC. operator",
+        }
+        attempts = [
+            {
+                "child_id": "op",
+                "child_index": 1,
+                "prompt_kind": "operator_application_answer",
+                "parsed_answer": "C",
+                "operator_application_audit": {
+                    "decorative_use": False,
+                    "slot_completion_rate": 1.0,
+                    "used_operator_ids": ["op"],
+                    "required_slots_filled": ["slot"],
+                },
+            },
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw_budget_matched": {
+                    "variant": "raw_budget_matched",
+                    "answer": "B",
+                    "budget_strong_consensus": True,
+                    "budget_top_candidate_vote_count": 4,
+                },
+            }
+        }
+        selection = {
+            "selection_method": "operator_application_fidelity_choice",
+            "selected_child_id": "op",
+            "selected_answer": "C",
+            "operator_application_selection": {
+                "slot_completion_rate": 1.0,
+                "used_operator_ids": ["op"],
+                "required_slots_filled": ["slot"],
+            },
+            "source_grounded_operator_evidence": {"direct_high_confidence": True},
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "operator_application_fidelity_choice")
+        self.assertEqual(gated["selected_child_id"], "op")
+        self.assertEqual(gated["selected_answer"], "C")
+        self.assertEqual(gated["verified_or_abstain_gate"]["status"], "allowed")
 
     def test_verified_or_abstain_blocks_structural_dissent_against_same_run_consensus(self):
         problem = {

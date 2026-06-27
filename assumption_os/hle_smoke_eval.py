@@ -13,7 +13,9 @@ import argparse
 import ast
 import concurrent.futures
 import contextlib
+import contextvars
 import fractions
+import functools
 import http.client
 import html
 import json
@@ -59,6 +61,82 @@ HLE_OFFICIAL_SOURCES = [
     "https://huggingface.co/datasets/cais/hle",
     "https://github.com/centerforaisafety/hle",
 ]
+
+_NO_GOLD_DECISION_PHASE: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "hle_no_gold_decision_phase",
+    default="",
+)
+
+
+class GoldAccessDuringDecisionError(RuntimeError):
+    """Raised when decision-time code tries to read the HLE reference answer."""
+
+
+def _no_gold_decision_guard_enabled() -> bool:
+    return os.environ.get("HLE_DISABLE_NO_GOLD_DECISION_GUARD", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _active_no_gold_decision_phase() -> str:
+    if not _no_gold_decision_guard_enabled():
+        return ""
+    return str(_NO_GOLD_DECISION_PHASE.get() or "")
+
+
+@contextlib.contextmanager
+def _no_gold_decision_phase(stage: str) -> Iterable[None]:
+    if not _no_gold_decision_guard_enabled():
+        yield
+        return
+    token = _NO_GOLD_DECISION_PHASE.set(str(stage or "decision"))
+    try:
+        yield
+    finally:
+        _NO_GOLD_DECISION_PHASE.reset(token)
+
+
+def _no_gold_decision_guarded(stage: str):
+    def decorate(func):
+        @functools.wraps(func)
+        def wrapped(*args, **kwargs):
+            if _no_gold_decision_guard_enabled() and not _active_no_gold_decision_phase():
+                with _no_gold_decision_phase(stage):
+                    return func(*args, **kwargs)
+            return func(*args, **kwargs)
+
+        return wrapped
+
+    return decorate
+
+
+class _HleProblem(dict):
+    """Problem dict that traps gold-answer reads inside guarded decision phases."""
+
+    _GOLD_KEYS = {"_answer"}
+
+    def _guard_key(self, key: Any) -> None:
+        if key in self._GOLD_KEYS:
+            phase = _active_no_gold_decision_phase()
+            if phase:
+                raise GoldAccessDuringDecisionError(
+                    f"HLE gold field {key!r} accessed during decision phase {phase!r}"
+                )
+
+    def __getitem__(self, key: Any) -> Any:
+        self._guard_key(key)
+        return super().__getitem__(key)
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        self._guard_key(key)
+        return super().get(key, default)
+
+    def __contains__(self, key: object) -> bool:
+        self._guard_key(key)
+        return super().__contains__(key)
 
 
 def build_hle_text_smoke_eval_payload(
@@ -952,7 +1030,7 @@ def _problem_from_row(row: dict[str, Any], *, scanned: int, skipped_before: int)
     answer_type = str(row.get("answer_type") or "")
     category = str(row.get("category") or "")
     raw_subject = str(row.get("raw_subject") or "")
-    return {
+    return _HleProblem({
         "id_hash": stable_hash({"hle_id": row.get("id")}),
         "question_hash": stable_hash({"question": question}),
         "answer_hash": stable_hash({"answer": answer, "answer_type": answer_type}),
@@ -963,9 +1041,10 @@ def _problem_from_row(row: dict[str, Any], *, scanned: int, skipped_before: int)
         "skipped_before": skipped_before,
         "_question": question,
         "_answer": answer,
-    }
+    })
 
 
+@_no_gold_decision_guarded("assumption_agent_plan")
 def _build_assumption_agent_plan(
     *,
     root: Path,
@@ -1300,6 +1379,7 @@ def _build_assumption_agent_plan(
     return plan
 
 
+@_no_gold_decision_guarded("hipporag_baseline_plan")
 def _build_hipporag_baseline_plan(
     *,
     problem: dict[str, Any],
@@ -1453,6 +1533,7 @@ def _content_terms(text: str) -> set[str]:
     }
 
 
+@_no_gold_decision_guarded("prompt_for")
 def _prompt_for(problem: dict[str, Any], *, variant: str, agent_plan: dict[str, Any] | None = None) -> str:
     question = problem["_question"]
     answer_type = problem["answer_type"]
@@ -1726,6 +1807,7 @@ def _budget_control_base_variant(variant: str) -> str:
     return "hipporag_baseline" if variant.startswith("hipporag") else "raw"
 
 
+@_no_gold_decision_guarded("budget_matched_control_answer")
 def _call_budget_matched_control_answer(
     *,
     problem: dict[str, Any],
@@ -1820,6 +1902,7 @@ def _call_budget_matched_control_answer(
     }
 
 
+@_no_gold_decision_guarded("budget_matched_control_prompt_specs")
 def _budget_matched_control_prompt_specs(
     problem: dict[str, Any],
     *,
@@ -4890,6 +4973,7 @@ def _route_arbitrator_lock_decision(summary: dict[str, Any] | None) -> bool:
     return _route_arbitrator_should_lock(summary)
 
 
+@_no_gold_decision_guarded("llm_route_arbitrator_prompt")
 def _llm_route_arbitrator_prompt(
     *,
     problem: dict[str, Any],
@@ -7654,6 +7738,7 @@ def _child_timeout_attempt(
     return attempt
 
 
+@_no_gold_decision_guarded("recursive_child_attempt")
 def _run_child_attempt(
     *,
     problem: dict[str, Any],
@@ -8066,6 +8151,7 @@ def _child_model_failover_trigger(
     }
 
 
+@_no_gold_decision_guarded("child_model_failover_prompt")
 def _child_model_failover_prompt(problem: dict[str, Any], *, trigger: dict[str, Any]) -> str:
     answer_type = problem.get("answer_type") or "exactMatch"
     return (
@@ -8184,6 +8270,7 @@ def _endpoint_error_pressure_abort_summary(
     }
 
 
+@_no_gold_decision_guarded("timeout_recovery_answer_prompt")
 def _timeout_recovery_answer_prompt(problem: dict[str, Any], *, trigger: dict[str, Any]) -> str:
     answer_type = problem.get("answer_type") or "exactMatch"
     output_contract = (
@@ -9357,6 +9444,7 @@ def _run_reference_plan_repair(
     return result, 1
 
 
+@_no_gold_decision_guarded("mc_option_claim_planner_prompt")
 def _mc_option_claim_planner_prompt(problem: dict[str, Any]) -> str:
     return (
         "Extract up to four independent executable math plans for this HLE multipleChoice item. The answer options "
@@ -9392,6 +9480,7 @@ def _unique_candidate_answers_for_claim_planner(problem: dict[str, Any], attempt
     return candidates
 
 
+@_no_gold_decision_guarded("candidate_claim_planner_prompt")
 def _candidate_claim_planner_prompt(problem: dict[str, Any], candidates: list[str]) -> str:
     candidate_lines = "\n".join(f"{idx}. {answer}" for idx, answer in enumerate(candidates, start=1))
     return (
@@ -9408,6 +9497,7 @@ def _candidate_claim_planner_prompt(problem: dict[str, Any], candidates: list[st
     )
 
 
+@_no_gold_decision_guarded("candidate_claim_plan_repair_prompt")
 def _candidate_claim_plan_repair_prompt(
     problem: dict[str, Any],
     candidates: list[str],
@@ -9430,6 +9520,7 @@ def _candidate_claim_plan_repair_prompt(
     )
 
 
+@_no_gold_decision_guarded("mc_option_claim_plan_repair_prompt")
 def _mc_option_claim_plan_repair_prompt(problem: dict[str, Any], initial_result: dict[str, Any]) -> str:
     failure_summary = _reference_plan_failure_summary(initial_result)
     return (
@@ -10285,6 +10376,7 @@ def _plan_expression_parse_candidates(expr: str) -> list[str]:
     return candidates[:8]
 
 
+@_no_gold_decision_guarded("math_tool_planner_prompt")
 def _math_tool_planner_prompt(problem: dict[str, Any]) -> str:
     return (
         "Extract up to four independent executable math plans for this HLE math exactMatch item. "
@@ -10300,6 +10392,7 @@ def _math_tool_planner_prompt(problem: dict[str, Any]) -> str:
     )
 
 
+@_no_gold_decision_guarded("math_tool_plan_repair_prompt")
 def _math_tool_plan_repair_prompt(problem: dict[str, Any], initial_result: dict[str, Any]) -> str:
     failure_summary = _reference_plan_failure_summary(initial_result)
     return (
@@ -10930,6 +11023,7 @@ def _operator_application_post_verifier_repair_spec(agent_plan: dict[str, Any] |
     }
 
 
+@_no_gold_decision_guarded("recursive_child_prompt_specs")
 def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     question = problem["_question"]
     answer_type = problem["answer_type"]
@@ -11104,6 +11198,7 @@ def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[s
     return _orthogonalize_child_prompt_specs(problem, specs, agent_plan=agent_plan)
 
 
+@_no_gold_decision_guarded("option_matrix_reasoner_prompt")
 def _option_matrix_reasoner_prompt(problem: dict[str, Any]) -> str:
     return (
         "Solve this multiple-choice item as a discrete option matrix, not as a first-impression vote. "
@@ -11117,6 +11212,7 @@ def _option_matrix_reasoner_prompt(problem: dict[str, Any]) -> str:
     )
 
 
+@_no_gold_decision_guarded("large_option_claim_table_prompt")
 def _large_option_claim_table_prompt(problem: dict[str, Any]) -> str:
     return (
         "Solve this large-option multiple-choice item by turning every option into a falsifiable claim. "
@@ -11129,6 +11225,7 @@ def _large_option_claim_table_prompt(problem: dict[str, Any]) -> str:
     )
 
 
+@_no_gold_decision_guarded("large_option_reverse_scan_prompt")
 def _large_option_reverse_scan_prompt(problem: dict[str, Any]) -> str:
     return (
         "Solve this large-option multiple-choice item by scanning options in reverse order first. This is a "
@@ -11140,6 +11237,7 @@ def _large_option_reverse_scan_prompt(problem: dict[str, Any]) -> str:
     )
 
 
+@_no_gold_decision_guarded("large_option_pairwise_tournament_prompt")
 def _large_option_pairwise_tournament_prompt(problem: dict[str, Any]) -> str:
     return (
         "Solve this large-option multiple-choice item as a pairwise elimination tournament. Internally compare "
@@ -11150,6 +11248,7 @@ def _large_option_pairwise_tournament_prompt(problem: dict[str, Any]) -> str:
     )
 
 
+@_no_gold_decision_guarded("large_option_tail_constraint_prompt")
 def _large_option_tail_constraint_prompt(problem: dict[str, Any]) -> str:
     return (
         "Solve this large-option multiple-choice item by auditing middle and late-label options before early "
@@ -11161,6 +11260,7 @@ def _large_option_tail_constraint_prompt(problem: dict[str, Any]) -> str:
     )
 
 
+@_no_gold_decision_guarded("large_option_anti_anchor_prompt")
 def _large_option_anti_anchor_prompt(problem: dict[str, Any]) -> str:
     return (
         "Solve this large-option multiple-choice item as an anti-anchor audit. First identify the option that a "
@@ -11190,6 +11290,7 @@ def _is_code_compile_mc_question(problem: dict[str, Any]) -> bool:
     ))
 
 
+@_no_gold_decision_guarded("code_semantics_answer_prompt")
 def _code_semantics_answer_prompt(problem: dict[str, Any]) -> str:
     return (
         "Solve this multiple-choice code item through a static/code-semantics branch. Treat the code block as "
@@ -11279,6 +11380,7 @@ def _counter_assumption_challenge_trigger(
     }
 
 
+@_no_gold_decision_guarded("counter_assumption_challenge_prompt")
 def _counter_assumption_challenge_prompt(
     problem: dict[str, Any],
     *,
@@ -11367,6 +11469,7 @@ def _maybe_run_counter_assumption_challenge(
     return attempt, summary
 
 
+@_no_gold_decision_guarded("option_elimination_challenge_prompt")
 def _option_elimination_challenge_prompt(
     problem: dict[str, Any],
     *,
@@ -11458,6 +11561,7 @@ def _maybe_run_option_elimination_challenge(
     return attempt, summary
 
 
+@_no_gold_decision_guarded("critic_synthesis_prompt")
 def _critic_synthesis_prompt(problem: dict[str, Any], *, evidence_context: str = "") -> str:
     evidence_block = (
         "Transient evidence, if relevant:\n"
@@ -11786,6 +11890,7 @@ def _extract_choice_from_hashable_attempts(attempts: list[dict[str, Any]], *, an
     return first.get(top_norm, top_norm)
 
 
+@_no_gold_decision_guarded("forced_alternative_challenge_prompt")
 def _forced_alternative_challenge_prompt(
     problem: dict[str, Any],
     *,
@@ -18120,6 +18225,7 @@ def _option_claim_statement_fact_span_directness_detail(
     }
 
 
+@_no_gold_decision_guarded("option_claim_span_directness_verifier_prompt")
 def _option_claim_span_directness_verifier_prompt(
     *,
     problem: dict[str, Any],
@@ -20061,6 +20167,7 @@ def _run_source_grounded_option_claim_verifier(
         }
 
 
+@_no_gold_decision_guarded("source_grounded_option_claim_verifier_prompt")
 def _source_grounded_option_claim_verifier_prompt(
     *,
     problem: dict[str, Any],
@@ -20312,6 +20419,7 @@ def _run_source_grounded_option_claim_relative_adjudicator(
         }
 
 
+@_no_gold_decision_guarded("source_grounded_option_claim_relative_adjudicator_prompt")
 def _source_grounded_option_claim_relative_adjudicator_prompt(
     *,
     problem: dict[str, Any],
@@ -20790,6 +20898,7 @@ def _run_option_claim_contrastive_adjudicator(
         }
 
 
+@_no_gold_decision_guarded("option_claim_contrastive_adjudicator_prompt")
 def _option_claim_contrastive_adjudicator_prompt(
     *,
     problem: dict[str, Any],
@@ -20955,7 +21064,13 @@ def _maybe_run_domain_rule_mc_verifier(
             summary=summary,
         )
         return None, summary
-    stem, options = _split_multiple_choice_question(problem)
+    with _no_gold_decision_phase("domain_rule_mc_verifier_decision"):
+        stem, options = _split_multiple_choice_question(problem)
+        decision = (
+            _domain_rule_mc_decision(problem=problem, stem=stem, options=options, evidence_context=evidence_context)
+            if len(options) >= 2
+            else None
+        )
     if len(options) < 2:
         summary = {"status": "abstained", "reason": "options_not_parsed", "option_count": len(options)}
         _log_domain_rule_mc_verifier_summary(
@@ -20967,7 +21082,6 @@ def _maybe_run_domain_rule_mc_verifier(
             summary=summary,
         )
         return None, summary
-    decision = _domain_rule_mc_decision(problem=problem, stem=stem, options=options, evidence_context=evidence_context)
     if not decision:
         summary = {
             "status": "not_required",
@@ -21606,6 +21720,7 @@ def _evidence_forced_alternative_disabled() -> bool:
     }
 
 
+@_no_gold_decision_guarded("evidence_forced_alternative_prompt")
 def _evidence_forced_alternative_prompt(
     problem: dict[str, Any],
     *,
@@ -21991,6 +22106,7 @@ def _weak_option_evidence_candidate_min_score() -> float:
     return 12.0
 
 
+@_no_gold_decision_guarded("evidence_guided_option_challenge_prompt")
 def _evidence_guided_option_challenge_prompt(
     problem: dict[str, Any],
     *,
@@ -22008,6 +22124,7 @@ def _evidence_guided_option_challenge_prompt(
     )
 
 
+@_no_gold_decision_guarded("structural_option_audit_prompt")
 def _structural_option_audit_prompt(
     problem: dict[str, Any],
     *,
@@ -23379,6 +23496,7 @@ def _deterministic_option_claim_relation_queries(
     return queries
 
 
+@_no_gold_decision_guarded("option_claim_relation_query_planner_prompt")
 def _option_claim_relation_query_planner_prompt(
     *,
     problem: dict[str, Any],
@@ -28498,6 +28616,7 @@ def _run_self_contained_full_option_adjudicator(
         return None
 
 
+@_no_gold_decision_guarded("self_contained_full_option_adjudicator_prompt")
 def _self_contained_full_option_adjudicator_prompt(
     problem: dict[str, Any],
     labels: list[str],
@@ -28517,6 +28636,7 @@ def _self_contained_full_option_adjudicator_prompt(
     )
 
 
+@_no_gold_decision_guarded("self_contained_option_adjudicator_prompt")
 def _self_contained_option_adjudicator_prompt(
     problem: dict[str, Any],
     candidates: list[dict[str, Any]],
@@ -28917,6 +29037,7 @@ def _operator_source_grounded_adjudicator_defer_summary(
     return {"blocked": False, "reason": "source_adjudicator_not_blocking"}
 
 
+@_no_gold_decision_guarded("recursive_child_selection")
 def _select_recursive_child_answer(
     *,
     problem: dict[str, Any],
@@ -29646,6 +29767,277 @@ def _verified_or_abstain_selection_from_baseline_consensus(
     return out
 
 
+def _raw_baseline_noharm_gate_enabled() -> bool:
+    return os.environ.get("HLE_DISABLE_RAW_BASELINE_NOHARM_GATE", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _raw_baseline_noharm_candidate(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    selection: dict[str, Any],
+    agent_plan: dict[str, Any] | None,
+    baseline_consensus: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not _raw_baseline_noharm_gate_enabled():
+        return None
+    answer_type = str(problem.get("answer_type") or "exactMatch")
+    selected_answer = str(selection.get("selected_answer") or "").strip()
+    selected_norm = _normalize_for_selection(selected_answer, answer_type=answer_type)
+    if not selected_norm:
+        return None
+
+    raw_attempt = next(
+        (
+            attempt for attempt in attempts
+            if attempt.get("prompt_kind") == "raw_preserve_selector_answer"
+            and str(attempt.get("parsed_answer") or "").strip()
+            and str(attempt.get("same_run_baseline_cache_variant") or "raw") == "raw"
+        ),
+        None,
+    )
+    raw_cache = None
+    if not isinstance(raw_attempt, dict):
+        raw_cache = _same_run_cached_baseline(agent_plan, ["raw"])
+    if not isinstance(raw_attempt, dict) and not isinstance(raw_cache, dict):
+        return None
+    if _strong_raw_budget_fallback_should_precede_raw(problem=problem, attempts=attempts):
+        return None
+    if isinstance(raw_attempt, dict):
+        raw_answer = str(raw_attempt.get("parsed_answer") or "").strip()
+        source = "raw_preserve_attempt"
+        source_child_id = raw_attempt.get("child_id")
+    else:
+        raw_answer = str((raw_cache or {}).get("answer") or "").strip()
+        source = "same_run_baseline_cache"
+        source_child_id = None
+    if not raw_answer:
+        return None
+    if answer_type == "multipleChoice":
+        raw_answer, _ = _canonicalize_multiple_choice_answer(problem, raw_answer)
+    elif _is_suspicious_exact_answer(raw_answer):
+        return None
+    raw_norm = _normalize_for_selection(raw_answer, answer_type=answer_type)
+    if not raw_norm or raw_norm == selected_norm:
+        return None
+    raw_support_variants = {"raw"}
+    for entry in _same_run_cached_baseline_entries(
+        agent_plan,
+        ["raw", "raw_budget_matched", "hipporag_baseline", "hipporag_budget_matched"],
+    ):
+        entry_answer = str(entry.get("answer") or "").strip()
+        if not entry_answer:
+            continue
+        if _normalize_for_selection(entry_answer, answer_type=answer_type) == raw_norm:
+            raw_support_variants.add(str(entry.get("variant") or ""))
+    hipporag_before_raw_decision = _hipporag_source_insufficient_before_raw_decision(
+        problem=problem,
+        attempts=attempts,
+    )
+    if (
+        hipporag_before_raw_decision.get("reason")
+        in {
+            "source_insufficient_hipporag_before_raw_allowed",
+            "hipporag_before_raw_lacks_answer_bearing_signal",
+        }
+        and len(raw_support_variants) < 2
+    ):
+        return None
+
+    if isinstance(baseline_consensus, dict):
+        baseline_norm = str(baseline_consensus.get("same_run_baseline_consensus_norm") or "")
+        if baseline_norm == raw_norm:
+            return None
+        policy = str(baseline_consensus.get("verified_or_abstain_fallback_policy") or "")
+        conflict = baseline_consensus.get("same_run_baseline_consensus_conflict")
+        conflict = conflict if isinstance(conflict, dict) else {}
+        verified_budget_split = (
+            policy == "same_run_verified_budget_pair_over_standard_split_consensus_preserve"
+            or (
+                conflict.get("selected_pair") == "budget_pair"
+                and bool(conflict.get("budget_pair_verified"))
+            )
+        )
+        if verified_budget_split:
+            return None
+
+    child_id = source_child_id or "same_run_raw_baseline_noharm"
+    return {
+        "child_id": child_id,
+        "child_index": -101,
+        "prompt_kind": (
+            "raw_preserve_selector_answer"
+            if source_child_id
+            else "same_run_raw_baseline_noharm_preserve_answer"
+        ),
+        "parsed_answer": raw_answer,
+        "parsed_answer_hash": stable_hash({"answer": raw_answer}),
+        "verified_or_abstain_fallback_policy": "same_run_raw_baseline_noharm_preserve",
+        "verified_or_abstain_consensus_count": 1,
+        "same_run_baseline_consensus_variants": sorted(raw_support_variants),
+        "same_run_baseline_cache_variant": "raw",
+        "raw_baseline_noharm_source": source,
+        "raw_baseline_support_count": len(raw_support_variants),
+        "raw_baseline_selected_answer_hash": stable_hash({"answer": selected_answer}),
+        "raw_baseline_answer_hash": stable_hash({"answer": raw_answer}),
+    }
+
+
+def _selection_has_strong_raw_baseline_counterevidence(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    selection: dict[str, Any],
+) -> bool:
+    method = str(selection.get("selection_method") or "")
+    if method in {
+        "source_grounded_verifier_choice",
+        "source_grounded_operator_evidence_choice",
+        "domain_rule_verifier_priority",
+        "verified_math_tool_priority",
+        "verified_option_evidence_priority",
+        "option_evidence_verifier_choice",
+        "budgeted_retrieval_conflict_verifier_choice",
+        "evidence_guided_dissent_verifier_choice",
+    }:
+        return True
+    return _selection_has_strong_baseline_consensus_counterevidence(
+        problem=problem,
+        attempts=attempts,
+        selection=selection,
+    )
+
+
+def _verified_or_abstain_selection_from_raw_noharm(
+    *,
+    selection: dict[str, Any],
+    raw_candidate: dict[str, Any],
+    reason: str,
+) -> dict[str, Any]:
+    out = dict(selection)
+    out.update({
+        "selection_method": "verified_or_abstain_direct_fallback",
+        "selected_child_id": raw_candidate.get("child_id"),
+        "selected_answer": raw_candidate.get("parsed_answer"),
+        "verified_or_abstain_gate": {
+            "status": "abstained",
+            "reason": reason,
+            "original_selection_method": selection.get("selection_method"),
+            "original_selected_child_id": selection.get("selected_child_id"),
+            "fallback_prompt_kind": raw_candidate.get("prompt_kind"),
+            "fallback_policy": raw_candidate.get("verified_or_abstain_fallback_policy"),
+            "fallback_consensus_count": raw_candidate.get("verified_or_abstain_consensus_count"),
+            "fallback_consensus_variants": raw_candidate.get("same_run_baseline_consensus_variants"),
+            "raw_baseline_noharm_source": raw_candidate.get("raw_baseline_noharm_source"),
+            "raw_baseline_answer_hash": raw_candidate.get("raw_baseline_answer_hash"),
+            "original_selected_answer_hash": raw_candidate.get("raw_baseline_selected_answer_hash"),
+        },
+    })
+    return out
+
+
+def _raw_budget_baseline_noharm_candidate(
+    *,
+    problem: dict[str, Any],
+    selection: dict[str, Any],
+    agent_plan: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    entry = _same_run_cached_baseline(agent_plan, ["raw_budget_matched"])
+    if not isinstance(entry, dict):
+        return None
+    if not (
+        _same_run_budget_entry_verified(entry)
+        or (
+            bool(entry.get("budget_strong_consensus"))
+            and int(entry.get("budget_top_candidate_vote_count") or 0) >= 3
+        )
+    ):
+        return None
+    answer_type = str(problem.get("answer_type") or "exactMatch")
+    selected_answer = str(selection.get("selected_answer") or "").strip()
+    selected_norm = _normalize_for_selection(selected_answer, answer_type=answer_type)
+    if not selected_norm:
+        return None
+    budget_answer = str(entry.get("answer") or "").strip()
+    if not budget_answer:
+        return None
+    if answer_type == "multipleChoice":
+        budget_answer, _ = _canonicalize_multiple_choice_answer(problem, budget_answer)
+    elif _is_suspicious_exact_answer(budget_answer):
+        return None
+    budget_norm = _normalize_for_selection(budget_answer, answer_type=answer_type)
+    if not budget_norm or budget_norm == selected_norm:
+        return None
+    return {
+        "child_id": "same_run_raw_budget_baseline_noharm",
+        "child_index": -102,
+        "prompt_kind": "same_run_raw_budget_baseline_noharm_preserve_answer",
+        "parsed_answer": budget_answer,
+        "parsed_answer_hash": stable_hash({"answer": budget_answer}),
+        "verified_or_abstain_fallback_policy": "same_run_raw_budget_baseline_noharm_preserve",
+        "verified_or_abstain_consensus_count": int(entry.get("budget_top_candidate_vote_count") or 0) or 1,
+        "same_run_baseline_consensus_variants": ["raw_budget_matched"],
+        "same_run_baseline_cache_variant": "raw_budget_matched",
+        "raw_budget_baseline_answer_hash": stable_hash({"answer": budget_answer}),
+        "raw_budget_baseline_selected_answer_hash": stable_hash({"answer": selected_answer}),
+        "raw_budget_baseline_verified": _same_run_budget_entry_verified(entry),
+        "raw_budget_baseline_strong_consensus": bool(entry.get("budget_strong_consensus")),
+        "raw_budget_baseline_top_candidate_vote_count": int(entry.get("budget_top_candidate_vote_count") or 0),
+    }
+
+
+def _selection_has_strong_raw_budget_baseline_counterevidence(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    selection: dict[str, Any],
+) -> bool:
+    if _selection_has_direct_source_grounded_operator_evidence(selection):
+        return True
+    return _selection_has_strong_raw_baseline_counterevidence(
+        problem=problem,
+        attempts=attempts,
+        selection=selection,
+    )
+
+
+def _verified_or_abstain_selection_from_raw_budget_noharm(
+    *,
+    selection: dict[str, Any],
+    candidate: dict[str, Any],
+    reason: str,
+) -> dict[str, Any]:
+    out = dict(selection)
+    out.update({
+        "selection_method": "verified_or_abstain_direct_fallback",
+        "selected_child_id": candidate.get("child_id"),
+        "selected_answer": candidate.get("parsed_answer"),
+        "verified_or_abstain_gate": {
+            "status": "abstained",
+            "reason": reason,
+            "original_selection_method": selection.get("selection_method"),
+            "original_selected_child_id": selection.get("selected_child_id"),
+            "fallback_prompt_kind": candidate.get("prompt_kind"),
+            "fallback_policy": candidate.get("verified_or_abstain_fallback_policy"),
+            "fallback_consensus_count": candidate.get("verified_or_abstain_consensus_count"),
+            "fallback_consensus_variants": candidate.get("same_run_baseline_consensus_variants"),
+            "raw_budget_baseline_answer_hash": candidate.get("raw_budget_baseline_answer_hash"),
+            "original_selected_answer_hash": candidate.get("raw_budget_baseline_selected_answer_hash"),
+            "raw_budget_baseline_verified": candidate.get("raw_budget_baseline_verified"),
+            "raw_budget_baseline_strong_consensus": candidate.get("raw_budget_baseline_strong_consensus"),
+            "raw_budget_baseline_top_candidate_vote_count": candidate.get(
+                "raw_budget_baseline_top_candidate_vote_count"
+            ),
+        },
+    })
+    return out
+
+
 def _selected_attempt_for_selection(
     *,
     problem: dict[str, Any],
@@ -30076,30 +30468,6 @@ def _apply_verified_or_abstain_selection(
         problem=problem,
         attempts=attempts,
     )
-    if baseline_consensus and method in _BASELINE_CONSENSUS_PROTECTED_SELECTION_METHODS:
-        selected_answer = str(selection.get("selected_answer") or "").strip()
-        selected_norm = _normalize_for_selection(
-            selected_answer,
-            answer_type=str(problem.get("answer_type") or "exactMatch"),
-        )
-        baseline_norm = str(baseline_consensus.get("same_run_baseline_consensus_norm") or "")
-        if (
-            selected_norm
-            and baseline_norm
-            and selected_norm != baseline_norm
-            and not _selection_has_strong_baseline_consensus_counterevidence(
-                problem=problem,
-                attempts=attempts,
-                selection=selection,
-            )
-            and high_margin_option_evidence.get("status") != "activated"
-            and high_margin_option_evidence_fallback is None
-        ):
-            return _verified_or_abstain_selection_from_baseline_consensus(
-                selection=selection,
-                baseline_consensus=baseline_consensus,
-                reason="same_run_baseline_consensus_blocks_weak_verified_override",
-            )
     if high_margin_option_evidence.get("status") == "activated":
         out = dict(selection)
         out["selection_method"] = "high_margin_option_evidence_choice"
@@ -30141,6 +30509,29 @@ def _apply_verified_or_abstain_selection(
             },
         })
         return out
+    if baseline_consensus and method in _BASELINE_CONSENSUS_PROTECTED_SELECTION_METHODS:
+        selected_answer = str(selection.get("selected_answer") or "").strip()
+        selected_norm = _normalize_for_selection(
+            selected_answer,
+            answer_type=str(problem.get("answer_type") or "exactMatch"),
+        )
+        baseline_norm = str(baseline_consensus.get("same_run_baseline_consensus_norm") or "")
+        if (
+            selected_norm
+            and baseline_norm
+            and selected_norm != baseline_norm
+            and not _selection_has_strong_baseline_consensus_counterevidence(
+                problem=problem,
+                attempts=attempts,
+                selection=selection,
+            )
+            and high_margin_option_evidence_fallback is None
+        ):
+            return _verified_or_abstain_selection_from_baseline_consensus(
+                selection=selection,
+                baseline_consensus=baseline_consensus,
+                reason="same_run_baseline_consensus_blocks_weak_verified_override",
+            )
     if method in _VERIFIED_SELECTION_METHODS:
         out = dict(selection)
         gate = {
@@ -30154,6 +30545,25 @@ def _apply_verified_or_abstain_selection(
             )
         out["verified_or_abstain_gate"] = gate
         return out
+    raw_budget_noharm_candidate = _raw_budget_baseline_noharm_candidate(
+        problem=problem,
+        selection=selection,
+        agent_plan=agent_plan,
+    )
+    if (
+        raw_budget_noharm_candidate
+        and high_margin_option_evidence_fallback is None
+        and not _selection_has_strong_raw_budget_baseline_counterevidence(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+        )
+    ):
+        return _verified_or_abstain_selection_from_raw_budget_noharm(
+            selection=selection,
+            candidate=raw_budget_noharm_candidate,
+            reason="raw_budget_baseline_noharm_blocks_weak_override",
+        )
     if _selection_has_operator_application_audit(problem=problem, attempts=attempts, selection=selection):
         source_grounding_blocked = (
             _operator_application_source_grounding_required(problem)
@@ -30210,6 +30620,31 @@ def _apply_verified_or_abstain_selection(
             "original_selection_method": method,
         }
         return out
+    raw_noharm_candidate = _raw_baseline_noharm_candidate(
+        problem=problem,
+        attempts=attempts,
+        selection=selection,
+        agent_plan=agent_plan,
+        baseline_consensus=baseline_consensus,
+    )
+    if (
+        raw_noharm_candidate
+        and (
+            raw_noharm_candidate.get("raw_baseline_noharm_source") == "raw_preserve_attempt"
+            or not baseline_consensus
+        )
+        and high_margin_option_evidence_fallback is None
+        and not _selection_has_strong_raw_baseline_counterevidence(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+        )
+    ):
+        return _verified_or_abstain_selection_from_raw_noharm(
+            selection=selection,
+            raw_candidate=raw_noharm_candidate,
+            reason="raw_baseline_noharm_blocks_weak_override",
+        )
     if baseline_consensus:
         selected_answer = str(selection.get("selected_answer") or "").strip()
         selected_norm = _normalize_for_selection(
@@ -31554,6 +31989,7 @@ def _parse_verifier_confidence(text: str) -> str:
     return ""
 
 
+@_no_gold_decision_guarded("minority_candidate_claim_verifier_prompt")
 def _minority_candidate_claim_verifier_prompt(
     problem: dict[str, Any],
     candidates: list[dict[str, Any]],
@@ -31679,6 +32115,7 @@ def _orthogonal_structural_elimination_selection(
     return None
 
 
+@_no_gold_decision_guarded("structural_dissent_verifier_prompt")
 def _structural_dissent_verifier_prompt(
     problem: dict[str, Any],
     candidates: list[dict[str, Any]],
@@ -32056,6 +32493,7 @@ def _run_budgeted_retrieval_conflict_verifier(
         return None
 
 
+@_no_gold_decision_guarded("budgeted_retrieval_conflict_verifier_prompt")
 def _budgeted_retrieval_conflict_verifier_prompt(
     problem: dict[str, Any],
     attempts: list[dict[str, Any]],
@@ -32223,6 +32661,7 @@ def _run_evidence_guided_dissent_verifier(
         return None
 
 
+@_no_gold_decision_guarded("evidence_guided_dissent_verifier_prompt")
 def _evidence_guided_dissent_verifier_prompt(
     problem: dict[str, Any],
     attempts: list[dict[str, Any]],
@@ -32442,6 +32881,7 @@ def _run_option_evidence_arbitrator(
         return None
 
 
+@_no_gold_decision_guarded("option_evidence_arbitrator_prompt")
 def _option_evidence_arbitrator_prompt(
     problem: dict[str, Any],
     attempts: list[dict[str, Any]],
@@ -32571,6 +33011,7 @@ def _run_source_grounded_mc_verifier(
         }
 
 
+@_no_gold_decision_guarded("source_grounded_mc_verifier_prompt")
 def _source_grounded_mc_verifier_prompt(
     problem: dict[str, Any],
     attempts: list[dict[str, Any]],
@@ -32593,6 +33034,7 @@ def _source_grounded_mc_verifier_prompt(
     )
 
 
+@_no_gold_decision_guarded("verifier_prompt")
 def _verifier_prompt(problem: dict[str, Any], attempts: list[dict[str, Any]]) -> str:
     choices = "\n".join(
         f"{index}. answer={attempt['parsed_answer']}; support_count={attempt.get('support_count', 1)}; "
@@ -32824,6 +33266,7 @@ def _extract_explicit_choice_label(text: str) -> str:
     return ""
 
 
+@_no_gold_decision_guarded("evidence_grounded_answer_prompt")
 def _evidence_grounded_answer_prompt(problem: dict[str, Any], *, evidence_context: str) -> str:
     if problem.get("answer_type") == "multipleChoice":
         return (
@@ -34950,6 +35393,7 @@ def _format_evidence_context(results: list[dict[str, str]], *, max_chars: int) -
     return _trim_context(text, max_chars=max_chars)
 
 
+@_no_gold_decision_guarded("exact_answer_repair_prompt")
 def _exact_answer_repair_prompt(
     problem: dict[str, Any],
     selected_answer: str,
@@ -36839,6 +37283,7 @@ def _operator_application_programmatic_summary(
     }
 
 
+@_no_gold_decision_guarded("operator_application_verifier_prompt")
 def _operator_application_verifier_prompt(
     *,
     problem: dict[str, Any],
@@ -39013,6 +39458,12 @@ def _component_efficacy_from_plan(
         "verified_or_abstain_allowed": verified_or_abstain_gate.get("status") == "allowed",
         "verified_or_abstain_abstained": verified_or_abstain_gate.get("status") == "abstained",
         "verified_or_abstain_no_fallback": verified_or_abstain_gate.get("status") == "no_fallback",
+        "raw_baseline_noharm_gate_applied": (
+            verified_or_abstain_gate.get("reason") == "raw_baseline_noharm_blocks_weak_override"
+        ),
+        "raw_budget_baseline_noharm_gate_applied": (
+            verified_or_abstain_gate.get("reason") == "raw_budget_baseline_noharm_blocks_weak_override"
+        ),
         "raw_preserve_selector_activated": raw_preserve.get("status") == "activated",
         "raw_preserve_candidate_emitted": bool(raw_preserve.get("candidate_emitted")),
         "raw_preserve_selected": bool(raw_preserve.get("selected_raw_preserve_candidate")),
