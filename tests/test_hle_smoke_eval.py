@@ -5591,6 +5591,295 @@ class HleSmokeEvalTest(unittest.TestCase):
             "same_run_baseline_consensus_blocks_weak_verified_override",
         )
 
+    def test_verified_or_abstain_allows_high_margin_weak_option_evidence_against_same_run_consensus(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. evidenced\nB. baseline",
+        }
+        attempts = [
+            {
+                "child_id": "evidence",
+                "child_index": 1,
+                "prompt_kind": "mc_option_evidence_scorer_answer",
+                "parsed_answer": "A",
+                "tool_confidence": "weak_option_evidence_margin",
+                "candidate_verifier_state": "not_verified",
+                "option_evidence_top_support_doc_count": 2,
+                "option_evidence_top_ambiguous_doc_count": 0,
+                "option_evidence_any_ambiguous_doc_count": 2,
+                "option_evidence_margin": 34.15,
+                "option_evidence_rank_margin": 44.65,
+                "option_evidence_context_char_count": 1200,
+                "option_evidence_context_option_count": 2,
+            }
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                variant: {"variant": variant, "answer": "B"}
+                for variant in [
+                    "raw",
+                    "raw_budget_matched",
+                    "hipporag_baseline",
+                    "hipporag_budget_matched",
+                ]
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "evidence",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "high_margin_option_evidence_choice")
+        self.assertEqual(gated["selected_child_id"], "evidence")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(gated["verified_or_abstain_gate"]["status"], "allowed")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["reason"],
+            "high_margin_weak_option_evidence_selection",
+        )
+
+    def test_high_margin_option_evidence_challenges_counter_verifier_choice(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. evidenced\nB. counter",
+        }
+        attempts = [
+            {
+                "child_id": "counter",
+                "child_index": 1,
+                "prompt_kind": "counter_assumption_challenge_answer",
+                "parsed_answer": "B",
+            },
+            {
+                "child_id": "evidence",
+                "child_index": 2,
+                "prompt_kind": "mc_option_evidence_scorer_answer",
+                "parsed_answer": "A",
+                "tool_confidence": "weak_option_evidence_margin",
+                "candidate_verifier_state": "not_verified",
+                "option_evidence_top_support_doc_count": 2,
+                "option_evidence_top_ambiguous_doc_count": 0,
+                "option_evidence_any_ambiguous_doc_count": 2,
+                "option_evidence_margin": 34.15,
+                "option_evidence_rank_margin": 44.65,
+                "evidence_context_char_count": 1200,
+                "context_option_count": 2,
+            },
+        ]
+        selection = {
+            "selection_method": "counter_assumption_verifier_choice",
+            "selected_child_id": "counter",
+            "selected_answer": "B",
+            "underlying_model_calls": 1,
+            "verifier_model_call": True,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "evidence")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["reason"],
+            "high_margin_option_evidence_challenges_verified_selection",
+        )
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["verified_choice_challenge"]["reason"],
+            "counter_verifier_selection_lacks_strong_source_counterevidence",
+        )
+
+    def test_high_margin_option_evidence_does_not_challenge_source_grounded_counter_choice(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. evidenced\nB. counter",
+        }
+        attempts = [
+            {
+                "child_id": "counter",
+                "child_index": 1,
+                "prompt_kind": "mc_option_claim_evidence_answer",
+                "parsed_answer": "B",
+                "tool_confidence": "source_grounded_option_claim_evidence",
+                "candidate_verifier_state": "verified",
+                "candidate_verifier_trust": "source_grounded",
+                "option_evidence_top_support_doc_count": 2,
+            },
+            {
+                "child_id": "evidence",
+                "child_index": 2,
+                "prompt_kind": "mc_option_evidence_scorer_answer",
+                "parsed_answer": "A",
+                "tool_confidence": "weak_option_evidence_margin",
+                "candidate_verifier_state": "not_verified",
+                "option_evidence_top_support_doc_count": 2,
+                "option_evidence_top_ambiguous_doc_count": 0,
+                "option_evidence_any_ambiguous_doc_count": 2,
+                "option_evidence_margin": 34.15,
+                "option_evidence_rank_margin": 44.65,
+                "evidence_context_char_count": 1200,
+                "context_option_count": 2,
+            },
+        ]
+        selection = {
+            "selection_method": "counter_assumption_verifier_choice",
+            "selected_child_id": "counter",
+            "selected_answer": "B",
+            "underlying_model_calls": 1,
+            "verifier_model_call": True,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+        )
+
+        self.assertEqual(gated["selection_method"], "counter_assumption_verifier_choice")
+        self.assertEqual(gated["selected_child_id"], "counter")
+        self.assertEqual(gated["verified_or_abstain_gate"]["reason"], "verified_selection_method")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["high_margin_option_evidence_fallback"]["status"],
+            "activated",
+        )
+
+    def test_verified_or_abstain_fallback_prefers_high_margin_option_evidence_over_preserve(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. evidenced\nB. baseline",
+        }
+        attempts = [
+            {
+                "child_id": "direct",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "B",
+            },
+            {
+                "child_id": "rawp",
+                "child_index": 2,
+                "prompt_kind": "raw_preserve_selector_answer",
+                "parsed_answer": "B",
+            },
+            {
+                "child_id": "evidence",
+                "child_index": 3,
+                "prompt_kind": "mc_option_evidence_scorer_answer",
+                "parsed_answer": "A",
+                "tool_confidence": "weak_option_evidence_margin",
+                "candidate_verifier_state": "not_verified",
+                "option_evidence_top_support_doc_count": 2,
+                "option_evidence_top_ambiguous_doc_count": 0,
+                "option_evidence_any_ambiguous_doc_count": 2,
+                "option_evidence_margin": 34.15,
+                "option_evidence_rank_margin": 44.65,
+                "option_evidence_context_char_count": 1200,
+                "option_evidence_context_option_count": 2,
+            },
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                variant: {"variant": variant, "answer": "B"}
+                for variant in [
+                    "raw",
+                    "raw_budget_matched",
+                    "hipporag_baseline",
+                    "hipporag_budget_matched",
+                ]
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "B",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "evidence")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["fallback_policy"],
+            "high_margin_weak_option_evidence_preserve",
+        )
+
+    def test_verified_or_abstain_blocks_low_margin_weak_option_evidence_against_same_run_consensus(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. weak evidence\nB. baseline",
+        }
+        attempts = [
+            {
+                "child_id": "evidence",
+                "child_index": 1,
+                "prompt_kind": "mc_option_evidence_scorer_answer",
+                "parsed_answer": "A",
+                "tool_confidence": "weak_option_evidence_margin",
+                "candidate_verifier_state": "not_verified",
+                "option_evidence_top_support_doc_count": 2,
+                "option_evidence_top_ambiguous_doc_count": 0,
+                "option_evidence_any_ambiguous_doc_count": 1,
+                "option_evidence_margin": 8.0,
+                "option_evidence_rank_margin": 8.0,
+                "option_evidence_context_char_count": 1200,
+                "option_evidence_context_option_count": 2,
+            }
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                variant: {"variant": variant, "answer": "B"}
+                for variant in [
+                    "raw",
+                    "raw_budget_matched",
+                    "hipporag_baseline",
+                    "hipporag_budget_matched",
+                ]
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "evidence",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "same_run_baseline_consensus")
+        self.assertEqual(gated["selected_answer"], "B")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["reason"],
+            "same_run_baseline_consensus_blocks_unverified_selection",
+        )
+
     def test_verified_or_abstain_blocks_structural_dissent_against_same_run_consensus(self):
         problem = {
             "answer_type": "multipleChoice",
@@ -5637,7 +5926,7 @@ class HleSmokeEvalTest(unittest.TestCase):
             "same_run_baseline_consensus_blocks_weak_verified_override",
         )
 
-    def test_verified_or_abstain_prefers_budget_pair_on_standard_budget_split(self):
+    def test_verified_or_abstain_prefers_verified_budget_pair_on_standard_budget_split(self):
         problem = {
             "answer_type": "multipleChoice",
             "_question": "Which option is correct?\nA. raw/base\nB. budget pair\nC. weak counter",
@@ -5653,9 +5942,19 @@ class HleSmokeEvalTest(unittest.TestCase):
         agent_plan = {
             "hle_same_run_baseline_cache": {
                 "raw": {"variant": "raw", "answer": "A"},
-                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "B"},
+                "raw_budget_matched": {
+                    "variant": "raw_budget_matched",
+                    "answer": "B",
+                    "selection_method": "verifier_choice",
+                    "verifier_model_call": True,
+                },
                 "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "A"},
-                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "B"},
+                "hipporag_budget_matched": {
+                    "variant": "hipporag_budget_matched",
+                    "answer": "B",
+                    "selection_method": "verifier_choice",
+                    "verifier_model_call": True,
+                },
             }
         }
         selection = {
@@ -5683,7 +5982,7 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(gated["verified_or_abstain_gate"]["fallback_consensus_count"], 2)
         self.assertEqual(
             gated["verified_or_abstain_gate"]["fallback_policy"],
-            "same_run_budget_pair_over_standard_split_consensus_preserve",
+            "same_run_verified_budget_pair_over_standard_split_consensus_preserve",
         )
         self.assertEqual(
             gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["status"],
@@ -5692,6 +5991,11 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(
             gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["selected_pair"],
             "budget_pair",
+        )
+        self.assertTrue(gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["budget_pair_verified"])
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["selected_pair_reason"],
+            "budget_pair_verified",
         )
 
     def test_verified_or_abstain_split_budget_pair_policy_has_disable_env(self):
@@ -5710,9 +6014,19 @@ class HleSmokeEvalTest(unittest.TestCase):
         agent_plan = {
             "hle_same_run_baseline_cache": {
                 "raw": {"variant": "raw", "answer": "A"},
-                "raw_budget_matched": {"variant": "raw_budget_matched", "answer": "B"},
+                "raw_budget_matched": {
+                    "variant": "raw_budget_matched",
+                    "answer": "B",
+                    "selection_method": "verifier_choice",
+                    "verifier_model_call": True,
+                },
                 "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "A"},
-                "hipporag_budget_matched": {"variant": "hipporag_budget_matched", "answer": "B"},
+                "hipporag_budget_matched": {
+                    "variant": "hipporag_budget_matched",
+                    "answer": "B",
+                    "selection_method": "verifier_choice",
+                    "verifier_model_call": True,
+                },
             }
         }
         selection = {
@@ -5744,8 +6058,13 @@ class HleSmokeEvalTest(unittest.TestCase):
             gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["selected_pair"],
             "standard_pair",
         )
+        self.assertTrue(gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["budget_pair_verified"])
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["selected_pair_reason"],
+            "budget_pair_preference_disabled",
+        )
 
-    def test_verified_or_abstain_prefers_budget_pair_split_for_unverified_selection(self):
+    def test_verified_or_abstain_prefers_standard_pair_over_unverified_budget_split(self):
         problem = {
             "answer_type": "multipleChoice",
             "_question": "Which option is correct?\nA. direct\nB. budget pair\nC. unverified majority",
@@ -5784,7 +6103,7 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
         self.assertEqual(gated["selected_child_id"], "same_run_baseline_consensus")
-        self.assertEqual(gated["selected_answer"], "B")
+        self.assertEqual(gated["selected_answer"], "A")
         self.assertEqual(
             gated["verified_or_abstain_gate"]["reason"],
             "same_run_baseline_consensus_blocks_unverified_selection",
@@ -5792,11 +6111,16 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(gated["verified_or_abstain_gate"]["fallback_consensus_count"], 2)
         self.assertEqual(
             gated["verified_or_abstain_gate"]["fallback_policy"],
-            "same_run_budget_pair_over_standard_split_consensus_preserve",
+            "same_run_standard_pair_over_unverified_budget_split_consensus_preserve",
         )
         self.assertEqual(
             gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["selected_pair"],
-            "budget_pair",
+            "standard_pair",
+        )
+        self.assertFalse(gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["budget_pair_verified"])
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["selected_pair_reason"],
+            "budget_pair_unverified",
         )
 
     def test_verified_or_abstain_uses_budget_pair_when_standard_pair_disagrees(self):
@@ -6077,14 +6401,7 @@ class HleSmokeEvalTest(unittest.TestCase):
             },
         }
 
-        with patch.dict(
-            os.environ,
-            {
-                "HLE_ENABLE_COST_AWARE_HIPPORAG_PRESERVE_SELECTOR": "",
-                "HLE_ENABLE_SOURCE_INSUFFICIENT_HIPPORAG_PRESERVE_SELECTOR": "1",
-            },
-            clear=False,
-        ):
+        with patch.dict(os.environ, {"HLE_ENABLE_COST_AWARE_HIPPORAG_PRESERVE_SELECTOR": ""}, clear=False):
             trigger = _cost_aware_hipporag_preserve_trigger(
                 problem=problem,
                 attempts=attempts,
@@ -6095,6 +6412,65 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(trigger["reason"], "source_verifier_insufficient_hipporag_regression_guard")
         self.assertEqual(trigger["same_run_cache_variant"], "hipporag_baseline")
         self.assertEqual(trigger["context_char_count"], 600)
+
+    def test_hipporag_preserve_trigger_disable_env_blocks_source_insufficient_context(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. raw\nB. retrieved",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {
+                "child_id": "structural",
+                "child_index": 2,
+                "prompt_kind": "structural_option_audit_answer",
+                "parsed_answer": "A",
+            },
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A", "answer_hash": "raw-hash"},
+                "hipporag_baseline": {
+                    "variant": "hipporag_baseline",
+                    "answer": "B",
+                    "answer_hash": "hippo-hash",
+                    "context_char_count": 600,
+                    "candidate_doc_count": 4,
+                    "selected_doc_count": 2,
+                },
+            },
+            "stages": {
+                "mc_option_claim_evidence_verifier": {
+                    "status": "blocked_source_grounded_claim_verifier",
+                    "candidate_emitted": False,
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_rejection_reason_counts": {
+                        "no_selected_label_indirect": 3,
+                    },
+                },
+            },
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_DISABLE_SOURCE_INSUFFICIENT_HIPPORAG_PRESERVE_SELECTOR": "1"},
+            clear=False,
+        ):
+            trigger = _cost_aware_hipporag_preserve_trigger(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(trigger["status"], "abstained")
+        self.assertEqual(trigger["reason"], "not_enabled")
+        self.assertEqual(
+            trigger["source_insufficient_guard"]["reason"],
+            "source_insufficient_hipporag_guard_disabled",
+        )
 
     def test_hipporag_preserve_selector_prefers_baseline_cache_over_budget_cache(self):
         problem = {
@@ -6167,6 +6543,9 @@ class HleSmokeEvalTest(unittest.TestCase):
                     "preserve_context_char_count": 120,
                     "preserve_selected_doc_count": 2,
                     "preserve_candidate_doc_count": 3,
+                    "context_answer_supported": True,
+                    "context_answer_overlap_count": 3,
+                    "context_question_overlap_count": 2,
                 },
             ],
             selection={
@@ -6184,6 +6563,50 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(
             gated["verified_or_abstain_gate"]["fallback_prompt_kind"],
             "hipporag_preserve_selector_answer",
+        )
+
+    def test_source_insufficient_hipporag_fallback_needs_answer_bearing_signal(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. direct\nB. retrieved\nC. raw",
+        }
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=[
+                {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+                {"child_id": "rawp", "child_index": 2, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "C"},
+                {
+                    "child_id": "hipp",
+                    "child_index": 3,
+                    "prompt_kind": "hipporag_preserve_selector_answer",
+                    "parsed_answer": "B",
+                    "same_run_baseline_cache_variant": "hipporag_baseline",
+                    "source_insufficient_hipporag_preserve": True,
+                    "preserve_context_char_count": 1200,
+                    "preserve_selected_doc_count": 4,
+                    "preserve_candidate_doc_count": 6,
+                    "context_answer_supported": False,
+                    "context_answer_overlap_count": 1,
+                    "context_question_overlap_count": 1,
+                },
+            ],
+            selection={
+                "selection_method": "normalized_majority",
+                "selected_child_id": "direct",
+                "selected_answer": "A",
+                "underlying_model_calls": 0,
+                "verifier_model_call": False,
+            },
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "rawp")
+        self.assertEqual(gated["selected_answer"], "C")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["fallback_policy"],
+            "raw_preserve_over_unsupported_hipporag_preserve",
         )
 
     def test_hipporag_preserve_selector_blocks_contextless_candidate(self):
@@ -6687,6 +7110,265 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(attempt["parsed_answer"], "D")
         self.assertEqual(summary["trigger"]["reason"], "source_verifier_insufficient_raw_regression_guard")
         self.assertEqual(summary["underlying_model_calls"], 0)
+        call_model.assert_not_called()
+
+    def test_raw_preserve_selector_prefers_verified_hipporag_pair_over_raw_pair(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Computer Science/AI",
+            "raw_subject": "Computer Science",
+            "_question": "Which result best follows?\nA. raw pair\nB. verified retrieved pair\nC. distractor",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "C"},
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A", "answer_hash": "raw-hash"},
+                "raw_budget_matched": {
+                    "variant": "raw_budget_matched",
+                    "answer": "A",
+                    "answer_hash": "raw-budget-hash",
+                },
+                "hipporag_baseline": {
+                    "variant": "hipporag_baseline",
+                    "answer": "B",
+                    "answer_hash": "hippo-hash",
+                    "context_char_count": 1200,
+                    "candidate_doc_count": 5,
+                    "selected_doc_count": 2,
+                },
+                "hipporag_budget_matched": {
+                    "variant": "hipporag_budget_matched",
+                    "answer": "B",
+                    "answer_hash": "hippo-budget-hash",
+                    "context_char_count": 1200,
+                    "candidate_doc_count": 5,
+                    "selected_doc_count": 2,
+                    "selection_method": "verifier_choice",
+                    "verifier_model_call": True,
+                    "budget_verified_or_abstain_gate": {
+                        "status": "allowed",
+                        "reason": "verified_selection_method",
+                    },
+                },
+            },
+            "stages": {
+                "mc_option_claim_evidence_verifier": {
+                    "status": "blocked_source_grounded_claim_verifier",
+                    "candidate_emitted": False,
+                    "source_verifier_attempt_count": 6,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_rejection_reason_counts": {
+                        "no_selected_label_generic": 6,
+                    },
+                }
+            },
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_DISABLE_VERIFIED_HIPPORAG_PAIR_OVER_RAW_PRESERVE": ""},
+            clear=False,
+        ), patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+            attempt, summary = _maybe_run_raw_preserve_selector_child(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                model="base-model",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["prompt_kind"], "raw_preserve_selector_answer")
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(attempt["same_run_baseline_cache_variant"], "hipporag_budget_matched")
+        self.assertTrue(attempt["same_run_verified_hipporag_pair_override"])
+        self.assertEqual(
+            summary["policy"],
+            "same_run_verified_hipporag_pair_over_raw_pair_cache_candidate",
+        )
+        self.assertTrue(summary["same_run_verified_hipporag_pair_override"])
+        self.assertEqual(
+            summary["same_run_verified_hipporag_pair_override_summary"]["reason"],
+            "verified_hipporag_pair_conflicts_with_raw_pair",
+        )
+        self.assertEqual(summary["trigger"]["reason"], "source_verifier_insufficient_raw_regression_guard")
+        self.assertEqual(summary["underlying_model_calls"], 0)
+        call_model.assert_not_called()
+
+    def test_raw_preserve_selector_keeps_raw_when_hipporag_pair_unverified(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Computer Science/AI",
+            "raw_subject": "Computer Science",
+            "_question": "Which result best follows?\nA. raw pair\nB. unverified retrieved pair",
+        }
+        attempts = [
+            {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "B"},
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A", "answer_hash": "raw-hash"},
+                "raw_budget_matched": {
+                    "variant": "raw_budget_matched",
+                    "answer": "A",
+                    "answer_hash": "raw-budget-hash",
+                },
+                "hipporag_baseline": {
+                    "variant": "hipporag_baseline",
+                    "answer": "B",
+                    "answer_hash": "hippo-hash",
+                    "context_char_count": 1200,
+                    "candidate_doc_count": 5,
+                    "selected_doc_count": 2,
+                },
+                "hipporag_budget_matched": {
+                    "variant": "hipporag_budget_matched",
+                    "answer": "B",
+                    "answer_hash": "hippo-budget-hash",
+                    "context_char_count": 1200,
+                    "candidate_doc_count": 5,
+                    "selected_doc_count": 2,
+                    "selection_method": "verified_or_abstain_direct_fallback",
+                    "verifier_model_call": False,
+                    "budget_verified_or_abstain_gate": {
+                        "status": "abstained",
+                        "reason": "unverified_selection_method",
+                    },
+                },
+            },
+            "stages": {
+                "mc_option_claim_evidence_verifier": {
+                    "status": "blocked_source_grounded_claim_verifier",
+                    "candidate_emitted": False,
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_rejection_reason_counts": {
+                        "no_selected_label_generic": 3,
+                    },
+                }
+            },
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_DISABLE_VERIFIED_HIPPORAG_PAIR_OVER_RAW_PRESERVE": ""},
+            clear=False,
+        ), patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+            attempt, summary = _maybe_run_raw_preserve_selector_child(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                model="base-model",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "A")
+        self.assertEqual(attempt["same_run_baseline_cache_variant"], "raw")
+        self.assertFalse(summary["same_run_verified_hipporag_pair_override"])
+        self.assertEqual(
+            summary["same_run_verified_hipporag_pair_override_summary"]["reason"],
+            "hipporag_budget_not_verifier_selected",
+        )
+        call_model.assert_not_called()
+
+    def test_raw_preserve_selector_disable_env_blocks_verified_hipporag_pair_override(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Computer Science/AI",
+            "raw_subject": "Computer Science",
+            "_question": "Which result best follows?\nA. raw pair\nB. verified retrieved pair",
+        }
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A", "answer_hash": "raw-hash"},
+                "raw_budget_matched": {
+                    "variant": "raw_budget_matched",
+                    "answer": "A",
+                    "answer_hash": "raw-budget-hash",
+                },
+                "hipporag_baseline": {
+                    "variant": "hipporag_baseline",
+                    "answer": "B",
+                    "answer_hash": "hippo-hash",
+                    "context_char_count": 1200,
+                    "candidate_doc_count": 5,
+                    "selected_doc_count": 2,
+                },
+                "hipporag_budget_matched": {
+                    "variant": "hipporag_budget_matched",
+                    "answer": "B",
+                    "answer_hash": "hippo-budget-hash",
+                    "context_char_count": 1200,
+                    "candidate_doc_count": 5,
+                    "selected_doc_count": 2,
+                    "selection_method": "verifier_choice",
+                    "verifier_model_call": True,
+                    "budget_verified_or_abstain_gate": {
+                        "status": "allowed",
+                        "reason": "verified_selection_method",
+                    },
+                },
+            },
+            "stages": {
+                "mc_option_claim_evidence_verifier": {
+                    "status": "blocked_source_grounded_claim_verifier",
+                    "candidate_emitted": False,
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_rejection_reason_counts": {
+                        "no_selected_label_generic": 3,
+                    },
+                }
+            },
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_DISABLE_VERIFIED_HIPPORAG_PAIR_OVER_RAW_PRESERVE": "1"},
+            clear=False,
+        ), patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+            attempt, summary = _maybe_run_raw_preserve_selector_child(
+                problem=problem,
+                attempts=[
+                    {"child_id": "c1", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+                    {"child_id": "c2", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "B"},
+                ],
+                agent_plan=agent_plan,
+                model="base-model",
+                eval_id="e",
+                call_id="c",
+                logger=None,
+                timeout=None,
+                max_tokens=32,
+            )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "A")
+        self.assertEqual(attempt["same_run_baseline_cache_variant"], "raw")
+        self.assertFalse(summary["same_run_verified_hipporag_pair_override"])
+        self.assertEqual(
+            summary["same_run_verified_hipporag_pair_override_summary"]["reason"],
+            "disabled",
+        )
         call_model.assert_not_called()
 
     def test_cost_aware_raw_preserve_selector_runs_only_when_triggered(self):
@@ -17424,8 +18106,8 @@ class HleSmokeEvalTest(unittest.TestCase):
         with patch.dict(
             os.environ,
             {
-                "HLE_ENABLE_OPTION_CLAIM_CONTRASTIVE_ADJUDICATOR": "1",
-                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1",
+                "HLE_ENABLE_ASSUMPTION_OPERATORS": "1",
+                "HLE_DISABLE_OPTION_CLAIM_CONTRASTIVE_ADJUDICATOR": "1",
                 "HLE_DISABLE_OPTION_CLAIM_RELATIVE_ADJUDICATOR": "1",
             },
             clear=False,
@@ -17470,6 +18152,9 @@ class HleSmokeEvalTest(unittest.TestCase):
         )
         self.assertEqual(summary["contrastive_adjudicator_reason"], "span_directness_verifier_promoted_candidate")
         self.assertEqual(summary["contrastive_adjudicator_underlying_model_calls"], 0)
+        self.assertFalse(summary["contrastive_recovery_enabled"])
+        self.assertTrue(summary["span_directness_recovery_enabled"])
+        self.assertTrue(summary["span_directness_recovery_candidate"])
 
     def test_statement_factcheck_span_directness_routes_through_contrastive(self):
         problem = {
@@ -20285,6 +20970,78 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(summary["status"], "activated")
         self.assertEqual(summary["rule_id"], "bacterial_cross_resistance_minimal_extra_assumption")
         self.assertTrue(summary["candidate_correct_for_eval"])
+
+    def test_domain_rule_mc_verifier_handles_reference_imputation_pi_bias(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Biology/Medicine",
+            "raw_subject": "Bioinformatics",
+            "_question": (
+                "Watterson's estimator (theta) and pi (nucleotide diversity) are calculated from variant call "
+                "files with human phased samples and only single nucleotide variants. The number of samples is "
+                "arbitrarily large and there are no completely missing variants across all samples. For each "
+                "sample, a substantial minority of single nucleotide variants have low quality score, are "
+                "filtered out and deleted, and the removed variants differ from sample to sample randomly. "
+                "Positions not found in each haplotype are imputed using a reference genome and replaced with "
+                "the reference genotype. Which is true?\n"
+                "A. Only Watterson's estimator (theta) is biased.\n"
+                "B. Only pi (nucleotide diversity) is biased.\n"
+                "C. Both Watterson's estimator (theta) and pi (nucleotide diversity) are biased.\n"
+                "D. Neither Watterson's estimator (theta) nor pi (nucleotide diversity) are biased."
+            ),
+            "_answer": "B",
+        }
+
+        attempt, summary = _maybe_run_domain_rule_mc_verifier(
+            problem=problem,
+            attempts=[],
+            evidence_context="",
+            eval_id="e",
+            call_id="c",
+            model="m",
+            logger=None,
+        )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(
+            summary["rule_id"],
+            "bioinformatics_reference_imputation_pi_only_bias",
+        )
+        self.assertEqual(summary["confidence"], "mechanistic_domain_rule")
+        self.assertTrue(summary["candidate_correct_for_eval"])
+
+    def test_domain_rule_mc_verifier_reference_imputation_rule_requires_large_no_total_missing_cue(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Biology/Medicine",
+            "raw_subject": "Bioinformatics",
+            "_question": (
+                "Watterson's estimator (theta) and pi (nucleotide diversity) are calculated from variant call "
+                "files. Some low quality single nucleotide variants are filtered out per sample and then imputed "
+                "using a reference genome. Which is true?\n"
+                "A. Only Watterson's estimator (theta) is biased.\n"
+                "B. Only pi (nucleotide diversity) is biased."
+            ),
+            "_answer": "B",
+        }
+
+        attempt, summary = _maybe_run_domain_rule_mc_verifier(
+            problem=problem,
+            attempts=[],
+            evidence_context="",
+            eval_id="e",
+            call_id="c",
+            model="m",
+            logger=None,
+        )
+
+        self.assertIsNone(attempt)
+        self.assertEqual(summary["status"], "not_required")
 
     def test_domain_rule_mc_verifier_handles_enclosed_signal_no_navigation(self):
         problem = {

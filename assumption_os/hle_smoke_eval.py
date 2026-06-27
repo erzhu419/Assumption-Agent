@@ -1634,6 +1634,7 @@ def _same_run_baseline_cache_entry(
         "budget_top_candidate_answer_hash": budget.get("top_candidate_answer_hash"),
         "budget_strong_consensus": bool(budget.get("strong_consensus")),
         "selection_method": budget.get("selection_method"),
+        "verifier_model_call": bool(budget.get("verifier_model_call")),
         "budget_verified_or_abstain_gate": budget.get("verified_or_abstain_gate"),
         "source": "same_run_baseline_cache",
     }
@@ -3502,6 +3503,143 @@ def _domain_rule_verifier_disabled() -> bool:
     return _env_flag("HLE_DISABLE_DOMAIN_RULE_VERIFIER")
 
 
+def _same_run_budget_entry_verified(entry: dict[str, Any] | None) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    selection_method = str(entry.get("selection_method") or "")
+    verifier_choice_methods = {
+        "verifier_choice",
+        "counter_assumption_verifier_choice",
+        "operator_application_fidelity_choice",
+        "orthogonal_structural_elimination_choice",
+        "structural_dissent_verifier_choice",
+    }
+    if selection_method in verifier_choice_methods and bool(entry.get("verifier_model_call")):
+        return True
+    gate = entry.get("budget_verified_or_abstain_gate")
+    gate = gate if isinstance(gate, dict) else {}
+    return bool(
+        gate.get("status") == "allowed"
+        and str(gate.get("reason") or "") == "verified_selection_method"
+        and selection_method in verifier_choice_methods
+    )
+
+
+def _verified_hipporag_pair_over_raw_preserve_candidate(
+    *,
+    problem: dict[str, Any],
+    agent_plan: dict[str, Any] | None,
+    raw_entry: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    if os.environ.get(
+        "HLE_DISABLE_VERIFIED_HIPPORAG_PAIR_OVER_RAW_PRESERVE",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return None, {"status": "abstained", "reason": "disabled"}
+    if not isinstance(raw_entry, dict):
+        return None, {"status": "abstained", "reason": "no_raw_cache_entry"}
+    cached = {
+        variant: _same_run_cached_baseline(agent_plan, [variant])
+        for variant in ["raw", "raw_budget_matched", "hipporag_baseline", "hipporag_budget_matched"]
+    }
+    if any(not isinstance(cached.get(variant), dict) for variant in cached):
+        return None, {
+            "status": "abstained",
+            "reason": "missing_required_same_run_baseline_pair",
+            "cached_variants": sorted(
+                variant for variant, entry in cached.items() if isinstance(entry, dict)
+            ),
+        }
+    answer_type = str(problem.get("answer_type") or "exactMatch")
+    norms = {
+        variant: _normalize_for_selection(
+            str((entry or {}).get("answer") or ""),
+            answer_type=answer_type,
+        )
+        for variant, entry in cached.items()
+    }
+    if not all(norms.values()):
+        return None, {
+            "status": "abstained",
+            "reason": "missing_normalized_answer",
+            "norm_hashes_by_variant": {
+                variant: stable_hash({"same_run_baseline_norm": norm})
+                for variant, norm in norms.items()
+                if norm
+            },
+        }
+    raw_norm = norms["raw"]
+    raw_budget_norm = norms["raw_budget_matched"]
+    hipporag_norm = norms["hipporag_baseline"]
+    hipporag_budget_norm = norms["hipporag_budget_matched"]
+    if raw_norm != raw_budget_norm:
+        return None, {
+            "status": "abstained",
+            "reason": "raw_pair_disagrees",
+            "raw_norm_hash": stable_hash({"same_run_baseline_norm": raw_norm}),
+            "raw_budget_norm_hash": stable_hash({"same_run_baseline_norm": raw_budget_norm}),
+        }
+    if hipporag_norm != hipporag_budget_norm:
+        return None, {
+            "status": "abstained",
+            "reason": "hipporag_pair_disagrees",
+            "hipporag_norm_hash": stable_hash({"same_run_baseline_norm": hipporag_norm}),
+            "hipporag_budget_norm_hash": stable_hash({"same_run_baseline_norm": hipporag_budget_norm}),
+        }
+    if raw_norm == hipporag_norm:
+        return None, {
+            "status": "abstained",
+            "reason": "raw_and_hipporag_pairs_agree",
+            "pair_norm_hash": stable_hash({"same_run_baseline_norm": raw_norm}),
+        }
+    hipporag_budget = cached["hipporag_budget_matched"]
+    if not _same_run_budget_entry_verified(hipporag_budget):
+        return None, {
+            "status": "abstained",
+            "reason": "hipporag_budget_not_verifier_selected",
+            "hipporag_budget_selection_method": hipporag_budget.get("selection_method"),
+            "hipporag_budget_verifier_model_call": bool(hipporag_budget.get("verifier_model_call")),
+            "hipporag_budget_verified_or_abstain_gate": hipporag_budget.get("budget_verified_or_abstain_gate"),
+        }
+    context_char_count = max(
+        int((cached["hipporag_baseline"] or {}).get("context_char_count") or 0),
+        int((hipporag_budget or {}).get("context_char_count") or 0),
+    )
+    selected_doc_count = max(
+        int((cached["hipporag_baseline"] or {}).get("selected_doc_count") or 0),
+        int((hipporag_budget or {}).get("selected_doc_count") or 0),
+    )
+    candidate_doc_count = max(
+        int((cached["hipporag_baseline"] or {}).get("candidate_doc_count") or 0),
+        int((hipporag_budget or {}).get("candidate_doc_count") or 0),
+    )
+    has_usable_context = context_char_count > 0 and (selected_doc_count > 0 or candidate_doc_count > 0)
+    if not has_usable_context:
+        return None, {
+            "status": "abstained",
+            "reason": "hipporag_pair_lacks_usable_context",
+            "context_char_count": context_char_count,
+            "selected_doc_count": selected_doc_count,
+            "candidate_doc_count": candidate_doc_count,
+        }
+    return hipporag_budget, {
+        "status": "activated",
+        "reason": "verified_hipporag_pair_conflicts_with_raw_pair",
+        "policy": "same_run_verified_hipporag_pair_over_raw_pair_preserve",
+        "selected_variant": "hipporag_budget_matched",
+        "raw_pair_variants": ["raw", "raw_budget_matched"],
+        "hipporag_pair_variants": ["hipporag_baseline", "hipporag_budget_matched"],
+        "raw_pair_norm_hash": stable_hash({"same_run_baseline_norm": raw_norm}),
+        "hipporag_pair_norm_hash": stable_hash({"same_run_baseline_norm": hipporag_norm}),
+        "hipporag_budget_selection_method": hipporag_budget.get("selection_method"),
+        "hipporag_budget_verifier_model_call": bool(hipporag_budget.get("verifier_model_call")),
+        "hipporag_budget_verified_or_abstain_gate": hipporag_budget.get("budget_verified_or_abstain_gate"),
+        "context_char_count": context_char_count,
+        "selected_doc_count": selected_doc_count,
+        "candidate_doc_count": candidate_doc_count,
+    }
+
+
 def _maybe_run_raw_preserve_selector_child(
     *,
     problem: dict[str, Any],
@@ -3530,6 +3668,13 @@ def _maybe_run_raw_preserve_selector_child(
     child_index = _timeout_recovery_child_index(attempts)
     cached = _same_run_cached_baseline(agent_plan, ["raw"])
     if cached:
+        override_cached, override_summary = _verified_hipporag_pair_over_raw_preserve_candidate(
+            problem=problem,
+            agent_plan=agent_plan,
+            raw_entry=cached,
+        )
+        if override_cached:
+            cached = override_cached
         answer = str(cached.get("answer") or "").strip()
         child_id = stable_hash({
             "call_id": call_id,
@@ -3558,9 +3703,18 @@ def _maybe_run_raw_preserve_selector_child(
             "status": "answered" if answer else "no_answer",
             "same_run_baseline_cache_variant": cached.get("variant"),
         }
+        if override_cached:
+            attempt["same_run_verified_hipporag_pair_override"] = True
+            attempt["verified_or_abstain_fallback_policy"] = (
+                "same_run_verified_hipporag_pair_over_raw_pair_preserve"
+            )
         summary = {
             "status": "activated" if answer else "no_candidate",
-            "policy": "same_run_raw_baseline_cache_candidate",
+            "policy": (
+                "same_run_verified_hipporag_pair_over_raw_pair_cache_candidate"
+                if override_cached
+                else "same_run_raw_baseline_cache_candidate"
+            ),
             "trigger": trigger if not env_forced else {"status": "activated", "reason": "env_forced"},
             "base_model": model,
             "child_id": child_id,
@@ -3570,6 +3724,8 @@ def _maybe_run_raw_preserve_selector_child(
             "candidate_emitted": bool(answer),
             "candidate_answer_hash": attempt.get("parsed_answer_hash"),
             "same_run_cache_variant": cached.get("variant"),
+            "same_run_verified_hipporag_pair_override": bool(override_cached),
+            "same_run_verified_hipporag_pair_override_summary": override_summary,
             "borrowed_baseline_model_calls": 1,
             "underlying_model_calls": 0,
         }
@@ -3942,6 +4098,11 @@ def _maybe_run_hipporag_preserve_selector_child(
             "context_question_overlap_count": int(cached.get("context_question_overlap_count") or 0),
             "context_answer_option_hash": cached.get("context_answer_option_hash"),
         }
+        answer_bearing_support = _hipporag_preserve_answer_bearing_support_summary(attempt)
+        attempt["hipporag_before_raw_answer_bearing_supported"] = bool(
+            answer_bearing_support.get("supported")
+        )
+        attempt["hipporag_before_raw_answer_bearing_reason"] = answer_bearing_support.get("reason")
         if trigger.get("reason") == "source_verifier_insufficient_hipporag_regression_guard":
             attempt["source_insufficient_hipporag_preserve"] = True
             attempt["verified_or_abstain_fallback_policy"] = (
@@ -3988,6 +4149,11 @@ def _maybe_run_hipporag_preserve_selector_child(
             "context_answer_overlap_count": int(cached.get("context_answer_overlap_count") or 0),
             "context_question_overlap_count": int(cached.get("context_question_overlap_count") or 0),
             "context_answer_option_hash": cached.get("context_answer_option_hash"),
+            "hipporag_before_raw_answer_bearing_supported": bool(
+                answer_bearing_support.get("supported")
+            ),
+            "hipporag_before_raw_answer_bearing_reason": answer_bearing_support.get("reason"),
+            "hipporag_before_raw_answer_bearing_support": answer_bearing_support,
             "borrowed_baseline_model_calls": 1,
             "underlying_model_calls": 0,
         }
@@ -4112,6 +4278,11 @@ def _maybe_run_hipporag_preserve_selector_child(
         attempt["context_answer_overlap_count"] = int(context_answer_support.get("overlap_count") or 0)
         attempt["context_question_overlap_count"] = int(context_answer_support.get("question_overlap_count") or 0)
         attempt["context_answer_option_hash"] = context_answer_support.get("option_hash")
+        answer_bearing_support = _hipporag_preserve_answer_bearing_support_summary(attempt)
+        attempt["hipporag_before_raw_answer_bearing_supported"] = bool(
+            answer_bearing_support.get("supported")
+        )
+        attempt["hipporag_before_raw_answer_bearing_reason"] = answer_bearing_support.get("reason")
         summary = {
             "status": "activated" if selected_answer else "no_candidate",
             "policy": (
@@ -4137,6 +4308,11 @@ def _maybe_run_hipporag_preserve_selector_child(
             "context_answer_overlap_count": int(context_answer_support.get("overlap_count") or 0),
             "context_question_overlap_count": int(context_answer_support.get("question_overlap_count") or 0),
             "context_answer_option_hash": context_answer_support.get("option_hash"),
+            "hipporag_before_raw_answer_bearing_supported": bool(
+                answer_bearing_support.get("supported")
+            ),
+            "hipporag_before_raw_answer_bearing_reason": answer_bearing_support.get("reason"),
+            "hipporag_before_raw_answer_bearing_support": answer_bearing_support,
             "baseline_plan_hash": stable_hash(baseline_plan),
             "budget_matched": True,
             "candidate_count": len(child_attempts),
@@ -4173,6 +4349,11 @@ def _maybe_run_hipporag_preserve_selector_child(
     attempt["context_answer_overlap_count"] = int(context_answer_support.get("overlap_count") or 0)
     attempt["context_question_overlap_count"] = int(context_answer_support.get("question_overlap_count") or 0)
     attempt["context_answer_option_hash"] = context_answer_support.get("option_hash")
+    answer_bearing_support = _hipporag_preserve_answer_bearing_support_summary(attempt)
+    attempt["hipporag_before_raw_answer_bearing_supported"] = bool(
+        answer_bearing_support.get("supported")
+    )
+    attempt["hipporag_before_raw_answer_bearing_reason"] = answer_bearing_support.get("reason")
     summary = {
         "status": "activated",
         "policy": (
@@ -4198,6 +4379,11 @@ def _maybe_run_hipporag_preserve_selector_child(
         "context_answer_overlap_count": int(context_answer_support.get("overlap_count") or 0),
         "context_question_overlap_count": int(context_answer_support.get("question_overlap_count") or 0),
         "context_answer_option_hash": context_answer_support.get("option_hash"),
+        "hipporag_before_raw_answer_bearing_supported": bool(
+            answer_bearing_support.get("supported")
+        ),
+        "hipporag_before_raw_answer_bearing_reason": answer_bearing_support.get("reason"),
+        "hipporag_before_raw_answer_bearing_support": answer_bearing_support,
         "baseline_plan_hash": stable_hash(baseline_plan),
         "underlying_model_calls": 1 if attempt.get("status") == "answered" else 0,
     }
@@ -5941,10 +6127,7 @@ def _source_insufficient_hipporag_preserve_selector_enabled() -> bool:
         "",
     ).strip().lower() in {"1", "true", "yes", "on"}:
         return False
-    return os.environ.get(
-        "HLE_ENABLE_SOURCE_INSUFFICIENT_HIPPORAG_PRESERVE_SELECTOR",
-        "",
-    ).strip().lower() in {"1", "true", "yes", "on"}
+    return True
 
 
 def _source_insufficient_claim_summary(claim_summary: dict[str, Any]) -> dict[str, Any]:
@@ -13565,11 +13748,32 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 "candidate_count": len(relative_candidate_labels),
                 "underlying_model_calls": 0,
             }
-    if (
-        (
-            _option_claim_contrastive_adjudicator_enabled()
-            or prefilter_override_recovery_adjudicators_enabled
+    contrastive_recovery_enabled = _option_claim_contrastive_adjudicator_enabled()
+    span_directness_recovery_candidate = bool(
+        missing_model_labels
+        or finite_sweep_retry_coverage
+        or sweep_gap_missing_label_set
+        or any(
+            str(item.get("retry_reason") or "").startswith("sweep_gap_")
+            or str(item.get("retry_reason") or "").startswith("missing_model_")
+            for item in source_verifier_attempts
         )
+    )
+    span_directness_recovery_enabled = bool(
+        span_directness_recovery_candidate
+        and _option_claim_selective_span_directness_recovery_enabled(
+            prefilter_override_recovery_adjudicators_enabled=(
+                prefilter_override_recovery_adjudicators_enabled
+            )
+        )
+    )
+    claim_recovery_enabled = bool(
+        contrastive_recovery_enabled
+        or span_directness_recovery_enabled
+        or prefilter_override_recovery_adjudicators_enabled
+    )
+    if (
+        claim_recovery_enabled
         and source_verifier_enabled
         and evidence_context.strip()
         and source_verifier_attempts
@@ -13671,14 +13875,18 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 if contrastive_unique_span_context_used
                 else contrastive_fallback_evidence_context
             )
+            direct_relation_span_recovery_enabled = bool(
+                _option_claim_candidate_direct_relation_span_extractor_enabled(
+                    force_enabled=(
+                        span_directness_recovery_enabled
+                        or prefilter_override_recovery_adjudicators_enabled
+                    )
+                )
+                or prefilter_override_recovery_adjudicators_enabled
+            )
             prioritize_candidate_direct_relation_recovery = bool(
                 _option_claim_candidate_direct_relation_span_verifier_priority_enabled()
-                and (
-                    _option_claim_candidate_direct_relation_span_extractor_enabled(
-                        force_enabled=prefilter_override_recovery_adjudicators_enabled,
-                    )
-                    or prefilter_override_recovery_adjudicators_enabled
-                )
+                and direct_relation_span_recovery_enabled
             )
             if prioritize_candidate_direct_relation_recovery:
                 span_directness_verifier_summary = _option_claim_span_directness_skipped_summary(
@@ -13718,7 +13926,10 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                     logger=logger,
                     timeout=timeout,
                     max_tokens=max_tokens,
-                    force_enabled=prefilter_override_recovery_adjudicators_enabled,
+                    force_enabled=(
+                        span_directness_recovery_enabled
+                        or prefilter_override_recovery_adjudicators_enabled
+                    ),
                 )
             unique_span_directness_verifier_summary = span_directness_verifier_summary
             candidate_direct_relation_span_docs_by_label: dict[str, list[dict[str, str]]] = {}
@@ -13734,10 +13945,7 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                     int(span_directness_verifier_summary.get("direct_candidate_count") or 0) <= 0
                     or require_contrastive_after_span_directness
                 )
-                and (
-                    _option_claim_candidate_direct_relation_span_extractor_enabled()
-                    or prefilter_override_recovery_adjudicators_enabled
-                )
+                and direct_relation_span_recovery_enabled
             ):
                 candidate_direct_relation_span_docs_by_label, candidate_direct_relation_span_extractor_summary = (
                     _option_claim_candidate_direct_relation_spans_by_label(
@@ -13748,7 +13956,10 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                         preferred_doc_hashes_by_label=contrastive_preferred_doc_hashes_by_label,
                         context_anchor_summary=contrastive_context_anchor_summary,
                         unique_span_summary=contrastive_unique_span_summary,
-                        force_enabled=prefilter_override_recovery_adjudicators_enabled,
+                        force_enabled=(
+                            span_directness_recovery_enabled
+                            or prefilter_override_recovery_adjudicators_enabled
+                        ),
                     )
                 )
                 candidate_direct_relation_span_context = _option_claim_candidate_direct_relation_span_context(
@@ -13791,7 +14002,10 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                             logger=logger,
                             timeout=timeout,
                             max_tokens=max_tokens,
-                            force_enabled=prefilter_override_recovery_adjudicators_enabled,
+                            force_enabled=(
+                                span_directness_recovery_enabled
+                                or prefilter_override_recovery_adjudicators_enabled
+                            ),
                         )
                     )
                     span_directness_verifier_summary = (
@@ -13880,21 +14094,53 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                     and candidate_direct_relation_span_context_used
                 ):
                     contrastive_evidence_context = candidate_direct_relation_span_context
-                contrastive_adjudicator_summary = _run_option_claim_contrastive_adjudicator(
-                    problem=problem,
-                    options=contrastive_options,
-                    evidence_context=contrastive_evidence_context,
-                    candidate_labels=contrastive_candidate_labels,
-                    candidate_summaries=contrastive_candidate_summaries,
-                    model=model,
-                    eval_id=eval_id,
-                    call_id=f"{call_id}_contrastive_adjudicator",
-                    logger=logger,
-                    timeout=timeout,
-                    max_tokens=max_tokens,
-                )
+                if contrastive_recovery_enabled or prefilter_override_recovery_adjudicators_enabled:
+                    contrastive_adjudicator_summary = _run_option_claim_contrastive_adjudicator(
+                        problem=problem,
+                        options=contrastive_options,
+                        evidence_context=contrastive_evidence_context,
+                        candidate_labels=contrastive_candidate_labels,
+                        candidate_summaries=contrastive_candidate_summaries,
+                        model=model,
+                        eval_id=eval_id,
+                        call_id=f"{call_id}_contrastive_adjudicator",
+                        logger=logger,
+                        timeout=timeout,
+                        max_tokens=max_tokens,
+                    )
+                else:
+                    contrastive_adjudicator_summary = {
+                        "status": "not_required",
+                        "reason": "span_directness_only_no_direct_promotion",
+                        "verifier_kind": "contrastive_top_vs_runner_up",
+                        "direct_high_confidence": False,
+                        "relation_satisfied": False,
+                        "candidate_count": len(contrastive_candidate_labels),
+                        "candidate_option_hashes": [
+                            stable_hash({"option_label": label})
+                            for label in contrastive_candidate_labels
+                            if label in options
+                        ],
+                        "candidate_summaries": contrastive_candidate_summaries,
+                        "selected_label": "",
+                        "selected_option_hash": None,
+                        "selected_runner_up": False,
+                        "underlying_model_calls": 0,
+                    }
             contrastive_adjudicator_summary["candidate_selection"] = _safe_contrastive_candidate_selection_summary(
                 contrastive_candidate_selection
+            )
+            contrastive_adjudicator_summary["contrastive_recovery_enabled"] = bool(
+                contrastive_recovery_enabled
+            )
+            contrastive_adjudicator_summary["span_directness_recovery_enabled"] = bool(
+                span_directness_recovery_enabled
+            )
+            contrastive_adjudicator_summary["span_directness_recovery_candidate"] = bool(
+                span_directness_recovery_candidate
+            )
+            contrastive_adjudicator_summary["prefilter_override_recovery_adjudicators_enabled"] = bool(
+                prefilter_override_recovery_adjudicators_enabled
             )
             contrastive_adjudicator_summary["answer_bearing_task_hint_kind"] = (
                 answer_bearing_task_hint.get("kind")
@@ -14596,6 +14842,20 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         "contrastive_adjudicator": contrastive_adjudicator_summary,
         "contrastive_adjudicator_status": contrastive_adjudicator_summary.get("status"),
         "contrastive_adjudicator_reason": contrastive_adjudicator_summary.get("reason"),
+        "contrastive_recovery_enabled": bool(
+            contrastive_adjudicator_summary.get("contrastive_recovery_enabled")
+        ),
+        "span_directness_recovery_enabled": bool(
+            contrastive_adjudicator_summary.get("span_directness_recovery_enabled")
+        ),
+        "span_directness_recovery_candidate": bool(
+            contrastive_adjudicator_summary.get("span_directness_recovery_candidate")
+        ),
+        "prefilter_override_recovery_adjudicators_enabled": bool(
+            contrastive_adjudicator_summary.get(
+                "prefilter_override_recovery_adjudicators_enabled"
+            )
+        ),
         "contrastive_adjudicator_budget_exhausted": bool(
             contrastive_adjudicator_summary.get("status") == "budget_exhausted"
         ),
@@ -15618,6 +15878,28 @@ def _option_claim_span_directness_verifier_enabled() -> bool:
     if explicit:
         return explicit in {"1", "true", "yes", "on"}
     return False
+
+
+def _option_claim_selective_span_directness_recovery_enabled(
+    *,
+    prefilter_override_recovery_adjudicators_enabled: bool = False,
+) -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_OPTION_CLAIM_SELECTIVE_SPAN_DIRECTNESS_RECOVERY",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    if prefilter_override_recovery_adjudicators_enabled:
+        return True
+    if _option_claim_span_directness_verifier_enabled():
+        return True
+    explicit = os.environ.get(
+        "HLE_ENABLE_OPTION_CLAIM_SELECTIVE_SPAN_DIRECTNESS_RECOVERY",
+        "",
+    ).strip().lower()
+    if explicit:
+        return explicit in {"1", "true", "yes", "on"}
+    return _env_flag("HLE_ENABLE_ASSUMPTION_OPERATORS")
 
 
 def _option_claim_span_directness_verifier_candidate_limit() -> int:
@@ -21912,6 +22194,13 @@ def _domain_rule_mc_decision(
     bio = _bacterial_cross_resistance_minimality_decision(problem=problem, stem=stem, options=options)
     if bio:
         return bio
+    diversity_bias = _bioinformatics_reference_imputation_diversity_bias_decision(
+        problem=problem,
+        stem=stem,
+        options=options,
+    )
+    if diversity_bias:
+        return diversity_bias
     effect_direction = _ecology_voc_latitude_effect_direction_decision(
         problem=problem,
         stem=stem,
@@ -22120,6 +22409,108 @@ def _bacterial_cross_resistance_minimality_decision(
         "reason": "cross_resistance_explains_parallel_resistance_without_adding_unstated_compensatory_fitness_clause",
         "evidence_required": False,
     }
+
+
+def _bioinformatics_reference_imputation_diversity_bias_decision(
+    *,
+    problem: dict[str, Any],
+    stem: str,
+    options: dict[str, str],
+) -> dict[str, Any] | None:
+    if _env_flag("HLE_DISABLE_BIOINFORMATICS_REFERENCE_IMPUTATION_DIVERSITY_RULE"):
+        return None
+    text = " ".join([
+        str(problem.get("category") or ""),
+        str(problem.get("raw_subject") or ""),
+        stem,
+    ])
+    lowered = text.lower()
+    option_text_blob = " ".join(str(value or "") for value in options.values()).lower()
+    required_groups = {
+        "domain": ("bioinformatics", "variant call", "vcf", "single nucleotide variant", "snv"),
+        "watterson": ("watterson", "theta"),
+        "pi": ("nucleotide diversity", " pi ", "π"),
+        "sample_filtering": ("low quality", "filtered out", "deleted", "removed"),
+        "random_per_sample": ("differ from sample to sample", "random", "per sample", "for each sample"),
+        "reference_imputation": ("reference genome", "imputed", "assumed to be the same genotype", "replaced"),
+        "large_no_total_missing": ("arbitrarily large", "no completely missing", "not found in each haplotype"),
+    }
+    missing = [
+        name
+        for name, cues in required_groups.items()
+        if not any(cue in lowered for cue in cues)
+    ]
+    if missing:
+        return None
+    if (
+        "biased" not in lowered
+        and "bias" not in lowered
+        and "biased" not in option_text_blob
+        and "bias" not in option_text_blob
+    ):
+        return None
+    candidates: list[str] = []
+    for label, option_text in sorted(options.items()):
+        option = _normalize_domain_rule_text(option_text)
+        says_only_pi = (
+            "only pi" in option
+            or "only nucleotide diversity" in option
+            or (
+                "only" in option
+                and "pi" in option
+                and "nucleotide diversity" in option
+            )
+        )
+        says_pi_biased = (
+            ("pi" in option or "nucleotide diversity" in option)
+            and ("biased" in option or "bias" in option)
+        )
+        excludes_watterson = (
+            "only" in option
+            or "watterson" not in option
+            or "theta" not in option
+        )
+        says_both = (
+            ("both" in option or "watterson" in option and "pi" in option)
+            and ("biased" in option or "bias" in option)
+            and "only" not in option
+        )
+        says_neither = "neither" in option or "not biased" in option or "unbiased" in option
+        if says_only_pi and says_pi_biased and excludes_watterson and not says_both and not says_neither:
+            candidates.append(label)
+    if len(candidates) != 1:
+        return None
+    return {
+        "label": candidates[0],
+        "rule_id": "bioinformatics_reference_imputation_pi_only_bias",
+        "confidence": "mechanistic_domain_rule",
+        "reason": (
+            "reference_imputation_of_per_sample_filtered_variants_reduces_pairwise_differences_pi_while_large_sample_"
+            "segregating_site_count_preserves_watterson_theta"
+        ),
+        "evidence_required": False,
+        "candidate_option_hashes": [
+            stable_hash({"option_label": label})
+            for label in sorted(candidates)
+        ],
+        "diagnostics": {
+            "policy": "reference_imputation_diversity_bias_v1",
+            "missing_trigger_groups": [],
+            "selected_option_hash": stable_hash({"option_label": candidates[0]}),
+            "theta_effect": "segregating_site_count_preserved_with_arbitrarily_large_samples",
+            "pi_effect": "pairwise_differences_downward_biased_by_reference_imputation",
+        },
+    }
+
+
+def _normalize_domain_rule_text(text: str) -> str:
+    return (
+        str(text or "")
+        .lower()
+        .replace("π", "pi")
+        .replace("watterson's", "watterson")
+        .replace("wattersons", "watterson")
+    )
 
 
 def _ecology_voc_latitude_effect_direction_decision(
@@ -29104,6 +29495,9 @@ def _same_run_baseline_consensus_candidate(
     def variants_for(rows: list[dict[str, Any]]) -> set[str]:
         return {str(entry.get("variant") or "") for entry in rows if entry.get("variant")}
 
+    def selection_methods_for(rows: list[dict[str, Any]]) -> list[str]:
+        return sorted({str(entry.get("selection_method") or "") for entry in rows if entry.get("selection_method")})
+
     selected_policy = ""
     selected_norm = ""
     selected_entries: list[dict[str, Any]] = []
@@ -29141,24 +29535,44 @@ def _same_run_baseline_consensus_candidate(
         and budget_norm
         and standard_norm != budget_norm
     ):
-        prefer_budget_split = os.environ.get(
+        budget_pair_verified = any(_same_run_budget_entry_verified(entry) for entry in budget_entries)
+        budget_pair_preference_disabled = os.environ.get(
             "HLE_DISABLE_BUDGET_PAIR_OVER_STANDARD_SPLIT_CONSENSUS",
             "",
-        ).strip().lower() not in {"1", "true", "yes", "on"}
-        selected_policy = (
-            "same_run_budget_pair_over_standard_split_consensus_preserve"
-            if prefer_budget_split
-            else "same_run_standard_pair_consensus_preserve"
-        )
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        prefer_budget_split = budget_pair_verified and not budget_pair_preference_disabled
+        if prefer_budget_split:
+            selected_policy = "same_run_verified_budget_pair_over_standard_split_consensus_preserve"
+            selected_pair_reason = "budget_pair_verified"
+        elif budget_pair_preference_disabled:
+            selected_policy = "same_run_standard_pair_consensus_preserve"
+            selected_pair_reason = "budget_pair_preference_disabled"
+        else:
+            selected_policy = "same_run_standard_pair_over_unverified_budget_split_consensus_preserve"
+            selected_pair_reason = "budget_pair_unverified"
         selected_norm = budget_norm if prefer_budget_split else standard_norm
         selected_entries = budget_entries if prefer_budget_split else standard_entries
         split_conflict = {
             "status": "standard_budget_pair_split",
             "selected_pair": "budget_pair" if prefer_budget_split else "standard_pair",
+            "selected_pair_reason": selected_pair_reason,
             "standard_pair_variants": sorted(standard_variants),
             "budget_pair_variants": sorted(budget_variants),
             "standard_pair_norm_hash": stable_hash({"same_run_baseline_norm": standard_norm}),
             "budget_pair_norm_hash": stable_hash({"same_run_baseline_norm": budget_norm}),
+            "standard_pair_selection_methods": selection_methods_for(standard_entries),
+            "budget_pair_selection_methods": selection_methods_for(budget_entries),
+            "budget_pair_verified": budget_pair_verified,
+            "budget_pair_verifier_model_call_count": sum(
+                1 for entry in budget_entries if bool(entry.get("verifier_model_call"))
+            ),
+            "budget_pair_verified_variants": sorted(
+                {
+                    str(entry.get("variant") or "")
+                    for entry in budget_entries
+                    if _same_run_budget_entry_verified(entry) and entry.get("variant")
+                }
+            ),
             "disable_env": "HLE_DISABLE_BUDGET_PAIR_OVER_STANDARD_SPLIT_CONSENSUS",
         }
     if not selected_entries:
@@ -29398,6 +29812,223 @@ def _selection_has_strong_baseline_consensus_counterevidence(
     return False
 
 
+def _high_margin_weak_option_evidence_selection_enabled() -> bool:
+    return os.environ.get(
+        "HLE_DISABLE_HIGH_MARGIN_WEAK_OPTION_EVIDENCE_SELECTION",
+        "",
+    ).strip().lower() not in {"1", "true", "yes", "on"}
+
+
+def _high_margin_weak_option_evidence_verified_challenge_enabled() -> bool:
+    return os.environ.get(
+        "HLE_DISABLE_HIGH_MARGIN_WEAK_OPTION_EVIDENCE_VERIFIED_CHALLENGE",
+        "",
+    ).strip().lower() not in {"1", "true", "yes", "on"}
+
+
+def _high_margin_weak_option_evidence_min_margin() -> float:
+    raw = os.environ.get("HLE_HIGH_MARGIN_WEAK_OPTION_EVIDENCE_MIN_MARGIN", "24").strip()
+    try:
+        return max(0.0, min(100.0, float(raw)))
+    except ValueError:
+        return 24.0
+
+
+def _high_margin_weak_option_evidence_min_rank_margin() -> float:
+    raw = os.environ.get("HLE_HIGH_MARGIN_WEAK_OPTION_EVIDENCE_MIN_RANK_MARGIN", "20").strip()
+    try:
+        return max(0.0, min(100.0, float(raw)))
+    except ValueError:
+        return 20.0
+
+
+def _high_margin_weak_option_evidence_attempt_summary(attempt: dict[str, Any]) -> dict[str, Any]:
+    if not _high_margin_weak_option_evidence_selection_enabled():
+        return {"status": "blocked", "reason": "env_disabled"}
+    if attempt.get("prompt_kind") != "mc_option_evidence_scorer_answer":
+        return {
+            "status": "not_required",
+            "reason": "attempt_not_option_evidence",
+            "selected_prompt_kind": attempt.get("prompt_kind"),
+        }
+    if attempt.get("candidate_verifier_state") == "refuted" and _is_trusted_candidate_verifier_attempt(attempt):
+        return {"status": "blocked", "reason": "selected_option_evidence_refuted"}
+    if str(attempt.get("tool_confidence") or "") != "weak_option_evidence_margin":
+        return {
+            "status": "not_required",
+            "reason": "selected_option_evidence_not_weak_margin",
+            "tool_confidence": attempt.get("tool_confidence"),
+        }
+    support_count = int(attempt.get("option_evidence_top_support_doc_count") or 0)
+    top_ambiguous = int(attempt.get("option_evidence_top_ambiguous_doc_count") or 0)
+    any_ambiguous = int(attempt.get("option_evidence_any_ambiguous_doc_count") or 0)
+    try:
+        margin = float(attempt.get("option_evidence_margin") or 0.0)
+    except (TypeError, ValueError):
+        margin = 0.0
+    try:
+        rank_margin = float(attempt.get("option_evidence_rank_margin") or 0.0)
+    except (TypeError, ValueError):
+        rank_margin = 0.0
+    context_chars = int(
+        attempt.get("option_evidence_context_char_count")
+        or attempt.get("evidence_context_char_count")
+        or 0
+    )
+    context_options = int(
+        attempt.get("option_evidence_context_option_count")
+        or attempt.get("context_option_count")
+        or 0
+    )
+    min_margin = _high_margin_weak_option_evidence_min_margin()
+    min_rank_margin = _high_margin_weak_option_evidence_min_rank_margin()
+    details = {
+        "status": "blocked",
+        "policy": "high_margin_weak_option_evidence_selection_v1",
+        "support_doc_count": support_count,
+        "top_ambiguous_doc_count": top_ambiguous,
+        "any_ambiguous_doc_count": any_ambiguous,
+        "margin": round(margin, 4),
+        "rank_margin": round(rank_margin, 4),
+        "min_margin": round(min_margin, 4),
+        "min_rank_margin": round(min_rank_margin, 4),
+        "context_char_count": context_chars,
+        "context_option_count": context_options,
+    }
+    if support_count < 2:
+        details["reason"] = "insufficient_support_docs"
+    elif top_ambiguous > 0:
+        details["reason"] = "top_option_ambiguous"
+    elif margin < min_margin:
+        details["reason"] = "margin_below_threshold"
+    elif rank_margin < min_rank_margin:
+        details["reason"] = "rank_margin_below_threshold"
+    elif context_chars < 500 or context_options < 2:
+        details["reason"] = "insufficient_option_evidence_context"
+    else:
+        details.update({
+            "status": "activated",
+            "reason": "high_margin_unambiguous_option_evidence_selected",
+        })
+    return details
+
+
+def _selection_high_margin_weak_option_evidence_summary(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    selection: dict[str, Any],
+) -> dict[str, Any]:
+    if problem.get("answer_type") != "multipleChoice":
+        return {"status": "not_required", "reason": "not_multiple_choice"}
+    attempt = _selected_attempt_for_selection(problem=problem, attempts=attempts, selection=selection)
+    if not isinstance(attempt, dict):
+        return {"status": "blocked", "reason": "selected_attempt_not_found"}
+    summary = _high_margin_weak_option_evidence_attempt_summary(attempt)
+    if summary.get("reason") == "attempt_not_option_evidence":
+        summary = dict(summary)
+        summary["reason"] = "selected_attempt_not_option_evidence"
+    return summary
+
+
+def _high_margin_weak_option_evidence_fallback_candidate(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if problem.get("answer_type") != "multipleChoice":
+        return None
+    candidates: list[tuple[float, float, int, dict[str, Any], dict[str, Any]]] = []
+    for attempt in attempts:
+        if not str(attempt.get("parsed_answer") or "").strip():
+            continue
+        summary = _high_margin_weak_option_evidence_attempt_summary(attempt)
+        if summary.get("status") != "activated":
+            continue
+        candidates.append((
+            float(summary.get("margin") or 0.0),
+            float(summary.get("rank_margin") or 0.0),
+            int(attempt.get("child_index") or 0),
+            attempt,
+            summary,
+        ))
+    if not candidates:
+        return None
+    _, _, _, selected, summary = sorted(
+        candidates,
+        key=lambda row: (-row[0], -row[1], row[2]),
+    )[0]
+    out = dict(selected)
+    out["verified_or_abstain_fallback_policy"] = "high_margin_weak_option_evidence_preserve"
+    out["high_margin_option_evidence"] = summary
+    return out
+
+
+def _high_margin_weak_option_evidence_verified_challenge_candidate(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    selection: dict[str, Any],
+    candidate: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    if not _high_margin_weak_option_evidence_verified_challenge_enabled():
+        return None
+    if problem.get("answer_type") != "multipleChoice":
+        return None
+    method = str(selection.get("selection_method") or "")
+    if method != "counter_assumption_verifier_choice":
+        return None
+    candidate = candidate or _high_margin_weak_option_evidence_fallback_candidate(
+        problem=problem,
+        attempts=attempts,
+    )
+    if not isinstance(candidate, dict):
+        return None
+    selected_answer = str(selection.get("selected_answer") or "").strip()
+    candidate_answer = str(candidate.get("parsed_answer") or "").strip()
+    if not selected_answer or not candidate_answer:
+        return None
+    answer_type = str(problem.get("answer_type") or "multipleChoice")
+    selected_norm = _normalize_for_selection(selected_answer, answer_type=answer_type)
+    candidate_norm = _normalize_for_selection(candidate_answer, answer_type=answer_type)
+    if not selected_norm or not candidate_norm or selected_norm == candidate_norm:
+        return None
+    if _selection_has_strong_baseline_consensus_counterevidence(
+        problem=problem,
+        attempts=attempts,
+        selection=selection,
+    ):
+        return None
+    selected_attempt = _selected_attempt_for_selection(problem=problem, attempts=attempts, selection=selection)
+    selected_summary = {
+        "child_id": selection.get("selected_child_id"),
+        "answer_hash": stable_hash({"answer": selected_answer}),
+    }
+    if isinstance(selected_attempt, dict):
+        selected_summary.update({
+            "prompt_kind": selected_attempt.get("prompt_kind"),
+            "candidate_verifier_state": selected_attempt.get("candidate_verifier_state"),
+            "candidate_verifier_trust": selected_attempt.get("candidate_verifier_trust"),
+            "tool_confidence": selected_attempt.get("tool_confidence"),
+        })
+    out = dict(candidate)
+    out["verified_or_abstain_fallback_policy"] = (
+        out.get("verified_or_abstain_fallback_policy")
+        or "high_margin_weak_option_evidence_preserve"
+    )
+    out["high_margin_option_evidence_verified_challenge"] = {
+        "status": "activated",
+        "policy": "high_margin_weak_option_evidence_over_counter_verifier_v1",
+        "reason": "counter_verifier_selection_lacks_strong_source_counterevidence",
+        "original_selection_method": method,
+        "original_selected_child_id": selection.get("selected_child_id"),
+        "original_selected": selected_summary,
+        "candidate": out.get("high_margin_option_evidence")
+        or _high_margin_weak_option_evidence_attempt_summary(out),
+    }
+    return out
+
+
 def _exact_diverse_verifier_enabled() -> bool:
     return os.environ.get("HLE_ENABLE_EXACT_DIVERSE_VERIFIER", "").strip().lower() in {
         "1",
@@ -29436,6 +30067,15 @@ def _apply_verified_or_abstain_selection(
         return selection
     method = str(selection.get("selection_method") or "")
     baseline_consensus = _same_run_baseline_consensus_candidate(problem=problem, agent_plan=agent_plan)
+    high_margin_option_evidence = _selection_high_margin_weak_option_evidence_summary(
+        problem=problem,
+        attempts=attempts,
+        selection=selection,
+    )
+    high_margin_option_evidence_fallback = _high_margin_weak_option_evidence_fallback_candidate(
+        problem=problem,
+        attempts=attempts,
+    )
     if baseline_consensus and method in _BASELINE_CONSENSUS_PROTECTED_SELECTION_METHODS:
         selected_answer = str(selection.get("selected_answer") or "").strip()
         selected_norm = _normalize_for_selection(
@@ -29452,19 +30092,67 @@ def _apply_verified_or_abstain_selection(
                 attempts=attempts,
                 selection=selection,
             )
+            and high_margin_option_evidence.get("status") != "activated"
+            and high_margin_option_evidence_fallback is None
         ):
             return _verified_or_abstain_selection_from_baseline_consensus(
                 selection=selection,
                 baseline_consensus=baseline_consensus,
                 reason="same_run_baseline_consensus_blocks_weak_verified_override",
             )
+    if high_margin_option_evidence.get("status") == "activated":
+        out = dict(selection)
+        out["selection_method"] = "high_margin_option_evidence_choice"
+        out["verified_or_abstain_gate"] = {
+            "status": "allowed",
+            "reason": "high_margin_weak_option_evidence_selection",
+            "original_selection_method": method,
+            "high_margin_option_evidence": high_margin_option_evidence,
+        }
+        return out
+    high_margin_verified_challenge = _high_margin_weak_option_evidence_verified_challenge_candidate(
+        problem=problem,
+        attempts=attempts,
+        selection=selection,
+        candidate=high_margin_option_evidence_fallback,
+    )
+    if high_margin_verified_challenge:
+        out = dict(selection)
+        out.update({
+            "selection_method": "verified_or_abstain_direct_fallback",
+            "selected_child_id": high_margin_verified_challenge.get("child_id"),
+            "selected_answer": high_margin_verified_challenge.get("parsed_answer"),
+            "verified_or_abstain_gate": {
+                "status": "abstained",
+                "reason": "high_margin_option_evidence_challenges_verified_selection",
+                "original_selection_method": method,
+                "original_selected_child_id": selection.get("selected_child_id"),
+                "fallback_prompt_kind": high_margin_verified_challenge.get("prompt_kind"),
+                "fallback_policy": high_margin_verified_challenge.get(
+                    "verified_or_abstain_fallback_policy"
+                )
+                or "high_margin_weak_option_evidence_preserve",
+                "high_margin_option_evidence": high_margin_verified_challenge.get(
+                    "high_margin_option_evidence"
+                ),
+                "verified_choice_challenge": high_margin_verified_challenge.get(
+                    "high_margin_option_evidence_verified_challenge"
+                ),
+            },
+        })
+        return out
     if method in _VERIFIED_SELECTION_METHODS:
         out = dict(selection)
-        out["verified_or_abstain_gate"] = {
+        gate = {
             "status": "allowed",
             "reason": "verified_selection_method",
             "original_selection_method": method,
         }
+        if high_margin_option_evidence_fallback:
+            gate["high_margin_option_evidence_fallback"] = high_margin_option_evidence_fallback.get(
+                "high_margin_option_evidence"
+            )
+        out["verified_or_abstain_gate"] = gate
         return out
     if _selection_has_operator_application_audit(problem=problem, attempts=attempts, selection=selection):
         source_grounding_blocked = (
@@ -29537,6 +30225,8 @@ def _apply_verified_or_abstain_selection(
                 attempts=attempts,
                 selection=selection,
             )
+            and high_margin_option_evidence.get("status") != "activated"
+            and high_margin_option_evidence_fallback is None
         ):
             return _verified_or_abstain_selection_from_baseline_consensus(
                 selection=selection,
@@ -29596,7 +30286,17 @@ def _verified_or_abstain_fallback_candidate(
         candidates.append(normalized_attempt)
     if not candidates:
         return None
-    if _hipporag_source_insufficient_fallback_should_precede_raw(problem=problem, attempts=candidates):
+    high_margin_option_evidence = _high_margin_weak_option_evidence_fallback_candidate(
+        problem=problem,
+        attempts=candidates,
+    )
+    if high_margin_option_evidence:
+        return high_margin_option_evidence
+    hipporag_before_raw_decision = _hipporag_source_insufficient_before_raw_decision(
+        problem=problem,
+        attempts=candidates,
+    )
+    if bool(hipporag_before_raw_decision.get("allow")):
         preserve_prompt_kinds = [
             "hipporag_preserve_selector_answer",
             "raw_preserve_selector_answer",
@@ -29663,7 +30363,18 @@ def _verified_or_abstain_fallback_candidate(
                 )
             ]
         if prompt_candidates:
-            return sorted(prompt_candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+            selected = sorted(prompt_candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+            if (
+                prompt_kind == "raw_preserve_selector_answer"
+                and hipporag_before_raw_decision.get("reason")
+                == "hipporag_before_raw_lacks_answer_bearing_signal"
+            ):
+                selected = dict(selected)
+                selected["verified_or_abstain_fallback_policy"] = (
+                    "raw_preserve_over_unsupported_hipporag_preserve"
+                )
+                selected["hipporag_before_raw_decision"] = hipporag_before_raw_decision
+            return selected
     consensus = _verified_or_abstain_consensus_fallback_candidate(problem=problem, attempts=candidates)
     if consensus:
         return consensus
@@ -29682,13 +30393,67 @@ def _hipporag_source_insufficient_fallback_should_precede_raw(
     problem: dict[str, Any],
     attempts: list[dict[str, Any]],
 ) -> bool:
+    return bool(
+        _hipporag_source_insufficient_before_raw_decision(
+            problem=problem,
+            attempts=attempts,
+        ).get("allow")
+    )
+
+
+def _hipporag_before_raw_answer_bearing_gate_enabled() -> bool:
+    return os.environ.get(
+        "HLE_DISABLE_HIPPORAG_BEFORE_RAW_ANSWER_BEARING_GATE",
+        "",
+    ).strip().lower() not in {"1", "true", "yes", "on"}
+
+
+def _hipporag_before_raw_min_answer_overlap() -> int:
+    raw = os.environ.get("HLE_HIPPORAG_BEFORE_RAW_MIN_ANSWER_OVERLAP", "2").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 2
+
+
+def _hipporag_preserve_answer_bearing_support_summary(attempt: dict[str, Any]) -> dict[str, Any]:
+    overlap = int(attempt.get("context_answer_overlap_count") or 0)
+    question_overlap = int(attempt.get("context_question_overlap_count") or 0)
+    min_overlap = _hipporag_before_raw_min_answer_overlap()
+    context_supported = bool(attempt.get("context_answer_supported"))
+    overlap_supported = overlap >= min_overlap and question_overlap > 0
+    supported = context_supported or overlap_supported
+    if context_supported:
+        reason = "context_answer_supported"
+    elif overlap_supported:
+        reason = "answer_and_question_overlap"
+    else:
+        reason = "insufficient_answer_bearing_context"
+    return {
+        "supported": bool(supported),
+        "reason": reason,
+        "context_answer_supported": context_supported,
+        "context_answer_overlap_count": overlap,
+        "context_question_overlap_count": question_overlap,
+        "min_answer_overlap": min_overlap,
+    }
+
+
+def _hipporag_source_insufficient_before_raw_decision(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+) -> dict[str, Any]:
     if os.environ.get(
         "HLE_DISABLE_SOURCE_INSUFFICIENT_HIPPORAG_BEFORE_RAW_FALLBACK",
         "",
     ).strip().lower() in {"1", "true", "yes", "on"}:
-        return False
+        return {
+            "allow": False,
+            "reason": "source_insufficient_hipporag_before_raw_disabled",
+        }
     if problem.get("answer_type") != "multipleChoice":
-        return False
+        return {"allow": False, "reason": "non_multiple_choice"}
     hipporag_candidates = [
         attempt for attempt in attempts
         if attempt.get("prompt_kind") == "hipporag_preserve_selector_answer"
@@ -29706,7 +30471,7 @@ def _hipporag_source_insufficient_fallback_should_precede_raw(
         )
     ]
     if not hipporag_candidates:
-        return False
+        return {"allow": False, "reason": "no_source_insufficient_hipporag_candidate"}
     raw_candidates = [
         attempt for attempt in attempts
         if attempt.get("prompt_kind") == "raw_preserve_selector_answer"
@@ -29717,7 +30482,11 @@ def _hipporag_source_insufficient_fallback_should_precede_raw(
         )
     ]
     if not raw_candidates:
-        return True
+        return {
+            "allow": True,
+            "reason": "source_insufficient_hipporag_no_raw_candidate",
+            "hipporag_candidate_count": len(hipporag_candidates),
+        }
     answer_type = str(problem.get("answer_type") or "exactMatch")
     hipporag_norms = {
         _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type=answer_type)
@@ -29729,7 +30498,37 @@ def _hipporag_source_insufficient_fallback_should_precede_raw(
     }
     hipporag_norms.discard("")
     raw_norms.discard("")
-    return bool(hipporag_norms and raw_norms and hipporag_norms.isdisjoint(raw_norms))
+    if not (hipporag_norms and raw_norms and hipporag_norms.isdisjoint(raw_norms)):
+        return {
+            "allow": False,
+            "reason": "hipporag_raw_not_disjoint",
+            "hipporag_candidate_count": len(hipporag_candidates),
+            "raw_candidate_count": len(raw_candidates),
+        }
+    support_summaries = [
+        _hipporag_preserve_answer_bearing_support_summary(attempt)
+        for attempt in hipporag_candidates
+    ]
+    answer_bearing_count = sum(1 for summary in support_summaries if summary.get("supported"))
+    if _hipporag_before_raw_answer_bearing_gate_enabled() and answer_bearing_count <= 0:
+        return {
+            "allow": False,
+            "reason": "hipporag_before_raw_lacks_answer_bearing_signal",
+            "hipporag_candidate_count": len(hipporag_candidates),
+            "raw_candidate_count": len(raw_candidates),
+            "answer_bearing_candidate_count": answer_bearing_count,
+            "answer_bearing_gate_enabled": True,
+            "support_summaries": support_summaries,
+        }
+    return {
+        "allow": True,
+        "reason": "source_insufficient_hipporag_before_raw_allowed",
+        "hipporag_candidate_count": len(hipporag_candidates),
+        "raw_candidate_count": len(raw_candidates),
+        "answer_bearing_candidate_count": answer_bearing_count,
+        "answer_bearing_gate_enabled": _hipporag_before_raw_answer_bearing_gate_enabled(),
+        "support_summaries": support_summaries,
+    }
 
 
 def _verified_or_abstain_consensus_fallback_candidate(
@@ -38222,6 +39021,9 @@ def _component_efficacy_from_plan(
             and raw_preserve.get("trigger", {}).get("reason")
             == "source_verifier_insufficient_raw_regression_guard"
         ),
+        "raw_preserve_verified_hipporag_pair_override": bool(
+            raw_preserve.get("same_run_verified_hipporag_pair_override")
+        ),
         "raw_budget_preserve_selector_activated": raw_budget_preserve.get("status") == "activated",
         "raw_budget_preserve_candidate_emitted": bool(raw_budget_preserve.get("candidate_emitted")),
         "raw_budget_preserve_selected": bool(raw_budget_preserve.get("selected_raw_budget_preserve_candidate")),
@@ -38489,12 +39291,18 @@ def _component_efficacy_from_plan(
         "mc_option_evidence_scorer": {
             "status": option_evidence.get("status"),
             "candidate_emitted": bool(option_evidence.get("candidate_emitted")),
+            "weak_candidate_emitted": bool(option_evidence.get("weak_candidate_emitted")),
             "candidate_verifier_state": option_evidence.get("candidate_verifier_state"),
             "candidate_correct_for_eval": option_evidence.get("candidate_correct_for_eval"),
             "top_score": option_evidence.get("top_score"),
             "margin": option_evidence.get("margin"),
+            "rank_margin": option_evidence.get("rank_margin"),
             "top_support_doc_count": int(option_evidence.get("top_support_doc_count") or 0),
             "top_ambiguous_doc_count": int(option_evidence.get("top_ambiguous_doc_count") or 0),
+            "any_ambiguous_doc_count": int(option_evidence.get("any_ambiguous_doc_count") or 0),
+            "evidence_context_char_count": int(option_evidence.get("evidence_context_char_count") or 0),
+            "context_option_count": int(option_evidence.get("context_option_count") or 0),
+            "context_doc_count": int(option_evidence.get("context_doc_count") or 0),
             "selected_option_evidence_candidate": bool(option_evidence.get("selected_option_evidence_candidate")),
         },
         "mc_option_claim_evidence_verifier": {
@@ -38781,6 +39589,16 @@ def _component_efficacy_from_plan(
             ),
             "contrastive_adjudicator_status": option_claim_evidence.get("contrastive_adjudicator_status"),
             "contrastive_adjudicator_reason": option_claim_evidence.get("contrastive_adjudicator_reason"),
+            "contrastive_recovery_enabled": bool(option_claim_evidence.get("contrastive_recovery_enabled")),
+            "span_directness_recovery_enabled": bool(
+                option_claim_evidence.get("span_directness_recovery_enabled")
+            ),
+            "span_directness_recovery_candidate": bool(
+                option_claim_evidence.get("span_directness_recovery_candidate")
+            ),
+            "prefilter_override_recovery_adjudicators_enabled": bool(
+                option_claim_evidence.get("prefilter_override_recovery_adjudicators_enabled")
+            ),
             "contrastive_adjudicator_candidate_count": int(
                 option_claim_evidence.get("contrastive_adjudicator_candidate_count") or 0
             ),
@@ -39217,6 +40035,16 @@ def _component_efficacy_from_plan(
             "trigger": raw_preserve.get("trigger"),
             "candidate_emitted": bool(raw_preserve.get("candidate_emitted")),
             "selected_raw_preserve_candidate": bool(raw_preserve.get("selected_raw_preserve_candidate")),
+            "same_run_cache_variant": raw_preserve.get("same_run_cache_variant"),
+            "same_run_verified_hipporag_pair_override": bool(
+                raw_preserve.get("same_run_verified_hipporag_pair_override")
+            ),
+            "same_run_verified_hipporag_pair_override_summary": (
+                raw_preserve.get("same_run_verified_hipporag_pair_override_summary")
+                if isinstance(raw_preserve.get("same_run_verified_hipporag_pair_override_summary"), dict)
+                else None
+            ),
+            "borrowed_baseline_model_calls": int(raw_preserve.get("borrowed_baseline_model_calls") or 0),
         },
         "raw_budget_preserve_selector": {
             "status": raw_budget_preserve.get("status"),
@@ -39249,6 +40077,24 @@ def _component_efficacy_from_plan(
             "candidate_doc_count": int(hipporag_preserve.get("candidate_doc_count") or 0),
             "selected_doc_count": int(hipporag_preserve.get("selected_doc_count") or 0),
             "context_char_count": int(hipporag_preserve.get("context_char_count") or 0),
+            "context_answer_supported": bool(hipporag_preserve.get("context_answer_supported")),
+            "context_answer_overlap_count": int(
+                hipporag_preserve.get("context_answer_overlap_count") or 0
+            ),
+            "context_question_overlap_count": int(
+                hipporag_preserve.get("context_question_overlap_count") or 0
+            ),
+            "hipporag_before_raw_answer_bearing_supported": bool(
+                hipporag_preserve.get("hipporag_before_raw_answer_bearing_supported")
+            ),
+            "hipporag_before_raw_answer_bearing_reason": hipporag_preserve.get(
+                "hipporag_before_raw_answer_bearing_reason"
+            ),
+            "hipporag_before_raw_answer_bearing_support": (
+                hipporag_preserve.get("hipporag_before_raw_answer_bearing_support")
+                if isinstance(hipporag_preserve.get("hipporag_before_raw_answer_bearing_support"), dict)
+                else None
+            ),
         },
         "route_arbitrator": {
             "status": route_arbitrator.get("status"),
