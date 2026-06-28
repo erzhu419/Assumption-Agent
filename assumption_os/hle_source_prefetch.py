@@ -11,6 +11,7 @@ import argparse
 import concurrent.futures
 import json
 import os
+import re
 import threading
 import time
 from collections import Counter
@@ -25,10 +26,12 @@ from .hle_smoke_eval import (
     _answer_bearing_web_search,
     _arxiv_search,
     _classify_hle_domain,
+    _clean_evidence_query,
     _compile_hle_operator_stage,
     _content_terms,
     _crossref_search,
     _deterministic_option_claim_relation_queries,
+    _evidence_source_error_label,
     _evidence_source_cache_get,
     _extract_choice,
     _load_text_only_sample,
@@ -41,6 +44,8 @@ from .hle_smoke_eval import (
     _option_claim_relation_slot_coverage,
     _option_claim_relation_slot_plan,
     _option_evidence_queries_for_plan,
+    _question_evidence_anchor_terms,
+    _question_relation_query_terms,
     _run_option_claim_relation_query_planner,
     _semantic_scholar_search,
     _split_multiple_choice_question,
@@ -62,6 +67,23 @@ DEFAULT_SOURCES = (
     "wikipedia_extract",
     "answer_web",
 )
+
+_SOURCE_PREFETCH_GENERIC_TERMS = {
+    "answer",
+    "answers",
+    "choice",
+    "choices",
+    "correct",
+    "direct",
+    "directly",
+    "false",
+    "following",
+    "option",
+    "options",
+    "question",
+    "statement",
+    "true",
+}
 
 
 def build_hle_source_prefetch_payload(
@@ -349,6 +371,12 @@ def _problem_query_records(
             option_text=option_text,
             problem=problem,
         )
+        option_aware_query_pairs = _option_aware_source_prefetch_queries(
+            stem=stem,
+            option_text=option_text,
+            problem=problem,
+            agent_plan=agent_plan,
+        )
         sweep_gap_relation_queries: list[tuple[str, str]] = []
         if enable_sweep_gap_relation_backfill_queries:
             deterministic_queries = _deterministic_option_claim_relation_queries(
@@ -376,13 +404,15 @@ def _problem_query_records(
                 ("option_claim_local_relation_expansion", query)
                 for query in local_relation_queries
             ]
-        combined = _interleave_queries(option_queries, claim_queries)
-        if answer_web_queries:
-            combined = [("answer_web_fallback", query) for query in answer_web_queries] + combined
-        if sweep_gap_relation_queries:
-            combined = sweep_gap_relation_queries + combined
-        if relation_queries:
-            combined = [("option_claim_relation_planner", query) for query in relation_queries] + combined
+        combined = _balanced_prefetch_query_mix(
+            relation_queries=relation_queries,
+            sweep_gap_relation_queries=sweep_gap_relation_queries,
+            option_aware_query_pairs=option_aware_query_pairs,
+            answer_web_queries=answer_web_queries,
+            option_queries=option_queries,
+            claim_queries=claim_queries,
+            max_queries=max_queries_per_option,
+        )
         for kind, query in combined[: max(1, max_queries_per_option)]:
             query = str(query or "").strip()
             if not query:
@@ -416,6 +446,291 @@ def _interleave_queries(option_queries: list[str], claim_queries: list[str]) -> 
             out.append(("option_evidence", option_queries[index]))
         if index < len(claim_queries):
             out.append(("option_claim", claim_queries[index]))
+    return out
+
+
+def _balanced_prefetch_query_mix(
+    *,
+    relation_queries: list[str],
+    sweep_gap_relation_queries: list[tuple[str, str]],
+    answer_web_queries: list[str],
+    option_queries: list[str],
+    claim_queries: list[str],
+    max_queries: int,
+    option_aware_query_pairs: list[tuple[str, str]] | None = None,
+) -> list[tuple[str, str]]:
+    deterministic_relation_queries = [
+        (kind, query)
+        for kind, query in sweep_gap_relation_queries
+        if kind == "option_claim_deterministic_relation"
+    ]
+    local_relation_queries = [
+        (kind, query)
+        for kind, query in sweep_gap_relation_queries
+        if kind == "option_claim_local_relation_expansion"
+    ]
+    other_relation_queries = [
+        (kind, query)
+        for kind, query in sweep_gap_relation_queries
+        if kind
+        not in {
+            "option_claim_deterministic_relation",
+            "option_claim_local_relation_expansion",
+        }
+    ]
+    buckets = [
+        [("option_claim_relation_planner", query) for query in relation_queries],
+        deterministic_relation_queries,
+        local_relation_queries,
+        [("answer_web_fallback", query) for query in answer_web_queries],
+        [("option_claim", query) for query in claim_queries],
+        [("option_evidence", query) for query in option_queries],
+        list(option_aware_query_pairs or []),
+        other_relation_queries,
+    ]
+    return _round_robin_query_pairs(buckets, max_queries=max_queries)
+
+
+def _option_aware_source_prefetch_queries(
+    *,
+    stem: str,
+    option_text: str,
+    problem: dict[str, Any],
+    agent_plan: dict[str, Any] | None = None,
+) -> list[tuple[str, str]]:
+    option_terms = _source_prefetch_option_anchor_terms(option_text=option_text, stem=stem, max_terms=10)
+    if not option_terms:
+        return []
+    subject_terms = _source_prefetch_subject_terms(problem, max_terms=4)
+    question_anchors = _question_evidence_anchor_terms(stem, option_text=option_text, max_terms=8)
+    relation_terms = _question_relation_query_terms(stem)
+    option_phrases = _source_prefetch_focus_phrases(option_text, max_phrases=4)
+    question_phrases = _source_prefetch_focus_phrases(stem, max_phrases=3)
+    operator_terms = _source_prefetch_operator_terms(agent_plan, max_terms=5)
+    seeds: list[tuple[str, str]] = [
+        (
+            "option_anchor_relation",
+            " ".join(option_terms[:6] + question_anchors[:5] + relation_terms[:4] + subject_terms),
+        ),
+        (
+            "option_anchor_relation",
+            " ".join(option_terms[:6] + relation_terms[:5] + subject_terms),
+        ),
+        (
+            "question_relation_anchor",
+            " ".join(question_anchors[:6] + option_terms[:5] + subject_terms),
+        ),
+    ]
+    if operator_terms:
+        seeds.append((
+            "option_operator_anchor",
+            " ".join(option_terms[:5] + question_anchors[:4] + operator_terms[:5] + subject_terms),
+        ))
+    for phrase in option_phrases[:3]:
+        seeds.extend([
+            (
+                "option_focus_phrase",
+                " ".join([phrase] + question_anchors[:3] + relation_terms[:3] + subject_terms),
+            ),
+            (
+                "option_focus_phrase",
+                " ".join([phrase] + subject_terms),
+            ),
+        ])
+    for phrase in question_phrases[:2]:
+        seeds.append((
+            "question_relation_anchor",
+            " ".join([phrase] + option_terms[:5] + relation_terms[:3] + subject_terms),
+        ))
+    pairs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for kind, seed in seeds:
+        query = _clean_evidence_query(seed)
+        key = _normalize_query_key(query)
+        if not query or not key or key in seen:
+            continue
+        if not _source_prefetch_query_has_option_anchor(query=query, option_text=option_text):
+            continue
+        seen.add(key)
+        pairs.append((kind, query))
+        if len(pairs) >= 8:
+            break
+    return pairs
+
+
+def _source_prefetch_option_anchor_terms(
+    *,
+    option_text: str,
+    stem: str,
+    max_terms: int,
+) -> list[str]:
+    stem_terms = {
+        term.lower().strip("._-")
+        for term in _content_terms(stem)
+    }
+    terms: list[str] = []
+    seen: set[str] = set()
+    for token in re.findall(r"[A-Za-z0-9_+.-]{3,}", option_text or ""):
+        clean = token.strip("._-")
+        key = clean.lower()
+        if (
+            not clean
+            or key in seen
+            or key in _SOURCE_PREFETCH_GENERIC_TERMS
+            or (key in stem_terms and len(clean) < 7)
+        ):
+            continue
+        seen.add(key)
+        terms.append(clean)
+        if len(terms) >= max_terms:
+            break
+    return terms
+
+
+def _source_prefetch_subject_terms(problem: dict[str, Any], *, max_terms: int) -> list[str]:
+    terms: list[str] = []
+    seen: set[str] = set()
+    for value in (problem.get("raw_subject"), problem.get("category")):
+        for token in re.findall(r"[A-Za-z0-9_+.-]{3,}", str(value or "")):
+            clean = token.strip("._-")
+            key = clean.lower()
+            if not clean or key in seen or key in _SOURCE_PREFETCH_GENERIC_TERMS:
+                continue
+            seen.add(key)
+            terms.append(clean)
+            if len(terms) >= max_terms:
+                return terms
+    return terms
+
+
+def _source_prefetch_focus_phrases(text: str, *, max_phrases: int) -> list[str]:
+    raw = str(text or "")
+    phrases: list[str] = []
+    seen: set[str] = set()
+    for groups in re.findall(r'"([^"]{3,90})"|\'([^\']{3,90})\'|`([^`]{3,90})`', raw):
+        for item in groups:
+            phrase = _source_prefetch_clean_phrase(item)
+            key = _normalize_query_key(phrase)
+            if phrase and key and key not in seen:
+                seen.add(key)
+                phrases.append(phrase)
+    proper_noun_pattern = r"\b[A-Z][A-Za-z0-9_+.-]*(?:\s+[A-Z][A-Za-z0-9_+.-]*){1,5}\b"
+    for match in re.finditer(proper_noun_pattern, raw):
+        phrase = _source_prefetch_clean_phrase(match.group(0))
+        key = _normalize_query_key(phrase)
+        if phrase and key and key not in seen:
+            seen.add(key)
+            phrases.append(phrase)
+            if len(phrases) >= max_phrases:
+                return phrases
+    if len(phrases) < max_phrases:
+        tokens = [
+            token.strip("._-")
+            for token in re.findall(r"[A-Za-z0-9_+.-]{5,}", raw)
+            if token.lower().strip("._-") not in _SOURCE_PREFETCH_GENERIC_TERMS
+        ]
+        for start in range(0, max(0, len(tokens) - 1)):
+            phrase = _source_prefetch_clean_phrase(" ".join(tokens[start:start + 3]))
+            key = _normalize_query_key(phrase)
+            if phrase and key and key not in seen:
+                seen.add(key)
+                phrases.append(phrase)
+                if len(phrases) >= max_phrases:
+                    break
+    return phrases[:max_phrases]
+
+
+def _source_prefetch_operator_terms(
+    agent_plan: dict[str, Any] | None,
+    *,
+    max_terms: int,
+) -> list[str]:
+    if not isinstance(agent_plan, dict):
+        return []
+    operator_stage = ((agent_plan.get("stages") or {}).get("operator_spec_compiler") or {})
+    specs = operator_stage.get("operator_specs", []) if isinstance(operator_stage, dict) else []
+    terms: list[str] = []
+    seen: set[str] = set()
+    for spec in specs or []:
+        if isinstance(spec, dict):
+            values = [
+                spec.get("source_claim"),
+                spec.get("trigger_conditions"),
+                spec.get("execution_steps"),
+                spec.get("required_output_slots"),
+                spec.get("verifier_checks"),
+            ]
+        else:
+            values = []
+        for value in values:
+            if isinstance(value, (list, tuple, set)):
+                texts = [str(item) for item in value]
+            else:
+                texts = [str(value or "")]
+            for text in texts:
+                for token in re.findall(r"[A-Za-z0-9_+.-]{4,}", text):
+                    clean = token.strip("._-")
+                    key = clean.lower()
+                    if not clean or key in seen or key in _SOURCE_PREFETCH_GENERIC_TERMS:
+                        continue
+                    seen.add(key)
+                    terms.append(clean)
+                    if len(terms) >= max_terms:
+                        return terms
+    return terms
+
+
+def _source_prefetch_clean_phrase(text: str) -> str:
+    phrase = _clean_evidence_query(text)
+    if len(phrase.split()) > 8:
+        phrase = " ".join(phrase.split()[:8])
+    return phrase
+
+
+def _source_prefetch_query_has_option_anchor(*, query: str, option_text: str) -> bool:
+    option_terms = _content_terms(option_text)
+    query_terms = _content_terms(query)
+    if option_terms & query_terms:
+        return True
+    for phrase in _source_prefetch_focus_phrases(option_text, max_phrases=4):
+        if phrase and phrase.lower() in query.lower():
+            return True
+    return False
+
+
+def _normalize_query_key(text: str) -> str:
+    return " ".join(str(text or "").lower().split())
+
+
+def _round_robin_query_pairs(
+    buckets: list[list[tuple[str, str]]],
+    *,
+    max_queries: int,
+) -> list[tuple[str, str]]:
+    budget = max(1, int(max_queries or 1))
+    out: list[tuple[str, str]] = []
+    seen_hashes: set[str] = set()
+    offsets = [0 for _ in buckets]
+    while len(out) < budget:
+        progressed = False
+        for bucket_index, bucket in enumerate(buckets):
+            while offsets[bucket_index] < len(bucket):
+                kind, query = bucket[offsets[bucket_index]]
+                offsets[bucket_index] += 1
+                clean_query = str(query or "").strip()
+                if not clean_query:
+                    continue
+                query_hash = stable_hash({"query": clean_query})
+                if query_hash in seen_hashes:
+                    continue
+                seen_hashes.add(query_hash)
+                out.append((kind, clean_query))
+                progressed = True
+                break
+            if len(out) >= budget:
+                break
+        if not progressed:
+            break
     return out
 
 
@@ -587,30 +902,116 @@ def _source_prefetch_execution_order(
         for index, job in indexed_jobs
         if job.get("action") != "fetch"
     ]
+    return _source_prefetch_fair_candidate_order(fetch_jobs) + non_fetch_jobs
+
+
+def _source_prefetch_fair_candidate_order(
+    indexed_jobs: list[tuple[int, dict[str, Any]]],
+) -> list[tuple[int, dict[str, Any]]]:
     grouped: dict[str, list[tuple[int, dict[str, Any]]]] = {}
     group_order: list[str] = []
-    for index, job in fetch_jobs:
+    for index, job in indexed_jobs:
         problem_row = job.get("problem_row") or {}
         group_key = str(problem_row.get("problem_id_hash") or problem_row.get("seed_offset") or index)
         if group_key not in grouped:
             grouped[group_key] = []
             group_order.append(group_key)
         grouped[group_key].append((index, job))
-    round_robin_fetches: list[tuple[int, dict[str, Any]]] = []
+    problem_orders: dict[str, list[tuple[int, dict[str, Any]]]] = {
+        group_key: _source_prefetch_problem_fair_candidate_order(grouped[group_key])
+        for group_key in group_order
+    }
+    fair_jobs: list[tuple[int, dict[str, Any]]] = []
     offsets = {group_key: 0 for group_key in group_order}
     while True:
         progressed = False
         for group_key in group_order:
             offset = offsets[group_key]
-            group_items = grouped[group_key]
+            group_items = problem_orders[group_key]
             if offset >= len(group_items):
                 continue
-            round_robin_fetches.append(group_items[offset])
+            fair_jobs.append(group_items[offset])
             offsets[group_key] = offset + 1
             progressed = True
         if not progressed:
             break
-    return round_robin_fetches + non_fetch_jobs
+    return fair_jobs
+
+
+def _source_prefetch_problem_fair_candidate_order(
+    indexed_jobs: list[tuple[int, dict[str, Any]]],
+) -> list[tuple[int, dict[str, Any]]]:
+    option_groups: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+    option_order: list[str] = []
+    for index, job in indexed_jobs:
+        record = job.get("record") if isinstance(job.get("record"), dict) else {}
+        query_row = job.get("query_row") if isinstance(job.get("query_row"), dict) else {}
+        option_key = str(
+            record.get("option_hash")
+            or query_row.get("option_hash")
+            or query_row.get("option_label_hash")
+            or ""
+        )
+        if not option_key:
+            option_key = f"__no_option__:{index}"
+        if option_key not in option_groups:
+            option_groups[option_key] = []
+            option_order.append(option_key)
+        option_groups[option_key].append((index, job))
+    option_orders: dict[str, list[tuple[int, dict[str, Any]]]] = {
+        option_key: _source_prefetch_query_fair_candidate_order(option_groups[option_key])
+        for option_key in option_order
+    }
+    ordered: list[tuple[int, dict[str, Any]]] = []
+    offsets = {option_key: 0 for option_key in option_order}
+    while True:
+        progressed = False
+        for option_key in option_order:
+            offset = offsets[option_key]
+            group_items = option_orders[option_key]
+            if offset >= len(group_items):
+                continue
+            ordered.append(group_items[offset])
+            offsets[option_key] = offset + 1
+            progressed = True
+        if not progressed:
+            break
+    return ordered
+
+
+def _source_prefetch_query_fair_candidate_order(
+    indexed_jobs: list[tuple[int, dict[str, Any]]],
+) -> list[tuple[int, dict[str, Any]]]:
+    query_groups: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+    query_order: list[str] = []
+    for index, job in indexed_jobs:
+        record = job.get("record") if isinstance(job.get("record"), dict) else {}
+        query_row = job.get("query_row") if isinstance(job.get("query_row"), dict) else {}
+        query_key = str(
+            record.get("query_hash")
+            or query_row.get("query_hash")
+            or job.get("query")
+            or index
+        )
+        if query_key not in query_groups:
+            query_groups[query_key] = []
+            query_order.append(query_key)
+        query_groups[query_key].append((index, job))
+    ordered: list[tuple[int, dict[str, Any]]] = []
+    offsets = {query_key: 0 for query_key in query_order}
+    while True:
+        progressed = False
+        for query_key in query_order:
+            offset = offsets[query_key]
+            group_items = query_groups[query_key]
+            if offset >= len(group_items):
+                continue
+            ordered.append(group_items[offset])
+            offsets[query_key] = offset + 1
+            progressed = True
+        if not progressed:
+            break
+    return ordered
 
 
 def _apply_source_prefetch_live_budget(
@@ -631,30 +1032,10 @@ def _apply_source_prefetch_live_budget(
     if budget_policy == "sequential":
         selected = {index for index, _ in candidates[:budget]}
     else:
-        grouped: dict[str, list[int]] = {}
-        group_order: list[str] = []
-        for index, job in candidates:
-            problem_row = job.get("problem_row") or {}
-            group_key = str(problem_row.get("problem_id_hash") or problem_row.get("seed_offset") or index)
-            if group_key not in grouped:
-                grouped[group_key] = []
-                group_order.append(group_key)
-            grouped[group_key].append(index)
-        offsets = {group_key: 0 for group_key in group_order}
-        while len(selected) < budget:
-            progressed = False
-            for group_key in group_order:
-                offset = offsets[group_key]
-                group_indices = grouped[group_key]
-                if offset >= len(group_indices):
-                    continue
-                selected.add(group_indices[offset])
-                offsets[group_key] = offset + 1
-                progressed = True
-                if len(selected) >= budget:
-                    break
-            if not progressed:
-                break
+        selected = {
+            index
+            for index, _job in _source_prefetch_fair_candidate_order(candidates)[:budget]
+        }
     out: list[dict[str, Any]] = []
     for index, job in enumerate(jobs):
         if job.get("action") != "fetch_candidate":
@@ -751,6 +1132,7 @@ def _run_source_prefetch_job(
         except Exception as exc:
             record["status"] = "error"
             record["error_type"] = type(exc).__name__
+            record["error_label"] = _evidence_source_error_label(exc)
             _source_prefetch_record_source_error(
                 source=source,
                 source_error_budget=source_error_budget,
@@ -849,6 +1231,7 @@ def _source_prefetch_log_event(
         "cache_status_after": record.get("cache_status_after"),
         "row_count": record.get("row_count"),
         "error_type": error_type or record.get("error_type") or "",
+        "error_label": record.get("error_label") or "",
         "cached_error_retry_attempted": bool(record.get("cached_error_retry_attempted")),
         "raw_content_persisted": False,
     }

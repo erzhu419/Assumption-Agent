@@ -95,6 +95,7 @@ from assumption_os.hle_smoke_eval import (
     _maybe_run_operator_application_verifier,
     _maybe_run_timeout_recovery_child,
     _run_self_contained_full_option_adjudicator,
+    _run_sweep_gap_full_option_recheck,
     _math_tool_child_timeout,
     _maybe_add_answer_bearing_evidence_candidate,
     _maybe_mark_answer_bearing_evidence_attempt,
@@ -176,7 +177,10 @@ from assumption_os.hle_smoke_eval import (
     _option_claim_source_quality_detail,
     _option_claim_statement_fact_programmatic_span_promotion_detail,
     _option_claim_negative_except_programmatic_promotion_detail,
+    _option_claim_option_query_terms,
+    _option_claim_source_quality_directness_promotion_detail,
     _apply_option_claim_duplicate_doc_penalty,
+    _option_evidence_relation_audit_suffix,
     _rank_source_verifier_rows_by_source_quality,
     _rank_option_claim_evidence_docs,
     _semantic_scholar_search,
@@ -2619,6 +2623,172 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertIsNone(selection)
         self.assertIn("selected_option_not_sweep_only", text)
         self.assertNotIn("Structural lure", text)
+
+    def test_sweep_gap_full_option_recheck_can_select_non_structured_sweep_only_option(self):
+        problem = {
+            "id_hash": "p",
+            "question_hash": "q",
+            "answer_type": "multipleChoice",
+            "_question": (
+                "According to a specialized catalogue, which entry has the described relation?\n"
+                "A. Familiar lure\nB. Common lure\nC. RareCorrect relation"
+            ),
+        }
+        attempts = [
+            {
+                "child_id": "direct-a",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "status": "answered",
+                "parsed_answer": "A",
+            },
+            {
+                "child_id": "recursive-b",
+                "child_index": 2,
+                "prompt_kind": "recursive_assumption_answer",
+                "status": "answered",
+                "parsed_answer": "B",
+            },
+            {
+                "child_id": "sweep-c",
+                "child_index": 3,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "status": "answered",
+                "parsed_answer": "C",
+            },
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "events.jsonl"
+            with patch(
+                "assumption_os.hle_smoke_eval._call_model",
+                return_value='{"choice":3,"confidence":"high"}',
+            ) as verifier:
+                selection = _select_recursive_child_answer(
+                    problem=problem,
+                    attempts=attempts,
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=_JsonlLogger(log_path),
+                    timeout=1,
+                    max_tokens=32,
+                )
+            text = log_path.read_text(encoding="utf-8")
+
+        verifier.assert_called_once()
+        self.assertEqual(selection["selection_method"], "sweep_gap_full_option_recheck_choice")
+        self.assertEqual(selection["selected_child_id"], "sweep-c")
+        self.assertEqual(selection["selected_answer"], "C")
+        self.assertTrue(selection["sweep_gap_full_option_recheck"]["selected_is_sweep_only"])
+        self.assertIn("sweep_gap_full_option_recheck_start", text)
+        self.assertIn("sweep_gap_full_option_recheck_end", text)
+        self.assertNotIn("RareCorrect", text)
+        self.assertNotIn("Common lure", text)
+
+    def test_sweep_gap_full_option_recheck_rejects_non_sweep_or_low_confidence(self):
+        problem = {
+            "id_hash": "p",
+            "question_hash": "q",
+            "answer_type": "multipleChoice",
+            "_question": (
+                "According to a specialized catalogue, which entry has the described relation?\n"
+                "A. Familiar lure\nB. Common lure\nC. RareCorrect relation"
+            ),
+        }
+        attempts = [
+            {"child_id": "direct-a", "child_index": 1, "prompt_kind": "direct_short_answer", "status": "answered", "parsed_answer": "A"},
+            {"child_id": "recursive-b", "child_index": 2, "prompt_kind": "recursive_assumption_answer", "status": "answered", "parsed_answer": "B"},
+            {"child_id": "sweep-c", "child_index": 3, "prompt_kind": "mc_option_sweep_candidate", "status": "answered", "parsed_answer": "C"},
+        ]
+        ranked = [
+            ("a", [attempts[0]]),
+            ("b", [attempts[1]]),
+            ("c", [attempts[2]]),
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "events.jsonl"
+            with patch(
+                "assumption_os.hle_smoke_eval._call_model",
+                return_value='{"choice":2,"confidence":"high"}',
+            ):
+                selection = _run_sweep_gap_full_option_recheck(
+                    problem=problem,
+                    valid=attempts,
+                    ranked=ranked,
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=_JsonlLogger(log_path),
+                    timeout=1,
+                    max_tokens=32,
+                )
+            text = log_path.read_text(encoding="utf-8")
+        self.assertIsNone(selection)
+        self.assertIn("selected_option_not_sweep_only", text)
+
+        with TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "events.jsonl"
+            with patch(
+                "assumption_os.hle_smoke_eval._call_model",
+                return_value='{"choice":3,"confidence":"low"}',
+            ):
+                selection = _run_sweep_gap_full_option_recheck(
+                    problem=problem,
+                    valid=attempts,
+                    ranked=ranked,
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=_JsonlLogger(log_path),
+                    timeout=1,
+                    max_tokens=32,
+                )
+            text = log_path.read_text(encoding="utf-8")
+        self.assertIsNone(selection)
+        self.assertIn("low_confidence", text)
+
+    def test_sweep_gap_full_option_recheck_skips_trusted_option_evidence_candidate(self):
+        problem = {
+            "id_hash": "p",
+            "question_hash": "q",
+            "answer_type": "multipleChoice",
+            "_question": (
+                "According to a specialized catalogue, which entry has the described relation?\n"
+                "A. Familiar lure\nB. Common lure\nC. RareCorrect relation"
+            ),
+        }
+        attempts = [
+            {"child_id": "direct-a", "child_index": 1, "prompt_kind": "direct_short_answer", "status": "answered", "parsed_answer": "A"},
+            {"child_id": "evidence-b", "child_index": 2, "prompt_kind": "mc_option_claim_evidence_answer", "status": "answered", "parsed_answer": "B", "candidate_verifier_state": "verified"},
+            {"child_id": "sweep-c", "child_index": 3, "prompt_kind": "mc_option_sweep_candidate", "status": "answered", "parsed_answer": "C"},
+        ]
+        ranked = [
+            ("a", [attempts[0]]),
+            ("b", [attempts[1]]),
+            ("c", [attempts[2]]),
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "events.jsonl"
+            with patch("assumption_os.hle_smoke_eval._call_model") as verifier:
+                selection = _run_sweep_gap_full_option_recheck(
+                    problem=problem,
+                    valid=attempts,
+                    ranked=ranked,
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=_JsonlLogger(log_path),
+                    timeout=1,
+                    max_tokens=32,
+                )
+            text = log_path.read_text(encoding="utf-8")
+
+        verifier.assert_not_called()
+        self.assertIsNone(selection)
+        self.assertIn("trusted_option_evidence_candidate_present", text)
 
     def test_self_contained_option_adjudicator_can_be_disabled_for_controls(self):
         problem = {
@@ -5684,6 +5854,115 @@ class HleSmokeEvalTest(unittest.TestCase):
             "same_run_baseline_consensus_blocks_weak_verified_override",
         )
 
+    def test_verified_or_abstain_blocks_self_contained_override_against_same_run_consensus(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. baseline\nB. self-contained",
+        }
+        attempts = [
+            {
+                "child_id": "direct",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "B",
+            },
+            {
+                "child_id": "recursive",
+                "child_index": 2,
+                "prompt_kind": "recursive_assumption_answer",
+                "parsed_answer": "B",
+            },
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                variant: {"variant": variant, "answer": "A"}
+                for variant in [
+                    "raw",
+                    "raw_budget_matched",
+                    "hipporag_baseline",
+                    "hipporag_budget_matched",
+                ]
+            }
+        }
+        selection = {
+            "selection_method": "self_contained_option_adjudicator_choice",
+            "selected_child_id": "direct",
+            "selected_answer": "B",
+            "underlying_model_calls": 1,
+            "verifier_model_call": True,
+            "self_contained_option_adjudicator": {
+                "confidence": "high",
+                "support_count": 2,
+                "support_prompt_kinds": ["direct_short_answer", "recursive_assumption_answer"],
+            },
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "same_run_baseline_consensus")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["reason"],
+            "same_run_baseline_consensus_blocks_weak_verified_override",
+        )
+
+    def test_verified_or_abstain_allows_source_backed_self_contained_override(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. baseline\nB. source-backed",
+        }
+        attempts = [
+            {
+                "child_id": "source",
+                "child_index": 1,
+                "prompt_kind": "structural_option_audit_answer",
+                "parsed_answer": "B",
+                "candidate_verifier_state": "verified",
+                "candidate_verifier_trust": "source_grounded",
+                "source_supported_evidence_candidate": True,
+            },
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                variant: {"variant": variant, "answer": "A"}
+                for variant in [
+                    "raw",
+                    "raw_budget_matched",
+                    "hipporag_baseline",
+                    "hipporag_budget_matched",
+                ]
+            }
+        }
+        selection = {
+            "selection_method": "self_contained_option_adjudicator_choice",
+            "selected_child_id": "source",
+            "selected_answer": "B",
+            "underlying_model_calls": 1,
+            "verifier_model_call": True,
+            "self_contained_option_adjudicator": {
+                "confidence": "high",
+                "support_count": 2,
+                "support_prompt_kinds": ["structural_option_audit_answer"],
+            },
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "self_contained_option_adjudicator_choice")
+        self.assertEqual(gated["selected_child_id"], "source")
+        self.assertEqual(gated["verified_or_abstain_gate"]["status"], "allowed")
+
     def test_verified_or_abstain_allows_high_margin_weak_option_evidence_against_same_run_consensus(self):
         problem = {
             "answer_type": "multipleChoice",
@@ -5971,6 +6250,66 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(
             gated["verified_or_abstain_gate"]["reason"],
             "same_run_baseline_consensus_blocks_unverified_selection",
+        )
+
+    def test_verified_or_abstain_blocks_borderline_weak_option_evidence_against_same_run_consensus(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. borderline evidence\nB. baseline",
+        }
+        attempts = [
+            {
+                "child_id": "evidence",
+                "child_index": 1,
+                "prompt_kind": "mc_option_evidence_scorer_answer",
+                "parsed_answer": "A",
+                "tool_confidence": "weak_option_evidence_margin",
+                "candidate_verifier_state": "not_verified",
+                "option_evidence_top_support_doc_count": 2,
+                "option_evidence_top_ambiguous_doc_count": 0,
+                "option_evidence_any_ambiguous_doc_count": 0,
+                "option_evidence_margin": 24.2833,
+                "option_evidence_rank_margin": 29.2833,
+                "option_evidence_context_char_count": 1200,
+                "option_evidence_context_option_count": 2,
+            }
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                variant: {"variant": variant, "answer": "B"}
+                for variant in [
+                    "raw",
+                    "raw_budget_matched",
+                    "hipporag_baseline",
+                    "hipporag_budget_matched",
+                ]
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "evidence",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "same_run_baseline_consensus")
+        self.assertEqual(gated["selected_answer"], "B")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["reason"],
+            "same_run_baseline_consensus_blocks_unverified_selection",
+        )
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["fallback_policy"],
+            "same_run_four_way_consensus_preserve",
         )
 
     def test_raw_baseline_noharm_blocks_weak_budget_pair_override(self):
@@ -6282,6 +6621,61 @@ class HleSmokeEvalTest(unittest.TestCase):
             "raw_budget_baseline_noharm_blocks_weak_override",
         )
 
+    def test_same_run_majority_consensus_precedes_raw_budget_noharm(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. three controls\nB. raw budget\nC. weak direct",
+        }
+        attempts = [
+            {
+                "child_id": "direct",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+            }
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {
+                    "variant": "raw_budget_matched",
+                    "answer": "B",
+                    "budget_strong_consensus": True,
+                    "budget_top_candidate_vote_count": 3,
+                },
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "A"},
+                "hipporag_budget_matched": {
+                    "variant": "hipporag_budget_matched",
+                    "answer": "A",
+                    "budget_strong_consensus": True,
+                    "budget_top_candidate_vote_count": 4,
+                },
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "same_run_baseline_consensus")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["fallback_policy"],
+            "same_run_baseline_majority_consensus_preserve",
+        )
+        self.assertEqual(gated["verified_or_abstain_gate"]["fallback_consensus_count"], 3)
+
     def test_raw_budget_baseline_noharm_allows_source_grounded_operator(self):
         problem = {
             "answer_type": "multipleChoice",
@@ -6520,6 +6914,129 @@ class HleSmokeEvalTest(unittest.TestCase):
             gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]["selected_pair_reason"],
             "budget_pair_preference_disabled",
         )
+
+    def test_verified_or_abstain_prefers_strong_budget_pair_over_standard_split(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. standard pair\nB. strong budget pair\nC. weak majority",
+        }
+        attempts = [
+            {
+                "child_id": "majority",
+                "child_index": 1,
+                "prompt_kind": "structural_option_audit_answer",
+                "parsed_answer": "C",
+            }
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {
+                    "variant": "raw_budget_matched",
+                    "answer": "B",
+                    "budget_strong_consensus": True,
+                    "budget_top_candidate_vote_count": 4,
+                    "selection_method": "verified_or_abstain_direct_fallback",
+                },
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "A"},
+                "hipporag_budget_matched": {
+                    "variant": "hipporag_budget_matched",
+                    "answer": "B",
+                    "budget_strong_consensus": True,
+                    "budget_top_candidate_vote_count": 5,
+                    "selection_method": "verified_or_abstain_direct_fallback",
+                },
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "majority",
+            "selected_answer": "C",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "same_run_baseline_consensus")
+        self.assertEqual(gated["selected_answer"], "B")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["fallback_policy"],
+            "same_run_strong_budget_pair_over_standard_split_consensus_preserve",
+        )
+        conflict = gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]
+        self.assertEqual(conflict["selected_pair"], "budget_pair")
+        self.assertFalse(conflict["budget_pair_verified"])
+        self.assertTrue(conflict["budget_pair_strong_consensus"])
+        self.assertEqual(conflict["selected_pair_reason"], "budget_pair_strong_consensus")
+        self.assertEqual(conflict["budget_pair_top_candidate_vote_counts"], [4, 5])
+
+    def test_verified_or_abstain_strong_budget_pair_policy_has_disable_env(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. standard pair\nB. strong budget pair\nC. weak majority",
+        }
+        attempts = [
+            {
+                "child_id": "majority",
+                "child_index": 1,
+                "prompt_kind": "structural_option_audit_answer",
+                "parsed_answer": "C",
+            }
+        ]
+        agent_plan = {
+            "hle_same_run_baseline_cache": {
+                "raw": {"variant": "raw", "answer": "A"},
+                "raw_budget_matched": {
+                    "variant": "raw_budget_matched",
+                    "answer": "B",
+                    "budget_strong_consensus": True,
+                    "budget_top_candidate_vote_count": 4,
+                },
+                "hipporag_baseline": {"variant": "hipporag_baseline", "answer": "A"},
+                "hipporag_budget_matched": {
+                    "variant": "hipporag_budget_matched",
+                    "answer": "B",
+                    "budget_strong_consensus": True,
+                    "budget_top_candidate_vote_count": 4,
+                },
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "majority",
+            "selected_answer": "C",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_DISABLE_BUDGET_PAIR_OVER_STANDARD_SPLIT_CONSENSUS": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=attempts,
+                selection=selection,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["fallback_policy"],
+            "same_run_standard_pair_consensus_preserve",
+        )
+        conflict = gated["verified_or_abstain_gate"]["baseline_consensus_conflict"]
+        self.assertEqual(conflict["selected_pair"], "standard_pair")
+        self.assertTrue(conflict["budget_pair_strong_consensus"])
+        self.assertEqual(conflict["selected_pair_reason"], "budget_pair_preference_disabled")
 
     def test_verified_or_abstain_prefers_standard_pair_over_unverified_budget_split(self):
         problem = {
@@ -6985,6 +7502,55 @@ class HleSmokeEvalTest(unittest.TestCase):
             "answer_type": "multipleChoice",
             "_question": "Which option is correct?\nA. direct\nB. retrieved\nC. raw",
         }
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_SOURCE_INSUFFICIENT_HIPPORAG_PRESERVE_SELECTOR": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=[
+                    {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+                    {"child_id": "rawp", "child_index": 2, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "C"},
+                    {
+                        "child_id": "hipp",
+                        "child_index": 3,
+                        "prompt_kind": "hipporag_preserve_selector_answer",
+                        "parsed_answer": "B",
+                        "same_run_baseline_cache_variant": "hipporag_baseline",
+                        "source_insufficient_hipporag_preserve": True,
+                        "preserve_context_char_count": 120,
+                        "preserve_selected_doc_count": 2,
+                        "preserve_candidate_doc_count": 3,
+                        "context_answer_supported": True,
+                        "context_answer_overlap_count": 3,
+                        "context_question_overlap_count": 2,
+                    },
+                ],
+                selection={
+                    "selection_method": "normalized_majority",
+                    "selected_child_id": "direct",
+                    "selected_answer": "A",
+                    "underlying_model_calls": 0,
+                    "verifier_model_call": False,
+                },
+            )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "hipp")
+        self.assertEqual(gated["selected_answer"], "B")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["fallback_prompt_kind"],
+            "hipporag_preserve_selector_answer",
+        )
+
+    def test_source_insufficient_hipporag_fallback_disabled_by_default(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. direct\nB. retrieved\nC. raw",
+        }
         gated = _apply_verified_or_abstain_selection(
             problem=problem,
             attempts=[
@@ -7015,11 +7581,11 @@ class HleSmokeEvalTest(unittest.TestCase):
         )
 
         self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
-        self.assertEqual(gated["selected_child_id"], "hipp")
-        self.assertEqual(gated["selected_answer"], "B")
+        self.assertEqual(gated["selected_child_id"], "rawp")
+        self.assertEqual(gated["selected_answer"], "C")
         self.assertEqual(
-            gated["verified_or_abstain_gate"]["fallback_prompt_kind"],
-            "hipporag_preserve_selector_answer",
+            gated["verified_or_abstain_gate"]["fallback_policy"],
+            "same_run_raw_baseline_noharm_preserve",
         )
 
     def test_source_insufficient_hipporag_fallback_needs_answer_bearing_signal(self):
@@ -7029,34 +7595,39 @@ class HleSmokeEvalTest(unittest.TestCase):
             "answer_type": "multipleChoice",
             "_question": "Which option is correct?\nA. direct\nB. retrieved\nC. raw",
         }
-        gated = _apply_verified_or_abstain_selection(
-            problem=problem,
-            attempts=[
-                {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
-                {"child_id": "rawp", "child_index": 2, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "C"},
-                {
-                    "child_id": "hipp",
-                    "child_index": 3,
-                    "prompt_kind": "hipporag_preserve_selector_answer",
-                    "parsed_answer": "B",
-                    "same_run_baseline_cache_variant": "hipporag_baseline",
-                    "source_insufficient_hipporag_preserve": True,
-                    "preserve_context_char_count": 1200,
-                    "preserve_selected_doc_count": 4,
-                    "preserve_candidate_doc_count": 6,
-                    "context_answer_supported": False,
-                    "context_answer_overlap_count": 1,
-                    "context_question_overlap_count": 1,
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_SOURCE_INSUFFICIENT_HIPPORAG_PRESERVE_SELECTOR": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=[
+                    {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+                    {"child_id": "rawp", "child_index": 2, "prompt_kind": "raw_preserve_selector_answer", "parsed_answer": "C"},
+                    {
+                        "child_id": "hipp",
+                        "child_index": 3,
+                        "prompt_kind": "hipporag_preserve_selector_answer",
+                        "parsed_answer": "B",
+                        "same_run_baseline_cache_variant": "hipporag_baseline",
+                        "source_insufficient_hipporag_preserve": True,
+                        "preserve_context_char_count": 1200,
+                        "preserve_selected_doc_count": 4,
+                        "preserve_candidate_doc_count": 6,
+                        "context_answer_supported": False,
+                        "context_answer_overlap_count": 1,
+                        "context_question_overlap_count": 1,
+                    },
+                ],
+                selection={
+                    "selection_method": "normalized_majority",
+                    "selected_child_id": "direct",
+                    "selected_answer": "A",
+                    "underlying_model_calls": 0,
+                    "verifier_model_call": False,
                 },
-            ],
-            selection={
-                "selection_method": "normalized_majority",
-                "selected_child_id": "direct",
-                "selected_answer": "A",
-                "underlying_model_calls": 0,
-                "verifier_model_call": False,
-            },
-        )
+            )
 
         self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
         self.assertEqual(gated["selected_child_id"], "rawp")
@@ -11905,6 +12476,135 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertFalse(detail["promote"])
         self.assertEqual(detail["reason"], "selected_candidate_failed_source_quality_gate")
 
+    def test_source_quality_directness_promotion_accepts_near_complete_relation_span(self):
+        option_hash = stable_hash({"option_label": "A"})
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_OPTION_CLAIM_NEAR_COMPLETE_RELATION_PROMOTION": "1"},
+            clear=False,
+        ):
+            detail = _option_claim_source_quality_directness_promotion_detail(
+                contrastive_adjudicator_summary={"direct_high_confidence": False},
+                span_directness_summary={
+                    "direct_candidate_count": 0,
+                    "direct_candidate_option_hashes": [],
+                },
+                candidate_summaries=[
+                    {
+                        "option_hash": option_hash,
+                        "source_quality_doc_count": 2,
+                        "source_quality_score": 11.5,
+                        "support_doc_count": 2,
+                        "refute_doc_count": 1,
+                        "local_relation_query_expansion_doc_count": 1,
+                        "candidate_unique_span_count": 1,
+                        "candidate_direct_relation_span_count": 1,
+                        "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                        "candidate_direct_relation_span_top_relation_signature_missing_term_count": 1,
+                        "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                        "candidate_direct_relation_span_top_relation_proximity": True,
+                        "candidate_direct_relation_span_top_shared_doc": False,
+                        "span_directness_lexical_unique_but_relation_generic": True,
+                    }
+                ],
+                options={"A": "Near complete direct relation option"},
+                candidate_labels=["A"],
+            )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(
+            detail["reason"],
+            "unique_programmatic_near_complete_relation_span_with_source_quality",
+        )
+        self.assertEqual(detail["selected_option_hash"], option_hash)
+        self.assertEqual(
+            detail["selected_directness_path"],
+            "programmatic_near_complete_relation_span",
+        )
+        self.assertEqual(
+            detail["programmatic_near_complete_relation_candidate_count"],
+            1,
+        )
+        self.assertTrue(
+            detail["selected_candidate"]["refute_allowed_by_strong_programmatic_signal"]
+        )
+
+    def test_source_quality_directness_promotion_blocks_near_complete_when_source_weak(self):
+        option_hash = stable_hash({"option_label": "A"})
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_OPTION_CLAIM_NEAR_COMPLETE_RELATION_PROMOTION": "1"},
+            clear=False,
+        ):
+            detail = _option_claim_source_quality_directness_promotion_detail(
+                contrastive_adjudicator_summary={"direct_high_confidence": False},
+                span_directness_summary={
+                    "direct_candidate_count": 0,
+                    "direct_candidate_option_hashes": [],
+                },
+                candidate_summaries=[
+                    {
+                        "option_hash": option_hash,
+                        "source_quality_doc_count": 0,
+                        "source_quality_score": 3.0,
+                        "support_doc_count": 0,
+                        "candidate_unique_span_count": 1,
+                        "candidate_direct_relation_span_count": 1,
+                        "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                        "candidate_direct_relation_span_top_relation_signature_missing_term_count": 1,
+                        "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                        "candidate_direct_relation_span_top_relation_proximity": True,
+                        "candidate_direct_relation_span_top_shared_doc": False,
+                        "span_directness_lexical_unique_but_relation_generic": True,
+                    }
+                ],
+                options={"A": "Weakly sourced near complete option"},
+                candidate_labels=["A"],
+            )
+
+        self.assertFalse(detail["promote"])
+        self.assertEqual(detail["reason"], "no_span_directness_direct_candidates")
+        self.assertEqual(
+            detail["rejection_counts"],
+            {"missing_source_quality_signal": 1},
+        )
+
+    def test_source_quality_directness_promotion_near_complete_is_opt_in(self):
+        option_hash = stable_hash({"option_label": "A"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={"direct_high_confidence": False},
+            span_directness_summary={
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": option_hash,
+                    "source_quality_doc_count": 2,
+                    "source_quality_score": 11.5,
+                    "support_doc_count": 2,
+                    "local_relation_query_expansion_doc_count": 1,
+                    "candidate_unique_span_count": 1,
+                    "candidate_direct_relation_span_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "span_directness_lexical_unique_but_relation_generic": True,
+                }
+            ],
+            options={"A": "Near complete direct relation option"},
+            candidate_labels=["A"],
+        )
+
+        self.assertFalse(detail["promote"])
+        self.assertEqual(detail["reason"], "no_span_directness_direct_candidates")
+        self.assertEqual(
+            detail["programmatic_near_complete_relation_candidate_count"],
+            0,
+        )
+
     def test_negative_except_programmatic_promotion_accepts_single_relation_gap(self):
         a_hash = stable_hash({"option_label": "A"})
         b_hash = stable_hash({"option_label": "B"})
@@ -12568,6 +13268,120 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertIn("unexpectedly", signature["required_terms"])
         self.assertEqual(signature["source"], "stem_anchor")
 
+    def test_option_claim_relation_signature_prefers_question_focus_over_early_named_entities(self):
+        signature = _option_claim_question_relation_signature_terms(
+            stem=(
+                "Lewis purchased a house in Windsor, Ontario and wanted a painting of "
+                "Algonquin Park or Hudson Bay during Autumn. Marcel delivered a forest "
+                "painting in February. Lewis later found the Sale of Goods Act and asked "
+                "a lawyer what the applicability of the SGA and its implied warranties "
+                "and conditions would be to his situation."
+            ),
+            option_text=(
+                "The lawyer will say the SGA applies and an implied condition was breached."
+            ),
+            max_terms=12,
+        )
+
+        required = set(signature["required_terms"])
+        self.assertTrue(required & {"applicability", "warranties", "conditions", "sale", "goods"})
+        self.assertNotIn("algonquin", required)
+        self.assertNotIn("february", required)
+        self.assertNotIn("windsor", required)
+
+    def test_option_claim_relation_signature_does_not_require_weak_transfer_intervention_terms(self):
+        signature = _option_claim_question_relation_signature_terms(
+            stem=(
+                "A patient had a difficult colonoscopy, then deteriorated and required "
+                "transfer for intervention. Based only on these findings, which of the "
+                "following is the most likely diagnosis?"
+            ),
+            option_text="Splenic laceration",
+            max_terms=12,
+        )
+
+        self.assertIn("diagnosis", signature["query_terms"])
+        self.assertNotIn("transfer", signature["required_terms"])
+        self.assertNotIn("intervention", signature["required_terms"])
+        self.assertIn("diagnosis", signature["required_terms"])
+
+    def test_option_query_terms_prefers_tail_claim_over_boilerplate(self):
+        terms = _option_claim_option_query_terms(
+            (
+                "The lawyer will inform Lewis that his interpretation of the SGA is "
+                "correct and that the painting breached the implied warranties and "
+                "conditions under the Sale of Goods Act."
+            ),
+            max_terms=8,
+        )
+
+        lowered = {term.lower() for term in terms}
+        self.assertTrue(lowered & {"warranties", "conditions", "goods", "breached"})
+        self.assertNotIn("lawyer", lowered)
+        self.assertNotIn("inform", lowered)
+        self.assertNotIn("lewis", lowered)
+
+    def test_diagnosis_relation_signature_prefers_clinical_clues_over_exam_noise(self):
+        signature = _option_claim_question_relation_signature_terms(
+            stem=(
+                "A patient underwent difficult colonoscopy and later developed abdominal "
+                "pain, left-shoulder discomfort, hypotension, worsening distension, "
+                "guarding, and a hemoglobin drop. Conjunctival pallor was observed. "
+                "Auscultation revealed clear breath sounds. Based only on these findings, "
+                "which of the following is the most likely diagnosis?"
+            ),
+            option_text="Splenic laceration",
+            max_terms=12,
+        )
+
+        self.assertIn("diagnosis", signature["required_terms"])
+        self.assertTrue(
+            set(signature["anchor_terms"])
+            & {"colonoscopy", "hemoglobin", "hypotension", "abdominal", "left-shoulder"}
+        )
+        self.assertNotIn("auscultation", signature["required_terms"])
+        self.assertNotIn("conjunctival", signature["required_terms"])
+
+    def test_relation_queries_use_specific_option_terms_for_document_discrepancy(self):
+        queries = _deterministic_option_claim_relation_queries(
+            stem=(
+                "Bank X receives a bill of lading and invoice under a letter of credit. "
+                "Which following statement is true?"
+            ),
+            option_text=(
+                "The document has following discrepancy: Bill of lading is not presented "
+                "in full set"
+            ),
+            problem={"raw_subject": "International Business"},
+            agent_plan={},
+        )
+
+        joined = " ".join(queries).lower()
+        self.assertIn("bill", joined)
+        self.assertIn("lading", joined)
+        self.assertIn("full", joined)
+        self.assertNotIn("document has following discrepancy", joined)
+
+    def test_option_claim_relation_signature_host_transfer_uses_specific_biotype_anchors(self):
+        signature = _option_claim_question_relation_signature_terms(
+            stem=(
+                "In my experiment, the watermelon-adapted aphid biotype did well on a "
+                "raffinose-rich diet whereas the cotton-adapted biotype did well on sucrose. "
+                "In a host transfer experiment, sugar metabolism was differentially affected. "
+                "Which of the following is not true?"
+            ),
+            option_text="The watermelon-adapted biotype preferred the raffinose-rich diet.",
+            max_terms=12,
+        )
+
+        self.assertIn("transfer", signature["query_terms"])
+        self.assertNotIn("transfer", signature["required_terms"])
+        self.assertNotIn("true", signature["required_terms"])
+        self.assertTrue(
+            set(signature["required_terms"])
+            & {"watermelon-adapted", "cotton-adapted", "metabolism"}
+        )
+
     def test_deterministic_relation_queries_include_required_relation_backfill_terms(self):
         stem = (
             "A simulator applies a conversion operator to a discrete-time trajectory "
@@ -12613,6 +13427,92 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertIn("sulphate-reducing", joined)
         self.assertIn("oxidation", joined)
         self.assertIn("unexpectedly", joined)
+
+    def test_local_relation_expansion_docs_runs_without_planned_queries(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Systems Biology",
+            "_question": (
+                "Which mechanism preserves the controlled variable under replacement?\n"
+                "A. Alpha mechanism\n"
+                "B. Beta mechanism"
+            ),
+        }
+
+        def fake_local_search(query, *, problem, limit):
+            self.assertIn("Beta", query)
+            return [
+                {
+                    "title": "Beta controlled-variable result",
+                    "snippet": "Beta mechanism preserves the controlled variable under replacement.",
+                    "source": "openalex",
+                }
+            ]
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_LOCAL_RELATION_QUERY_EXPANSION": "1",
+                "HLE_EVIDENCE_SOURCE_CACHE_DIR": "unit-cache",
+                "HLE_EVIDENCE_SOURCE_CACHE_ONLY": "1",
+            },
+            clear=False,
+        ):
+            with patch(
+                "assumption_os.hle_smoke_eval._local_evidence_corpus_search",
+                side_effect=fake_local_search,
+            ):
+                docs = _option_claim_local_relation_query_expansion_docs(
+                    stem=(
+                        "Which mechanism preserves the controlled variable under "
+                        "replacement?"
+                    ),
+                    option_text="Beta mechanism",
+                    problem=problem,
+                    planned_queries=[],
+                    max_docs=3,
+                )
+
+        self.assertTrue(docs)
+        self.assertEqual(docs[0]["retrieval_stage"], "local_relation_query_expansion")
+        self.assertGreaterEqual(
+            int(docs[0]["relation_query_expansion_covered_slot_count"]),
+            1,
+        )
+
+    def test_local_evidence_corpus_search_filters_cross_domain_noise(self):
+        rows = [
+            {
+                "title": "When less is more: pollinator visitation",
+                "snippet": (
+                    "Generalist pollinators can provide neutral service under some "
+                    "conditions and purposes in ecological communities."
+                ),
+                "source": "semantic_scholar",
+            },
+            {
+                "title": "Sale of Goods Act implied warranties",
+                "snippet": (
+                    "A contract for goods may include implied warranties and conditions "
+                    "under sale of goods law."
+                ),
+                "source": "openalex",
+            },
+        ]
+
+        with patch(
+            "assumption_os.hle_smoke_eval._load_local_evidence_corpus_rows",
+            return_value=rows,
+        ):
+            docs = _local_evidence_corpus_search(
+                "purpose conditions warranties breached goods applicability condition situation Law",
+                problem={"raw_subject": "Law", "category": "Humanities/Social Science"},
+                limit=5,
+            )
+
+        self.assertEqual(len(docs), 1)
+        self.assertIn("Sale of Goods Act", docs[0]["title"])
 
     def test_option_claim_candidate_direct_relation_span_signature_filters_generic_relation_overlap(self):
         options = {
@@ -17965,6 +18865,37 @@ class HleSmokeEvalTest(unittest.TestCase):
             "best_sweep_only_ranked",
         )
 
+    def test_option_claim_contrastive_candidate_selection_adds_best_overall_source_quality(self):
+        rows = [
+            {"label": "A", "net_score": 30.0, "source_quality_score": 8.0, "source_quality_doc_count": 1},
+            {"label": "B", "net_score": 20.0, "source_quality_score": 7.0, "source_quality_doc_count": 1},
+            {
+                "label": "C",
+                "net_score": -3.0,
+                "source_quality_score": 13.0,
+                "source_quality_doc_count": 2,
+                "answer_web_cache_sweep_general_relation_directish_count": 1,
+            },
+            {"label": "D", "net_score": -4.0, "source_quality_score": 1.0, "source_quality_doc_count": 0},
+        ]
+
+        selection = _option_claim_contrastive_candidate_selection(
+            ranked_rows=rows,
+            options={"A": "Alpha", "B": "Beta", "C": "Gamma", "D": "Delta"},
+            missing_model_labels=[],
+        )
+
+        self.assertIn("C", selection["candidate_labels"])
+        self.assertTrue(selection["overall_source_quality_challenger_included"])
+        self.assertEqual(
+            selection["best_overall_source_quality_challenger_option_hash"],
+            stable_hash({"option_label": "C"}),
+        )
+        self.assertEqual(
+            selection["selection_reasons_by_option_hash"][stable_hash({"option_label": "C"})],
+            "best_overall_source_quality",
+        )
+
     def test_option_claim_contrastive_candidate_selection_adds_finite_option_coverage(self):
         rows = [
             {"label": "A", "net_score": 30.0, "source_quality_score": 8.0, "source_quality_doc_count": 1},
@@ -18022,6 +18953,175 @@ class HleSmokeEvalTest(unittest.TestCase):
             selection["selection_reasons_by_option_hash"][stable_hash({"option_label": "J"})],
             "tail_sweep_only_large_option",
         )
+
+    def test_source_quality_directness_promotion_accepts_unique_direct_candidate(self):
+        b_hash = stable_hash({"option_label": "B"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "direct_candidate_count": 1,
+                "direct_candidate_option_hashes": [b_hash],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": stable_hash({"option_label": "A"}),
+                    "source_quality_score": 9.0,
+                    "source_quality_doc_count": 1,
+                    "support_doc_count": 1,
+                    "refute_doc_count": 0,
+                    "candidate_unique_span_count": 1,
+                },
+                {
+                    "option_hash": b_hash,
+                    "source_quality_score": 12.0,
+                    "source_quality_doc_count": 2,
+                    "support_doc_count": 1,
+                    "refute_doc_count": 0,
+                    "candidate_direct_relation_span_count": 1,
+                    "span_directness_direct_high_confidence": True,
+                    "overall_source_quality_challenger": True,
+                    "source_verifier_rejection_reason": "no_selected_label_generic",
+                },
+            ],
+            options={"A": "Alpha", "B": "Beta"},
+            candidate_labels=["A", "B"],
+        )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(detail["status"], "activated")
+        self.assertEqual(detail["selected_label"], "B")
+        self.assertEqual(detail["selected_option_hash"], b_hash)
+        self.assertEqual(detail["eligible_candidate_count"], 1)
+
+    def test_source_quality_directness_promotion_blocks_ambiguous_direct_candidates(self):
+        b_hash = stable_hash({"option_label": "B"})
+        c_hash = stable_hash({"option_label": "C"})
+        candidate = {
+            "source_quality_score": 12.0,
+            "source_quality_doc_count": 2,
+            "support_doc_count": 1,
+            "refute_doc_count": 0,
+            "candidate_direct_relation_span_count": 1,
+            "span_directness_direct_high_confidence": True,
+        }
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "direct_candidate_count": 2,
+                "direct_candidate_option_hashes": [b_hash, c_hash],
+            },
+            candidate_summaries=[
+                {"option_hash": b_hash, **candidate},
+                {"option_hash": c_hash, **candidate},
+            ],
+            options={"B": "Beta", "C": "Gamma"},
+            candidate_labels=["B", "C"],
+        )
+
+        self.assertFalse(detail["promote"])
+        self.assertEqual(detail["status"], "blocked")
+        self.assertEqual(detail["reason"], "ambiguous_multiple_direct_source_quality_candidates")
+
+    def test_source_quality_directness_promotion_accepts_programmatic_complete_relation_span(self):
+        c_hash = stable_hash({"option_label": "C"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": stable_hash({"option_label": "A"}),
+                    "source_quality_score": 4.0,
+                    "source_quality_doc_count": 0,
+                    "support_doc_count": 0,
+                    "refute_doc_count": 0,
+                    "candidate_direct_relation_span_count": 0,
+                },
+                {
+                    "option_hash": c_hash,
+                    "source_quality_score": 11.0,
+                    "source_quality_doc_count": 1,
+                    "support_doc_count": 0,
+                    "refute_doc_count": 0,
+                    "candidate_direct_relation_span_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 2,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "span_directness_status": "blocked_not_direct_relation",
+                    "span_directness_lexical_unique_but_relation_generic": True,
+                    "source_verifier_rejection_reason": "no_selected_label_generic",
+                    "overall_source_quality_challenger": True,
+                },
+            ],
+            options={"A": "Alpha", "C": "Gamma"},
+            candidate_labels=["A", "C"],
+        )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(detail["status"], "activated")
+        self.assertEqual(
+            detail["reason"],
+            "unique_programmatic_complete_relation_span_with_source_quality",
+        )
+        self.assertEqual(detail["selected_label"], "C")
+        self.assertEqual(detail["selected_option_hash"], c_hash)
+        self.assertEqual(
+            detail["selected_directness_path"],
+            "programmatic_complete_relation_span",
+        )
+
+    def test_source_quality_directness_promotion_logs_missing_required_terms_without_promotion(self):
+        b_hash = stable_hash({"option_label": "B"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": b_hash,
+                    "source_quality_score": 12.0,
+                    "source_quality_doc_count": 2,
+                    "support_doc_count": 1,
+                    "refute_doc_count": 0,
+                    "candidate_direct_relation_span_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "span_directness_status": "blocked_not_direct_relation",
+                    "span_directness_lexical_unique_but_relation_generic": True,
+                },
+            ],
+            options={"B": "Beta"},
+            candidate_labels=["B"],
+        )
+
+        self.assertFalse(detail["promote"])
+        self.assertEqual(detail["status"], "blocked")
+        self.assertEqual(detail["reason"], "no_span_directness_direct_candidates")
+        self.assertEqual(detail["eligible_candidate_count"], 0)
+        self.assertEqual(detail["programmatic_complete_relation_candidate_count"], 0)
+        self.assertGreaterEqual(detail["rejection_counts"]["missing_required_relation_terms"], 1)
+        self.assertTrue(detail["direct_hashes_empty"])
 
     def test_option_claim_queries_expand_single_note_musicology_options(self):
         problem = {
@@ -18141,6 +19241,21 @@ class HleSmokeEvalTest(unittest.TestCase):
             "true",
         )
         self.assertEqual(docs[0]["answer_web_cache_sweep_task_kind"], "general_relation")
+
+    def test_option_evidence_relation_audit_suffix_uses_local_relation_metadata(self):
+        suffix = _option_evidence_relation_audit_suffix({
+            "retrieval_stage": "answer_web_cache_sweep",
+            "answer_web_cache_sweep_general_relation_directish_signal": "true",
+            "answer_web_cache_sweep_relation_slot_covered_count": "2",
+            "answer_web_cache_sweep_relation_proximity": "true",
+            "answer_web_cache_sweep_relation_signature_required_overlap": "1",
+        })
+        self.assertIn("answer_web_cache_sweep", suffix)
+        self.assertIn("relation_directish", suffix)
+        self.assertIn("relation_slots=2", suffix)
+        self.assertIn("required_overlap=1", suffix)
+
+        self.assertEqual(_option_evidence_relation_audit_suffix({"source": "openalex"}), "")
 
     def test_answer_web_cache_sweep_rejects_musicology_shared_chord_scale_note_row(self):
         problem = {
@@ -21485,6 +22600,127 @@ class HleSmokeEvalTest(unittest.TestCase):
                 "B. Only pi (nucleotide diversity) is biased."
             ),
             "_answer": "B",
+        }
+
+        attempt, summary = _maybe_run_domain_rule_mc_verifier(
+            problem=problem,
+            attempts=[],
+            evidence_context="",
+            eval_id="e",
+            call_id="c",
+            model="m",
+            logger=None,
+        )
+
+        self.assertIsNone(attempt)
+        self.assertEqual(summary["status"], "not_required")
+
+    def test_domain_rule_mc_verifier_handles_quant_genetics_heritability_pgs_none_true(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Biology/Medicine",
+            "raw_subject": "Computational Biology",
+            "_question": (
+                "In a theoretically ideal population of a K-selected species under HWE, a phenotype has "
+                "a broad-sense heritability of 0.5. A polygenic score is constructed to predict this "
+                "phenotype using typical GWAS data. Which of the following statements are necessarily true?\n"
+                "A. The polygenic score can not explain more than 50% of the variance in the phenotype\n"
+                "B. Given an arbitrarily large GWAS, the polygenic score will approach a variance explained of 50%\n"
+                "C. Given an arbitrarily large GWAS, the polygenic score constructed via linearly summing GWAS "
+                "effect sizes will not approach a variance explained of 50% due to gene-gene interactions and "
+                "other non-linear effects such as dominance\n"
+                "D. The existence of any epigenetic effects would limit the narrow-sense heritability to less than 0.5\n"
+                "E. None of the other answer choices are correct"
+            ),
+            "_answer": "E",
+        }
+
+        attempt, summary = _maybe_run_domain_rule_mc_verifier(
+            problem=problem,
+            attempts=[],
+            evidence_context="",
+            eval_id="e",
+            call_id="c",
+            model="m",
+            logger=None,
+        )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "E")
+        self.assertEqual(
+            summary["rule_id"],
+            "quant_genetics_heritability_pgs_necessity_none_true",
+        )
+        self.assertEqual(summary["confidence"], "conceptual_domain_rule")
+        self.assertTrue(summary["candidate_correct_for_eval"])
+        self.assertEqual(
+            summary["rule_diagnostics"]["selected_option_hash"],
+            stable_hash({"option_label": "E"}),
+        )
+        self.assertEqual(summary["rule_diagnostics"]["rejected_core_statement_count"], 4)
+
+    def test_domain_rule_mc_verifier_quant_genetics_handles_combo_options(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Biology/Medicine",
+            "raw_subject": "Computational Biology",
+            "_question": (
+                "In a theoretically ideal population under HWE, a phenotype has a broad-sense "
+                "heritability of 0.5. A polygenic score is constructed to predict this phenotype "
+                "using typical GWAS data. Which of the following statements are necessarily true?\n"
+                "A. The polygenic score can not explain more than 50% of the variance in the phenotype\n"
+                "B. Given an arbitrarily large GWAS, the polygenic score will approach a variance explained of 50%\n"
+                "C. Given an arbitrarily large GWAS, the polygenic score constructed via linearly summing GWAS "
+                "effect sizes will not approach a variance explained of 50% due to dominance\n"
+                "D. The existence of any epigenetic effects would limit the narrow-sense heritability to less than 0.5\n"
+                "E. Only choices A and C are correct\n"
+                "F. Only choices B and D are correct\n"
+                "G. A different combination of answer choices not listed here are correct\n"
+                "H. All answer choices A-D are correct\n"
+                "I. None of the other answer choices are correct"
+            ),
+            "_answer": "I",
+        }
+
+        attempt, summary = _maybe_run_domain_rule_mc_verifier(
+            problem=problem,
+            attempts=[],
+            evidence_context="",
+            eval_id="e",
+            call_id="c",
+            model="m",
+            logger=None,
+        )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "I")
+        self.assertEqual(
+            summary["rule_diagnostics"]["selected_option_hash"],
+            stable_hash({"option_label": "I"}),
+        )
+        self.assertTrue(summary["candidate_correct_for_eval"])
+
+    def test_domain_rule_mc_verifier_quant_genetics_requires_necessity_trigger(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Biology/Medicine",
+            "raw_subject": "Computational Biology",
+            "_question": (
+                "In a theoretically ideal population under HWE, a phenotype has a broad-sense "
+                "heritability of 0.5. A polygenic score is constructed using typical GWAS data. "
+                "Which statement is most useful for prediction?\n"
+                "A. The polygenic score can not explain more than 50% of the variance in the phenotype\n"
+                "B. Given an arbitrarily large GWAS, the polygenic score will approach a variance explained of 50%\n"
+                "C. Given an arbitrarily large GWAS, linear GWAS effect sizes will not approach 50% due to dominance\n"
+                "D. Epigenetic effects limit narrow-sense heritability to less than 0.5\n"
+                "E. None of the other answer choices are correct"
+            ),
         }
 
         attempt, summary = _maybe_run_domain_rule_mc_verifier(

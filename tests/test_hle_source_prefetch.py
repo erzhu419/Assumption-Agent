@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+import urllib.error
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -318,6 +319,107 @@ class TestHleSourcePrefetch(unittest.TestCase):
         self.assertEqual(fetched_by_seed, [1, 2, 3])
         self.assertEqual(skipped_by_seed, [1, 2, 3])
 
+    def test_live_budget_covers_more_queries_before_duplicate_sources(self):
+        query_plan = [
+            {
+                "problem_id_hash": "problem-1",
+                "seed_offset": 1,
+                "operator_family_tags": [],
+                "query_records": [
+                    {
+                        "query_hash": f"query-{index}",
+                        "query_kind": "option_claim",
+                        "option_hash": "option-a",
+                        "_query": f"query {index}",
+                    }
+                    for index in range(2)
+                ],
+            }
+        ]
+
+        def fetch_source(*, source, query, limit, timeout, ignore_cached_error=False):
+            return [{"title": query, "snippet": "row", "source": source}]
+
+        with (
+            patch.object(prefetch, "_cache_status", return_value="miss"),
+            patch.object(prefetch, "_fetch_source", side_effect=fetch_source),
+        ):
+            records = prefetch._run_source_prefetch(
+                query_plan=query_plan,
+                sources=["semantic_scholar", "openalex"],
+                source_limit=2,
+                timeout=1.0,
+                execute_live=True,
+                max_live_calls=2,
+                delay_sec=0.0,
+                parallel_workers=1,
+            )
+
+        self.assertEqual(
+            [(row["query_hash"], row["source"], row["status"]) for row in records],
+            [
+                ("query-0", "semantic_scholar", "fetched"),
+                ("query-0", "openalex", "budget_skipped"),
+                ("query-1", "semantic_scholar", "fetched"),
+                ("query-1", "openalex", "budget_skipped"),
+            ],
+        )
+
+    def test_live_budget_round_robins_options_within_problem(self):
+        query_plan = [
+            {
+                "problem_id_hash": "problem-1",
+                "seed_offset": 1,
+                "operator_family_tags": [],
+                "query_records": [
+                    {
+                        "query_hash": "a-0",
+                        "query_kind": "option_claim",
+                        "option_hash": "option-a",
+                        "_query": "A query 0",
+                    },
+                    {
+                        "query_hash": "a-1",
+                        "query_kind": "option_claim",
+                        "option_hash": "option-a",
+                        "_query": "A query 1",
+                    },
+                    {
+                        "query_hash": "b-0",
+                        "query_kind": "option_claim",
+                        "option_hash": "option-b",
+                        "_query": "B query 0",
+                    },
+                ],
+            }
+        ]
+        fetch_order = []
+
+        def fetch_source(*, source, query, limit, timeout, ignore_cached_error=False):
+            fetch_order.append(query)
+            return [{"title": query, "snippet": "row", "source": source}]
+
+        with (
+            patch.object(prefetch, "_cache_status", return_value="miss"),
+            patch.object(prefetch, "_fetch_source", side_effect=fetch_source),
+        ):
+            records = prefetch._run_source_prefetch(
+                query_plan=query_plan,
+                sources=["openalex"],
+                source_limit=2,
+                timeout=1.0,
+                execute_live=True,
+                max_live_calls=2,
+                delay_sec=0.0,
+                parallel_workers=1,
+            )
+
+        self.assertEqual(fetch_order, ["A query 0", "B query 0"])
+        self.assertEqual(
+            [row["status"] for row in records],
+            ["fetched", "budget_skipped", "fetched"],
+        )
+
     def test_run_source_prefetch_executes_round_robin_fetches_before_front_loaded_static(self):
         query_plan = [
             {
@@ -409,6 +511,58 @@ class TestHleSourcePrefetch(unittest.TestCase):
             [row["status"] for row in records],
             ["error", "source_error_budget_skipped", "source_error_budget_skipped"],
         )
+
+    def test_run_source_prefetch_logs_sanitized_source_error_label(self):
+        query_plan = [
+            {
+                "problem_id_hash": "problem-hash",
+                "seed_offset": 7,
+                "operator_family_tags": [],
+                "query_records": [
+                    {
+                        "query_hash": "query-hash",
+                        "query_kind": "option_claim",
+                        "option_hash": "option-a",
+                        "_query": "raw secret query",
+                    }
+                ],
+            }
+        ]
+
+        def fetch_source(*, source, query, limit, timeout, ignore_cached_error=False):
+            raise urllib.error.HTTPError(
+                url="https://example.invalid/raw-secret-query",
+                code=429,
+                msg="Too Many Requests",
+                hdrs=None,
+                fp=None,
+            )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "prefetch.jsonl"
+            logger = JsonlDiagnosticLogger(log_path)
+            with (
+                patch.object(prefetch, "_cache_status", return_value="miss"),
+                patch.object(prefetch, "_fetch_source", side_effect=fetch_source),
+            ):
+                records = prefetch._run_source_prefetch(
+                    query_plan=query_plan,
+                    sources=["openalex"],
+                    source_limit=2,
+                    timeout=1.0,
+                    execute_live=True,
+                    max_live_calls=1,
+                    delay_sec=0.0,
+                    logger=logger,
+                )
+            events = [json.loads(line) for line in log_path.read_text().splitlines()]
+
+        self.assertEqual(records[0]["status"], "error")
+        self.assertEqual(records[0]["error_label"], "HTTPError_429")
+        serialized = json.dumps({"records": records, "events": events})
+        self.assertIn("HTTPError_429", serialized)
+        self.assertNotIn("raw secret query", serialized)
+        self.assertNotIn("raw-secret-query", serialized)
 
     def test_run_source_prefetch_skips_cached_error_without_live_fetch(self):
         query_plan = [
@@ -577,6 +731,65 @@ class TestHleSourcePrefetch(unittest.TestCase):
         self.assertIn("answer_web_fallback", serialized)
         self.assertNotIn("Beta salient advice", serialized)
 
+    def test_option_aware_source_prefetch_queries_use_option_and_question_anchors(self):
+        problem = {
+            "id_hash": "pid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Immunology",
+        }
+
+        pairs = prefetch._option_aware_source_prefetch_queries(
+            stem=(
+                "Which antibody mechanism explains reduced binding to a glycosylated "
+                "threonine repeat sequence?"
+            ),
+            option_text="Loss of epitope recognition caused by O-linked glycan shielding",
+            problem=problem,
+            agent_plan={"stages": {}},
+        )
+
+        kinds = [kind for kind, _query in pairs]
+        queries = [query for _kind, query in pairs]
+        self.assertIn("option_anchor_relation", kinds)
+        self.assertTrue(any("epitope" in query.lower() for query in queries))
+        self.assertTrue(any("Immunology" in query for query in queries))
+        self.assertTrue(all("gold" not in query.lower() for query in queries))
+
+    def test_problem_query_records_include_option_aware_queries_without_raw_persistence(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Molecular Biology",
+        }
+        options = {
+            "A": "Alpha transporter alters sucrose uptake",
+            "B": "Beta transporter changes raffinose secretion",
+        }
+
+        records, _summary = prefetch._problem_query_records(
+            problem=problem,
+            stem="Which mechanism explains altered aphid feeding under controlled sucrose conditions?",
+            options=options,
+            agent_plan={"stages": {}},
+            max_options=2,
+            max_queries_per_problem=8,
+            max_queries_per_option=4,
+            enable_relation_query_planner=False,
+            relation_query_planner_model="gpt-5.4-mini",
+        )
+
+        kinds = [record["query_kind"] for record in records]
+        self.assertIn("option_anchor_relation", kinds)
+        safe = prefetch._sanitize_problem_plan({"problem_id_hash": "pid", "query_records": records})
+        serialized = json.dumps(safe)
+        self.assertIn("option_anchor_relation", serialized)
+        self.assertNotIn("Alpha transporter alters sucrose uptake", serialized)
+        self.assertNotIn("controlled sucrose conditions", serialized)
+        self.assertNotIn("_query", serialized)
+
     def test_problem_query_records_can_include_sweep_gap_relation_backfill_queries(self):
         problem = {
             "id_hash": "pid",
@@ -615,6 +828,111 @@ class TestHleSourcePrefetch(unittest.TestCase):
         self.assertIn("option_claim_deterministic_relation", serialized)
         self.assertNotIn("Beta target", serialized)
         self.assertNotIn("_query", serialized)
+
+    def test_balanced_prefetch_query_mix_includes_option_aware_when_no_relation_pressure(self):
+        pairs = prefetch._balanced_prefetch_query_mix(
+            relation_queries=[],
+            sweep_gap_relation_queries=[],
+            answer_web_queries=["answer web direct relation"],
+            option_queries=["option evidence phrase"],
+            claim_queries=["option claim answer phrase"],
+            option_aware_query_pairs=[("option_anchor_relation", "option anchor relation phrase")],
+            max_queries=4,
+        )
+
+        kinds = [kind for kind, _query in pairs]
+
+        self.assertEqual(len(pairs), 4)
+        self.assertEqual(
+            kinds,
+            ["answer_web_fallback", "option_claim", "option_evidence", "option_anchor_relation"],
+        )
+
+    def test_balanced_prefetch_query_mix_keeps_answer_bearing_families_under_backfill_pressure(self):
+        pairs = prefetch._balanced_prefetch_query_mix(
+            relation_queries=[],
+            sweep_gap_relation_queries=[
+                ("option_claim_deterministic_relation", f"deterministic relation {index}")
+                for index in range(4)
+            ]
+            + [
+                ("option_claim_local_relation_expansion", f"local relation {index}")
+                for index in range(4)
+            ],
+            answer_web_queries=["answer web direct relation"],
+            option_queries=["option evidence phrase"],
+            claim_queries=["option claim answer phrase"],
+            max_queries=5,
+        )
+
+        kinds = [kind for kind, _query in pairs]
+
+        self.assertEqual(len(pairs), 5)
+        self.assertIn("option_claim_deterministic_relation", kinds)
+        self.assertIn("option_claim_local_relation_expansion", kinds)
+        self.assertIn("answer_web_fallback", kinds)
+        self.assertIn("option_claim", kinds)
+        self.assertIn("option_evidence", kinds)
+
+    def test_problem_query_records_balances_backfill_with_claim_and_answer_web_queries(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Medicine",
+        }
+        options = {"A": "Alpha diagnosis"}
+
+        with (
+            patch.object(
+                prefetch,
+                "_deterministic_option_claim_relation_queries",
+                return_value=[f"deterministic relation {index}" for index in range(4)],
+            ),
+            patch.object(
+                prefetch,
+                "_option_claim_local_relation_query_expansion_queries",
+                return_value=[f"local relation {index}" for index in range(4)],
+            ),
+            patch.object(
+                prefetch,
+                "_option_claim_answer_web_fallback_queries",
+                return_value=["answer web direct relation"],
+            ),
+            patch.object(
+                prefetch,
+                "_option_claim_evidence_queries_for_plan",
+                return_value=["option claim answer phrase"],
+            ),
+            patch.object(
+                prefetch,
+                "_option_evidence_queries_for_plan",
+                return_value=["option evidence phrase"],
+            ),
+            patch.object(prefetch, "_option_claim_relation_slot_plan", return_value={}),
+        ):
+            records, _summary = prefetch._problem_query_records(
+                problem=problem,
+                stem="Which diagnosis explains the clinical endpoint?",
+                options=options,
+                agent_plan={"stages": {}},
+                max_options=1,
+                max_queries_per_problem=5,
+                max_queries_per_option=5,
+                enable_relation_query_planner=False,
+                enable_sweep_gap_relation_backfill_queries=True,
+                relation_query_planner_model="gpt-5.4-mini",
+            )
+
+        kinds = [record["query_kind"] for record in records]
+
+        self.assertEqual(len(records), 5)
+        self.assertIn("option_claim_deterministic_relation", kinds)
+        self.assertIn("option_claim_local_relation_expansion", kinds)
+        self.assertIn("answer_web_fallback", kinds)
+        self.assertIn("option_claim", kinds)
+        self.assertIn("option_evidence", kinds)
 
     def test_fetch_source_supports_answer_web(self):
         with patch.object(
