@@ -109,6 +109,7 @@ def build_hle_source_prefetch_payload(
     logger: JsonlDiagnosticLogger | None = None,
     enable_relation_query_planner: bool = False,
     enable_sweep_gap_relation_backfill_queries: bool = False,
+    enable_option_aware_query_expansion: bool = False,
     relation_query_planner_model: str = "gpt-5.4-mini",
 ) -> dict[str, Any]:
     root = root.resolve()
@@ -127,6 +128,7 @@ def build_hle_source_prefetch_payload(
             max_queries_per_option=max_queries_per_option,
             enable_relation_query_planner=enable_relation_query_planner,
             enable_sweep_gap_relation_backfill_queries=enable_sweep_gap_relation_backfill_queries,
+            enable_option_aware_query_expansion=enable_option_aware_query_expansion,
             relation_query_planner_model=relation_query_planner_model,
             logger=logger,
         )
@@ -169,6 +171,7 @@ def build_hle_source_prefetch_payload(
             "source_error_budget": source_error_budget,
             "enable_relation_query_planner": enable_relation_query_planner,
             "enable_sweep_gap_relation_backfill_queries": enable_sweep_gap_relation_backfill_queries,
+            "enable_option_aware_query_expansion": enable_option_aware_query_expansion,
             "relation_query_planner_model": relation_query_planner_model,
         },
         "metrics": metrics,
@@ -193,6 +196,7 @@ def _build_query_plan(
     max_queries_per_option: int,
     enable_relation_query_planner: bool,
     enable_sweep_gap_relation_backfill_queries: bool,
+    enable_option_aware_query_expansion: bool,
     relation_query_planner_model: str,
     logger: JsonlDiagnosticLogger | None = None,
 ) -> list[dict[str, Any]]:
@@ -228,6 +232,7 @@ def _build_query_plan(
             max_queries_per_option=max_queries_per_option,
             enable_relation_query_planner=enable_relation_query_planner,
             enable_sweep_gap_relation_backfill_queries=enable_sweep_gap_relation_backfill_queries,
+            enable_option_aware_query_expansion=enable_option_aware_query_expansion,
             relation_query_planner_model=relation_query_planner_model,
             logger=logger,
         )
@@ -329,6 +334,7 @@ def _problem_query_records(
     max_queries_per_option: int,
     enable_relation_query_planner: bool = False,
     enable_sweep_gap_relation_backfill_queries: bool = False,
+    enable_option_aware_query_expansion: bool = False,
     relation_query_planner_model: str = "gpt-5.4-mini",
     logger: JsonlDiagnosticLogger | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -371,12 +377,14 @@ def _problem_query_records(
             option_text=option_text,
             problem=problem,
         )
-        option_aware_query_pairs = _option_aware_source_prefetch_queries(
-            stem=stem,
-            option_text=option_text,
-            problem=problem,
-            agent_plan=agent_plan,
-        )
+        option_aware_query_pairs: list[tuple[str, str]] = []
+        if enable_option_aware_query_expansion:
+            option_aware_query_pairs = _option_aware_source_prefetch_queries(
+                stem=stem,
+                option_text=option_text,
+                problem=problem,
+                agent_plan=agent_plan,
+            )
         sweep_gap_relation_queries: list[tuple[str, str]] = []
         if enable_sweep_gap_relation_backfill_queries:
             deterministic_queries = _deterministic_option_claim_relation_queries(
@@ -1640,6 +1648,11 @@ def main() -> None:
     parser.add_argument("--log-out", default="")
     parser.add_argument("--enable-relation-query-planner", action="store_true")
     parser.add_argument("--enable-sweep-gap-relation-backfill-queries", action="store_true")
+    parser.add_argument(
+        "--enable-option-aware-query-expansion",
+        action="store_true",
+        help="Opt-in experimental option-anchor query expansion for source prefetch diagnostics.",
+    )
     parser.add_argument("--relation-query-planner-model", default="gpt-5.4-mini")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--md-out", default=str(DEFAULT_MD_OUT))
@@ -1677,6 +1690,7 @@ def main() -> None:
         enable_sweep_gap_relation_backfill_queries=bool(
             args.enable_sweep_gap_relation_backfill_queries
         ),
+        enable_option_aware_query_expansion=bool(args.enable_option_aware_query_expansion),
         relation_query_planner_model=args.relation_query_planner_model,
     )
     out = Path(args.out)

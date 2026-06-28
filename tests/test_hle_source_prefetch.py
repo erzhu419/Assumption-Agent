@@ -756,7 +756,7 @@ class TestHleSourcePrefetch(unittest.TestCase):
         self.assertTrue(any("Immunology" in query for query in queries))
         self.assertTrue(all("gold" not in query.lower() for query in queries))
 
-    def test_problem_query_records_include_option_aware_queries_without_raw_persistence(self):
+    def test_problem_query_records_skip_option_aware_queries_by_default(self):
         problem = {
             "id_hash": "pid",
             "question_hash": "qid",
@@ -778,6 +778,37 @@ class TestHleSourcePrefetch(unittest.TestCase):
             max_queries_per_problem=8,
             max_queries_per_option=4,
             enable_relation_query_planner=False,
+            relation_query_planner_model="gpt-5.4-mini",
+        )
+
+        kinds = [record["query_kind"] for record in records]
+        self.assertNotIn("option_anchor_relation", kinds)
+        self.assertNotIn("option_focus_phrase", kinds)
+        self.assertNotIn("question_relation_anchor", kinds)
+
+    def test_problem_query_records_include_option_aware_queries_when_enabled_without_raw_persistence(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Molecular Biology",
+        }
+        options = {
+            "A": "Alpha transporter alters sucrose uptake",
+            "B": "Beta transporter changes raffinose secretion",
+        }
+
+        records, _summary = prefetch._problem_query_records(
+            problem=problem,
+            stem="Which mechanism explains altered aphid feeding under controlled sucrose conditions?",
+            options=options,
+            agent_plan={"stages": {}},
+            max_options=2,
+            max_queries_per_problem=8,
+            max_queries_per_option=4,
+            enable_relation_query_planner=False,
+            enable_option_aware_query_expansion=True,
             relation_query_planner_model="gpt-5.4-mini",
         )
 

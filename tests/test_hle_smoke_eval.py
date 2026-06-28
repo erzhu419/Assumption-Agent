@@ -14866,6 +14866,8 @@ class HleSmokeEvalTest(unittest.TestCase):
                 }).encode("utf-8")
 
         problem = {"category": "Computer Science/AI", "raw_subject": "Software Engineering"}
+        _LOCAL_EVIDENCE_CORPUS_CACHE.clear()
+        _LOCAL_EVIDENCE_CORPUS_CACHE_ORDER.clear()
         with TemporaryDirectory() as cache_dir:
             with patch.dict(os.environ, {"HLE_EVIDENCE_SOURCE_CACHE_DIR": cache_dir}):
                 with patch("urllib.request.urlopen", return_value=FakeResponse()):
@@ -14878,6 +14880,48 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertTrue(rows)
         self.assertEqual(rows[0]["source"], "semantic_scholar")
+
+    def test_local_evidence_corpus_search_skips_evidence_source_cache_when_disabled(self):
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return json.dumps({
+                    "data": [
+                        {
+                            "title": "Cached Beta target",
+                            "abstract": (
+                                "Cached Beta target preserves the migration dependency in a "
+                                "software replacement benchmark."
+                            ),
+                            "venue": "Venue",
+                            "year": 2024,
+                        }
+                    ]
+                }).encode("utf-8")
+
+        problem = {"category": "Computer Science/AI", "raw_subject": "Software Engineering"}
+        _LOCAL_EVIDENCE_CORPUS_CACHE.clear()
+        _LOCAL_EVIDENCE_CORPUS_CACHE_ORDER.clear()
+        with TemporaryDirectory() as cache_dir:
+            with patch.dict(os.environ, {
+                "HLE_EVIDENCE_SOURCE_CACHE_DIR": cache_dir,
+                "HLE_DISABLE_EVIDENCE_CACHE_CORPUS": "1",
+                "HLE_EVIDENCE_SOURCE_CORPUS_PATHS": "",
+            }):
+                with patch("urllib.request.urlopen", return_value=FakeResponse()):
+                    _semantic_scholar_search("Cached Beta target", limit=2, timeout=1.0)
+                rows = _local_evidence_corpus_search(
+                    "Beta target migration dependency",
+                    problem=problem,
+                    limit=2,
+                )
+
+        self.assertEqual(rows, [])
 
     def test_local_evidence_corpus_search_skips_weak_sources_by_default(self):
         problem = {"category": "Computer Science/AI", "raw_subject": "Software Engineering"}
