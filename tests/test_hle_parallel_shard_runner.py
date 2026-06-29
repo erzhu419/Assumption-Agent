@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 import os
 import subprocess
@@ -17,12 +18,14 @@ from assumption_os.hle_module_ablation_runner import (
 from assumption_os.hle_parallel_shard_runner import (
     ShardRunState,
     aggregate_parallel_payload,
+    apply_generalization_holdout_defaults,
     apply_hle_offline_defaults,
     apply_live_network_defaults,
     build_error_stratification,
     build_failure_diagnostics,
     build_heartbeat,
     build_model_budget_fairness_audit,
+    build_payload_without_execution,
     build_pollution_audit,
     build_runner_env,
     build_shard_command,
@@ -35,6 +38,8 @@ from assumption_os.hle_parallel_shard_runner import (
     model_router_primary_key_present,
     run_live_model_preflight,
     run_parallel_shards,
+    runtime_feature_flags_from_args,
+    source_policy_from_env,
 )
 
 
@@ -123,6 +128,45 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual([spec.sample_size for spec in specs], [1, 1, 1])
         self.assertEqual([spec.seed_offset for spec in specs], [498, 499, 527])
         self.assertEqual([spec.eval_id for spec in specs], ["explicit_shard_000", "explicit_shard_001", "explicit_shard_002"])
+
+    def test_generalization_holdout_remaps_explicit_seed_offsets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            args = self._ablation_args(tmp)
+            args.eval_id = "generalization"
+            args.total_sample_size = 2
+            args.shard_size = 1
+            args.seed_offsets = "10,20"
+            args.generalization_holdout = True
+            args.exclude_existing_hle_artifacts = False
+            args.dedupe_shard_samples = False
+            apply_generalization_holdout_defaults(args)
+
+            def fake_dedupe(**kwargs):
+                self.assertTrue(kwargs["exclude_existing_hle_artifacts"])
+                self.assertEqual([spec.seed_offset for spec in kwargs["specs"]], [10, 20])
+                return (
+                    [replace(spec, seed_offset=spec.seed_offset + 1000) for spec in kwargs["specs"]],
+                    {
+                        "enabled": True,
+                        "status": "ok",
+                        "raw_content_persisted": False,
+                        "distinct_problem_hash_count": 2,
+                    },
+                )
+
+            with patch(
+                "assumption_os.hle_parallel_shard_runner.dedupe_shard_specs_by_sample_hash",
+                side_effect=fake_dedupe,
+            ) as dedupe:
+                specs, states = build_payload_without_execution(args)
+
+        self.assertTrue(args.exclude_existing_hle_artifacts)
+        self.assertTrue(args.dedupe_shard_samples)
+        self.assertTrue(args._generalization_holdout_policy["explicit_seed_offsets_remapped"])
+        dedupe.assert_called_once()
+        self.assertEqual([spec.seed_offset for spec in specs], [1010, 1020])
+        self.assertEqual(args._shard_sample_dedupe_summary["status"], "ok")
+        self.assertIn("--exclude-existing-hle-artifacts", states[0].command)
 
     def test_module_ablation_plan_builds_real_toggles_without_secrets(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -225,9 +269,16 @@ class TestHleParallelShardRunner(unittest.TestCase):
                 enable_assumption_operator_retrieval_fallback=True,
                 assumption_operator_fallback_min_score=0.2,
                 enable_operator_application_verifier=True,
+                enable_operator_policy_gate=True,
                 disable_domain_rule_verifier=True,
                 enable_option_claim_contrastive_adjudicator=True,
                 enable_option_claim_span_directness_verifier=True,
+                enable_option_claim_relation_span_comparator=True,
+                enable_option_claim_relation_query_planner=True,
+                enable_option_claim_source_cache_corpus_backfill=True,
+                enable_option_claim_source_verifier_repair_context=True,
+                enable_option_claim_source_verifier_acceptance_quality_gate=True,
+                enable_option_claim_source_verifier_structured_context=True,
             )
         text = " ".join(cmd)
         self.assertIn("--hard-exit-after-write", cmd)
@@ -239,12 +290,103 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertIn("--enable-assumption-operator-retrieval-fallback", cmd)
         self.assertIn("--assumption-operator-fallback-min-score 0.2", text)
         self.assertIn("--enable-operator-application-verifier", cmd)
+        self.assertIn("--enable-operator-policy-gate", cmd)
         self.assertIn("--disable-domain-rule-verifier", cmd)
         self.assertIn("--enable-option-claim-contrastive-adjudicator", cmd)
         self.assertIn("--enable-option-claim-span-directness-verifier", cmd)
+        self.assertIn("--enable-option-claim-relation-span-comparator", cmd)
+        self.assertIn("--enable-option-claim-relation-query-planner", cmd)
+        self.assertIn("--enable-option-claim-source-cache-corpus-backfill", cmd)
+        self.assertIn("--enable-option-claim-source-verifier-repair-context", cmd)
+        self.assertIn("--enable-option-claim-source-verifier-acceptance-quality-gate", cmd)
+        self.assertIn("--enable-option-claim-source-verifier-structured-context", cmd)
         self.assertIn("--exclude-existing-hle-artifacts", cmd)
         self.assertNotIn("sk-", text)
         self.assertNotIn("hf_", text)
+
+    def test_runtime_feature_flags_and_source_policy_record_toggles_without_secrets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            args = self._ablation_args(tmp)
+            args.enable_assumption_operators = True
+            args.disable_assumption_operators = False
+            args.assumption_operator_domains = "science,hle_general"
+            args.assumption_operator_skip_domains = "business"
+            args.assumption_operator_max_specs = 2
+            args.allow_assumption_operators_without_context = False
+            args.enable_assumption_operator_retrieval_fallback = True
+            args.enable_operator_application_verifier = True
+            args.enable_operator_policy_gate = True
+            args.disable_domain_rule_verifier = True
+            args.enable_option_claim_contrastive_adjudicator = True
+            args.disable_option_claim_contrastive_adjudicator = False
+            args.enable_option_claim_span_directness_verifier = True
+            args.disable_option_claim_span_directness_verifier = False
+            args.enable_option_claim_relation_span_comparator = True
+            args.disable_option_claim_relation_span_comparator = False
+            args.enable_option_claim_relation_query_planner = True
+            args.disable_option_claim_relation_query_planner = False
+            args.enable_option_claim_source_cache_corpus_backfill = True
+            args.disable_option_claim_source_cache_corpus_backfill = False
+            args.enable_option_claim_source_verifier_repair_context = True
+            args.disable_option_claim_source_verifier_repair_context = False
+            args.enable_option_claim_source_verifier_acceptance_quality_gate = True
+            args.disable_option_claim_source_verifier_acceptance_quality_gate = False
+            args.enable_option_claim_source_verifier_structured_context = True
+            args.disable_option_claim_source_verifier_structured_context = False
+
+            flags = runtime_feature_flags_from_args(args)
+
+        source_policy = source_policy_from_env({
+            "HLE_EVIDENCE_SOURCE_CACHE_ONLY": "1",
+            "HLE_SOURCE_SEARCH_CACHE_ONLY": "1",
+            "HLE_DISABLE_LIVE_SOURCE_SEARCH": "1",
+            "HLE_ALLOW_LIVE_SOURCE_SEARCH": "0",
+            "HLE_EVIDENCE_SOURCE_CORPUS_PATHS": "/tmp/local-cache.jsonl",
+            "HLE_ENABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER": "1",
+            "HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER": "",
+            "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR": "1",
+            "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR": "",
+            "HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL": "1",
+            "HLE_DISABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL": "",
+            "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT": "1",
+            "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT": "",
+            "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE": "1",
+            "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE": "",
+            "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT": "1",
+            "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT": "",
+            "SEMANTIC_SCHOLAR_API_KEY": "test-semantic-key",
+            "OPENALEX_API_KEY": "test-openalex-key",
+        })
+        self.assertTrue(flags["operator_policy_gate_enabled"])
+        self.assertTrue(flags["option_claim_contrastive_adjudicator_enabled"])
+        self.assertTrue(flags["option_claim_span_directness_verifier_enabled"])
+        self.assertTrue(flags["option_claim_relation_span_comparator_enabled"])
+        self.assertTrue(flags["option_claim_relation_query_planner_enabled"])
+        self.assertTrue(flags["option_claim_source_cache_corpus_backfill_enabled"])
+        self.assertTrue(flags["option_claim_source_verifier_repair_context_enabled"])
+        self.assertTrue(flags["option_claim_source_verifier_acceptance_quality_gate_enabled"])
+        self.assertTrue(flags["option_claim_source_verifier_structured_context_enabled"])
+        self.assertEqual(flags["assumption_operator_domains"], "science,hle_general")
+        self.assertEqual(source_policy["source_search_cache_only"], "1")
+        self.assertEqual(source_policy["option_claim_relation_query_planner_env"], "1")
+        self.assertEqual(source_policy["option_claim_relation_span_comparator_env"], "1")
+        self.assertEqual(source_policy["option_claim_source_cache_corpus_backfill_env"], "1")
+        self.assertEqual(source_policy["option_claim_source_verifier_repair_context_env"], "1")
+        self.assertEqual(
+            source_policy["option_claim_source_verifier_acceptance_quality_gate_env"],
+            "1",
+        )
+        self.assertEqual(
+            source_policy["option_claim_source_verifier_structured_context_env"],
+            "1",
+        )
+        self.assertTrue(source_policy["semantic_scholar_api_key_present"])
+        self.assertTrue(source_policy["openalex_api_key_present"])
+        flattened = json.dumps({"feature_flags": flags, "source_policy": source_policy}, sort_keys=True)
+        self.assertNotIn("test-semantic-key", flattened)
+        self.assertNotIn("test-openalex-key", flattened)
+        self.assertNotIn("sk-", flattened)
+        self.assertNotIn("hf_", flattened)
 
     def test_reuse_completed_shards_marks_valid_payloads_without_rerun(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -830,10 +972,97 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(summary["activated_row_count"], 0)
         self.assertEqual(summary["reason_counts"]["generic_harness_graph_context_only"], 1)
 
+    def test_aggregate_allows_context_gate_abstain_without_operator_activation_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            specs = build_shard_specs(
+                eval_id="operator-context-abstain",
+                total_sample_size=1,
+                shard_size=1,
+                seed_offset=0,
+                seed_stride=1,
+                run_dir=root,
+                md_dir=root,
+            )
+            operator_context_abstain_ce = {
+                "kind": "assumption_agent_recursive_verify",
+                "flags": {
+                    "operator_specs_requested": True,
+                    "operator_specs_activated": False,
+                    "operator_context_injected": False,
+                    "operator_specs_blocked": True,
+                },
+                "operator_specs": {
+                    "status": "skipped",
+                    "reason": "context_gate_abstained",
+                    "operator_count": 0,
+                    "operator_source_types": [],
+                },
+                "selection": {"selection_method": "verified_or_abstain_direct_fallback"},
+            }
+            rows = [
+                _row("p1", "raw", False, model="gpt-5.4-mini"),
+                _row("p1", "hipporag_baseline", False, model="gpt-5.4-mini"),
+                _row("p1", "raw_budget_matched", False, model="gpt-5.4-mini"),
+                _row("p1", "hipporag_budget_matched", False, model="gpt-5.4-mini"),
+                _row(
+                    "p1",
+                    "assumption_agent_recursive_verify",
+                    True,
+                    model="gpt-5.4-mini",
+                    component_efficacy=operator_context_abstain_ce,
+                ),
+            ]
+            states = [ShardRunState(spec=specs[0], command=[], status="completed", returncode=0)]
+            payload = aggregate_parallel_payload(
+                eval_id="operator-context-abstain",
+                specs=specs,
+                states=states,
+                shard_payloads=[_payload(rows)],
+                execute_live=True,
+                models="gpt-5.4-mini",
+                variants=(
+                    "raw,hipporag_baseline,raw_budget_matched,hipporag_budget_matched,"
+                    "assumption_agent_recursive_verify"
+                ),
+                total_sample_size=1,
+                shard_size=1,
+                parallel_workers=1,
+                soft_timeout_sec=900,
+                kill_on_soft_timeout=False,
+                feature_flags={
+                    "option_claim_contrastive_adjudicator_enabled": True,
+                    "option_claim_span_directness_verifier_enabled": True,
+                    "raw_content_persisted": False,
+                },
+                source_policy={
+                    "evidence_source_cache_only": "1",
+                    "source_search_cache_only": "1",
+                    "live_source_search_disabled": "1",
+                    "live_source_search_allowed": "0",
+                    "raw_content_persisted": False,
+                },
+            )
+
+        self.assertTrue(payload["pass"])
+        self.assertNotIn("assumption_operator_activated_if_selected", payload["failed_gates"])
+        self.assertTrue(
+            payload["runtime_policy"]["feature_flags"]["option_claim_contrastive_adjudicator_enabled"]
+        )
+        self.assertEqual(payload["runtime_policy"]["source_policy"]["source_search_cache_only"], "1")
+        summary = payload["metrics"]["operator_activation_summary"]
+        self.assertEqual(summary["requested_row_count"], 1)
+        self.assertEqual(summary["selected_row_count"], 0)
+        self.assertEqual(summary["context_abstained_row_count"], 1)
+        self.assertEqual(summary["blocked_row_count"], 1)
+        self.assertEqual(summary["reason_counts"]["context_gate_abstained"], 1)
+
     def test_runner_env_sets_retry_and_global_concurrency_without_secrets(self) -> None:
         env = build_runner_env(
             model_router_attempts=7,
             model_router_timeout=7200,
+            model_router_transient_extra_attempts=0,
+            enable_option_claim_relation_query_planner=True,
             parallel_workers=4,
             model_router_per_attempt_timeout=90,
             model_router_subprocess_calls=True,
@@ -845,6 +1074,9 @@ class TestHleParallelShardRunner(unittest.TestCase):
             model_router_global_slot_wait_sec=2400,
         )
         self.assertEqual(env["MODEL_ROUTER_ATTEMPTS"], "7")
+        self.assertEqual(env["MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS"], "0")
+        self.assertEqual(env["HLE_ENABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER"], "1")
+        self.assertNotIn("HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER", env)
         self.assertEqual(env["MODEL_ROUTER_TIMEOUT"], "7200")
         self.assertEqual(env["MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"], "90")
         self.assertEqual(env["MODEL_ROUTER_SUBPROCESS_CALLS"], "1")
@@ -864,6 +1096,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
             env[key]
             for key in (
                 "MODEL_ROUTER_ATTEMPTS",
+                "MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS",
                 "MODEL_ROUTER_TIMEOUT",
                 "MODEL_ROUTER_PER_ATTEMPT_TIMEOUT",
                 "MODEL_ROUTER_SUBPROCESS_CALLS",
@@ -878,6 +1111,107 @@ class TestHleParallelShardRunner(unittest.TestCase):
         )
         self.assertNotIn("sk-", configured_values)
         self.assertNotIn("hf_", configured_values)
+
+    def test_runner_env_relation_query_planner_explicit_toggle_clears_conflict(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER": "1",
+                "HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER": "1",
+                "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR": "1",
+                "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR": "1",
+                "HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL": "1",
+                "HLE_DISABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL": "1",
+                "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT": "1",
+                "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT": "1",
+                "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE": "1",
+                "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE": "1",
+                "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT": "1",
+                "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT": "1",
+            },
+            clear=False,
+        ):
+            env = build_runner_env(
+                model_router_attempts=None,
+                model_router_timeout=None,
+                enable_option_claim_relation_query_planner=True,
+                enable_option_claim_relation_span_comparator=True,
+                enable_option_claim_source_cache_corpus_backfill=True,
+                enable_option_claim_source_verifier_repair_context=True,
+                enable_option_claim_source_verifier_acceptance_quality_gate=True,
+                enable_option_claim_source_verifier_structured_context=True,
+            )
+            self.assertEqual(env["HLE_ENABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER"], "1")
+            self.assertNotIn("HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER", env)
+            self.assertEqual(env["HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR"], "1")
+            self.assertNotIn("HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR", env)
+            self.assertEqual(
+                env["HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"],
+                "1",
+            )
+            self.assertNotIn(
+                "HLE_DISABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL",
+                env,
+            )
+            self.assertEqual(env["HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT"], "1")
+            self.assertNotIn("HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT", env)
+            self.assertEqual(
+                env["HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE"],
+                "1",
+            )
+            self.assertNotIn(
+                "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE",
+                env,
+            )
+            self.assertEqual(
+                env["HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT"],
+                "1",
+            )
+            self.assertNotIn(
+                "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT",
+                env,
+            )
+
+            env = build_runner_env(
+                model_router_attempts=None,
+                model_router_timeout=None,
+                disable_option_claim_relation_query_planner=True,
+                disable_option_claim_relation_span_comparator=True,
+                disable_option_claim_source_cache_corpus_backfill=True,
+                disable_option_claim_source_verifier_repair_context=True,
+                disable_option_claim_source_verifier_acceptance_quality_gate=True,
+                disable_option_claim_source_verifier_structured_context=True,
+            )
+            self.assertEqual(env["HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER"], "1")
+            self.assertNotIn("HLE_ENABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER", env)
+            self.assertEqual(env["HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR"], "1")
+            self.assertNotIn("HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR", env)
+            self.assertEqual(
+                env["HLE_DISABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"],
+                "1",
+            )
+            self.assertNotIn(
+                "HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL",
+                env,
+            )
+            self.assertEqual(env["HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT"], "1")
+            self.assertNotIn("HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT", env)
+            self.assertEqual(
+                env["HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE"],
+                "1",
+            )
+            self.assertNotIn(
+                "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE",
+                env,
+            )
+            self.assertEqual(
+                env["HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT"],
+                "1",
+            )
+            self.assertNotIn(
+                "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT",
+                env,
+            )
 
     def test_runner_env_defaults_recursive_child_batch_cap(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
@@ -954,6 +1288,9 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(env["HLE_DATASET_LOCAL_PATH"], str(dataset_path))
         self.assertEqual(env["HLE_EVIDENCE_SOURCE_CACHE_DIR"], str(cache_path))
         self.assertEqual(env["HLE_EVIDENCE_SOURCE_CACHE_ONLY"], "1")
+        self.assertEqual(env["HLE_SOURCE_SEARCH_CACHE_ONLY"], "1")
+        self.assertEqual(env["HLE_DISABLE_LIVE_SOURCE_SEARCH"], "1")
+        self.assertEqual(env["HLE_ALLOW_LIVE_SOURCE_SEARCH"], "0")
 
     def test_hle_offline_defaults_preserve_explicit_source_policy_and_opt_out(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -982,6 +1319,8 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(env["HLE_DATASET_LOCAL_PATH"], "/custom/hle")
         self.assertEqual(env["HLE_EVIDENCE_SOURCE_CACHE_DIR"], "/custom/cache")
         self.assertNotIn("HLE_EVIDENCE_SOURCE_CACHE_ONLY", env)
+        self.assertNotIn("HLE_SOURCE_SEARCH_CACHE_ONLY", env)
+        self.assertNotIn("HLE_DISABLE_LIVE_SOURCE_SEARCH", env)
         self.assertEqual(disabled_env, {"HLE_DISABLE_LOCAL_HLE_DEFAULTS": "1"})
 
     def test_live_network_defaults_stabilize_execute_live_without_overriding_user_values(self) -> None:
@@ -1243,6 +1582,176 @@ class TestHleParallelShardRunner(unittest.TestCase):
             1,
         )
         self.assertEqual(diagnostics["agent_failure_buckets"]["multiple_choice_selection_failed"], 1)
+
+    def test_failure_diagnostics_summarize_source_directness_gaps(self) -> None:
+        rows = [
+            _row(
+                "p1",
+                "assumption_agent_recursive_verify",
+                False,
+                component_efficacy={
+                    "flags": {
+                        "candidate_generation_missed_gold": True,
+                        "missing_model_option_source_retry_scheduled": True,
+                        "missing_model_option_source_retry_success": False,
+                        "low_support_exhaustive_missing_model_retry_used": True,
+                        "mc_option_claim_source_verifier_used": True,
+                        "mc_option_claim_source_verifier_repair_context_used": True,
+                        "mc_option_claim_source_verifier_repair_context_found_spans": True,
+                        "mc_option_claim_source_verifier_structured_context_used": True,
+                        "mc_option_claim_source_verifier_acceptance_quality_gate_blocked": True,
+                        "mc_option_claim_evidence_candidate_emitted": False,
+                        "mc_option_claim_local_relation_query_expansion_used": True,
+                        "mc_option_claim_sweep_gap_local_relation_backfill_used": True,
+                        "mc_option_claim_span_directness_verifier_used": True,
+                        "mc_option_claim_span_directness_verifier_accepted": False,
+                        "mc_option_claim_span_directness_lexical_unique_but_generic": True,
+                        "mc_option_claim_relation_span_comparator_used": True,
+                        "mc_option_claim_relation_span_comparator_accepted": False,
+                        "mc_option_claim_candidate_direct_relation_span_extractor_used": False,
+                        "mc_option_claim_candidate_direct_relation_span_directness_accepted": False,
+                        "mc_option_claim_contrastive_adjudicator_used": True,
+                        "mc_option_claim_contrastive_adjudicator_accepted": False,
+                        "mc_option_claim_contrastive_relation_matrix_returned": True,
+                        "mc_option_claim_contrastive_structured_relation_audit_used": True,
+                        "mc_option_claim_contrastive_structured_relation_audit_hard_blocked": True,
+                        "gold_option_source_verifier_attempted": True,
+                        "gold_option_source_verifier_accepted": False,
+                        "gold_option_source_verifier_direct_source_insufficient": True,
+                    },
+                    "mc_option_claim_evidence_verifier": {
+                        "relation_query_planner_status": "disabled",
+                        "source_verifier_rejection_reason_counts": {
+                            "no_selected_label_generic": 3,
+                        },
+                        "source_verifier_repair_context_status_counts": {
+                            "activated": 2,
+                        },
+                        "source_verifier_repair_context_reason_counts": {
+                            "candidate_relation_repair_context_available": 2,
+                        },
+                        "source_verifier_structured_context_status_counts": {
+                            "activated": 2,
+                        },
+                        "source_verifier_structured_context_reason_counts": {
+                            "target_relation_outline_available": 2,
+                        },
+                        "source_verifier_acceptance_quality_gate_reason_counts": {
+                            "missing_programmatic_source_quality_signal": 1,
+                        },
+                        "source_quality_directness_promotion_detail": {
+                            "status": "blocked",
+                            "reason": "no_span_directness_direct_candidates",
+                            "rejection_counts": {
+                                "missing_candidate_direct_relation_span": 2,
+                                "not_span_direct": 2,
+                            },
+                        },
+                        "span_directness_verifier_status": "blocked_not_direct_relation",
+                        "span_directness_verifier_reason": "no_candidate_span_direct_relation",
+                        "relation_span_comparator_status": "blocked_not_direct_relation",
+                        "relation_span_comparator_reason": "no_direct_relation_span_candidate",
+                        "candidate_direct_relation_span_extractor_status": "activated",
+                        "candidate_direct_relation_span_directness_verifier_status": (
+                            "blocked_not_direct_relation"
+                        ),
+                        "contrastive_adjudicator_reason": "not_direct_high_confidence",
+                        "contrastive_adjudicator_direct_relation_candidate_count": 0,
+                        "contrastive_adjudicator_selected_structured_relation_hard_block_reason": (
+                            "source_verifier_generic"
+                        ),
+                        "contrastive_adjudicator_structured_relation_matrix": [
+                            {
+                                "option_hash": "candidate-a",
+                                "hard_block_reason": "source_verifier_generic",
+                            }
+                        ],
+                    },
+                    "selection": {"selection_method": "verified_or_abstain_direct_fallback"},
+                },
+            ),
+            _row("p1", "raw", False),
+            _row("p1", "hipporag_baseline", False),
+        ]
+
+        diagnostics = build_failure_diagnostics(rows=rows)
+
+        buckets = diagnostics["source_directness_failure_buckets"]
+        self.assertEqual(buckets["relation_query_planner_not_activated"], 1)
+        self.assertEqual(buckets["source_verifier_used"], 1)
+        self.assertEqual(buckets["source_verifier_no_candidate_emitted"], 1)
+        self.assertEqual(buckets["source_verifier_repair_context_used"], 1)
+        self.assertEqual(buckets["source_verifier_repair_context_found_spans"], 1)
+        self.assertEqual(buckets["source_verifier_structured_context_used"], 1)
+        self.assertEqual(buckets["source_verifier_acceptance_quality_gate_blocked"], 1)
+        self.assertEqual(buckets["missing_model_source_retry_unhelpful"], 1)
+        self.assertEqual(buckets["local_relation_query_expansion_found_docs"], 1)
+        self.assertEqual(buckets["sweep_gap_local_relation_backfill_found_docs"], 1)
+        self.assertEqual(buckets["source_quality_promotion_no_direct_span"], 1)
+        self.assertEqual(buckets["span_directness_verifier_rejected"], 1)
+        self.assertEqual(buckets["span_directness_lexical_unique_but_generic"], 1)
+        self.assertEqual(buckets["relation_span_comparator_used"], 1)
+        self.assertEqual(buckets["relation_span_comparator_rejected"], 1)
+        self.assertEqual(buckets["candidate_direct_relation_span_directness_rejected"], 1)
+        self.assertEqual(buckets["contrastive_relation_matrix_no_direct_candidate"], 1)
+        self.assertEqual(buckets["contrastive_structured_relation_audit_used"], 1)
+        self.assertEqual(buckets["contrastive_structured_relation_audit_hard_blocked"], 1)
+        self.assertEqual(buckets["gold_option_source_verifier_unaccepted"], 1)
+
+        reasons = diagnostics["source_directness_reason_counts"]
+        self.assertEqual(
+            reasons["source_verifier_rejection_reason"]["no_selected_label_generic"],
+            3,
+        )
+        self.assertEqual(
+            reasons["source_verifier_repair_context_status"]["activated"],
+            2,
+        )
+        self.assertEqual(
+            reasons["source_verifier_repair_context_reason"][
+                "candidate_relation_repair_context_available"
+            ],
+            2,
+        )
+        self.assertEqual(
+            reasons["source_verifier_structured_context_status"]["activated"],
+            2,
+        )
+        self.assertEqual(
+            reasons["source_verifier_structured_context_reason"][
+                "target_relation_outline_available"
+            ],
+            2,
+        )
+        self.assertEqual(
+            reasons["source_verifier_acceptance_quality_gate_reason"][
+                "missing_programmatic_source_quality_signal"
+            ],
+            1,
+        )
+        self.assertEqual(
+            reasons["source_quality_directness_promotion_reason"][
+                "no_span_directness_direct_candidates"
+            ],
+            1,
+        )
+        self.assertEqual(reasons["source_quality_directness_rejection"]["not_span_direct"], 2)
+        self.assertEqual(
+            reasons["relation_span_comparator_status"]["blocked_not_direct_relation"],
+            1,
+        )
+        self.assertEqual(
+            reasons["relation_span_comparator_reason"]["no_direct_relation_span_candidate"],
+            1,
+        )
+        self.assertEqual(
+            reasons["contrastive_adjudicator_reason"]["not_direct_high_confidence"],
+            1,
+        )
+        self.assertEqual(
+            reasons["contrastive_structured_relation_hard_block"]["source_verifier_generic"],
+            1,
+        )
 
 
 def _row(

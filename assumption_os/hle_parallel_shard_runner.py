@@ -177,6 +177,22 @@ def _parse_seed_offsets(value: str | None) -> list[int]:
     return offsets
 
 
+def apply_generalization_holdout_defaults(args: argparse.Namespace) -> argparse.Namespace:
+    """Make generalization runs use unseen HLE problem hashes by default."""
+    if not bool(getattr(args, "generalization_holdout", False)):
+        return args
+    args.exclude_existing_hle_artifacts = True
+    args.dedupe_shard_samples = True
+    setattr(args, "_generalization_holdout_policy", {
+        "enabled": True,
+        "exclude_existing_hle_artifacts": True,
+        "dedupe_shard_samples": True,
+        "explicit_seed_offsets_remapped": bool(_parse_seed_offsets(getattr(args, "seed_offsets", ""))),
+        "raw_content_persisted": False,
+    })
+    return args
+
+
 def dedupe_shard_specs_by_sample_hash(
     *,
     root: Path,
@@ -478,11 +494,24 @@ def build_shard_command(
     enable_assumption_operator_retrieval_fallback: bool = False,
     assumption_operator_fallback_min_score: float | None = None,
     enable_operator_application_verifier: bool = False,
+    enable_operator_policy_gate: bool = False,
     disable_domain_rule_verifier: bool = False,
     enable_option_claim_contrastive_adjudicator: bool = False,
     disable_option_claim_contrastive_adjudicator: bool = False,
     enable_option_claim_span_directness_verifier: bool = False,
     disable_option_claim_span_directness_verifier: bool = False,
+    enable_option_claim_relation_span_comparator: bool = False,
+    disable_option_claim_relation_span_comparator: bool = False,
+    enable_option_claim_relation_query_planner: bool = False,
+    disable_option_claim_relation_query_planner: bool = False,
+    enable_option_claim_source_cache_corpus_backfill: bool = False,
+    disable_option_claim_source_cache_corpus_backfill: bool = False,
+    enable_option_claim_source_verifier_repair_context: bool = False,
+    disable_option_claim_source_verifier_repair_context: bool = False,
+    enable_option_claim_source_verifier_acceptance_quality_gate: bool = False,
+    disable_option_claim_source_verifier_acceptance_quality_gate: bool = False,
+    enable_option_claim_source_verifier_structured_context: bool = False,
+    disable_option_claim_source_verifier_structured_context: bool = False,
 ) -> list[str]:
     effective_max_scan = max_scan + max(0, spec.seed_offset)
     cmd = [
@@ -550,6 +579,8 @@ def build_shard_command(
         ])
     if enable_operator_application_verifier:
         cmd.append("--enable-operator-application-verifier")
+    if enable_operator_policy_gate:
+        cmd.append("--enable-operator-policy-gate")
     if disable_domain_rule_verifier:
         cmd.append("--disable-domain-rule-verifier")
     if enable_option_claim_contrastive_adjudicator:
@@ -560,6 +591,30 @@ def build_shard_command(
         cmd.append("--enable-option-claim-span-directness-verifier")
     if disable_option_claim_span_directness_verifier:
         cmd.append("--disable-option-claim-span-directness-verifier")
+    if enable_option_claim_relation_span_comparator:
+        cmd.append("--enable-option-claim-relation-span-comparator")
+    if disable_option_claim_relation_span_comparator:
+        cmd.append("--disable-option-claim-relation-span-comparator")
+    if enable_option_claim_relation_query_planner:
+        cmd.append("--enable-option-claim-relation-query-planner")
+    if disable_option_claim_relation_query_planner:
+        cmd.append("--disable-option-claim-relation-query-planner")
+    if enable_option_claim_source_cache_corpus_backfill:
+        cmd.append("--enable-option-claim-source-cache-corpus-backfill")
+    if disable_option_claim_source_cache_corpus_backfill:
+        cmd.append("--disable-option-claim-source-cache-corpus-backfill")
+    if enable_option_claim_source_verifier_repair_context:
+        cmd.append("--enable-option-claim-source-verifier-repair-context")
+    if disable_option_claim_source_verifier_repair_context:
+        cmd.append("--disable-option-claim-source-verifier-repair-context")
+    if enable_option_claim_source_verifier_acceptance_quality_gate:
+        cmd.append("--enable-option-claim-source-verifier-acceptance-quality-gate")
+    if disable_option_claim_source_verifier_acceptance_quality_gate:
+        cmd.append("--disable-option-claim-source-verifier-acceptance-quality-gate")
+    if enable_option_claim_source_verifier_structured_context:
+        cmd.append("--enable-option-claim-source-verifier-structured-context")
+    if disable_option_claim_source_verifier_structured_context:
+        cmd.append("--disable-option-claim-source-verifier-structured-context")
     if exclude_existing_hle_artifacts:
         cmd.append("--exclude-existing-hle-artifacts")
     if exclude_artifact_glob:
@@ -575,6 +630,19 @@ def build_runner_env(
     *,
     model_router_attempts: int | None,
     model_router_timeout: float | None,
+    model_router_transient_extra_attempts: int | None = None,
+    enable_option_claim_relation_query_planner: bool | None = None,
+    disable_option_claim_relation_query_planner: bool | None = None,
+    enable_option_claim_relation_span_comparator: bool | None = None,
+    disable_option_claim_relation_span_comparator: bool | None = None,
+    enable_option_claim_source_cache_corpus_backfill: bool | None = None,
+    disable_option_claim_source_cache_corpus_backfill: bool | None = None,
+    enable_option_claim_source_verifier_repair_context: bool | None = None,
+    disable_option_claim_source_verifier_repair_context: bool | None = None,
+    enable_option_claim_source_verifier_acceptance_quality_gate: bool | None = None,
+    disable_option_claim_source_verifier_acceptance_quality_gate: bool | None = None,
+    enable_option_claim_source_verifier_structured_context: bool | None = None,
+    disable_option_claim_source_verifier_structured_context: bool | None = None,
     parallel_workers: int | None = None,
     model_router_per_attempt_timeout: float | None = None,
     model_router_subprocess_calls: bool | None = None,
@@ -591,6 +659,80 @@ def build_runner_env(
         env["HLE_PARALLEL_SHARD_WORKERS"] = str(max(1, int(parallel_workers)))
     if model_router_attempts is not None:
         env["MODEL_ROUTER_ATTEMPTS"] = str(model_router_attempts)
+    if model_router_transient_extra_attempts is not None:
+        env["MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS"] = str(model_router_transient_extra_attempts)
+    if enable_option_claim_relation_query_planner is not None:
+        if enable_option_claim_relation_query_planner:
+            env["HLE_ENABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER"] = "1"
+            env.pop("HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER", None)
+        else:
+            env["HLE_ENABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER"] = "0"
+    if disable_option_claim_relation_query_planner is not None:
+        if disable_option_claim_relation_query_planner:
+            env["HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER"] = "1"
+            env.pop("HLE_ENABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER", None)
+        else:
+            env["HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER"] = "0"
+    if enable_option_claim_relation_span_comparator is not None:
+        if enable_option_claim_relation_span_comparator:
+            env["HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR"] = "1"
+            env.pop("HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR", None)
+        else:
+            env["HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR"] = "0"
+    if disable_option_claim_relation_span_comparator is not None:
+        if disable_option_claim_relation_span_comparator:
+            env["HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR"] = "1"
+            env.pop("HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR", None)
+        else:
+            env["HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR"] = "0"
+    if enable_option_claim_source_cache_corpus_backfill is not None:
+        if enable_option_claim_source_cache_corpus_backfill:
+            env["HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"] = "1"
+            env.pop("HLE_DISABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL", None)
+        else:
+            env["HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"] = "0"
+    if disable_option_claim_source_cache_corpus_backfill is not None:
+        if disable_option_claim_source_cache_corpus_backfill:
+            env["HLE_DISABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"] = "1"
+            env.pop("HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL", None)
+        else:
+            env["HLE_DISABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"] = "0"
+    if enable_option_claim_source_verifier_repair_context is not None:
+        if enable_option_claim_source_verifier_repair_context:
+            env["HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT"] = "1"
+            env.pop("HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT", None)
+        else:
+            env["HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT"] = "0"
+    if disable_option_claim_source_verifier_repair_context is not None:
+        if disable_option_claim_source_verifier_repair_context:
+            env["HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT"] = "1"
+            env.pop("HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT", None)
+        else:
+            env["HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT"] = "0"
+    if enable_option_claim_source_verifier_acceptance_quality_gate is not None:
+        if enable_option_claim_source_verifier_acceptance_quality_gate:
+            env["HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE"] = "1"
+            env.pop("HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE", None)
+        else:
+            env["HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE"] = "0"
+    if disable_option_claim_source_verifier_acceptance_quality_gate is not None:
+        if disable_option_claim_source_verifier_acceptance_quality_gate:
+            env["HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE"] = "1"
+            env.pop("HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE", None)
+        else:
+            env["HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE"] = "0"
+    if enable_option_claim_source_verifier_structured_context is not None:
+        if enable_option_claim_source_verifier_structured_context:
+            env["HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT"] = "1"
+            env.pop("HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT", None)
+        else:
+            env["HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT"] = "0"
+    if disable_option_claim_source_verifier_structured_context is not None:
+        if disable_option_claim_source_verifier_structured_context:
+            env["HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT"] = "1"
+            env.pop("HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT", None)
+        else:
+            env["HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT"] = "0"
     if model_router_timeout is not None:
         env["MODEL_ROUTER_TIMEOUT"] = str(model_router_timeout)
     if model_router_per_attempt_timeout is not None:
@@ -619,6 +761,7 @@ def build_runner_env(
 def model_router_policy_from_env(env: dict[str, str]) -> dict[str, Any]:
     return {
         "attempts": env.get("MODEL_ROUTER_ATTEMPTS"),
+        "transient_extra_attempts": env.get("MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS"),
         "timeout_sec": env.get("MODEL_ROUTER_TIMEOUT"),
         "per_attempt_timeout_sec": env.get("MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"),
         "subprocess_calls": env.get("MODEL_ROUTER_SUBPROCESS_CALLS"),
@@ -632,6 +775,141 @@ def model_router_policy_from_env(env: dict[str, str]) -> dict[str, Any]:
         "router_aware_child_worker_cap_enabled": env.get("HLE_ENABLE_ROUTER_AWARE_CHILD_WORKER_CAP"),
         "router_aware_child_workers_per_shard": env.get("HLE_ROUTER_AWARE_CHILD_WORKERS_PER_SHARD"),
         "router_aware_child_worker_cap_disabled": env.get("HLE_DISABLE_ROUTER_AWARE_CHILD_WORKER_CAP"),
+        "raw_content_persisted": False,
+    }
+
+
+def runtime_feature_flags_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "assumption_operators_enabled": bool(getattr(args, "enable_assumption_operators", False)),
+        "assumption_operators_disabled": bool(getattr(args, "disable_assumption_operators", False)),
+        "assumption_operator_domains": str(getattr(args, "assumption_operator_domains", "") or ""),
+        "assumption_operator_skip_domains": str(getattr(args, "assumption_operator_skip_domains", "") or ""),
+        "assumption_operator_max_specs": getattr(args, "assumption_operator_max_specs", None),
+        "assumption_operators_without_context_allowed": bool(
+            getattr(args, "allow_assumption_operators_without_context", False)
+        ),
+        "assumption_operator_retrieval_fallback_enabled": bool(
+            getattr(args, "enable_assumption_operator_retrieval_fallback", False)
+        ),
+        "operator_application_verifier_enabled": bool(
+            getattr(args, "enable_operator_application_verifier", False)
+        ),
+        "operator_policy_gate_enabled": bool(getattr(args, "enable_operator_policy_gate", False)),
+        "domain_rule_verifier_disabled": bool(getattr(args, "disable_domain_rule_verifier", False)),
+        "option_claim_contrastive_adjudicator_enabled": bool(
+            getattr(args, "enable_option_claim_contrastive_adjudicator", False)
+        ),
+        "option_claim_contrastive_adjudicator_disabled": bool(
+            getattr(args, "disable_option_claim_contrastive_adjudicator", False)
+        ),
+        "option_claim_span_directness_verifier_enabled": bool(
+            getattr(args, "enable_option_claim_span_directness_verifier", False)
+        ),
+        "option_claim_span_directness_verifier_disabled": bool(
+            getattr(args, "disable_option_claim_span_directness_verifier", False)
+        ),
+        "option_claim_relation_span_comparator_enabled": bool(
+            getattr(args, "enable_option_claim_relation_span_comparator", False)
+        ),
+        "option_claim_relation_span_comparator_disabled": bool(
+            getattr(args, "disable_option_claim_relation_span_comparator", False)
+        ),
+        "option_claim_relation_query_planner_enabled": bool(
+            getattr(args, "enable_option_claim_relation_query_planner", False)
+        ),
+        "option_claim_relation_query_planner_disabled": bool(
+            getattr(args, "disable_option_claim_relation_query_planner", False)
+        ),
+        "option_claim_source_cache_corpus_backfill_enabled": bool(
+            getattr(args, "enable_option_claim_source_cache_corpus_backfill", False)
+        ),
+        "option_claim_source_cache_corpus_backfill_disabled": bool(
+            getattr(args, "disable_option_claim_source_cache_corpus_backfill", False)
+        ),
+        "option_claim_source_verifier_repair_context_enabled": bool(
+            getattr(args, "enable_option_claim_source_verifier_repair_context", False)
+        ),
+        "option_claim_source_verifier_repair_context_disabled": bool(
+            getattr(args, "disable_option_claim_source_verifier_repair_context", False)
+        ),
+        "option_claim_source_verifier_acceptance_quality_gate_enabled": bool(
+            getattr(
+                args,
+                "enable_option_claim_source_verifier_acceptance_quality_gate",
+                False,
+            )
+        ),
+        "option_claim_source_verifier_acceptance_quality_gate_disabled": bool(
+            getattr(
+                args,
+                "disable_option_claim_source_verifier_acceptance_quality_gate",
+                False,
+            )
+        ),
+        "option_claim_source_verifier_structured_context_enabled": bool(
+            getattr(
+                args,
+                "enable_option_claim_source_verifier_structured_context",
+                False,
+            )
+        ),
+        "option_claim_source_verifier_structured_context_disabled": bool(
+            getattr(
+                args,
+                "disable_option_claim_source_verifier_structured_context",
+                False,
+            )
+        ),
+        "raw_content_persisted": False,
+    }
+
+
+def source_policy_from_env(env: dict[str, str]) -> dict[str, Any]:
+    return {
+        "evidence_source_cache_only": env.get("HLE_EVIDENCE_SOURCE_CACHE_ONLY"),
+        "source_search_cache_only": env.get("HLE_SOURCE_SEARCH_CACHE_ONLY"),
+        "live_source_search_disabled": env.get("HLE_DISABLE_LIVE_SOURCE_SEARCH"),
+        "live_source_search_allowed": env.get("HLE_ALLOW_LIVE_SOURCE_SEARCH"),
+        "evidence_source_corpus_paths_present": bool(str(env.get("HLE_EVIDENCE_SOURCE_CORPUS_PATHS") or "").strip()),
+        "semantic_scholar_api_key_present": bool(str(env.get("SEMANTIC_SCHOLAR_API_KEY") or "").strip()),
+        "openalex_api_key_present": bool(
+            str(env.get("OPENALEX_API_KEY") or env.get("HLE_OPENALEX_API_KEY") or "").strip()
+        ),
+        "option_claim_relation_query_planner_env": env.get("HLE_ENABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER"),
+        "option_claim_relation_query_planner_disabled_env": env.get(
+            "HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER"
+        ),
+        "option_claim_relation_span_comparator_env": env.get(
+            "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR"
+        ),
+        "option_claim_relation_span_comparator_disabled_env": env.get(
+            "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR"
+        ),
+        "option_claim_source_cache_corpus_backfill_env": env.get(
+            "HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"
+        ),
+        "option_claim_source_cache_corpus_backfill_disabled_env": env.get(
+            "HLE_DISABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"
+        ),
+        "option_claim_source_verifier_repair_context_env": env.get(
+            "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT"
+        ),
+        "option_claim_source_verifier_repair_context_disabled_env": env.get(
+            "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT"
+        ),
+        "option_claim_source_verifier_acceptance_quality_gate_env": env.get(
+            "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE"
+        ),
+        "option_claim_source_verifier_acceptance_quality_gate_disabled_env": env.get(
+            "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE"
+        ),
+        "option_claim_source_verifier_structured_context_env": env.get(
+            "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT"
+        ),
+        "option_claim_source_verifier_structured_context_disabled_env": env.get(
+            "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT"
+        ),
         "raw_content_persisted": False,
     }
 
@@ -771,6 +1049,9 @@ def apply_hle_offline_defaults(env: dict[str, str]) -> dict[str, str]:
     )
     if has_source_cache and not explicit_source_policy and not _env_truthy(env, "HLE_ALLOW_LIVE_SOURCE_SEARCH"):
         env["HLE_EVIDENCE_SOURCE_CACHE_ONLY"] = "1"
+        env["HLE_SOURCE_SEARCH_CACHE_ONLY"] = "1"
+        env["HLE_DISABLE_LIVE_SOURCE_SEARCH"] = "1"
+        env["HLE_ALLOW_LIVE_SOURCE_SEARCH"] = "0"
     if (
         not str(env.get("HLE_RECURSIVE_CHILD_BATCH_MAX_WAIT_SEC", "")).strip()
         and not str(env.get("HLE_RECURSIVE_CHILD_BATCH_TOTAL_WAIT_SEC", "")).strip()
@@ -1145,6 +1426,8 @@ def aggregate_parallel_payload(
     launch_stagger_sec: float = 0.0,
     diagnostic_log_out: Path | None = None,
     model_router_policy: dict[str, Any] | None = None,
+    feature_flags: dict[str, Any] | None = None,
+    source_policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_rows = _merged_run_rows(shard_payloads)
     metrics = _parallel_metrics(run_rows=run_rows, shard_payloads=shard_payloads)
@@ -1219,6 +1502,8 @@ def aggregate_parallel_payload(
             "launch_stagger_sec": launch_stagger_sec,
             "reuse_completed_shards": reuse_completed_shards or {"enabled": False},
             "model_router": model_router_policy or {},
+            "feature_flags": feature_flags or {},
+            "source_policy": source_policy or {},
             "raw_content_persisted": False,
         },
         "diagnostic_log_out": str(diagnostic_log_out) if diagnostic_log_out else None,
@@ -1861,6 +2146,8 @@ def build_failure_diagnostics(*, rows: list[dict[str, Any]]) -> dict[str, Any]:
     agent_gain_loss: Counter[str] = Counter()
     agent_selection_buckets: Counter[str] = Counter()
     verified_gate_buckets: Counter[str] = Counter()
+    source_directness_buckets: Counter[str] = Counter()
+    source_directness_reasons: dict[str, Counter[str]] = defaultdict(Counter)
     agent_problem_count = 0
 
     for row in rows:
@@ -1909,6 +2196,12 @@ def build_failure_diagnostics(*, rows: list[dict[str, Any]]) -> dict[str, Any]:
             if str(agent_row.get("answer_type")) == "multipleChoice":
                 agent_failure_buckets["multiple_choice_selection_failed"] += 1
             flags = _row_flags(agent_row)
+            _update_source_directness_failure_diagnostics(
+                agent_row=agent_row,
+                flags=flags,
+                buckets=source_directness_buckets,
+                reasons=source_directness_reasons,
+            )
             if flags.get("candidate_generation_missed_gold"):
                 agent_failure_buckets["candidate_generation_missed_gold"] += 1
             if flags.get("candidate_generation_missed_gold_with_sweep_coverage"):
@@ -1960,6 +2253,11 @@ def build_failure_diagnostics(*, rows: list[dict[str, Any]]) -> dict[str, Any]:
         "agent_gain_loss": dict(sorted(agent_gain_loss.items())),
         "agent_selection_methods": dict(sorted(agent_selection_buckets.items())),
         "verified_or_abstain_gate_status": dict(sorted(verified_gate_buckets.items())),
+        "source_directness_failure_buckets": dict(sorted(source_directness_buckets.items())),
+        "source_directness_reason_counts": {
+            key: dict(sorted(counter.items()))
+            for key, counter in sorted(source_directness_reasons.items())
+        },
         "raw_content_persisted": False,
     }
 
@@ -1993,6 +2291,224 @@ def _row_flags(row: dict[str, Any]) -> dict[str, Any]:
         return {}
     flags = efficacy.get("flags")
     return flags if isinstance(flags, dict) else {}
+
+
+def _row_component(row: dict[str, Any], key: str) -> dict[str, Any]:
+    efficacy = row.get("component_efficacy")
+    if not isinstance(efficacy, dict):
+        return {}
+    component = efficacy.get(key)
+    return component if isinstance(component, dict) else {}
+
+
+def _increment_reason_counter(counter: Counter[str], value: Any) -> None:
+    label = str(value or "").strip() or "unknown"
+    counter[label] += 1
+
+
+def _merge_count_mapping(counter: Counter[str], values: Any) -> None:
+    if not isinstance(values, dict):
+        return
+    for key, value in sorted(values.items()):
+        try:
+            count = int(value or 0)
+        except (TypeError, ValueError):
+            count = 0
+        if count <= 0:
+            continue
+        counter[str(key or "unknown")] += count
+
+
+def _update_source_directness_failure_diagnostics(
+    *,
+    agent_row: dict[str, Any],
+    flags: dict[str, Any],
+    buckets: Counter[str],
+    reasons: dict[str, Counter[str]],
+) -> None:
+    """Aggregate why source-backed candidate promotion failed without storing raw text."""
+    option_claim = _row_component(agent_row, "mc_option_claim_evidence_verifier")
+    if not option_claim and not flags:
+        return
+
+    if flags.get("option_claim_relation_query_planner_activated"):
+        buckets["relation_query_planner_activated"] += 1
+    elif option_claim.get("relation_query_planner_status"):
+        buckets["relation_query_planner_not_activated"] += 1
+        _increment_reason_counter(
+            reasons["relation_query_planner_status"],
+            option_claim.get("relation_query_planner_status"),
+        )
+
+    if flags.get("mc_option_claim_source_verifier_used"):
+        buckets["source_verifier_used"] += 1
+        if not flags.get("mc_option_claim_evidence_candidate_emitted"):
+            buckets["source_verifier_no_candidate_emitted"] += 1
+    if flags.get("mc_option_claim_source_verifier_repair_context_used"):
+        buckets["source_verifier_repair_context_used"] += 1
+    if flags.get("mc_option_claim_source_verifier_repair_context_found_spans"):
+        buckets["source_verifier_repair_context_found_spans"] += 1
+    if flags.get("mc_option_claim_source_verifier_structured_context_used"):
+        buckets["source_verifier_structured_context_used"] += 1
+    if flags.get("mc_option_claim_source_verifier_acceptance_quality_gate_blocked"):
+        buckets["source_verifier_acceptance_quality_gate_blocked"] += 1
+    _merge_count_mapping(
+        reasons["source_verifier_acceptance_quality_gate_reason"],
+        option_claim.get("source_verifier_acceptance_quality_gate_reason_counts"),
+    )
+    _merge_count_mapping(
+        reasons["source_verifier_repair_context_status"],
+        option_claim.get("source_verifier_repair_context_status_counts"),
+    )
+    _merge_count_mapping(
+        reasons["source_verifier_repair_context_reason"],
+        option_claim.get("source_verifier_repair_context_reason_counts"),
+    )
+    _merge_count_mapping(
+        reasons["source_verifier_structured_context_status"],
+        option_claim.get("source_verifier_structured_context_status_counts"),
+    )
+    _merge_count_mapping(
+        reasons["source_verifier_structured_context_reason"],
+        option_claim.get("source_verifier_structured_context_reason_counts"),
+    )
+    _merge_count_mapping(
+        reasons["source_verifier_rejection_reason"],
+        option_claim.get("source_verifier_rejection_reason_counts"),
+    )
+
+    if flags.get("missing_model_option_source_retry_scheduled"):
+        buckets["missing_model_source_retry_scheduled"] += 1
+        if not flags.get("missing_model_option_source_retry_success"):
+            buckets["missing_model_source_retry_unhelpful"] += 1
+    if flags.get("low_support_exhaustive_missing_model_retry_used"):
+        buckets["low_support_exhaustive_missing_model_retry_used"] += 1
+
+    if flags.get("mc_option_claim_local_relation_query_expansion_used"):
+        buckets["local_relation_query_expansion_found_docs"] += 1
+    if flags.get("mc_option_claim_sweep_gap_local_relation_backfill_used"):
+        buckets["sweep_gap_local_relation_backfill_found_docs"] += 1
+    if flags.get("mc_option_claim_source_cache_corpus_backfill_used"):
+        buckets["source_cache_corpus_backfill_found_docs"] += 1
+
+    promotion_detail = option_claim.get("source_quality_directness_promotion_detail")
+    if isinstance(promotion_detail, dict):
+        _increment_reason_counter(
+            reasons["source_quality_directness_promotion_reason"],
+            promotion_detail.get("reason") or option_claim.get("source_quality_directness_promotion_reason"),
+        )
+        _merge_count_mapping(
+            reasons["source_quality_directness_rejection"],
+            promotion_detail.get("rejection_counts"),
+        )
+        if promotion_detail.get("status") == "blocked":
+            buckets["source_quality_directness_promotion_blocked"] += 1
+            if promotion_detail.get("reason") == "no_span_directness_direct_candidates":
+                buckets["source_quality_promotion_no_direct_span"] += 1
+    elif option_claim.get("source_quality_directness_promotion_status"):
+        _increment_reason_counter(
+            reasons["source_quality_directness_promotion_status"],
+            option_claim.get("source_quality_directness_promotion_status"),
+        )
+
+    if flags.get("mc_option_claim_span_directness_verifier_used"):
+        buckets["span_directness_verifier_used"] += 1
+        if not flags.get("mc_option_claim_span_directness_verifier_accepted"):
+            buckets["span_directness_verifier_rejected"] += 1
+    if option_claim.get("span_directness_verifier_status"):
+        _increment_reason_counter(
+            reasons["span_directness_verifier_status"],
+            option_claim.get("span_directness_verifier_status"),
+        )
+    if option_claim.get("span_directness_verifier_reason"):
+        _increment_reason_counter(
+            reasons["span_directness_verifier_reason"],
+            option_claim.get("span_directness_verifier_reason"),
+        )
+    if flags.get("mc_option_claim_span_directness_lexical_unique_but_generic"):
+        buckets["span_directness_lexical_unique_but_generic"] += 1
+    if flags.get("mc_option_claim_span_directness_slot_gate_blocked_model_direct"):
+        buckets["span_directness_slot_gate_blocked_model_direct"] += 1
+
+    if flags.get("mc_option_claim_relation_span_comparator_used"):
+        buckets["relation_span_comparator_used"] += 1
+        if not flags.get("mc_option_claim_relation_span_comparator_accepted"):
+            buckets["relation_span_comparator_rejected"] += 1
+    if option_claim.get("relation_span_comparator_status"):
+        _increment_reason_counter(
+            reasons["relation_span_comparator_status"],
+            option_claim.get("relation_span_comparator_status"),
+        )
+    if option_claim.get("relation_span_comparator_reason"):
+        _increment_reason_counter(
+            reasons["relation_span_comparator_reason"],
+            option_claim.get("relation_span_comparator_reason"),
+        )
+
+    if flags.get("mc_option_claim_candidate_direct_relation_span_extractor_used"):
+        buckets["candidate_direct_relation_span_extractor_used"] += 1
+    elif option_claim.get("candidate_direct_relation_span_extractor_status"):
+        buckets["candidate_direct_relation_span_extractor_no_spans"] += 1
+        _increment_reason_counter(
+            reasons["candidate_direct_relation_span_extractor_status"],
+            option_claim.get("candidate_direct_relation_span_extractor_status"),
+        )
+    if (
+        option_claim.get("candidate_direct_relation_span_directness_verifier_status")
+        and not flags.get("mc_option_claim_candidate_direct_relation_span_directness_accepted")
+    ):
+        buckets["candidate_direct_relation_span_directness_rejected"] += 1
+        _increment_reason_counter(
+            reasons["candidate_direct_relation_span_directness_status"],
+            option_claim.get("candidate_direct_relation_span_directness_verifier_status"),
+        )
+
+    if flags.get("mc_option_claim_contrastive_adjudicator_used"):
+        buckets["contrastive_adjudicator_used"] += 1
+        if not flags.get("mc_option_claim_contrastive_adjudicator_accepted"):
+            buckets["contrastive_adjudicator_rejected"] += 1
+    if flags.get("mc_option_claim_contrastive_relation_matrix_returned"):
+        buckets["contrastive_relation_matrix_returned"] += 1
+        if int(option_claim.get("contrastive_adjudicator_direct_relation_candidate_count") or 0) <= 0:
+            buckets["contrastive_relation_matrix_no_direct_candidate"] += 1
+    if flags.get("mc_option_claim_contrastive_structured_relation_audit_used"):
+        buckets["contrastive_structured_relation_audit_used"] += 1
+    if flags.get("mc_option_claim_contrastive_structured_relation_audit_hard_blocked"):
+        buckets["contrastive_structured_relation_audit_hard_blocked"] += 1
+        hard_block_reason_seen = False
+        for item in option_claim.get("contrastive_adjudicator_structured_relation_matrix", []) or []:
+            if not isinstance(item, dict):
+                continue
+            hard_block_reason = str(item.get("hard_block_reason") or "").strip()
+            if not hard_block_reason:
+                continue
+            hard_block_reason_seen = True
+            _increment_reason_counter(
+                reasons["contrastive_structured_relation_hard_block"],
+                hard_block_reason,
+            )
+        if not hard_block_reason_seen:
+            _increment_reason_counter(
+                reasons["contrastive_structured_relation_hard_block"],
+                option_claim.get("contrastive_adjudicator_selected_structured_relation_hard_block_reason")
+                or "any_candidate_hard_blocked",
+            )
+    if option_claim.get("contrastive_adjudicator_reason"):
+        _increment_reason_counter(
+            reasons["contrastive_adjudicator_reason"],
+            option_claim.get("contrastive_adjudicator_reason"),
+        )
+
+    if flags.get("gold_option_source_verifier_attempted"):
+        buckets["gold_option_source_verifier_attempted"] += 1
+        if not flags.get("gold_option_source_verifier_accepted"):
+            buckets["gold_option_source_verifier_unaccepted"] += 1
+    elif flags.get("candidate_generation_missed_gold") or flags.get("missing_model_option_source_retry_scheduled"):
+        buckets["gold_option_source_verifier_not_attempted"] += 1
+    if flags.get("gold_option_source_verifier_direct_source_insufficient"):
+        buckets["gold_option_direct_source_insufficient"] += 1
+    if flags.get("gold_option_source_verifier_indirect_or_generic"):
+        buckets["gold_option_source_indirect_or_generic"] += 1
 
 
 def _verified_gate_status(row: dict[str, Any]) -> str:
@@ -2308,7 +2824,8 @@ def build_payload_without_execution(args: argparse.Namespace) -> tuple[list[Shar
             md_dir=md_dir,
         )
     dedupe_summary: dict[str, Any] = {"enabled": False}
-    if explicit_seed_offsets:
+    generalization_holdout = bool(getattr(args, "generalization_holdout", False))
+    if explicit_seed_offsets and not generalization_holdout:
         dedupe_summary = {
             "enabled": False,
             "reason": "explicit_seed_offsets",
@@ -2378,6 +2895,7 @@ def build_payload_without_execution(args: argparse.Namespace) -> tuple[list[Shar
                 enable_operator_application_verifier=bool(
                     getattr(args, "enable_operator_application_verifier", False)
                 ),
+                enable_operator_policy_gate=bool(getattr(args, "enable_operator_policy_gate", False)),
                 disable_domain_rule_verifier=bool(getattr(args, "disable_domain_rule_verifier", False)),
                 enable_option_claim_contrastive_adjudicator=bool(
                     getattr(args, "enable_option_claim_contrastive_adjudicator", False)
@@ -2390,6 +2908,58 @@ def build_payload_without_execution(args: argparse.Namespace) -> tuple[list[Shar
                 ),
                 disable_option_claim_span_directness_verifier=bool(
                     getattr(args, "disable_option_claim_span_directness_verifier", False)
+                ),
+                enable_option_claim_relation_span_comparator=bool(
+                    getattr(args, "enable_option_claim_relation_span_comparator", False)
+                ),
+                disable_option_claim_relation_span_comparator=bool(
+                    getattr(args, "disable_option_claim_relation_span_comparator", False)
+                ),
+                enable_option_claim_relation_query_planner=bool(
+                    getattr(args, "enable_option_claim_relation_query_planner", False)
+                ),
+                disable_option_claim_relation_query_planner=bool(
+                    getattr(args, "disable_option_claim_relation_query_planner", False)
+                ),
+                enable_option_claim_source_cache_corpus_backfill=bool(
+                    getattr(args, "enable_option_claim_source_cache_corpus_backfill", False)
+                ),
+                disable_option_claim_source_cache_corpus_backfill=bool(
+                    getattr(args, "disable_option_claim_source_cache_corpus_backfill", False)
+                ),
+                enable_option_claim_source_verifier_repair_context=bool(
+                    getattr(args, "enable_option_claim_source_verifier_repair_context", False)
+                ),
+                disable_option_claim_source_verifier_repair_context=bool(
+                    getattr(args, "disable_option_claim_source_verifier_repair_context", False)
+                ),
+                enable_option_claim_source_verifier_acceptance_quality_gate=bool(
+                    getattr(
+                        args,
+                        "enable_option_claim_source_verifier_acceptance_quality_gate",
+                        False,
+                    )
+                ),
+                disable_option_claim_source_verifier_acceptance_quality_gate=bool(
+                    getattr(
+                        args,
+                        "disable_option_claim_source_verifier_acceptance_quality_gate",
+                        False,
+                    )
+                ),
+                enable_option_claim_source_verifier_structured_context=bool(
+                    getattr(
+                        args,
+                        "enable_option_claim_source_verifier_structured_context",
+                        False,
+                    )
+                ),
+                disable_option_claim_source_verifier_structured_context=bool(
+                    getattr(
+                        args,
+                        "disable_option_claim_source_verifier_structured_context",
+                        False,
+                    )
                 ),
             ),
         )
@@ -2416,10 +2986,21 @@ def main() -> None:
     parser.add_argument(
         "--seed-offsets",
         default="",
-        help="Comma-separated explicit seed offsets. Requires --shard-size 1 and skips parent dedupe remapping.",
+        help=(
+            "Comma-separated explicit seed offsets. Requires --shard-size 1 and skips parent dedupe "
+            "remapping unless --generalization-holdout is enabled."
+        ),
     )
     parser.add_argument("--dedupe-shard-samples", action="store_true")
     parser.add_argument("--dedupe-shard-max-attempts", type=int, default=25)
+    parser.add_argument(
+        "--generalization-holdout",
+        action="store_true",
+        help=(
+            "Treat this as an unseen generalization run: exclude existing HLE artifacts "
+            "and remap shard seeds by problem hash before execution."
+        ),
+    )
     parser.add_argument("--sample-answer-type", default="")
     parser.add_argument("--sample-subject-contains", default="")
     parser.add_argument("--models", default="gpt-5.4-mini")
@@ -2442,11 +3023,24 @@ def main() -> None:
     parser.add_argument("--enable-assumption-operator-retrieval-fallback", action="store_true")
     parser.add_argument("--assumption-operator-fallback-min-score", type=float, default=None)
     parser.add_argument("--enable-operator-application-verifier", action="store_true")
+    parser.add_argument("--enable-operator-policy-gate", action="store_true")
     parser.add_argument("--disable-domain-rule-verifier", action="store_true")
     parser.add_argument("--enable-option-claim-contrastive-adjudicator", action="store_true")
     parser.add_argument("--disable-option-claim-contrastive-adjudicator", action="store_true")
     parser.add_argument("--enable-option-claim-span-directness-verifier", action="store_true")
     parser.add_argument("--disable-option-claim-span-directness-verifier", action="store_true")
+    parser.add_argument("--enable-option-claim-relation-span-comparator", action="store_true")
+    parser.add_argument("--disable-option-claim-relation-span-comparator", action="store_true")
+    parser.add_argument("--enable-option-claim-relation-query-planner", action="store_true")
+    parser.add_argument("--disable-option-claim-relation-query-planner", action="store_true")
+    parser.add_argument("--enable-option-claim-source-cache-corpus-backfill", action="store_true")
+    parser.add_argument("--disable-option-claim-source-cache-corpus-backfill", action="store_true")
+    parser.add_argument("--enable-option-claim-source-verifier-repair-context", action="store_true")
+    parser.add_argument("--disable-option-claim-source-verifier-repair-context", action="store_true")
+    parser.add_argument("--enable-option-claim-source-verifier-acceptance-quality-gate", action="store_true")
+    parser.add_argument("--disable-option-claim-source-verifier-acceptance-quality-gate", action="store_true")
+    parser.add_argument("--enable-option-claim-source-verifier-structured-context", action="store_true")
+    parser.add_argument("--disable-option-claim-source-verifier-structured-context", action="store_true")
     parser.add_argument("--exclude-existing-hle-artifacts", action="store_true")
     parser.add_argument(
         "--exclude-artifact-glob",
@@ -2474,6 +3068,7 @@ def main() -> None:
         help="Terminate and then kill shards after --soft-timeout-sec. Default only records heartbeat observation.",
     )
     parser.add_argument("--model-router-attempts", type=int, default=None)
+    parser.add_argument("--model-router-transient-extra-attempts", type=int, default=None)
     parser.add_argument("--model-router-timeout", type=float, default=None)
     parser.add_argument("--model-router-per-attempt-timeout", type=float, default=None)
     parser.add_argument("--model-router-subprocess-calls", action="store_true")
@@ -2487,6 +3082,7 @@ def main() -> None:
     parser.add_argument("--live-model-preflight-timeout-sec", type=float, default=60.0)
     args = parser.parse_args()
     args = apply_live_network_defaults(args)
+    args = apply_generalization_holdout_defaults(args)
     apply_hle_offline_defaults(os.environ)
 
     root = Path(args.root).resolve()
@@ -2503,6 +3099,8 @@ def main() -> None:
         if args.log_out
         else run_dir / f"{args.eval_id}.diagnostic.jsonl"
     )
+    runner_feature_flags = runtime_feature_flags_from_args(args)
+    runner_source_policy = source_policy_from_env(os.environ)
     logger = JsonlDiagnosticLogger(diagnostic_log_out)
     log_event(
         logger,
@@ -2532,8 +3130,16 @@ def main() -> None:
                 "global_slot_wait_sec": args.model_router_global_slot_wait_sec,
                 "raw_content_persisted": False,
             },
+            "feature_flags": runner_feature_flags,
+            "source_policy": runner_source_policy,
             "reuse_completed_shards": bool(args.reuse_completed_shards),
             "dedupe_shard_samples": bool(args.dedupe_shard_samples),
+            "generalization_holdout": bool(args.generalization_holdout),
+            "generalization_holdout_policy": getattr(
+                args,
+                "_generalization_holdout_policy",
+                {"enabled": False},
+            ),
         },
     )
     hash_cache_path = run_dir / f"{args.eval_id}.existing_hash_cache.json"
@@ -2548,6 +3154,13 @@ def main() -> None:
             "shard_size": args.shard_size,
             "dedupe_shard_samples": bool(args.dedupe_shard_samples),
             "exclude_existing_hle_artifacts": bool(args.exclude_existing_hle_artifacts),
+            "feature_flags": runner_feature_flags,
+            "source_policy": runner_source_policy,
+            "generalization_holdout_policy": getattr(
+                args,
+                "_generalization_holdout_policy",
+                {"enabled": False},
+            ),
             "hash_cache_path": str(hash_cache_path),
         },
     )
@@ -2561,6 +3174,11 @@ def main() -> None:
             "seed_offsets": [state.spec.seed_offset for state in states],
             "sample_sizes": [state.spec.sample_size for state in states],
             "dedupe_summary": getattr(args, "_shard_sample_dedupe_summary", {"enabled": False}),
+            "generalization_holdout_policy": getattr(
+                args,
+                "_generalization_holdout_policy",
+                {"enabled": False},
+            ),
             "hash_cache_path": str(hash_cache_path),
         },
     )
@@ -2592,6 +3210,51 @@ def main() -> None:
     env = build_runner_env(
         model_router_attempts=args.model_router_attempts,
         model_router_timeout=args.model_router_timeout,
+        model_router_transient_extra_attempts=args.model_router_transient_extra_attempts,
+        enable_option_claim_relation_query_planner=(
+            True if args.enable_option_claim_relation_query_planner else None
+        ),
+        disable_option_claim_relation_query_planner=(
+            True if args.disable_option_claim_relation_query_planner else None
+        ),
+        enable_option_claim_relation_span_comparator=(
+            True if args.enable_option_claim_relation_span_comparator else None
+        ),
+        disable_option_claim_relation_span_comparator=(
+            True if args.disable_option_claim_relation_span_comparator else None
+        ),
+        enable_option_claim_source_cache_corpus_backfill=(
+            True if args.enable_option_claim_source_cache_corpus_backfill else None
+        ),
+        disable_option_claim_source_cache_corpus_backfill=(
+            True if args.disable_option_claim_source_cache_corpus_backfill else None
+        ),
+        enable_option_claim_source_verifier_repair_context=(
+            True if args.enable_option_claim_source_verifier_repair_context else None
+        ),
+        disable_option_claim_source_verifier_repair_context=(
+            True if args.disable_option_claim_source_verifier_repair_context else None
+        ),
+        enable_option_claim_source_verifier_acceptance_quality_gate=(
+            True
+            if args.enable_option_claim_source_verifier_acceptance_quality_gate
+            else None
+        ),
+        disable_option_claim_source_verifier_acceptance_quality_gate=(
+            True
+            if args.disable_option_claim_source_verifier_acceptance_quality_gate
+            else None
+        ),
+        enable_option_claim_source_verifier_structured_context=(
+            True
+            if args.enable_option_claim_source_verifier_structured_context
+            else None
+        ),
+        disable_option_claim_source_verifier_structured_context=(
+            True
+            if args.disable_option_claim_source_verifier_structured_context
+            else None
+        ),
         parallel_workers=args.parallel_workers,
         model_router_per_attempt_timeout=args.model_router_per_attempt_timeout,
         model_router_subprocess_calls=True if args.model_router_subprocess_calls else None,
@@ -2601,6 +3264,18 @@ def main() -> None:
         model_router_global_concurrency_dir=args.model_router_global_concurrency_dir,
         model_router_global_slot_ttl_sec=args.model_router_global_slot_ttl_sec,
         model_router_global_slot_wait_sec=args.model_router_global_slot_wait_sec,
+    )
+    runner_source_policy = source_policy_from_env(env)
+    log_event(
+        logger,
+        {
+            "event": "hle_parallel_runner_env_policy",
+            "eval_id": args.eval_id,
+            "feature_flags": runner_feature_flags,
+            "source_policy": runner_source_policy,
+            "model_router": model_router_policy_from_env(env),
+            "raw_content_persisted": False,
+        },
     )
     if args.execute_live and not model_router_primary_key_present(env):
         model_preflight = run_live_model_preflight(
@@ -2739,6 +3414,8 @@ def main() -> None:
         launch_stagger_sec=max(0.0, float(args.launch_stagger_sec or 0.0)),
         diagnostic_log_out=diagnostic_log_out,
         model_router_policy=model_router_policy_from_env(env),
+        feature_flags=runner_feature_flags,
+        source_policy=runner_source_policy,
     )
     log_event(
         logger,
@@ -2765,6 +3442,12 @@ def main() -> None:
                 "agent_failure_buckets": payload["failure_diagnostics"]["agent_failure_buckets"],
                 "agent_gain_loss": payload["failure_diagnostics"]["agent_gain_loss"],
                 "verified_or_abstain_gate_status": payload["failure_diagnostics"]["verified_or_abstain_gate_status"],
+                "source_directness_failure_buckets": payload["failure_diagnostics"][
+                    "source_directness_failure_buckets"
+                ],
+                "source_directness_reason_counts": payload["failure_diagnostics"][
+                    "source_directness_reason_counts"
+                ],
             },
         },
     )
@@ -2816,6 +3499,12 @@ def main() -> None:
             "agent_failure_buckets": payload["failure_diagnostics"]["agent_failure_buckets"],
             "agent_gain_loss": payload["failure_diagnostics"]["agent_gain_loss"],
             "verified_or_abstain_gate_status": payload["failure_diagnostics"]["verified_or_abstain_gate_status"],
+            "source_directness_failure_buckets": payload["failure_diagnostics"][
+                "source_directness_failure_buckets"
+            ],
+            "source_directness_reason_counts": payload["failure_diagnostics"][
+                "source_directness_reason_counts"
+            ],
         },
         "failed_gates": payload["failed_gates"],
         "paper_clean_failed_gates": payload["paper_clean_failed_gates"],
