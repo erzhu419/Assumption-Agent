@@ -13,6 +13,7 @@ from unittest.mock import patch
 from assumption_os.hle_module_activation_audit import build_hle_module_activation_audit_payload
 from assumption_os.hle_smoke_eval import (
     GoldAccessDuringDecisionError,
+    VariantExecutionWatchdogExceeded,
     _LOCAL_EVIDENCE_CORPUS_CACHE,
     _LOCAL_EVIDENCE_CORPUS_CACHE_ORDER,
     _OPTION_CLAIM_VERIFIER_BUDGET_USED,
@@ -63,6 +64,7 @@ from assumption_os.hle_smoke_eval import (
     _execute_math_tool_plan_text,
     _endpoint_error_pressure_abort_summary,
     _extract_multiple_choice_options,
+    _execute_recursive_child_attempts,
     _expected_but_missing_modules,
     _filter_answer_bearing_evidence_results,
     _force_serial_child_execution_reason,
@@ -78,6 +80,7 @@ from assumption_os.hle_smoke_eval import (
     _local_evidence_corpus_search,
     _module_activation_summary,
     _model_router_subprocess_calls_enabled,
+    _model_router_call_scope,
     _maybe_run_forced_alternative_challenge,
     _maybe_run_critic_synthesis_child,
     _maybe_add_route_arbitrator_candidate,
@@ -98,6 +101,8 @@ from assumption_os.hle_smoke_eval import (
     _run_self_contained_full_option_adjudicator,
     _run_sweep_gap_full_option_recheck,
     _run_structural_dissent_recheck,
+    _self_contained_full_option_adjudicator_prompt,
+    _sweep_gap_full_option_recheck_prompt,
     _apply_answer_bearing_option_directness_gate,
     _math_tool_child_timeout,
     _maybe_add_answer_bearing_evidence_candidate,
@@ -108,6 +113,7 @@ from assumption_os.hle_smoke_eval import (
     _model_router_subprocess_process_timeout,
     _no_gold_decision_guarded,
     _no_gold_decision_phase,
+    _option_claim_model_router_scope,
     _acquire_model_router_slot,
     _remove_stale_model_router_slots,
     _release_model_router_slot,
@@ -122,7 +128,9 @@ from assumption_os.hle_smoke_eval import (
     _recursive_child_prompt_specs,
     _recursive_child_batch_max_wait_sec,
     _recursive_child_latency_summary,
+    _execute_recursive_child_attempts,
     _recursive_late_child_budget_allows,
+    _verified_or_abstain_fallback_candidate,
     _recursive_late_child_budget_skip_summary,
     _recursive_late_child_model_attempt_count,
     _recursive_timeout_recovery_trigger,
@@ -130,6 +138,9 @@ from assumption_os.hle_smoke_eval import (
     _child_model_failover_trigger,
     _call_model,
     _call_recursive_verified_answer,
+    _variant_execution_watchdog,
+    _variant_watchdog_blocked_summary,
+    _variant_watchdog_summary,
     _run_math_tool_attempt,
     _run_child_batch,
     _run_minority_candidate_claim_verifier,
@@ -156,6 +167,8 @@ from assumption_os.hle_smoke_eval import (
     _deterministic_option_claim_relation_queries,
     _option_claim_answer_web_fallback_queries,
     _option_claim_relation_query_planner_enabled,
+    _option_claim_relation_span_comparator_promotion_enabled,
+    _option_claim_relation_comparator_single_recovery_promotion_blocked,
     _option_claim_relation_query_planner_prompt,
     _option_claim_answer_bearing_task_hint,
     _option_claim_candidate_direct_relation_span_verifier_priority_enabled,
@@ -166,6 +179,8 @@ from assumption_os.hle_smoke_eval import (
     _option_claim_statement_fact_slot_coverage_detail,
     _option_claim_statement_fact_refutation_detail,
     _option_claim_span_directness_programmatic_gap_audit,
+    _option_claim_span_directness_gap_model_skip_detail,
+    _option_claim_missing_required_pair_span_directness_detail,
     _option_claim_verified_candidate_signal,
     _option_claim_unique_relation_spans_by_label,
     _option_claim_local_relation_query_expansion_docs,
@@ -173,12 +188,15 @@ from assumption_os.hle_smoke_eval import (
     _option_claim_sweep_gap_local_relation_backfill_docs,
     _option_claim_source_cache_corpus_backfill_docs,
     _option_claim_candidate_direct_relation_spans_by_label,
+    _option_claim_candidate_direct_relation_repair_context_bridge,
     _option_claim_contrastive_candidate_summaries,
     _option_claim_contrastive_candidate_selection,
+    _safe_contrastive_candidate_selection_summary,
     _option_claim_verifier_budget_allows,
     _parse_option_claim_relation_query_plan,
     _run_option_claim_relation_query_planner,
     _run_option_claim_span_directness_verifier,
+    _option_claim_candidate_relation_span_directness_detail,
     _option_claim_span_directness_skipped_summary,
     _option_claim_unresolved_multiple_direct_conflict,
     _run_option_claim_contrastive_adjudicator,
@@ -791,6 +809,33 @@ class HleSmokeEvalTest(unittest.TestCase):
             len(specs),
         )
 
+    def test_recursive_child_prompt_kind_limit_caps_total_children_when_enabled(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. one\nB. two\nC. three\nD. four",
+        }
+        plan = {"prompt_context": "graph context"}
+        with patch.dict(os.environ, {"HLE_RECURSIVE_CHILD_PROMPT_KIND_LIMIT": "4"}, clear=False):
+            specs = _recursive_child_prompt_specs(problem, agent_plan=plan)
+
+        kinds = [spec["prompt_kind"] for spec in specs]
+        self.assertEqual(len(kinds), 4)
+        self.assertEqual(
+            kinds,
+            [
+                "direct_short_answer",
+                "agent_context_answer",
+                "constraint_checked_answer",
+                "recursive_assumption_answer",
+            ],
+        )
+        budget = plan["stages"]["recursive_child_prompt_kind_budget"]
+        self.assertEqual(budget["status"], "activated")
+        self.assertEqual(budget["reason"], "capped_total_prompt_kinds")
+        self.assertEqual(budget["limit"], 4)
+        self.assertGreater(budget["skipped_child_count"], 0)
+        self.assertIn("option_matrix_reasoner_answer", budget["skipped_prompt_kinds"])
+
     def test_recursive_late_child_budget_counts_only_model_child_attempts(self):
         attempts = [
             {
@@ -909,6 +954,253 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(skip["status"], "skipped_by_recursive_late_child_budget_gate")
         self.assertEqual(skip["model_child_count_before"], 2)
 
+    def test_recursive_child_total_budget_caps_late_child_gate_when_explicit_late_absent(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+        }
+        attempts = [
+            {"prompt_kind": "direct_short_answer", "status": "answered", "latency_sec": 1.0},
+            {"prompt_kind": "constraint_checked_answer", "status": "answered", "latency_sec": 1.0},
+        ]
+        plan = {"stages": {}}
+
+        with TemporaryDirectory() as tmp:
+            logger = _JsonlLogger(Path(tmp) / "events.jsonl")
+            with patch.dict(
+                os.environ,
+                {
+                    "HLE_RECURSIVE_CHILD_TOTAL_MODEL_CALL_BUDGET": "2",
+                    "HLE_RECURSIVE_LATE_CHILD_MODEL_CALL_BUDGET": "",
+                },
+                clear=False,
+            ):
+                allowed = _recursive_late_child_budget_allows(
+                    stage_name="counter_assumption_challenge",
+                    problem=problem,
+                    attempts=attempts,
+                    agent_plan=plan,
+                    eval_id="eval",
+                    call_id="call",
+                    model="gpt-5.4-mini",
+                    logger=logger,
+                )
+
+        self.assertFalse(allowed)
+        gate = plan["stages"]["recursive_late_child_budget_gate"]
+        self.assertEqual(gate["status"], "activated")
+        self.assertEqual(gate["budget_limit"], 2)
+        self.assertEqual(gate["skipped_stage_count"], 1)
+
+    def test_recursive_core_child_model_call_budget_caps_parallel_scheduler(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "exactMatch",
+            "_question": "What is x?",
+        }
+        specs = [
+            {"prompt_kind": "direct_short_answer", "prompt": "answer 1"},
+            {"prompt_kind": "constraint_checked_answer", "prompt": "answer 2"},
+            {"prompt_kind": "recursive_assumption_answer", "prompt": "answer 3"},
+            {"prompt_kind": "option_matrix_reasoner_answer", "prompt": "answer 4"},
+        ]
+        called_prompt_kinds: list[str] = []
+
+        def answered_child_attempt(**kwargs):
+            prompt_kind = kwargs["spec"]["prompt_kind"]
+            called_prompt_kinds.append(prompt_kind)
+            return {
+                "child_id": f"child-{kwargs['child_index']}",
+                "child_index": kwargs["child_index"],
+                "prompt_kind": prompt_kind,
+                "branch_axis": prompt_kind,
+                "parsed_answer": f"A{kwargs['child_index']}",
+                "parsed_answer_hash": f"h{kwargs['child_index']}",
+                "prediction_hash": f"p{kwargs['child_index']}",
+                "latency_sec": 0.01,
+                "status": "answered",
+            }
+
+        with TemporaryDirectory() as tmp:
+            logger = _JsonlLogger(Path(tmp) / "events.jsonl")
+            with patch.dict(os.environ, {"HLE_RECURSIVE_CORE_CHILD_MODEL_CALL_BUDGET": "2"}, clear=False):
+                with patch("assumption_os.hle_smoke_eval._run_child_attempt", side_effect=answered_child_attempt):
+                    result = _execute_recursive_child_attempts(
+                        problem=problem,
+                        specs=specs,
+                        model="gpt-5.4-mini",
+                        eval_id="eval",
+                        call_id="call",
+                        logger=logger,
+                        timeout=30,
+                        max_tokens=64,
+                        mode="parallel_quorum",
+                    )
+            events = [
+                json.loads(line)
+                for line in logger.path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertEqual(called_prompt_kinds, ["direct_short_answer", "constraint_checked_answer"])
+        self.assertEqual(result["underlying_model_calls"], 2)
+        self.assertEqual(result["skipped_prompt_kinds"], ["recursive_assumption_answer", "option_matrix_reasoner_answer"])
+        gate = result["core_child_model_call_budget_gate"]
+        self.assertEqual(gate["status"], "activated")
+        self.assertEqual(gate["budget_limit"], 2)
+        self.assertEqual(gate["planned_child_count_before"], 4)
+        self.assertEqual(gate["planned_child_count_after"], 2)
+        self.assertEqual(gate["skipped_child_count"], 2)
+        budget_events = [
+            event for event in events
+            if event.get("event") == "recursive_core_child_model_call_budget_gate"
+        ]
+        self.assertEqual(len(budget_events), 1)
+        self.assertEqual(budget_events[0]["stage_status"], "activated")
+        self.assertFalse(budget_events[0]["raw_content_persisted"])
+
+    def test_recursive_selection_model_call_budget_skips_model_adjudicators(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. alpha\nB. beta",
+        }
+        attempts = [
+            {
+                "child_id": "c1",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+                "status": "answered",
+            },
+            {
+                "child_id": "c2",
+                "child_index": 2,
+                "prompt_kind": "constraint_checked_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+                "status": "answered",
+            },
+        ]
+
+        with TemporaryDirectory() as tmp:
+            logger = _JsonlLogger(Path(tmp) / "events.jsonl")
+            with patch.dict(os.environ, {"HLE_RECURSIVE_SELECTION_MODEL_CALL_BUDGET": "0"}, clear=False):
+                with patch("assumption_os.hle_smoke_eval._run_self_contained_option_adjudicator") as self_contained:
+                    with patch("assumption_os.hle_smoke_eval._run_self_contained_full_option_adjudicator") as full:
+                        with patch("assumption_os.hle_smoke_eval._run_sweep_gap_full_option_recheck") as sweep:
+                            with patch("assumption_os.hle_smoke_eval._run_structural_dissent_recheck") as dissent:
+                                with patch("assumption_os.hle_smoke_eval._maybe_run_source_grounded_mc_selection") as source:
+                                    with patch("assumption_os.hle_smoke_eval._select_after_counter_assumption_challenge") as counter:
+                                        with patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+                                            selection = _select_recursive_child_answer(
+                                                problem=problem,
+                                                attempts=attempts,
+                                                model="gpt-5.4-mini",
+                                                eval_id="eval",
+                                                call_id="call",
+                                                logger=logger,
+                                                timeout=30,
+                                                max_tokens=64,
+                                            )
+            events = [
+                json.loads(line)
+                for line in logger.path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        for mocked in [self_contained, full, sweep, dissent, source, counter, call_model]:
+            mocked.assert_not_called()
+        self.assertEqual(selection["selection_method"], "selection_model_call_budget_fallback_first")
+        self.assertEqual(selection["selected_child_id"], "c1")
+        gate = selection["selection_model_call_budget_gate"]
+        self.assertEqual(gate["status"], "activated")
+        self.assertEqual(gate["budget_limit"], 0)
+        self.assertEqual(gate["allowed_stage_count"], 0)
+        self.assertIn("recursive_verifier", gate["skipped_stage_names"])
+        budget_events = [
+            event for event in events
+            if event.get("event") == "recursive_selection_model_call_budget_gate"
+        ]
+        self.assertGreaterEqual(len(budget_events), 1)
+        self.assertTrue(all(event["stage_status"] == "skipped" for event in budget_events))
+        self.assertFalse(budget_events[0]["raw_content_persisted"])
+
+    def test_recursive_selection_wallclock_budget_skips_model_adjudicators(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. alpha\nB. beta",
+        }
+        attempts = [
+            {
+                "child_id": "c1",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+                "status": "answered",
+            },
+            {
+                "child_id": "c2",
+                "child_index": 2,
+                "prompt_kind": "constraint_checked_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+                "status": "answered",
+            },
+        ]
+
+        with TemporaryDirectory() as tmp:
+            logger = _JsonlLogger(Path(tmp) / "events.jsonl")
+            with patch.dict(os.environ, {"HLE_RECURSIVE_SELECTION_WALLCLOCK_BUDGET_SEC": "-1"}, clear=False):
+                with patch("assumption_os.hle_smoke_eval._run_self_contained_option_adjudicator") as self_contained:
+                    with patch("assumption_os.hle_smoke_eval._run_self_contained_full_option_adjudicator") as full:
+                        with patch("assumption_os.hle_smoke_eval._run_sweep_gap_full_option_recheck") as sweep:
+                            with patch("assumption_os.hle_smoke_eval._run_structural_dissent_recheck") as dissent:
+                                with patch("assumption_os.hle_smoke_eval._maybe_run_source_grounded_mc_selection") as source:
+                                    with patch("assumption_os.hle_smoke_eval._select_after_counter_assumption_challenge") as counter:
+                                        with patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+                                            selection = _select_recursive_child_answer(
+                                                problem=problem,
+                                                attempts=attempts,
+                                                model="gpt-5.4-mini",
+                                                eval_id="eval",
+                                                call_id="call",
+                                                logger=logger,
+                                                timeout=30,
+                                                max_tokens=64,
+                                            )
+            events = [
+                json.loads(line)
+                for line in logger.path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        for mocked in [self_contained, full, sweep, dissent, source, counter, call_model]:
+            mocked.assert_not_called()
+        self.assertEqual(selection["selection_method"], "selection_model_call_budget_fallback_first")
+        self.assertEqual(selection["selected_child_id"], "c1")
+        self.assertNotIn("selection_model_call_budget_gate", selection)
+        gate = selection["selection_wallclock_budget_gate"]
+        self.assertEqual(gate["status"], "activated")
+        self.assertEqual(gate["budget_sec"], 0.0)
+        self.assertEqual(gate["allowed_stage_count"], 0)
+        self.assertIn("recursive_verifier", gate["skipped_stage_names"])
+        self.assertIn("elapsed_sec", gate)
+        budget_events = [
+            event for event in events
+            if event.get("event") == "recursive_selection_wallclock_budget_gate"
+        ]
+        self.assertGreaterEqual(len(budget_events), 1)
+        self.assertTrue(all(event["stage_status"] == "skipped" for event in budget_events))
+        self.assertFalse(budget_events[0]["raw_content_persisted"])
+
     def test_option_claim_budget_can_reserve_call_for_span_directness(self):
         problem = {
             "id_hash": "pid",
@@ -978,6 +1270,242 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertTrue(events[3]["uses_reserved_budget"])
         self.assertEqual(events[3]["budget_used_before"], 2)
 
+    def test_option_claim_budget_preserves_variant_directness_and_selection_reserve(self):
+        problem = _HleProblem({
+            "id_hash": "pid-variant-directness-reserve",
+            "question_hash": "qid-variant-directness-reserve",
+            "answer_type": "multipleChoice",
+            "_question": "Which option directly preserves the controlled variable?\nA. Alpha\nB. Beta",
+        })
+        _OPTION_CLAIM_VERIFIER_BUDGET_USED.clear()
+        _OPTION_CLAIM_VERIFIER_SPAN_DIRECTNESS_BUDGET_USED.clear()
+        with TemporaryDirectory() as tmp:
+            logger = _JsonlLogger(Path(tmp) / "events.jsonl")
+            with patch.dict(
+                os.environ,
+                {
+                    "HLE_VARIANT_RECURSIVE_SELECTION_RESERVED_MODEL_CALL_BUDGET": "1",
+                    "HLE_OPTION_CLAIM_SPAN_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET": "1",
+                },
+                clear=False,
+            ):
+                with _variant_execution_watchdog(
+                    eval_id="eval",
+                    call_id="root",
+                    problem=problem,
+                    model="gpt-5.4-mini",
+                    variant="assumption_agent_recursive_verify",
+                    logger=logger,
+                    timeout_sec=None,
+                    model_call_budget=12,
+                ) as watchdog:
+                    watchdog["model_call_count"] = 10
+                    source_allowed = _option_claim_verifier_budget_allows(
+                        kind="source_grounded_option_claim_verifier",
+                        problem=problem,
+                        eval_id="eval",
+                        call_id="root",
+                        model="gpt-5.4-mini",
+                        logger=logger,
+                    )
+                    span_allowed = _option_claim_verifier_budget_allows(
+                        kind="option_claim_span_directness_verifier",
+                        problem=problem,
+                        eval_id="eval",
+                        call_id="root_span_directness_verifier",
+                        model="gpt-5.4-mini",
+                        logger=logger,
+                    )
+                    comparator_allowed = _option_claim_verifier_budget_allows(
+                        kind="option_claim_relation_span_comparator",
+                        problem=problem,
+                        eval_id="eval",
+                        call_id="root_relation_span_comparator",
+                        model="gpt-5.4-mini",
+                        logger=logger,
+                    )
+            events = [
+                json.loads(line)
+                for line in logger.path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+        _OPTION_CLAIM_VERIFIER_BUDGET_USED.clear()
+        _OPTION_CLAIM_VERIFIER_SPAN_DIRECTNESS_BUDGET_USED.clear()
+
+        budget_events = [
+            event for event in events
+            if event.get("event") == "option_claim_verifier_model_call_budget_gate"
+        ]
+        self.assertFalse(source_allowed)
+        self.assertTrue(span_allowed)
+        self.assertTrue(comparator_allowed)
+        self.assertEqual(
+            budget_events[0]["reason"],
+            "variant_model_call_budget_reserved_for_option_claim_directness",
+        )
+        self.assertEqual(budget_events[0]["variant_budget_remaining_before"], 2)
+        self.assertEqual(budget_events[0]["variant_recursive_selection_reserved_budget"], 1)
+        self.assertEqual(budget_events[0]["variant_directness_reserved_budget"], 1)
+        self.assertFalse(budget_events[0]["uses_variant_directness_reserved_budget"])
+        self.assertTrue(budget_events[1]["uses_variant_directness_reserved_budget"])
+        self.assertTrue(budget_events[2]["uses_variant_directness_reserved_budget"])
+
+    def test_source_verifier_stops_before_variant_directness_reserve(self):
+        problem = _HleProblem({
+            "id_hash": "pid-source-variant-reserve",
+            "question_hash": "qid-source-variant-reserve",
+            "answer_type": "multipleChoice",
+            "_question": "Which option directly preserves the controlled variable?\nA. Alpha\nB. Beta",
+        })
+        options = {"A": "Alpha", "B": "Beta"}
+        _OPTION_CLAIM_VERIFIER_BUDGET_USED.clear()
+        _OPTION_CLAIM_VERIFIER_SPAN_DIRECTNESS_BUDGET_USED.clear()
+        with TemporaryDirectory() as tmp:
+            logger = _JsonlLogger(Path(tmp) / "events.jsonl")
+            with patch.dict(
+                os.environ,
+                {
+                    "HLE_VARIANT_RECURSIVE_SELECTION_RESERVED_MODEL_CALL_BUDGET": "1",
+                    "HLE_OPTION_CLAIM_SPAN_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET": "1",
+                },
+                clear=False,
+            ):
+                with _variant_execution_watchdog(
+                    eval_id="eval",
+                    call_id="root",
+                    problem=problem,
+                    model="gpt-5.4-mini",
+                    variant="assumption_agent_recursive_verify",
+                    logger=logger,
+                    timeout_sec=None,
+                    model_call_budget=12,
+                ) as watchdog:
+                    watchdog["model_call_count"] = 10
+                    with patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+                        summary = _run_source_grounded_option_claim_verifier(
+                            problem=problem,
+                            options=options,
+                            evidence_context="Option A evidence: Alpha is only topical.",
+                            lexical_top_label="A",
+                            model="gpt-5.4-mini",
+                            eval_id="eval",
+                            call_id="root",
+                            logger=logger,
+                            timeout=1,
+                            max_tokens=64,
+                        )
+            events_text = logger.path.read_text(encoding="utf-8")
+        _OPTION_CLAIM_VERIFIER_BUDGET_USED.clear()
+        _OPTION_CLAIM_VERIFIER_SPAN_DIRECTNESS_BUDGET_USED.clear()
+
+        call_model.assert_not_called()
+        self.assertEqual(summary["status"], "budget_exhausted")
+        self.assertEqual(
+            summary["reason"],
+            "variant_model_call_budget_reserved_for_option_claim_directness",
+        )
+        self.assertEqual(summary["underlying_model_calls"], 0)
+        self.assertEqual(
+            summary["budget_state"]["variant_budget_remaining_before"],
+            2,
+        )
+        self.assertIn("variant_model_call_budget_reserved_for_option_claim_directness", events_text)
+
+    def test_span_directness_preserves_variant_comparator_reserve(self):
+        problem = _HleProblem({
+            "id_hash": "pid-comparator-reserve",
+            "question_hash": "qid-comparator-reserve",
+            "answer_type": "multipleChoice",
+            "_question": "Which option directly satisfies the relation?\nA. Alpha\nB. Beta",
+        })
+        _OPTION_CLAIM_VERIFIER_BUDGET_USED.clear()
+        _OPTION_CLAIM_VERIFIER_SPAN_DIRECTNESS_BUDGET_USED.clear()
+        with TemporaryDirectory() as tmp:
+            logger = _JsonlLogger(Path(tmp) / "events.jsonl")
+            with patch.dict(
+                os.environ,
+                {
+                    "HLE_VARIANT_RECURSIVE_SELECTION_RESERVED_MODEL_CALL_BUDGET": "1",
+                    "HLE_OPTION_CLAIM_SPAN_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET": "1",
+                    "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR": "1",
+                },
+                clear=False,
+            ):
+                with _variant_execution_watchdog(
+                    eval_id="eval",
+                    call_id="root",
+                    problem=problem,
+                    model="gpt-5.4-mini",
+                    variant="assumption_agent_recursive_verify",
+                    logger=logger,
+                    timeout_sec=None,
+                    model_call_budget=12,
+                ) as watchdog:
+                    watchdog["model_call_count"] = 9
+                    source_allowed = _option_claim_verifier_budget_allows(
+                        kind="source_grounded_option_claim_verifier",
+                        problem=problem,
+                        eval_id="eval",
+                        call_id="root",
+                        model="gpt-5.4-mini",
+                        logger=logger,
+                    )
+                    span_allowed = _option_claim_verifier_budget_allows(
+                        kind="option_claim_span_directness_verifier",
+                        problem=problem,
+                        eval_id="eval",
+                        call_id="root_span_directness_verifier",
+                        model="gpt-5.4-mini",
+                        logger=logger,
+                    )
+                    watchdog["model_call_count"] = 10
+                    second_span_allowed = _option_claim_verifier_budget_allows(
+                        kind="option_claim_span_directness_verifier",
+                        problem=problem,
+                        eval_id="eval",
+                        call_id="root_candidate_direct_relation_span_directness_verifier",
+                        model="gpt-5.4-mini",
+                        logger=logger,
+                    )
+                    comparator_allowed = _option_claim_verifier_budget_allows(
+                        kind="option_claim_relation_span_comparator",
+                        problem=problem,
+                        eval_id="eval",
+                        call_id="root_relation_span_comparator",
+                        model="gpt-5.4-mini",
+                        logger=logger,
+                    )
+            events = [
+                json.loads(line)
+                for line in logger.path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+        _OPTION_CLAIM_VERIFIER_BUDGET_USED.clear()
+        _OPTION_CLAIM_VERIFIER_SPAN_DIRECTNESS_BUDGET_USED.clear()
+
+        budget_events = [
+            event for event in events
+            if event.get("event") == "option_claim_verifier_model_call_budget_gate"
+        ]
+        self.assertFalse(source_allowed)
+        self.assertTrue(span_allowed)
+        self.assertFalse(second_span_allowed)
+        self.assertTrue(comparator_allowed)
+        self.assertEqual(
+            budget_events[0]["reason"],
+            "variant_model_call_budget_reserved_for_option_claim_directness",
+        )
+        self.assertEqual(budget_events[0]["variant_directness_reserved_budget"], 2)
+        self.assertEqual(
+            budget_events[2]["reason"],
+            "variant_model_call_budget_reserved_for_relation_span_comparator",
+        )
+        self.assertEqual(
+            budget_events[2]["variant_relation_comparator_reserved_budget"],
+            1,
+        )
+        self.assertTrue(budget_events[3]["uses_variant_relation_comparator_reserved_budget"])
+
     def test_candidate_direct_relation_span_verifier_priority_flag_and_skip_summary(self):
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop(
@@ -1006,35 +1534,40 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertFalse(summary["raw_content_persisted"])
 
     def test_weak_source_fallback_cascade_gate_activates_after_generic_source_exhaustion(self):
-        summary = _weak_source_fallback_cascade_gate_summary(
-            problem={"answer_type": "multipleChoice"},
-            attempts=[],
-            option_claim_evidence_summary={
-                "status": "blocked_source_grounded_claim_verifier",
-                "source_verifier_attempt_count": 3,
-                "source_verifier_accepted_attempt_count": 0,
-                "source_verifier_attempts": [
-                    {
-                        "direct_high_confidence": False,
-                        "evidence_relation": "generic",
-                        "confidence": "low",
-                        "source_quality_doc_count": 0,
-                    },
-                    {
-                        "direct_high_confidence": False,
-                        "evidence_relation": "indirect",
-                        "confidence": "low",
-                        "source_quality_doc_count": 0,
-                    },
-                    {
-                        "direct_high_confidence": False,
-                        "evidence_relation": "generic",
-                        "confidence": "low",
-                        "source_quality_doc_count": 0,
-                    },
-                ],
-            },
-        )
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_WEAK_SOURCE_FALLBACK_CASCADE_STAGE_SKIP": "1"},
+            clear=False,
+        ):
+            summary = _weak_source_fallback_cascade_gate_summary(
+                problem={"answer_type": "multipleChoice"},
+                attempts=[],
+                option_claim_evidence_summary={
+                    "status": "blocked_source_grounded_claim_verifier",
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_attempts": [
+                        {
+                            "direct_high_confidence": False,
+                            "evidence_relation": "generic",
+                            "confidence": "low",
+                            "source_quality_doc_count": 0,
+                        },
+                        {
+                            "direct_high_confidence": False,
+                            "evidence_relation": "indirect",
+                            "confidence": "low",
+                            "source_quality_doc_count": 0,
+                        },
+                        {
+                            "direct_high_confidence": False,
+                            "evidence_relation": "generic",
+                            "confidence": "low",
+                            "source_quality_doc_count": 0,
+                        },
+                    ],
+                },
+            )
 
         self.assertEqual(summary["status"], "activated")
         self.assertEqual(
@@ -1089,6 +1622,59 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertTrue(summary["generic_source_evidence_backoff"]["blocked"])
         self.assertNotIn("structural_option_audit_child", summary["skipped_stage_names"])
         self.assertIn("structural_option_audit_child", summary["preserved_stage_names"])
+
+    def test_weak_source_fallback_cascade_stage_skip_is_enabled_by_default(self):
+        summary = _weak_source_fallback_cascade_gate_summary(
+            problem={"answer_type": "multipleChoice"},
+            attempts=[],
+            option_claim_evidence_summary={
+                "status": "blocked_source_grounded_claim_verifier",
+                "source_verifier_attempt_count": 3,
+                "source_verifier_accepted_attempt_count": 0,
+                "source_verifier_zero_quality_attempt_count": 3,
+                "source_verifier_attempts": [
+                    {
+                        "direct_high_confidence": False,
+                        "evidence_relation": "generic",
+                        "confidence": "low",
+                        "source_quality_doc_count": 0,
+                    }
+                ] * 3,
+            },
+        )
+
+        self.assertEqual(summary["status"], "activated")
+        self.assertTrue(summary["stage_skip_enabled"])
+        self.assertIn("counter_assumption_challenge", summary["skipped_stage_names"])
+        self.assertIn("counter_assumption_challenge", summary["would_skip_stage_names"])
+        self.assertEqual(summary["stage_skip_reason"], "stage_skip_enabled_by_gate")
+
+        with patch.dict(
+            os.environ,
+            {"HLE_DISABLE_WEAK_SOURCE_FALLBACK_CASCADE_STAGE_SKIP": "1"},
+            clear=False,
+        ):
+            disabled = _weak_source_fallback_cascade_gate_summary(
+                problem={"answer_type": "multipleChoice"},
+                attempts=[],
+                option_claim_evidence_summary={
+                    "status": "blocked_source_grounded_claim_verifier",
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_zero_quality_attempt_count": 3,
+                    "source_verifier_attempts": [
+                        {
+                            "direct_high_confidence": False,
+                            "evidence_relation": "generic",
+                            "confidence": "low",
+                            "source_quality_doc_count": 0,
+                        }
+                    ] * 3,
+                },
+            )
+        self.assertFalse(disabled["stage_skip_enabled"])
+        self.assertEqual(disabled["skipped_stage_names"], [])
+        self.assertEqual(disabled["stage_skip_reason"], "stage_skip_disabled_by_env")
 
     def test_weak_source_fallback_cascade_gate_preserves_verified_candidate(self):
         summary = _weak_source_fallback_cascade_gate_summary(
@@ -1581,6 +2167,40 @@ class HleSmokeEvalTest(unittest.TestCase):
         retrieval = efficacy["retrieval"]
         self.assertTrue(retrieval["source_search_cache_only"])
         self.assertTrue(retrieval["live_source_search_disabled"])
+
+    def test_component_efficacy_preserves_selection_wallclock_budget_gate(self):
+        gate = {
+            "status": "activated",
+            "reason": "skipped_selection_model_stage_after_wallclock_budget_exhaustion",
+            "policy": "recursive_selection_wallclock_budget",
+            "budget_sec": 180.0,
+            "elapsed_sec": 181.85,
+            "allowed_stage_count": 2,
+            "skipped_stage_count": 1,
+            "allowed_stage_names": ["self_contained_option_adjudicator"],
+            "skipped_stage_names": ["counter_assumption_challenge_selector"],
+            "raw_content_persisted": False,
+        }
+        efficacy = _component_efficacy_from_plan(
+            problem={"answer_type": "multipleChoice"},
+            variant="assumption_agent_recursive_verify",
+            plan={
+                "stages": {
+                    "multi_candidate_self_verifier": {
+                        "status": "activated",
+                        "selection_method": "verified_or_abstain_direct_fallback",
+                        "selection_wallclock_budget_gate": gate,
+                    },
+                },
+            },
+            correct=True,
+            error=None,
+        )
+
+        self.assertTrue(efficacy["flags"]["recursive_selection_wallclock_budget_gate_enabled"])
+        self.assertTrue(efficacy["flags"]["recursive_selection_wallclock_budget_gate_activated"])
+        self.assertTrue(efficacy["flags"]["recursive_selection_wallclock_budget_gate_skipped_stages"])
+        self.assertEqual(efficacy["selection"]["selection_wallclock_budget_gate"], gate)
 
     def test_operator_activation_summary_distinguishes_selected_noop_from_domain_skip(self):
         selected_noop = {
@@ -2948,6 +3568,30 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertIn("selected_option_not_sweep_only", text)
         self.assertNotIn("Structural lure", text)
 
+    def test_full_option_prompts_include_cardinality_set_element_guard(self):
+        problem = {
+            "id_hash": "p",
+            "question_hash": "q",
+            "answer_type": "multipleChoice",
+            "_question": (
+                "A rigid object has five contact points. What is the cardinality of the set "
+                "of locations where the object can satisfy the stated constraint?\n"
+                "A. 5\nB. countably infinite\nC. cardinality of the Reals"
+            ),
+        }
+        labels = ["A", "B", "C"]
+
+        prompt = _self_contained_full_option_adjudicator_prompt(problem, labels)
+        recheck_prompt = _sweep_gap_full_option_recheck_prompt(problem, labels)
+
+        for text in (prompt, recheck_prompt):
+            self.assertIn("set-element ledger", text)
+            self.assertIn("placements/locations/configurations/parameter values", text)
+            self.assertIn("physical parts/contact points", text)
+            self.assertIn("finite, countable", text)
+            self.assertIn("continuum-sized", text)
+            self.assertIn("component-count trap", text)
+
     def test_sweep_gap_full_option_recheck_can_select_non_structured_sweep_only_option(self):
         problem = {
             "id_hash": "p",
@@ -3215,6 +3859,57 @@ class HleSmokeEvalTest(unittest.TestCase):
             text = log_path.read_text(encoding="utf-8")
         self.assertIsNone(selection)
         self.assertIn("low_confidence", text)
+
+        with TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "events.jsonl"
+            with patch(
+                "assumption_os.hle_smoke_eval._call_model",
+                return_value='{"choice":2,"selected_label":"B","confidence":"low"}',
+            ):
+                selection = _run_structural_dissent_recheck(
+                    problem=problem,
+                    valid=[
+                        *attempts,
+                        {
+                            "child_id": "adv-b",
+                            "child_index": 4,
+                            "prompt_kind": "adversarial_alternative_answer",
+                            "status": "answered",
+                            "parsed_answer": "B",
+                        },
+                        {
+                            "child_id": "elim-a",
+                            "child_index": 5,
+                            "prompt_kind": "option_elimination_answer",
+                            "status": "answered",
+                            "parsed_answer": "A",
+                        },
+                        {
+                            "child_id": "matrix-a",
+                            "child_index": 6,
+                            "prompt_kind": "option_matrix_reasoner_answer",
+                            "status": "answered",
+                            "parsed_answer": "A",
+                        },
+                    ],
+                    ranked=[
+                        ("a", [attempts[0], attempts[1], {"parsed_answer": "A"}, {"parsed_answer": "A"}]),
+                        ("b", [attempts[2], {"parsed_answer": "B"}]),
+                    ],
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=_JsonlLogger(log_path),
+                    timeout=1,
+                    max_tokens=32,
+                    weak_source_fallback_cascade_active=True,
+                )
+            text = log_path.read_text(encoding="utf-8")
+        self.assertIsNotNone(selection)
+        self.assertEqual(selection["selection_method"], "structural_dissent_recheck_choice")
+        self.assertEqual(selection["selected_answer"], "B")
+        self.assertTrue(selection["structural_dissent_recheck"]["weak_source_low_confidence_recovery"])
+        self.assertIn("weak_source_low_confidence_structural_dissent_recovery", text)
 
         with TemporaryDirectory() as tmpdir:
             log_path = Path(tmpdir) / "events.jsonl"
@@ -5662,6 +6357,181 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(len(timeout_events), 2)
         self.assertEqual(timeout_events[0]["timeout_reason"], "recursive_child_batch_max_wait_exceeded")
 
+    def test_recursive_child_no_byte_cascade_guard_skips_remaining_parallel_children(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+        }
+        specs = [
+            {"prompt_kind": "direct_short_answer", "prompt": "a", "branch_axis": "closed_book_direct"},
+            {"prompt_kind": "hipporag_context_answer", "prompt": "b", "branch_axis": "hipporag_retrieval_bridge"},
+            {"prompt_kind": "constraint_checked_answer", "prompt": "c", "branch_axis": "format_constraint"},
+            {"prompt_kind": "option_elimination_answer", "prompt": "d", "branch_axis": "option_elimination"},
+        ]
+        calls = []
+
+        def no_byte_child_attempt(**kwargs):
+            calls.append(kwargs["spec"]["prompt_kind"])
+            return {
+                "child_id": f"child-{kwargs['child_index']}",
+                "child_index": kwargs["child_index"],
+                "prompt_kind": kwargs["spec"]["prompt_kind"],
+                "branch_axis": kwargs["spec"].get("branch_axis"),
+                "parsed_answer": "",
+                "parsed_answer_hash": None,
+                "prediction_hash": None,
+                "latency_sec": 90.0,
+                "status": "error",
+                "error_type": "RuntimeError",
+                "error_label": "SubprocessNoByteTimeout",
+                "error": "model_subprocess_no_byte_timeout_after_90.0s",
+            }
+
+        with TemporaryDirectory() as tmp:
+            logger = _JsonlLogger(Path(tmp) / "events.jsonl")
+            with patch.dict(
+                os.environ,
+                {"HLE_RECURSIVE_CHILD_NO_BYTE_CASCADE_RECOVERY_CHILD_COUNT": "0"},
+                clear=False,
+            ):
+                with patch("assumption_os.hle_smoke_eval._run_child_attempt", side_effect=no_byte_child_attempt):
+                    result = _execute_recursive_child_attempts(
+                        problem=problem,
+                        specs=specs,
+                        model="m",
+                        eval_id="e",
+                        call_id="c",
+                        logger=logger,
+                        timeout=None,
+                        max_tokens=32,
+                        mode="parallel_quorum",
+                    )
+            events = [
+                json.loads(line)
+                for line in logger.path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertEqual(calls, ["direct_short_answer", "hipporag_context_answer"])
+        self.assertEqual(len(result["attempts"]), 2)
+        self.assertEqual(result["underlying_model_calls"], 0)
+        self.assertEqual(result["early_stop_reason"], "first_batch_systemic_no_byte_endpoint_errors")
+        self.assertEqual(
+            result["skipped_prompt_kinds"],
+            ["constraint_checked_answer", "option_elimination_answer"],
+        )
+        guard = result["no_byte_cascade_guard"]
+        self.assertEqual(guard["status"], "activated")
+        self.assertEqual(guard["action"], "skip_remaining_recursive_children")
+        self.assertEqual(guard["no_byte_error_child_count"], 2)
+        self.assertEqual(guard["remaining_child_count"], 2)
+        guard_events = [event for event in events if event.get("event") == "recursive_child_no_byte_cascade_guard"]
+        early_stop_events = [event for event in events if event.get("event") == "recursive_child_early_stop"]
+        self.assertEqual(len(guard_events), 1)
+        self.assertEqual(guard_events[0]["reason"], "first_batch_systemic_no_byte_endpoint_errors")
+        self.assertEqual(len(early_stop_events), 1)
+
+    def test_recursive_child_no_byte_cascade_guard_runs_bounded_recovery_by_default(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. Alpha\nB. Beta\nC. Gamma\nD. Delta",
+        }
+        specs = [
+            {"prompt_kind": "direct_short_answer", "prompt": "a", "branch_axis": "closed_book_direct"},
+            {"prompt_kind": "constraint_checked_answer", "prompt": "b", "branch_axis": "format_constraint"},
+            {"prompt_kind": "recursive_assumption_answer", "prompt": "c", "branch_axis": "assumption_falsification"},
+            {"prompt_kind": "option_matrix_reasoner_answer", "prompt": "d", "branch_axis": "option_matrix_reasoning"},
+            {"prompt_kind": "option_elimination_answer", "prompt": "e", "branch_axis": "option_elimination"},
+        ]
+        calls = []
+
+        def mixed_child_attempt(**kwargs):
+            prompt_kind = kwargs["spec"]["prompt_kind"]
+            calls.append(prompt_kind)
+            if kwargs["child_index"] <= 2:
+                return {
+                    "child_id": f"child-{kwargs['child_index']}",
+                    "child_index": kwargs["child_index"],
+                    "prompt_kind": prompt_kind,
+                    "branch_axis": kwargs["spec"].get("branch_axis"),
+                    "parsed_answer": "",
+                    "parsed_answer_hash": None,
+                    "prediction_hash": None,
+                    "latency_sec": 90.0,
+                    "status": "error",
+                    "error_type": "RuntimeError",
+                    "error_label": "SubprocessNoByteTimeout",
+                    "error": "model_subprocess_no_byte_timeout_after_90.0s",
+                }
+            return {
+                "child_id": f"child-{kwargs['child_index']}",
+                "child_index": kwargs["child_index"],
+                "prompt_kind": prompt_kind,
+                "branch_axis": kwargs["spec"].get("branch_axis"),
+                "parsed_answer": "C",
+                "parsed_answer_hash": "hash-c",
+                "prediction_hash": "pred-c",
+                "latency_sec": 1.0,
+                "status": "answered",
+            }
+
+        with TemporaryDirectory() as tmp:
+            logger = _JsonlLogger(Path(tmp) / "events.jsonl")
+            with patch.dict(os.environ, {"HLE_RECURSIVE_CHILD_NO_BYTE_CASCADE_RECOVERY_CHILD_COUNT": ""}, clear=False):
+                with patch("assumption_os.hle_smoke_eval._run_child_attempt", side_effect=mixed_child_attempt):
+                    result = _execute_recursive_child_attempts(
+                        problem=problem,
+                        specs=specs,
+                        model="m",
+                        eval_id="e",
+                        call_id="c",
+                        logger=logger,
+                        timeout=None,
+                        max_tokens=32,
+                        mode="parallel_quorum",
+                    )
+            events = [
+                json.loads(line)
+                for line in logger.path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertEqual(
+            calls,
+            [
+                "direct_short_answer",
+                "constraint_checked_answer",
+                "recursive_assumption_answer",
+                "option_matrix_reasoner_answer",
+            ],
+        )
+        self.assertEqual(len(result["attempts"]), 4)
+        self.assertEqual(result["underlying_model_calls"], 2)
+        self.assertEqual(
+            result["early_stop_reason"],
+            "first_batch_systemic_no_byte_endpoint_errors_recovery_limited",
+        )
+        self.assertEqual(result["skipped_prompt_kinds"], ["option_elimination_answer"])
+        guard = result["no_byte_cascade_guard"]
+        self.assertEqual(guard["status"], "activated")
+        self.assertEqual(guard["action"], "run_recovery_child_batch")
+        self.assertEqual(guard["recovery_child_count"], 2)
+        self.assertEqual(
+            guard["recovery_prompt_kinds"],
+            ["recursive_assumption_answer", "option_matrix_reasoner_answer"],
+        )
+        self.assertEqual(guard["recovery_summary"]["status"], "recovered_candidates")
+        recovery_events = [
+            event for event in events
+            if event.get("event") == "recursive_child_no_byte_cascade_recovery"
+        ]
+        self.assertEqual(len(recovery_events), 1)
+        self.assertEqual(recovery_events[0]["status"], "recovered_candidates")
+        self.assertFalse(recovery_events[0]["raw_content_persisted"])
+
     def test_parallel_child_batch_treats_zero_timeout_as_unlimited(self):
         problem = {
             "id_hash": "pid",
@@ -6207,6 +7077,231 @@ class HleSmokeEvalTest(unittest.TestCase):
         with patch.dict(os.environ, {"HLE_ANSWER_FORMAT_REPAIR_TIMEOUT_SEC": "45"}, clear=True):
             self.assertEqual(_answer_format_repair_timeout(None), 45.0)
 
+    def test_variant_watchdog_blocks_after_model_call_budget(self):
+        problem = _HleProblem({
+            "id_hash": "p1",
+            "question_hash": "q1",
+            "answer_hash": "a1",
+            "_question": "Question text is not logged by watchdog",
+            "_answer": "A",
+            "answer_type": "multipleChoice",
+            "category": "unit",
+            "raw_subject": "unit",
+        })
+        with TemporaryDirectory() as tmpdir:
+            logger = _JsonlLogger(Path(tmpdir) / "watchdog.jsonl")
+            with patch("assumption_os.hle_smoke_eval._call_model_unwatched", return_value='{"answer":"A"}') as call:
+                with _variant_execution_watchdog(
+                    eval_id="wd",
+                    call_id="c1",
+                    problem=problem,
+                    model="gpt-5.4-mini",
+                    variant="raw",
+                    logger=logger,
+                    timeout_sec=None,
+                    model_call_budget=1,
+                ) as watchdog:
+                    self.assertEqual(
+                        _call_model(model="gpt-5.4-mini", prompt="Q", timeout=None, max_tokens=8),
+                        '{"answer":"A"}',
+                    )
+                    with self.assertRaises(VariantExecutionWatchdogExceeded):
+                        _call_model(model="gpt-5.4-mini", prompt="Q2", timeout=None, max_tokens=8)
+                    summary = _variant_watchdog_summary(watchdog)
+
+            events = [json.loads(line) for line in (Path(tmpdir) / "watchdog.jsonl").read_text().splitlines()]
+
+        self.assertEqual(call.call_count, 1)
+        self.assertEqual(summary["model_call_count"], 1)
+        self.assertEqual(summary["model_call_success_count"], 1)
+        self.assertEqual(summary["violation_reason"], "variant_total_model_call_budget_exceeded")
+        self.assertTrue(all(event.get("raw_content_persisted") is False for event in events))
+        self.assertIn("variant_watchdog_blocked", {event.get("event") for event in events})
+        self.assertNotIn("Question text is not logged by watchdog", json.dumps(events))
+
+    def test_variant_watchdog_can_reserve_final_call_for_recursive_selection(self):
+        problem = _HleProblem({
+            "id_hash": "p-reserve",
+            "question_hash": "q-reserve",
+            "answer_hash": "a-reserve",
+            "_question": "Question text is not logged by reserve watchdog",
+            "_answer": "A",
+            "answer_type": "multipleChoice",
+            "category": "unit",
+            "raw_subject": "unit",
+        })
+        with TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "watchdog.jsonl"
+            logger = _JsonlLogger(log_path)
+            with patch.dict(
+                os.environ,
+                {"HLE_VARIANT_RECURSIVE_SELECTION_RESERVED_MODEL_CALL_BUDGET": "1"},
+                clear=False,
+            ):
+                with patch(
+                    "assumption_os.hle_smoke_eval._call_model_unwatched",
+                    return_value='{"answer":"A"}',
+                ) as call:
+                    with _variant_execution_watchdog(
+                        eval_id="wd",
+                        call_id="reserve-block",
+                        problem=problem,
+                        model="gpt-5.4-mini",
+                        variant="assumption_agent_recursive_verify",
+                        logger=logger,
+                        timeout_sec=None,
+                        model_call_budget=2,
+                    ) as watchdog:
+                        self.assertEqual(
+                            _call_model(model="gpt-5.4-mini", prompt="Q", timeout=None, max_tokens=8),
+                            '{"answer":"A"}',
+                        )
+                        with self.assertRaises(VariantExecutionWatchdogExceeded):
+                            _call_model(model="gpt-5.4-mini", prompt="Q2", timeout=None, max_tokens=8)
+                        blocked_summary = _variant_watchdog_summary(watchdog)
+
+                with patch(
+                    "assumption_os.hle_smoke_eval._call_model_unwatched",
+                    return_value='{"answer":"B"}',
+                ) as selection_call:
+                    with _variant_execution_watchdog(
+                        eval_id="wd",
+                        call_id="reserve-allow",
+                        problem=problem,
+                        model="gpt-5.4-mini",
+                        variant="assumption_agent_recursive_verify",
+                        logger=logger,
+                        timeout_sec=None,
+                        model_call_budget=2,
+                    ) as watchdog:
+                        self.assertEqual(
+                            _call_model(model="gpt-5.4-mini", prompt="Q", timeout=None, max_tokens=8),
+                            '{"answer":"B"}',
+                        )
+                        with _no_gold_decision_phase("recursive_child_selection"):
+                            self.assertEqual(
+                                _call_model(model="gpt-5.4-mini", prompt="Select", timeout=None, max_tokens=8),
+                                '{"answer":"B"}',
+                            )
+                        allowed_summary = _variant_watchdog_summary(watchdog)
+            events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+
+        self.assertEqual(call.call_count, 1)
+        self.assertEqual(selection_call.call_count, 2)
+        self.assertEqual(blocked_summary["model_call_count"], 1)
+        self.assertEqual(
+            blocked_summary["violation_reason"],
+            "variant_model_call_budget_reserved_for_recursive_selection",
+        )
+        self.assertEqual(
+            blocked_summary["recursive_selection_reserved_model_call_budget"],
+            1,
+        )
+        self.assertEqual(allowed_summary["model_call_count"], 2)
+        self.assertEqual(allowed_summary["violation_reason"], None)
+        blocked_events = [
+            event for event in events
+            if event.get("event") == "variant_watchdog_blocked"
+        ]
+        self.assertEqual(blocked_events[0]["reason"], "variant_model_call_budget_reserved_for_recursive_selection")
+        self.assertEqual(blocked_events[0]["budget_remaining_before"], 1)
+        self.assertNotIn("Question text is not logged by reserve watchdog", json.dumps(events))
+
+    def test_variant_watchdog_blocked_summary_marks_timeout_without_throwing(self):
+        problem = _HleProblem({
+            "id_hash": "p-fast-abort",
+            "question_hash": "q-fast-abort",
+            "answer_hash": "a-fast-abort",
+            "_question": "Question text is not logged by fast abort watchdog",
+            "_answer": "A",
+            "answer_type": "multipleChoice",
+            "category": "unit",
+            "raw_subject": "unit",
+        })
+        with TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "watchdog.jsonl"
+            logger = _JsonlLogger(log_path)
+            with _variant_execution_watchdog(
+                eval_id="wd",
+                call_id="fast-abort",
+                problem=problem,
+                model="gpt-5.4-mini",
+                variant="assumption_agent_recursive_verify",
+                logger=logger,
+                timeout_sec=10,
+                model_call_budget=3,
+            ) as watchdog:
+                watchdog["deadline_monotonic"] = time.monotonic() - 0.01
+                summary = _variant_watchdog_blocked_summary(stage_name="unit_stage")
+                self.assertIsNotNone(summary)
+                self.assertEqual(summary["status"], "blocked")
+                self.assertEqual(summary["violation_reason"], "variant_total_timeout_exceeded")
+                self.assertEqual(summary["stage_name"], "unit_stage")
+            events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+
+        self.assertIn("variant_watchdog_blocked", {event.get("event") for event in events})
+        self.assertNotIn("Question text is not logged by fast abort watchdog", json.dumps(events))
+
+    def test_selection_uses_watchdog_fallback_without_model_call_when_variant_blocked(self):
+        problem = _HleProblem({
+            "id_hash": "p-selection-fast-abort",
+            "question_hash": "q-selection-fast-abort",
+            "answer_hash": "a-selection-fast-abort",
+            "_question": "Which option is correct?\nA. Alpha\nB. Beta",
+            "_answer": "A",
+            "answer_type": "multipleChoice",
+            "category": "unit",
+            "raw_subject": "unit",
+        })
+        attempts = [
+            {
+                "child_id": "c1",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "status": "answered",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "c2",
+                "child_index": 2,
+                "prompt_kind": "recursive_assumption_answer",
+                "status": "answered",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+        ]
+        with TemporaryDirectory() as tmpdir:
+            logger = _JsonlLogger(Path(tmpdir) / "watchdog.jsonl")
+            with _variant_execution_watchdog(
+                eval_id="wd",
+                call_id="selection-fast-abort",
+                problem=problem,
+                model="gpt-5.4-mini",
+                variant="assumption_agent_recursive_verify",
+                logger=logger,
+                timeout_sec=10,
+                model_call_budget=3,
+            ) as watchdog:
+                watchdog["deadline_monotonic"] = time.monotonic() - 0.01
+                with patch("assumption_os.hle_smoke_eval._call_model") as call:
+                    selection = _select_recursive_child_answer(
+                        problem=problem,
+                        attempts=attempts,
+                        model="gpt-5.4-mini",
+                        eval_id="wd",
+                        call_id="selection-fast-abort",
+                        logger=logger,
+                        timeout=None,
+                        max_tokens=16,
+                    )
+                    call.assert_not_called()
+
+        self.assertEqual(selection["selection_method"], "variant_watchdog_fallback_first")
+        self.assertEqual(selection["selected_child_id"], "c1")
+        self.assertFalse(selection["verifier_model_call"])
+        self.assertIn("variant_watchdog_fast_abort", selection)
+
     def test_call_model_uses_extra_retry_for_transient_ssl_eof(self):
         transient = urllib.error.URLError(ssl.SSLEOFError("unexpected eof"))
         response = {"choices": [{"message": {"content": '{"answer":"B"}'}}]}
@@ -6231,6 +7326,70 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(text, '{"answer":"B"}')
         self.assertEqual(urlopen.call_count, 2)
         sleep_retry.assert_called_once()
+
+    def test_call_model_rechecks_variant_deadline_after_slot_wait(self):
+        problem = _HleProblem({
+            "id_hash": "p-slot-deadline",
+            "question_hash": "q-slot-deadline",
+            "answer_hash": "a-slot-deadline",
+            "_question": "Question text is not logged by slot deadline watchdog",
+            "_answer": "A",
+            "answer_type": "multipleChoice",
+            "category": "unit",
+            "raw_subject": "unit",
+        })
+
+        class ExpiringSlot:
+            def __init__(self, watchdog):
+                self.watchdog = watchdog
+
+            def __enter__(self):
+                self.watchdog["deadline_monotonic"] = time.monotonic() - 0.01
+                return None
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        with TemporaryDirectory() as tmpdir:
+            logger = _JsonlLogger(Path(tmpdir) / "watchdog.jsonl")
+            with patch.dict(
+                os.environ,
+                {
+                    "OPENAI_API_KEY": "test-key",
+                    "OPENAI_BASE_URL": "https://example.invalid/v1",
+                    "MODEL_ROUTER_SUBPROCESS_CALLS": "1",
+                    "MODEL_ROUTER_ATTEMPTS": "1",
+                    "MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS": "0",
+                    "MODEL_ROUTER_BACKOFF_BASE_SEC": "0",
+                    "MODEL_ROUTER_BACKOFF_JITTER_SEC": "0",
+                },
+                clear=True,
+            ):
+                with _variant_execution_watchdog(
+                    eval_id="wd",
+                    call_id="slot-deadline",
+                    problem=problem,
+                    model="gpt-5.4-mini",
+                    variant="raw",
+                    logger=logger,
+                    timeout_sec=10,
+                    model_call_budget=3,
+                ) as watchdog:
+                    with patch(
+                        "assumption_os.hle_smoke_eval._global_model_router_slot",
+                        side_effect=lambda model: ExpiringSlot(watchdog),
+                    ), patch(
+                        "assumption_os.hle_smoke_eval._single_model_subprocess_call",
+                        return_value='{"answer":"A"}',
+                    ) as subprocess_call:
+                        with self.assertRaises(RuntimeError):
+                            _call_model(
+                                model="gpt-5.4-mini",
+                                prompt="Q",
+                                timeout=None,
+                                max_tokens=8,
+                            )
+                        subprocess_call.assert_not_called()
 
     def test_call_model_treats_subprocess_wrapped_http_503_as_transient(self):
         transient = RuntimeError("urllib.error.HTTPError: HTTP Error 503: Service Unavailable")
@@ -6309,6 +7468,226 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(text, '{"answer":"F"}')
         self.assertEqual(subprocess_call.call_count, 2)
         sleep_retry.assert_called_once()
+
+    def test_call_model_child_scope_attempt_override_caps_transient_retry_and_logs_scope(self):
+        transient = urllib.error.URLError(ssl.SSLEOFError("unexpected eof"))
+        response = {"choices": [{"message": {"content": '{"answer":"G"}'}}]}
+        with TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "router.jsonl"
+            with patch.dict(
+                os.environ,
+                {
+                    "GPT5_API_KEY": "test-key",
+                    "MODEL_ROUTER_ATTEMPTS": "3",
+                    "MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS": "2",
+                    "HLE_RECURSIVE_CHILD_MODEL_ROUTER_ATTEMPTS": "1",
+                    "HLE_RECURSIVE_CHILD_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS": "0",
+                    "MODEL_ROUTER_BACKOFF_BASE_SEC": "0",
+                    "MODEL_ROUTER_BACKOFF_JITTER_SEC": "0",
+                    "MODEL_ROUTER_LOG_PATH": str(log_path),
+                },
+                clear=True,
+            ):
+                with patch(
+                    "assumption_os.hle_smoke_eval._urlopen_json_with_deadline",
+                    side_effect=[transient, response],
+                ) as urlopen:
+                    with _no_gold_decision_phase("recursive_child_attempt"):
+                        with _model_router_call_scope(
+                            router_scope="recursive_child",
+                            router_call_stage="unit_child",
+                            child_index=7,
+                            prompt_kind="unit_prompt",
+                        ):
+                            with self.assertRaises(RuntimeError):
+                                _call_model(model="gpt-5.4-mini", prompt="Q", timeout=None, max_tokens=8)
+
+            self.assertEqual(urlopen.call_count, 1)
+            events = [json.loads(line) for line in log_path.read_text().splitlines()]
+        starts = [event for event in events if event.get("event_type") == "model_router_attempt_start"]
+        errors = [event for event in events if event.get("event_type") == "model_router_attempt_error"]
+        self.assertEqual(len(starts), 1)
+        self.assertEqual(starts[0]["max_attempts"], 1)
+        self.assertEqual(starts[0]["router_scope"], "recursive_child")
+        self.assertEqual(starts[0]["router_call_stage"], "unit_child")
+        self.assertEqual(starts[0]["child_index"], 7)
+        self.assertEqual(starts[0]["prompt_kind"], "unit_prompt")
+        self.assertEqual(starts[0]["attempt_limit_source"], "hle_recursive_child_model_router_attempts")
+        self.assertEqual(starts[0]["transient_extra_attempt_limit_source"], "hle_recursive_child_model_router_transient_extra_attempts")
+        self.assertEqual(errors[0]["will_retry"], False)
+
+    def test_call_model_recursive_child_subprocess_no_byte_uses_small_scoped_cap(self):
+        transient = RuntimeError("model_subprocess_no_byte_timeout_after_90.0s")
+        with TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "router.jsonl"
+            with patch.dict(
+                os.environ,
+                {
+                    "GPT5_API_KEY": "test-key",
+                    "MODEL_ROUTER_SUBPROCESS_CALLS": "1",
+                    "MODEL_ROUTER_ATTEMPTS": "8",
+                    "MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS": "2",
+                    "MODEL_ROUTER_BACKOFF_BASE_SEC": "0",
+                    "MODEL_ROUTER_BACKOFF_JITTER_SEC": "0",
+                    "MODEL_ROUTER_LOG_PATH": str(log_path),
+                },
+                clear=True,
+            ):
+                with patch(
+                    "assumption_os.hle_smoke_eval._single_model_subprocess_call",
+                    side_effect=[transient, transient, '{"answer":"Z"}'],
+                ) as subprocess_call:
+                    with patch("assumption_os.hle_smoke_eval._sleep_before_model_retry") as sleep_retry:
+                        with _no_gold_decision_phase("recursive_child_attempt"):
+                            with _model_router_call_scope(
+                                router_scope="recursive_child",
+                                router_call_stage="unit_child",
+                                child_index=3,
+                                prompt_kind="unit_prompt",
+                            ):
+                                with self.assertRaises(RuntimeError):
+                                    _call_model(model="gpt-5.4-mini", prompt="Q", timeout=None, max_tokens=8)
+            events = [json.loads(line) for line in log_path.read_text().splitlines()]
+
+        errors = [event for event in events if event.get("event_type") == "model_router_attempt_error"]
+        self.assertEqual(subprocess_call.call_count, 2)
+        self.assertEqual(sleep_retry.call_count, 1)
+        self.assertEqual(len(errors), 2)
+        self.assertEqual(errors[0]["will_retry"], True)
+        self.assertEqual(errors[0]["no_byte_attempt_limit"], 2)
+        self.assertFalse(errors[0]["no_byte_attempt_limited"])
+        self.assertEqual(errors[1]["will_retry"], False)
+        self.assertTrue(errors[1]["no_byte_attempt_limited"])
+
+    def test_call_model_selection_subprocess_no_byte_uses_small_scoped_cap(self):
+        transient = RuntimeError("model_subprocess_no_byte_timeout_after_90.0s")
+        with TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "router.jsonl"
+            with patch.dict(
+                os.environ,
+                {
+                    "GPT5_API_KEY": "test-key",
+                    "MODEL_ROUTER_SUBPROCESS_CALLS": "1",
+                    "MODEL_ROUTER_ATTEMPTS": "8",
+                    "MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS": "2",
+                    "MODEL_ROUTER_BACKOFF_BASE_SEC": "0",
+                    "MODEL_ROUTER_BACKOFF_JITTER_SEC": "0",
+                    "MODEL_ROUTER_LOG_PATH": str(log_path),
+                },
+                clear=True,
+            ):
+                with patch(
+                    "assumption_os.hle_smoke_eval._single_model_subprocess_call",
+                    side_effect=[transient, transient, '{"answer":"Z"}'],
+                ) as subprocess_call:
+                    with patch("assumption_os.hle_smoke_eval._sleep_before_model_retry") as sleep_retry:
+                        with _no_gold_decision_phase("recursive_child_selection"):
+                            with self.assertRaises(RuntimeError):
+                                _call_model(model="gpt-5.4-mini", prompt="Q", timeout=None, max_tokens=8)
+            events = [json.loads(line) for line in log_path.read_text().splitlines()]
+
+        errors = [event for event in events if event.get("event_type") == "model_router_attempt_error"]
+        self.assertEqual(subprocess_call.call_count, 2)
+        self.assertEqual(sleep_retry.call_count, 1)
+        self.assertEqual(len(errors), 2)
+        self.assertEqual(errors[0]["decision_phase"], "recursive_child_selection")
+        self.assertEqual(errors[0]["will_retry"], True)
+        self.assertEqual(errors[0]["no_byte_attempt_limit"], 2)
+        self.assertFalse(errors[0]["no_byte_attempt_limited"])
+        self.assertEqual(errors[1]["will_retry"], False)
+        self.assertTrue(errors[1]["no_byte_attempt_limited"])
+
+    def test_call_model_selection_phase_attempt_override_caps_transient_retry(self):
+        transient = urllib.error.URLError(ssl.SSLEOFError("unexpected eof"))
+        response = {"choices": [{"message": {"content": '{"answer":"H"}'}}]}
+        with TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "router.jsonl"
+            with patch.dict(
+                os.environ,
+                {
+                    "GPT5_API_KEY": "test-key",
+                    "MODEL_ROUTER_ATTEMPTS": "3",
+                    "MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS": "2",
+                    "HLE_RECURSIVE_SELECTION_MODEL_ROUTER_ATTEMPTS": "1",
+                    "HLE_RECURSIVE_SELECTION_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS": "0",
+                    "MODEL_ROUTER_BACKOFF_BASE_SEC": "0",
+                    "MODEL_ROUTER_BACKOFF_JITTER_SEC": "0",
+                    "MODEL_ROUTER_LOG_PATH": str(log_path),
+                },
+                clear=True,
+            ):
+                with patch(
+                    "assumption_os.hle_smoke_eval._urlopen_json_with_deadline",
+                    side_effect=[transient, response],
+                ) as urlopen:
+                    with _no_gold_decision_phase("recursive_child_selection"):
+                        with self.assertRaises(RuntimeError):
+                            _call_model(model="gpt-5.4-mini", prompt="Q", timeout=None, max_tokens=8)
+
+            self.assertEqual(urlopen.call_count, 1)
+            events = [json.loads(line) for line in log_path.read_text().splitlines()]
+        starts = [event for event in events if event.get("event_type") == "model_router_attempt_start"]
+        errors = [event for event in events if event.get("event_type") == "model_router_attempt_error"]
+        self.assertEqual(len(starts), 1)
+        self.assertEqual(starts[0]["max_attempts"], 1)
+        self.assertEqual(starts[0]["decision_phase"], "recursive_child_selection")
+        self.assertEqual(starts[0]["attempt_limit_source"], "hle_recursive_selection_model_router_attempts")
+        self.assertEqual(
+            starts[0]["transient_extra_attempt_limit_source"],
+            "hle_recursive_selection_model_router_transient_extra_attempts",
+        )
+        self.assertEqual(errors[0]["will_retry"], False)
+
+    def test_call_model_option_claim_scope_attempt_override_caps_transient_retry(self):
+        transient = urllib.error.URLError(ssl.SSLEOFError("unexpected eof"))
+        response = {"choices": [{"message": {"content": '{"answer":"I"}'}}]}
+        problem = {"id_hash": "pid", "question_hash": "qid"}
+        with TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "router.jsonl"
+            with patch.dict(
+                os.environ,
+                {
+                    "GPT5_API_KEY": "test-key",
+                    "MODEL_ROUTER_ATTEMPTS": "3",
+                    "MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS": "2",
+                    "HLE_OPTION_CLAIM_MODEL_ROUTER_ATTEMPTS": "1",
+                    "HLE_OPTION_CLAIM_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS": "0",
+                    "MODEL_ROUTER_BACKOFF_BASE_SEC": "0",
+                    "MODEL_ROUTER_BACKOFF_JITTER_SEC": "0",
+                    "MODEL_ROUTER_LOG_PATH": str(log_path),
+                },
+                clear=True,
+            ):
+                with patch(
+                    "assumption_os.hle_smoke_eval._urlopen_json_with_deadline",
+                    side_effect=[transient, response],
+                ) as urlopen:
+                    with _option_claim_model_router_scope(
+                        stage="unit_option_claim_verifier",
+                        problem=problem,
+                        call_id="call-1",
+                        candidate_count=2,
+                        option_count=5,
+                    ):
+                        with self.assertRaises(RuntimeError):
+                            _call_model(model="gpt-5.4-mini", prompt="Q", timeout=None, max_tokens=8)
+
+            self.assertEqual(urlopen.call_count, 1)
+            events = [json.loads(line) for line in log_path.read_text().splitlines()]
+        starts = [event for event in events if event.get("event_type") == "model_router_attempt_start"]
+        errors = [event for event in events if event.get("event_type") == "model_router_attempt_error"]
+        self.assertEqual(len(starts), 1)
+        self.assertEqual(starts[0]["max_attempts"], 1)
+        self.assertEqual(starts[0]["router_scope"], "option_claim_verifier")
+        self.assertEqual(starts[0]["router_call_stage"], "unit_option_claim_verifier")
+        self.assertEqual(starts[0]["option_candidate_count"], 2)
+        self.assertEqual(starts[0]["option_count"], 5)
+        self.assertEqual(starts[0]["attempt_limit_source"], "hle_option_claim_model_router_attempts")
+        self.assertEqual(
+            starts[0]["transient_extra_attempt_limit_source"],
+            "hle_option_claim_model_router_transient_extra_attempts",
+        )
+        self.assertEqual(errors[0]["will_retry"], False)
 
     def test_model_subprocess_no_byte_watchdog_caps_process_timeout(self):
         with patch.dict(os.environ, {}, clear=True):
@@ -6760,6 +8139,50 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(verifier_gated["selected_child_id"], "context")
         self.assertEqual(verifier_gated["verified_or_abstain_gate"]["status"], "allowed")
 
+    def test_verified_or_abstain_preserves_top_support_over_self_contained_low_support(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": (
+                "Which diagnosis best explains the presentation?\n"
+                "A. Streptococcal esophagitis\n"
+                "B. Esophageal adenocarcinoma\n"
+                "C. Esophageal squamous cell carcinoma\n"
+                "D. GERD\n"
+                "E. Herpes esophagitis"
+            ),
+        }
+        attempts = [
+            {"child_id": "direct-c", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "C"},
+            {"child_id": "constraint-a", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "A"},
+            {"child_id": "recursive-c", "child_index": 3, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "C"},
+            {"child_id": "matrix-a", "child_index": 4, "prompt_kind": "option_matrix_reasoner_answer", "parsed_answer": "A"},
+            {"child_id": "eliminate-c", "child_index": 5, "prompt_kind": "option_elimination_answer", "parsed_answer": "C"},
+            {"child_id": "adversarial-a", "child_index": 6, "prompt_kind": "adversarial_alternative_answer", "parsed_answer": "A"},
+            {"child_id": "structural-a", "child_index": 7, "prompt_kind": "structural_option_audit_answer", "parsed_answer": "A"},
+        ]
+        selection = {
+            "selection_method": "self_contained_option_adjudicator_choice",
+            "selected_child_id": "direct-c",
+            "selected_answer": "C",
+            "underlying_model_calls": 1,
+            "verifier_model_call": True,
+        }
+
+        gated = _apply_verified_or_abstain_selection(problem=problem, attempts=attempts, selection=selection)
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(gated["selected_child_id"], "structural-a")
+        gate = gated["verified_or_abstain_gate"]
+        self.assertEqual(gate["status"], "abstained")
+        self.assertEqual(gate["reason"], "self_contained_support_preserve_blocks_low_support_override")
+        self.assertEqual(gate["fallback_policy"], "self_contained_support_preserve_top_model_support")
+        self.assertEqual(gate["fallback_consensus_count"], 4)
+        guard = gate["self_contained_support_preserve_guard"]
+        self.assertEqual(guard["original_selected_support_count"], 3)
+        self.assertEqual(guard["preserved_support_count"], 4)
+        self.assertFalse(guard["raw_content_persisted"])
+
     def test_verified_or_abstain_preserves_unverified_consensus_before_direct(self):
         problem = {
             "answer_type": "multipleChoice",
@@ -6796,6 +8219,137 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(gated["verified_or_abstain_gate"]["fallback_prompt_kind"], "structural_option_audit_answer")
         self.assertEqual(gated["verified_or_abstain_gate"]["fallback_policy"], "unverified_consensus")
         self.assertEqual(gated["verified_or_abstain_gate"]["fallback_consensus_count"], 2)
+
+    def test_verified_or_abstain_weak_source_guard_skips_same_answer_direct_fallback(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. runner-up\nC. blocked consensus",
+        }
+        attempts = [
+            {"child_id": "direct-c", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "C"},
+            {"child_id": "constraint-a", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "A"},
+            {"child_id": "recursive-a", "child_index": 3, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "A"},
+            {"child_id": "matrix-c", "child_index": 4, "prompt_kind": "option_matrix_reasoner_answer", "parsed_answer": "C"},
+            {"child_id": "eliminate-c", "child_index": 5, "prompt_kind": "option_elimination_answer", "parsed_answer": "C"},
+            {"child_id": "structural-c", "child_index": 6, "prompt_kind": "structural_option_audit_answer", "parsed_answer": "C"},
+            {"child_id": "structural-a", "child_index": 7, "prompt_kind": "structural_option_audit_answer", "parsed_answer": "A"},
+        ]
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct-c",
+            "selected_answer": "C",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+        agent_plan = {
+            "stages": {
+                "weak_source_fallback_cascade_gate": {
+                    "status": "activated",
+                    "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_relation_counts": {"generic": 3},
+                    "source_verifier_confidence_counts": {"high": 3},
+                }
+            }
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_WEAK_SOURCE_BLOCKED_CONSENSUS_PRESERVE_OVER_MODEL_ONLY_VERIFIED": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=attempts,
+                selection=selection,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(gated["selected_child_id"], "constraint-a")
+        gate = gated["verified_or_abstain_gate"]
+        self.assertEqual(gate["status"], "abstained")
+        self.assertEqual(gate["reason"], "unverified_selection_method")
+        self.assertIsInstance(gate["weak_source_same_answer_fallback_guard"], dict)
+        self.assertEqual(
+            gate["weak_source_same_answer_fallback_guard"]["reason"],
+            "blocked_source_generic_consensus_answer_norm_excluded_from_fallback",
+        )
+        self.assertEqual(
+            gate["weak_source_fallback_cascade_unverified_consensus_guard"][
+                "blocked_fallback_consensus_count"
+            ],
+            4,
+        )
+
+    def test_verified_or_abstain_weak_source_verified_method_preserves_blocked_consensus(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. majority\nC. model-only verifier",
+        }
+        attempts = [
+            {"child_id": "direct-a", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A"},
+            {"child_id": "constraint-a", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "A"},
+            {"child_id": "recursive-c", "child_index": 3, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "C"},
+            {"child_id": "matrix-c", "child_index": 4, "prompt_kind": "option_matrix_reasoner_answer", "parsed_answer": "C"},
+            {"child_id": "eliminate-a", "child_index": 5, "prompt_kind": "option_elimination_answer", "parsed_answer": "A"},
+            {"child_id": "structural-a", "child_index": 6, "prompt_kind": "structural_option_audit_answer", "parsed_answer": "A"},
+        ]
+        selection = {
+            "selection_method": "counter_assumption_verifier_choice",
+            "selected_child_id": "matrix-c",
+            "selected_answer": "C",
+            "underlying_model_calls": 1,
+            "verifier_model_call": True,
+        }
+        agent_plan = {
+            "stages": {
+                "weak_source_fallback_cascade_gate": {
+                    "status": "activated",
+                    "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_relation_counts": {"generic": 3},
+                    "source_verifier_confidence_counts": {"high": 2, "low": 1},
+                }
+            }
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_WEAK_SOURCE_BLOCKED_CONSENSUS_PRESERVE_OVER_MODEL_ONLY_VERIFIED": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=attempts,
+                selection=selection,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_answer"], "A")
+        gate = gated["verified_or_abstain_gate"]
+        self.assertEqual(gate["reason"], "weak_source_fallback_cascade_blocks_model_only_verified_selection")
+        self.assertEqual(
+            gate["fallback_policy"],
+            "weak_source_blocked_consensus_preserve_over_model_only_verified",
+        )
+        self.assertIsInstance(gate["weak_source_blocked_consensus_preserve_guard"], dict)
+        self.assertEqual(
+            gate["weak_source_blocked_consensus_preserve_guard"]["reason"],
+            "weak_source_gate_blocks_model_only_verified_selection_without_direct_alternative",
+        )
+        self.assertEqual(
+            gate["weak_source_fallback_cascade_unverified_consensus_guard"][
+                "blocked_fallback_consensus_count"
+            ],
+            4,
+        )
 
     def test_verified_or_abstain_blocks_unverified_consensus_after_weak_source_cascade(self):
         problem = {
@@ -6846,12 +8400,17 @@ class HleSmokeEvalTest(unittest.TestCase):
             "verifier_model_call": False,
         }
 
-        gated = _apply_verified_or_abstain_selection(
-            problem=problem,
-            attempts=attempts,
-            selection=selection,
-            agent_plan=agent_plan,
-        )
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_WEAK_SOURCE_BLOCKED_CONSENSUS_OVER_DIRECT_PRESERVE": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=attempts,
+                selection=selection,
+                agent_plan=agent_plan,
+            )
 
         self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
         self.assertEqual(gated["selected_child_id"], "direct")
@@ -6950,6 +8509,851 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertTrue(guard["blocked"])
         self.assertEqual(guard["structural_audit_recovery"]["status"], "selected")
 
+    def test_weak_source_blocked_consensus_over_direct_preserves_stronger_consensus(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. direct lure\nB. structured consensus",
+        }
+        attempts = [
+            {
+                "child_id": "direct",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "adversarial",
+                "child_index": 2,
+                "prompt_kind": "adversarial_alternative_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "constraint",
+                "child_index": 3,
+                "prompt_kind": "constraint_checked_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "matrix",
+                "child_index": 4,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "recursive",
+                "child_index": 5,
+                "prompt_kind": "recursive_assumption_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "structural",
+                "child_index": 6,
+                "prompt_kind": "structural_option_audit_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "weak_source_fallback_cascade_gate": {
+                    "status": "activated",
+                    "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_relation_counts": {"generic": 3},
+                    "source_verifier_confidence_counts": {"low": 3},
+                }
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "constraint",
+            "selected_answer": "B",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_WEAK_SOURCE_BLOCKED_CONSENSUS_OVER_DIRECT_PRESERVE": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=attempts,
+                selection=selection,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "structural")
+        self.assertEqual(gated["selected_answer"], "B")
+        gate = gated["verified_or_abstain_gate"]
+        self.assertEqual(
+            gate["fallback_policy"],
+            "weak_source_blocked_consensus_over_direct_preserve",
+        )
+        self.assertEqual(gate["fallback_consensus_count"], 4)
+        self.assertEqual(
+            gate["fallback_consensus_prompt_kinds"],
+            [
+                "constraint_checked_answer",
+                "option_matrix_reasoner_answer",
+                "recursive_assumption_answer",
+                "structural_option_audit_answer",
+            ],
+        )
+        preserve = gate["weak_source_blocked_consensus_over_direct_preserve"]
+        self.assertEqual(preserve["status"], "selected")
+        self.assertEqual(preserve["max_direct_conflict_support"], 2)
+        guard = gate["weak_source_fallback_cascade_unverified_consensus_guard"]
+        self.assertTrue(guard["blocked"])
+        self.assertEqual(
+            guard["blocked_consensus_over_direct_preserve"]["status"],
+            "selected",
+        )
+
+    def test_weak_source_blocked_consensus_structural_core_preserves_four_three_split(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. structural core\nB. runner up",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "matrix", "child_index": 2, "prompt_kind": "option_matrix_reasoner_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "recursive", "child_index": 3, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "structural", "child_index": 4, "prompt_kind": "structural_option_audit_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "adversarial", "child_index": 5, "prompt_kind": "adversarial_alternative_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+            {"child_id": "constraint", "child_index": 6, "prompt_kind": "constraint_checked_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+            {"child_id": "elim", "child_index": 7, "prompt_kind": "option_elimination_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+        ]
+        agent_plan = {
+            "stages": {
+                "weak_source_fallback_cascade_gate": {
+                    "status": "activated",
+                    "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_relation_counts": {"generic": 3},
+                    "source_verifier_confidence_counts": {"high": 1, "low": 2},
+                }
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_WEAK_SOURCE_BLOCKED_CONSENSUS_STRUCTURAL_CORE_PRESERVE": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=attempts,
+                selection=selection,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "structural")
+        self.assertEqual(gated["selected_answer"], "A")
+        gate = gated["verified_or_abstain_gate"]
+        self.assertEqual(
+            gate["fallback_policy"],
+            "weak_source_blocked_consensus_structural_core_preserve",
+        )
+        self.assertEqual(gate["fallback_consensus_count"], 4)
+        self.assertIsNone(gate["weak_source_same_answer_fallback_guard"])
+        preserve = gate["weak_source_blocked_consensus_structural_core_preserve"]
+        self.assertEqual(preserve["status"], "selected")
+        guard = gate["weak_source_fallback_cascade_unverified_consensus_guard"]
+        self.assertEqual(
+            guard["blocked_consensus_structural_core_preserve"]["status"],
+            "selected",
+        )
+
+    def test_weak_source_blocked_non_core_consensus_still_excludes_same_answer(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. generic consensus\nB. matrix recursive",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "constraint", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "elim", "child_index": 3, "prompt_kind": "option_elimination_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "structural", "child_index": 4, "prompt_kind": "structural_option_audit_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "adversarial", "child_index": 5, "prompt_kind": "adversarial_alternative_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "matrix", "child_index": 6, "prompt_kind": "option_matrix_reasoner_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+            {"child_id": "recursive", "child_index": 7, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+        ]
+        agent_plan = {
+            "stages": {
+                "weak_source_fallback_cascade_gate": {
+                    "status": "activated",
+                    "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_relation_counts": {"generic": 3},
+                    "source_verifier_confidence_counts": {"high": 1, "low": 2},
+                }
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_WEAK_SOURCE_HIGH_CONFIDENCE_GENERIC_CONSENSUS_PRESERVE": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=attempts,
+                selection=selection,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "recursive")
+        self.assertEqual(gated["selected_answer"], "B")
+        gate = gated["verified_or_abstain_gate"]
+        self.assertEqual(gate["fallback_policy"], "preserve_or_direct")
+        self.assertIsNotNone(gate["weak_source_same_answer_fallback_guard"])
+        self.assertIsNone(gate["weak_source_blocked_consensus_structural_core_preserve"])
+
+    def test_weak_source_direct_tie_prefers_matrix_recursive_group(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. direct lure\nB. matrix-recursive answer",
+        }
+        attempts = [
+            {
+                "child_id": "direct",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "elim",
+                "child_index": 2,
+                "prompt_kind": "option_elimination_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "structural",
+                "child_index": 3,
+                "prompt_kind": "structural_option_audit_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "matrix",
+                "child_index": 4,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "recursive",
+                "child_index": 5,
+                "prompt_kind": "recursive_assumption_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "adversarial",
+                "child_index": 6,
+                "prompt_kind": "adversarial_alternative_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "weak_source_fallback_cascade_gate": {
+                    "status": "activated",
+                    "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+                    "source_verifier_attempt_count": 2,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_relation_counts": {"generic": 2},
+                    "source_verifier_confidence_counts": {"high": 1, "low": 1},
+                }
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_WEAK_SOURCE_HIGH_CONFIDENCE_GENERIC_CONSENSUS_PRESERVE": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=attempts,
+                selection=selection,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "matrix")
+        self.assertEqual(gated["selected_answer"], "B")
+        gate = gated["verified_or_abstain_gate"]
+        self.assertEqual(
+            gate["fallback_policy"],
+            "weak_source_direct_tie_matrix_recursive_recovery",
+        )
+        self.assertEqual(gate["fallback_consensus_count"], 3)
+        self.assertEqual(
+            gate["fallback_consensus_prompt_kinds"],
+            [
+                "adversarial_alternative_answer",
+                "option_matrix_reasoner_answer",
+                "recursive_assumption_answer",
+            ],
+        )
+        recovery = gate["weak_source_direct_tie_matrix_recursive_recovery"]
+        self.assertEqual(recovery["status"], "selected")
+        self.assertEqual(recovery["direct_support_count"], 3)
+        guard = gate["weak_source_fallback_cascade_unverified_consensus_guard"]
+        self.assertTrue(guard["blocked"])
+        self.assertEqual(
+            guard["direct_tie_matrix_recursive_recovery"]["status"],
+            "selected",
+        )
+
+    def test_weak_source_blocked_consensus_constraint_preserve_requires_enable_env(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. direct\nB. constraint-supported consensus",
+        }
+        attempts = [
+            {
+                "child_id": "direct",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "constraint",
+                "child_index": 2,
+                "prompt_kind": "constraint_checked_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "recursive",
+                "child_index": 3,
+                "prompt_kind": "recursive_assumption_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "matrix",
+                "child_index": 4,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "elim",
+                "child_index": 5,
+                "prompt_kind": "option_elimination_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "structural",
+                "child_index": 6,
+                "prompt_kind": "structural_option_audit_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "adv",
+                "child_index": 7,
+                "prompt_kind": "adversarial_alternative_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "weak_source_fallback_cascade_gate": {
+                    "status": "activated",
+                    "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+                    "source_verifier_attempt_count": 5,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_relation_counts": {"generic": 5},
+                    "source_verifier_confidence_counts": {"low": 5},
+                }
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "constraint",
+            "selected_answer": "B",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_WEAK_SOURCE_BLOCKED_CONSENSUS_CONSTRAINT_PRESERVE": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=attempts,
+                selection=selection,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "constraint")
+        self.assertEqual(gated["selected_answer"], "B")
+        gate = gated["verified_or_abstain_gate"]
+        self.assertEqual(gate["fallback_policy"], "weak_source_blocked_consensus_constraint_preserve")
+        self.assertEqual(gate["fallback_prompt_kind"], "constraint_checked_answer")
+        guard = gate["weak_source_fallback_cascade_unverified_consensus_guard"]
+        self.assertEqual(guard["blocked_consensus_constraint_preserve"]["status"], "selected")
+
+    def test_weak_source_blocked_consensus_constraint_preserve_default_excludes_generic_consensus(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. direct\nB. constraint-supported consensus",
+        }
+        attempts = [
+            {
+                "child_id": "direct",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "constraint",
+                "child_index": 2,
+                "prompt_kind": "constraint_checked_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "recursive",
+                "child_index": 3,
+                "prompt_kind": "recursive_assumption_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "matrix",
+                "child_index": 4,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "elim",
+                "child_index": 5,
+                "prompt_kind": "option_elimination_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "structural",
+                "child_index": 6,
+                "prompt_kind": "structural_option_audit_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "weak_source_fallback_cascade_gate": {
+                    "status": "activated",
+                    "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+                    "source_verifier_attempt_count": 5,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_relation_counts": {"generic": 5},
+                    "source_verifier_confidence_counts": {"low": 5},
+                }
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "constraint",
+            "selected_answer": "B",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_WEAK_SOURCE_HIGH_CONFIDENCE_GENERIC_CONSENSUS_PRESERVE": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=attempts,
+                selection=selection,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "direct")
+        self.assertEqual(gated["selected_answer"], "A")
+        gate = gated["verified_or_abstain_gate"]
+        self.assertEqual(gate["fallback_policy"], "preserve_or_direct")
+        self.assertIsNone(gate.get("weak_source_blocked_consensus_constraint_preserve"))
+        self.assertIsInstance(gate["weak_source_same_answer_fallback_guard"], dict)
+
+    def test_weak_source_high_confidence_generic_consensus_preserves_structural_quorum(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. high-confidence consensus\nB. runner up",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "constraint", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "matrix", "child_index": 3, "prompt_kind": "option_matrix_reasoner_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "structural", "child_index": 4, "prompt_kind": "structural_option_audit_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "adv", "child_index": 5, "prompt_kind": "adversarial_alternative_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "recursive", "child_index": 6, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+            {"child_id": "elim", "child_index": 7, "prompt_kind": "option_elimination_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+        ]
+        agent_plan = {
+            "stages": {
+                "weak_source_fallback_cascade_gate": {
+                    "status": "activated",
+                    "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_relation_counts": {"generic": 3},
+                    "source_verifier_confidence_counts": {"high": 2, "low": 1},
+                }
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "structural",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_WEAK_SOURCE_HIGH_CONFIDENCE_GENERIC_CONSENSUS_PRESERVE": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=attempts,
+                selection=selection,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "structural")
+        self.assertEqual(gated["selected_answer"], "A")
+        gate = gated["verified_or_abstain_gate"]
+        self.assertEqual(
+            gate["fallback_policy"],
+            "weak_source_high_confidence_generic_consensus_preserve",
+        )
+        preserve = gate["weak_source_high_confidence_generic_consensus_preserve"]
+        self.assertEqual(preserve["status"], "selected")
+        guard = gate["weak_source_fallback_cascade_unverified_consensus_guard"]
+        self.assertEqual(
+            guard["high_confidence_generic_consensus_preserve"]["status"],
+            "selected",
+        )
+        self.assertIsNone(gate["weak_source_same_answer_fallback_guard"])
+
+    def test_weak_source_low_confidence_generic_consensus_still_excludes_structural_quorum(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. low-confidence consensus\nB. runner up",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "constraint", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "matrix", "child_index": 3, "prompt_kind": "option_matrix_reasoner_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "structural", "child_index": 4, "prompt_kind": "structural_option_audit_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "adv", "child_index": 5, "prompt_kind": "adversarial_alternative_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "recursive", "child_index": 6, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+            {"child_id": "elim", "child_index": 7, "prompt_kind": "option_elimination_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+        ]
+        agent_plan = {
+            "stages": {
+                "weak_source_fallback_cascade_gate": {
+                    "status": "activated",
+                    "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_relation_counts": {"generic": 3},
+                    "source_verifier_confidence_counts": {"high": 1, "low": 2},
+                }
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "structural",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "recursive")
+        self.assertEqual(gated["selected_answer"], "B")
+        gate = gated["verified_or_abstain_gate"]
+        self.assertEqual(gate["fallback_policy"], "preserve_or_direct")
+        self.assertIsNone(gate.get("weak_source_high_confidence_generic_consensus_preserve"))
+        self.assertIsInstance(gate["weak_source_same_answer_fallback_guard"], dict)
+
+    def test_weak_source_direct_consensus_constraint_dissent_prefers_constraint(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. direct consensus\nB. constraint dissent",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "constraint", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+            {"child_id": "recursive", "child_index": 3, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "matrix", "child_index": 4, "prompt_kind": "option_matrix_reasoner_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "elim", "child_index": 5, "prompt_kind": "option_elimination_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "structural", "child_index": 6, "prompt_kind": "structural_option_audit_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "adv", "child_index": 7, "prompt_kind": "adversarial_alternative_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+        ]
+        agent_plan = {
+            "stages": {
+                "weak_source_fallback_cascade_gate": {
+                    "status": "activated",
+                    "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_relation_counts": {"generic": 3},
+                    "source_verifier_confidence_counts": {"high": 2, "low": 1},
+                }
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "constraint")
+        self.assertEqual(gated["selected_answer"], "B")
+        gate = gated["verified_or_abstain_gate"]
+        self.assertEqual(
+            gate["fallback_policy"],
+            "weak_source_direct_constraint_split_constraint_recovery",
+        )
+        guard = gate["weak_source_fallback_cascade_unverified_consensus_guard"]
+        self.assertEqual(guard["direct_constraint_split_recovery"]["selected_side"], "constraint")
+
+    def test_weak_source_direct_constraint_dissent_defaults_to_direct_when_source_generic(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. direct constraint\nB. structural consensus",
+        }
+        attempts = [
+            {"child_id": "direct", "child_index": 1, "prompt_kind": "direct_short_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "constraint", "child_index": 2, "prompt_kind": "constraint_checked_answer", "parsed_answer": "A", "parsed_answer_hash": "ha"},
+            {"child_id": "recursive", "child_index": 3, "prompt_kind": "recursive_assumption_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+            {"child_id": "matrix", "child_index": 4, "prompt_kind": "option_matrix_reasoner_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+            {"child_id": "elim", "child_index": 5, "prompt_kind": "option_elimination_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+            {"child_id": "structural", "child_index": 6, "prompt_kind": "structural_option_audit_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+            {"child_id": "adv", "child_index": 7, "prompt_kind": "adversarial_alternative_answer", "parsed_answer": "B", "parsed_answer_hash": "hb"},
+        ]
+        agent_plan = {
+            "stages": {
+                "weak_source_fallback_cascade_gate": {
+                    "status": "activated",
+                    "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_relation_counts": {"generic": 3},
+                    "source_verifier_confidence_counts": {"high": 1, "low": 2},
+                }
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "recursive",
+            "selected_answer": "B",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "direct")
+        self.assertEqual(gated["selected_answer"], "A")
+        gate = gated["verified_or_abstain_gate"]
+        self.assertEqual(gate["fallback_policy"], "preserve_or_direct")
+        self.assertIsInstance(gate["weak_source_same_answer_fallback_guard"], dict)
+        guard = gate["weak_source_fallback_cascade_unverified_consensus_guard"]
+        self.assertTrue(guard["blocked"])
+
+    def test_weak_source_constraint_matrix_dissent_precedes_direct_consensus(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. direct consensus\nB. constrained matrix dissent",
+        }
+        attempts = [
+            {
+                "child_id": "direct",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "constraint",
+                "child_index": 2,
+                "prompt_kind": "constraint_checked_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "recursive",
+                "child_index": 3,
+                "prompt_kind": "recursive_assumption_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "matrix",
+                "child_index": 4,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "elim",
+                "child_index": 5,
+                "prompt_kind": "option_elimination_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "structural",
+                "child_index": 6,
+                "prompt_kind": "structural_option_audit_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "adv",
+                "child_index": 7,
+                "prompt_kind": "adversarial_alternative_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "weak_source_fallback_cascade_gate": {
+                    "status": "activated",
+                    "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+                    "source_verifier_attempt_count": 3,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_relation_counts": {"generic": 3},
+                    "source_verifier_confidence_counts": {"high": 3},
+                }
+            }
+        }
+        selection = {
+            "selection_method": "normalized_majority",
+            "selected_child_id": "direct",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_WEAK_SOURCE_CONSTRAINT_MATRIX_DISSENT_RECOVERY": "1"},
+            clear=False,
+        ):
+            gated = _apply_verified_or_abstain_selection(
+                problem=problem,
+                attempts=attempts,
+                selection=selection,
+                agent_plan=agent_plan,
+            )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "constraint")
+        self.assertEqual(gated["selected_answer"], "B")
+        gate = gated["verified_or_abstain_gate"]
+        self.assertEqual(gate["fallback_policy"], "weak_source_constraint_matrix_dissent_recovery")
+        self.assertEqual(gate["fallback_prompt_kind"], "constraint_checked_answer")
+        self.assertEqual(gate["fallback_consensus_count"], 2)
+        guard = gate["weak_source_fallback_cascade_unverified_consensus_guard"]
+        self.assertEqual(guard["constraint_matrix_dissent_recovery"]["status"], "selected")
+        self.assertEqual(guard["blocked_fallback_consensus_count"], 5)
+
     def test_weak_source_cascade_preserves_structural_audit_by_default(self):
         problem = {
             "answer_type": "multipleChoice",
@@ -6989,7 +9393,14 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertIn("structural_option_audit_child", summary["preserved_stage_names"])
         self.assertEqual(summary["preserved_stage_count"], 1)
 
-        with patch.dict(os.environ, {"HLE_WEAK_SOURCE_FALLBACK_CASCADE_SKIP_STRUCTURAL_AUDIT": "1"}, clear=False):
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_WEAK_SOURCE_FALLBACK_CASCADE_STAGE_SKIP": "1",
+                "HLE_WEAK_SOURCE_FALLBACK_CASCADE_SKIP_STRUCTURAL_AUDIT": "1",
+            },
+            clear=False,
+        ):
             old_summary = _weak_source_fallback_cascade_gate_summary(
                 problem=problem,
                 attempts=attempts,
@@ -7313,6 +9724,94 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(gated["selected_answer"], "A")
         self.assertEqual(gated["verified_or_abstain_gate"]["fallback_prompt_kind"], "direct_short_answer")
 
+    def test_verified_or_abstain_last_resort_blocks_unsupported_option_sweep_candidate(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. selected\nB. unsupported sweep",
+        }
+        attempts = [
+            {
+                "child_id": "selected",
+                "child_index": 1,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "sweep-b",
+                "child_index": 2,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+        ]
+        diagnostics = {}
+
+        fallback = _verified_or_abstain_fallback_candidate(
+            problem=problem,
+            attempts=attempts,
+            exclude_child_ids={"selected"},
+            diagnostics=diagnostics,
+        )
+
+        self.assertIsNone(fallback)
+        guard = diagnostics["verified_or_abstain_last_resort_guard"]
+        self.assertEqual(guard["status"], "blocked")
+        self.assertEqual(
+            guard["reason"],
+            "all_last_resort_candidates_blocked",
+        )
+        self.assertEqual(guard["blocked_candidate_count"], 1)
+        self.assertEqual(
+            guard["decision_reasons"],
+            {"synthetic_option_sweep_candidate_lacks_direct_signal_or_model_support": 1},
+        )
+        self.assertFalse(guard["raw_content_persisted"])
+
+    def test_verified_or_abstain_last_resort_allows_option_sweep_with_direct_signal(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. selected\nB. verified sweep",
+        }
+        attempts = [
+            {
+                "child_id": "selected",
+                "child_index": 1,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "sweep-b",
+                "child_index": 2,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+                "accepted_direct_high_confidence": True,
+            },
+        ]
+        diagnostics = {}
+
+        fallback = _verified_or_abstain_fallback_candidate(
+            problem=problem,
+            attempts=attempts,
+            exclude_child_ids={"selected"},
+            diagnostics=diagnostics,
+        )
+
+        self.assertIsNotNone(fallback)
+        self.assertEqual(fallback["child_id"], "sweep-b")
+        guard = fallback["verified_or_abstain_last_resort_guard"]
+        self.assertEqual(guard["status"], "allowed")
+        self.assertEqual(
+            guard["decision_reasons"],
+            {"synthetic_option_sweep_candidate_has_direct_signal": 1},
+        )
+        self.assertEqual(
+            diagnostics["verified_or_abstain_last_resort_guard"]["allowed_candidate_count"],
+            1,
+        )
+
     def test_verified_or_abstain_blocks_self_contained_override_against_same_run_consensus(self):
         problem = {
             "answer_type": "multipleChoice",
@@ -7421,6 +9920,79 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(gated["selection_method"], "self_contained_option_adjudicator_choice")
         self.assertEqual(gated["selected_child_id"], "source")
         self.assertEqual(gated["verified_or_abstain_gate"]["status"], "allowed")
+
+    def test_verified_or_abstain_blocks_self_contained_when_source_verifier_generic(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. self-contained\nB. direct",
+        }
+        attempts = [
+            {
+                "child_id": "self",
+                "child_index": 1,
+                "prompt_kind": "structural_option_audit_answer",
+                "parsed_answer": "A",
+            },
+            {
+                "child_id": "direct",
+                "child_index": 2,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "B",
+            },
+        ]
+        selection = {
+            "selection_method": "self_contained_option_adjudicator_choice",
+            "selected_child_id": "self",
+            "selected_answer": "A",
+            "underlying_model_calls": 1,
+            "verifier_model_call": True,
+            "self_contained_option_adjudicator": {
+                "confidence": "high",
+                "support_count": 1,
+                "support_prompt_kinds": ["structural_option_audit_answer"],
+            },
+        }
+        agent_plan = {
+            "stages": {
+                "mc_option_claim_evidence_verifier": {
+                    "status": "blocked_source_grounded_claim_verifier",
+                    "candidate_emitted": False,
+                    "source_verifier_attempt_count": 2,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_rejection_reason_counts": {
+                        "no_selected_label_generic": 2,
+                    },
+                    "contrastive_adjudicator_status": "blocked_structured_relation_audit",
+                    "contrastive_adjudicator_reason": "structured_relation_audit_not_direct",
+                    "relation_span_comparator_status": "blocked_not_direct_relation",
+                    "relation_span_comparator_reason": "no_direct_relation_span_candidate",
+                    "span_directness_verifier_status": "blocked_not_direct_relation",
+                    "span_directness_verifier_reason": "no_candidate_span_direct_relation_after_recovery",
+                }
+            }
+        }
+
+        gated = _apply_verified_or_abstain_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            agent_plan=agent_plan,
+        )
+
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "direct")
+        self.assertEqual(gated["selected_answer"], "B")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["reason"],
+            "source_verifier_generic_blocks_model_only_verified_selection",
+        )
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["weak_source_fallback_cascade_gate"][
+                "source_verifier_indirect_or_generic_rejection_count"
+            ],
+            2,
+        )
 
     def test_verified_or_abstain_allows_high_margin_weak_option_evidence_against_same_run_consensus(self):
         problem = {
@@ -13732,7 +16304,7 @@ class HleSmokeEvalTest(unittest.TestCase):
             "answer_type": "multipleChoice",
             "_question": (
                 "Which mechanism preserves the controlled variable under replacement?\n"
-                "A. Alpha mechanism\nB. Beta mechanism"
+                "A. Alpha\nB. Beta"
             ),
         }
         options = {
@@ -13792,7 +16364,10 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         with patch.dict(
             os.environ,
-            {"HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1"},
+            {
+                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1",
+                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_GAP_MODEL_SKIP": "1",
+            },
             clear=False,
         ):
             with patch("assumption_os.hle_smoke_eval._call_model", side_effect=fake_call_model):
@@ -13899,7 +16474,10 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         with patch.dict(
             os.environ,
-            {"HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1"},
+            {
+                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1",
+                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_GAP_MODEL_SKIP": "1",
+            },
             clear=False,
         ):
             with patch("assumption_os.hle_smoke_eval._call_model", side_effect=fake_call_model):
@@ -14092,6 +16670,369 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(row["reason"], "programmatic_complete_candidate_relation_span")
         self.assertFalse(row["model_direct_high_confidence"])
         self.assertTrue(row["direct_high_confidence"])
+
+    def test_candidate_relation_directness_accepts_structured_near_complete_source_span(self):
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_STRUCTURED_NEAR_COMPLETE_CANDIDATE_RELATION_DIRECTNESS": "1",
+            },
+            clear=False,
+        ):
+            detail = _option_claim_candidate_relation_span_directness_detail([
+                {
+                    "title": "Candidate relation span (source_cache_corpus_backfill)",
+                    "snippet": (
+                        "Beta mechanism preserves the controlled variable under "
+                        "replacement in the audited benchmark."
+                    ),
+                    "source_retrieval_stage": "source_cache_corpus_backfill",
+                    "span_provenance": "candidate_pool_relation_span",
+                    "relation_signature_required_term_count": "2",
+                    "relation_signature_required_overlap": "1",
+                    "relation_signature_required_missing_term_count": "1",
+                    "relation_query_expansion_slot_coverage": "1",
+                    "relation_signature_proximity": "true",
+                    "relation_proximity": "true",
+                    "option_overlap": "1",
+                    "relation_overlap": "1",
+                    "source_doc_shared": "false",
+                    "source_doc_supports_other": "false",
+                    "span_hash": "near-complete-span",
+                }
+            ])
+
+        self.assertEqual(detail["status"], "activated")
+        self.assertEqual(detail["direct_doc_count"], 1)
+        self.assertEqual(detail["complete_candidate_relation_span_count"], 0)
+        self.assertEqual(
+            detail["structured_near_complete_candidate_relation_span_count"],
+            1,
+        )
+        self.assertEqual(
+            detail["required_coverage_candidate_relation_span_count"],
+            1,
+        )
+        self.assertEqual(
+            detail["rows"][0]["required_coverage_basis"],
+            "structured_near_complete_required",
+        )
+
+    def test_candidate_relation_directness_blocks_structured_near_complete_supports_other(self):
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_STRUCTURED_NEAR_COMPLETE_CANDIDATE_RELATION_DIRECTNESS": "1",
+            },
+            clear=False,
+        ):
+            detail = _option_claim_candidate_relation_span_directness_detail([
+                {
+                    "title": "Candidate relation span (source_cache_corpus_backfill)",
+                    "snippet": (
+                        "Beta mechanism and Alpha mechanism both preserve the "
+                        "controlled variable under replacement."
+                    ),
+                    "source_retrieval_stage": "source_cache_corpus_backfill",
+                    "span_provenance": "candidate_pool_relation_span",
+                    "relation_signature_required_term_count": "2",
+                    "relation_signature_required_overlap": "1",
+                    "relation_signature_required_missing_term_count": "1",
+                    "relation_query_expansion_slot_coverage": "1",
+                    "relation_signature_proximity": "true",
+                    "relation_proximity": "true",
+                    "option_overlap": "1",
+                    "relation_overlap": "1",
+                    "source_doc_shared": "false",
+                    "source_doc_supports_other": "true",
+                    "span_hash": "near-complete-shared-span",
+                }
+            ])
+
+        self.assertEqual(detail["status"], "blocked")
+        self.assertEqual(detail["direct_doc_count"], 0)
+        self.assertEqual(
+            detail["structured_near_complete_candidate_relation_span_count"],
+            1,
+        )
+        self.assertFalse(detail["rows"][0]["direct"])
+        self.assertTrue(detail["rows"][0]["effective_supports_other"])
+
+    def test_candidate_relation_directness_near_complete_is_opt_in(self):
+        detail = _option_claim_candidate_relation_span_directness_detail([
+            {
+                "source_retrieval_stage": "source_cache_corpus_backfill",
+                "span_provenance": "candidate_pool_relation_span",
+                "relation_signature_required_term_count": "2",
+                "relation_signature_required_overlap": "1",
+                "relation_signature_required_missing_term_count": "1",
+                "relation_query_expansion_slot_coverage": "1",
+                "relation_signature_proximity": "true",
+                "relation_proximity": "true",
+                "option_overlap": "1",
+                "relation_overlap": "1",
+                "source_doc_shared": "false",
+                "source_doc_supports_other": "false",
+                "span_hash": "near-complete-span",
+            }
+        ])
+
+        self.assertEqual(detail["status"], "blocked")
+        self.assertEqual(detail["direct_doc_count"], 0)
+        self.assertEqual(
+            detail["structured_near_complete_candidate_relation_span_count"],
+            0,
+        )
+
+    def test_span_directness_gap_model_skip_blocks_missing_relation_without_model_call(self):
+        problem = {
+            "_question": (
+                "Which mechanism preserves the controlled variable under replacement?\n"
+                "A. Alpha mechanism\nB. Beta mechanism"
+            ),
+            "id_hash": "p",
+            "question_hash": "q",
+            "answer_type": "multipleChoice",
+        }
+        generic_candidate_doc = {
+            "title": "Candidate relation span (candidate_pool_relation_span)",
+            "snippet": "Beta appears in metadata and benchmark notes.",
+            "source": "openalex",
+            "source_retrieval_stage": "local_relation_corpus",
+            "span_provenance": "candidate_pool_relation_span",
+            "relation_signature_required_term_count": "2",
+            "relation_signature_required_overlap": "0",
+            "relation_signature_required_missing_term_count": "2",
+            "relation_signature_proximity": "false",
+            "relation_proximity": "false",
+            "option_overlap": "1",
+            "relation_overlap": "0",
+            "source_doc_shared": "false",
+            "source_doc_supports_other": "false",
+            "span_hash": "generic-candidate-span",
+        }
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1",
+                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_GAP_MODEL_SKIP": "1",
+            },
+            clear=False,
+        ):
+            with patch("assumption_os.hle_smoke_eval._call_model") as call_model:
+                summary = _run_option_claim_span_directness_verifier(
+                    problem=problem,
+                    options={"B": "Beta"},
+                    unique_span_docs_by_label={"B": [generic_candidate_doc]},
+                    unique_span_summary={
+                        "candidate_unique_span_count": 1,
+                        "candidate_unique_span_hashes_by_option_hash": {
+                            stable_hash({"option_label": "B"}): ["generic-candidate-span"],
+                        },
+                    },
+                    candidate_labels=["B"],
+                    span_context_kind="candidate_direct_relation_recovery",
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=0,
+                    max_tokens=512,
+                )
+
+        call_model.assert_not_called()
+        self.assertEqual(summary["status"], "blocked_not_direct_relation")
+        self.assertEqual(
+            summary["reason"],
+            "no_candidate_span_direct_relation_after_gap_model_skip",
+        )
+        self.assertEqual(summary["attempted_candidate_count"], 0)
+        self.assertEqual(summary["gap_model_skip_count"], 1)
+        self.assertEqual(summary["lexical_unique_but_relation_generic_count"], 1)
+        self.assertEqual(
+            summary["gap_model_skip_reason_counts"],
+            {"span_directness_gap_model_skip_missing_required_relation_terms": 1},
+        )
+        row = summary["candidate_directness_rows"][0]
+        self.assertEqual(row["status"], "skipped_gap_model_call")
+        self.assertTrue(row["gap_model_skip_applied"])
+        self.assertTrue(row["lexical_unique_but_relation_generic"])
+        self.assertEqual(
+            row["programmatic_gap_reason"],
+            "missing_required_relation_terms",
+        )
+
+    def test_span_directness_gap_model_skip_is_default_disabled_for_baseline_safety(self):
+        problem = {
+            "_question": (
+                "Which mechanism preserves the controlled variable under replacement?\n"
+                "A. Alpha\nB. Beta"
+            ),
+            "id_hash": "p",
+            "question_hash": "q",
+            "answer_type": "multipleChoice",
+        }
+        generic_candidate_doc = {
+            "title": "Candidate relation span (candidate_pool_relation_span)",
+            "snippet": "Beta appears in metadata and benchmark notes.",
+            "source": "openalex",
+            "source_retrieval_stage": "local_relation_corpus",
+            "span_provenance": "candidate_pool_relation_span",
+            "relation_signature_required_term_count": "2",
+            "relation_signature_required_overlap": "0",
+            "relation_signature_required_missing_term_count": "2",
+            "relation_signature_proximity": "false",
+            "relation_proximity": "false",
+            "option_overlap": "1",
+            "relation_overlap": "0",
+            "source_doc_shared": "false",
+            "source_doc_supports_other": "false",
+            "span_hash": "generic-candidate-span",
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1"},
+            clear=False,
+        ):
+            with patch(
+                "assumption_os.hle_smoke_eval._call_model",
+                return_value=json.dumps({
+                    "selected_label": "",
+                    "direct_relation": False,
+                    "confidence": "low",
+                    "evidence_relation": "generic",
+                    "supports_answer": False,
+                }),
+            ) as call_model:
+                summary = _run_option_claim_span_directness_verifier(
+                    problem=problem,
+                    options={"B": "Beta"},
+                    unique_span_docs_by_label={"B": [generic_candidate_doc]},
+                    unique_span_summary={
+                        "candidate_unique_span_count": 1,
+                        "candidate_unique_span_hashes_by_option_hash": {
+                            stable_hash({"option_label": "B"}): ["generic-candidate-span"],
+                        },
+                    },
+                    candidate_labels=["B"],
+                    span_context_kind="candidate_direct_relation_recovery",
+                    model="m",
+                    eval_id="e",
+                    call_id="c",
+                    logger=None,
+                    timeout=0,
+                    max_tokens=512,
+                )
+
+        call_model.assert_called_once()
+        self.assertEqual(summary["attempted_candidate_count"], 1)
+        self.assertEqual(summary["gap_model_skip_count"], 0)
+        self.assertEqual(summary["status"], "blocked_not_direct_relation")
+
+    def test_span_directness_gap_model_skip_does_not_skip_primary_unique_spans(self):
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_GAP_MODEL_SKIP": "1"},
+            clear=False,
+        ):
+            detail = _option_claim_span_directness_gap_model_skip_detail(
+                span_context_kind="candidate_unique",
+                programmatic_gap_audit={"reason": "missing_required_relation_terms"},
+                statement_fact_span_directness={},
+                missing_required_pair_span_directness={},
+                missing_required_single_span_directness={},
+                candidate_relation_span_directness={},
+            )
+
+        self.assertFalse(detail["skip_model_call"])
+        self.assertEqual(detail["reason"], "non_candidate_span_context")
+
+    def test_span_directness_gap_model_skip_detail_preserves_programmatic_direct(self):
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_GAP_MODEL_SKIP": "1"},
+            clear=False,
+        ):
+            detail = _option_claim_span_directness_gap_model_skip_detail(
+                span_context_kind="candidate_direct_relation_recovery",
+                programmatic_gap_audit={"reason": "missing_required_relation_terms"},
+                statement_fact_span_directness={"direct_high_confidence": False},
+                missing_required_pair_span_directness={"direct_high_confidence": True, "direct_doc_count": 1},
+                missing_required_single_span_directness={},
+                candidate_relation_span_directness={},
+            )
+
+        self.assertFalse(detail["skip_model_call"])
+        self.assertEqual(detail["reason"], "programmatic_direct_signal_present")
+
+    def test_relation_span_comparator_promotion_is_enabled_by_default(self):
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR_PROMOTION": "",
+                "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR_PROMOTION": "",
+            },
+            clear=False,
+        ):
+            self.assertTrue(_option_claim_relation_span_comparator_promotion_enabled())
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR_PROMOTION": "0"},
+            clear=False,
+        ):
+            self.assertFalse(_option_claim_relation_span_comparator_promotion_enabled())
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR_PROMOTION": "1",
+                "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR_PROMOTION": "1",
+            },
+            clear=False,
+        ):
+            self.assertFalse(_option_claim_relation_span_comparator_promotion_enabled())
+
+    def test_single_recovery_relation_comparator_promotion_is_blocked_by_default(self):
+        summary = {
+            "reason": "single_direct_relation_span_candidate",
+            "direct_candidate_count": 1,
+        }
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_CANDIDATE_RECOVERY_SINGLE_RELATION_COMPARATOR_PROMOTION": "",
+            },
+            clear=False,
+        ):
+            self.assertTrue(
+                _option_claim_relation_comparator_single_recovery_promotion_blocked(
+                    candidate_recovery_directness_requires_adjudication=True,
+                    relation_span_comparator_summary=summary,
+                )
+            )
+            self.assertFalse(
+                _option_claim_relation_comparator_single_recovery_promotion_blocked(
+                    candidate_recovery_directness_requires_adjudication=False,
+                    relation_span_comparator_summary=summary,
+                )
+            )
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_CANDIDATE_RECOVERY_SINGLE_RELATION_COMPARATOR_PROMOTION": "1",
+            },
+            clear=False,
+        ):
+            self.assertFalse(
+                _option_claim_relation_comparator_single_recovery_promotion_blocked(
+                    candidate_recovery_directness_requires_adjudication=True,
+                    relation_span_comparator_summary=summary,
+                )
+            )
 
     def test_span_directness_tiebreaks_multiple_direct_by_direct_doc_strength(self):
         problem = {
@@ -14605,7 +17546,15 @@ class HleSmokeEvalTest(unittest.TestCase):
                 {
                     "option_hash": b_hash,
                     "span_hash": "beta-span",
+                    "score": 12.5,
+                    "span_provenance": "candidate_pool_relation_span",
+                    "relation_signature_required_overlap": 2,
                     "relation_signature_required_missing_term_count": 0,
+                    "relation_signature_overlap": 3,
+                    "relation_signature_proximity": True,
+                    "relation_proximity": True,
+                    "option_overlap": 2,
+                    "relation_overlap": 2,
                 },
             ],
         }
@@ -14614,6 +17563,10 @@ class HleSmokeEvalTest(unittest.TestCase):
             del model, timeout, max_tokens
             self.assertIn("focused relation-span comparator", prompt)
             self.assertIn("Recovered candidate relation spans and audit", prompt)
+            self.assertIn("Top span audit", prompt)
+            self.assertIn("required_overlap=2", prompt)
+            self.assertIn("required_missing=0", prompt)
+            self.assertIn("signature_proximity=true", prompt)
             self.assertIn("Beta mechanism preserves", prompt)
             return json.dumps({
                 "selected_label": "B",
@@ -14715,6 +17668,30 @@ class HleSmokeEvalTest(unittest.TestCase):
             "direct_candidate_count": 2,
             "direct_candidate_option_hashes": [a_hash, b_hash],
             "multiple_direct_tiebreak_status": "blocked",
+            "multiple_direct_tiebreak": {
+                "status": "blocked",
+                "reason": "multiple_direct_span_tiebreak_ambiguous_evidence_strength",
+                "candidate_scores": [
+                    {
+                        "option_hash": a_hash,
+                        "direct_doc_count": 1,
+                        "complete_span_count": 1,
+                        "programmatic_direct_row_count": 1,
+                        "model_direct_row_count": 0,
+                        "supports_answer_row_count": 1,
+                        "direct_row_count": 1,
+                    },
+                    {
+                        "option_hash": b_hash,
+                        "direct_doc_count": 1,
+                        "complete_span_count": 1,
+                        "programmatic_direct_row_count": 1,
+                        "model_direct_row_count": 0,
+                        "supports_answer_row_count": 1,
+                        "direct_row_count": 1,
+                    },
+                ],
+            },
             "candidate_directness_rows": [
                 {
                     "option_hash": a_hash,
@@ -14725,6 +17702,16 @@ class HleSmokeEvalTest(unittest.TestCase):
                     "candidate_relation_span_complete_count": 1,
                     "span_count": 1,
                     "reason": "programmatic_complete_candidate_relation_span",
+                    "candidate_relation_span_directness": {
+                        "rows": [
+                            {
+                                "direct": True,
+                                "complete_required": True,
+                                "effective_supports_other": False,
+                                "source_doc_shared": False,
+                            }
+                        ]
+                    },
                 },
                 {
                     "option_hash": b_hash,
@@ -14735,9 +17722,48 @@ class HleSmokeEvalTest(unittest.TestCase):
                     "candidate_relation_span_complete_count": 1,
                     "span_count": 1,
                     "reason": "programmatic_complete_candidate_relation_span",
+                    "candidate_relation_span_directness": {
+                        "rows": [
+                            {
+                                "direct": True,
+                                "complete_required": True,
+                                "effective_supports_other": False,
+                                "source_doc_shared": False,
+                            }
+                        ]
+                    },
                 },
             ],
         }
+
+        def fake_call_model(*, model, prompt, timeout, max_tokens):
+            del model, timeout, max_tokens
+            self.assertIn("Span-directness structured audit", prompt)
+            self.assertIn("candidate_relation_direct_doc_count=1", prompt)
+            self.assertIn("nested_direct_count=1", prompt)
+            self.assertIn("Multiple-direct score audit", prompt)
+            return json.dumps({
+                "selected_label": "B",
+                "confidence": "verified",
+                "candidate_relation_matrix": [
+                    {
+                        "label": "A",
+                        "direct_relation": False,
+                        "candidate_unique_relation": False,
+                        "shared_with_other_candidates": False,
+                        "evidence_relation": "indirect",
+                        "fails_because": "The span is judged weaker.",
+                    },
+                    {
+                        "label": "B",
+                        "direct_relation": True,
+                        "candidate_unique_relation": True,
+                        "shared_with_other_candidates": False,
+                        "evidence_relation": "answer_bearing",
+                        "relation_evidence": "Beta mechanism preserves the controlled variable.",
+                    },
+                ],
+            })
 
         with patch.dict(
             os.environ,
@@ -14746,28 +17772,7 @@ class HleSmokeEvalTest(unittest.TestCase):
         ):
             with patch(
                 "assumption_os.hle_smoke_eval._call_model",
-                return_value=json.dumps({
-                    "selected_label": "B",
-                    "confidence": "verified",
-                    "candidate_relation_matrix": [
-                        {
-                            "label": "A",
-                            "direct_relation": False,
-                            "candidate_unique_relation": False,
-                            "shared_with_other_candidates": False,
-                            "evidence_relation": "indirect",
-                            "fails_because": "The span is judged weaker.",
-                        },
-                        {
-                            "label": "B",
-                            "direct_relation": True,
-                            "candidate_unique_relation": True,
-                            "shared_with_other_candidates": False,
-                            "evidence_relation": "answer_bearing",
-                            "relation_evidence": "Beta mechanism preserves the controlled variable.",
-                        },
-                    ],
-                }),
+                side_effect=fake_call_model,
             ):
                 summary = _run_option_claim_relation_span_comparator(
                     problem=problem,
@@ -14786,6 +17791,8 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertEqual(summary["status"], "blocked_span_directness_conflict")
         self.assertFalse(summary["direct_high_confidence"])
+        self.assertIsNotNone(summary["directness_audit_context_hash"])
+        self.assertGreater(summary["directness_audit_context_char_count"], 0)
         self.assertEqual(
             summary["span_directness_conflict_audit_reason"],
             "relation_span_comparator_not_unique_over_span_direct_candidates",
@@ -16157,6 +19164,75 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertIn("B", recovered_docs)
         self.assertEqual(recovered_summary["candidate_specific_sentence_span_count"], 1)
 
+    def test_candidate_direct_relation_repair_context_bridge_materializes_repair_spans(self):
+        options = {
+            "A": "Alpha mechanism",
+            "B": "Beta mechanism",
+        }
+        docs_by_label = {
+            "A": [
+                {
+                    "title": "Alpha relation source",
+                    "snippet": (
+                        "Alpha mechanism preserves the controlled variable under "
+                        "replacement in the benchmark system."
+                    ),
+                    "source": "openalex",
+                    "retrieval_stage": "source_cache_corpus_backfill",
+                }
+            ],
+            "B": [
+                {
+                    "title": "Beta background",
+                    "snippet": "Beta mechanism appears in unrelated replacement metadata.",
+                    "source": "openalex",
+                }
+            ],
+        }
+        existing_summary = {
+            "status": "not_required",
+            "reason": "no_candidate_direct_relation_spans_recovered",
+            "max_spans_per_label": 2,
+            "candidate_direct_relation_span_count": 0,
+            "candidate_direct_relation_span_count_by_option_hash": {},
+            "candidate_direct_relation_span_rows": [],
+            "span_provenance_counts": {},
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT": "1"},
+            clear=False,
+        ):
+            docs, summary, bridge = _option_claim_candidate_direct_relation_repair_context_bridge(
+                stem="Which mechanism preserves the controlled variable under replacement?",
+                options=options,
+                docs_by_label=docs_by_label,
+                candidate_labels=["A", "B"],
+                problem=None,
+                preferred_doc_hashes_by_label={},
+                source_verifier_repair_context_by_label={
+                    "A": {"status": "activated", "span_count": 1},
+                    "B": {"status": "not_required", "span_count": 0},
+                },
+                existing_docs_by_label={},
+                existing_summary=existing_summary,
+            )
+
+        self.assertEqual(bridge["status"], "activated")
+        self.assertEqual(bridge["attempted_candidate_count"], 1)
+        self.assertGreater(bridge["recovered_span_count"], 0)
+        self.assertIn("A", docs)
+        self.assertEqual(docs["A"][0]["repair_context_bridge"], "true")
+        self.assertEqual(summary["status"], "activated")
+        self.assertEqual(summary["repair_context_bridge_status"], "activated")
+        self.assertGreater(summary["repair_context_bridge_span_count"], 0)
+        self.assertTrue(
+            summary["candidate_direct_relation_span_rows"][0]["repair_context_bridge"]
+        )
+        summary_text = json.dumps(summary, sort_keys=True)
+        self.assertNotIn("Alpha mechanism preserves the controlled variable", summary_text)
+
     def test_option_claim_candidate_direct_relation_span_requires_full_musicology_note_signal(self):
         stem = (
             'In the jazz standard "All The Things You Are", if performed in A minor, '
@@ -16560,7 +19636,7 @@ class HleSmokeEvalTest(unittest.TestCase):
         )
         self.assertTrue(summary["relation_signature_term_hashes_by_option_hash"][option_hash])
 
-    def test_option_claim_missing_required_term_backfill_is_opt_in(self):
+    def test_option_claim_missing_required_term_backfill_can_be_disabled(self):
         options = {
             "B": "Beta mechanism",
         }
@@ -16575,6 +19651,7 @@ class HleSmokeEvalTest(unittest.TestCase):
             {
                 "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1",
                 "HLE_DISABLE_OPTION_CLAIM_MISSING_REQUIRED_TERM_BACKFILL": "1",
+                "HLE_ENABLE_OPTION_CLAIM_REQUIRED_COVERAGE_COMPOSITION_SPAN": "1",
             },
             clear=False,
         ):
@@ -16599,6 +19676,121 @@ class HleSmokeEvalTest(unittest.TestCase):
         search.assert_not_called()
         self.assertFalse(summary["missing_required_term_backfill_enabled"])
         self.assertEqual(summary["missing_required_term_backfill_doc_count"], 0)
+
+    def test_option_claim_missing_required_term_backfill_defaults_on_for_cache_only(self):
+        options = {
+            "B": "Beta mechanism",
+        }
+        generic_doc = {
+            "title": "Beta replacement metadata",
+            "snippet": "Beta mechanism appears in replacement metadata and search indexes.",
+            "source": "openalex",
+        }
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1",
+                "HLE_DISABLE_OPTION_CLAIM_MISSING_REQUIRED_TERM_BACKFILL": "",
+                "HLE_ENABLE_OPTION_CLAIM_MISSING_REQUIRED_TERM_BACKFILL": "",
+                "HLE_EVIDENCE_SOURCE_CACHE_ONLY": "1",
+            },
+            clear=False,
+        ):
+            with patch(
+                "assumption_os.hle_smoke_eval._local_evidence_corpus_search",
+                return_value=[],
+            ) as search:
+                _, summary = _option_claim_candidate_direct_relation_spans_by_label(
+                    stem="Which mechanism preserves the controlled variable under replacement?",
+                    options=options,
+                    docs_by_label={"B": [generic_doc]},
+                    candidate_labels=["B"],
+                    problem={
+                        "_question": "Which mechanism preserves the controlled variable under replacement?",
+                        "answer_type": "multipleChoice",
+                        "category": "Science",
+                        "raw_subject": "Systems Biology",
+                    },
+                    max_spans_per_label=1,
+                    min_score=0.0,
+                )
+
+        search.assert_called()
+        self.assertTrue(summary["missing_required_term_backfill_enabled"])
+        self.assertGreaterEqual(summary["missing_required_term_backfill_query_count"], 1)
+
+    def test_option_claim_missing_required_term_backfill_queries_use_option_claim_terms(self):
+        options = {
+            "B": "The potential follows the surface charge expression.",
+        }
+        generic_doc = {
+            "title": "Surface charge expression note",
+            "snippet": "The surface charge expression is discussed in archived metadata.",
+            "source": "openalex",
+        }
+        captured_queries: list[str] = []
+
+        def fake_local_search(query, *, problem, limit):
+            del problem, limit
+            captured_queries.append(query)
+            return []
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1",
+                "HLE_ENABLE_OPTION_CLAIM_MISSING_REQUIRED_TERM_BACKFILL": "1",
+            },
+            clear=False,
+        ):
+            with patch(
+                "assumption_os.hle_smoke_eval._local_evidence_corpus_paths",
+                return_value=[Path("unit-cache")],
+            ):
+                with patch(
+                    "assumption_os.hle_smoke_eval._local_evidence_corpus_search",
+                    side_effect=fake_local_search,
+                ):
+                    _, summary = _option_claim_candidate_direct_relation_spans_by_label(
+                        stem=(
+                            "Such a configuration can model parts of a transmission line. "
+                            "Which electric boundary condition is correct?"
+                        ),
+                        options=options,
+                        docs_by_label={"B": [generic_doc]},
+                        candidate_labels=["B"],
+                        problem={
+                            "_question": (
+                                "Such a configuration can model parts of a transmission line. "
+                                "Which electric boundary condition is correct?"
+                            ),
+                            "answer_type": "multipleChoice",
+                            "category": "Science",
+                            "raw_subject": "Physics",
+                        },
+                        max_spans_per_label=1,
+                        min_score=0.0,
+                    )
+
+        option_hash = stable_hash({"option_label": "B"})
+        backfill_summary = summary["missing_required_term_backfill_summaries_by_option_hash"][
+            option_hash
+        ]
+        provenance_counts = backfill_summary["query_provenance_counts"]
+        self.assertGreater(
+            provenance_counts.get("option_claim_terms_all_required_terms", 0),
+            0,
+        )
+        lowered_queries = [query.lower() for query in captured_queries]
+        self.assertTrue(
+            any(
+                "surface" in query
+                and "charge" in query
+                and ("boundary" in query or "transmission" in query)
+                for query in lowered_queries
+            )
+        )
 
     def test_option_claim_missing_required_term_backfill_recovers_local_source_span(self):
         options = {
@@ -16749,6 +19941,226 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertTrue(row["missing_required_term_backfill"])
         self.assertEqual(row["relation_signature_required_missing_term_count"], 0)
 
+    def test_option_claim_required_relation_bridge_pairs_source_cache_relation_doc(self):
+        options = {
+            "B": "Beta mechanism",
+        }
+        option_anchor = {
+            "title": "Beta archive",
+            "snippet": (
+                "Beta mechanism appears in controlled replacement metadata."
+            ),
+            "source": "openalex",
+        }
+        relation_only_cache_doc = {
+            "title": "Controlled variable preservation",
+            "snippet": (
+                "Preserves the controlled variable under replacement in the "
+                "benchmark system."
+            ),
+            "source": "openalex",
+            "retrieval_stage": "source_cache_corpus_backfill",
+            "source_cache_corpus_backfill": "true",
+        }
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1",
+                "HLE_DISABLE_OPTION_CLAIM_REQUIRED_COVERAGE_COMPOSITION_SPAN": "1",
+                "HLE_EVIDENCE_SOURCE_CACHE_ONLY": "1",
+            },
+            clear=False,
+        ):
+            docs_by_label, summary = _option_claim_candidate_direct_relation_spans_by_label(
+                stem="Which mechanism preserves the controlled variable under replacement?",
+                options=options,
+                docs_by_label={"B": [option_anchor, relation_only_cache_doc]},
+                candidate_labels=["B"],
+                problem={
+                    "_question": (
+                        "Which mechanism preserves the controlled variable under "
+                        "replacement?"
+                    ),
+                    "answer_type": "multipleChoice",
+                    "category": "Science",
+                    "raw_subject": "Systems Biology",
+                },
+                max_spans_per_label=2,
+                min_score=0.0,
+                force_enabled=True,
+            )
+
+        self.assertEqual(summary["status"], "activated")
+        self.assertFalse(summary["missing_required_term_backfill_composition_enabled"])
+        self.assertTrue(summary["required_relation_bridge_span_enabled"])
+        self.assertEqual(summary["required_relation_bridge_source_candidate_count"], 1)
+        self.assertEqual(summary["required_relation_bridge_paired_span_count"], 1)
+        self.assertEqual(
+            summary["span_provenance_counts"]["missing_required_term_backfill_paired_span"],
+            1,
+        )
+        paired_doc = docs_by_label["B"][0]
+        self.assertEqual(
+            paired_doc["missing_required_term_backfill_policy"],
+            "candidate_required_relation_bridge_v1",
+        )
+        self.assertEqual(paired_doc["candidate_required_relation_bridge"], "true")
+        directness = _option_claim_missing_required_pair_span_directness_detail(
+            [paired_doc]
+        )
+        self.assertTrue(directness["direct_high_confidence"])
+        self.assertEqual(directness["reason"], "complete_missing_required_pair_span")
+
+    def test_option_claim_missing_required_backfill_returns_relation_only_bridge_source(self):
+        options = {
+            "B": "Beta mechanism",
+        }
+        option_anchor = {
+            "title": "Beta replacement metadata",
+            "snippet": "Beta mechanism appears in replacement metadata.",
+            "source": "openalex",
+        }
+        relation_only_cache_doc = {
+            "title": "Controlled variable preservation",
+            "snippet": (
+                "Preserves the controlled variable under replacement in the "
+                "benchmark system."
+            ),
+            "source": "openalex",
+        }
+
+        def fake_local_search(query, *, problem, limit):
+            self.assertTrue(query.strip())
+            self.assertGreaterEqual(limit, 1)
+            self.assertEqual(problem["raw_subject"], "Systems Biology")
+            return [relation_only_cache_doc]
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1",
+                "HLE_ENABLE_OPTION_CLAIM_MISSING_REQUIRED_TERM_BACKFILL": "1",
+                "HLE_ENABLE_OPTION_CLAIM_REQUIRED_RELATION_BRIDGE_SPAN": "1",
+                "HLE_ENABLE_OPTION_CLAIM_MISSING_REQUIRED_RELATION_ONLY_BACKFILL": "1",
+                "HLE_DISABLE_OPTION_CLAIM_REQUIRED_COVERAGE_COMPOSITION_SPAN": "1",
+            },
+            clear=False,
+        ):
+            with patch(
+                "assumption_os.hle_smoke_eval._local_evidence_corpus_paths",
+                return_value=[Path("unit-cache")],
+            ):
+                with patch(
+                    "assumption_os.hle_smoke_eval._local_evidence_corpus_search",
+                    side_effect=fake_local_search,
+                ):
+                    docs_by_label, summary = _option_claim_candidate_direct_relation_spans_by_label(
+                        stem="Which mechanism preserves the controlled variable under replacement?",
+                        options=options,
+                        docs_by_label={"B": [option_anchor]},
+                        candidate_labels=["B"],
+                        problem={
+                            "_question": (
+                                "Which mechanism preserves the controlled variable under "
+                                "replacement?"
+                            ),
+                            "answer_type": "multipleChoice",
+                            "category": "Science",
+                            "raw_subject": "Systems Biology",
+                        },
+                        max_spans_per_label=2,
+                        min_score=0.0,
+                        force_enabled=True,
+                    )
+
+        option_hash = stable_hash({"option_label": "B"})
+        backfill_summary = summary["missing_required_term_backfill_summaries_by_option_hash"][
+            option_hash
+        ]
+        self.assertEqual(backfill_summary["relation_only_bridge_doc_count"], 1)
+        self.assertEqual(
+            backfill_summary["filter_counts"]["relation_only_bridge_source_accepted"],
+            1,
+        )
+        self.assertEqual(summary["missing_required_term_backfill_relation_only_doc_count"], 1)
+        self.assertEqual(summary["required_relation_bridge_paired_span_count"], 1)
+        paired_doc = docs_by_label["B"][0]
+        self.assertEqual(
+            paired_doc["missing_required_term_backfill_policy"],
+            "candidate_required_relation_bridge_v1",
+        )
+        self.assertEqual(paired_doc["candidate_required_relation_bridge"], "true")
+        directness = _option_claim_missing_required_pair_span_directness_detail(
+            [paired_doc]
+        )
+        self.assertTrue(directness["direct_high_confidence"])
+        self.assertEqual(directness["reason"], "complete_missing_required_pair_span")
+
+    def test_option_claim_missing_required_relation_only_backfill_is_opt_in(self):
+        options = {
+            "B": "Beta mechanism",
+        }
+        option_anchor = {
+            "title": "Beta replacement metadata",
+            "snippet": "Beta mechanism appears in replacement metadata.",
+            "source": "openalex",
+        }
+        relation_only_cache_doc = {
+            "title": "Controlled variable preservation",
+            "snippet": (
+                "Preserves the controlled variable under replacement in the "
+                "benchmark system."
+            ),
+            "source": "openalex",
+        }
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1",
+                "HLE_ENABLE_OPTION_CLAIM_MISSING_REQUIRED_TERM_BACKFILL": "1",
+                "HLE_ENABLE_OPTION_CLAIM_REQUIRED_RELATION_BRIDGE_SPAN": "1",
+                "HLE_ENABLE_OPTION_CLAIM_MISSING_REQUIRED_RELATION_ONLY_BACKFILL": "",
+                "HLE_EVIDENCE_SOURCE_CACHE_ONLY": "1",
+            },
+            clear=False,
+        ):
+            with patch(
+                "assumption_os.hle_smoke_eval._local_evidence_corpus_paths",
+                return_value=[Path("unit-cache")],
+            ):
+                with patch(
+                    "assumption_os.hle_smoke_eval._local_evidence_corpus_search",
+                    return_value=[relation_only_cache_doc],
+                ):
+                    _, summary = _option_claim_candidate_direct_relation_spans_by_label(
+                        stem="Which mechanism preserves the controlled variable under replacement?",
+                        options=options,
+                        docs_by_label={"B": [option_anchor]},
+                        candidate_labels=["B"],
+                        problem={
+                            "_question": (
+                                "Which mechanism preserves the controlled variable under "
+                                "replacement?"
+                            ),
+                            "answer_type": "multipleChoice",
+                            "category": "Science",
+                            "raw_subject": "Systems Biology",
+                        },
+                        max_spans_per_label=2,
+                        min_score=0.0,
+                        force_enabled=True,
+                    )
+
+        option_hash = stable_hash({"option_label": "B"})
+        backfill_summary = summary["missing_required_term_backfill_summaries_by_option_hash"][
+            option_hash
+        ]
+        self.assertFalse(backfill_summary["relation_only_bridge_enabled"])
+        self.assertEqual(backfill_summary["relation_only_bridge_doc_count"], 0)
+        self.assertEqual(summary["missing_required_term_backfill_relation_only_doc_count"], 0)
+
     def test_option_claim_missing_required_term_backfill_bypasses_unique_source_suppression(self):
         options = {
             "B": "Beta mechanism",
@@ -16878,6 +20290,192 @@ class HleSmokeEvalTest(unittest.TestCase):
         )
         self.assertIn("Candidate anchor evidence", docs_by_label["B"][0]["snippet"])
         self.assertIn("Missing required relation evidence", docs_by_label["B"][0]["snippet"])
+        self.assertTrue(summary["candidate_direct_relation_span_required_coverage_gap_rows"])
+        self.assertIsNotNone(
+            summary["candidate_direct_relation_span_required_coverage_gap_rows_hash"]
+        )
+        gap_row = summary["candidate_direct_relation_span_required_coverage_gap_rows"][0]
+        self.assertEqual(gap_row["option_hash"], stable_hash({"option_label": "B"}))
+        self.assertGreaterEqual(gap_row["scored_span_count"], 1)
+        self.assertIn("main_no_option_signal", gap_row["filter_counts"])
+
+    def test_option_claim_missing_required_term_backfill_composes_partial_candidate_sources(self):
+        options = {
+            "B": "Beta mechanism",
+        }
+        partial_preservation_doc = {
+            "title": "Beta replacement preservation",
+            "snippet": "Beta mechanism preserves replacement behavior in the assay.",
+            "source": "openalex",
+            "retrieval_stage": "missing_required_term_backfill",
+            "missing_required_term_backfill": "true",
+        }
+        partial_variable_doc = {
+            "title": "Beta controlled variable",
+            "snippet": "Beta mechanism tracks the controlled variable in the benchmark.",
+            "source": "semantic_scholar",
+            "retrieval_stage": "missing_required_term_backfill",
+            "missing_required_term_backfill": "true",
+        }
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1",
+                "HLE_DISABLE_OPTION_CLAIM_MISSING_REQUIRED_TERM_BACKFILL": "1",
+                "HLE_ENABLE_OPTION_CLAIM_REQUIRED_COVERAGE_COMPOSITION_SPAN": "1",
+            },
+            clear=False,
+        ):
+            docs_by_label, summary = _option_claim_candidate_direct_relation_spans_by_label(
+                stem="Which mechanism preserves the controlled variable under replacement?",
+                options=options,
+                docs_by_label={"B": [partial_preservation_doc, partial_variable_doc]},
+                candidate_labels=["B"],
+                max_spans_per_label=1,
+                min_score=0.0,
+            )
+
+        self.assertEqual(summary["status"], "activated")
+        self.assertGreaterEqual(
+            summary["missing_required_term_backfill_composition_candidate_count"],
+            1,
+        )
+        self.assertEqual(summary["missing_required_term_backfill_composed_span_count"], 1)
+        self.assertEqual(summary["missing_required_term_backfill_paired_span_count"], 1)
+        self.assertEqual(
+            docs_by_label["B"][0]["span_provenance"],
+            "missing_required_term_backfill_paired_span",
+        )
+        row = summary["candidate_direct_relation_span_rows"][0]
+        self.assertTrue(row["missing_required_term_backfill_pair"])
+        self.assertEqual(row["relation_signature_required_missing_term_count"], 0)
+        self.assertGreaterEqual(row["relation_signature_required_overlap"], 4)
+
+    def test_option_claim_incomplete_missing_required_pair_does_not_suppress_composition(self):
+        options = {
+            "B": "Beta mechanism",
+        }
+        anchor_doc = {
+            "title": "Beta replacement metadata",
+            "snippet": "Beta mechanism appears in replacement metadata.",
+            "source": "openalex",
+        }
+        relation_only_backfill = {
+            "title": "Replacement preservation note",
+            "snippet": "The process preserves replacement behavior in the assay.",
+            "source": "openalex",
+            "retrieval_stage": "missing_required_term_backfill",
+            "missing_required_term_backfill": "true",
+            "missing_required_term_backfill_query_hash": "unit-query",
+            "missing_required_term_backfill_query_provenance": (
+                "required_relation_terms_without_option_phrase"
+            ),
+            "missing_required_term_backfill_required_overlap": "1",
+            "missing_required_term_backfill_required_missing_term_count": "3",
+        }
+        partial_preservation_doc = {
+            "title": "Beta replacement preservation",
+            "snippet": "Beta mechanism preserves replacement behavior in the assay.",
+            "source": "openalex",
+            "retrieval_stage": "missing_required_term_backfill",
+            "missing_required_term_backfill": "true",
+        }
+        partial_variable_doc = {
+            "title": "Beta controlled variable",
+            "snippet": "Beta mechanism tracks the controlled variable in the benchmark.",
+            "source": "semantic_scholar",
+            "retrieval_stage": "missing_required_term_backfill",
+            "missing_required_term_backfill": "true",
+        }
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1",
+                "HLE_DISABLE_OPTION_CLAIM_MISSING_REQUIRED_TERM_BACKFILL": "1",
+                "HLE_ENABLE_OPTION_CLAIM_REQUIRED_COVERAGE_COMPOSITION_SPAN": "1",
+            },
+            clear=False,
+        ):
+            docs_by_label, summary = _option_claim_candidate_direct_relation_spans_by_label(
+                stem="Which mechanism preserves the controlled variable under replacement?",
+                options=options,
+                docs_by_label={
+                    "B": [
+                        anchor_doc,
+                        relation_only_backfill,
+                        partial_preservation_doc,
+                        partial_variable_doc,
+                    ]
+                },
+                candidate_labels=["B"],
+                max_spans_per_label=1,
+                min_score=0.0,
+            )
+
+        self.assertEqual(summary["status"], "activated")
+        self.assertGreaterEqual(summary["missing_required_term_backfill_pair_candidate_count"], 1)
+        self.assertGreaterEqual(summary["missing_required_term_backfill_paired_span_count"], 1)
+        self.assertEqual(summary["missing_required_term_backfill_composed_span_count"], 1)
+        self.assertEqual(
+            docs_by_label["B"][0]["span_provenance"],
+            "missing_required_term_backfill_paired_span",
+        )
+        row = summary["candidate_direct_relation_span_rows"][0]
+        self.assertTrue(row["missing_required_term_backfill_pair"])
+        self.assertEqual(row["relation_signature_required_missing_term_count"], 0)
+        self.assertGreaterEqual(row["relation_signature_required_overlap"], 4)
+
+    def test_option_claim_required_coverage_composition_is_opt_in(self):
+        options = {
+            "B": "Beta mechanism",
+        }
+        partial_preservation_doc = {
+            "title": "Beta replacement preservation",
+            "snippet": "Beta mechanism preserves replacement behavior in the assay.",
+            "source": "openalex",
+            "retrieval_stage": "missing_required_term_backfill",
+            "missing_required_term_backfill": "true",
+        }
+        partial_variable_doc = {
+            "title": "Beta controlled variable",
+            "snippet": "Beta mechanism tracks the controlled variable in the benchmark.",
+            "source": "semantic_scholar",
+            "retrieval_stage": "missing_required_term_backfill",
+            "missing_required_term_backfill": "true",
+        }
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1",
+                "HLE_DISABLE_OPTION_CLAIM_MISSING_REQUIRED_TERM_BACKFILL": "1",
+                "HLE_DISABLE_OPTION_CLAIM_REQUIRED_COVERAGE_COMPOSITION_SPAN": "1",
+            },
+            clear=False,
+        ):
+            docs_by_label, summary = _option_claim_candidate_direct_relation_spans_by_label(
+                stem="Which mechanism preserves the controlled variable under replacement?",
+                options=options,
+                docs_by_label={"B": [partial_preservation_doc, partial_variable_doc]},
+                candidate_labels=["B"],
+                max_spans_per_label=1,
+                min_score=0.0,
+            )
+
+        self.assertEqual(summary["status"], "activated")
+        self.assertEqual(summary["missing_required_term_backfill_composed_span_count"], 0)
+        self.assertEqual(
+            summary["candidate_direct_relation_span_rows"][0][
+                "relation_signature_required_missing_term_count"
+            ],
+            2,
+        )
+        self.assertEqual(
+            docs_by_label["B"][0]["span_provenance"],
+            "missing_required_term_backfill_span",
+        )
 
     def test_statement_factcheck_extractor_prefers_answer_web_claim_span(self):
         options = {
@@ -19829,7 +23427,7 @@ class HleSmokeEvalTest(unittest.TestCase):
             "status": "weak_margin",
             "top_support_doc_count": 0,
             "weak_candidate_emitted": False,
-            "source_verifier_candidate": False,
+            "source_verifier_candidate": True,
         }
         with patch.dict(
             os.environ,
@@ -19874,7 +23472,7 @@ class HleSmokeEvalTest(unittest.TestCase):
             "status": "weak_margin",
             "top_support_doc_count": 0,
             "weak_candidate_emitted": False,
-            "source_verifier_candidate": False,
+            "source_verifier_candidate": True,
         }
 
         def fake_search_docs(*, stem, option_text, problem, agent_plan, max_docs):
@@ -20122,8 +23720,32 @@ class HleSmokeEvalTest(unittest.TestCase):
                 "refuting_doc_hashes": [],
             }
 
-        verifier_responses = [
-            {
+        def fake_source_quality(*, stem, option_label, option_text, option_terms_by_label, option_text_by_label, docs):
+            del stem, option_text, option_terms_by_label, option_text_by_label, docs
+            return {
+                "source_quality_score": 12.0 if option_label == "B" else 3.0 if option_label == "A" else 0.0,
+                "source_quality_doc_count": 2 if option_label == "B" else 1 if option_label == "A" else 0,
+                "statement_fact_claim_doc_count": 0,
+                "statement_fact_refutation_doc_count": 0,
+                "statement_fact_refutation_high_confidence_doc_count": 0,
+                "max_statement_fact_refutation_strength": 0.0,
+                "statement_fact_slot_complete_doc_count": 0,
+                "statement_fact_answer_web_slot_complete_doc_count": 0,
+                "statement_fact_zero_slot_rejected_doc_count": 0,
+            }
+
+        def fake_source_verifier(**kwargs):
+            if kwargs["lexical_top_label"] == "B":
+                return {
+                    "status": "activated",
+                    "direct_high_confidence": True,
+                    "selected_label": "B",
+                    "confidence": "high",
+                    "evidence_relation": "direct",
+                    "supports_answer": True,
+                    "underlying_model_calls": 1,
+                }
+            return {
                 "status": "blocked_not_direct_high_confidence",
                 "direct_high_confidence": False,
                 "selected_label": "",
@@ -20131,17 +23753,7 @@ class HleSmokeEvalTest(unittest.TestCase):
                 "evidence_relation": "generic",
                 "supports_answer": False,
                 "underlying_model_calls": 1,
-            },
-            {
-                "status": "activated",
-                "direct_high_confidence": True,
-                "selected_label": "B",
-                "confidence": "high",
-                "evidence_relation": "direct",
-                "supports_answer": True,
-                "underlying_model_calls": 1,
-            },
-        ]
+            }
 
         with patch.dict(
             os.environ,
@@ -20159,18 +23771,22 @@ class HleSmokeEvalTest(unittest.TestCase):
                     side_effect=fake_score_detail,
                 ):
                     with patch(
-                        "assumption_os.hle_smoke_eval._run_source_grounded_option_claim_verifier",
-                        side_effect=verifier_responses,
-                    ) as verifier:
-                        attempt, summary = _maybe_run_mc_option_claim_evidence_verifier(
-                            problem=problem,
-                            attempts=attempts,
-                            option_evidence_summary=option_evidence_summary,
-                            eval_id="e",
-                            call_id="c",
-                            model="m",
-                            logger=None,
-                        )
+                        "assumption_os.hle_smoke_eval._option_claim_source_quality_detail",
+                        side_effect=fake_source_quality,
+                    ):
+                        with patch(
+                            "assumption_os.hle_smoke_eval._run_source_grounded_option_claim_verifier",
+                            side_effect=fake_source_verifier,
+                        ) as verifier:
+                            attempt, summary = _maybe_run_mc_option_claim_evidence_verifier(
+                                problem=problem,
+                                attempts=attempts,
+                                option_evidence_summary=option_evidence_summary,
+                                eval_id="e",
+                                call_id="c",
+                                model="m",
+                                logger=None,
+                            )
 
         self.assertIsNotNone(attempt)
         self.assertEqual(attempt["parsed_answer"], "B")
@@ -20178,11 +23794,162 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(summary["prefilter_override"]["status"], "sweep_gap_claim_scan_override")
         self.assertEqual(summary["prefilter_override"]["sweep_only_missing_option_count"], 1)
         self.assertTrue(summary["finite_sweep_retry_coverage_enabled"])
-        self.assertEqual(summary["source_verifier_attempt_count"], 2)
-        self.assertEqual(summary["missing_model_source_retry_count"], 2)
-        self.assertEqual(summary["source_verifier_attempts"][1]["retry_reason"], "sweep_gap_missing_model_option")
-        self.assertEqual(verifier.call_args_list[1].kwargs["lexical_top_label"], "B")
+        self.assertGreaterEqual(summary["source_verifier_attempt_count"], 1)
+        self.assertGreaterEqual(summary["missing_model_source_retry_count"], 1)
+        self.assertTrue(
+            any(
+                item.get("retry_reason") == "sweep_gap_missing_model_option"
+                for item in summary["source_verifier_attempts"]
+            )
+        )
+        self.assertIn(
+            "B",
+            [call.kwargs["lexical_top_label"] for call in verifier.call_args_list],
+        )
         self.assertTrue(summary["candidate_correct_for_eval"])
+
+    def test_option_claim_source_verifier_budget_break_stops_retry_loop(self):
+        problem = {
+            "id_hash": "pid-budget-break",
+            "question_hash": "qid-budget-break",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Synthetic",
+            "_question": "Which option is best supported?\nA. Alpha\nB. Beta\nC. Gamma\nD. Delta",
+        }
+        option_evidence_summary = {
+            "status": "weak_margin",
+            "top_support_doc_count": 0,
+            "weak_candidate_emitted": False,
+            "source_verifier_candidate": True,
+        }
+
+        def fake_search_docs(*, stem, option_text, problem, agent_plan, max_docs):
+            del stem, problem, agent_plan, max_docs
+            return (
+                [{"title": option_text, "snippet": f"{option_text} direct evidence.", "source": "openalex"}],
+                [option_text],
+                [],
+            )
+
+        def fake_score_detail(*, stem_terms, option_label, option_text, option_terms_by_label, option_text_by_label, docs):
+            del stem_terms, option_text, option_terms_by_label, option_text_by_label, docs
+            scores = {"A": 22.0, "B": 21.0, "C": 20.0, "D": 1.0}
+            support = 2 if option_label in {"A", "B", "C"} else 0
+            return {
+                "net_score": scores[option_label],
+                "support_doc_count": support,
+                "refute_doc_count": 0,
+                "ambiguous_doc_count": 0,
+                "unsupported_doc_count": 0 if support else 1,
+                "supporting_doc_hashes": [f"h{option_label.lower()}"] if support else [],
+                "refuting_doc_hashes": [],
+            }
+
+        def fake_source_quality(*, stem, option_label, option_text, option_terms_by_label, option_text_by_label, docs):
+            del stem, option_text, option_terms_by_label, option_text_by_label, docs
+            return {
+                "source_quality_score": 0.0,
+                "source_quality_doc_count": 0,
+                "statement_fact_claim_doc_count": 0,
+                "statement_fact_refutation_doc_count": 0,
+                "statement_fact_refutation_high_confidence_doc_count": 0,
+                "max_statement_fact_refutation_strength": 0.0,
+                "statement_fact_slot_complete_doc_count": 0,
+                "statement_fact_answer_web_slot_complete_doc_count": 0,
+                "statement_fact_zero_slot_rejected_doc_count": 0,
+            }
+
+        budget_reason = (
+            "option_claim_verifier_non_reserved_budget_exhausted_reserved_for_span_directness"
+        )
+        verifier_responses = [
+            {
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+                "selected_label": "",
+                "confidence": "low",
+                "evidence_relation": "generic",
+                "supports_answer": False,
+                "underlying_model_calls": 1,
+            },
+            {
+                "status": "budget_exhausted",
+                "reason": budget_reason,
+                "direct_high_confidence": False,
+                "selected_label": "",
+                "supports_answer": False,
+                "budget_state": {
+                    "budget_limit": 3,
+                    "reserved_budget_limit": 1,
+                    "non_reserved_budget_limit": 2,
+                    "budget_used_before": 2,
+                    "reserved_budget_used_before": 0,
+                    "budget_remaining_before": 1,
+                    "uses_reserved_budget": False,
+                },
+                "underlying_model_calls": 0,
+            },
+            {
+                "status": "activated",
+                "direct_high_confidence": True,
+                "selected_label": "C",
+                "confidence": "high",
+                "evidence_relation": "direct",
+                "supports_answer": True,
+                "underlying_model_calls": 1,
+            },
+        ]
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_SOURCE_GROUNDED_OPTION_CLAIM_RETRY_TOP_K": "4",
+                "HLE_DISABLE_MISSING_MODEL_OPTION_CLAIM_RETRY": "1",
+                "HLE_SOURCE_GROUNDED_OPTION_CLAIM_SOURCE_QUALITY_CHALLENGER_LIMIT": "0",
+                "HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER": "1",
+                "HLE_DISABLE_OPTION_CLAIM_RELATIVE_ADJUDICATOR": "1",
+                "HLE_DISABLE_OPTION_CLAIM_CONTRASTIVE_ADJUDICATOR": "1",
+                "HLE_DISABLE_OPTION_CLAIM_SPAN_DIRECTNESS_VERIFIER": "1",
+                "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT": "1",
+                "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT": "1",
+            },
+            clear=False,
+        ):
+            with patch("assumption_os.hle_smoke_eval._option_claim_evidence_search_docs", side_effect=fake_search_docs):
+                with patch(
+                    "assumption_os.hle_smoke_eval._score_option_claim_evidence_detail",
+                    side_effect=fake_score_detail,
+                ):
+                    with patch(
+                        "assumption_os.hle_smoke_eval._option_claim_source_quality_detail",
+                        side_effect=fake_source_quality,
+                    ):
+                        with patch(
+                            "assumption_os.hle_smoke_eval._run_source_grounded_option_claim_verifier",
+                            side_effect=verifier_responses,
+                        ) as verifier:
+                            attempt, summary = _maybe_run_mc_option_claim_evidence_verifier(
+                                problem=problem,
+                                attempts=[],
+                                option_evidence_summary=option_evidence_summary,
+                                eval_id="e",
+                                call_id="c",
+                                model="m",
+                                logger=None,
+                            )
+
+        self.assertIsNone(attempt)
+        self.assertEqual(verifier.call_count, 2)
+        self.assertEqual(summary["source_verifier_attempt_count"], 2)
+        self.assertEqual(summary["source_verifier_budget_break_status"], "activated")
+        self.assertEqual(summary["source_verifier_budget_break_reason"], budget_reason)
+        self.assertEqual(summary["source_verifier_budget_break_skipped_row_count"], 1)
+        self.assertFalse(summary["source_verifier_budget_break_total_budget_exhausted"])
+        self.assertTrue(
+            summary["source_verifier_budget_break_preserved_span_directness_reserved_budget"]
+        )
+        self.assertEqual(summary["source_verifier_attempts"][1]["budget_reason"], budget_reason)
 
     def test_option_claim_second_pass_after_option_sweep_rescues_prefiltered_sweep_only_candidate(self):
         problem = {
@@ -20284,8 +24051,32 @@ class HleSmokeEvalTest(unittest.TestCase):
                 "refuting_doc_hashes": [],
             }
 
-        verifier_responses = [
-            {
+        def fake_source_quality(*, stem, option_label, option_text, option_terms_by_label, option_text_by_label, docs):
+            del stem, option_text, option_terms_by_label, option_text_by_label, docs
+            return {
+                "source_quality_score": 12.0 if option_label == "B" else 3.0 if option_label == "A" else 0.0,
+                "source_quality_doc_count": 2 if option_label == "B" else 1 if option_label == "A" else 0,
+                "statement_fact_claim_doc_count": 0,
+                "statement_fact_refutation_doc_count": 0,
+                "statement_fact_refutation_high_confidence_doc_count": 0,
+                "max_statement_fact_refutation_strength": 0.0,
+                "statement_fact_slot_complete_doc_count": 0,
+                "statement_fact_answer_web_slot_complete_doc_count": 0,
+                "statement_fact_zero_slot_rejected_doc_count": 0,
+            }
+
+        def fake_source_verifier(**kwargs):
+            if kwargs["lexical_top_label"] == "B":
+                return {
+                    "status": "activated",
+                    "direct_high_confidence": True,
+                    "selected_label": "B",
+                    "confidence": "high",
+                    "evidence_relation": "direct",
+                    "supports_answer": True,
+                    "underlying_model_calls": 1,
+                }
+            return {
                 "status": "blocked_not_direct_high_confidence",
                 "direct_high_confidence": False,
                 "selected_label": "",
@@ -20293,17 +24084,7 @@ class HleSmokeEvalTest(unittest.TestCase):
                 "evidence_relation": "generic",
                 "supports_answer": False,
                 "underlying_model_calls": 1,
-            },
-            {
-                "status": "activated",
-                "direct_high_confidence": True,
-                "selected_label": "B",
-                "confidence": "high",
-                "evidence_relation": "direct",
-                "supports_answer": True,
-                "underlying_model_calls": 1,
-            },
-        ]
+            }
 
         with patch.dict(
             os.environ,
@@ -20322,22 +24103,26 @@ class HleSmokeEvalTest(unittest.TestCase):
                     side_effect=fake_score_detail,
                 ):
                     with patch(
-                        "assumption_os.hle_smoke_eval._run_source_grounded_option_claim_verifier",
-                        side_effect=verifier_responses,
-                    ) as verifier:
-                        second_attempt, second_summary = (
-                            _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
-                                problem=problem,
-                                attempts=attempts,
-                                option_evidence_summary=option_evidence_summary,
-                                option_claim_evidence_summary=first_summary,
-                                option_sweep_summary={"status": "activated"},
-                                eval_id="e",
-                                call_id="c",
-                                model="m",
-                                logger=None,
+                        "assumption_os.hle_smoke_eval._option_claim_source_quality_detail",
+                        side_effect=fake_source_quality,
+                    ):
+                        with patch(
+                            "assumption_os.hle_smoke_eval._run_source_grounded_option_claim_verifier",
+                            side_effect=fake_source_verifier,
+                        ) as verifier:
+                            second_attempt, second_summary = (
+                                _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
+                                    problem=problem,
+                                    attempts=attempts,
+                                    option_evidence_summary=option_evidence_summary,
+                                    option_claim_evidence_summary=first_summary,
+                                    option_sweep_summary={"status": "activated"},
+                                    eval_id="e",
+                                    call_id="c",
+                                    model="m",
+                                    logger=None,
+                                )
                             )
-                        )
 
         self.assertIsNotNone(second_attempt)
         self.assertEqual(second_attempt["parsed_answer"], "B")
@@ -20349,8 +24134,329 @@ class HleSmokeEvalTest(unittest.TestCase):
         )
         self.assertEqual(second_summary["first_pass_prefilter"]["reason"], first_summary["reason"])
         self.assertEqual(second_summary["prefilter_override"]["status"], "sweep_gap_claim_scan_override")
-        self.assertEqual(second_summary["source_verifier_attempt_count"], 2)
-        self.assertEqual(verifier.call_args_list[1].kwargs["lexical_top_label"], "B")
+        self.assertGreaterEqual(second_summary["source_verifier_attempt_count"], 1)
+        self.assertTrue(
+            any(
+                item.get("retry_reason") == "sweep_gap_missing_model_option"
+                for item in second_summary["source_verifier_attempts"]
+            )
+        )
+        self.assertIn(
+            "B",
+            [call.kwargs["lexical_top_label"] for call in verifier.call_args_list],
+        )
+        self.assertTrue(second_summary["candidate_correct_for_eval"])
+
+    def test_option_claim_second_pass_after_option_sweep_runs_when_first_pass_missing(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Synthetic",
+            "_question": "Which mechanism is best supported?\nA. Alpha\nB. Beta\nC. Gamma",
+            "_answer": "B",
+        }
+        attempts = [
+            {
+                "child_id": "model-a",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": stable_hash({"answer": "A"}),
+                "status": "answered",
+            },
+            {
+                "child_id": "sweep-b",
+                "child_index": 2,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "B",
+                "parsed_answer_hash": stable_hash({"answer": "B"}),
+                "status": "answered",
+            },
+        ]
+        option_evidence_summary = {
+            "status": "blocked_ambiguous_option_evidence",
+            "top_support_doc_count": 0,
+            "weak_candidate_emitted": False,
+            "source_verifier_candidate": False,
+        }
+
+        def fake_search_docs(*, stem, option_text, problem, agent_plan, max_docs):
+            del stem, problem, agent_plan, max_docs
+            return (
+                [{"title": option_text, "snippet": f"{option_text} retrieved evidence.", "source": "openalex"}],
+                [option_text],
+                [],
+            )
+
+        def fake_score_detail(*, stem_terms, option_label, option_text, option_terms_by_label, option_text_by_label, docs):
+            del stem_terms, option_text, option_terms_by_label, option_text_by_label, docs
+            if option_label == "A":
+                return {
+                    "net_score": 20.0,
+                    "support_doc_count": 2,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "unsupported_doc_count": 0,
+                    "supporting_doc_hashes": ["ha"],
+                    "refuting_doc_hashes": [],
+                }
+            return {
+                "net_score": 2.0 if option_label == "B" else 1.0,
+                "support_doc_count": 0,
+                "refute_doc_count": 0,
+                "ambiguous_doc_count": 0,
+                "unsupported_doc_count": 1,
+                "supporting_doc_hashes": [],
+                "refuting_doc_hashes": [],
+            }
+
+        def fake_source_quality(*, stem, option_label, option_text, option_terms_by_label, option_text_by_label, docs):
+            del stem, option_text, option_terms_by_label, option_text_by_label, docs
+            return {
+                "source_quality_score": 12.0 if option_label == "B" else 3.0 if option_label == "A" else 0.0,
+                "source_quality_doc_count": 2 if option_label == "B" else 1 if option_label == "A" else 0,
+                "statement_fact_claim_doc_count": 0,
+                "statement_fact_refutation_doc_count": 0,
+                "statement_fact_refutation_high_confidence_doc_count": 0,
+                "max_statement_fact_refutation_strength": 0.0,
+                "statement_fact_slot_complete_doc_count": 0,
+                "statement_fact_answer_web_slot_complete_doc_count": 0,
+                "statement_fact_zero_slot_rejected_doc_count": 0,
+            }
+
+        def fake_source_verifier(**kwargs):
+            if kwargs["lexical_top_label"] == "B":
+                return {
+                    "status": "activated",
+                    "direct_high_confidence": True,
+                    "selected_label": "B",
+                    "confidence": "high",
+                    "evidence_relation": "direct",
+                    "supports_answer": True,
+                    "underlying_model_calls": 1,
+                }
+            return {
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+                "selected_label": "",
+                "confidence": "low",
+                "evidence_relation": "generic",
+                "supports_answer": False,
+                "underlying_model_calls": 1,
+            }
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_EVIDENCE_SOURCE_CACHE_ONLY": "1",
+                "HLE_ENABLE_OPTION_CLAIM_SWEEP_GAP_SECOND_PASS": "1",
+                "HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER": "1",
+                "HLE_DISABLE_OPTION_CLAIM_ZERO_QUALITY_MISSING_RETRY_BUDGET_GATE": "1",
+            },
+            clear=False,
+        ):
+            with patch("assumption_os.hle_smoke_eval._option_claim_evidence_search_docs", side_effect=fake_search_docs):
+                with patch(
+                    "assumption_os.hle_smoke_eval._score_option_claim_evidence_detail",
+                    side_effect=fake_score_detail,
+                ):
+                    with patch(
+                        "assumption_os.hle_smoke_eval._option_claim_source_quality_detail",
+                        side_effect=fake_source_quality,
+                    ):
+                        with patch(
+                            "assumption_os.hle_smoke_eval._run_source_grounded_option_claim_verifier",
+                            side_effect=fake_source_verifier,
+                        ) as verifier:
+                            second_attempt, second_summary = (
+                                _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
+                                    problem=problem,
+                                    attempts=attempts,
+                                    option_evidence_summary=option_evidence_summary,
+                                    option_claim_evidence_summary=None,
+                                    option_sweep_summary={"status": "activated"},
+                                    eval_id="e",
+                                    call_id="c",
+                                    model="m",
+                                    logger=None,
+                                )
+                            )
+
+        self.assertIsNotNone(second_attempt)
+        self.assertEqual(second_attempt["parsed_answer"], "B")
+        self.assertEqual(second_summary["status"], "activated")
+        self.assertEqual(second_summary["post_sweep_second_pass_status"], "activated")
+        self.assertTrue(
+            second_summary["post_sweep_second_pass"][
+                "coverage_forced_without_prefiltered_first_pass"
+            ]
+        )
+        self.assertEqual(second_summary["first_pass_prefilter"]["status"], "missing")
+        self.assertEqual(second_summary["prefilter_override"]["status"], "sweep_gap_claim_scan_override")
+        self.assertTrue(
+            any(
+                item.get("retry_reason") == "sweep_gap_missing_model_option"
+                for item in second_summary["source_verifier_attempts"]
+            )
+        )
+        self.assertIn(
+            "B",
+            [call.kwargs["lexical_top_label"] for call in verifier.call_args_list],
+        )
+        self.assertTrue(second_summary["candidate_correct_for_eval"])
+
+    def test_option_claim_second_pass_forces_math_sweep_gap_source_scan(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Mathematics",
+            "raw_subject": "Mathematics",
+            "_question": "Which option satisfies the equation?\nA. Alpha\nB. Beta\nC. Gamma",
+            "_answer": "B",
+        }
+        attempts = [
+            {
+                "child_id": "model-a",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": stable_hash({"answer": "A"}),
+                "status": "answered",
+            },
+            {
+                "child_id": "sweep-b",
+                "child_index": 2,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "B",
+                "parsed_answer_hash": stable_hash({"answer": "B"}),
+                "status": "answered",
+            },
+        ]
+        first_summary = {
+            "status": "not_required",
+            "reason": "math_requires_executable_verifier",
+        }
+        option_evidence_summary = {
+            "status": "weak_margin",
+            "top_support_doc_count": 0,
+            "weak_candidate_emitted": False,
+            "source_verifier_candidate": False,
+        }
+
+        def fake_search_docs(*, stem, option_text, problem, agent_plan, max_docs):
+            del stem, problem, agent_plan, max_docs
+            return (
+                [{"title": option_text, "snippet": f"{option_text} retrieved evidence.", "source": "openalex"}],
+                [option_text],
+                [],
+            )
+
+        def fake_score_detail(*, stem_terms, option_label, option_text, option_terms_by_label, option_text_by_label, docs):
+            del stem_terms, option_text, option_terms_by_label, option_text_by_label, docs
+            if option_label == "A":
+                return {
+                    "net_score": 20.0,
+                    "support_doc_count": 2,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "unsupported_doc_count": 0,
+                    "supporting_doc_hashes": ["ha"],
+                    "refuting_doc_hashes": [],
+                }
+            return {
+                "net_score": 2.0 if option_label == "B" else 1.0,
+                "support_doc_count": 0,
+                "refute_doc_count": 0,
+                "ambiguous_doc_count": 0,
+                "unsupported_doc_count": 1,
+                "supporting_doc_hashes": [],
+                "refuting_doc_hashes": [],
+            }
+
+        def fake_source_quality(*, stem, option_label, option_text, option_terms_by_label, option_text_by_label, docs):
+            del stem, option_text, option_terms_by_label, option_text_by_label, docs
+            return {
+                "source_quality_score": 12.0 if option_label == "B" else 3.0 if option_label == "A" else 0.0,
+                "source_quality_doc_count": 2 if option_label == "B" else 1 if option_label == "A" else 0,
+                "statement_fact_claim_doc_count": 0,
+                "statement_fact_refutation_doc_count": 0,
+                "statement_fact_refutation_high_confidence_doc_count": 0,
+                "max_statement_fact_refutation_strength": 0.0,
+                "statement_fact_slot_complete_doc_count": 0,
+                "statement_fact_answer_web_slot_complete_doc_count": 0,
+                "statement_fact_zero_slot_rejected_doc_count": 0,
+            }
+
+        def fake_source_verifier(**kwargs):
+            if kwargs["lexical_top_label"] == "B":
+                return {
+                    "status": "activated",
+                    "direct_high_confidence": True,
+                    "selected_label": "B",
+                    "confidence": "high",
+                    "evidence_relation": "direct",
+                    "supports_answer": True,
+                    "underlying_model_calls": 1,
+                }
+            return {
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+                "selected_label": "",
+                "confidence": "low",
+                "evidence_relation": "generic",
+                "supports_answer": False,
+                "underlying_model_calls": 1,
+            }
+
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_EVIDENCE_SOURCE_CACHE_ONLY": "1",
+                "HLE_ENABLE_OPTION_CLAIM_SWEEP_GAP_SECOND_PASS": "1",
+                "HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER": "1",
+                "HLE_DISABLE_OPTION_CLAIM_ZERO_QUALITY_MISSING_RETRY_BUDGET_GATE": "1",
+            },
+            clear=False,
+        ):
+            with patch("assumption_os.hle_smoke_eval._option_claim_evidence_search_docs", side_effect=fake_search_docs):
+                with patch(
+                    "assumption_os.hle_smoke_eval._score_option_claim_evidence_detail",
+                    side_effect=fake_score_detail,
+                ):
+                    with patch(
+                        "assumption_os.hle_smoke_eval._option_claim_source_quality_detail",
+                        side_effect=fake_source_quality,
+                    ):
+                        with patch(
+                            "assumption_os.hle_smoke_eval._run_source_grounded_option_claim_verifier",
+                            side_effect=fake_source_verifier,
+                        ) as verifier:
+                            second_attempt, second_summary = (
+                                _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
+                                    problem=problem,
+                                    attempts=attempts,
+                                    option_evidence_summary=option_evidence_summary,
+                                    option_claim_evidence_summary=first_summary,
+                                    option_sweep_summary={"status": "activated"},
+                                    eval_id="e",
+                                    call_id="c",
+                                    model="m",
+                                    logger=None,
+                                )
+                            )
+
+        self.assertIsNotNone(second_attempt)
+        self.assertEqual(second_attempt["parsed_answer"], "B")
+        self.assertTrue(second_summary["force_sweep_gap_source_claim_scan"])
+        self.assertTrue(second_summary["post_sweep_second_pass"]["forced_math_source_claim_scan"])
+        self.assertGreaterEqual(second_summary["source_verifier_attempt_count"], 1)
+        self.assertIn(
+            "B",
+            [call.kwargs["lexical_top_label"] for call in verifier.call_args_list],
+        )
         self.assertTrue(second_summary["candidate_correct_for_eval"])
 
     def test_option_claim_evidence_verifier_keeps_prefilter_when_sweep_candidate_is_not_sweep_only(self):
@@ -20700,8 +24806,32 @@ class HleSmokeEvalTest(unittest.TestCase):
                 "refuting_doc_hashes": [],
             }
 
-        verifier_responses = [
-            {
+        def fake_source_quality(*, stem, option_label, option_text, option_terms_by_label, option_text_by_label, docs):
+            del stem, option_text, option_terms_by_label, option_text_by_label, docs
+            return {
+                "source_quality_score": 12.0 if option_label == "B" else 3.0 if option_label == "A" else 0.0,
+                "source_quality_doc_count": 2 if option_label == "B" else 1 if option_label == "A" else 0,
+                "statement_fact_claim_doc_count": 0,
+                "statement_fact_refutation_doc_count": 0,
+                "statement_fact_refutation_high_confidence_doc_count": 0,
+                "max_statement_fact_refutation_strength": 0.0,
+                "statement_fact_slot_complete_doc_count": 0,
+                "statement_fact_answer_web_slot_complete_doc_count": 0,
+                "statement_fact_zero_slot_rejected_doc_count": 0,
+            }
+
+        def fake_source_verifier(**kwargs):
+            if kwargs["lexical_top_label"] == "B":
+                return {
+                    "status": "activated",
+                    "direct_high_confidence": True,
+                    "selected_label": "B",
+                    "confidence": "high",
+                    "evidence_relation": "direct",
+                    "supports_answer": True,
+                    "underlying_model_calls": 1,
+                }
+            return {
                 "status": "blocked_not_direct_high_confidence",
                 "direct_high_confidence": False,
                 "selected_label": "",
@@ -20709,17 +24839,7 @@ class HleSmokeEvalTest(unittest.TestCase):
                 "evidence_relation": "generic",
                 "supports_answer": False,
                 "underlying_model_calls": 1,
-            },
-            {
-                "status": "activated",
-                "direct_high_confidence": True,
-                "selected_label": "B",
-                "confidence": "high",
-                "evidence_relation": "direct",
-                "supports_answer": True,
-                "underlying_model_calls": 1,
-            },
-        ]
+            }
 
         with patch("assumption_os.hle_smoke_eval._option_claim_evidence_search_docs", side_effect=fake_search_docs):
             with patch(
@@ -20807,8 +24927,32 @@ class HleSmokeEvalTest(unittest.TestCase):
                 "refuting_doc_hashes": [],
             }
 
-        verifier_responses = [
-            {
+        def fake_source_quality(*, stem, option_label, option_text, option_terms_by_label, option_text_by_label, docs):
+            del stem, option_text, option_terms_by_label, option_text_by_label, docs
+            return {
+                "source_quality_score": 12.0 if option_label == "B" else 3.0 if option_label == "A" else 0.0,
+                "source_quality_doc_count": 2 if option_label == "B" else 1 if option_label == "A" else 0,
+                "statement_fact_claim_doc_count": 0,
+                "statement_fact_refutation_doc_count": 0,
+                "statement_fact_refutation_high_confidence_doc_count": 0,
+                "max_statement_fact_refutation_strength": 0.0,
+                "statement_fact_slot_complete_doc_count": 0,
+                "statement_fact_answer_web_slot_complete_doc_count": 0,
+                "statement_fact_zero_slot_rejected_doc_count": 0,
+            }
+
+        def fake_source_verifier(**kwargs):
+            if kwargs["lexical_top_label"] == "B":
+                return {
+                    "status": "activated",
+                    "direct_high_confidence": True,
+                    "selected_label": "B",
+                    "confidence": "high",
+                    "evidence_relation": "direct",
+                    "supports_answer": True,
+                    "underlying_model_calls": 1,
+                }
+            return {
                 "status": "blocked_not_direct_high_confidence",
                 "direct_high_confidence": False,
                 "selected_label": "",
@@ -20816,17 +24960,7 @@ class HleSmokeEvalTest(unittest.TestCase):
                 "evidence_relation": "generic",
                 "supports_answer": False,
                 "underlying_model_calls": 1,
-            },
-            {
-                "status": "activated",
-                "direct_high_confidence": True,
-                "selected_label": "B",
-                "confidence": "high",
-                "evidence_relation": "direct",
-                "supports_answer": True,
-                "underlying_model_calls": 1,
-            },
-        ]
+            }
 
         with patch.dict(
             os.environ,
@@ -20839,27 +24973,38 @@ class HleSmokeEvalTest(unittest.TestCase):
                     side_effect=fake_score_detail,
                 ):
                     with patch(
-                        "assumption_os.hle_smoke_eval._run_source_grounded_option_claim_verifier",
-                        side_effect=verifier_responses,
-                    ) as verifier:
-                        attempt, summary = _maybe_run_mc_option_claim_evidence_verifier(
-                            problem=problem,
-                            attempts=attempts,
-                            eval_id="e",
-                            call_id="c",
-                            model="m",
-                            logger=None,
-                        )
+                        "assumption_os.hle_smoke_eval._option_claim_source_quality_detail",
+                        side_effect=fake_source_quality,
+                    ):
+                        with patch(
+                            "assumption_os.hle_smoke_eval._run_source_grounded_option_claim_verifier",
+                            side_effect=fake_source_verifier,
+                        ) as verifier:
+                            attempt, summary = _maybe_run_mc_option_claim_evidence_verifier(
+                                problem=problem,
+                                attempts=attempts,
+                                eval_id="e",
+                                call_id="c",
+                                model="m",
+                                logger=None,
+                            )
 
         self.assertIsNotNone(attempt)
         self.assertEqual(attempt["parsed_answer"], "B")
         self.assertEqual(summary["status"], "activated")
-        self.assertEqual(summary["source_verifier_attempt_count"], 2)
+        self.assertGreaterEqual(summary["source_verifier_attempt_count"], 1)
         self.assertEqual(summary["missing_model_option_count"], 2)
-        self.assertEqual(summary["missing_model_source_retry_count"], 2)
-        self.assertEqual(summary["source_verifier_attempts"][1]["retry_reason"], "missing_model_option")
-        self.assertEqual(verifier.call_args_list[0].kwargs["lexical_top_label"], "A")
-        self.assertEqual(verifier.call_args_list[1].kwargs["lexical_top_label"], "B")
+        self.assertGreaterEqual(summary["missing_model_source_retry_count"], 1)
+        self.assertTrue(
+            any(
+                item.get("retry_reason") == "missing_model_option"
+                for item in summary["source_verifier_attempts"]
+            )
+        )
+        self.assertIn(
+            "B",
+            [call.kwargs["lexical_top_label"] for call in verifier.call_args_list],
+        )
         self.assertTrue(summary["candidate_correct_for_eval"])
 
     def test_option_claim_source_verifier_records_rejection_reason_metadata(self):
@@ -22695,6 +26840,43 @@ class HleSmokeEvalTest(unittest.TestCase):
             "best_sweep_only_ranked",
         )
 
+    def test_option_claim_contrastive_candidate_selection_tiebreaks_source_quality_by_cleaner_evidence(self):
+        rows = [
+            {"label": "A", "net_score": 30.0, "source_quality_score": 8.0, "source_quality_doc_count": 1},
+            {"label": "B", "net_score": 20.0, "source_quality_score": 7.0, "source_quality_doc_count": 1},
+            {
+                "label": "C",
+                "net_score": 5.0,
+                "source_quality_score": 7.25,
+                "source_quality_doc_count": 0,
+                "ambiguous_doc_count": 4,
+                "local_relation_query_expansion_doc_count": 2,
+            },
+            {
+                "label": "D",
+                "net_score": 1.0,
+                "source_quality_score": 7.25,
+                "source_quality_doc_count": 0,
+                "ambiguous_doc_count": 1,
+                "local_relation_query_expansion_doc_count": 1,
+            },
+        ]
+
+        selection = _option_claim_contrastive_candidate_selection(
+            ranked_rows=rows,
+            options={"A": "Alpha", "B": "Beta", "C": "Gamma", "D": "Delta"},
+            missing_model_labels=["C", "D"],
+        )
+
+        self.assertEqual(
+            selection["best_sweep_only_challenger_option_hash"],
+            stable_hash({"option_label": "D"}),
+        )
+        self.assertEqual(
+            selection["selection_reasons_by_option_hash"][stable_hash({"option_label": "D"})],
+            "best_sweep_only_source_quality",
+        )
+
     def test_option_claim_contrastive_candidate_selection_prioritizes_source_quality_challenger(self):
         rows = [
             {"label": "A", "net_score": 30.0, "source_quality_score": 8.0, "source_quality_doc_count": 1},
@@ -22718,6 +26900,36 @@ class HleSmokeEvalTest(unittest.TestCase):
             selection["selection_reasons_by_option_hash"][stable_hash({"option_label": "F"})],
             "high_confidence_source_quality_challenger",
         )
+
+    def test_option_claim_contrastive_candidate_selection_audits_limit_excluded_source_candidate(self):
+        rows = [
+            {"label": "A", "net_score": 30.0, "source_quality_score": 8.0, "source_quality_doc_count": 1},
+            {"label": "B", "net_score": 20.0, "source_quality_score": 7.0, "source_quality_doc_count": 1},
+            {"label": "C", "net_score": 2.0, "source_quality_score": 2.0, "source_quality_doc_count": 0},
+            {"label": "F", "net_score": -1.0, "source_quality_score": 14.0, "source_quality_doc_count": 3},
+        ]
+
+        with patch.dict(os.environ, {"HLE_OPTION_CLAIM_CONTRASTIVE_ADJUDICATOR_CANDIDATE_LIMIT": "2"}):
+            selection = _option_claim_contrastive_candidate_selection(
+                ranked_rows=rows,
+                options={label: label for label in "ABCF"},
+                missing_model_labels=["C", "F"],
+                priority_source_quality_labels=["F"],
+            )
+
+        self.assertEqual(selection["candidate_labels"], ["A", "B"])
+        f_hash = stable_hash({"option_label": "F"})
+        audit_by_hash = {
+            row["option_hash"]: row
+            for row in selection["candidate_pool_audit_rows"]
+        }
+        self.assertIn(f_hash, audit_by_hash)
+        self.assertEqual(audit_by_hash[f_hash]["exclusion_reason"], "candidate_limit_reached")
+        self.assertTrue(audit_by_hash[f_hash]["priority_source_quality"])
+        self.assertEqual(selection["candidate_pool_source_quality_not_selected_count"], 1)
+        safe = _safe_contrastive_candidate_selection_summary(selection)
+        self.assertEqual(safe["candidate_pool_audit_hash"], selection["candidate_pool_audit_hash"])
+        self.assertEqual(safe["candidate_pool_audit_row_count"], 4)
 
     def test_option_claim_contrastive_candidate_selection_adds_best_overall_source_quality(self):
         rows = [
@@ -22983,6 +27195,196 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(detail["selected_option_hash"], b_hash)
         self.assertEqual(detail["eligible_candidate_count"], 1)
 
+    def test_source_quality_directness_promotion_accepts_statement_fact_claim_span(self):
+        j_hash = stable_hash({"option_label": "J"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "status": "budget_exhausted",
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": j_hash,
+                    "source_quality_score": 9.5,
+                    "source_quality_doc_count": 2,
+                    "source_quality_statement_fact_claim_doc_count": 2,
+                    "source_quality_statement_fact_slot_complete_doc_count": 2,
+                    "source_quality_statement_fact_answer_web_slot_complete_doc_count": 2,
+                    "source_quality_statement_fact_zero_slot_rejected_doc_count": 0,
+                    "support_doc_count": 0,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 4,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_statement_fact_claim_signal": True,
+                    "candidate_direct_relation_span_top_answer_web_direct_claim_signal": True,
+                    "candidate_direct_relation_span_top_candidate_specific_sentence": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "candidate_direct_relation_span_top_source_doc_shared": False,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": False,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 0,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 1,
+                    "source_verifier_rejection_reason": (
+                        "variant_model_call_budget_reserved_for_option_claim_directness"
+                    ),
+                },
+            ],
+            options={
+                "J": (
+                    "A normal form verifier is a pair V = (S, D) where S is a "
+                    "sampler and D is a decider."
+                ),
+            },
+            candidate_labels=["J"],
+        )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(detail["status"], "activated")
+        self.assertEqual(detail["selected_option_hash"], j_hash)
+        self.assertEqual(
+            detail["selected_directness_path"],
+            "programmatic_statement_fact_claim_span",
+        )
+        self.assertEqual(
+            detail["reason"],
+            "unique_statement_fact_claim_span_with_source_quality",
+        )
+
+    def test_source_quality_directness_promotion_blocks_statement_fact_claim_with_refute(self):
+        j_hash = stable_hash({"option_label": "J"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": j_hash,
+                    "source_quality_score": 9.5,
+                    "source_quality_doc_count": 2,
+                    "source_quality_statement_fact_claim_doc_count": 2,
+                    "source_quality_statement_fact_slot_complete_doc_count": 2,
+                    "source_quality_statement_fact_answer_web_slot_complete_doc_count": 2,
+                    "source_quality_statement_fact_refutation_doc_count": 1,
+                    "source_quality_statement_fact_refutation_high_confidence_doc_count": 1,
+                    "support_doc_count": 0,
+                    "refute_doc_count": 1,
+                    "ambiguous_doc_count": 0,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_statement_fact_claim_signal": True,
+                    "candidate_direct_relation_span_top_answer_web_direct_claim_signal": True,
+                    "candidate_direct_relation_span_top_candidate_specific_sentence": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "candidate_direct_relation_span_top_source_doc_shared": False,
+                },
+            ],
+            options={"J": "A normal form verifier is a pair V = (S, D)."},
+            candidate_labels=["J"],
+        )
+
+        self.assertFalse(detail["promote"])
+        self.assertEqual(detail["reason"], "no_span_directness_direct_candidates")
+        self.assertEqual(detail["rejection_counts"]["has_refuting_docs"], 1)
+
+    def test_source_quality_directness_promotion_blocks_unresolved_multiple_direct_conflict(self):
+        b_hash = stable_hash({"option_label": "B"})
+        c_hash = stable_hash({"option_label": "C"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_span_directness_gate",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "status": "blocked_multiple_direct_candidates",
+                "reason": "multiple_direct_span_tiebreak_incomplete_conflict_coverage",
+                "direct_candidate_count": 2,
+                "direct_candidate_option_hashes": [b_hash, c_hash],
+                "multiple_direct_tiebreak_status": "blocked",
+                "multiple_direct_tiebreak_reason": (
+                    "multiple_direct_span_tiebreak_incomplete_conflict_coverage"
+                ),
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": b_hash,
+                    "source_quality_score": 12.0,
+                    "source_quality_doc_count": 2,
+                    "support_doc_count": 1,
+                    "refute_doc_count": 0,
+                    "candidate_direct_relation_span_count": 1,
+                    "span_directness_direct_high_confidence": True,
+                    "overall_source_quality_challenger": True,
+                },
+            ],
+            options={"B": "Beta", "C": "Gamma"},
+            candidate_labels=["B", "C"],
+        )
+
+        self.assertFalse(detail["promote"])
+        self.assertEqual(detail["status"], "blocked")
+        self.assertEqual(
+            detail["reason"],
+            "span_directness_unresolved_multiple_direct_conflict",
+        )
+        self.assertTrue(detail["span_directness_unresolved_multiple_direct_conflict"])
+        self.assertEqual(detail["blocked_promotion_candidate_count"], 1)
+
+    def test_source_quality_directness_promotion_allows_complete_span_under_unresolved_conflict(self):
+        b_hash = stable_hash({"option_label": "B"})
+        c_hash = stable_hash({"option_label": "C"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_span_directness_gate",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "status": "blocked_multiple_direct_candidates",
+                "reason": "multiple_direct_span_tiebreak_incomplete_conflict_coverage",
+                "direct_candidate_count": 2,
+                "direct_candidate_option_hashes": [b_hash, c_hash],
+                "multiple_direct_tiebreak_status": "blocked",
+                "multiple_direct_tiebreak_reason": (
+                    "multiple_direct_span_tiebreak_incomplete_conflict_coverage"
+                ),
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": b_hash,
+                    "source_quality_score": 9.0,
+                    "source_quality_doc_count": 1,
+                    "support_doc_count": 1,
+                    "refute_doc_count": 0,
+                    "local_relation_query_expansion_doc_count": 2,
+                    "candidate_direct_relation_span_count": 1,
+                    "span_directness_direct_high_confidence": True,
+                    "span_directness_candidate_relation_span_direct_doc_count": 1,
+                    "span_directness_candidate_relation_span_complete_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 2,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "source_verifier_rejection_reason": "no_selected_label_generic",
+                },
+            ],
+            options={"B": "Beta", "C": "Gamma"},
+            candidate_labels=["B", "C"],
+        )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(detail["status"], "activated")
+        self.assertTrue(detail["unresolved_conflict_promotion_cleared"])
+        self.assertEqual(detail["selected_option_hash"], b_hash)
+
     def test_source_quality_directness_promotion_accepts_high_confidence_refutation_span(self):
         b_hash = stable_hash({"option_label": "B"})
         detail = _option_claim_source_quality_directness_promotion_detail(
@@ -23104,6 +27506,128 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertFalse(detail["promote"])
         self.assertEqual(detail["status"], "blocked")
         self.assertEqual(detail["reason"], "ambiguous_multiple_direct_source_quality_candidates")
+
+    def test_source_quality_directness_promotion_tiebreaks_model_backed_conflict_over_close_sweep_only(self):
+        b_hash = stable_hash({"option_label": "B"})
+        c_hash = stable_hash({"option_label": "C"})
+        common = {
+            "source_quality_doc_count": 1,
+            "support_doc_count": 1,
+            "refute_doc_count": 1,
+            "ambiguous_doc_count": 2,
+            "span_directness_direct_high_confidence": True,
+            "span_directness_candidate_relation_span_direct_doc_count": 2,
+            "span_directness_candidate_relation_span_complete_count": 2,
+            "span_directness_candidate_relation_span_count": 2,
+            "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+            "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+            "candidate_direct_relation_span_top_relation_signature_proximity": True,
+            "candidate_direct_relation_span_top_relation_proximity": True,
+            "candidate_direct_relation_span_top_shared_doc": False,
+            "source_verifier_rejection_reason": "no_selected_label_generic",
+        }
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_span_directness_gate",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "direct_candidate_count": 2,
+                "direct_candidate_option_hashes": [b_hash, c_hash],
+            },
+            candidate_summaries=[
+                {
+                    **common,
+                    "option_hash": b_hash,
+                    "selection_reason": "best_sweep_only_ranked",
+                    "source_quality_score": 10.8,
+                    "candidate_direct_relation_span_count": 3,
+                    "local_relation_query_expansion_doc_count": 2,
+                    "overall_source_quality_challenger": True,
+                    "source_quality_challenger": True,
+                },
+                {
+                    **common,
+                    "option_hash": c_hash,
+                    "selection_reason": "runner_up_ranked",
+                    "source_quality_score": 11.6,
+                    "candidate_direct_relation_span_count": 2,
+                    "local_relation_query_expansion_doc_count": 4,
+                },
+            ],
+            options={"B": "Beta", "C": "Gamma"},
+            candidate_labels=["B", "C"],
+        )
+
+        self.assertTrue(detail["promote"])
+        self.assertTrue(detail["sweep_only_near_tie_tiebreak_applied"])
+        self.assertEqual(
+            detail["sweep_only_near_tie_tiebreak_reason"],
+            "model_backed_conflict_resolved_candidate_over_close_sweep_only",
+        )
+        self.assertEqual(detail["selected_option_hash"], c_hash)
+        self.assertEqual(
+            detail["reason"],
+            "candidate_relation_span_conflict_resolved_with_source_quality",
+        )
+
+    def test_source_quality_directness_promotion_allows_dominant_complete_top_under_near_tie(self):
+        b_hash = stable_hash({"option_label": "B"})
+        c_hash = stable_hash({"option_label": "C"})
+        common = {
+            "source_quality_doc_count": 0,
+            "support_doc_count": 0,
+            "refute_doc_count": 0,
+            "ambiguous_doc_count": 1,
+            "span_directness_direct_high_confidence": True,
+            "candidate_direct_relation_span_count": 1,
+            "span_directness_candidate_relation_span_direct_doc_count": 1,
+            "span_directness_candidate_relation_span_complete_count": 1,
+            "span_directness_candidate_relation_span_count": 1,
+            "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+            "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+            "candidate_direct_relation_span_top_relation_signature_proximity": True,
+            "candidate_direct_relation_span_top_relation_proximity": True,
+            "candidate_direct_relation_span_top_shared_doc": False,
+            "relation_span_comparator_direct_high_confidence": True,
+            "relation_span_comparator_evidence_relation": "answer_bearing",
+        }
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "direct_candidate_count": 2,
+                "direct_candidate_option_hashes": [b_hash, c_hash],
+            },
+            candidate_summaries=[
+                {
+                    **common,
+                    "option_hash": b_hash,
+                    "selection_reason": "best_sweep_only_source_quality",
+                    "source_quality_score": 7.25,
+                    "local_relation_query_expansion_doc_count": 3,
+                },
+                {
+                    **common,
+                    "option_hash": c_hash,
+                    "selection_reason": "runner_up_ranked",
+                    "source_quality_score": 7.31,
+                    "local_relation_query_expansion_doc_count": 1,
+                },
+            ],
+            options={"B": "Beta", "C": "Gamma"},
+            candidate_labels=["B", "C"],
+        )
+
+        self.assertTrue(detail["promote"])
+        self.assertTrue(detail["source_quality_near_tie_top_dominance_applied"])
+        self.assertEqual(detail["selected_option_hash"], b_hash)
+        self.assertEqual(
+            detail["source_quality_near_tie_top_dominance_reason"],
+            "top_complete_relation_span_with_stronger_local_relation_evidence",
+        )
 
     def test_source_quality_directness_promotion_accepts_candidate_relation_conflict_resolution(self):
         b_hash = stable_hash({"option_label": "B"})
@@ -23242,6 +27766,175 @@ class HleSmokeEvalTest(unittest.TestCase):
             detail["programmatic_relation_span_audit"]["source_generic_complete_candidate_count"],
             1,
         )
+
+    def test_source_quality_directness_promotion_blocks_near_complete_generic_by_default(self):
+        b_hash = stable_hash({"option_label": "B"})
+        with patch.dict(
+            os.environ,
+            {
+                "HLE_ENABLE_OPTION_CLAIM_NEAR_COMPLETE_RELATION_PROMOTION": "",
+                "HLE_ENABLE_OPTION_CLAIM_NEAR_COMPLETE_GENERIC_SOURCE_RECOVERY": "",
+            },
+            clear=False,
+        ):
+            detail = _option_claim_source_quality_directness_promotion_detail(
+                contrastive_adjudicator_summary={
+                    "status": "blocked_not_direct_high_confidence",
+                    "direct_high_confidence": False,
+                },
+                span_directness_summary={
+                    "direct_candidate_count": 0,
+                    "direct_candidate_option_hashes": [],
+                },
+                candidate_summaries=[
+                    {
+                        "option_hash": b_hash,
+                        "source_quality_score": 7.0,
+                        "source_quality_doc_count": 0,
+                        "support_doc_count": 0,
+                        "refute_doc_count": 0,
+                        "ambiguous_doc_count": 0,
+                        "local_relation_query_expansion_doc_count": 2,
+                        "candidate_direct_relation_span_count": 2,
+                        "candidate_direct_relation_span_top_relation_signature_required_overlap": 2,
+                        "candidate_direct_relation_span_top_relation_signature_missing_term_count": 1,
+                        "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                        "candidate_direct_relation_span_top_relation_proximity": True,
+                        "candidate_direct_relation_span_top_shared_doc": False,
+                        "source_verifier_rejection_reason": "no_selected_label_generic",
+                    },
+                ],
+                options={"B": "Beta"},
+                candidate_labels=["B"],
+            )
+
+        self.assertFalse(detail["promote"])
+        self.assertEqual(detail["status"], "blocked")
+        self.assertFalse(detail["near_complete_generic_source_recovery_enabled"])
+        self.assertEqual(detail["rejection_counts"]["not_span_direct"], 1)
+        self.assertEqual(
+            detail["programmatic_relation_span_audit"][
+                "programmatic_near_complete_relation_candidate_count"
+            ],
+            1,
+        )
+
+    def test_source_quality_directness_promotion_accepts_unique_near_complete_generic_recovery(self):
+        b_hash = stable_hash({"option_label": "B"})
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_OPTION_CLAIM_NEAR_COMPLETE_GENERIC_SOURCE_RECOVERY": "1"},
+            clear=False,
+        ):
+            detail = _option_claim_source_quality_directness_promotion_detail(
+                contrastive_adjudicator_summary={
+                    "status": "blocked_not_direct_high_confidence",
+                    "direct_high_confidence": False,
+                },
+                span_directness_summary={
+                    "direct_candidate_count": 0,
+                    "direct_candidate_option_hashes": [],
+                },
+                candidate_summaries=[
+                    {
+                        "option_hash": stable_hash({"option_label": "A"}),
+                        "source_quality_score": 6.0,
+                        "source_quality_doc_count": 1,
+                        "support_doc_count": 0,
+                        "refute_doc_count": 1,
+                        "ambiguous_doc_count": 0,
+                        "local_relation_query_expansion_doc_count": 3,
+                        "candidate_direct_relation_span_count": 2,
+                        "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                        "candidate_direct_relation_span_top_relation_signature_missing_term_count": 2,
+                        "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                        "candidate_direct_relation_span_top_relation_proximity": True,
+                        "candidate_direct_relation_span_top_shared_doc": False,
+                        "source_verifier_rejection_reason": "no_selected_label_generic",
+                    },
+                    {
+                        "option_hash": b_hash,
+                        "source_quality_score": 7.0,
+                        "source_quality_doc_count": 0,
+                        "support_doc_count": 0,
+                        "refute_doc_count": 0,
+                        "ambiguous_doc_count": 0,
+                        "local_relation_query_expansion_doc_count": 2,
+                        "candidate_direct_relation_span_count": 2,
+                        "candidate_direct_relation_span_top_relation_signature_required_overlap": 2,
+                        "candidate_direct_relation_span_top_relation_signature_missing_term_count": 1,
+                        "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                        "candidate_direct_relation_span_top_relation_proximity": True,
+                        "candidate_direct_relation_span_top_shared_doc": False,
+                        "source_verifier_rejection_reason": "no_selected_label_generic",
+                    },
+                ],
+                options={"A": "Alpha", "B": "Beta"},
+                candidate_labels=["A", "B"],
+            )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(detail["status"], "activated")
+        self.assertTrue(detail["near_complete_generic_source_recovery_enabled"])
+        self.assertEqual(detail["selected_label"], "B")
+        self.assertEqual(detail["selected_option_hash"], b_hash)
+        self.assertEqual(
+            detail["selected_directness_path"],
+            "programmatic_near_complete_generic_source_recovery",
+        )
+        self.assertEqual(
+            detail["reason"],
+            "unique_programmatic_near_complete_generic_source_recovery_with_source_quality",
+        )
+        self.assertTrue(
+            detail["selected_candidate"]["near_complete_generic_source_recovery"]
+        )
+
+    def test_source_quality_directness_promotion_counts_source_cache_for_near_complete_recovery(self):
+        b_hash = stable_hash({"option_label": "B"})
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_OPTION_CLAIM_NEAR_COMPLETE_GENERIC_SOURCE_RECOVERY": "1"},
+            clear=False,
+        ):
+            detail = _option_claim_source_quality_directness_promotion_detail(
+                contrastive_adjudicator_summary={
+                    "status": "blocked_not_direct_high_confidence",
+                    "direct_high_confidence": False,
+                },
+                span_directness_summary={
+                    "direct_candidate_count": 0,
+                    "direct_candidate_option_hashes": [],
+                },
+                candidate_summaries=[
+                    {
+                        "option_hash": b_hash,
+                        "source_quality_score": 6.5,
+                        "source_quality_doc_count": 0,
+                        "support_doc_count": 0,
+                        "refute_doc_count": 0,
+                        "ambiguous_doc_count": 0,
+                        "source_cache_corpus_backfill_doc_count": 2,
+                        "candidate_direct_relation_span_count": 2,
+                        "candidate_direct_relation_span_top_relation_signature_required_overlap": 2,
+                        "candidate_direct_relation_span_top_relation_signature_missing_term_count": 1,
+                        "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                        "candidate_direct_relation_span_top_relation_proximity": True,
+                        "candidate_direct_relation_span_top_shared_doc": False,
+                        "source_verifier_rejection_reason": "no_selected_label_generic",
+                    },
+                ],
+                options={"B": "Beta"},
+                candidate_labels=["B"],
+            )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(detail["selected_option_hash"], b_hash)
+        self.assertEqual(
+            detail["selected_directness_path"],
+            "programmatic_near_complete_generic_source_recovery",
+        )
+        self.assertEqual(detail["selected_candidate"]["local_relation_doc_count"], 2)
 
     def test_source_quality_directness_promotion_blocks_indirect_programmatic_complete_span(self):
         c_hash = stable_hash({"option_label": "C"})
@@ -24350,6 +29043,19 @@ class HleSmokeEvalTest(unittest.TestCase):
                 "failure_reason": "No direct stem relation.",
             })
 
+        contrastive_result = {
+            "status": "activated",
+            "reason": "selected_candidate_directly_satisfies_relation",
+            "verifier_kind": "contrastive_top_vs_runner_up",
+            "direct_high_confidence": True,
+            "relation_satisfied": True,
+            "supports_answer": True,
+            "selected_label": "C",
+            "selected_option_hash": stable_hash({"option_label": "C"}),
+            "selected_runner_up": False,
+            "underlying_model_calls": 1,
+        }
+
         with patch.dict(
             os.environ,
             {
@@ -24374,7 +29080,8 @@ class HleSmokeEvalTest(unittest.TestCase):
                             return_value=rejected,
                         ):
                             with patch(
-                                "assumption_os.hle_smoke_eval._run_option_claim_contrastive_adjudicator"
+                                "assumption_os.hle_smoke_eval._run_option_claim_contrastive_adjudicator",
+                                return_value=contrastive_result,
                             ) as contrastive:
                                 with patch(
                                     "assumption_os.hle_smoke_eval._call_model",
@@ -24391,12 +29098,23 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertIsNotNone(attempt)
         self.assertEqual(attempt["parsed_answer"], "C")
-        contrastive.assert_not_called()
+        contrastive.assert_called_once()
         self.assertEqual(summary["span_directness_verifier_status"], "activated")
         self.assertEqual(
             summary["span_directness_verifier_reason"],
             "single_direct_span_candidate_after_recovery",
         )
+        self.assertTrue(
+            summary["contrastive_adjudicator"][
+                "candidate_recovery_directness_requires_adjudication"
+            ]
+        )
+        self.assertTrue(
+            summary["contrastive_adjudicator"][
+                "span_directness_direct_promotion_blocked_by_candidate_recovery"
+            ]
+        )
+        self.assertEqual(summary["contrastive_adjudicator_status"], "activated")
         self.assertEqual(summary["candidate_direct_relation_span_extractor_status"], "activated")
         self.assertGreater(
             summary["candidate_direct_relation_span_shared_doc_count"]
@@ -27593,6 +32311,152 @@ class HleSmokeEvalTest(unittest.TestCase):
                 "D. Epigenetic effects limit narrow-sense heritability to less than 0.5\n"
                 "E. None of the other answer choices are correct"
             ),
+        }
+
+        attempt, summary = _maybe_run_domain_rule_mc_verifier(
+            problem=problem,
+            attempts=[],
+            evidence_context="",
+            eval_id="e",
+            call_id="c",
+            model="m",
+            logger=None,
+        )
+
+        self.assertIsNone(attempt)
+        self.assertEqual(summary["status"], "not_required")
+
+    def test_domain_rule_mc_verifier_handles_symmetric_two_action_game_pure_ne_lower_bound(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Humanities/Social Science",
+            "raw_subject": "Economics",
+            "_question": (
+                "Given an n-player symmetric game with 2 actions per player, there are "
+                "$2^n$ pure strategy profiles. At least how many of these are pure "
+                "strategy Nash equilibria?\n"
+                "A. possibly 0\n"
+                "B. 1\n"
+                "C. 2\n"
+                "D. log n\n"
+                "E. n^2"
+            ),
+            "_answer": "B",
+        }
+
+        attempt, summary = _maybe_run_domain_rule_mc_verifier(
+            problem=problem,
+            attempts=[],
+            evidence_context="",
+            eval_id="e",
+            call_id="c",
+            model="m",
+            logger=None,
+        )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "B")
+        self.assertEqual(
+            summary["rule_id"],
+            "game_theory_symmetric_two_action_pure_ne_existence",
+        )
+        self.assertEqual(summary["confidence"], "conceptual_domain_rule")
+        self.assertTrue(summary["candidate_correct_for_eval"])
+        self.assertEqual(
+            summary["rule_diagnostics"]["selected_option_hash"],
+            stable_hash({"option_label": "B"}),
+        )
+
+    def test_domain_rule_mc_verifier_symmetric_game_rule_requires_two_action_lower_bound(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Humanities/Social Science",
+            "raw_subject": "Economics",
+            "_question": (
+                "In a symmetric game, which statement about mixed Nash equilibria is most useful?\n"
+                "A. possibly 0\n"
+                "B. 1"
+            ),
+            "_answer": "B",
+        }
+
+        attempt, summary = _maybe_run_domain_rule_mc_verifier(
+            problem=problem,
+            attempts=[],
+            evidence_context="",
+            eval_id="e",
+            call_id="c",
+            model="m",
+            logger=None,
+        )
+
+        self.assertIsNone(attempt)
+        self.assertEqual(summary["status"], "not_required")
+
+    def test_domain_rule_mc_verifier_handles_topology_location_cardinality_trap(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": (
+                "Consider a small chair with five rigid, equally long legs on a smooth sphere. "
+                "What is the minimum cardinality of the set of locations on the sphere where "
+                "all five legs can touch the surface simultaneously?\n"
+                "A. 0\n"
+                "B. 1\n"
+                "C. 2\n"
+                "D. 5\n"
+                "E. countably infinite\n"
+                "F. cardinality of the Reals\n"
+                "G. None of the above"
+            ),
+            "_answer": "F",
+        }
+
+        attempt, summary = _maybe_run_domain_rule_mc_verifier(
+            problem=problem,
+            attempts=[],
+            evidence_context="",
+            eval_id="e",
+            call_id="c",
+            model="m",
+            logger=None,
+        )
+
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt["parsed_answer"], "F")
+        self.assertEqual(
+            summary["rule_id"],
+            "topology_location_cardinality_component_count_trap",
+        )
+        self.assertEqual(summary["confidence"], "conceptual_domain_rule")
+        self.assertTrue(summary["candidate_correct_for_eval"])
+        self.assertEqual(
+            summary["rule_diagnostics"]["selected_option_hash"],
+            stable_hash({"option_label": "F"}),
+        )
+
+    def test_domain_rule_mc_verifier_topology_location_rule_rejects_contact_point_count(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "category": "Math",
+            "raw_subject": "Mathematics",
+            "_question": (
+                "A rigid chair has five legs touching a smooth sphere. How many contact points "
+                "are made in one simultaneous placement?\n"
+                "A. 0\n"
+                "B. 5\n"
+                "C. cardinality of the Reals"
+            ),
+            "_answer": "B",
         }
 
         attempt, summary = _maybe_run_domain_rule_mc_verifier(

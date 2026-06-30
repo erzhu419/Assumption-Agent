@@ -181,13 +181,25 @@ def apply_generalization_holdout_defaults(args: argparse.Namespace) -> argparse.
     """Make generalization runs use unseen HLE problem hashes by default."""
     if not bool(getattr(args, "generalization_holdout", False)):
         return args
+    explicit_seed_offsets = _parse_seed_offsets(getattr(args, "seed_offsets", ""))
+    preserve_explicit_seed_offsets = bool(
+        explicit_seed_offsets
+        and getattr(
+            args,
+            "generalization_holdout_preserve_explicit_seed_offsets",
+            False,
+        )
+    )
     args.exclude_existing_hle_artifacts = True
-    args.dedupe_shard_samples = True
+    args.dedupe_shard_samples = not preserve_explicit_seed_offsets
     setattr(args, "_generalization_holdout_policy", {
         "enabled": True,
         "exclude_existing_hle_artifacts": True,
-        "dedupe_shard_samples": True,
-        "explicit_seed_offsets_remapped": bool(_parse_seed_offsets(getattr(args, "seed_offsets", ""))),
+        "dedupe_shard_samples": args.dedupe_shard_samples,
+        "explicit_seed_offsets_remapped": bool(
+            explicit_seed_offsets and not preserve_explicit_seed_offsets
+        ),
+        "explicit_seed_offsets_preserved": bool(preserve_explicit_seed_offsets),
         "raw_content_persisted": False,
     })
     return args
@@ -485,6 +497,8 @@ def build_shard_command(
     exclude_artifact_glob: str,
     sample_answer_type: str,
     sample_subject_contains: str,
+    variant_total_timeout_sec: float | None = None,
+    variant_total_model_call_budget: int | None = None,
     enable_assumption_operators: bool = False,
     disable_assumption_operators: bool = False,
     assumption_operator_domains: str = "",
@@ -554,6 +568,10 @@ def build_shard_command(
         cmd.append("--execute-live")
     if call_timeout is not None:
         cmd.extend(["--call-timeout", str(call_timeout)])
+    if variant_total_timeout_sec is not None:
+        cmd.extend(["--variant-total-timeout-sec", str(variant_total_timeout_sec)])
+    if variant_total_model_call_budget is not None:
+        cmd.extend(["--variant-total-model-call-budget", str(variant_total_model_call_budget)])
     if agent_child_timeout is not None:
         cmd.extend(["--agent-child-timeout", str(agent_child_timeout)])
     if not evidence_bridge_enabled:
@@ -631,6 +649,8 @@ def build_runner_env(
     model_router_attempts: int | None,
     model_router_timeout: float | None,
     model_router_transient_extra_attempts: int | None = None,
+    recursive_selection_model_call_budget: int | None = None,
+    recursive_selection_wallclock_budget_sec: float | None = None,
     enable_option_claim_relation_query_planner: bool | None = None,
     disable_option_claim_relation_query_planner: bool | None = None,
     enable_option_claim_relation_span_comparator: bool | None = None,
@@ -661,6 +681,14 @@ def build_runner_env(
         env["MODEL_ROUTER_ATTEMPTS"] = str(model_router_attempts)
     if model_router_transient_extra_attempts is not None:
         env["MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS"] = str(model_router_transient_extra_attempts)
+    if recursive_selection_model_call_budget is not None:
+        env["HLE_RECURSIVE_SELECTION_MODEL_CALL_BUDGET"] = str(
+            max(0, int(recursive_selection_model_call_budget))
+        )
+    if recursive_selection_wallclock_budget_sec is not None:
+        env["HLE_RECURSIVE_SELECTION_WALLCLOCK_BUDGET_SEC"] = str(
+            max(0.0, float(recursive_selection_wallclock_budget_sec))
+        )
     if enable_option_claim_relation_query_planner is not None:
         if enable_option_claim_relation_query_planner:
             env["HLE_ENABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER"] = "1"
@@ -775,6 +803,8 @@ def model_router_policy_from_env(env: dict[str, str]) -> dict[str, Any]:
         "router_aware_child_worker_cap_enabled": env.get("HLE_ENABLE_ROUTER_AWARE_CHILD_WORKER_CAP"),
         "router_aware_child_workers_per_shard": env.get("HLE_ROUTER_AWARE_CHILD_WORKERS_PER_SHARD"),
         "router_aware_child_worker_cap_disabled": env.get("HLE_DISABLE_ROUTER_AWARE_CHILD_WORKER_CAP"),
+        "recursive_selection_model_call_budget": env.get("HLE_RECURSIVE_SELECTION_MODEL_CALL_BUDGET"),
+        "recursive_selection_wallclock_budget_sec": env.get("HLE_RECURSIVE_SELECTION_WALLCLOCK_BUDGET_SEC"),
         "raw_content_persisted": False,
     }
 
@@ -860,6 +890,16 @@ def runtime_feature_flags_from_args(args: argparse.Namespace) -> dict[str, Any]:
                 "disable_option_claim_source_verifier_structured_context",
                 False,
             )
+        ),
+        "recursive_selection_model_call_budget": getattr(
+            args,
+            "recursive_selection_model_call_budget",
+            None,
+        ),
+        "recursive_selection_wallclock_budget_sec": getattr(
+            args,
+            "recursive_selection_wallclock_budget_sec",
+            None,
         ),
         "raw_content_persisted": False,
     }
@@ -1052,11 +1092,6 @@ def apply_hle_offline_defaults(env: dict[str, str]) -> dict[str, str]:
         env["HLE_SOURCE_SEARCH_CACHE_ONLY"] = "1"
         env["HLE_DISABLE_LIVE_SOURCE_SEARCH"] = "1"
         env["HLE_ALLOW_LIVE_SOURCE_SEARCH"] = "0"
-    if (
-        not str(env.get("HLE_RECURSIVE_CHILD_BATCH_MAX_WAIT_SEC", "")).strip()
-        and not str(env.get("HLE_RECURSIVE_CHILD_BATCH_TOTAL_WAIT_SEC", "")).strip()
-    ):
-        env["HLE_RECURSIVE_CHILD_BATCH_MAX_WAIT_SEC"] = "180"
     return env
 
 
@@ -1072,6 +1107,16 @@ def apply_live_network_defaults(args: argparse.Namespace) -> argparse.Namespace:
         return args
     if getattr(args, "model_router_attempts", None) is None:
         args.model_router_attempts = 8
+    if getattr(args, "model_router_transient_extra_attempts", None) is None:
+        args.model_router_transient_extra_attempts = 0
+    if getattr(args, "model_router_per_attempt_timeout", None) is None:
+        args.model_router_per_attempt_timeout = 180.0
+    if getattr(args, "model_router_no_byte_timeout_sec", None) is None:
+        args.model_router_no_byte_timeout_sec = 180.0
+    if bool(getattr(args, "disable_model_router_subprocess_calls", False)):
+        args.model_router_subprocess_calls = False
+    elif getattr(args, "model_router_subprocess_calls", None) is None:
+        args.model_router_subprocess_calls = True
     if getattr(args, "model_router_backoff_base_sec", None) is None:
         args.model_router_backoff_base_sec = 1.5
     if getattr(args, "model_router_global_concurrency", None) is None:
@@ -1426,6 +1471,7 @@ def aggregate_parallel_payload(
     launch_stagger_sec: float = 0.0,
     diagnostic_log_out: Path | None = None,
     model_router_policy: dict[str, Any] | None = None,
+    variant_watchdog_policy: dict[str, Any] | None = None,
     feature_flags: dict[str, Any] | None = None,
     source_policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -1502,6 +1548,7 @@ def aggregate_parallel_payload(
             "launch_stagger_sec": launch_stagger_sec,
             "reuse_completed_shards": reuse_completed_shards or {"enabled": False},
             "model_router": model_router_policy or {},
+            "variant_watchdog": variant_watchdog_policy or {"enabled": False},
             "feature_flags": feature_flags or {},
             "source_policy": source_policy or {},
             "raw_content_persisted": False,
@@ -2596,6 +2643,7 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
     operator_application = metrics.get("operator_application_summary") or {}
     claim_guard = pollution.get("claim_guard") or {}
     runtime_policy = payload.get("runtime_policy") or {}
+    variant_watchdog = runtime_policy.get("variant_watchdog") or {"enabled": False}
     sampling = payload.get("sampling") or {}
     shard_dedupe = (payload.get("sampling") or {}).get("shard_sample_dedupe") or {"enabled": False}
     reuse_summary = runtime_policy.get("reuse_completed_shards") or {"enabled": False}
@@ -2609,6 +2657,7 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
         f"- launch stagger sec: `{runtime_policy.get('launch_stagger_sec')}`",
         f"- process timeout policy: `{runtime_policy.get('process_timeout_policy')}`",
         f"- kill on soft timeout: `{runtime_policy.get('kill_on_soft_timeout')}`",
+        f"- variant watchdog: `{variant_watchdog}`",
         f"- reused completed shards: `{reuse_summary.get('reused_shard_count', 0)}`",
         f"- shard sample dedupe: `{shard_dedupe.get('status', shard_dedupe.get('enabled'))}`",
         f"- loaded shard payloads: `{payload['loaded_shard_payload_count']}/{payload['sampling']['planned_shard_count']}`",
@@ -2825,13 +2874,27 @@ def build_payload_without_execution(args: argparse.Namespace) -> tuple[list[Shar
         )
     dedupe_summary: dict[str, Any] = {"enabled": False}
     generalization_holdout = bool(getattr(args, "generalization_holdout", False))
-    if explicit_seed_offsets and not generalization_holdout:
+    preserve_generalization_seed_offsets = bool(
+        generalization_holdout
+        and explicit_seed_offsets
+        and getattr(
+            args,
+            "generalization_holdout_preserve_explicit_seed_offsets",
+            False,
+        )
+    )
+    if explicit_seed_offsets and (not generalization_holdout or preserve_generalization_seed_offsets):
         dedupe_summary = {
             "enabled": False,
-            "reason": "explicit_seed_offsets",
+            "reason": (
+                "preflighted_explicit_seed_offsets_preserved_for_generalization_holdout"
+                if preserve_generalization_seed_offsets
+                else "explicit_seed_offsets"
+            ),
             "raw_content_persisted": False,
             "distinct_problem_hash_count": None,
             "seed_offsets": explicit_seed_offsets,
+            "exclude_existing_hle_artifacts": bool(args.exclude_existing_hle_artifacts),
         }
     elif getattr(args, "dedupe_shard_samples", False):
         try:
@@ -2878,6 +2941,8 @@ def build_payload_without_execution(args: argparse.Namespace) -> tuple[list[Shar
                 exclude_artifact_glob=args.exclude_artifact_glob,
                 sample_answer_type=args.sample_answer_type,
                 sample_subject_contains=args.sample_subject_contains,
+                variant_total_timeout_sec=getattr(args, "variant_total_timeout_sec", None),
+                variant_total_model_call_budget=getattr(args, "variant_total_model_call_budget", None),
                 enable_assumption_operators=bool(getattr(args, "enable_assumption_operators", False)),
                 disable_assumption_operators=bool(getattr(args, "disable_assumption_operators", False)),
                 assumption_operator_domains=str(getattr(args, "assumption_operator_domains", "") or ""),
@@ -3001,12 +3066,23 @@ def main() -> None:
             "and remap shard seeds by problem hash before execution."
         ),
     )
+    parser.add_argument(
+        "--generalization-holdout-preserve-explicit-seed-offsets",
+        action="store_true",
+        help=(
+            "With --generalization-holdout and --seed-offsets, exclude existing HLE artifacts "
+            "but keep the caller-provided seed offsets. Use only when the explicit cohort was "
+            "already preflighted as unseen/source-bearing."
+        ),
+    )
     parser.add_argument("--sample-answer-type", default="")
     parser.add_argument("--sample-subject-contains", default="")
     parser.add_argument("--models", default="gpt-5.4-mini")
     parser.add_argument("--variants", default="raw,assumption_agent_recursive_verify,hipporag_baseline")
     parser.add_argument("--execute-live", action="store_true")
     parser.add_argument("--call-timeout", type=float, default=None)
+    parser.add_argument("--variant-total-timeout-sec", type=float, default=None)
+    parser.add_argument("--variant-total-model-call-budget", type=int, default=None)
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--graph-dir", default=str(Path("phase four/assumption_graph")))
     parser.add_argument("--agent-top-k", type=int, default=5)
@@ -3071,16 +3147,37 @@ def main() -> None:
     parser.add_argument("--model-router-transient-extra-attempts", type=int, default=None)
     parser.add_argument("--model-router-timeout", type=float, default=None)
     parser.add_argument("--model-router-per-attempt-timeout", type=float, default=None)
-    parser.add_argument("--model-router-subprocess-calls", action="store_true")
+    parser.add_argument("--model-router-subprocess-calls", action="store_true", default=None)
+    parser.add_argument("--disable-model-router-subprocess-calls", action="store_true")
     parser.add_argument("--model-router-no-byte-timeout-sec", type=float, default=None)
     parser.add_argument("--model-router-backoff-base-sec", type=float, default=None)
     parser.add_argument("--model-router-global-concurrency", type=int, default=None)
     parser.add_argument("--model-router-global-concurrency-dir", default="")
     parser.add_argument("--model-router-global-slot-ttl-sec", type=float, default=None)
     parser.add_argument("--model-router-global-slot-wait-sec", type=float, default=None)
+    parser.add_argument(
+        "--recursive-selection-model-call-budget",
+        type=int,
+        default=None,
+        help=(
+            "Maximum number of model-backed recursive selection/adjudicator stages per "
+            "problem variant. Later selection stages are skipped with JSONL diagnostics."
+        ),
+    )
+    parser.add_argument(
+        "--recursive-selection-wallclock-budget-sec",
+        type=float,
+        default=None,
+        help=(
+            "Maximum wallclock seconds spent in recursive selection/adjudicator stages "
+            "per problem variant. Later stages are skipped with JSONL diagnostics."
+        ),
+    )
     parser.add_argument("--skip-live-model-preflight", action="store_true")
     parser.add_argument("--live-model-preflight-timeout-sec", type=float, default=60.0)
     args = parser.parse_args()
+    if bool(args.model_router_subprocess_calls) and bool(args.disable_model_router_subprocess_calls):
+        parser.error("--model-router-subprocess-calls and --disable-model-router-subprocess-calls are mutually exclusive")
     args = apply_live_network_defaults(args)
     args = apply_generalization_holdout_defaults(args)
     apply_hle_offline_defaults(os.environ)
@@ -3121,6 +3218,7 @@ def main() -> None:
             "kill_on_soft_timeout": bool(args.kill_on_soft_timeout),
             "model_router": {
                 "attempts": args.model_router_attempts,
+                "transient_extra_attempts": args.model_router_transient_extra_attempts,
                 "timeout_sec": args.model_router_timeout,
                 "per_attempt_timeout_sec": args.model_router_per_attempt_timeout,
                 "subprocess_calls": bool(args.model_router_subprocess_calls),
@@ -3128,6 +3226,17 @@ def main() -> None:
                 "global_concurrency": args.model_router_global_concurrency,
                 "global_slot_ttl_sec": args.model_router_global_slot_ttl_sec,
                 "global_slot_wait_sec": args.model_router_global_slot_wait_sec,
+                "recursive_selection_model_call_budget": args.recursive_selection_model_call_budget,
+                "recursive_selection_wallclock_budget_sec": args.recursive_selection_wallclock_budget_sec,
+                "raw_content_persisted": False,
+            },
+            "variant_watchdog": {
+                "total_timeout_sec": args.variant_total_timeout_sec,
+                "total_model_call_budget": args.variant_total_model_call_budget,
+                "enabled": bool(
+                    args.variant_total_timeout_sec is not None
+                    or args.variant_total_model_call_budget is not None
+                ),
                 "raw_content_persisted": False,
             },
             "feature_flags": runner_feature_flags,
@@ -3257,13 +3366,15 @@ def main() -> None:
         ),
         parallel_workers=args.parallel_workers,
         model_router_per_attempt_timeout=args.model_router_per_attempt_timeout,
-        model_router_subprocess_calls=True if args.model_router_subprocess_calls else None,
+        model_router_subprocess_calls=args.model_router_subprocess_calls,
         model_router_no_byte_timeout_sec=args.model_router_no_byte_timeout_sec,
         model_router_backoff_base_sec=args.model_router_backoff_base_sec,
         model_router_global_concurrency=args.model_router_global_concurrency,
         model_router_global_concurrency_dir=args.model_router_global_concurrency_dir,
         model_router_global_slot_ttl_sec=args.model_router_global_slot_ttl_sec,
         model_router_global_slot_wait_sec=args.model_router_global_slot_wait_sec,
+        recursive_selection_model_call_budget=args.recursive_selection_model_call_budget,
+        recursive_selection_wallclock_budget_sec=args.recursive_selection_wallclock_budget_sec,
     )
     runner_source_policy = source_policy_from_env(env)
     log_event(
@@ -3414,6 +3525,15 @@ def main() -> None:
         launch_stagger_sec=max(0.0, float(args.launch_stagger_sec or 0.0)),
         diagnostic_log_out=diagnostic_log_out,
         model_router_policy=model_router_policy_from_env(env),
+        variant_watchdog_policy={
+            "enabled": bool(
+                args.variant_total_timeout_sec is not None
+                or args.variant_total_model_call_budget is not None
+            ),
+            "total_timeout_sec": args.variant_total_timeout_sec,
+            "total_model_call_budget": args.variant_total_model_call_budget,
+            "raw_content_persisted": False,
+        },
         feature_flags=runner_feature_flags,
         source_policy=runner_source_policy,
     )

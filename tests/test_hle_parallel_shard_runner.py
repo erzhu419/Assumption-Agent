@@ -77,6 +77,8 @@ class TestHleParallelShardRunner(unittest.TestCase):
             exclude_artifact_glob="phase four/assumption_graph/paper_readiness_20260604/hle_parallel_runs/hle*.json*",
             dedupe_shard_samples=True,
             dedupe_shard_max_attempts=11,
+            generalization_holdout=False,
+            generalization_holdout_preserve_explicit_seed_offsets=False,
             run_dir=str(Path(tmp) / "runs"),
             md_dir=str(Path(tmp) / "md"),
             out="",
@@ -166,6 +168,36 @@ class TestHleParallelShardRunner(unittest.TestCase):
         dedupe.assert_called_once()
         self.assertEqual([spec.seed_offset for spec in specs], [1010, 1020])
         self.assertEqual(args._shard_sample_dedupe_summary["status"], "ok")
+        self.assertIn("--exclude-existing-hle-artifacts", states[0].command)
+
+    def test_generalization_holdout_can_preserve_preflighted_explicit_seed_offsets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            args = self._ablation_args(tmp)
+            args.eval_id = "generalization_preflighted"
+            args.total_sample_size = 2
+            args.shard_size = 1
+            args.seed_offsets = "2022,2087"
+            args.generalization_holdout = True
+            args.generalization_holdout_preserve_explicit_seed_offsets = True
+            args.exclude_existing_hle_artifacts = False
+            args.dedupe_shard_samples = True
+            apply_generalization_holdout_defaults(args)
+
+            with patch(
+                "assumption_os.hle_parallel_shard_runner.dedupe_shard_specs_by_sample_hash",
+            ) as dedupe:
+                specs, states = build_payload_without_execution(args)
+
+        self.assertTrue(args.exclude_existing_hle_artifacts)
+        self.assertFalse(args.dedupe_shard_samples)
+        self.assertFalse(args._generalization_holdout_policy["explicit_seed_offsets_remapped"])
+        self.assertTrue(args._generalization_holdout_policy["explicit_seed_offsets_preserved"])
+        dedupe.assert_not_called()
+        self.assertEqual([spec.seed_offset for spec in specs], [2022, 2087])
+        self.assertEqual(
+            args._shard_sample_dedupe_summary["reason"],
+            "preflighted_explicit_seed_offsets_preserved_for_generalization_holdout",
+        )
         self.assertIn("--exclude-existing-hle-artifacts", states[0].command)
 
     def test_module_ablation_plan_builds_real_toggles_without_secrets(self) -> None:
@@ -263,6 +295,8 @@ class TestHleParallelShardRunner(unittest.TestCase):
                 exclude_artifact_glob="artifacts/*.json*",
                 sample_answer_type="multipleChoice",
                 sample_subject_contains="chem",
+                variant_total_timeout_sec=1200,
+                variant_total_model_call_budget=9,
                 enable_assumption_operators=True,
                 assumption_operator_domains="science,hle_general",
                 assumption_operator_max_specs=3,
@@ -283,6 +317,8 @@ class TestHleParallelShardRunner(unittest.TestCase):
         text = " ".join(cmd)
         self.assertIn("--hard-exit-after-write", cmd)
         self.assertIn("--execute-live", cmd)
+        self.assertIn("--variant-total-timeout-sec 1200", text)
+        self.assertIn("--variant-total-model-call-budget 9", text)
         self.assertIn("--disable-evidence-bridge", cmd)
         self.assertIn("--enable-assumption-operators", cmd)
         self.assertIn("--assumption-operator-domains science,hle_general", text)
@@ -333,6 +369,8 @@ class TestHleParallelShardRunner(unittest.TestCase):
             args.disable_option_claim_source_verifier_acceptance_quality_gate = False
             args.enable_option_claim_source_verifier_structured_context = True
             args.disable_option_claim_source_verifier_structured_context = False
+            args.recursive_selection_model_call_budget = 2
+            args.recursive_selection_wallclock_budget_sec = 180
 
             flags = runtime_feature_flags_from_args(args)
 
@@ -366,6 +404,8 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertTrue(flags["option_claim_source_verifier_repair_context_enabled"])
         self.assertTrue(flags["option_claim_source_verifier_acceptance_quality_gate_enabled"])
         self.assertTrue(flags["option_claim_source_verifier_structured_context_enabled"])
+        self.assertEqual(flags["recursive_selection_model_call_budget"], 2)
+        self.assertEqual(flags["recursive_selection_wallclock_budget_sec"], 180)
         self.assertEqual(flags["assumption_operator_domains"], "science,hle_general")
         self.assertEqual(source_policy["source_search_cache_only"], "1")
         self.assertEqual(source_policy["option_claim_relation_query_planner_env"], "1")
@@ -1072,6 +1112,8 @@ class TestHleParallelShardRunner(unittest.TestCase):
             model_router_global_concurrency_dir="/tmp/hle-slots",
             model_router_global_slot_ttl_sec=1800,
             model_router_global_slot_wait_sec=2400,
+            recursive_selection_model_call_budget=2,
+            recursive_selection_wallclock_budget_sec=180,
         )
         self.assertEqual(env["MODEL_ROUTER_ATTEMPTS"], "7")
         self.assertEqual(env["MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS"], "0")
@@ -1087,10 +1129,14 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(env["MODEL_ROUTER_GLOBAL_CONCURRENCY_DIR"], "/tmp/hle-slots")
         self.assertEqual(env["MODEL_ROUTER_GLOBAL_SLOT_TTL_SEC"], "1800")
         self.assertEqual(env["MODEL_ROUTER_GLOBAL_SLOT_WAIT_SEC"], "2400")
+        self.assertEqual(env["HLE_RECURSIVE_SELECTION_MODEL_CALL_BUDGET"], "2")
+        self.assertEqual(env["HLE_RECURSIVE_SELECTION_WALLCLOCK_BUDGET_SEC"], "180.0")
         policy = model_router_policy_from_env(env)
         self.assertEqual(policy["subprocess_calls"], "1")
         self.assertEqual(policy["subprocess_no_byte_timeout_sec"], "120")
         self.assertEqual(policy["parallel_shard_workers"], "4")
+        self.assertEqual(policy["recursive_selection_model_call_budget"], "2")
+        self.assertEqual(policy["recursive_selection_wallclock_budget_sec"], "180.0")
         self.assertFalse(policy["raw_content_persisted"])
         configured_values = " ".join(
             env[key]
@@ -1107,6 +1153,8 @@ class TestHleParallelShardRunner(unittest.TestCase):
                 "MODEL_ROUTER_GLOBAL_CONCURRENCY_DIR",
                 "MODEL_ROUTER_GLOBAL_SLOT_TTL_SEC",
                 "MODEL_ROUTER_GLOBAL_SLOT_WAIT_SEC",
+                "HLE_RECURSIVE_SELECTION_MODEL_CALL_BUDGET",
+                "HLE_RECURSIVE_SELECTION_WALLCLOCK_BUDGET_SEC",
             )
         )
         self.assertNotIn("sk-", configured_values)
@@ -1213,13 +1261,14 @@ class TestHleParallelShardRunner(unittest.TestCase):
                 env,
             )
 
-    def test_runner_env_defaults_recursive_child_batch_cap(self) -> None:
+    def test_runner_env_does_not_default_recursive_child_batch_cap(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
             env = build_runner_env(
                 model_router_attempts=None,
                 model_router_timeout=None,
             )
-        self.assertEqual(env["HLE_RECURSIVE_CHILD_BATCH_MAX_WAIT_SEC"], "180")
+        self.assertNotIn("HLE_RECURSIVE_CHILD_BATCH_MAX_WAIT_SEC", env)
+        self.assertNotIn("HLE_RECURSIVE_CHILD_BATCH_TOTAL_WAIT_SEC", env)
 
         with patch.dict(os.environ, {"HLE_RECURSIVE_CHILD_BATCH_MAX_WAIT_SEC": "90"}, clear=True):
             env = build_runner_env(
@@ -1329,6 +1378,11 @@ class TestHleParallelShardRunner(unittest.TestCase):
             eval_id="eval/live",
             parallel_workers=8,
             model_router_attempts=None,
+            model_router_transient_extra_attempts=None,
+            model_router_per_attempt_timeout=None,
+            model_router_subprocess_calls=None,
+            disable_model_router_subprocess_calls=False,
+            model_router_no_byte_timeout_sec=None,
             model_router_backoff_base_sec=None,
             model_router_global_concurrency=None,
             model_router_global_concurrency_dir="",
@@ -1338,6 +1392,10 @@ class TestHleParallelShardRunner(unittest.TestCase):
         apply_live_network_defaults(args)
 
         self.assertEqual(args.model_router_attempts, 8)
+        self.assertEqual(args.model_router_transient_extra_attempts, 0)
+        self.assertEqual(args.model_router_per_attempt_timeout, 180.0)
+        self.assertTrue(args.model_router_subprocess_calls)
+        self.assertEqual(args.model_router_no_byte_timeout_sec, 180.0)
         self.assertEqual(args.model_router_backoff_base_sec, 1.5)
         self.assertEqual(args.model_router_global_concurrency, 4)
         self.assertIn("eval_live", args.model_router_global_concurrency_dir)
@@ -1349,6 +1407,11 @@ class TestHleParallelShardRunner(unittest.TestCase):
             eval_id="eval",
             parallel_workers=8,
             model_router_attempts=3,
+            model_router_transient_extra_attempts=4,
+            model_router_per_attempt_timeout=45,
+            model_router_subprocess_calls=True,
+            disable_model_router_subprocess_calls=False,
+            model_router_no_byte_timeout_sec=75,
             model_router_backoff_base_sec=0.5,
             model_router_global_concurrency=2,
             model_router_global_concurrency_dir="/tmp/custom-slots",
@@ -1358,6 +1421,10 @@ class TestHleParallelShardRunner(unittest.TestCase):
         apply_live_network_defaults(explicit)
 
         self.assertEqual(explicit.model_router_attempts, 3)
+        self.assertEqual(explicit.model_router_transient_extra_attempts, 4)
+        self.assertEqual(explicit.model_router_per_attempt_timeout, 45)
+        self.assertTrue(explicit.model_router_subprocess_calls)
+        self.assertEqual(explicit.model_router_no_byte_timeout_sec, 75)
         self.assertEqual(explicit.model_router_backoff_base_sec, 0.5)
         self.assertEqual(explicit.model_router_global_concurrency, 2)
         self.assertEqual(explicit.model_router_global_concurrency_dir, "/tmp/custom-slots")
@@ -1369,6 +1436,11 @@ class TestHleParallelShardRunner(unittest.TestCase):
             eval_id="eval",
             parallel_workers=8,
             model_router_attempts=None,
+            model_router_transient_extra_attempts=None,
+            model_router_per_attempt_timeout=None,
+            model_router_subprocess_calls=None,
+            disable_model_router_subprocess_calls=False,
+            model_router_no_byte_timeout_sec=None,
             model_router_backoff_base_sec=None,
             model_router_global_concurrency=None,
             model_router_global_concurrency_dir="",
@@ -1378,7 +1450,31 @@ class TestHleParallelShardRunner(unittest.TestCase):
         apply_live_network_defaults(dry)
 
         self.assertIsNone(dry.model_router_attempts)
+        self.assertIsNone(dry.model_router_transient_extra_attempts)
+        self.assertIsNone(dry.model_router_per_attempt_timeout)
+        self.assertIsNone(dry.model_router_subprocess_calls)
+        self.assertIsNone(dry.model_router_no_byte_timeout_sec)
         self.assertIsNone(dry.model_router_global_concurrency)
+
+        disabled = Namespace(
+            execute_live=True,
+            eval_id="eval",
+            parallel_workers=2,
+            model_router_attempts=None,
+            model_router_transient_extra_attempts=None,
+            model_router_per_attempt_timeout=None,
+            model_router_subprocess_calls=None,
+            disable_model_router_subprocess_calls=True,
+            model_router_no_byte_timeout_sec=None,
+            model_router_backoff_base_sec=None,
+            model_router_global_concurrency=None,
+            model_router_global_concurrency_dir="",
+            model_router_global_slot_ttl_sec=None,
+            model_router_global_slot_wait_sec=None,
+        )
+        apply_live_network_defaults(disabled)
+        self.assertFalse(disabled.model_router_subprocess_calls)
+        self.assertEqual(disabled.model_router_no_byte_timeout_sec, 180.0)
 
     def test_pollution_audit_tracks_generic_context_selection_and_endpoint_scope(self) -> None:
         rows = [

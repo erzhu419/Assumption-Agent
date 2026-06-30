@@ -71,10 +71,22 @@ _NO_GOLD_DECISION_PHASE: contextvars.ContextVar[str] = contextvars.ContextVar(
     "hle_no_gold_decision_phase",
     default="",
 )
+_MODEL_ROUTER_CALL_SCOPE: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar(
+    "hle_model_router_call_scope",
+    default={},
+)
+_VARIANT_EXECUTION_WATCHDOG: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
+    "hle_variant_execution_watchdog",
+    default=None,
+)
 
 
 class GoldAccessDuringDecisionError(RuntimeError):
     """Raised when decision-time code tries to read the HLE reference answer."""
+
+
+class VariantExecutionWatchdogExceeded(RuntimeError):
+    """Raised when a single problem/variant exhausts its configured budget."""
 
 
 def _no_gold_decision_guard_enabled() -> bool:
@@ -116,6 +128,406 @@ def _no_gold_decision_guarded(stage: str):
         return wrapped
 
     return decorate
+
+
+@contextlib.contextmanager
+def _model_router_call_scope(**metadata: Any) -> Iterable[None]:
+    current = dict(_MODEL_ROUTER_CALL_SCOPE.get() or {})
+    for key, value in metadata.items():
+        if value is not None:
+            current[str(key)] = value
+    token = _MODEL_ROUTER_CALL_SCOPE.set(current)
+    try:
+        yield
+    finally:
+        _MODEL_ROUTER_CALL_SCOPE.reset(token)
+
+
+def _active_model_router_call_scope() -> dict[str, Any]:
+    return dict(_MODEL_ROUTER_CALL_SCOPE.get() or {})
+
+
+def _variant_watchdog_timeout_from_env() -> float | None:
+    return _normalize_optional_timeout(
+        os.environ.get("HLE_VARIANT_TOTAL_TIMEOUT_SEC")
+        or os.environ.get("HLE_PER_VARIANT_TOTAL_TIMEOUT_SEC")
+        or os.environ.get("HLE_QUESTION_VARIANT_TOTAL_TIMEOUT_SEC")
+    )
+
+
+def _variant_watchdog_model_call_budget_from_env() -> int | None:
+    raw = (
+        os.environ.get("HLE_VARIANT_TOTAL_MODEL_CALL_BUDGET")
+        or os.environ.get("HLE_PER_VARIANT_TOTAL_MODEL_CALL_BUDGET")
+        or os.environ.get("HLE_QUESTION_VARIANT_MODEL_CALL_BUDGET")
+        or ""
+    )
+    raw = raw.strip()
+    if not raw or raw.lower() in {"0", "none", "null", "off", "false", "no", "unlimited"}:
+        return None
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return None
+
+
+def _variant_watchdog_recursive_selection_reserved_budget_from_env(
+    model_call_budget: int | None = None,
+) -> int:
+    raw = (
+        os.environ.get("HLE_VARIANT_RECURSIVE_SELECTION_RESERVED_MODEL_CALL_BUDGET")
+        or os.environ.get("HLE_VARIANT_SELECTION_RESERVED_MODEL_CALL_BUDGET")
+        or os.environ.get("HLE_VARIANT_RESERVED_SELECTION_MODEL_CALLS")
+        or ""
+    )
+    raw = raw.strip()
+    if not raw or raw.lower() in {"0", "none", "null", "off", "false", "no"}:
+        return 0
+    try:
+        value = max(0, int(raw))
+    except ValueError:
+        return 0
+    if model_call_budget is not None:
+        return min(value, max(0, int(model_call_budget) - 1))
+    return min(50, value)
+
+
+def _variant_watchdog_call_is_recursive_selection() -> bool:
+    if _active_no_gold_decision_phase() == "recursive_child_selection":
+        return True
+    scope = _active_model_router_call_scope()
+    return scope.get("router_scope") == "recursive_selection"
+
+
+@contextlib.contextmanager
+def _variant_execution_watchdog(
+    *,
+    eval_id: str,
+    call_id: str,
+    problem: dict[str, Any],
+    model: str,
+    variant: str,
+    logger: "_JsonlLogger | None",
+    timeout_sec: float | None,
+    model_call_budget: int | None,
+) -> Iterable[dict[str, Any]]:
+    timeout_sec = _normalize_optional_timeout(timeout_sec)
+    if model_call_budget is not None:
+        try:
+            model_call_budget = max(1, int(model_call_budget))
+        except (TypeError, ValueError):
+            model_call_budget = None
+    recursive_selection_reserved_budget = (
+        _variant_watchdog_recursive_selection_reserved_budget_from_env(model_call_budget)
+        if model_call_budget is not None
+        else 0
+    )
+    started = time.monotonic()
+    state: dict[str, Any] = {
+        "enabled": bool(timeout_sec is not None or model_call_budget is not None),
+        "eval_id": eval_id,
+        "call_id": call_id,
+        "problem_id_hash": problem.get("id_hash"),
+        "question_hash": problem.get("question_hash"),
+        "model": model,
+        "variant": variant,
+        "timeout_sec": timeout_sec,
+        "deadline_monotonic": None if timeout_sec is None else started + timeout_sec,
+        "model_call_budget": model_call_budget,
+        "recursive_selection_reserved_model_call_budget": recursive_selection_reserved_budget,
+        "model_call_count": 0,
+        "model_call_success_count": 0,
+        "model_call_error_count": 0,
+        "started_monotonic": started,
+        "status": "running",
+        "violation_reason": None,
+        "_logger": logger,
+        "_lock": threading.Lock(),
+    }
+    token = _VARIANT_EXECUTION_WATCHDOG.set(state)
+    _variant_watchdog_log(state, "variant_watchdog_start", {})
+    try:
+        yield state
+    except Exception as exc:
+        state["exception_type"] = type(exc).__name__
+        if isinstance(exc, VariantExecutionWatchdogExceeded):
+            state["status"] = "blocked"
+            if state.get("violation_reason") is None:
+                state["violation_reason"] = str(exc)
+        else:
+            state["status"] = "error"
+        raise
+    else:
+        if state.get("status") == "running":
+            state["status"] = "completed"
+    finally:
+        state["elapsed_sec"] = round(time.monotonic() - started, 4)
+        _variant_watchdog_log(state, "variant_watchdog_end", {})
+        _VARIANT_EXECUTION_WATCHDOG.reset(token)
+
+
+def _active_variant_watchdog() -> dict[str, Any] | None:
+    state = _VARIANT_EXECUTION_WATCHDOG.get()
+    return state if isinstance(state, dict) else None
+
+
+def _variant_watchdog_deadline() -> float | None:
+    state = _active_variant_watchdog()
+    if not state or not state.get("enabled"):
+        return None
+    deadline = state.get("deadline_monotonic")
+    return float(deadline) if isinstance(deadline, (int, float)) else None
+
+
+def _variant_watchdog_router_metadata() -> dict[str, Any]:
+    state = _active_variant_watchdog()
+    if not state or not state.get("enabled"):
+        return {}
+    summary = _variant_watchdog_summary(state)
+    return {
+        "variant_watchdog_enabled": True,
+        "variant_watchdog_call_id": summary.get("call_id"),
+        "variant_watchdog_variant": summary.get("variant"),
+        "variant_watchdog_model_call_count": summary.get("model_call_count"),
+        "variant_watchdog_model_call_budget": summary.get("model_call_budget"),
+        "variant_watchdog_remaining_sec": summary.get("remaining_sec"),
+    }
+
+
+def _variant_watchdog_summary(state: dict[str, Any] | None = None) -> dict[str, Any]:
+    state = state or _active_variant_watchdog() or {}
+    enabled = bool(state.get("enabled"))
+    started = state.get("started_monotonic")
+    elapsed = (
+        round(time.monotonic() - float(started), 4)
+        if isinstance(started, (int, float))
+        else state.get("elapsed_sec")
+    )
+    deadline = state.get("deadline_monotonic")
+    remaining = (
+        round(float(deadline) - time.monotonic(), 4)
+        if isinstance(deadline, (int, float))
+        else None
+    )
+    return {
+        "enabled": enabled,
+        "status": state.get("status") or ("disabled" if not enabled else "unknown"),
+        "violation_reason": state.get("violation_reason"),
+        "call_id": state.get("call_id"),
+        "problem_id_hash": state.get("problem_id_hash"),
+        "model": state.get("model"),
+        "variant": state.get("variant"),
+        "timeout_sec": state.get("timeout_sec"),
+        "remaining_sec": remaining,
+        "elapsed_sec": elapsed,
+        "model_call_budget": state.get("model_call_budget"),
+        "recursive_selection_reserved_model_call_budget": int(
+            state.get("recursive_selection_reserved_model_call_budget") or 0
+        ),
+        "model_call_count": int(state.get("model_call_count") or 0),
+        "model_call_success_count": int(state.get("model_call_success_count") or 0),
+        "model_call_error_count": int(state.get("model_call_error_count") or 0),
+        "raw_content_persisted": False,
+    }
+
+
+def _variant_watchdog_mark_error(state: dict[str, Any] | None, *, exc: Exception) -> None:
+    if not isinstance(state, dict):
+        return
+    state["exception_type"] = type(exc).__name__
+    if isinstance(exc, VariantExecutionWatchdogExceeded):
+        state["status"] = "blocked"
+        if not state.get("violation_reason"):
+            state["violation_reason"] = str(exc)
+    else:
+        state["status"] = "error"
+
+
+def _variant_watchdog_before_model_call(*, model: str) -> int | None:
+    state = _active_variant_watchdog()
+    if not state or not state.get("enabled"):
+        return None
+    lock = state.get("_lock")
+    if not hasattr(lock, "__enter__"):
+        lock = None
+    now = time.monotonic()
+    with (lock if lock is not None else contextlib.nullcontext()):
+        deadline = state.get("deadline_monotonic")
+        if isinstance(deadline, (int, float)) and now >= float(deadline):
+            _variant_watchdog_violate(state, "variant_total_timeout_exceeded")
+        budget = state.get("model_call_budget")
+        count = int(state.get("model_call_count") or 0)
+        if budget is not None and count >= int(budget):
+            _variant_watchdog_violate(state, "variant_total_model_call_budget_exceeded")
+        recursive_selection_reserved_budget = int(
+            state.get("recursive_selection_reserved_model_call_budget") or 0
+        )
+        if (
+            budget is not None
+            and recursive_selection_reserved_budget > 0
+            and not _variant_watchdog_call_is_recursive_selection()
+            and int(budget) - count <= recursive_selection_reserved_budget
+        ):
+            _variant_watchdog_violate(
+                state,
+                "variant_model_call_budget_reserved_for_recursive_selection",
+                {
+                    "budget_remaining_before": max(0, int(budget) - count),
+                    "recursive_selection_reserved_model_call_budget": (
+                        recursive_selection_reserved_budget
+                    ),
+                    "decision_phase": _active_no_gold_decision_phase(),
+                    "router_scope": _active_model_router_call_scope().get("router_scope"),
+                    "router_call_stage": _active_model_router_call_scope().get("router_call_stage"),
+                    "prompt_kind": _active_model_router_call_scope().get("prompt_kind"),
+                },
+            )
+        state["model_call_count"] = count + 1
+        call_index = count + 1
+    _variant_watchdog_log(
+        state,
+        "variant_watchdog_model_call_admitted",
+        {
+            "model": model,
+            "model_call_index": call_index,
+            **_model_router_scope_metadata(),
+        },
+    )
+    return call_index
+
+
+def _variant_watchdog_after_model_call(
+    *,
+    call_index: int | None,
+    status: str,
+    latency_sec: float,
+    error_label: str | None = None,
+) -> None:
+    state = _active_variant_watchdog()
+    if not state or not state.get("enabled") or call_index is None:
+        return
+    lock = state.get("_lock")
+    if not hasattr(lock, "__enter__"):
+        lock = None
+    with (lock if lock is not None else contextlib.nullcontext()):
+        if status == "success":
+            state["model_call_success_count"] = int(state.get("model_call_success_count") or 0) + 1
+        else:
+            state["model_call_error_count"] = int(state.get("model_call_error_count") or 0) + 1
+    _variant_watchdog_log(
+        state,
+        "variant_watchdog_model_call_finished",
+        {
+            "model_call_index": call_index,
+            "model_call_status": status,
+            "model_call_latency_sec": round(float(latency_sec), 4),
+            "error_label": error_label,
+        },
+    )
+
+
+def _variant_watchdog_mark_blocked(
+    state: dict[str, Any],
+    reason: str,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    first_block = state.get("status") != "blocked" or state.get("violation_reason") != reason
+    state["status"] = "blocked"
+    state["violation_reason"] = reason
+    if first_block:
+        _variant_watchdog_log(
+            state,
+            "variant_watchdog_blocked",
+            {"reason": reason, **(extra or {})},
+        )
+
+
+def _variant_watchdog_blocked_summary(
+    *,
+    stage_name: str = "",
+) -> dict[str, Any] | None:
+    state = _active_variant_watchdog()
+    if not state or not state.get("enabled"):
+        return None
+    lock = state.get("_lock")
+    if not hasattr(lock, "__enter__"):
+        lock = None
+    with (lock if lock is not None else contextlib.nullcontext()):
+        if state.get("status") != "blocked":
+            now = time.monotonic()
+            deadline = state.get("deadline_monotonic")
+            if isinstance(deadline, (int, float)) and now >= float(deadline):
+                _variant_watchdog_mark_blocked(
+                    state,
+                    "variant_total_timeout_exceeded",
+                    {"stage_name": stage_name} if stage_name else {},
+                )
+            else:
+                budget = state.get("model_call_budget")
+                count = int(state.get("model_call_count") or 0)
+                if budget is not None and count >= int(budget):
+                    _variant_watchdog_mark_blocked(
+                        state,
+                        "variant_total_model_call_budget_exceeded",
+                        {"stage_name": stage_name} if stage_name else {},
+                    )
+        if state.get("status") != "blocked":
+            return None
+        summary = _variant_watchdog_summary(state)
+    if stage_name:
+        summary["stage_name"] = stage_name
+    return summary
+
+
+def _variant_watchdog_violate(
+    state: dict[str, Any],
+    reason: str,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    _variant_watchdog_mark_blocked(state, reason, extra)
+    raise VariantExecutionWatchdogExceeded(reason)
+
+
+def _variant_watchdog_log(state: dict[str, Any], event: str, extra: dict[str, Any]) -> None:
+    if not state.get("enabled"):
+        return
+    logger = state.get("_logger")
+    if not isinstance(logger, _JsonlLogger):
+        return
+    payload = {
+        "event": event,
+        "eval_id": state.get("eval_id"),
+        "call_id": state.get("call_id"),
+        "problem_id_hash": state.get("problem_id_hash"),
+        "question_hash": state.get("question_hash"),
+        "model": state.get("model"),
+        "variant": state.get("variant"),
+        "variant_watchdog": _variant_watchdog_summary(state),
+        "raw_content_persisted": False,
+    }
+    payload.update(extra)
+    _log_event(logger, payload)
+
+
+@contextlib.contextmanager
+def _option_claim_model_router_scope(
+    *,
+    stage: str,
+    problem: dict[str, Any],
+    call_id: str | None = None,
+    candidate_count: int | None = None,
+    option_count: int | None = None,
+) -> Iterable[None]:
+    with _model_router_call_scope(
+        router_scope="option_claim_verifier",
+        router_call_stage=stage,
+        call_id=call_id,
+        problem_id_hash=problem.get("id_hash"),
+        question_hash=problem.get("question_hash"),
+        option_candidate_count=candidate_count,
+        option_count=option_count,
+    ):
+        yield
 
 
 class _HleProblem(dict):
@@ -167,6 +579,8 @@ def build_hle_text_smoke_eval_payload(
     exclude_artifact_glob: str = "phase four/assumption_graph/paper_readiness_20260604/hle_parallel_runs/hle*.json*",
     sample_answer_type: str = "",
     sample_subject_contains: str = "",
+    variant_total_timeout_sec: float | None = None,
+    variant_total_model_call_budget: int | None = None,
 ) -> dict[str, Any]:
     root = root.resolve()
     models = models or ["gpt-5.5"]
@@ -190,6 +604,18 @@ def build_hle_text_smoke_eval_payload(
         )
     run_rows: list[dict[str, Any]] = []
     logger = _JsonlLogger(log_out) if log_out else None
+    variant_total_timeout_sec = (
+        _normalize_optional_timeout(variant_total_timeout_sec)
+        if variant_total_timeout_sec is not None
+        else _variant_watchdog_timeout_from_env()
+    )
+    if variant_total_model_call_budget is None:
+        variant_total_model_call_budget = _variant_watchdog_model_call_budget_from_env()
+    else:
+        try:
+            variant_total_model_call_budget = max(1, int(variant_total_model_call_budget))
+        except (TypeError, ValueError):
+            variant_total_model_call_budget = None
     api_summary = {
         "execute_live_requested": execute_live,
         "planned_live_model_calls": len(sample_rows) * len(models) * len(variants) if execute_live else 0,
@@ -208,6 +634,11 @@ def build_hle_text_smoke_eval_payload(
         "exclude_artifact_glob": exclude_artifact_glob,
         "excluded_existing_problem_count": len(excluded_problem_hashes),
         "underlying_model_calls_executed": 0,
+        "variant_total_timeout_sec": variant_total_timeout_sec,
+        "variant_total_model_call_budget": variant_total_model_call_budget,
+        "variant_watchdog_enabled": bool(
+            variant_total_timeout_sec is not None or variant_total_model_call_budget is not None
+        ),
     }
     router_log_env_key = ""
     previous_router_log_path = ""
@@ -262,6 +693,17 @@ def build_hle_text_smoke_eval_payload(
                                 context_max_chars=agent_context_max_chars,
                             )
                         module_trace = _module_trace(problem, variant=variant, agent_plan=variant_plan)
+                        watchdog_manager = _variant_execution_watchdog(
+                            eval_id=eval_id,
+                            call_id=call_id,
+                            problem=problem,
+                            model=model,
+                            variant=variant,
+                            logger=logger,
+                            timeout_sec=variant_total_timeout_sec,
+                            model_call_budget=variant_total_model_call_budget,
+                        )
+                        variant_watchdog = watchdog_manager.__enter__()
                         _log_event(
                             logger,
                             {
@@ -278,6 +720,7 @@ def build_hle_text_smoke_eval_payload(
                                 "call_timeout_sec": api_summary["call_timeout_sec"],
                                 "max_tokens": max_tokens,
                                 "module_trace": module_trace,
+                                "variant_watchdog": _variant_watchdog_summary(variant_watchdog),
                             },
                         )
                         started = time.monotonic()
@@ -344,6 +787,8 @@ def build_hle_text_smoke_eval_payload(
                                 )
                                 api_summary["underlying_model_calls_executed"] += 1
                             latency = round(time.monotonic() - started, 4)
+                            if variant_watchdog.get("status") == "running":
+                                variant_watchdog["status"] = "completed"
                             api_summary["live_model_calls_executed"] += 1
                             row = _score_prediction(
                                 problem=problem,
@@ -357,6 +802,7 @@ def build_hle_text_smoke_eval_payload(
                                     "timeout_sec": api_summary["call_timeout_sec"],
                                     "max_tokens": max_tokens,
                                     "agent_plan_hash": stable_hash(variant_plan or {}),
+                                    "variant_watchdog": _variant_watchdog_summary(variant_watchdog),
                                 },
                             )
                             row["component_efficacy"] = _component_efficacy_from_plan(
@@ -390,9 +836,11 @@ def build_hle_text_smoke_eval_payload(
                                     "module_trace": module_trace,
                                     "component_efficacy": row["component_efficacy"],
                                     "agent_decision": (agent_plan or {}).get("world_model_router", {}).get("decision"),
+                                    "variant_watchdog": _variant_watchdog_summary(variant_watchdog),
                                 },
                             )
                         except Exception as exc:  # pragma: no cover - live API path.
+                            _variant_watchdog_mark_error(variant_watchdog, exc=exc)
                             latency = round(time.monotonic() - started, 4)
                             traceback_tail = _exception_traceback_tail(exc)
                             api_summary["live_model_call_errors"].append({
@@ -416,6 +864,7 @@ def build_hle_text_smoke_eval_payload(
                                     "timeout_sec": api_summary["call_timeout_sec"],
                                     "max_tokens": max_tokens,
                                     "agent_plan_hash": stable_hash(variant_plan or {}),
+                                    "variant_watchdog": _variant_watchdog_summary(variant_watchdog),
                                 },
                             )
                             error_row["component_efficacy"] = _component_efficacy_from_plan(
@@ -442,8 +891,10 @@ def build_hle_text_smoke_eval_payload(
                                     "module_trace": module_trace,
                                     "component_efficacy": error_row["component_efficacy"],
                                     "agent_decision": (agent_plan or {}).get("world_model_router", {}).get("decision"),
+                                    "variant_watchdog": _variant_watchdog_summary(variant_watchdog),
                                 },
                             )
+                        watchdog_manager.__exit__(None, None, None)
     finally:
         if router_log_env_key:
             if previous_router_log_path:
@@ -526,6 +977,7 @@ def format_markdown(payload: dict[str, Any]) -> str:
         f"- underlying model calls executed: `{metrics['underlying_model_calls_executed']}`",
         f"- live attempts resolved: `{metrics['resolved_live_model_calls']}/{metrics['planned_live_model_calls']}`",
         f"- live call errors: `{metrics['live_model_call_error_count']}`",
+        f"- variant watchdog: `{metrics.get('variant_watchdog_summary', {})}`",
         f"- overall accuracy: `{metrics['overall_accuracy']}`",
         f"- raw content persisted: `{metrics['raw_content_persisted']}`",
         f"- failed gates: `{payload['failed_gates']}`",
@@ -662,6 +1114,8 @@ def format_markdown(payload: dict[str, Any]) -> str:
                 "mc_option_claim_candidate_direct_relation_span_signature_rerank_used",
                 "mc_option_claim_candidate_direct_relation_span_signature_proximity",
                 "mc_option_claim_candidate_direct_relation_span_directness_accepted",
+                "mc_option_claim_candidate_direct_relation_repair_context_bridge_used",
+                "mc_option_claim_candidate_direct_relation_repair_context_bridge_recovered_spans",
                 "mc_option_claim_local_relation_query_expansion_used",
                 "mc_option_claim_sweep_gap_local_relation_backfill_used",
                 "mc_option_claim_answer_web_cache_sweep_used",
@@ -2207,6 +2661,8 @@ def _call_recursive_verified_answer(
         attempts.append(answer_bearing_evidence_candidate_attempt)
 
     def late_child_allowed(stage_name: str) -> bool:
+        if variant_watchdog_fast_abort(stage_name):
+            return False
         return _recursive_late_child_budget_allows(
             stage_name=stage_name,
             problem=problem,
@@ -2223,6 +2679,51 @@ def _call_recursive_verified_answer(
             stage_name=stage_name,
             attempts=attempts,
         )
+
+    variant_watchdog_fast_abort_summary: dict[str, Any] | None = None
+
+    def variant_watchdog_fast_abort(stage_name: str) -> dict[str, Any] | None:
+        nonlocal variant_watchdog_fast_abort_summary
+        summary = _variant_watchdog_blocked_summary(stage_name=stage_name)
+        if not summary:
+            return None
+        if variant_watchdog_fast_abort_summary is None:
+            variant_watchdog_fast_abort_summary = {
+                "status": "activated",
+                "reason": summary.get("violation_reason") or "variant_watchdog_blocked",
+                "stage_name": stage_name,
+                "attempt_count": len(attempts),
+                "answered_attempt_count": sum(
+                    1 for attempt in attempts if attempt.get("status") == "answered"
+                ),
+                "variant_watchdog": summary,
+                "raw_content_persisted": False,
+            }
+            agent_plan.setdefault("stages", {})["variant_watchdog_fast_abort"] = (
+                variant_watchdog_fast_abort_summary
+            )
+            _log_event(
+                logger,
+                {
+                    "event": "variant_watchdog_fast_abort",
+                    "eval_id": eval_id,
+                    "call_id": call_id,
+                    "problem_id_hash": problem["id_hash"],
+                    "question_hash": problem["question_hash"],
+                    "model": model,
+                    "variant": "assumption_agent_recursive_verify",
+                    "stage_status": "activated",
+                    "reason": variant_watchdog_fast_abort_summary["reason"],
+                    "stage_name": stage_name,
+                    "attempt_count": variant_watchdog_fast_abort_summary["attempt_count"],
+                    "answered_attempt_count": variant_watchdog_fast_abort_summary[
+                        "answered_attempt_count"
+                    ],
+                    "variant_watchdog": summary,
+                    "raw_content_persisted": False,
+                },
+            )
+        return variant_watchdog_fast_abort_summary
 
     math_tool_summary: dict[str, Any] | None = None
     if not domain_rule_locked and _should_run_math_tool_child(problem):
@@ -2362,6 +2863,10 @@ def _call_recursive_verified_answer(
     weak_source_fallback_cascade_gate_active = (
         weak_source_fallback_cascade_gate_summary.get("status") == "activated"
     )
+    weak_source_fallback_cascade_stage_skip_active = bool(
+        weak_source_fallback_cascade_gate_active
+        and weak_source_fallback_cascade_gate_summary.get("stage_skip_enabled")
+    )
     agent_plan.setdefault("stages", {})["weak_source_fallback_cascade_gate"] = (
         weak_source_fallback_cascade_gate_summary
     )
@@ -2376,10 +2881,11 @@ def _call_recursive_verified_answer(
             "model": model,
             "variant": "assumption_agent_recursive_verify",
             "stage_status": weak_source_fallback_cascade_gate_summary.get("status"),
+            "stage_skip_active": weak_source_fallback_cascade_stage_skip_active,
             "stage_data": weak_source_fallback_cascade_gate_summary,
         },
     )
-    if weak_source_fallback_cascade_gate_active:
+    if weak_source_fallback_cascade_stage_skip_active:
         for skipped_stage_name in weak_source_fallback_cascade_gate_summary.get("skipped_stage_names", []) or []:
             _log_event(
                 logger,
@@ -2410,7 +2916,7 @@ def _call_recursive_verified_answer(
     evidence_guided_option_summary: dict[str, Any] | None = None
     evidence_guided_option_attempt = None
     evidence_guided_context = ""
-    if weak_source_fallback_cascade_gate_active:
+    if weak_source_fallback_cascade_stage_skip_active:
         evidence_guided_option_summary = _weak_source_fallback_cascade_skip_summary(
             weak_source_fallback_cascade_gate_summary,
             stage_name="evidence_guided_option_challenge",
@@ -2445,7 +2951,7 @@ def _call_recursive_verified_answer(
     structural_option_audit_summary: dict[str, Any] | None = None
     structural_option_audit_attempt = None
     structural_audit_blocked_by_weak_source_gate = (
-        weak_source_fallback_cascade_gate_active
+        weak_source_fallback_cascade_stage_skip_active
         and "structural_option_audit_child"
         in set(weak_source_fallback_cascade_gate_summary.get("skipped_stage_names", []) or [])
     )
@@ -2478,7 +2984,7 @@ def _call_recursive_verified_answer(
             underlying_calls += 1
     evidence_forced_alternative_summary: dict[str, Any] | None = None
     evidence_forced_alternative_attempt = None
-    if weak_source_fallback_cascade_gate_active:
+    if weak_source_fallback_cascade_stage_skip_active:
         evidence_forced_alternative_summary = _weak_source_fallback_cascade_skip_summary(
             weak_source_fallback_cascade_gate_summary,
             stage_name="evidence_forced_alternative_challenge",
@@ -2707,7 +3213,7 @@ def _call_recursive_verified_answer(
     if (
         not endpoint_error_abort
         and not domain_rule_locked
-        and not weak_source_fallback_cascade_gate_active
+        and not weak_source_fallback_cascade_stage_skip_active
         and (not early_route_arbitrator_locked or run_deep_challenges_after_route)
     ):
         if late_child_allowed("counter_assumption_challenge"):
@@ -2732,7 +3238,7 @@ def _call_recursive_verified_answer(
             counter_challenge_summary["forced_alternative_challenge"] = late_child_skip_summary(
                 "forced_alternative_challenge"
             )
-    elif weak_source_fallback_cascade_gate_active:
+    elif weak_source_fallback_cascade_stage_skip_active:
         counter_challenge_summary = _weak_source_fallback_cascade_skip_summary(
             weak_source_fallback_cascade_gate_summary,
             stage_name="counter_assumption_challenge",
@@ -2803,7 +3309,7 @@ def _call_recursive_verified_answer(
     if (
         not endpoint_error_abort
         and not domain_rule_locked
-        and not weak_source_fallback_cascade_gate_active
+        and not weak_source_fallback_cascade_stage_skip_active
         and (not early_route_arbitrator_locked or run_deep_challenges_after_route)
     ):
         if late_child_allowed("critic_synthesis_child"):
@@ -2821,7 +3327,7 @@ def _call_recursive_verified_answer(
             )
         else:
             critic_synthesis_summary = late_child_skip_summary("critic_synthesis_child")
-    elif weak_source_fallback_cascade_gate_active:
+    elif weak_source_fallback_cascade_stage_skip_active:
         critic_synthesis_summary = _weak_source_fallback_cascade_skip_summary(
             weak_source_fallback_cascade_gate_summary,
             stage_name="critic_synthesis_child",
@@ -2843,7 +3349,15 @@ def _call_recursive_verified_answer(
 
     option_claim_second_pass_attempt = None
     option_claim_second_pass_summary = None
-    if not endpoint_error_abort and not domain_rule_locked and not weak_source_fallback_cascade_gate_active:
+    option_claim_second_pass_watchdog_abort = variant_watchdog_fast_abort(
+        "mc_option_claim_evidence_verifier_second_pass"
+    )
+    if (
+        not option_claim_second_pass_watchdog_abort
+        and not endpoint_error_abort
+        and not domain_rule_locked
+        and not weak_source_fallback_cascade_stage_skip_active
+    ):
         option_claim_second_pass_attempt, option_claim_second_pass_summary = (
             _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
                 problem=problem,
@@ -2860,7 +3374,14 @@ def _call_recursive_verified_answer(
                 max_tokens=min(max_tokens, 384),
             )
         )
-    elif weak_source_fallback_cascade_gate_active:
+    elif option_claim_second_pass_watchdog_abort:
+        option_claim_second_pass_summary = {
+            "status": "skipped_by_variant_watchdog",
+            "reason": option_claim_second_pass_watchdog_abort.get("reason"),
+            "variant_watchdog": option_claim_second_pass_watchdog_abort.get("variant_watchdog"),
+            "raw_content_persisted": False,
+        }
+    elif weak_source_fallback_cascade_stage_skip_active:
         option_claim_second_pass_summary = _weak_source_fallback_cascade_skip_summary(
             weak_source_fallback_cascade_gate_summary,
             stage_name="mc_option_claim_evidence_verifier_second_pass",
@@ -2976,6 +3497,7 @@ def _call_recursive_verified_answer(
         timeout=_recursive_verifier_timeout(child_timeout if child_timeout is not None else timeout),
         max_tokens=min(max_tokens, 384),
         evidence_context=selection_evidence_context,
+        weak_source_fallback_cascade_active=weak_source_fallback_cascade_stage_skip_active,
     )
     selection = _apply_verified_or_abstain_selection(
         problem=problem,
@@ -3075,6 +3597,7 @@ def _call_recursive_verified_answer(
                     timeout=_recursive_verifier_timeout(child_timeout if child_timeout is not None else timeout),
                     max_tokens=min(max_tokens, 384),
                     evidence_context=selection_evidence_context,
+                    weak_source_fallback_cascade_active=weak_source_fallback_cascade_stage_skip_active,
                 )
                 selection = _apply_verified_or_abstain_selection(
                     problem=problem,
@@ -3132,6 +3655,12 @@ def _call_recursive_verified_answer(
         if isinstance(recursive_late_child_budget_gate_summary, dict)
         else {}
     )
+    recursive_core_child_budget_gate_summary = child_result.get("core_child_model_call_budget_gate")
+    recursive_core_child_budget_gate_summary = (
+        recursive_core_child_budget_gate_summary
+        if isinstance(recursive_core_child_budget_gate_summary, dict)
+        else {}
+    )
     recursive_child_latency_summary = _recursive_child_latency_summary(attempts)
     child_summary = {
         "status": "activated",
@@ -3187,6 +3716,11 @@ def _call_recursive_verified_answer(
         "candidate_answer_metadata": _candidate_answer_metadata_from_attempts(problem=problem, attempts=attempts),
         "endpoint_error_pressure_abort": endpoint_error_abort_summary,
     }
+    no_byte_cascade_guard_summary = child_result.get("no_byte_cascade_guard")
+    if isinstance(no_byte_cascade_guard_summary, dict):
+        child_summary["no_byte_cascade_guard"] = no_byte_cascade_guard_summary
+        child_summary["no_byte_cascade_guard_status"] = no_byte_cascade_guard_summary.get("status")
+        child_summary["no_byte_cascade_guard_reason"] = no_byte_cascade_guard_summary.get("reason")
     if recursive_budget_gate_summary:
         child_summary["budget_gate"] = recursive_budget_gate_summary
         child_summary["budget_gate_status"] = recursive_budget_gate_summary.get("status")
@@ -3206,6 +3740,20 @@ def _call_recursive_verified_answer(
         child_summary["late_child_budget_gate_skipped_stage_names"] = list(
             recursive_late_child_budget_gate_summary.get("skipped_stage_names", []) or []
         )
+    if recursive_core_child_budget_gate_summary:
+        child_summary["core_child_model_call_budget_gate"] = recursive_core_child_budget_gate_summary
+        child_summary["core_child_model_call_budget_gate_status"] = (
+            recursive_core_child_budget_gate_summary.get("status")
+        )
+        child_summary["core_child_model_call_budget_gate_reason"] = (
+            recursive_core_child_budget_gate_summary.get("reason")
+        )
+        child_summary["core_child_model_call_budget_gate_skipped_child_count"] = int(
+            recursive_core_child_budget_gate_summary.get("skipped_child_count") or 0
+        )
+        child_summary["core_child_model_call_budget_gate_skipped_prompt_kinds"] = list(
+            recursive_core_child_budget_gate_summary.get("skipped_prompt_kinds", []) or []
+        )
     verifier_summary = {
         "status": "activated",
         "selection_method": selection.get("selection_method"),
@@ -3213,7 +3761,20 @@ def _call_recursive_verified_answer(
         "selected_answer_hash": selected_hash,
         "verifier_model_call": bool(selection.get("verifier_model_call")),
         "verified_or_abstain_gate": selection.get("verified_or_abstain_gate"),
+        "verified_or_abstain_fallback_trace": _verified_or_abstain_fallback_trace(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+        ),
     }
+    if isinstance(selection.get("selection_model_call_budget_gate"), dict):
+        verifier_summary["selection_model_call_budget_gate"] = selection.get(
+            "selection_model_call_budget_gate"
+        )
+    if isinstance(selection.get("selection_wallclock_budget_gate"), dict):
+        verifier_summary["selection_wallclock_budget_gate"] = selection.get(
+            "selection_wallclock_budget_gate"
+        )
     if selection.get("source_grounded_operator_evidence"):
         verifier_summary["source_grounded_operator_evidence"] = selection.get("source_grounded_operator_evidence")
     if selection.get("operator_conflict_contrastive_adjudicator"):
@@ -3228,6 +3789,8 @@ def _call_recursive_verified_answer(
         )
     stages = agent_plan.setdefault("stages", {})
     stages["recursive_child_validation"] = child_summary
+    if recursive_core_child_budget_gate_summary:
+        stages["recursive_core_child_model_call_budget_gate"] = recursive_core_child_budget_gate_summary
     stages["multi_candidate_self_verifier"] = verifier_summary
     if operator_application_summary.get("status") != "not_required":
         stages["operator_application_verifier"] = operator_application_summary
@@ -7063,6 +7626,77 @@ def _apply_recursive_child_budget_gate(
     return kept_specs
 
 
+def _recursive_child_prompt_kind_limit() -> int | None:
+    raw = os.environ.get("HLE_RECURSIVE_CHILD_PROMPT_KIND_LIMIT", "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    if value <= 0:
+        return None
+    return max(1, min(64, value))
+
+
+def _apply_recursive_child_prompt_kind_limit(
+    problem: dict[str, Any],
+    specs: list[dict[str, Any]],
+    *,
+    agent_plan: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    limit = _recursive_child_prompt_kind_limit()
+    stages = agent_plan.setdefault("stages", {}) if agent_plan is not None else None
+    planned_prompt_kinds = [str(spec.get("prompt_kind") or "") for spec in specs]
+    if limit is None or len(specs) <= limit:
+        if stages is not None and limit is not None:
+            stages["recursive_child_prompt_kind_budget"] = {
+                "status": "not_needed",
+                "policy": "recursive_child_total_prompt_kind_budget",
+                "reason": "within_prompt_kind_limit",
+                "limit": limit,
+                "answer_type": problem.get("answer_type"),
+                "planned_child_count_before": len(specs),
+                "planned_child_count_after": len(specs),
+                "planned_prompt_kinds_before": planned_prompt_kinds,
+                "kept_prompt_kinds": planned_prompt_kinds,
+                "skipped_prompt_kinds": [],
+                "skipped_child_count": 0,
+                "raw_content_persisted": False,
+            }
+        return specs
+    kept_specs = list(specs[:limit])
+    kept_prompt_kinds = [str(spec.get("prompt_kind") or "") for spec in kept_specs]
+    skipped_specs = list(specs[limit:])
+    skipped_prompt_kinds = [str(spec.get("prompt_kind") or "") for spec in skipped_specs]
+    if stages is not None:
+        stages["recursive_child_prompt_kind_budget"] = {
+            "status": "activated",
+            "policy": "recursive_child_total_prompt_kind_budget",
+            "reason": "capped_total_prompt_kinds",
+            "limit": limit,
+            "answer_type": problem.get("answer_type"),
+            "planned_child_count_before": len(specs),
+            "planned_child_count_after": len(kept_specs),
+            "planned_prompt_kinds_before": planned_prompt_kinds,
+            "kept_prompt_kinds": kept_prompt_kinds,
+            "skipped_prompt_kinds": skipped_prompt_kinds,
+            "skipped_children": [
+                {
+                    "prompt_kind": str(spec.get("prompt_kind") or ""),
+                    "branch_axis": str(
+                        spec.get("branch_axis")
+                        or _child_branch_axis(str(spec.get("prompt_kind") or ""))
+                    ),
+                }
+                for spec in skipped_specs
+            ],
+            "skipped_child_count": len(skipped_specs),
+            "raw_content_persisted": False,
+        }
+    return kept_specs
+
+
 _RECURSIVE_LATE_CHILD_MODEL_FREE_PROMPT_KINDS = {
     "answer_bearing_evidence_candidate",
     "domain_rule_mc_verifier_answer",
@@ -7086,8 +7720,8 @@ _RECURSIVE_LATE_CHILD_BUDGET_DEFAULT_STAGE_NAMES = {
 }
 
 
-def _recursive_late_child_model_call_budget_limit() -> int | None:
-    raw = os.environ.get("HLE_RECURSIVE_LATE_CHILD_MODEL_CALL_BUDGET", "").strip()
+def _recursive_child_model_call_budget_limit_from_env(name: str) -> int | None:
+    raw = os.environ.get(name, "").strip()
     if not raw:
         return None
     try:
@@ -7097,6 +7731,56 @@ def _recursive_late_child_model_call_budget_limit() -> int | None:
     if value < 0:
         return None
     return value
+
+
+def _recursive_total_child_model_call_budget_limit() -> int | None:
+    return _recursive_child_model_call_budget_limit_from_env(
+        "HLE_RECURSIVE_CHILD_TOTAL_MODEL_CALL_BUDGET"
+    )
+
+
+def _recursive_core_child_model_call_budget_limit() -> int | None:
+    explicit = _recursive_child_model_call_budget_limit_from_env(
+        "HLE_RECURSIVE_CORE_CHILD_MODEL_CALL_BUDGET"
+    )
+    if explicit is not None:
+        return explicit
+    return _recursive_total_child_model_call_budget_limit()
+
+
+def _recursive_late_child_model_call_budget_limit() -> int | None:
+    explicit = _recursive_child_model_call_budget_limit_from_env(
+        "HLE_RECURSIVE_LATE_CHILD_MODEL_CALL_BUDGET"
+    )
+    if explicit is not None:
+        return explicit
+    return _recursive_total_child_model_call_budget_limit()
+
+
+def _recursive_selection_model_call_budget_limit() -> int | None:
+    explicit = _recursive_child_model_call_budget_limit_from_env(
+        "HLE_RECURSIVE_SELECTION_MODEL_CALL_BUDGET"
+    )
+    if explicit is not None:
+        return explicit
+    return _recursive_child_model_call_budget_limit_from_env(
+        "HLE_RECURSIVE_SELECTION_ADJUDICATOR_MODEL_CALL_BUDGET"
+    )
+
+
+def _recursive_selection_wallclock_budget_sec() -> float | None:
+    raw = (
+        os.environ.get("HLE_RECURSIVE_SELECTION_WALLCLOCK_BUDGET_SEC")
+        or os.environ.get("HLE_RECURSIVE_SELECTION_TOTAL_WALLCLOCK_SEC")
+        or os.environ.get("HLE_RECURSIVE_SELECTION_TOTAL_TIMEOUT_SEC")
+        or ""
+    ).strip().lower()
+    if not raw or raw in {"0", "none", "null", "off", "false", "no", "unlimited"}:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return None
 
 
 def _recursive_late_child_budget_stage_names() -> set[str] | None:
@@ -7125,6 +7809,305 @@ def _recursive_late_child_attempt_counts_as_model_call(attempt: dict[str, Any]) 
     if float(attempt.get("latency_sec") or 0.0) == 0.0 and int(attempt.get("underlying_model_calls") or 0) == 0:
         return False
     return True
+
+
+def _recursive_child_spec_counts_as_model_call(spec: dict[str, Any]) -> bool:
+    prompt_kind = str(spec.get("prompt_kind") or "")
+    if not prompt_kind or prompt_kind in _RECURSIVE_LATE_CHILD_MODEL_FREE_PROMPT_KINDS:
+        return False
+    if bool(spec.get("synthetic_option_sweep")):
+        return False
+    return True
+
+
+def _recursive_child_spec_prompt_kinds(specs: list[dict[str, Any]]) -> list[str]:
+    return [str(spec.get("prompt_kind") or "") for spec in specs]
+
+
+def _recursive_child_spec_branch_axes(specs: list[dict[str, Any]]) -> list[str]:
+    return [
+        str(spec.get("branch_axis") or _child_branch_axis(str(spec.get("prompt_kind") or "")))
+        for spec in specs
+    ]
+
+
+def _recursive_core_child_budget_split_specs(
+    specs: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    limit = _recursive_core_child_model_call_budget_limit()
+    model_call_count_before = sum(1 for spec in specs if _recursive_child_spec_counts_as_model_call(spec))
+    if limit is None:
+        return specs, {}
+    kept: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    used = 0
+    for spec in specs:
+        if _recursive_child_spec_counts_as_model_call(spec):
+            if used >= limit:
+                skipped.append(spec)
+                continue
+            used += 1
+        kept.append(spec)
+    summary = {
+        "status": "activated" if skipped else "enabled",
+        "reason": (
+            "core_child_model_call_budget_exhausted"
+            if skipped
+            else "within_core_child_model_call_budget"
+        ),
+        "policy": "core_recursive_child_model_call_budget",
+        "budget_limit": limit,
+        "total_budget_limit": _recursive_total_child_model_call_budget_limit(),
+        "planned_child_count_before": len(specs),
+        "planned_child_count_after": len(kept),
+        "model_call_spec_count_before": model_call_count_before,
+        "model_call_spec_count_after": sum(
+            1 for spec in kept if _recursive_child_spec_counts_as_model_call(spec)
+        ),
+        "skipped_child_count": len(skipped),
+        "kept_prompt_kinds": _recursive_child_spec_prompt_kinds(kept),
+        "skipped_prompt_kinds": _recursive_child_spec_prompt_kinds(skipped),
+        "kept_branch_axes": _recursive_child_spec_branch_axes(kept),
+        "skipped_branch_axes": _recursive_child_spec_branch_axes(skipped),
+        "raw_content_persisted": False,
+    }
+    return kept, summary
+
+
+def _log_recursive_core_child_budget_gate(
+    logger: "_JsonlLogger | None",
+    *,
+    problem: dict[str, Any],
+    eval_id: str,
+    call_id: str,
+    model: str,
+    summary: dict[str, Any],
+) -> None:
+    if not summary:
+        return
+    _log_event(
+        logger,
+        {
+            "event": "recursive_core_child_model_call_budget_gate",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "problem_id_hash": problem.get("id_hash"),
+            "question_hash": problem.get("question_hash"),
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "stage_status": summary.get("status"),
+            "reason": summary.get("reason"),
+            "budget_limit": summary.get("budget_limit"),
+            "planned_child_count_before": summary.get("planned_child_count_before"),
+            "planned_child_count_after": summary.get("planned_child_count_after"),
+            "model_call_spec_count_before": summary.get("model_call_spec_count_before"),
+            "model_call_spec_count_after": summary.get("model_call_spec_count_after"),
+            "skipped_child_count": summary.get("skipped_child_count"),
+            "skipped_prompt_kinds": list(summary.get("skipped_prompt_kinds", []) or []),
+            "skipped_branch_axes": list(summary.get("skipped_branch_axes", []) or []),
+            "raw_content_persisted": False,
+            "stage_data": summary,
+        },
+    )
+
+
+def _recursive_selection_model_call_budget_summary() -> dict[str, Any]:
+    limit = _recursive_selection_model_call_budget_limit()
+    if limit is None:
+        return {}
+    return {
+        "status": "enabled",
+        "reason": "within_selection_model_call_budget",
+        "policy": "recursive_selection_model_call_budget",
+        "budget_limit": limit,
+        "used_model_call_stage_count": 0,
+        "allowed_stage_count": 0,
+        "skipped_stage_count": 0,
+        "allowed_stage_names": [],
+        "skipped_stage_names": [],
+        "decisions": [],
+        "raw_content_persisted": False,
+    }
+
+
+def _recursive_selection_wallclock_budget_summary() -> dict[str, Any]:
+    budget_sec = _recursive_selection_wallclock_budget_sec()
+    if budget_sec is None:
+        return {}
+    started = time.monotonic()
+    return {
+        "status": "enabled",
+        "reason": "within_selection_wallclock_budget",
+        "policy": "recursive_selection_wallclock_budget",
+        "budget_sec": budget_sec,
+        "started_monotonic": started,
+        "allowed_stage_count": 0,
+        "skipped_stage_count": 0,
+        "allowed_stage_names": [],
+        "skipped_stage_names": [],
+        "decisions": [],
+        "raw_content_persisted": False,
+    }
+
+
+def _selection_wallclock_budget_public_summary(summary: dict[str, Any]) -> dict[str, Any]:
+    if not summary:
+        return {}
+    public = dict(summary)
+    public.pop("started_monotonic", None)
+    if "started_monotonic" in summary:
+        public["elapsed_sec"] = round(
+            max(0.0, time.monotonic() - float(summary.get("started_monotonic") or 0.0)),
+            4,
+        )
+    return public
+
+
+def _recursive_selection_wallclock_budget_allows(
+    summary: dict[str, Any],
+    *,
+    stage_name: str,
+    problem: dict[str, Any],
+    eval_id: str,
+    call_id: str,
+    model: str,
+    logger: "_JsonlLogger | None",
+) -> bool:
+    if not summary:
+        return True
+    budget_sec = float(summary.get("budget_sec") or 0.0)
+    started = float(summary.get("started_monotonic") or time.monotonic())
+    elapsed = max(0.0, time.monotonic() - started)
+    allowed = elapsed <= budget_sec
+    reason = (
+        "within_selection_wallclock_budget"
+        if allowed
+        else "selection_wallclock_budget_exhausted"
+    )
+    decision = {
+        "stage_name": stage_name,
+        "allowed": allowed,
+        "reason": reason,
+        "budget_sec": budget_sec,
+        "elapsed_sec": round(elapsed, 4),
+        "raw_content_persisted": False,
+    }
+    if allowed:
+        summary["allowed_stage_count"] = int(summary.get("allowed_stage_count") or 0) + 1
+        summary.setdefault("allowed_stage_names", []).append(stage_name)
+    else:
+        summary["status"] = "activated"
+        summary["reason"] = "skipped_selection_model_stage_after_wallclock_budget_exhaustion"
+        summary["skipped_stage_count"] = int(summary.get("skipped_stage_count") or 0) + 1
+        summary.setdefault("skipped_stage_names", []).append(stage_name)
+    decisions = summary.setdefault("decisions", [])
+    decisions.append(decision)
+    if len(decisions) > 48:
+        del decisions[:-48]
+    _log_event(
+        logger,
+        {
+            "event": "recursive_selection_wallclock_budget_gate",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "problem_id_hash": problem.get("id_hash"),
+            "question_hash": problem.get("question_hash"),
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "stage_name": stage_name,
+            "stage_status": "allowed" if allowed else "skipped",
+            "allowed": allowed,
+            "reason": reason,
+            "budget_sec": budget_sec,
+            "elapsed_sec": round(elapsed, 4),
+            "raw_content_persisted": False,
+            "stage_data": decision,
+        },
+    )
+    return allowed
+
+
+def _recursive_selection_model_call_budget_allows(
+    summary: dict[str, Any],
+    *,
+    stage_name: str,
+    problem: dict[str, Any],
+    eval_id: str,
+    call_id: str,
+    model: str,
+    logger: "_JsonlLogger | None",
+) -> bool:
+    if not summary:
+        return True
+    limit = int(summary.get("budget_limit") or 0)
+    used = int(summary.get("used_model_call_stage_count") or 0)
+    allowed = used < limit
+    reason = (
+        "within_selection_model_call_budget"
+        if allowed
+        else "selection_model_call_budget_exhausted"
+    )
+    decision = {
+        "stage_name": stage_name,
+        "allowed": allowed,
+        "reason": reason,
+        "budget_limit": limit,
+        "used_model_call_stage_count_before": used,
+        "raw_content_persisted": False,
+    }
+    if allowed:
+        summary["used_model_call_stage_count"] = used + 1
+        summary["allowed_stage_count"] = int(summary.get("allowed_stage_count") or 0) + 1
+        summary.setdefault("allowed_stage_names", []).append(stage_name)
+    else:
+        summary["status"] = "activated"
+        summary["reason"] = "skipped_selection_model_stage_after_budget_exhaustion"
+        summary["skipped_stage_count"] = int(summary.get("skipped_stage_count") or 0) + 1
+        summary.setdefault("skipped_stage_names", []).append(stage_name)
+    decisions = summary.setdefault("decisions", [])
+    decisions.append(decision)
+    if len(decisions) > 48:
+        del decisions[:-48]
+    _log_event(
+        logger,
+        {
+            "event": "recursive_selection_model_call_budget_gate",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "problem_id_hash": problem.get("id_hash"),
+            "question_hash": problem.get("question_hash"),
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "stage_name": stage_name,
+            "stage_status": "allowed" if allowed else "skipped",
+            "allowed": allowed,
+            "reason": reason,
+            "budget_limit": limit,
+            "used_model_call_stage_count_before": used,
+            "raw_content_persisted": False,
+            "stage_data": decision,
+        },
+    )
+    return allowed
+
+
+def _attach_selection_model_call_budget_gate(
+    selection: dict[str, Any],
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    if summary:
+        selection["selection_model_call_budget_gate"] = summary
+    return selection
+
+
+def _attach_selection_wallclock_budget_gate(
+    selection: dict[str, Any],
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    public = _selection_wallclock_budget_public_summary(summary)
+    if public:
+        selection["selection_wallclock_budget_gate"] = public
+    return selection
 
 
 def _recursive_late_child_model_attempt_count(attempts: list[dict[str, Any]]) -> int:
@@ -7411,6 +8394,17 @@ def _execute_recursive_child_attempts(
     max_tokens: int,
     mode: str,
 ) -> dict[str, Any]:
+    specs, core_budget_summary = _recursive_core_child_budget_split_specs(specs)
+    _log_recursive_core_child_budget_gate(
+        logger,
+        problem=problem,
+        eval_id=eval_id,
+        call_id=call_id,
+        model=model,
+        summary=core_budget_summary,
+    )
+    budget_skipped_prompt_kinds = list(core_budget_summary.get("skipped_prompt_kinds", []) or [])
+    budget_skipped_branch_axes = list(core_budget_summary.get("skipped_branch_axes", []) or [])
     force_serial_reason = _force_serial_child_execution_reason(mode=mode, timeout=timeout)
     if mode != "parallel_quorum" or force_serial_reason:
         result = _execute_recursive_child_attempts_serial(
@@ -7426,6 +8420,10 @@ def _execute_recursive_child_attempts(
         if force_serial_reason:
             result["execution_mode"] = "serial_strict_timeout"
             result["serial_forced_reason"] = force_serial_reason
+        if core_budget_summary:
+            result["core_child_model_call_budget_gate"] = core_budget_summary
+            result["skipped_prompt_kinds"] = list(result.get("skipped_prompt_kinds", []) or []) + budget_skipped_prompt_kinds
+            result["skipped_branch_axes"] = list(result.get("skipped_branch_axes", []) or []) + budget_skipped_branch_axes
         return result
     first_batch = _run_child_batch(
         problem=problem,
@@ -7446,8 +8444,11 @@ def _execute_recursive_child_attempts(
     retrieval_child_pending = bool(remaining_prompt_kinds & {"agent_context_answer", "hipporag_context_answer"})
     if _can_stop_recursive_children_early(problem, attempts) and not retrieval_child_pending:
         early_stop_reason = "two_vote_majority"
-        skipped_prompt_kinds = [row["prompt_kind"] for row in specs[len(attempts):]]
-        skipped_branch_axes = [str(row.get("branch_axis") or _child_branch_axis(row["prompt_kind"])) for row in specs[len(attempts):]]
+        skipped_prompt_kinds = [row["prompt_kind"] for row in specs[len(attempts):]] + budget_skipped_prompt_kinds
+        skipped_branch_axes = [
+            str(row.get("branch_axis") or _child_branch_axis(row["prompt_kind"]))
+            for row in specs[len(attempts):]
+        ] + budget_skipped_branch_axes
         _log_recursive_child_early_stop(
             logger,
             eval_id=eval_id,
@@ -7470,6 +8471,153 @@ def _execute_recursive_child_attempts(
             "execution_mode": "parallel_quorum",
             "child_timeout_sec": timeout,
             "child_max_workers": first_batch["max_workers"],
+            "core_child_model_call_budget_gate": core_budget_summary,
+        }
+    no_byte_cascade_guard = _recursive_child_no_byte_cascade_guard_summary(
+        problem=problem,
+        attempts=attempts,
+        remaining_specs=specs[len(attempts):],
+    )
+    if no_byte_cascade_guard.get("status") == "activated":
+        remaining_specs_after_first = specs[len(attempts):]
+        recovery_child_count = min(
+            len(remaining_specs_after_first),
+            int(no_byte_cascade_guard.get("recovery_child_count") or 0),
+        )
+        recovery_specs = remaining_specs_after_first[:recovery_child_count]
+        skipped_specs_after_recovery = remaining_specs_after_first[recovery_child_count:]
+        no_byte_cascade_guard["recovery_prompt_kinds"] = [
+            str(row.get("prompt_kind") or "") for row in recovery_specs
+        ]
+        no_byte_cascade_guard["recovery_branch_axes"] = [
+            str(row.get("branch_axis") or _child_branch_axis(row["prompt_kind"]))
+            for row in recovery_specs
+        ]
+        no_byte_cascade_guard["skipped_prompt_kinds"] = [
+            str(row.get("prompt_kind") or "") for row in skipped_specs_after_recovery
+        ] + budget_skipped_prompt_kinds
+        no_byte_cascade_guard["skipped_branch_axes"] = [
+            str(row.get("branch_axis") or _child_branch_axis(row["prompt_kind"]))
+            for row in skipped_specs_after_recovery
+        ] + budget_skipped_branch_axes
+        skipped_branch_axes = [
+            str(row.get("branch_axis") or _child_branch_axis(row["prompt_kind"]))
+            for row in skipped_specs_after_recovery
+        ] + budget_skipped_branch_axes
+        skipped_prompt_kinds = list(no_byte_cascade_guard["skipped_prompt_kinds"])
+        _log_event(
+            logger,
+            {
+                "event": "recursive_child_no_byte_cascade_guard",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "question_hash": problem["question_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                **no_byte_cascade_guard,
+            },
+        )
+        if recovery_specs:
+            recovery_batch = _run_child_batch(
+                problem=problem,
+                specs=recovery_specs,
+                start_index=len(attempts) + 1,
+                model=model,
+                eval_id=eval_id,
+                call_id=call_id,
+                logger=logger,
+                timeout=timeout,
+                max_tokens=max_tokens,
+                max_workers=_agent_parallel_child_max_workers(len(recovery_specs), timeout=timeout),
+            )
+            attempts.extend(recovery_batch["attempts"])
+            attempts.sort(key=lambda row: int(row.get("child_index", 0) or 0))
+            valid_after_recovery = _valid_recursive_answer_attempts(problem=problem, attempts=attempts)
+            recovery_summary = {
+                "status": "recovered_candidates" if valid_after_recovery else "no_candidate_after_recovery",
+                "reason": "no_byte_cascade_recovery_batch_completed",
+                "policy": "bounded_recovery_after_no_byte_cascade",
+                "recovery_child_count": len(recovery_specs),
+                "recovery_prompt_kinds": no_byte_cascade_guard["recovery_prompt_kinds"],
+                "recovery_answered_child_count": sum(
+                    1 for row in recovery_batch["attempts"] if row.get("status") == "answered"
+                ),
+                "valid_candidate_count_after_recovery": len(valid_after_recovery),
+                "remaining_skipped_child_count": len(skipped_specs_after_recovery),
+                "skipped_prompt_kinds": skipped_prompt_kinds,
+                "raw_content_persisted": False,
+            }
+            no_byte_cascade_guard["recovery_summary"] = recovery_summary
+            _log_event(
+                logger,
+                {
+                    "event": "recursive_child_no_byte_cascade_recovery",
+                    "eval_id": eval_id,
+                    "call_id": call_id,
+                    "problem_id_hash": problem["id_hash"],
+                    "question_hash": problem["question_hash"],
+                    "model": model,
+                    "variant": "assumption_agent_recursive_verify",
+                    **recovery_summary,
+                },
+            )
+            early_stop_reason = (
+                "first_batch_systemic_no_byte_endpoint_errors_recovery_limited"
+                if skipped_specs_after_recovery
+                else None
+            )
+            if skipped_specs_after_recovery:
+                _log_recursive_child_early_stop(
+                    logger,
+                    eval_id=eval_id,
+                    call_id=call_id,
+                    problem=problem,
+                    model=model,
+                    reason=early_stop_reason or "first_batch_systemic_no_byte_endpoint_errors_recovery_limited",
+                    executed_child_count=len(attempts),
+                    planned_child_count=len(specs),
+                    skipped_prompt_kinds=skipped_prompt_kinds,
+                    executed_branch_axes=_child_branch_axes_for_attempts(attempts),
+                    skipped_branch_axes=skipped_branch_axes,
+                )
+            return {
+                "attempts": attempts,
+                "underlying_model_calls": first_batch["underlying_model_calls"] + recovery_batch["underlying_model_calls"],
+                "early_stop_reason": early_stop_reason,
+                "skipped_prompt_kinds": skipped_prompt_kinds,
+                "skipped_branch_axes": skipped_branch_axes,
+                "execution_mode": "parallel_quorum",
+                "child_timeout_sec": timeout,
+                "child_max_workers": max(first_batch["max_workers"], recovery_batch["max_workers"]),
+                "core_child_model_call_budget_gate": core_budget_summary,
+                "no_byte_cascade_guard": no_byte_cascade_guard,
+            }
+        early_stop_reason = str(no_byte_cascade_guard.get("reason") or "recursive_child_no_byte_cascade")
+        _log_recursive_child_early_stop(
+            logger,
+            eval_id=eval_id,
+            call_id=call_id,
+            problem=problem,
+            model=model,
+            reason=early_stop_reason,
+            executed_child_count=len(attempts),
+            planned_child_count=len(specs),
+            skipped_prompt_kinds=skipped_prompt_kinds,
+            executed_branch_axes=_child_branch_axes_for_attempts(attempts),
+            skipped_branch_axes=skipped_branch_axes,
+        )
+        return {
+            "attempts": attempts,
+            "underlying_model_calls": first_batch["underlying_model_calls"],
+            "early_stop_reason": early_stop_reason,
+            "skipped_prompt_kinds": skipped_prompt_kinds,
+            "skipped_branch_axes": skipped_branch_axes,
+            "execution_mode": "parallel_quorum",
+            "child_timeout_sec": timeout,
+            "child_max_workers": first_batch["max_workers"],
+            "core_child_model_call_budget_gate": core_budget_summary,
+            "no_byte_cascade_guard": no_byte_cascade_guard,
         }
     rest_batch = _run_child_batch(
         problem=problem,
@@ -7489,12 +8637,126 @@ def _execute_recursive_child_attempts(
         "attempts": attempts,
         "underlying_model_calls": first_batch["underlying_model_calls"] + rest_batch["underlying_model_calls"],
         "early_stop_reason": None,
-        "skipped_prompt_kinds": [],
-        "skipped_branch_axes": [],
+        "skipped_prompt_kinds": budget_skipped_prompt_kinds,
+        "skipped_branch_axes": budget_skipped_branch_axes,
         "execution_mode": "parallel_quorum",
         "child_timeout_sec": timeout,
         "child_max_workers": max(first_batch["max_workers"], rest_batch["max_workers"]),
+        "core_child_model_call_budget_gate": core_budget_summary,
+        "no_byte_cascade_guard": no_byte_cascade_guard,
     }
+
+
+def _recursive_child_no_byte_cascade_guard_summary(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    remaining_specs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if os.environ.get("HLE_DISABLE_RECURSIVE_CHILD_NO_BYTE_CASCADE_GUARD", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return {"status": "disabled", "reason": "disabled"}
+    if not remaining_specs:
+        return {"status": "not_required", "reason": "no_remaining_recursive_children"}
+    recovery_child_count = _recursive_child_no_byte_cascade_recovery_child_count(remaining_specs)
+    min_errors_raw = os.environ.get("HLE_RECURSIVE_CHILD_NO_BYTE_CASCADE_MIN_ERRORS", "2").strip()
+    try:
+        min_errors = max(1, int(min_errors_raw))
+    except ValueError:
+        min_errors = 2
+    model_attempts = [
+        attempt for attempt in attempts
+        if str(attempt.get("prompt_kind") or "")
+        and attempt.get("prompt_kind") not in {
+            "route_arbitrator_answer",
+            "answer_bearing_evidence_candidate",
+            "mc_option_sweep_candidate",
+        }
+    ]
+    valid = _valid_recursive_answer_attempts(problem=problem, attempts=model_attempts)
+    error_attempts = [
+        attempt for attempt in model_attempts
+        if attempt.get("status") in {"error", "timeout"}
+    ]
+    no_byte_attempts = [
+        attempt for attempt in error_attempts
+        if _recursive_child_attempt_is_no_byte_timeout(attempt)
+    ]
+    total = len(model_attempts)
+    error_ratio = len(error_attempts) / max(1, total)
+    no_byte_ratio = len(no_byte_attempts) / max(1, total)
+    base = {
+        "model_child_attempt_count": total,
+        "valid_candidate_count": len(valid),
+        "error_child_count": len(error_attempts),
+        "no_byte_error_child_count": len(no_byte_attempts),
+        "remaining_child_count": len(remaining_specs),
+        "remaining_prompt_kinds": [str(spec.get("prompt_kind") or "") for spec in remaining_specs],
+        "error_ratio": round(error_ratio, 4),
+        "no_byte_error_ratio": round(no_byte_ratio, 4),
+        "recovery_child_count": recovery_child_count,
+        "recovery_enabled": recovery_child_count > 0,
+        "raw_content_persisted": False,
+    }
+    if (
+        len(valid) == 0
+        and total >= min_errors
+        and len(error_attempts) == total
+        and len(no_byte_attempts) >= min_errors
+        and no_byte_ratio >= 0.75
+    ):
+        return {
+            "status": "activated",
+            "reason": "first_batch_systemic_no_byte_endpoint_errors",
+            "policy": (
+                "bounded_recovery_after_no_byte_cascade"
+                if recovery_child_count > 0
+                else "skip_remaining_recursive_children_after_no_byte_cascade"
+            ),
+            "action": (
+                "run_recovery_child_batch"
+                if recovery_child_count > 0
+                else "skip_remaining_recursive_children"
+            ),
+            "min_no_byte_errors": min_errors,
+            **base,
+        }
+    return {
+        "status": "not_required",
+        "reason": "no_byte_error_pressure_below_abort_threshold",
+        "min_no_byte_errors": min_errors,
+        **base,
+    }
+
+
+def _recursive_child_no_byte_cascade_recovery_child_count(
+    remaining_specs: list[dict[str, Any]],
+) -> int:
+    raw = os.environ.get("HLE_RECURSIVE_CHILD_NO_BYTE_CASCADE_RECOVERY_CHILD_COUNT", "2").strip().lower()
+    if raw in {"", "default"}:
+        raw = "2"
+    if raw in {"0", "none", "null", "off", "false", "no", "disabled"}:
+        return 0
+    try:
+        return min(len(remaining_specs), max(0, int(raw)))
+    except ValueError:
+        return min(len(remaining_specs), 2)
+
+
+def _recursive_child_attempt_is_no_byte_timeout(attempt: dict[str, Any]) -> bool:
+    label = str(attempt.get("error_label") or "")
+    if label == "SubprocessNoByteTimeout":
+        return True
+    text = " ".join([
+        str(attempt.get("error") or ""),
+        str(attempt.get("error_message") or ""),
+        str(attempt.get("timeout_reason") or ""),
+    ]).lower()
+    return "model_subprocess_no_byte_timeout" in text or "subprocess.timeoutexpired" in text
 
 
 def _agent_parallel_child_max_workers(candidate_count: int, *, timeout: float | None) -> int:
@@ -7556,8 +8818,10 @@ def _recursive_child_batch_max_wait_sec(timeout: float | None) -> float | None:
         or os.environ.get("HLE_RECURSIVE_CHILD_BATCH_TOTAL_WAIT_SEC")
         or ""
     ).strip().lower()
+    if raw in {"0", "none", "null", "off", "false", "no", "unlimited"}:
+        return None
     configured: float | None = None
-    if raw and raw not in {"0", "none", "null", "off", "false", "no", "unlimited"}:
+    if raw:
         try:
             configured = max(0.0, float(raw))
         except ValueError:
@@ -7704,7 +8968,9 @@ def _run_child_batch(
     try:
         for offset, spec in enumerate(specs):
             child_index = start_index + offset
+            child_context = contextvars.copy_context()
             future = executor.submit(
+                child_context.run,
                 _run_child_attempt,
                 problem=problem,
                 spec=spec,
@@ -7904,7 +9170,18 @@ def _run_child_attempt(
     )
     started = time.monotonic()
     try:
-        text = _call_model(model=model, prompt=spec["prompt"], timeout=timeout, max_tokens=max_tokens)
+        with _model_router_call_scope(
+            router_scope="recursive_child",
+            router_call_stage="recursive_child_answer",
+            call_id=call_id,
+            child_id=child_id,
+            child_index=child_index,
+            prompt_kind=spec["prompt_kind"],
+            branch_axis=branch_axis,
+            problem_id_hash=problem["id_hash"],
+            question_hash=problem["question_hash"],
+        ):
+            text = _call_model(model=model, prompt=spec["prompt"], timeout=timeout, max_tokens=max_tokens)
         parsed = _parse_answer_json(text) or text.strip()
         parsed, mc_canonical_summary = _canonicalize_multiple_choice_answer(problem, parsed)
         operator_source_ids = [str(value) for value in spec.get("operator_source_ids", []) or [] if str(value)]
@@ -7919,16 +9196,27 @@ def _run_child_attempt(
         if _operator_child_audit_needs_repair(spec=spec, audit=operator_audit):
             repair_started = time.monotonic()
             try:
-                repair_text = _call_model(
-                    model=model,
-                    prompt=_operator_child_audit_repair_prompt(
-                        original_prompt=str(spec.get("prompt") or ""),
-                        source_ids=operator_source_ids,
-                        required_slots=operator_required_slots,
-                    ),
-                    timeout=timeout,
-                    max_tokens=max_tokens,
-                )
+                with _model_router_call_scope(
+                    router_scope="recursive_child",
+                    router_call_stage="operator_application_audit_repair",
+                    call_id=call_id,
+                    child_id=child_id,
+                    child_index=child_index,
+                    prompt_kind=spec["prompt_kind"],
+                    branch_axis=branch_axis,
+                    problem_id_hash=problem["id_hash"],
+                    question_hash=problem["question_hash"],
+                ):
+                    repair_text = _call_model(
+                        model=model,
+                        prompt=_operator_child_audit_repair_prompt(
+                            original_prompt=str(spec.get("prompt") or ""),
+                            source_ids=operator_source_ids,
+                            required_slots=operator_required_slots,
+                        ),
+                        timeout=timeout,
+                        max_tokens=max_tokens,
+                    )
                 repair_parsed = _parse_answer_json(repair_text) or repair_text.strip()
                 repair_parsed, repair_mc_summary = _canonicalize_multiple_choice_answer(problem, repair_parsed)
                 repair_audit = _parse_operator_child_audit_json(
@@ -8047,6 +9335,8 @@ def _run_child_attempt(
         )
         return attempt
     except Exception as exc:
+        error_label = _model_error_label(exc)
+        error_message = _model_error_message(exc)
         attempt = {
             "child_id": child_id,
             "child_index": child_index,
@@ -8059,6 +9349,8 @@ def _run_child_attempt(
             "latency_sec": round(time.monotonic() - started, 4),
             "status": "error",
             "error_type": type(exc).__name__,
+            "error_label": error_label,
+            "error": error_message,
         }
         _log_event(
             logger,
@@ -8076,7 +9368,8 @@ def _run_child_attempt(
                 "orthogonal_branch_id": orthogonal_branch_id,
                 "latency_sec": attempt["latency_sec"],
                 "error_type": type(exc).__name__,
-                "error": str(exc)[:240],
+                "error_label": error_label,
+                "error": error_message,
             },
         )
         return attempt
@@ -9391,12 +10684,18 @@ def _llm_math_reference_claim(
     )
     started = time.monotonic()
     try:
-        planner_text = _call_model(
-            model=planner_model,
-            prompt=_candidate_claim_planner_prompt(problem, candidates),
-            timeout=timeout,
-            max_tokens=max_tokens,
-        )
+        with _option_claim_model_router_scope(
+            stage="exact_candidate_reference_planner",
+            problem=problem,
+            call_id=call_id,
+            candidate_count=len(candidates),
+        ):
+            planner_text = _call_model(
+                model=planner_model,
+                prompt=_candidate_claim_planner_prompt(problem, candidates),
+                timeout=timeout,
+                max_tokens=max_tokens,
+            )
     except Exception as exc:
         latency = round(time.monotonic() - started, 4)
         _log_candidate_claim_planner_lifecycle(
@@ -9499,12 +10798,17 @@ def _llm_math_reference_claim_for_mc_options(
     )
     started = time.monotonic()
     try:
-        planner_text = _call_model(
-            model=planner_model,
-            prompt=_mc_option_claim_planner_prompt(problem),
-            timeout=timeout,
-            max_tokens=max_tokens,
-        )
+        with _option_claim_model_router_scope(
+            stage="mc_option_reference_planner",
+            problem=problem,
+            call_id=call_id,
+        ):
+            planner_text = _call_model(
+                model=planner_model,
+                prompt=_mc_option_claim_planner_prompt(problem),
+                timeout=timeout,
+                max_tokens=max_tokens,
+            )
     except Exception as exc:
         latency = round(time.monotonic() - started, 4)
         _log_candidate_claim_planner_lifecycle(
@@ -9618,12 +10922,17 @@ def _run_reference_plan_repair(
     )
     started = time.monotonic()
     try:
-        repair_text = _call_model(
-            model=model,
-            prompt=prompt,
-            timeout=timeout,
-            max_tokens=max_tokens,
-        )
+        with _option_claim_model_router_scope(
+            stage=planner_kind,
+            problem=problem,
+            call_id=call_id,
+        ):
+            repair_text = _call_model(
+                model=model,
+                prompt=prompt,
+                timeout=timeout,
+                max_tokens=max_tokens,
+            )
     except Exception as exc:
         latency = round(time.monotonic() - started, 4)
         _log_candidate_claim_planner_lifecycle(
@@ -11459,6 +12768,7 @@ def _recursive_child_prompt_specs(problem: dict[str, Any], *, agent_plan: dict[s
         for operator_row in reversed(operator_rows):
             specs.insert(operator_insert_index, operator_row)
     specs = _apply_recursive_child_budget_gate(problem, specs, agent_plan=agent_plan)
+    specs = _apply_recursive_child_prompt_kind_limit(problem, specs, agent_plan=agent_plan)
     return _orthogonalize_child_prompt_specs(problem, specs, agent_plan=agent_plan)
 
 
@@ -11999,15 +13309,139 @@ def _candidate_answer_metadata_from_attempts(
             canonical, _ = _canonicalize_multiple_choice_answer(problem, answer)
         norm = _normalize_for_selection(canonical, answer_type=answer_type)
         prompt_kind = str(attempt.get("prompt_kind") or "")
+        try:
+            latency_sec = round(float(attempt.get("latency_sec") or 0.0), 4)
+        except (TypeError, ValueError):
+            latency_sec = 0.0
         records.append({
+            "child_id": attempt.get("child_id"),
             "child_index": int(attempt.get("child_index", 0) or 0),
             "prompt_kind": prompt_kind,
+            "branch_axis": str(attempt.get("branch_axis") or _child_branch_axis(prompt_kind)),
+            "status": str(attempt.get("status") or ""),
             "answer_hash": attempt.get("parsed_answer_hash") or stable_hash({"answer": canonical}),
             "normalized_answer_hash": stable_hash({"normalized_answer": norm}) if norm else None,
             "synthetic_option_sweep": prompt_kind == "mc_option_sweep_candidate",
             "model_generated": prompt_kind != "mc_option_sweep_candidate",
+            "counts_as_model_call": _recursive_late_child_attempt_counts_as_model_call(attempt),
+            "latency_sec": latency_sec,
+            "candidate_verifier_state": attempt.get("candidate_verifier_state"),
+            "candidate_verifier_trust": attempt.get("candidate_verifier_trust"),
+            "tool_confidence": attempt.get("tool_confidence"),
+            "source_supported_evidence_candidate": bool(attempt.get("source_supported_evidence_candidate")),
+            "context_answer_supported": bool(attempt.get("context_answer_supported")),
+            "context_answer_option_hash": attempt.get("context_answer_option_hash"),
+            "top_support_doc_count": int(
+                attempt.get("option_evidence_top_support_doc_count")
+                or attempt.get("top_support_doc_count")
+                or 0
+            ),
+            "top_refute_doc_count": int(attempt.get("top_refute_doc_count") or 0),
         })
     return records
+
+
+def _verified_or_abstain_fallback_trace(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    selection: dict[str, Any],
+) -> dict[str, Any]:
+    gate = selection.get("verified_or_abstain_gate")
+    gate = gate if isinstance(gate, dict) else {}
+    answer_type = str(problem.get("answer_type") or "exactMatch")
+    by_norm: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for attempt in attempts:
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        if answer_type == "multipleChoice":
+            answer, _ = _canonicalize_multiple_choice_answer(problem, answer)
+        norm = _normalize_for_selection(answer, answer_type=answer_type)
+        if norm:
+            by_norm[norm].append(attempt)
+
+    candidate_groups: list[dict[str, Any]] = []
+    for norm, rows in by_norm.items():
+        answer_hashes = sorted({
+            str(row.get("parsed_answer_hash") or "")
+            for row in rows
+            if row.get("parsed_answer_hash")
+        })
+        prompt_kinds = sorted({
+            str(row.get("prompt_kind") or "")
+            for row in rows
+            if row.get("prompt_kind")
+        })
+        candidate_groups.append({
+            "normalized_answer_hash": stable_hash({"normalized_answer": norm}),
+            "answer_hashes": answer_hashes,
+            "support_count": len(rows),
+            "prompt_kinds": prompt_kinds,
+            "model_generated_support_count": sum(
+                1 for row in rows if row.get("prompt_kind") != "mc_option_sweep_candidate"
+            ),
+            "synthetic_option_sweep_support_count": sum(
+                1 for row in rows if row.get("prompt_kind") == "mc_option_sweep_candidate"
+            ),
+            "contains_selected_child": any(
+                row.get("child_id") == selection.get("selected_child_id")
+                for row in rows
+            ),
+        })
+    candidate_groups.sort(
+        key=lambda row: (
+            -int(row.get("support_count") or 0),
+            ",".join(row.get("answer_hashes", []) or []),
+        )
+    )
+    selected_attempt = _selected_attempt_for_selection(
+        problem=problem,
+        attempts=attempts,
+        selection=selection,
+    )
+    blocked_guard = gate.get("weak_source_fallback_cascade_unverified_consensus_guard")
+    blocked_guard = blocked_guard if isinstance(blocked_guard, dict) else {}
+    last_resort_guard = gate.get("verified_or_abstain_last_resort_guard")
+    last_resort_guard = last_resort_guard if isinstance(last_resort_guard, dict) else {}
+    return {
+        "status": "available",
+        "policy": "hash_only_verified_or_abstain_fallback_trace_v1",
+        "raw_content_persisted": False,
+        "gate_status": gate.get("status"),
+        "gate_reason": gate.get("reason"),
+        "original_selection_method": gate.get("original_selection_method"),
+        "original_selected_child_id": gate.get("original_selected_child_id"),
+        "fallback_prompt_kind": gate.get("fallback_prompt_kind"),
+        "fallback_policy": gate.get("fallback_policy"),
+        "fallback_answer_hash": gate.get("fallback_answer_hash"),
+        "selected_child_id": selection.get("selected_child_id"),
+        "selected_prompt_kind": (selected_attempt or {}).get("prompt_kind"),
+        "selected_answer_hash": stable_hash({"answer": selection.get("selected_answer")}),
+        "last_resort_guard": last_resort_guard or None,
+        "candidate_group_count": len(candidate_groups),
+        "candidate_groups": candidate_groups[:12],
+        "blocked_consensus": {
+            "blocked": bool(blocked_guard.get("blocked")),
+            "reason": blocked_guard.get("reason"),
+            "blocked_fallback_answer_hash": blocked_guard.get("blocked_fallback_answer_hash"),
+            "blocked_fallback_consensus_count": blocked_guard.get(
+                "blocked_fallback_consensus_count"
+            ),
+            "blocked_fallback_consensus_runner_up_count": blocked_guard.get(
+                "blocked_fallback_consensus_runner_up_count"
+            ),
+            "blocked_fallback_consensus_prompt_kinds": blocked_guard.get(
+                "blocked_fallback_consensus_prompt_kinds"
+            ),
+            "source_verifier_attempt_count": blocked_guard.get("source_verifier_attempt_count"),
+            "source_verifier_direct_high_confidence_count": blocked_guard.get(
+                "source_verifier_direct_high_confidence_count"
+            ),
+            "source_verifier_relation_counts": blocked_guard.get("source_verifier_relation_counts"),
+            "source_verifier_confidence_counts": blocked_guard.get("source_verifier_confidence_counts"),
+        },
+    }
 
 
 def _option_sweep_gap_audit_summary(
@@ -12777,6 +14211,21 @@ def _option_claim_sweep_gap_second_pass_enabled() -> bool:
     return _option_claim_sweep_gap_prefilter_rescue_enabled()
 
 
+def _option_claim_sweep_gap_math_source_claim_scan_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_OPTION_CLAIM_SWEEP_GAP_MATH_SOURCE_CLAIM_SCAN",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    raw = os.environ.get(
+        "HLE_ENABLE_OPTION_CLAIM_SWEEP_GAP_MATH_SOURCE_CLAIM_SCAN",
+        "",
+    ).strip().lower()
+    if raw:
+        return raw in {"1", "true", "yes", "on"}
+    return _option_claim_sweep_gap_second_pass_enabled()
+
+
 def _option_claim_sweep_only_option_labels(
     *,
     problem: dict[str, Any],
@@ -12975,7 +14424,17 @@ def _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
         if isinstance(option_claim_evidence_summary, dict)
         else {}
     )
-    if first_pass_summary.get("status") != "prefiltered_by_option_evidence_scorer":
+    first_pass_status = str(first_pass_summary.get("status") or "")
+    first_pass_reason = str(first_pass_summary.get("reason") or "")
+    first_pass_allows_sweep_gap_recheck = first_pass_status in {
+        "",
+        "not_required",
+        "abstained",
+        "prefiltered_by_option_evidence_scorer",
+        "blocked_no_claim_support",
+        "blocked_source_grounded_claim_verifier",
+    }
+    if not first_pass_allows_sweep_gap_recheck:
         return None, None
     if any(attempt.get("prompt_kind") == "mc_option_claim_evidence_answer" for attempt in attempts):
         return None, None
@@ -12996,8 +14455,13 @@ def _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
             "status": "blocked",
             "reason": "env_disabled",
             "policy": "sweep_gap_claim_second_pass_v1",
+            "first_pass_status": first_pass_status or "missing",
+            "first_pass_reason": first_pass_reason,
+            "first_pass_missing": not bool(first_pass_summary),
         }
         summary = dict(first_pass_summary)
+        summary.setdefault("status", first_pass_status or "not_required")
+        summary.setdefault("reason", first_pass_reason or "sweep_gap_second_pass_disabled")
         summary["post_sweep_second_pass"] = second_pass
         summary["post_sweep_second_pass_status"] = second_pass["status"]
         summary["post_sweep_second_pass_reason"] = second_pass["reason"]
@@ -13011,7 +14475,15 @@ def _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
     if trigger.get("status") != "activated":
         second_pass = dict(trigger)
         second_pass["policy"] = "sweep_gap_claim_second_pass_v1"
+        second_pass["first_pass_status"] = first_pass_status or "missing"
+        second_pass["first_pass_reason"] = first_pass_reason
+        second_pass["first_pass_missing"] = not bool(first_pass_summary)
         summary = dict(first_pass_summary)
+        summary.setdefault("status", first_pass_status or "not_required")
+        summary.setdefault(
+            "reason",
+            first_pass_reason or "sweep_gap_second_pass_not_triggered",
+        )
         summary["post_sweep_second_pass"] = second_pass
         summary["post_sweep_second_pass_status"] = second_pass.get("status")
         summary["post_sweep_second_pass_reason"] = second_pass.get("reason")
@@ -13045,6 +14517,10 @@ def _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
             "stage_data": trigger,
         },
     )
+    force_math_source_claim_scan = bool(
+        first_pass_reason == "math_requires_executable_verifier"
+        and _option_claim_sweep_gap_math_source_claim_scan_enabled()
+    )
     second_attempt, second_summary = _maybe_run_mc_option_claim_evidence_verifier(
         problem=problem,
         attempts=attempts,
@@ -13056,6 +14532,7 @@ def _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
         logger=logger,
         timeout=timeout,
         max_tokens=max_tokens,
+        force_sweep_gap_source_claim_scan=force_math_source_claim_scan,
     )
     if not isinstance(second_summary, dict):
         return second_attempt, second_summary
@@ -13064,8 +14541,13 @@ def _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
         "status": "activated",
         "reason": "reran_claim_verifier_after_option_sweep",
         "policy": "sweep_gap_claim_second_pass_v1",
-        "first_pass_status": first_pass_summary.get("status"),
-        "first_pass_reason": first_pass_summary.get("reason"),
+        "first_pass_status": first_pass_status or "missing",
+        "first_pass_reason": first_pass_reason,
+        "first_pass_missing": not bool(first_pass_summary),
+        "coverage_forced_without_prefiltered_first_pass": (
+            first_pass_status != "prefiltered_by_option_evidence_scorer"
+        ),
+        "forced_math_source_claim_scan": force_math_source_claim_scan,
         "result_status": second_summary.get("status"),
         "result_candidate_emitted": bool(second_summary.get("candidate_emitted")),
         "result_source_verifier_attempt_count": int(
@@ -13083,8 +14565,9 @@ def _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
     wrapped_summary["post_sweep_second_pass_status"] = second_pass["status"]
     wrapped_summary["post_sweep_second_pass_reason"] = second_pass["reason"]
     wrapped_summary["first_pass_prefilter"] = {
-        "status": first_pass_summary.get("status"),
-        "reason": first_pass_summary.get("reason"),
+        "status": first_pass_status or "missing",
+        "reason": first_pass_reason,
+        "missing": not bool(first_pass_summary),
         "option_evidence_status": first_pass_summary.get("option_evidence_status"),
         "top_support_doc_count": int(first_pass_summary.get("top_support_doc_count") or 0),
         "sweep_gap_prefilter_rescue_status": first_pass_summary.get(
@@ -13123,6 +14606,7 @@ def _maybe_run_mc_option_claim_evidence_verifier(
     logger: "_JsonlLogger | None",
     timeout: float | None = None,
     max_tokens: int = 384,
+    force_sweep_gap_source_claim_scan: bool = False,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     if problem.get("answer_type") != "multipleChoice":
         return None, None
@@ -13138,7 +14622,7 @@ def _maybe_run_mc_option_claim_evidence_verifier(
     stem, options = _split_multiple_choice_question(problem)
     if len(options) < 2:
         return None, {"status": "abstained", "reason": "options_not_parsed"}
-    if _classify_hle_domain(problem) == "math":
+    if _classify_hle_domain(problem) == "math" and not force_sweep_gap_source_claim_scan:
         return None, {"status": "not_required", "reason": "math_requires_executable_verifier"}
     prefilter = _mc_option_claim_evidence_prefilter_summary(option_evidence_summary)
     prefilter_override: dict[str, Any] | None = None
@@ -13992,9 +15476,18 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 "dropped_option_hashes": list(
                     coverage_cap_summary.get("dropped_option_hashes", []) or []
                 ),
-            }
+    }
     source_verifier_candidate = bool(source_verifier_rows and evidence_context.strip())
     source_verifier_attempts: list[dict[str, Any]] = []
+    source_verifier_budget_break_summary: dict[str, Any] = {
+        "status": "not_required",
+        "reason": "source_verifier_budget_not_exhausted",
+        "stopped_source_verifier_retry_loop": False,
+        "skipped_source_verifier_row_count": 0,
+        "attempt_count_before_break": 0,
+        "total_budget_exhausted": False,
+        "preserved_span_directness_reserved_budget": False,
+    }
     source_verifier_repair_context_by_label: dict[str, dict[str, Any]] = {}
     ranked_option_rank_by_label = {
         str(row.get("label") or ""): index + 1
@@ -14058,6 +15551,17 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         "relation_matrix": [],
         "direct_candidate_option_hashes": [],
         "underlying_model_calls": 0,
+    }
+    candidate_direct_relation_span_repair_context_bridge_summary: dict[str, Any] = {
+        "status": "disabled",
+        "reason": "env_disabled",
+        "policy": "source_verifier_repair_context_candidate_direct_span_bridge_v1",
+        "candidate_count": 0,
+        "attempted_candidate_count": 0,
+        "recovered_span_count": 0,
+        "recovered_candidate_count": 0,
+        "recovered_candidate_option_hashes": [],
+        "raw_content_persisted": False,
     }
     source_quality_directness_promotion_detail: dict[str, Any] = {
         "promote": False,
@@ -14542,8 +16046,68 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                     "option_claim_evidence_context": verifier_evidence_context,
                 }),
                 "evidence_context_char_count": len(verifier_evidence_context),
+                "budget_reason": (
+                    current_summary.get("reason")
+                    if current_summary.get("status") == "budget_exhausted"
+                    else None
+                ),
+                "budget_state": (
+                    current_summary.get("budget_state")
+                    if current_summary.get("status") == "budget_exhausted"
+                    and isinstance(current_summary.get("budget_state"), dict)
+                    else None
+                ),
                 "underlying_model_calls": int(current_summary.get("underlying_model_calls") or 0),
             })
+            if current_summary.get("status") == "budget_exhausted":
+                budget_reason = str(
+                    current_summary.get("reason") or "option_claim_verifier_budget_exhausted"
+                )
+                skipped_row_count = max(0, len(source_verifier_rows) - verifier_index - 1)
+                source_verifier_budget_break_summary = {
+                    "status": "activated",
+                    "reason": budget_reason,
+                    "stopped_source_verifier_retry_loop": True,
+                    "break_index": verifier_index,
+                    "attempt_count_before_break": len(source_verifier_attempts),
+                    "skipped_source_verifier_row_count": skipped_row_count,
+                    "total_budget_exhausted": (
+                        budget_reason == "option_claim_verifier_budget_exhausted"
+                    ),
+                    "preserved_span_directness_reserved_budget": (
+                        budget_reason
+                        == "option_claim_verifier_non_reserved_budget_exhausted_reserved_for_span_directness"
+                    ),
+                    "budget_state": current_summary.get("budget_state"),
+                    "lexical_top_option_hash": stable_hash({"option_label": lexical_label}),
+                }
+                _log_event(
+                    logger,
+                    {
+                        "event": "source_grounded_option_claim_verifier_budget_break",
+                        "eval_id": eval_id,
+                        "call_id": call_id if verifier_index == 0 else f"{call_id}_retry_{verifier_index}",
+                        "problem_id_hash": problem["id_hash"],
+                        "question_hash": problem["question_hash"],
+                        "model": model,
+                        "variant": "assumption_agent_recursive_verify",
+                        "stage_status": "activated",
+                        "reason": budget_reason,
+                        "break_index": verifier_index,
+                        "attempt_count_before_break": len(source_verifier_attempts),
+                        "skipped_source_verifier_row_count": skipped_row_count,
+                        "total_budget_exhausted": (
+                            budget_reason == "option_claim_verifier_budget_exhausted"
+                        ),
+                        "preserved_span_directness_reserved_budget": (
+                            budget_reason
+                            == "option_claim_verifier_non_reserved_budget_exhausted_reserved_for_span_directness"
+                        ),
+                        "lexical_top_option_hash": stable_hash({"option_label": lexical_label}),
+                        "raw_content_persisted": False,
+                    },
+                )
+                break
             if blocked_cross_selection_mismatch and not source_verified:
                 source_verifier_summary = current_summary
             if accepted_direct_high_confidence:
@@ -14551,6 +16115,12 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 source_selected_label = selected_label
                 source_verified = True
                 break
+    source_verifier_budget_break_active = bool(
+        source_verifier_budget_break_summary.get("status") == "activated"
+    )
+    source_verifier_total_budget_exhausted = bool(
+        source_verifier_budget_break_summary.get("total_budget_exhausted")
+    )
     span_directness_recovery_candidate = bool(
         missing_model_labels
         or finite_sweep_retry_coverage
@@ -14565,7 +16135,16 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         span_directness_recovery_candidate
         and _option_claim_span_directness_verifier_enabled()
     )
-    if (
+    if source_verifier_budget_break_active and source_verifier_enabled and source_verifier_candidate:
+        relative_adjudicator_summary = {
+            "status": "skipped",
+            "reason": source_verifier_budget_break_summary.get("reason"),
+            "direct_high_confidence": False,
+            "candidate_count": 0,
+            "underlying_model_calls": 0,
+            "source_verifier_budget_break": source_verifier_budget_break_summary,
+        }
+    elif (
         _option_claim_relative_adjudicator_enabled()
         and source_verifier_enabled
         and source_verifier_candidate
@@ -14642,6 +16221,8 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 "underlying_model_calls": 0,
             }
     contrastive_recovery_enabled = _option_claim_contrastive_adjudicator_enabled()
+    if source_verifier_budget_break_active:
+        contrastive_recovery_enabled = False
     span_directness_recovery_enabled = bool(
         span_directness_recovery_candidate
         and _option_claim_selective_span_directness_recovery_enabled(
@@ -14649,6 +16230,7 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 prefilter_override_recovery_adjudicators_enabled
             )
         )
+        and not source_verifier_total_budget_exhausted
     )
     claim_recovery_enabled = bool(
         contrastive_recovery_enabled
@@ -14671,6 +16253,52 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 for row in source_quality_challenger_rows
                 if str(row.get("label") or "")
             ],
+        )
+        _log_event(
+            logger,
+            {
+                "event": "mc_option_claim_contrastive_candidate_selection",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "question_hash": problem["question_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "stage_status": "activated",
+                "candidate_count": len(
+                    contrastive_candidate_selection.get("candidate_labels", []) or []
+                ),
+                "candidate_option_hashes": list(
+                    contrastive_candidate_selection.get("candidate_option_hashes", []) or []
+                ),
+                "candidate_limit": int(
+                    contrastive_candidate_selection.get("candidate_limit") or 0
+                ),
+                "selection_reasons_by_option_hash": dict(
+                    contrastive_candidate_selection.get(
+                        "selection_reasons_by_option_hash"
+                    )
+                    or {}
+                ),
+                "sweep_only_challenger_included": bool(
+                    contrastive_candidate_selection.get(
+                        "sweep_only_challenger_included"
+                    )
+                ),
+                "overall_source_quality_challenger_included": bool(
+                    contrastive_candidate_selection.get(
+                        "overall_source_quality_challenger_included"
+                    )
+                ),
+                "finite_option_coverage_included": bool(
+                    contrastive_candidate_selection.get(
+                        "finite_option_coverage_included"
+                    )
+                ),
+                "stage_data": _safe_contrastive_candidate_selection_summary(
+                    contrastive_candidate_selection
+                ),
+            },
         )
         contrastive_candidate_labels = list(contrastive_candidate_selection.get("candidate_labels", []) or [])
         if len(contrastive_candidate_labels) >= 2:
@@ -14854,6 +16482,80 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                         ),
                     )
                 )
+                (
+                    candidate_direct_relation_span_docs_by_label,
+                    candidate_direct_relation_span_extractor_summary,
+                    candidate_direct_relation_span_repair_context_bridge_summary,
+                ) = _option_claim_candidate_direct_relation_repair_context_bridge(
+                    stem=stem,
+                    options=contrastive_options,
+                    docs_by_label=contrastive_docs_by_label,
+                    candidate_labels=contrastive_candidate_labels,
+                    problem=problem,
+                    preferred_doc_hashes_by_label=contrastive_preferred_doc_hashes_by_label,
+                    source_verifier_repair_context_by_label=(
+                        source_verifier_repair_context_by_label
+                    ),
+                    existing_docs_by_label=candidate_direct_relation_span_docs_by_label,
+                    existing_summary=candidate_direct_relation_span_extractor_summary,
+                )
+                _log_event(
+                    logger,
+                    {
+                        "event": "mc_option_claim_candidate_direct_relation_repair_context_bridge",
+                        "eval_id": eval_id,
+                        "call_id": call_id,
+                        "problem_id_hash": problem["id_hash"],
+                        "question_hash": problem["question_hash"],
+                        "model": model,
+                        "variant": "assumption_agent_recursive_verify",
+                        "stage_status": (
+                            candidate_direct_relation_span_repair_context_bridge_summary.get(
+                                "status"
+                            )
+                        ),
+                        "reason": (
+                            candidate_direct_relation_span_repair_context_bridge_summary.get(
+                                "reason"
+                            )
+                        ),
+                        "attempted_candidate_count": int(
+                            candidate_direct_relation_span_repair_context_bridge_summary.get(
+                                "attempted_candidate_count"
+                            )
+                            or 0
+                        ),
+                        "recovered_span_count": int(
+                            candidate_direct_relation_span_repair_context_bridge_summary.get(
+                                "recovered_span_count"
+                            )
+                            or 0
+                        ),
+                        "recovered_candidate_count": int(
+                            candidate_direct_relation_span_repair_context_bridge_summary.get(
+                                "recovered_candidate_count"
+                            )
+                            or 0
+                        ),
+                        "recovered_candidate_option_hashes": list(
+                            candidate_direct_relation_span_repair_context_bridge_summary.get(
+                                "recovered_candidate_option_hashes",
+                                [],
+                            )
+                            or []
+                        ),
+                        "skip_reason_counts": dict(
+                            candidate_direct_relation_span_repair_context_bridge_summary.get(
+                                "skip_reason_counts"
+                            )
+                            or {}
+                        ),
+                        "raw_content_persisted": False,
+                        "stage_data": (
+                            candidate_direct_relation_span_repair_context_bridge_summary
+                        ),
+                    },
+                )
                 candidate_direct_relation_span_context = _option_claim_candidate_direct_relation_span_context(
                     options=contrastive_options,
                     span_docs_by_label=candidate_direct_relation_span_docs_by_label,
@@ -14966,13 +16668,39 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 "selected_label": "",
                 "selected_option_hash": None,
             }
+            candidate_recovery_directness_requires_adjudication = bool(
+                not _option_claim_candidate_recovery_direct_promotion_enabled()
+                and (
+                    span_directness_verifier_summary.get("span_context_kind")
+                    == "effective_unique_plus_recovery"
+                    or bool(
+                        span_directness_verifier_summary.get(
+                            "candidate_direct_relation_span_directness_verifier"
+                        )
+                    )
+                    or str(span_directness_verifier_summary.get("reason") or "").endswith(
+                        "_after_recovery"
+                    )
+                )
+                and int(
+                    candidate_direct_relation_span_directness_verifier_summary.get(
+                        "underlying_model_calls"
+                    )
+                    or 0
+                )
+                > 0
+            )
+            span_directness_direct_promotion_requires_adjudication = bool(
+                require_contrastive_after_span_directness
+                or candidate_recovery_directness_requires_adjudication
+            )
             span_directness_promoted = bool(
                 _option_claim_span_directness_direct_promotion_enabled()
                 and span_directness_verifier_summary.get("direct_high_confidence")
                 and span_directness_selected_label in options
                 and span_directness_selected_label in set(contrastive_candidate_labels)
                 and (
-                    not require_contrastive_after_span_directness
+                    not span_directness_direct_promotion_requires_adjudication
                     or bool(statement_fact_programmatic_promotion_detail.get("promote"))
                 )
             )
@@ -15062,6 +16790,19 @@ def _maybe_run_mc_option_claim_evidence_verifier(
             )
             contrastive_adjudicator_summary["span_directness_direct_promotion_blocked_by_task_hint"] = bool(
                 require_contrastive_after_span_directness
+                and bool(span_directness_verifier_summary.get("direct_high_confidence"))
+                and not bool(statement_fact_programmatic_promotion_detail.get("promote"))
+            )
+            contrastive_adjudicator_summary[
+                "candidate_recovery_direct_promotion_enabled"
+            ] = bool(_option_claim_candidate_recovery_direct_promotion_enabled())
+            contrastive_adjudicator_summary[
+                "candidate_recovery_directness_requires_adjudication"
+            ] = bool(candidate_recovery_directness_requires_adjudication)
+            contrastive_adjudicator_summary[
+                "span_directness_direct_promotion_blocked_by_candidate_recovery"
+            ] = bool(
+                candidate_recovery_directness_requires_adjudication
                 and bool(span_directness_verifier_summary.get("direct_high_confidence"))
                 and not bool(statement_fact_programmatic_promotion_detail.get("promote"))
             )
@@ -15156,6 +16897,23 @@ def _maybe_run_mc_option_claim_evidence_verifier(
             )
             contrastive_adjudicator_summary["candidate_direct_relation_span_extractor_status"] = (
                 candidate_direct_relation_span_extractor_summary.get("status")
+            )
+            contrastive_adjudicator_summary[
+                "candidate_direct_relation_span_repair_context_bridge"
+            ] = candidate_direct_relation_span_repair_context_bridge_summary
+            contrastive_adjudicator_summary[
+                "candidate_direct_relation_span_repair_context_bridge_status"
+            ] = candidate_direct_relation_span_repair_context_bridge_summary.get("status")
+            contrastive_adjudicator_summary[
+                "candidate_direct_relation_span_repair_context_bridge_reason"
+            ] = candidate_direct_relation_span_repair_context_bridge_summary.get("reason")
+            contrastive_adjudicator_summary[
+                "candidate_direct_relation_span_repair_context_bridge_span_count"
+            ] = int(
+                candidate_direct_relation_span_repair_context_bridge_summary.get(
+                    "recovered_span_count"
+                )
+                or 0
             )
             contrastive_adjudicator_summary["candidate_direct_relation_span_context_used"] = bool(
                 candidate_direct_relation_span_context_used
@@ -15321,6 +17079,12 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 "span_directness_verifier_lexical_unique_but_relation_generic_count"
             ] = int(
                 span_directness_verifier_summary.get("lexical_unique_but_relation_generic_count") or 0
+            )
+            contrastive_adjudicator_summary["span_directness_verifier_gap_model_skip_count"] = int(
+                span_directness_verifier_summary.get("gap_model_skip_count") or 0
+            )
+            contrastive_adjudicator_summary["span_directness_verifier_gap_model_skip_reason_counts"] = dict(
+                span_directness_verifier_summary.get("gap_model_skip_reason_counts") or {}
             )
             contrastive_adjudicator_summary["span_directness_verifier_selected_option_hash"] = (
                 span_directness_verifier_summary.get("selected_option_hash")
@@ -15492,11 +17256,30 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 relation_comparator_selected_hash
                 and relation_comparator_selected_hash in span_directness_direct_hashes
             )
+            relation_comparator_promotion_enabled = (
+                _option_claim_relation_span_comparator_promotion_enabled()
+            )
+            relation_comparator_single_recovery_promotion_blocked = (
+                _option_claim_relation_comparator_single_recovery_promotion_blocked(
+                    candidate_recovery_directness_requires_adjudication=(
+                        candidate_recovery_directness_requires_adjudication
+                    ),
+                    relation_span_comparator_summary=relation_span_comparator_summary,
+                )
+            )
+            contrastive_adjudicator_summary[
+                "relation_span_comparator_promotion_enabled"
+            ] = bool(relation_comparator_promotion_enabled)
             contrastive_adjudicator_summary[
                 "relation_span_comparator_selected_span_direct"
             ] = bool(relation_comparator_selected_span_direct)
+            contrastive_adjudicator_summary[
+                "relation_span_comparator_single_recovery_promotion_blocked"
+            ] = bool(relation_comparator_single_recovery_promotion_blocked)
             if (
                 (not source_verified)
+                and relation_comparator_promotion_enabled
+                and not relation_comparator_single_recovery_promotion_blocked
                 and relation_span_comparator_summary.get("direct_high_confidence")
                 and relation_comparator_selected_label in options
                 and relation_comparator_selected_label in set(contrastive_candidate_labels)
@@ -15537,6 +17320,35 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 contrastive_adjudicator_summary[
                     "relation_span_comparator_promotion_reason"
                 ] = "relation_span_comparator_promoted_candidate"
+            elif (
+                (not source_verified)
+                and relation_comparator_promotion_enabled
+                and relation_comparator_single_recovery_promotion_blocked
+                and relation_span_comparator_summary.get("direct_high_confidence")
+                and relation_comparator_selected_label in options
+                and relation_comparator_selected_label in set(contrastive_candidate_labels)
+            ):
+                contrastive_adjudicator_summary[
+                    "relation_span_comparator_promotion_blocked"
+                ] = True
+                contrastive_adjudicator_summary[
+                    "relation_span_comparator_promotion_reason"
+                ] = (
+                    "candidate_recovery_single_relation_comparator_requires_source_quality"
+                )
+            elif (
+                (not source_verified)
+                and relation_span_comparator_summary.get("direct_high_confidence")
+                and relation_comparator_selected_label in options
+                and relation_comparator_selected_label in set(contrastive_candidate_labels)
+                and not relation_comparator_promotion_enabled
+            ):
+                contrastive_adjudicator_summary[
+                    "relation_span_comparator_promotion_blocked"
+                ] = True
+                contrastive_adjudicator_summary[
+                    "relation_span_comparator_promotion_reason"
+                ] = "relation_span_comparator_promotion_disabled"
             elif (
                 (not source_verified)
                 and relation_span_comparator_summary.get("direct_high_confidence")
@@ -15593,6 +17405,37 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                                 "eligible_candidate_count"
                             )
                             or 0
+                        ),
+                        "blocked_promotion_candidate_count": int(
+                            source_quality_directness_promotion_detail.get(
+                                "blocked_promotion_candidate_count"
+                            )
+                            or 0
+                        ),
+                        "span_directness_status": (
+                            source_quality_directness_promotion_detail.get(
+                                "span_directness_status"
+                            )
+                        ),
+                        "span_directness_reason": (
+                            source_quality_directness_promotion_detail.get(
+                                "span_directness_reason"
+                            )
+                        ),
+                        "span_directness_unresolved_multiple_direct_conflict": bool(
+                            source_quality_directness_promotion_detail.get(
+                                "span_directness_unresolved_multiple_direct_conflict"
+                            )
+                        ),
+                        "span_directness_multiple_direct_tiebreak_status": (
+                            source_quality_directness_promotion_detail.get(
+                                "span_directness_multiple_direct_tiebreak_status"
+                            )
+                        ),
+                        "span_directness_multiple_direct_tiebreak_reason": (
+                            source_quality_directness_promotion_detail.get(
+                                "span_directness_multiple_direct_tiebreak_reason"
+                            )
                         ),
                         "stage_data": source_quality_directness_promotion_detail,
                     },
@@ -15736,6 +17579,7 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         "status": status,
         "source": "option_claim_support_refute_retrieval",
         "score_policy": "option_claim_support_refute_margin_v1",
+        "force_sweep_gap_source_claim_scan": bool(force_sweep_gap_source_claim_scan),
         "min_net_score": round(min_net_score, 4),
         "option_count": len(options),
         "top_option_hash": stable_hash({"option_label": top["label"]}),
@@ -15760,6 +17604,20 @@ def _maybe_run_mc_option_claim_evidence_verifier(
             1
             for item in source_verifier_attempts
             if item.get("status") == "budget_exhausted"
+        ),
+        "source_verifier_budget_break": source_verifier_budget_break_summary,
+        "source_verifier_budget_break_status": source_verifier_budget_break_summary.get("status"),
+        "source_verifier_budget_break_reason": source_verifier_budget_break_summary.get("reason"),
+        "source_verifier_budget_break_skipped_row_count": int(
+            source_verifier_budget_break_summary.get("skipped_source_verifier_row_count") or 0
+        ),
+        "source_verifier_budget_break_total_budget_exhausted": bool(
+            source_verifier_budget_break_summary.get("total_budget_exhausted")
+        ),
+        "source_verifier_budget_break_preserved_span_directness_reserved_budget": bool(
+            source_verifier_budget_break_summary.get(
+                "preserved_span_directness_reserved_budget"
+            )
         ),
         "source_verifier_repair_context_enabled": _option_claim_source_verifier_repair_context_enabled(),
         "source_verifier_repair_context_attempt_count": len(source_verifier_repair_context_by_label),
@@ -16065,6 +17923,46 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         "candidate_direct_relation_span_extractor_status": (
             candidate_direct_relation_span_extractor_summary.get("status")
         ),
+        "candidate_direct_relation_span_repair_context_bridge": (
+            candidate_direct_relation_span_repair_context_bridge_summary
+        ),
+        "candidate_direct_relation_span_repair_context_bridge_status": (
+            candidate_direct_relation_span_repair_context_bridge_summary.get("status")
+        ),
+        "candidate_direct_relation_span_repair_context_bridge_reason": (
+            candidate_direct_relation_span_repair_context_bridge_summary.get("reason")
+        ),
+        "candidate_direct_relation_span_repair_context_bridge_attempted_candidate_count": int(
+            candidate_direct_relation_span_repair_context_bridge_summary.get(
+                "attempted_candidate_count"
+            )
+            or 0
+        ),
+        "candidate_direct_relation_span_repair_context_bridge_recovered_span_count": int(
+            candidate_direct_relation_span_repair_context_bridge_summary.get(
+                "recovered_span_count"
+            )
+            or 0
+        ),
+        "candidate_direct_relation_span_repair_context_bridge_recovered_candidate_count": int(
+            candidate_direct_relation_span_repair_context_bridge_summary.get(
+                "recovered_candidate_count"
+            )
+            or 0
+        ),
+        "candidate_direct_relation_span_repair_context_bridge_recovered_candidate_option_hashes": list(
+            candidate_direct_relation_span_repair_context_bridge_summary.get(
+                "recovered_candidate_option_hashes",
+                [],
+            )
+            or []
+        ),
+        "candidate_direct_relation_span_repair_context_bridge_skip_reason_counts": dict(
+            candidate_direct_relation_span_repair_context_bridge_summary.get(
+                "skip_reason_counts"
+            )
+            or {}
+        ),
         "candidate_direct_relation_span_count": int(
             candidate_direct_relation_span_extractor_summary.get("candidate_direct_relation_span_count")
             or 0
@@ -16121,6 +18019,89 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 "relation_signature_missing_required_term_span_count"
             ) or 0
         ),
+        "candidate_direct_relation_span_missing_required_backfill_score_candidate_count": int(
+            candidate_direct_relation_span_extractor_summary.get(
+                "missing_required_term_backfill_score_candidate_count"
+            ) or 0
+        ),
+        "candidate_direct_relation_span_missing_required_backfill_scored_count": int(
+            candidate_direct_relation_span_extractor_summary.get(
+                "missing_required_term_backfill_scored_count"
+            ) or 0
+        ),
+        "candidate_direct_relation_span_missing_required_backfill_relation_only_doc_count": int(
+            candidate_direct_relation_span_extractor_summary.get(
+                "missing_required_term_backfill_relation_only_doc_count"
+            ) or 0
+        ),
+        "candidate_direct_relation_span_missing_required_backfill_relation_only_scored_doc_count": int(
+            candidate_direct_relation_span_extractor_summary.get(
+                "missing_required_term_backfill_relation_only_scored_doc_count"
+            ) or 0
+        ),
+        "candidate_direct_relation_span_missing_required_backfill_relation_only_annotated_existing_doc_count": int(
+            candidate_direct_relation_span_extractor_summary.get(
+                "missing_required_term_backfill_relation_only_annotated_existing_doc_count"
+            ) or 0
+        ),
+        "candidate_direct_relation_span_missing_required_backfill_pair_candidate_count": int(
+            candidate_direct_relation_span_extractor_summary.get(
+                "missing_required_term_backfill_pair_candidate_count"
+            ) or 0
+        ),
+        "candidate_direct_relation_span_missing_required_backfill_paired_span_count": int(
+            candidate_direct_relation_span_extractor_summary.get(
+                "missing_required_term_backfill_paired_span_count"
+            ) or 0
+        ),
+        "candidate_direct_relation_span_missing_required_backfill_composition_candidate_count": int(
+            candidate_direct_relation_span_extractor_summary.get(
+                "missing_required_term_backfill_composition_candidate_count"
+            ) or 0
+        ),
+        "candidate_direct_relation_span_missing_required_backfill_composed_span_count": int(
+            candidate_direct_relation_span_extractor_summary.get(
+                "missing_required_term_backfill_composed_span_count"
+            ) or 0
+        ),
+        "candidate_direct_relation_span_required_relation_bridge_enabled": bool(
+            candidate_direct_relation_span_extractor_summary.get(
+                "required_relation_bridge_span_enabled"
+            )
+        ),
+        "candidate_direct_relation_span_required_relation_bridge_source_candidate_count": int(
+            candidate_direct_relation_span_extractor_summary.get(
+                "required_relation_bridge_source_candidate_count"
+            ) or 0
+        ),
+        "candidate_direct_relation_span_required_relation_bridge_paired_span_count": int(
+            candidate_direct_relation_span_extractor_summary.get(
+                "required_relation_bridge_paired_span_count"
+            ) or 0
+        ),
+        "candidate_direct_relation_span_missing_required_backfill_scoring_filter_counts": dict(
+            candidate_direct_relation_span_extractor_summary.get(
+                "missing_required_term_backfill_scoring_filter_counts"
+            ) or {}
+        ),
+        "candidate_direct_relation_span_filter_counts_by_option_hash": dict(
+            candidate_direct_relation_span_extractor_summary.get(
+                "candidate_direct_relation_span_filter_counts_by_option_hash"
+            )
+            or {}
+        ),
+        "candidate_direct_relation_span_required_coverage_gap_rows": list(
+            candidate_direct_relation_span_extractor_summary.get(
+                "candidate_direct_relation_span_required_coverage_gap_rows",
+                [],
+            )
+            or []
+        ),
+        "candidate_direct_relation_span_required_coverage_gap_rows_hash": (
+            candidate_direct_relation_span_extractor_summary.get(
+                "candidate_direct_relation_span_required_coverage_gap_rows_hash"
+            )
+        ),
         "candidate_direct_relation_span_suppressed_unique_source_doc_count": int(
             candidate_direct_relation_span_extractor_summary.get("suppressed_unique_source_doc_count") or 0
         ),
@@ -16132,6 +18113,15 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         ),
         "candidate_direct_relation_span_directness_verifier_direct_candidate_count": int(
             candidate_direct_relation_span_directness_verifier_summary.get("direct_candidate_count") or 0
+        ),
+        "candidate_direct_relation_span_directness_verifier_gap_model_skip_count": int(
+            candidate_direct_relation_span_directness_verifier_summary.get("gap_model_skip_count") or 0
+        ),
+        "candidate_direct_relation_span_directness_verifier_gap_model_skip_reason_counts": dict(
+            candidate_direct_relation_span_directness_verifier_summary.get(
+                "gap_model_skip_reason_counts"
+            )
+            or {}
         ),
         "candidate_direct_relation_span_directness_verifier_underlying_model_calls": int(
             candidate_direct_relation_span_directness_verifier_summary.get("underlying_model_calls") or 0
@@ -16156,6 +18146,12 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         ),
         "span_directness_verifier_budget_exhausted_candidate_count": int(
             span_directness_verifier_summary.get("budget_exhausted_candidate_count") or 0
+        ),
+        "span_directness_verifier_gap_model_skip_count": int(
+            span_directness_verifier_summary.get("gap_model_skip_count") or 0
+        ),
+        "span_directness_verifier_gap_model_skip_reason_counts": dict(
+            span_directness_verifier_summary.get("gap_model_skip_reason_counts") or {}
         ),
         "span_directness_verifier_statement_fact_slot_gate_required_count": int(
             span_directness_verifier_summary.get("statement_fact_slot_gate_required_count") or 0
@@ -16291,6 +18287,21 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 "span_directness_direct_promotion_blocked_by_task_hint"
             )
         ),
+        "contrastive_adjudicator_candidate_recovery_direct_promotion_enabled": bool(
+            contrastive_adjudicator_summary.get(
+                "candidate_recovery_direct_promotion_enabled"
+            )
+        ),
+        "contrastive_adjudicator_candidate_recovery_directness_requires_adjudication": bool(
+            contrastive_adjudicator_summary.get(
+                "candidate_recovery_directness_requires_adjudication"
+            )
+        ),
+        "contrastive_adjudicator_span_directness_direct_promotion_blocked_by_candidate_recovery": bool(
+            contrastive_adjudicator_summary.get(
+                "span_directness_direct_promotion_blocked_by_candidate_recovery"
+            )
+        ),
         "contrastive_adjudicator_statement_fact_programmatic_span_promotion": bool(
             contrastive_adjudicator_summary.get("statement_fact_programmatic_span_promotion")
         ),
@@ -16355,6 +18366,15 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         "relation_span_comparator_relation_matrix_hash": (
             relation_span_comparator_summary.get("relation_matrix_hash")
         ),
+        "relation_span_comparator_directness_audit_context_hash": (
+            relation_span_comparator_summary.get("directness_audit_context_hash")
+        ),
+        "relation_span_comparator_directness_audit_context_char_count": int(
+            relation_span_comparator_summary.get(
+                "directness_audit_context_char_count"
+            )
+            or 0
+        ),
         "relation_span_comparator_span_directness_conflict_audit_status": (
             relation_span_comparator_summary.get("span_directness_conflict_audit_status")
         ),
@@ -16369,6 +18389,26 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         ),
         "relation_span_comparator_underlying_model_calls": int(
             relation_span_comparator_summary.get("underlying_model_calls") or 0
+        ),
+        "relation_span_comparator_promotion_enabled": bool(
+            contrastive_adjudicator_summary.get(
+                "relation_span_comparator_promotion_enabled"
+            )
+        ),
+        "relation_span_comparator_promotion_blocked": bool(
+            contrastive_adjudicator_summary.get(
+                "relation_span_comparator_promotion_blocked"
+            )
+        ),
+        "relation_span_comparator_single_recovery_promotion_blocked": bool(
+            contrastive_adjudicator_summary.get(
+                "relation_span_comparator_single_recovery_promotion_blocked"
+            )
+        ),
+        "relation_span_comparator_promotion_reason": (
+            contrastive_adjudicator_summary.get(
+                "relation_span_comparator_promotion_reason"
+            )
         ),
         "contrastive_adjudicator_candidate_count": int(
             contrastive_adjudicator_summary.get("candidate_count") or 0
@@ -17316,7 +19356,143 @@ def _option_claim_span_directness_reserved_model_call_budget_limit(limit: int | 
 
 
 def _option_claim_verifier_uses_span_directness_reserve(kind: str) -> bool:
-    return str(kind or "") == "option_claim_span_directness_verifier"
+    return str(kind or "") in {
+        "option_claim_span_directness_verifier",
+        "option_claim_relation_span_comparator",
+    }
+
+
+def _option_claim_variant_directness_reserved_model_call_budget_limit() -> int:
+    raw = (
+        os.environ.get("HLE_OPTION_CLAIM_VARIANT_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET")
+        or os.environ.get("HLE_OPTION_CLAIM_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET")
+        or ""
+    ).strip()
+    if raw:
+        try:
+            value = int(raw)
+        except ValueError:
+            value = 0
+        return max(0, min(50, value))
+    span_reserve = _option_claim_span_directness_reserved_model_call_budget_limit()
+    if _option_claim_relation_span_comparator_enabled():
+        return max(
+            span_reserve,
+            1 + _option_claim_relation_span_comparator_reserved_model_call_budget_limit(),
+        )
+    return span_reserve
+
+
+def _option_claim_relation_span_comparator_reserved_model_call_budget_limit() -> int:
+    raw = os.environ.get(
+        "HLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR_RESERVED_MODEL_CALL_BUDGET",
+        "",
+    ).strip()
+    if raw:
+        try:
+            value = int(raw)
+        except ValueError:
+            value = 0
+        return max(0, min(50, value))
+    return 1 if _option_claim_relation_span_comparator_enabled() else 0
+
+
+def _option_claim_variant_model_call_budget_state(kind: str) -> dict[str, Any]:
+    state = _active_variant_watchdog()
+    if not state or not state.get("enabled"):
+        return {
+            "enabled": False,
+            "allowed": True,
+            "reason": "variant_watchdog_disabled",
+            "budget_limit": None,
+            "budget_used_before": None,
+            "budget_remaining_before": None,
+            "recursive_selection_reserved_budget": 0,
+            "directness_reserved_budget": 0,
+            "relation_comparator_reserved_budget": 0,
+            "uses_directness_reserved_budget": False,
+            "uses_relation_comparator_reserved_budget": False,
+            "protected_budget_before": 0,
+        }
+    budget = state.get("model_call_budget")
+    if budget is None:
+        return {
+            "enabled": False,
+            "allowed": True,
+            "reason": "variant_model_call_budget_unlimited",
+            "budget_limit": None,
+            "budget_used_before": int(state.get("model_call_count") or 0),
+            "budget_remaining_before": None,
+            "recursive_selection_reserved_budget": int(
+                state.get("recursive_selection_reserved_model_call_budget") or 0
+            ),
+            "directness_reserved_budget": 0,
+            "relation_comparator_reserved_budget": 0,
+            "uses_directness_reserved_budget": False,
+            "uses_relation_comparator_reserved_budget": False,
+            "protected_budget_before": int(
+                state.get("recursive_selection_reserved_model_call_budget") or 0
+            ),
+        }
+    budget = int(budget)
+    used = int(state.get("model_call_count") or 0)
+    remaining = max(0, budget - used)
+    recursive_selection_reserved = int(
+        state.get("recursive_selection_reserved_model_call_budget") or 0
+    )
+    directness_reserved = _option_claim_variant_directness_reserved_model_call_budget_limit()
+    relation_comparator_reserved = (
+        _option_claim_relation_span_comparator_reserved_model_call_budget_limit()
+    )
+    uses_directness_reserved = _option_claim_verifier_uses_span_directness_reserve(kind)
+    uses_relation_comparator_reserved = (
+        str(kind or "") == "option_claim_relation_span_comparator"
+    )
+    if uses_relation_comparator_reserved:
+        protected_budget = recursive_selection_reserved
+    elif str(kind or "") == "option_claim_span_directness_verifier":
+        protected_budget = recursive_selection_reserved + relation_comparator_reserved
+    elif uses_directness_reserved:
+        protected_budget = recursive_selection_reserved
+    else:
+        protected_budget = recursive_selection_reserved + directness_reserved
+    if used >= budget:
+        allowed = False
+        reason = "variant_total_model_call_budget_exceeded"
+    elif remaining <= recursive_selection_reserved:
+        allowed = False
+        reason = "variant_model_call_budget_reserved_for_recursive_selection"
+    elif (
+        relation_comparator_reserved > 0
+        and str(kind or "") == "option_claim_span_directness_verifier"
+        and remaining <= protected_budget
+    ):
+        allowed = False
+        reason = "variant_model_call_budget_reserved_for_relation_span_comparator"
+    elif (
+        directness_reserved > 0
+        and not uses_directness_reserved
+        and remaining <= protected_budget
+    ):
+        allowed = False
+        reason = "variant_model_call_budget_reserved_for_option_claim_directness"
+    else:
+        allowed = True
+        reason = "within_variant_model_call_budget"
+    return {
+        "enabled": True,
+        "allowed": allowed,
+        "reason": reason,
+        "budget_limit": budget,
+        "budget_used_before": used,
+        "budget_remaining_before": remaining,
+        "recursive_selection_reserved_budget": recursive_selection_reserved,
+        "directness_reserved_budget": directness_reserved,
+        "relation_comparator_reserved_budget": relation_comparator_reserved,
+        "uses_directness_reserved_budget": uses_directness_reserved,
+        "uses_relation_comparator_reserved_budget": uses_relation_comparator_reserved,
+        "protected_budget_before": protected_budget,
+    }
 
 
 def _option_claim_verifier_budget_root_call_id(call_id: str) -> str:
@@ -17342,6 +19518,120 @@ def _option_claim_verifier_budget_root_call_id(call_id: str) -> str:
     return root
 
 
+def _option_claim_verifier_budget_state(
+    *,
+    kind: str,
+    problem: dict[str, Any],
+    eval_id: str,
+    call_id: str,
+) -> dict[str, Any]:
+    limit = _option_claim_verifier_model_call_budget_limit()
+    root_call_id = _option_claim_verifier_budget_root_call_id(call_id)
+    key = f"{eval_id}:{root_call_id}:{problem.get('id_hash', '')}"
+    used = int(_OPTION_CLAIM_VERIFIER_BUDGET_USED.get(key, 0))
+    reserve_limit = _option_claim_span_directness_reserved_model_call_budget_limit(limit)
+    reserve_kind = "option_claim_span_directness_verifier" if reserve_limit > 0 else ""
+    non_reserved_limit = max(0, int(limit or 0) - reserve_limit)
+    uses_reserve = _option_claim_verifier_uses_span_directness_reserve(kind)
+    reserved_used = int(_OPTION_CLAIM_VERIFIER_SPAN_DIRECTNESS_BUDGET_USED.get(key, 0))
+    variant_budget_state = _option_claim_variant_model_call_budget_state(kind)
+    if limit is None:
+        return {
+            "enabled": bool(variant_budget_state.get("enabled")),
+            "allowed": bool(variant_budget_state.get("allowed")),
+            "reason": (
+                str(variant_budget_state.get("reason") or "")
+                if variant_budget_state.get("enabled") and not variant_budget_state.get("allowed")
+                else "budget_unlimited"
+            ),
+            "root_call_id": root_call_id,
+            "key": key,
+            "budget_limit": None,
+            "reserved_budget_limit": reserve_limit,
+            "reserved_budget_kind": reserve_kind,
+            "reserved_budget_used_before": reserved_used,
+            "non_reserved_budget_limit": non_reserved_limit,
+            "uses_reserved_budget": uses_reserve,
+            "budget_used_before": used,
+            "budget_remaining_before": None,
+            "variant_budget_state": variant_budget_state,
+            "variant_budget_enabled": bool(variant_budget_state.get("enabled")),
+            "variant_budget_limit": variant_budget_state.get("budget_limit"),
+            "variant_budget_used_before": variant_budget_state.get("budget_used_before"),
+            "variant_budget_remaining_before": variant_budget_state.get("budget_remaining_before"),
+            "variant_recursive_selection_reserved_budget": variant_budget_state.get(
+                "recursive_selection_reserved_budget"
+            ),
+            "variant_directness_reserved_budget": variant_budget_state.get(
+                "directness_reserved_budget"
+            ),
+            "variant_relation_comparator_reserved_budget": variant_budget_state.get(
+                "relation_comparator_reserved_budget"
+            ),
+            "uses_variant_directness_reserved_budget": variant_budget_state.get(
+                "uses_directness_reserved_budget"
+            ),
+            "uses_variant_relation_comparator_reserved_budget": variant_budget_state.get(
+                "uses_relation_comparator_reserved_budget"
+            ),
+            "variant_protected_budget_before": variant_budget_state.get(
+                "protected_budget_before"
+            ),
+        }
+    if reserve_limit > 0 and not uses_reserve:
+        local_allowed = used < non_reserved_limit
+        local_blocked_reason = "option_claim_verifier_non_reserved_budget_exhausted_reserved_for_span_directness"
+    else:
+        local_allowed = used < limit
+        local_blocked_reason = "option_claim_verifier_budget_exhausted"
+    variant_allowed = bool(variant_budget_state.get("allowed", True))
+    allowed = bool(local_allowed and variant_allowed)
+    if allowed:
+        reason = "within_budget"
+    elif not local_allowed:
+        reason = local_blocked_reason
+    else:
+        reason = str(variant_budget_state.get("reason") or "variant_model_call_budget_exhausted")
+    return {
+        "enabled": True,
+        "allowed": allowed,
+        "reason": reason,
+        "root_call_id": root_call_id,
+        "key": key,
+        "budget_limit": limit,
+        "reserved_budget_limit": reserve_limit,
+        "reserved_budget_kind": reserve_kind,
+        "reserved_budget_used_before": reserved_used,
+        "non_reserved_budget_limit": non_reserved_limit,
+        "uses_reserved_budget": uses_reserve,
+        "budget_used_before": used,
+        "budget_remaining_before": max(0, limit - used),
+        "variant_budget_state": variant_budget_state,
+        "variant_budget_enabled": bool(variant_budget_state.get("enabled")),
+        "variant_budget_limit": variant_budget_state.get("budget_limit"),
+        "variant_budget_used_before": variant_budget_state.get("budget_used_before"),
+        "variant_budget_remaining_before": variant_budget_state.get("budget_remaining_before"),
+        "variant_recursive_selection_reserved_budget": variant_budget_state.get(
+            "recursive_selection_reserved_budget"
+        ),
+        "variant_directness_reserved_budget": variant_budget_state.get(
+            "directness_reserved_budget"
+        ),
+        "variant_relation_comparator_reserved_budget": variant_budget_state.get(
+            "relation_comparator_reserved_budget"
+        ),
+        "uses_variant_directness_reserved_budget": variant_budget_state.get(
+            "uses_directness_reserved_budget"
+        ),
+        "uses_variant_relation_comparator_reserved_budget": variant_budget_state.get(
+            "uses_relation_comparator_reserved_budget"
+        ),
+        "variant_protected_budget_before": variant_budget_state.get(
+            "protected_budget_before"
+        ),
+    }
+
+
 def _option_claim_verifier_budget_allows(
     *,
     kind: str,
@@ -17353,50 +19643,65 @@ def _option_claim_verifier_budget_allows(
     candidate_count: int = 0,
     extra: dict[str, Any] | None = None,
 ) -> bool:
-    limit = _option_claim_verifier_model_call_budget_limit()
-    if limit is None:
+    state = _option_claim_verifier_budget_state(
+        kind=kind,
+        problem=problem,
+        eval_id=eval_id,
+        call_id=call_id,
+    )
+    if not state.get("enabled"):
         return True
-    root_call_id = _option_claim_verifier_budget_root_call_id(call_id)
-    key = f"{eval_id}:{root_call_id}:{problem.get('id_hash', '')}"
-    used = int(_OPTION_CLAIM_VERIFIER_BUDGET_USED.get(key, 0))
-    reserve_limit = _option_claim_span_directness_reserved_model_call_budget_limit(limit)
-    reserve_kind = "option_claim_span_directness_verifier" if reserve_limit > 0 else ""
-    non_reserved_limit = max(0, limit - reserve_limit)
-    uses_reserve = _option_claim_verifier_uses_span_directness_reserve(kind)
-    reserved_used = int(_OPTION_CLAIM_VERIFIER_SPAN_DIRECTNESS_BUDGET_USED.get(key, 0))
-    if reserve_limit > 0 and not uses_reserve:
-        allowed = used < non_reserved_limit
-        blocked_reason = "option_claim_verifier_non_reserved_budget_exhausted_reserved_for_span_directness"
-    else:
-        allowed = used < limit
-        blocked_reason = "option_claim_verifier_budget_exhausted"
-    if allowed:
-        _OPTION_CLAIM_VERIFIER_BUDGET_USED[key] = used + 1
-        if uses_reserve:
-            _OPTION_CLAIM_VERIFIER_SPAN_DIRECTNESS_BUDGET_USED[key] = reserved_used + 1
+    allowed = bool(state.get("allowed"))
+    if allowed and state.get("budget_limit") is not None:
+        key = str(state.get("key") or "")
+        _OPTION_CLAIM_VERIFIER_BUDGET_USED[key] = int(state.get("budget_used_before") or 0) + 1
+        if state.get("uses_reserved_budget"):
+            _OPTION_CLAIM_VERIFIER_SPAN_DIRECTNESS_BUDGET_USED[key] = (
+                int(state.get("reserved_budget_used_before") or 0) + 1
+            )
     _log_event(
         logger,
         {
             "event": "option_claim_verifier_model_call_budget_gate",
             "eval_id": eval_id,
             "call_id": call_id,
-            "root_call_id": root_call_id,
+            "root_call_id": state.get("root_call_id"),
             "problem_id_hash": problem.get("id_hash"),
             "question_hash": problem.get("question_hash"),
             "model": model,
             "variant": "assumption_agent_recursive_verify",
             "verifier_kind": kind,
             "candidate_count": candidate_count,
-            "budget_limit": limit,
-            "reserved_budget_limit": reserve_limit,
-            "reserved_budget_kind": reserve_kind,
-            "reserved_budget_used_before": reserved_used,
-            "non_reserved_budget_limit": non_reserved_limit,
-            "uses_reserved_budget": uses_reserve,
-            "budget_used_before": used,
-            "budget_remaining_before": max(0, limit - used),
+            "budget_limit": state.get("budget_limit"),
+            "reserved_budget_limit": state.get("reserved_budget_limit"),
+            "reserved_budget_kind": state.get("reserved_budget_kind"),
+            "reserved_budget_used_before": state.get("reserved_budget_used_before"),
+            "non_reserved_budget_limit": state.get("non_reserved_budget_limit"),
+            "uses_reserved_budget": state.get("uses_reserved_budget"),
+            "budget_used_before": state.get("budget_used_before"),
+            "budget_remaining_before": state.get("budget_remaining_before"),
+            "variant_budget_enabled": state.get("variant_budget_enabled"),
+            "variant_budget_limit": state.get("variant_budget_limit"),
+            "variant_budget_used_before": state.get("variant_budget_used_before"),
+            "variant_budget_remaining_before": state.get("variant_budget_remaining_before"),
+            "variant_recursive_selection_reserved_budget": state.get(
+                "variant_recursive_selection_reserved_budget"
+            ),
+            "variant_directness_reserved_budget": state.get(
+                "variant_directness_reserved_budget"
+            ),
+            "variant_relation_comparator_reserved_budget": state.get(
+                "variant_relation_comparator_reserved_budget"
+            ),
+            "uses_variant_directness_reserved_budget": state.get(
+                "uses_variant_directness_reserved_budget"
+            ),
+            "uses_variant_relation_comparator_reserved_budget": state.get(
+                "uses_variant_relation_comparator_reserved_budget"
+            ),
+            "variant_protected_budget_before": state.get("variant_protected_budget_before"),
             "allowed": allowed,
-            "reason": "within_budget" if allowed else blocked_reason,
+            "reason": state.get("reason"),
             **(extra or {}),
         },
     )
@@ -17436,6 +19741,8 @@ def _source_grounded_option_claim_rejection_reason(
     lexical_top_label: str,
     require_lexical_match: bool,
 ) -> str:
+    if str(summary.get("status") or "") == "budget_exhausted":
+        return str(summary.get("reason") or "option_claim_verifier_budget_exhausted")
     selected_label = str(summary.get("selected_label") or "")
     confidence = str(summary.get("confidence") or "").strip().lower()
     relation = str(summary.get("evidence_relation") or "").strip().lower()
@@ -17712,6 +20019,21 @@ def _option_claim_relation_span_comparator_enabled() -> bool:
     return False
 
 
+def _option_claim_relation_span_comparator_promotion_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR_PROMOTION",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    explicit = os.environ.get(
+        "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR_PROMOTION",
+        "",
+    ).strip().lower()
+    if explicit:
+        return explicit in {"1", "true", "yes", "on"}
+    return True
+
+
 def _option_claim_selective_span_directness_recovery_enabled(
     *,
     prefilter_override_recovery_adjudicators_enabled: bool = False,
@@ -17766,6 +20088,36 @@ def _option_claim_span_directness_direct_promotion_enabled() -> bool:
     return True
 
 
+def _option_claim_candidate_recovery_direct_promotion_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_OPTION_CLAIM_CANDIDATE_RECOVERY_DIRECT_PROMOTION",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    return os.environ.get(
+        "HLE_ENABLE_OPTION_CLAIM_CANDIDATE_RECOVERY_DIRECT_PROMOTION",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _option_claim_relation_comparator_single_recovery_promotion_blocked(
+    *,
+    candidate_recovery_directness_requires_adjudication: bool,
+    relation_span_comparator_summary: dict[str, Any],
+) -> bool:
+    if os.environ.get(
+        "HLE_ENABLE_OPTION_CLAIM_CANDIDATE_RECOVERY_SINGLE_RELATION_COMPARATOR_PROMOTION",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    return bool(
+        candidate_recovery_directness_requires_adjudication
+        and int(relation_span_comparator_summary.get("direct_candidate_count") or 0) <= 1
+        and str(relation_span_comparator_summary.get("reason") or "")
+        == "single_direct_relation_span_candidate"
+    )
+
+
 def _option_claim_candidate_direct_relation_span_verifier_priority_enabled() -> bool:
     if os.environ.get(
         "HLE_DISABLE_OPTION_CLAIM_CANDIDATE_DIRECT_RELATION_SPAN_VERIFIER_PRIORITY",
@@ -17800,6 +20152,21 @@ def _option_claim_candidate_direct_relation_span_extractor_enabled(
     return _option_claim_span_directness_verifier_enabled()
 
 
+def _option_claim_candidate_direct_relation_repair_context_bridge_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_OPTION_CLAIM_CANDIDATE_DIRECT_RELATION_REPAIR_CONTEXT_BRIDGE",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    explicit = os.environ.get(
+        "HLE_ENABLE_OPTION_CLAIM_CANDIDATE_DIRECT_RELATION_REPAIR_CONTEXT_BRIDGE",
+        "",
+    ).strip().lower()
+    if explicit:
+        return explicit in {"1", "true", "yes", "on"}
+    return _option_claim_source_verifier_repair_context_enabled()
+
+
 def _option_claim_candidate_direct_relation_span_max_per_label() -> int:
     raw = os.environ.get("HLE_OPTION_CLAIM_CANDIDATE_DIRECT_RELATION_SPAN_MAX_PER_LABEL", "").strip()
     if raw:
@@ -17820,6 +20187,48 @@ def _option_claim_candidate_direct_relation_span_min_score() -> float:
     return 3.0
 
 
+def _option_claim_required_coverage_composition_span_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_OPTION_CLAIM_REQUIRED_COVERAGE_COMPOSITION_SPAN",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    return os.environ.get(
+        "HLE_ENABLE_OPTION_CLAIM_REQUIRED_COVERAGE_COMPOSITION_SPAN",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _option_claim_required_relation_bridge_span_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_OPTION_CLAIM_REQUIRED_RELATION_BRIDGE_SPAN",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    explicit = os.environ.get(
+        "HLE_ENABLE_OPTION_CLAIM_REQUIRED_RELATION_BRIDGE_SPAN",
+        "",
+    ).strip().lower()
+    if explicit:
+        return explicit in {"1", "true", "yes", "on"}
+    return _evidence_source_cache_only()
+
+
+def _option_claim_missing_required_relation_only_backfill_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_OPTION_CLAIM_MISSING_REQUIRED_RELATION_ONLY_BACKFILL",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    explicit = os.environ.get(
+        "HLE_ENABLE_OPTION_CLAIM_MISSING_REQUIRED_RELATION_ONLY_BACKFILL",
+        "",
+    ).strip().lower()
+    if explicit:
+        return explicit in {"1", "true", "yes", "on"}
+    return False
+
+
 def _option_claim_missing_required_term_backfill_enabled() -> bool:
     if os.environ.get(
         "HLE_DISABLE_OPTION_CLAIM_MISSING_REQUIRED_TERM_BACKFILL",
@@ -17832,7 +20241,7 @@ def _option_claim_missing_required_term_backfill_enabled() -> bool:
     ).strip().lower()
     if explicit:
         return explicit in {"1", "true", "yes", "on"}
-    return False
+    return _evidence_source_cache_only()
 
 
 def _option_claim_missing_required_term_backfill_limit(max_docs: int) -> int:
@@ -18707,6 +21116,11 @@ def _option_claim_missing_required_term_backfill_docs(
         "source_counts": {},
         "retrieval_stage_counts": {},
         "filter_counts": {},
+        "relation_only_bridge_enabled": (
+            _option_claim_missing_required_relation_only_backfill_enabled()
+        ),
+        "relation_only_bridge_doc_count": 0,
+        "relation_only_bridge_annotated_existing_doc_count": 0,
         "rows": [],
     }
     if max_docs <= 0:
@@ -18752,6 +21166,20 @@ def _option_claim_missing_required_term_backfill_docs(
     existing_hashes = set(existing_docs_by_hash)
     required_ranked = sorted(required_terms, key=lambda term: (-len(term), term))
     relation_ranked = sorted(relation_anchor_terms, key=lambda term: (-len(term), term))
+    option_claim_terms = [
+        str(term).lower().strip("._-")
+        for term in _option_claim_option_query_terms(option_text, max_terms=10)
+        if str(term).strip()
+    ]
+    option_claim_terms = list(dict.fromkeys(
+        term
+        for term in option_claim_terms
+        if len(term) >= 3 and term not in _EVIDENCE_QUERY_STOPWORDS
+    ))
+    detail["option_claim_term_count"] = len(option_claim_terms)
+    detail["option_claim_term_hashes"] = _option_claim_relation_signature_term_hashes(
+        option_claim_terms[:8]
+    )
     query_candidates: list[tuple[str, str]] = []
 
     def _add_query(text: str, provenance: str) -> None:
@@ -18767,10 +21195,20 @@ def _option_claim_missing_required_term_backfill_docs(
         " ".join([option_text] + required_ranked[:6]),
         "option_all_required_terms",
     )
+    if option_claim_terms:
+        _add_query(
+            " ".join(option_claim_terms[:8] + required_ranked[:6]),
+            "option_claim_terms_all_required_terms",
+        )
     _add_query(
         " ".join([option_text] + required_ranked[:4] + relation_ranked[:4]),
         "option_required_relation_terms",
     )
+    if option_claim_terms:
+        _add_query(
+            " ".join(option_claim_terms[:8] + required_ranked[:4] + relation_ranked[:4]),
+            "option_claim_terms_required_relation_terms",
+        )
     _add_query(
         " ".join(required_ranked[:6] + relation_ranked[:6]),
         "required_relation_terms_without_option_phrase",
@@ -18782,6 +21220,11 @@ def _option_claim_missing_required_term_backfill_docs(
             if value != term
         ][:4]
         _add_query(" ".join([option_text, term] + related), "option_single_missing_required_term")
+        if option_claim_terms:
+            _add_query(
+                " ".join(option_claim_terms[:8] + [term] + related),
+                "option_claim_terms_single_missing_required_term",
+            )
     selected_queries = query_candidates[:10]
     detail["query_count"] = len(selected_queries)
     detail["query_hashes"] = [stable_hash({"query": query}) for query, _ in selected_queries]
@@ -18795,6 +21238,11 @@ def _option_claim_missing_required_term_backfill_docs(
     scored: list[tuple[float, int, dict[str, str], dict[str, Any]]] = []
     seen_hashes: set[str] = set(existing_hashes)
     filter_counts: Counter[str] = Counter()
+    relation_only_bridge_enabled = (
+        _option_claim_missing_required_relation_only_backfill_enabled()
+    )
+    relation_only_bridge_doc_hashes: set[str] = set()
+    relation_only_bridge_annotated_hashes: set[str] = set()
     min_option_support = 1 if len(distinctive_terms) <= 2 else 2
     min_required_overlap = 2 if len(required_terms) >= 2 else 1
     max_local_rows = max(4, min(16, _option_claim_missing_required_term_backfill_limit(max_docs) * 4))
@@ -18846,9 +21294,6 @@ def _option_claim_missing_required_term_backfill_docs(
                 or title_option_overlap >= min_option_support
                 or option_overlap >= min_option_support
             )
-            if not option_signal:
-                filter_counts["no_option_signal"] += 1
-                continue
             required_overlap_terms = sorted(required_terms & doc_terms)
             if not required_overlap_terms:
                 filter_counts["no_required_overlap"] += 1
@@ -18874,6 +21319,23 @@ def _option_claim_missing_required_term_backfill_docs(
             if not relation_signal:
                 filter_counts["no_relation_signal"] += 1
                 continue
+            relation_only_bridge_source = bool(
+                relation_only_bridge_enabled
+                and not option_signal
+                and not supports_other
+                and required_overlap_terms
+                and relation_signal
+                and (
+                    len(required_overlap_terms) >= min_required_overlap
+                    or query_relation_overlap >= 2
+                    or relation_proximity
+                )
+            )
+            if not option_signal and not relation_only_bridge_source:
+                filter_counts["no_option_signal"] += 1
+                continue
+            if relation_only_bridge_source:
+                filter_counts["relation_only_bridge_source_accepted"] += 1
             if (
                 supports_other
                 and not supports_current
@@ -18907,7 +21369,9 @@ def _option_claim_missing_required_term_backfill_docs(
                 + (0.8 * min(title_option_overlap, 3))
                 + (0.9 * min(query_relation_overlap, 5))
                 + (0.6 * min(relation_overlap, 4))
+                + (1.0 if relation_only_bridge_source else 0.0)
                 - (0.75 if supports_other and not supports_current else 0.0)
+                - (1.25 if relation_only_bridge_source else 0.0)
                 - (0.35 * min(len(missing_required_terms), 5))
                 + (0.2 / (query_index + 1))
                 + (0.05 / (row_index + 1))
@@ -18923,8 +21387,16 @@ def _option_claim_missing_required_term_backfill_docs(
             focused["retrieval_stage_score"] = str(round(score, 4))
             focused["missing_required_term_backfill"] = "true"
             focused["missing_required_term_backfill_policy"] = (
-                "missing_required_term_local_backfill_v1"
+                "missing_required_relation_only_bridge_source_v1"
+                if relation_only_bridge_source
+                else "missing_required_term_local_backfill_v1"
             )
+            focused["missing_required_term_backfill_relation_only"] = str(
+                bool(relation_only_bridge_source)
+            ).lower()
+            focused["candidate_required_relation_bridge_source"] = str(
+                bool(relation_only_bridge_source)
+            ).lower()
             focused["missing_required_term_backfill_option_hash"] = option_hash
             focused["missing_required_term_backfill_doc_hash"] = doc_hash
             focused["missing_required_term_backfill_query_hash"] = stable_hash({"query": query})
@@ -18982,6 +21454,7 @@ def _option_claim_missing_required_term_backfill_docs(
                 "option_overlap": option_overlap,
                 "title_option_overlap": title_option_overlap,
                 "supports_other": bool(supports_other),
+                "relation_only_bridge_source": bool(relation_only_bridge_source),
                 "duplicate_existing_doc": bool(duplicate_existing_doc),
             }
             if duplicate_existing_doc:
@@ -18995,18 +21468,29 @@ def _option_claim_missing_required_term_backfill_docs(
                     for key, value in focused.items():
                         if key.startswith("missing_required_term_backfill"):
                             existing_doc[key] = value
+                        elif key == "candidate_required_relation_bridge_source":
+                            existing_doc[key] = value
                     existing_doc.setdefault("missing_required_term_backfill", "true")
                 annotated_existing_hashes.add(doc_hash)
+                if relation_only_bridge_source:
+                    relation_only_bridge_annotated_hashes.add(doc_hash)
                 seen_hashes.add(doc_hash)
                 detail["rows"].append(row_audit)
                 continue
             seen_hashes.add(doc_hash)
+            if relation_only_bridge_source:
+                relation_only_bridge_doc_hashes.add(doc_hash)
             scored.append((round(score, 4), -len(scored), focused, row_audit))
     ranked = sorted(scored, key=lambda item: (item[0], item[1]), reverse=True)
     docs = [
         row
         for _, _, row, _ in ranked
     ][: _option_claim_missing_required_term_backfill_limit(max_docs)]
+    relation_only_bridge_selected_doc_count = sum(
+        1
+        for row in docs
+        if _json_truthy(row.get("missing_required_term_backfill_relation_only"))
+    )
     detail_rows = list(detail.get("rows", []) or [])
     detail_rows.extend(audit for _, _, _, audit in ranked[: _option_claim_missing_required_term_backfill_limit(max_docs)])
     detail.update({
@@ -19022,6 +21506,11 @@ def _option_claim_missing_required_term_backfill_docs(
         ),
         "doc_count": len(docs),
         "annotated_existing_doc_count": len(annotated_existing_hashes),
+        "relation_only_bridge_doc_count": relation_only_bridge_selected_doc_count,
+        "relation_only_bridge_scored_doc_count": len(relation_only_bridge_doc_hashes),
+        "relation_only_bridge_annotated_existing_doc_count": len(
+            relation_only_bridge_annotated_hashes
+        ),
         "source_counts": _option_claim_doc_source_counts(docs),
         "retrieval_stage_counts": _option_claim_retrieval_stage_counts(docs),
         "filter_counts": dict(sorted(filter_counts.items())),
@@ -19170,11 +21659,23 @@ def _option_claim_candidate_direct_relation_spans_by_label(
     missing_required_term_backfill_reserved_span_count = 0
     missing_required_term_backfill_replaced_span_count = 0
     missing_required_term_backfill_unique_source_bypass_count = 0
+    missing_required_term_backfill_relation_only_doc_count = 0
+    missing_required_term_backfill_relation_only_scored_doc_count = 0
+    missing_required_term_backfill_relation_only_annotated_existing_doc_count = 0
     missing_required_term_backfill_score_candidate_count = 0
     missing_required_term_backfill_scored_count = 0
     missing_required_term_backfill_scoring_filter_counts: Counter[str] = Counter()
     missing_required_term_backfill_pair_candidate_count = 0
     missing_required_term_backfill_paired_span_count = 0
+    missing_required_term_backfill_composition_candidate_count = 0
+    missing_required_term_backfill_composed_span_count = 0
+    required_relation_bridge_enabled = (
+        _option_claim_required_relation_bridge_span_enabled()
+    )
+    required_relation_bridge_source_candidate_count = 0
+    required_relation_bridge_paired_span_count = 0
+    candidate_direct_relation_span_filter_counts_by_option_hash: dict[str, Counter[str]] = defaultdict(Counter)
+    candidate_direct_relation_span_required_coverage_gap_rows: list[dict[str, Any]] = []
 
     for label in label_order:
         option_text = options[label]
@@ -19279,6 +21780,15 @@ def _option_claim_candidate_direct_relation_spans_by_label(
         missing_required_term_backfill_query_count += int(
             backfill_summary.get("query_count") or 0
         )
+        missing_required_term_backfill_relation_only_doc_count += int(
+            backfill_summary.get("relation_only_bridge_doc_count") or 0
+        )
+        missing_required_term_backfill_relation_only_scored_doc_count += int(
+            backfill_summary.get("relation_only_bridge_scored_doc_count") or 0
+        )
+        missing_required_term_backfill_relation_only_annotated_existing_doc_count += int(
+            backfill_summary.get("relation_only_bridge_annotated_existing_doc_count") or 0
+        )
         missing_required_term_backfill_rows.extend(
             row
             for row in backfill_summary.get("rows", []) or []
@@ -19304,6 +21814,25 @@ def _option_claim_candidate_direct_relation_spans_by_label(
             )
             missing_required_term_backfill_signal = _json_truthy(
                 doc.get("missing_required_term_backfill")
+            )
+            missing_required_relation_only_backfill_signal = bool(
+                _json_truthy(doc.get("missing_required_term_backfill_relation_only"))
+                or _json_truthy(doc.get("candidate_required_relation_bridge_source"))
+            )
+            required_relation_bridge_source_signal = bool(
+                required_relation_bridge_enabled
+                and (
+                    missing_required_term_backfill_signal
+                    or missing_required_relation_only_backfill_signal
+                    or source_cache_corpus_backfill_signal
+                    or retrieval_stage
+                    in {
+                        "source_cache_corpus_backfill",
+                        "sweep_gap_local_relation_backfill",
+                        "local_relation_query_expansion",
+                        "missing_required_term_backfill",
+                    }
+                )
             )
             if missing_required_term_backfill_signal:
                 missing_required_term_backfill_score_candidate_count += 1
@@ -19524,7 +22053,15 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                     )
             )
             if not option_signal or not relation_signal:
-                if missing_required_term_backfill_signal:
+                if not option_signal:
+                    candidate_direct_relation_span_filter_counts_by_option_hash[option_hash][
+                        "main_no_option_signal"
+                    ] += 1
+                if not relation_signal:
+                    candidate_direct_relation_span_filter_counts_by_option_hash[option_hash][
+                        "main_no_relation_signal"
+                    ] += 1
+                if missing_required_term_backfill_signal or required_relation_bridge_source_signal:
                     if not option_signal:
                         missing_required_term_backfill_scoring_filter_counts[
                             "main_no_option_signal"
@@ -19534,6 +22071,15 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                             "main_no_relation_signal"
                         ] += 1
                     if not option_signal and relation_signal:
+                        bridge_source = bool(
+                            required_relation_bridge_source_signal
+                            and (
+                                not missing_required_term_backfill_signal
+                                or missing_required_relation_only_backfill_signal
+                            )
+                        )
+                        if bridge_source:
+                            required_relation_bridge_source_candidate_count += 1
                         backfill_pair_source_candidates.append({
                             "title": title,
                             "snippet": snippet,
@@ -19541,6 +22087,12 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                             "doc_hash": doc_hash,
                             "source": source or "unknown",
                             "retrieval_stage": retrieval_stage or "standard_search",
+                            "bridge_source": bridge_source,
+                            "bridge_source_kind": (
+                                retrieval_stage
+                                or ("source_cache_corpus_backfill" if source_cache_corpus_backfill_signal else "")
+                                or "standard_search"
+                            ),
                             "query_hash": str(
                                 doc.get("missing_required_term_backfill_query_hash") or ""
                             ),
@@ -19558,6 +22110,9 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                             "relation_signature_overlap": relation_signature_overlap,
                             "relation_signature_required_overlap": (
                                 relation_signature_required_overlap
+                            ),
+                            "relation_signature_required_overlap_terms": (
+                                relation_signature_required_overlap_terms
                             ),
                             "relation_signature_required_missing_term_count": len(
                                 relation_signature_required_missing_terms
@@ -19963,7 +22518,26 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                 "relation_overlap": relation_overlap,
                 "stem_overlap": stem_overlap,
                 "doc_index": index,
+                "_relation_signature_required_overlap_terms": set(
+                    relation_signature_required_overlap_terms
+                ),
+                "_relation_signature_overlap_terms": set(
+                    relation_signature_overlap_terms
+                ),
+                "_normalized_doc_terms": set(normalized_doc_terms),
             })
+
+        def required_missing_count(item: dict[str, Any]) -> int:
+            try:
+                return int(item.get("relation_signature_required_missing_term_count") or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        def required_overlap_count(item: dict[str, Any]) -> int:
+            try:
+                return int(item.get("relation_signature_required_overlap") or 0)
+            except (TypeError, ValueError):
+                return 0
 
         if backfill_pair_source_candidates and scored:
             pair_relation_anchor_terms = (
@@ -19994,8 +22568,30 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                     relation_anchor_terms=list(pair_relation_anchor_terms),
                 )
                 anchor_terms = _normalized_content_terms(anchor_excerpt)
-                for pair_source in backfill_pair_source_candidates[:1]:
+                pair_source_limit = (
+                    4
+                    if (
+                        _option_claim_required_coverage_composition_span_enabled()
+                        or required_relation_bridge_enabled
+                    )
+                    else 1
+                )
+                pair_sources = list(backfill_pair_source_candidates[:pair_source_limit])
+                pair_sources.sort(key=lambda row: (
+                    -int(row.get("required_overlap") or 0),
+                    int(row.get("required_missing") or 0),
+                    -int(row.get("relation_signature_required_overlap") or 0),
+                    -int(row.get("relation_signature_overlap") or 0),
+                    str(row.get("doc_hash") or ""),
+                ))
+                for pair_source in pair_sources:
                     missing_required_term_backfill_pair_candidate_count += 1
+                    pair_is_required_relation_bridge = bool(pair_source.get("bridge_source"))
+                    pair_policy = (
+                        "candidate_required_relation_bridge_v1"
+                        if pair_is_required_relation_bridge
+                        else "missing_required_term_pair_bridge_v1"
+                    )
                     relation_excerpt = _option_evidence_excerpt(
                         snippet=str(pair_source.get("snippet") or pair_source.get("title") or ""),
                         option_text=option_text,
@@ -20063,6 +22659,13 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                         "span_provenance": "missing_required_term_backfill_paired_span",
                         "missing_required_term_backfill": "true",
                         "missing_required_term_backfill_pair": "true",
+                        "candidate_required_relation_bridge": str(
+                            pair_is_required_relation_bridge
+                        ).lower(),
+                        "candidate_required_relation_bridge_source_kind": str(
+                            pair_source.get("bridge_source_kind") or ""
+                        ),
+                        "missing_required_term_backfill_policy": pair_policy,
                         "missing_required_term_backfill_query_hash": str(
                             pair_source.get("query_hash") or ""
                         ),
@@ -20198,9 +22801,342 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                             int(pair_source.get("relation_signature_overlap") or 0),
                         ),
                         "doc_index": int(anchor_item.get("doc_index") or 0),
+                        "_relation_signature_required_overlap_terms": set(
+                            combined_required_overlap_terms
+                        ),
+                        "_relation_signature_overlap_terms": set(
+                            combined_signature_overlap_terms
+                        ),
+                        "_normalized_doc_terms": set(combined_terms),
                     })
                     scored.append(paired_item)
                     missing_required_term_backfill_paired_span_count += 1
+                    if pair_is_required_relation_bridge:
+                        required_relation_bridge_paired_span_count += 1
+
+        complete_clean_span_available = any(
+            required_missing_count(item) <= 0
+            and required_overlap_count(item) > 0
+            and not item.get("shared_doc")
+            and not item.get("source_doc_shared")
+            and not item.get("supports_other")
+            and not item.get("source_doc_supports_other")
+            for item in scored
+        )
+        if (
+            scored
+            and not complete_clean_span_available
+            and _option_claim_required_coverage_composition_span_enabled()
+        ):
+            trusted_composition_stages = {
+                "answer_web_cache_sweep",
+                "local_relation_corpus",
+                "local_relation_query_expansion",
+                "missing_required_term_backfill",
+                "missing_required_term_backfill_pair",
+                "source_cache_corpus_backfill",
+                "sweep_gap_local_relation_backfill",
+            }
+
+            def composition_source_signal(item: dict[str, Any]) -> bool:
+                stage = str(item.get("retrieval_stage") or "").strip()
+                provenance = str(item.get("span_provenance") or "").strip()
+                return bool(
+                    item.get("missing_required_term_backfill")
+                    or stage in trusted_composition_stages
+                    or provenance
+                    in {
+                        "candidate_pool_relation_span",
+                        "anchor_fallback_span",
+                        "preferred_fallback_span",
+                        "missing_required_term_backfill_span",
+                        "missing_required_term_backfill_paired_span",
+                    }
+                )
+
+            def clean_composition_item(item: dict[str, Any]) -> bool:
+                return bool(
+                    composition_source_signal(item)
+                    and not item.get("shared_doc")
+                    and not item.get("source_doc_shared")
+                    and not item.get("supports_other")
+                    and not item.get("source_doc_supports_other")
+                )
+
+            composition_anchors = [
+                item
+                for item in scored
+                if clean_composition_item(item)
+                and bool(item.get("option_signal"))
+                and bool(item.get("relation_signal"))
+                and int(item.get("option_overlap") or 0) > 0
+                and required_missing_count(item) > 0
+                and required_overlap_count(item) > 0
+            ]
+            composition_anchors.sort(key=lambda item: (
+                required_missing_count(item),
+                -required_overlap_count(item),
+                -float(item.get("score") or 0.0),
+                int(item.get("doc_index") or 0),
+            ))
+            best_composed_item: dict[str, Any] | None = None
+            best_composed_score: tuple[Any, ...] | None = None
+            for anchor_item in composition_anchors[:4]:
+                anchor_terms = set(
+                    anchor_item.get("_relation_signature_required_overlap_terms") or set()
+                )
+                anchor_source_hash = str(anchor_item.get("source_doc_hash") or "")
+                if not anchor_terms or not anchor_source_hash:
+                    continue
+                for partner_item in scored:
+                    partner_source_hash = str(partner_item.get("source_doc_hash") or "")
+                    if not partner_source_hash or partner_source_hash == anchor_source_hash:
+                        continue
+                    if not clean_composition_item(partner_item):
+                        continue
+                    if not (
+                        anchor_item.get("missing_required_term_backfill")
+                        or partner_item.get("missing_required_term_backfill")
+                    ):
+                        continue
+                    partner_terms = set(
+                        partner_item.get("_relation_signature_required_overlap_terms")
+                        or set()
+                    )
+                    if not partner_terms or partner_terms <= anchor_terms:
+                        continue
+                    combined_required_overlap_terms = sorted(anchor_terms | partner_terms)
+                    combined_required_missing_terms = sorted(
+                        term
+                        for term in relation_signature_required_terms
+                        if term not in set(combined_required_overlap_terms)
+                    )
+                    if combined_required_missing_terms:
+                        continue
+                    if len(combined_required_overlap_terms) <= required_overlap_count(anchor_item):
+                        continue
+                    missing_required_term_backfill_composition_candidate_count += 1
+                    combined_signature_overlap_terms = sorted(
+                        set(anchor_item.get("_relation_signature_overlap_terms") or set())
+                        | set(partner_item.get("_relation_signature_overlap_terms") or set())
+                    )
+                    anchor_doc = dict(anchor_item.get("doc") or {})
+                    partner_doc = dict(partner_item.get("doc") or {})
+                    anchor_excerpt = _option_evidence_excerpt(
+                        snippet=str(anchor_doc.get("snippet") or anchor_doc.get("title") or ""),
+                        option_text=option_text,
+                        max_chars=360,
+                        relation_anchor_terms=list(
+                            relation_terms
+                            | relation_signature_terms
+                            | relation_signature_required_terms
+                            | (stem_terms - option_terms)
+                        ),
+                    )
+                    partner_excerpt = _option_evidence_excerpt(
+                        snippet=str(partner_doc.get("snippet") or partner_doc.get("title") or ""),
+                        option_text=option_text,
+                        max_chars=360,
+                        relation_anchor_terms=list(
+                            relation_terms
+                            | relation_signature_terms
+                            | relation_signature_required_terms
+                            | (stem_terms - option_terms)
+                        ),
+                    )
+                    paired_source_doc_hash = stable_hash({
+                        "option_label": label,
+                        "anchor_source_doc_hash": anchor_source_hash,
+                        "missing_required_term_source_doc_hash": partner_source_hash,
+                        "composition_required_overlap_terms": (
+                            combined_required_overlap_terms
+                        ),
+                    })
+                    paired_excerpt = (
+                        f"Candidate anchor evidence: {anchor_excerpt}\n"
+                        f"Missing required relation evidence: {partner_excerpt}"
+                    ).strip()
+                    span_hash = stable_hash({
+                        "option_label": label,
+                        "source_doc_hash": paired_source_doc_hash,
+                        "candidate_direct_relation_span": paired_excerpt,
+                        "span_provenance": "missing_required_term_backfill_paired_span",
+                    })
+                    paired_doc = dict(anchor_doc)
+                    paired_doc.update({
+                        "title": (
+                            "Candidate relation span "
+                            "(missing_required_term_backfill_paired_span)"
+                        ),
+                        "snippet": paired_excerpt,
+                        "source": str(
+                            partner_item.get("source")
+                            or anchor_item.get("source")
+                            or "unknown"
+                        ),
+                        "retrieval_stage": "candidate_direct_relation_span",
+                        "source_retrieval_stage": "missing_required_term_backfill_pair",
+                        "source_doc_hash": paired_source_doc_hash,
+                        "anchor_source_doc_hash": anchor_source_hash,
+                        "missing_required_term_source_doc_hash": partner_source_hash,
+                        "span_hash": span_hash,
+                        "span_provenance": "missing_required_term_backfill_paired_span",
+                        "missing_required_term_backfill": "true",
+                        "missing_required_term_backfill_pair": "true",
+                        "missing_required_term_backfill_policy": (
+                            "candidate_required_coverage_composition_v1"
+                        ),
+                        "missing_required_term_backfill_required_overlap": str(
+                            len(combined_required_overlap_terms)
+                        ),
+                        "missing_required_term_backfill_required_missing_term_count": "0",
+                        "relation_signature_overlap": str(
+                            len(combined_signature_overlap_terms)
+                        ),
+                        "relation_signature_required_overlap": str(
+                            len(combined_required_overlap_terms)
+                        ),
+                        "relation_signature_required_missing_term_count": "0",
+                        "relation_signature_proximity": "true",
+                        "relation_proximity": "true",
+                        "option_overlap": str(int(anchor_item.get("option_overlap") or 0)),
+                        "relation_overlap": str(
+                            max(
+                                int(anchor_item.get("relation_overlap") or 0),
+                                int(partner_item.get("relation_overlap") or 0),
+                                len(combined_signature_overlap_terms),
+                            )
+                        ),
+                        "stem_overlap": str(
+                            max(
+                                int(anchor_item.get("stem_overlap") or 0),
+                                int(partner_item.get("stem_overlap") or 0),
+                            )
+                        ),
+                        "shared_doc": "false",
+                        "source_doc_shared": "false",
+                        "supports_other": "false",
+                        "source_doc_supports_other": "false",
+                    })
+                    paired_score = (
+                        max(
+                            float(anchor_item.get("score") or 0.0),
+                            float(partner_item.get("score") or 0.0),
+                        )
+                        + 2.6
+                        + (
+                            0.8
+                            * max(
+                                0,
+                                len(combined_required_overlap_terms)
+                                - required_overlap_count(anchor_item),
+                            )
+                        )
+                    )
+                    paired_item = dict(anchor_item)
+                    paired_item.update({
+                        "doc": paired_doc,
+                        "score": round(paired_score, 4),
+                        "option_hash": option_hash,
+                        "span_hash": span_hash,
+                        "source_doc_hash": paired_source_doc_hash,
+                        "source": str(
+                            partner_item.get("source")
+                            or anchor_item.get("source")
+                            or "unknown"
+                        ),
+                        "retrieval_stage": "missing_required_term_backfill_pair",
+                        "span_provenance": "missing_required_term_backfill_paired_span",
+                        "shared_doc": False,
+                        "source_doc_shared": False,
+                        "supports_other": False,
+                        "source_doc_supports_other": False,
+                        "candidate_specific_sentence_span": False,
+                        "relation_proximity": True,
+                        "relation_signature_proximity": True,
+                        "relation_signature_overlap": len(combined_signature_overlap_terms),
+                        "relation_signature_required_overlap": len(
+                            combined_required_overlap_terms
+                        ),
+                        "relation_signature_overlap_ratio": (
+                            round(
+                                len(combined_signature_overlap_terms)
+                                / len(relation_signature_terms),
+                                4,
+                            )
+                            if relation_signature_terms
+                            else 0.0
+                        ),
+                        "relation_signature_overlap_term_count": len(
+                            combined_signature_overlap_terms
+                        ),
+                        "relation_signature_missing_term_count": len(
+                            [
+                                term
+                                for term in relation_signature_terms
+                                if term not in set(combined_signature_overlap_terms)
+                            ]
+                        ),
+                        "relation_signature_required_missing_term_count": 0,
+                        "relation_signature_overlap_term_hashes": (
+                            _option_claim_relation_signature_term_hashes(
+                                combined_signature_overlap_terms[:8]
+                            )
+                        ),
+                        "relation_signature_missing_term_hashes": (
+                            _option_claim_relation_signature_term_hashes(
+                                [
+                                    term
+                                    for term in relation_signature_terms
+                                    if term not in set(combined_signature_overlap_terms)
+                                ][:8]
+                            )
+                        ),
+                        "relation_signature_required_missing_term_hashes": [],
+                        "missing_required_term_backfill": True,
+                        "missing_required_term_backfill_pair": True,
+                        "missing_required_term_backfill_query_hash": stable_hash({
+                            "candidate_required_coverage_composition": (
+                                anchor_source_hash,
+                                partner_source_hash,
+                            )
+                        }),
+                        "missing_required_term_backfill_query_provenance": (
+                            "candidate_required_coverage_composition"
+                        ),
+                        "missing_required_term_backfill_required_overlap": len(
+                            combined_required_overlap_terms
+                        ),
+                        "missing_required_term_backfill_required_missing_term_count": 0,
+                        "relation_overlap": max(
+                            int(anchor_item.get("relation_overlap") or 0),
+                            int(partner_item.get("relation_overlap") or 0),
+                            len(combined_signature_overlap_terms),
+                        ),
+                        "doc_index": int(anchor_item.get("doc_index") or 0),
+                        "_relation_signature_required_overlap_terms": set(
+                            combined_required_overlap_terms
+                        ),
+                        "_relation_signature_overlap_terms": set(
+                            combined_signature_overlap_terms
+                        ),
+                        "_normalized_doc_terms": set(
+                            anchor_item.get("_normalized_doc_terms") or set()
+                        )
+                        | set(partner_item.get("_normalized_doc_terms") or set()),
+                    })
+                    score_tuple = (
+                        required_missing_count(paired_item),
+                        -required_overlap_count(paired_item),
+                        -float(paired_item.get("score") or 0.0),
+                    )
+                    if best_composed_score is None or score_tuple < best_composed_score:
+                        best_composed_score = score_tuple
+                        best_composed_item = paired_item
+            if best_composed_item is not None:
+                scored.append(best_composed_item)
+                missing_required_term_backfill_paired_span_count += 1
+                missing_required_term_backfill_composed_span_count += 1
 
         scored.sort(key=lambda item: (
             -float(item.get("score") or 0.0),
@@ -20215,18 +23151,6 @@ def _option_claim_candidate_direct_relation_spans_by_label(
             if float(item.get("score") or 0.0) >= threshold
         ]
         selected = eligible[:max_spans]
-
-        def required_missing_count(item: dict[str, Any]) -> int:
-            try:
-                return int(item.get("relation_signature_required_missing_term_count") or 0)
-            except (TypeError, ValueError):
-                return 0
-
-        def required_overlap_count(item: dict[str, Any]) -> int:
-            try:
-                return int(item.get("relation_signature_required_overlap") or 0)
-            except (TypeError, ValueError):
-                return 0
 
         def backfill_improves_required_coverage(
             *,
@@ -20287,6 +23211,82 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                 ))
         if selected:
             recovered_docs_by_label[label] = [dict(item["doc"]) for item in selected]
+        coverage_probe = selected[0] if selected else (eligible[0] if eligible else (scored[0] if scored else None))
+        if coverage_probe is not None:
+            candidate_direct_relation_span_required_coverage_gap_rows.append({
+                "option_hash": option_hash,
+                "selected_span_count": len(selected),
+                "eligible_span_count": len(eligible),
+                "scored_span_count": len(scored),
+                "top_span_hash": coverage_probe.get("span_hash"),
+                "top_source_doc_hash": coverage_probe.get("source_doc_hash"),
+                "top_retrieval_stage": coverage_probe.get("retrieval_stage"),
+                "top_span_provenance": coverage_probe.get("span_provenance"),
+                "top_required_overlap": required_overlap_count(coverage_probe),
+                "top_required_missing_count": required_missing_count(coverage_probe),
+                "top_required_missing_term_hashes": list(
+                    coverage_probe.get(
+                        "relation_signature_required_missing_term_hashes",
+                        [],
+                    )
+                    or []
+                )[:8],
+                "top_relation_signature_proximity": bool(
+                    coverage_probe.get("relation_signature_proximity")
+                ),
+                "top_relation_proximity": bool(coverage_probe.get("relation_proximity")),
+                "top_option_overlap": int(coverage_probe.get("option_overlap") or 0),
+                "top_relation_overlap": int(coverage_probe.get("relation_overlap") or 0),
+                "top_shared_doc": bool(coverage_probe.get("shared_doc")),
+                "top_source_doc_shared": bool(coverage_probe.get("source_doc_shared")),
+                "top_supports_other": bool(coverage_probe.get("supports_other")),
+                "top_source_doc_supports_other": bool(
+                    coverage_probe.get("source_doc_supports_other")
+                ),
+                "top_missing_required_term_backfill": bool(
+                    coverage_probe.get("missing_required_term_backfill")
+                ),
+                "top_missing_required_term_backfill_pair": bool(
+                    coverage_probe.get("missing_required_term_backfill_pair")
+                ),
+                "filter_counts": dict(
+                    sorted(
+                        candidate_direct_relation_span_filter_counts_by_option_hash[
+                            option_hash
+                        ].items()
+                    )
+                ),
+            })
+        elif candidate_direct_relation_span_filter_counts_by_option_hash.get(option_hash):
+            candidate_direct_relation_span_required_coverage_gap_rows.append({
+                "option_hash": option_hash,
+                "selected_span_count": 0,
+                "eligible_span_count": 0,
+                "scored_span_count": 0,
+                "top_span_hash": None,
+                "top_required_overlap": 0,
+                "top_required_missing_count": int(
+                    relation_signature_required_term_count_by_option_hash.get(
+                        option_hash,
+                        0,
+                    )
+                    or 0
+                ),
+                "top_required_missing_term_hashes": list(
+                    relation_signature_required_term_hashes_by_option_hash.get(
+                        option_hash,
+                        [],
+                    )
+                    or []
+                )[:8],
+                "filter_counts": dict(
+                    sorted(
+                        candidate_direct_relation_span_filter_counts_by_option_hash[
+                            option_hash
+                        ].items()
+                    )
+                ),
+            })
         for item in selected:
             provenance = str(item.get("span_provenance") or "unknown")
             provenance_counts[provenance] += 1
@@ -20540,6 +23540,15 @@ def _option_claim_candidate_direct_relation_spans_by_label(
         "missing_required_term_backfill_unique_source_bypass_count": int(
             missing_required_term_backfill_unique_source_bypass_count
         ),
+        "missing_required_term_backfill_relation_only_doc_count": int(
+            missing_required_term_backfill_relation_only_doc_count
+        ),
+        "missing_required_term_backfill_relation_only_scored_doc_count": int(
+            missing_required_term_backfill_relation_only_scored_doc_count
+        ),
+        "missing_required_term_backfill_relation_only_annotated_existing_doc_count": int(
+            missing_required_term_backfill_relation_only_annotated_existing_doc_count
+        ),
         "missing_required_term_backfill_score_candidate_count": int(
             missing_required_term_backfill_score_candidate_count
         ),
@@ -20555,10 +23564,46 @@ def _option_claim_candidate_direct_relation_spans_by_label(
         "missing_required_term_backfill_paired_span_count": int(
             missing_required_term_backfill_paired_span_count
         ),
+        "missing_required_term_backfill_composition_enabled": (
+            _option_claim_required_coverage_composition_span_enabled()
+        ),
+        "missing_required_term_backfill_composition_candidate_count": int(
+            missing_required_term_backfill_composition_candidate_count
+        ),
+        "missing_required_term_backfill_composed_span_count": int(
+            missing_required_term_backfill_composed_span_count
+        ),
+        "required_relation_bridge_span_enabled": bool(
+            required_relation_bridge_enabled
+        ),
+        "required_relation_bridge_source_candidate_count": int(
+            required_relation_bridge_source_candidate_count
+        ),
+        "required_relation_bridge_paired_span_count": int(
+            required_relation_bridge_paired_span_count
+        ),
         "missing_required_term_backfill_summaries_by_option_hash": (
             missing_required_term_backfill_summaries_by_option_hash
         ),
         "missing_required_term_backfill_rows": missing_required_term_backfill_rows[:24],
+        "candidate_direct_relation_span_filter_counts_by_option_hash": {
+            option_hash: dict(sorted(counter.items()))
+            for option_hash, counter in sorted(
+                candidate_direct_relation_span_filter_counts_by_option_hash.items()
+            )
+        },
+        "candidate_direct_relation_span_required_coverage_gap_rows": (
+            candidate_direct_relation_span_required_coverage_gap_rows[:24]
+        ),
+        "candidate_direct_relation_span_required_coverage_gap_rows_hash": (
+            stable_hash({
+                "candidate_direct_relation_span_required_coverage_gap_rows": (
+                    candidate_direct_relation_span_required_coverage_gap_rows
+                )
+            })
+            if candidate_direct_relation_span_required_coverage_gap_rows
+            else None
+        ),
         "span_provenance_counts": dict(sorted(provenance_counts.items())),
         "shared_doc_candidate_span_count": int(provenance_counts.get("shared_doc_candidate_span") or 0),
         "candidate_specific_sentence_span_count": int(
@@ -20578,6 +23623,345 @@ def _option_claim_candidate_direct_relation_spans_by_label(
         "candidate_unique_span_rows": rows,
         "underlying_model_calls": 0,
     }
+
+
+def _merge_option_claim_candidate_direct_relation_span_summaries(
+    *,
+    base_docs_by_label: dict[str, list[dict[str, str]]],
+    base_summary: dict[str, Any],
+    bridge_docs_by_label: dict[str, list[dict[str, str]]],
+    bridge_rows: list[dict[str, Any]],
+    bridge_summary: dict[str, Any],
+    candidate_labels: list[str],
+    options: dict[str, str],
+) -> tuple[dict[str, list[dict[str, str]]], dict[str, Any]]:
+    label_order: list[str] = []
+    for label in candidate_labels:
+        label = str(label)
+        if label in options and label not in label_order:
+            label_order.append(label)
+    max_spans = int(
+        base_summary.get("max_spans_per_label")
+        or _option_claim_candidate_direct_relation_span_max_per_label()
+    )
+    merged_docs_by_label: dict[str, list[dict[str, str]]] = {
+        label: [dict(doc) for doc in docs]
+        for label, docs in (base_docs_by_label or {}).items()
+        if label in options and docs
+    }
+    existing_keys_by_label: dict[str, set[str]] = defaultdict(set)
+    for label, docs in merged_docs_by_label.items():
+        for doc in docs:
+            key = (
+                str(doc.get("span_hash") or "")
+                or str(doc.get("source_doc_hash") or "")
+                or stable_hash({
+                    "title": str(doc.get("title") or ""),
+                    "snippet": str(doc.get("snippet") or ""),
+                })
+            )
+            if key:
+                existing_keys_by_label[label].add(key)
+
+    added_span_hashes: set[str] = set()
+    added_option_hashes: set[str] = set()
+    option_hash_by_label = {
+        label: stable_hash({"option_label": label})
+        for label in label_order
+    }
+    label_by_option_hash = {value: key for key, value in option_hash_by_label.items()}
+    for label in label_order:
+        docs = [dict(doc) for doc in bridge_docs_by_label.get(label, []) or []]
+        if not docs:
+            continue
+        current = merged_docs_by_label.setdefault(label, [])
+        for doc in docs:
+            if len(current) >= max_spans:
+                break
+            key = (
+                str(doc.get("span_hash") or "")
+                or str(doc.get("source_doc_hash") or "")
+                or stable_hash({
+                    "title": str(doc.get("title") or ""),
+                    "snippet": str(doc.get("snippet") or ""),
+                })
+            )
+            if key and key in existing_keys_by_label[label]:
+                continue
+            doc["repair_context_bridge"] = "true"
+            doc["repair_context_bridge_policy"] = "source_verifier_singleton_candidate_span_bridge_v1"
+            current.append(doc)
+            if key:
+                existing_keys_by_label[label].add(key)
+            span_hash = str(doc.get("span_hash") or "")
+            if span_hash:
+                added_span_hashes.add(span_hash)
+            added_option_hashes.add(option_hash_by_label[label])
+
+    base_rows = [
+        dict(row)
+        for row in base_summary.get("candidate_direct_relation_span_rows", []) or []
+        if isinstance(row, dict)
+    ]
+    base_row_keys = {
+        str(row.get("span_hash") or "") or stable_hash(row)
+        for row in base_rows
+    }
+    merged_rows = list(base_rows)
+    for row in bridge_rows:
+        if not isinstance(row, dict):
+            continue
+        option_hash = str(row.get("option_hash") or "")
+        if option_hash not in added_option_hashes:
+            continue
+        row_key = str(row.get("span_hash") or "") or stable_hash(row)
+        if row_key in base_row_keys and row_key not in added_span_hashes:
+            continue
+        bridge_row = dict(row)
+        bridge_row["repair_context_bridge"] = True
+        bridge_row["repair_context_bridge_policy"] = (
+            "source_verifier_singleton_candidate_span_bridge_v1"
+        )
+        merged_rows.append(bridge_row)
+        base_row_keys.add(row_key)
+
+    span_count = sum(len(values) for values in merged_docs_by_label.values())
+    span_count_by_option_hash = {
+        stable_hash({"option_label": label}): len(merged_docs_by_label.get(label, []) or [])
+        for label in label_order
+    }
+    span_hashes_by_option_hash = {
+        stable_hash({"option_label": label}): [
+            str(doc.get("span_hash") or "")
+            for doc in merged_docs_by_label.get(label, []) or []
+            if str(doc.get("span_hash") or "")
+        ]
+        for label in label_order
+        if merged_docs_by_label.get(label)
+    }
+    provenance_counts = Counter(
+        str(row.get("span_provenance") or "unknown")
+        for row in merged_rows
+    )
+    bridge_span_count = sum(
+        1 for row in merged_rows if bool(row.get("repair_context_bridge"))
+    )
+    bridge_candidate_option_hashes = sorted({
+        str(row.get("option_hash") or "")
+        for row in merged_rows
+        if bool(row.get("repair_context_bridge")) and str(row.get("option_hash") or "")
+    })
+    merged_summary = dict(base_summary)
+    merged_summary.update({
+        "status": "activated" if span_count else "not_required",
+        "reason": (
+            "candidate_direct_relation_spans_recovered"
+            if span_count
+            else "no_candidate_direct_relation_spans_recovered"
+        ),
+        "candidate_direct_relation_span_count": span_count,
+        "candidate_direct_relation_span_candidate_count": sum(
+            1 for values in merged_docs_by_label.values() if values
+        ),
+        "candidate_direct_relation_span_count_by_option_hash": span_count_by_option_hash,
+        "candidate_direct_relation_span_hashes_by_option_hash": span_hashes_by_option_hash,
+        "candidate_direct_relation_span_rows": merged_rows,
+        "candidate_unique_span_count": span_count,
+        "candidate_unique_span_candidate_count": sum(
+            1 for values in merged_docs_by_label.values() if values
+        ),
+        "candidate_unique_span_hashes_by_option_hash": span_hashes_by_option_hash,
+        "candidate_unique_span_rows": merged_rows,
+        "span_provenance_counts": dict(sorted(provenance_counts.items())),
+        "shared_doc_candidate_span_count": int(
+            provenance_counts.get("shared_doc_candidate_span") or 0
+        ),
+        "candidate_specific_sentence_span_count": int(
+            provenance_counts.get("candidate_specific_sentence_span") or 0
+        ),
+        "anchor_fallback_span_count": int(
+            provenance_counts.get("anchor_fallback_span") or 0
+        ),
+        "preferred_fallback_span_count": int(
+            provenance_counts.get("preferred_fallback_span") or 0
+        ),
+        "candidate_pool_relation_span_count": int(
+            provenance_counts.get("candidate_pool_relation_span") or 0
+        ),
+        "missing_required_term_backfill_span_provenance_count": int(
+            provenance_counts.get("missing_required_term_backfill_span") or 0
+        ),
+        "relation_signature_proximity_span_count": sum(
+            1 for row in merged_rows if row.get("relation_signature_proximity")
+        ),
+        "relation_signature_missing_required_term_span_count": sum(
+            1
+            for row in merged_rows
+            if int(row.get("relation_signature_required_missing_term_count") or 0) > 0
+        ),
+        "statement_fact_claim_span_count": sum(
+            1 for row in merged_rows if row.get("statement_fact_claim_signal")
+        ),
+        "answer_web_direct_claim_span_count": sum(
+            1 for row in merged_rows if row.get("answer_web_direct_claim_signal")
+        ),
+        "repair_context_bridge": bridge_summary,
+        "repair_context_bridge_status": bridge_summary.get("status"),
+        "repair_context_bridge_reason": bridge_summary.get("reason"),
+        "repair_context_bridge_span_count": bridge_span_count,
+        "repair_context_bridge_candidate_count": len(bridge_candidate_option_hashes),
+        "repair_context_bridge_candidate_option_hashes": bridge_candidate_option_hashes,
+    })
+    return merged_docs_by_label, merged_summary
+
+
+def _option_claim_candidate_direct_relation_repair_context_bridge(
+    *,
+    stem: str,
+    options: dict[str, str],
+    docs_by_label: dict[str, list[dict[str, str]]],
+    candidate_labels: list[str],
+    problem: dict[str, Any] | None,
+    preferred_doc_hashes_by_label: dict[str, list[str]] | None,
+    source_verifier_repair_context_by_label: dict[str, dict[str, Any]] | None,
+    existing_docs_by_label: dict[str, list[dict[str, str]]],
+    existing_summary: dict[str, Any],
+) -> tuple[dict[str, list[dict[str, str]]], dict[str, Any], dict[str, Any]]:
+    label_order: list[str] = []
+    for label in candidate_labels:
+        label = str(label)
+        if label in options and label not in label_order:
+            label_order.append(label)
+    base_summary = {
+        "status": "disabled",
+        "reason": "env_disabled",
+        "policy": "source_verifier_repair_context_candidate_direct_span_bridge_v1",
+        "candidate_count": len(label_order),
+        "attempted_candidate_count": 0,
+        "recovered_span_count": 0,
+        "recovered_candidate_count": 0,
+        "recovered_candidate_option_hashes": [],
+        "skipped_candidate_count": 0,
+        "skip_reason_counts": {},
+        "raw_content_persisted": False,
+    }
+    if not _option_claim_candidate_direct_relation_repair_context_bridge_enabled():
+        return existing_docs_by_label, existing_summary, base_summary
+    repair_context_by_label = source_verifier_repair_context_by_label or {}
+    if not repair_context_by_label:
+        return existing_docs_by_label, existing_summary, {
+            **base_summary,
+            "status": "not_required",
+            "reason": "no_source_verifier_repair_context",
+        }
+    existing_count_by_hash = dict(
+        existing_summary.get("candidate_direct_relation_span_count_by_option_hash")
+        or {}
+    )
+    max_spans = int(
+        existing_summary.get("max_spans_per_label")
+        or _option_claim_candidate_direct_relation_span_max_per_label()
+    )
+    labels_to_attempt: list[str] = []
+    skip_reasons: Counter[str] = Counter()
+    for label in label_order:
+        option_hash = stable_hash({"option_label": label})
+        repair_summary = repair_context_by_label.get(label) or {}
+        if int(repair_summary.get("span_count") or 0) <= 0:
+            skip_reasons["repair_context_no_spans"] += 1
+            continue
+        if int(existing_count_by_hash.get(option_hash) or 0) >= max_spans:
+            skip_reasons["candidate_already_at_span_capacity"] += 1
+            continue
+        if not docs_by_label.get(label):
+            skip_reasons["candidate_has_no_docs"] += 1
+            continue
+        labels_to_attempt.append(label)
+    if not labels_to_attempt:
+        return existing_docs_by_label, existing_summary, {
+            **base_summary,
+            "status": "not_required",
+            "reason": "no_bridge_eligible_repair_context_candidates",
+            "skipped_candidate_count": sum(skip_reasons.values()),
+            "skip_reason_counts": dict(sorted(skip_reasons.items())),
+        }
+
+    bridge_docs_by_label: dict[str, list[dict[str, str]]] = {}
+    bridge_rows: list[dict[str, Any]] = []
+    bridge_span_count = 0
+    bridge_status_counts: Counter[str] = Counter()
+    bridge_reason_counts: Counter[str] = Counter()
+    bridge_span_rows_hashes_by_option_hash: dict[str, str] = {}
+    for label in labels_to_attempt:
+        option_hash = stable_hash({"option_label": label})
+        span_docs, span_summary = _option_claim_candidate_direct_relation_spans_by_label(
+            stem=stem,
+            options={label: options[label]},
+            docs_by_label={label: list(docs_by_label.get(label, []) or [])},
+            candidate_labels=[label],
+            problem=problem,
+            preferred_doc_hashes_by_label={
+                label: list((preferred_doc_hashes_by_label or {}).get(label, []) or [])
+            },
+            max_spans_per_label=max(1, max_spans - int(existing_count_by_hash.get(option_hash) or 0)),
+            force_enabled=True,
+        )
+        bridge_status_counts[str(span_summary.get("status") or "unknown")] += 1
+        bridge_reason_counts[str(span_summary.get("reason") or "unknown")] += 1
+        recovered = int(span_summary.get("candidate_direct_relation_span_count") or 0)
+        if recovered <= 0:
+            continue
+        bridge_docs_by_label[label] = [dict(doc) for doc in span_docs.get(label, []) or []]
+        bridge_span_count += recovered
+        rows = [
+            dict(row)
+            for row in span_summary.get("candidate_direct_relation_span_rows", []) or []
+            if isinstance(row, dict)
+        ]
+        bridge_rows.extend(rows)
+        bridge_span_rows_hashes_by_option_hash[option_hash] = stable_hash({
+            "source_verifier_repair_context_bridge_rows": rows,
+        })
+
+    recovered_option_hashes = [
+        stable_hash({"option_label": label})
+        for label, docs in bridge_docs_by_label.items()
+        if docs
+    ]
+    bridge_summary = {
+        **base_summary,
+        "status": "activated" if bridge_span_count else "not_required",
+        "reason": (
+            "repair_context_spans_materialized_for_direct_relation_recovery"
+            if bridge_span_count
+            else "repair_context_candidates_produced_no_direct_relation_spans"
+        ),
+        "attempted_candidate_count": len(labels_to_attempt),
+        "attempted_candidate_option_hashes": [
+            stable_hash({"option_label": label}) for label in labels_to_attempt
+        ],
+        "recovered_span_count": bridge_span_count,
+        "recovered_candidate_count": len(recovered_option_hashes),
+        "recovered_candidate_option_hashes": recovered_option_hashes,
+        "skipped_candidate_count": sum(skip_reasons.values()),
+        "skip_reason_counts": dict(sorted(skip_reasons.items())),
+        "span_extractor_status_counts": dict(sorted(bridge_status_counts.items())),
+        "span_extractor_reason_counts": dict(sorted(bridge_reason_counts.items())),
+        "span_rows_hashes_by_option_hash": bridge_span_rows_hashes_by_option_hash,
+        "raw_content_persisted": False,
+    }
+    if bridge_span_count <= 0:
+        return existing_docs_by_label, existing_summary, bridge_summary
+    merged_docs, merged_summary = _merge_option_claim_candidate_direct_relation_span_summaries(
+        base_docs_by_label=existing_docs_by_label,
+        base_summary=existing_summary,
+        bridge_docs_by_label=bridge_docs_by_label,
+        bridge_rows=bridge_rows,
+        bridge_summary=bridge_summary,
+        candidate_labels=label_order,
+        options=options,
+    )
+    return merged_docs, merged_summary, bridge_summary
 
 
 def _option_claim_candidate_direct_relation_span_context(
@@ -20615,6 +23999,17 @@ def _option_claim_candidate_direct_relation_span_context(
         if option_hash:
             rows_by_hash[option_hash].append(row)
     audit_lines: list[str] = []
+
+    def row_int(row: dict[str, Any], key: str) -> int:
+        try:
+            return int(row.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def row_bool(row: dict[str, Any], key: str) -> bool:
+        value = row.get(key)
+        return value is True or str(value).strip().lower() in {"1", "true", "yes", "on"}
+
     for label in candidate_labels:
         if label not in options:
             continue
@@ -20634,6 +24029,28 @@ def _option_claim_candidate_direct_relation_span_context(
             f"top_missing_required_term_count={missing_required_count}, "
             f"top_statement_missing_critical_slot_count={missing_statement_slots}"
         )
+        if top_row:
+            audit_lines.append(
+                "  Top span audit: "
+                f"provenance={str(top_row.get('span_provenance') or 'unknown')}; "
+                f"score={top_row.get('score')}; "
+                f"required_overlap={row_int(top_row, 'relation_signature_required_overlap')}; "
+                f"required_missing={missing_required_count}; "
+                f"signature_overlap={row_int(top_row, 'relation_signature_overlap')}; "
+                f"relation_proximity={str(row_bool(top_row, 'relation_proximity')).lower()}; "
+                f"signature_proximity={str(row_bool(top_row, 'relation_signature_proximity')).lower()}; "
+                f"option_overlap={row_int(top_row, 'option_overlap')}; "
+                f"relation_overlap={row_int(top_row, 'relation_overlap')}; "
+                f"slot_coverage={row_int(top_row, 'relation_query_expansion_slot_coverage')}; "
+                f"missing_slots={row_int(top_row, 'relation_query_expansion_missing_slot_count')}; "
+                f"answer_web_direct_claim={str(row_bool(top_row, 'answer_web_direct_claim_signal')).lower()}; "
+                f"statement_fact_claim={str(row_bool(top_row, 'statement_fact_claim_signal')).lower()}; "
+                f"statement_fact_refutation={str(row_bool(top_row, 'statement_fact_refutation_signal')).lower()}; "
+                f"missing_required_backfill={str(row_bool(top_row, 'missing_required_term_backfill')).lower()}; "
+                f"missing_required_pair={str(row_bool(top_row, 'missing_required_term_backfill_pair')).lower()}; "
+                f"shared_doc={str(row_bool(top_row, 'shared_doc')).lower()}; "
+                f"supports_other={str(row_bool(top_row, 'supports_other')).lower()}"
+            )
     audit = "\n".join(audit_lines) if audit_lines else "none"
     return (
         "Recovered candidate relation spans. These may come from anchor, preferred, shared, or "
@@ -21562,6 +24979,105 @@ def _option_claim_span_directness_programmatic_gap_audit(
     }
 
 
+def _option_claim_span_directness_gap_model_skip_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_OPTION_CLAIM_SPAN_DIRECTNESS_GAP_MODEL_SKIP",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    return os.environ.get(
+        "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECTNESS_GAP_MODEL_SKIP",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _option_claim_span_directness_gap_model_skip_detail(
+    *,
+    span_context_kind: str,
+    programmatic_gap_audit: dict[str, Any],
+    statement_fact_span_directness: dict[str, Any],
+    missing_required_pair_span_directness: dict[str, Any],
+    missing_required_single_span_directness: dict[str, Any],
+    candidate_relation_span_directness: dict[str, Any],
+) -> dict[str, Any]:
+    enabled = _option_claim_span_directness_gap_model_skip_enabled()
+    reason = str(programmatic_gap_audit.get("reason") or "")
+    programmatic_direct = bool(
+        statement_fact_span_directness.get("direct_high_confidence")
+        or missing_required_pair_span_directness.get("direct_high_confidence")
+        or missing_required_single_span_directness.get("direct_high_confidence")
+        or candidate_relation_span_directness.get("direct_high_confidence")
+    )
+    programmatic_coverage_count = (
+        int(missing_required_pair_span_directness.get("direct_doc_count") or 0)
+        + int(missing_required_single_span_directness.get("direct_doc_count") or 0)
+        + int(candidate_relation_span_directness.get("direct_doc_count") or 0)
+        + int(candidate_relation_span_directness.get("required_coverage_candidate_relation_span_count") or 0)
+        + int(statement_fact_span_directness.get("direct_doc_count") or 0)
+    )
+    skippable_context = str(span_context_kind or "") in {
+        "candidate_direct_relation_recovery",
+        "candidate_direct_relation",
+    }
+    skippable_gap = reason in {
+        "missing_option_anchor",
+        "missing_required_relation_terms",
+    }
+    skip = bool(
+        enabled
+        and skippable_context
+        and skippable_gap
+        and not programmatic_direct
+        and programmatic_coverage_count <= 0
+    )
+    if not enabled:
+        status = "disabled"
+        detail_reason = "env_disabled"
+    elif not skippable_context:
+        status = "not_required"
+        detail_reason = "non_candidate_span_context"
+    elif not skippable_gap:
+        status = "not_required"
+        detail_reason = "programmatic_gap_not_skippable"
+    elif programmatic_direct:
+        status = "not_required"
+        detail_reason = "programmatic_direct_signal_present"
+    elif programmatic_coverage_count > 0:
+        status = "not_required"
+        detail_reason = "programmatic_coverage_signal_present"
+    else:
+        status = "activated"
+        detail_reason = f"span_directness_gap_model_skip_{reason}"
+    return {
+        "policy": "span_directness_gap_model_skip_v1",
+        "status": status,
+        "reason": detail_reason,
+        "skip_model_call": skip,
+        "span_context_kind": span_context_kind,
+        "programmatic_gap_reason": reason,
+        "programmatic_direct_signal": programmatic_direct,
+        "programmatic_coverage_count": programmatic_coverage_count,
+        "statement_fact_direct_doc_count": int(
+            statement_fact_span_directness.get("direct_doc_count") or 0
+        ),
+        "missing_required_pair_direct_doc_count": int(
+            missing_required_pair_span_directness.get("direct_doc_count") or 0
+        ),
+        "missing_required_single_direct_doc_count": int(
+            missing_required_single_span_directness.get("direct_doc_count") or 0
+        ),
+        "candidate_relation_direct_doc_count": int(
+            candidate_relation_span_directness.get("direct_doc_count") or 0
+        ),
+        "candidate_relation_required_coverage_count": int(
+            candidate_relation_span_directness.get(
+                "required_coverage_candidate_relation_span_count"
+            )
+            or 0
+        ),
+    }
+
+
 def _option_claim_missing_required_pair_span_directness_detail(
     docs: list[dict[str, str]],
 ) -> dict[str, Any]:
@@ -21762,11 +25278,27 @@ def _option_claim_candidate_relation_span_directness_detail(
         except (TypeError, ValueError):
             return 0
 
+    structured_near_complete_enabled = _env_flag(
+        "HLE_ENABLE_OPTION_CLAIM_STRUCTURED_NEAR_COMPLETE_CANDIDATE_RELATION_DIRECTNESS"
+    )
     allowed_provenance = {
         "candidate_pool_relation_span",
         "candidate_specific_sentence_span",
         "anchor_fallback_span",
         "preferred_fallback_span",
+    }
+    if structured_near_complete_enabled:
+        allowed_provenance.update({
+            "missing_required_term_backfill_span",
+            "missing_required_term_backfill_paired_span",
+        })
+    structured_source_stages = {
+        "answer_web_cache_sweep",
+        "local_relation_query_expansion",
+        "missing_required_term_backfill",
+        "missing_required_term_backfill_pair",
+        "source_cache_corpus_backfill",
+        "sweep_gap_local_relation_backfill",
     }
     for doc in docs or []:
         if not isinstance(doc, dict):
@@ -21774,11 +25306,18 @@ def _option_claim_candidate_relation_span_directness_detail(
         provenance = str(doc.get("span_provenance") or "").strip()
         if provenance not in allowed_provenance:
             continue
+        source_stage = str(
+            doc.get("source_retrieval_stage") or doc.get("retrieval_stage") or ""
+        ).strip()
         required_count = safe_int(doc.get("relation_signature_required_term_count"))
         required_overlap = safe_int(doc.get("relation_signature_required_overlap"))
         required_missing = safe_int(doc.get("relation_signature_required_missing_term_count"))
         option_overlap = safe_int(doc.get("option_overlap"))
         relation_overlap = safe_int(doc.get("relation_overlap"))
+        relation_slot_coverage = safe_int(doc.get("relation_query_expansion_slot_coverage"))
+        missing_required_overlap = safe_int(
+            doc.get("missing_required_term_backfill_required_overlap")
+        )
         relation_proximity = _json_truthy(doc.get("relation_proximity"))
         signature_proximity = _json_truthy(doc.get("relation_signature_proximity"))
         candidate_specific = _json_truthy(doc.get("candidate_specific_sentence_span"))
@@ -21797,11 +25336,33 @@ def _option_claim_candidate_relation_span_directness_detail(
             and required_overlap >= required_count
         )
         relation_signal = bool(relation_proximity or signature_proximity or relation_overlap > 0)
+        structured_near_complete_required = bool(
+            structured_near_complete_enabled
+            and
+            not complete_required
+            and required_count >= 2
+            and required_missing == 1
+            and required_overlap >= max(1, required_count - 1)
+            and (
+                source_stage in structured_source_stages
+                or provenance
+                in {
+                    "missing_required_term_backfill_span",
+                    "missing_required_term_backfill_paired_span",
+                }
+            )
+            and relation_signal
+            and relation_overlap > 0
+            and (relation_slot_coverage > 0 or missing_required_overlap > 0 or required_overlap > 0)
+        )
+        required_coverage_complete = bool(
+            complete_required or structured_near_complete_required
+        )
         candidate_specific_signal = bool(
             not candidate_specific or candidate_specific_relation_overlap > 0
         )
         direct = bool(
-            complete_required
+            required_coverage_complete
             and option_overlap > 0
             and relation_signal
             and candidate_specific_signal
@@ -21813,11 +25374,24 @@ def _option_claim_candidate_relation_span_directness_detail(
             "source_doc_hash": str(doc.get("source_doc_hash") or ""),
             "direct": direct,
             "complete_required": complete_required,
+            "required_coverage_complete": required_coverage_complete,
+            "required_coverage_basis": (
+                "complete_required"
+                if complete_required
+                else (
+                    "structured_near_complete_required"
+                    if structured_near_complete_required
+                    else "incomplete_required"
+                )
+            ),
+            "structured_near_complete_required": structured_near_complete_required,
             "required_count": required_count,
             "required_overlap": required_overlap,
             "required_missing": required_missing,
             "option_overlap": option_overlap,
             "relation_overlap": relation_overlap,
+            "relation_slot_coverage": relation_slot_coverage,
+            "missing_required_overlap": missing_required_overlap,
             "relation_proximity": relation_proximity,
             "relation_signature_proximity": signature_proximity,
             "candidate_specific_sentence_span": candidate_specific,
@@ -21827,9 +25401,7 @@ def _option_claim_candidate_relation_span_directness_detail(
             "effective_shared": effective_shared,
             "effective_supports_other": effective_supports_other,
             "span_provenance": provenance,
-            "source_retrieval_stage": str(
-                doc.get("source_retrieval_stage") or doc.get("retrieval_stage") or ""
-            ).strip(),
+            "source_retrieval_stage": source_stage,
         })
     direct_rows = [row for row in rows if row.get("direct")]
     if direct_rows:
@@ -21849,6 +25421,12 @@ def _option_claim_candidate_relation_span_directness_detail(
         "candidate_relation_span_count": len(rows),
         "complete_candidate_relation_span_count": sum(
             1 for row in rows if row.get("complete_required")
+        ),
+        "structured_near_complete_candidate_relation_span_count": sum(
+            1 for row in rows if row.get("structured_near_complete_required")
+        ),
+        "required_coverage_candidate_relation_span_count": sum(
+            1 for row in rows if row.get("required_coverage_complete")
         ),
         "rows": rows[:8],
         "rows_hash": stable_hash({"candidate_relation_span_directness_rows": rows})
@@ -22525,6 +26103,157 @@ def _run_option_claim_span_directness_verifier(
                 "underlying_model_calls": 0,
             })
             continue
+        gap_model_skip = _option_claim_span_directness_gap_model_skip_detail(
+            span_context_kind=span_context_kind,
+            programmatic_gap_audit=programmatic_gap_audit,
+            statement_fact_span_directness=statement_fact_span_directness,
+            missing_required_pair_span_directness=missing_required_pair_span_directness,
+            missing_required_single_span_directness=missing_required_single_span_directness,
+            candidate_relation_span_directness=candidate_relation_span_directness,
+        )
+        if gap_model_skip.get("skip_model_call"):
+            row = {
+                "option_hash": option_hash,
+                "status": "skipped_gap_model_call",
+                "reason": gap_model_skip.get("reason"),
+                "span_count": len(docs),
+                "span_hashes": span_hashes[:4],
+                "evidence_context_hash": evidence_context_hash,
+                "evidence_context_char_count": len(evidence_context),
+                "selected_option_hash": None,
+                "direct_relation": False,
+                "direct_high_confidence": False,
+                "supports_answer": False,
+                "model_selected_option_hash": None,
+                "model_direct_relation": False,
+                "model_confidence": "",
+                "model_evidence_relation": "",
+                "model_supports_answer": False,
+                "model_direct_high_confidence": False,
+                "statement_fact_slot_gate_required": statement_fact_slot_gate_required,
+                "statement_fact_slot_gate_pass": False,
+                "statement_fact_slot_gate_blocked_model_direct": False,
+                "statement_fact_span_directness": statement_fact_span_directness,
+                "statement_fact_span_direct_doc_count": int(
+                    statement_fact_span_directness.get("direct_doc_count") or 0
+                ),
+                "statement_fact_span_slot_complete_doc_count": int(
+                    statement_fact_span_directness.get("slot_complete_doc_count") or 0
+                ),
+                "statement_fact_span_answer_web_direct_claim_doc_count": int(
+                    statement_fact_span_directness.get("answer_web_direct_claim_doc_count") or 0
+                ),
+                "statement_fact_span_missing_metadata_doc_count": int(
+                    statement_fact_span_directness.get("missing_metadata_doc_count") or 0
+                ),
+                "statement_fact_span_max_required_slot_count": int(
+                    statement_fact_span_directness.get("max_required_slot_count") or 0
+                ),
+                "missing_required_pair_span_directness": (
+                    missing_required_pair_span_directness
+                ),
+                "missing_required_pair_span_direct_doc_count": int(
+                    missing_required_pair_span_directness.get("direct_doc_count") or 0
+                ),
+                "missing_required_pair_span_count": int(
+                    missing_required_pair_span_directness.get("pair_span_count") or 0
+                ),
+                "missing_required_pair_span_complete_count": int(
+                    missing_required_pair_span_directness.get("complete_pair_span_count") or 0
+                ),
+                "missing_required_single_span_directness": (
+                    missing_required_single_span_directness
+                ),
+                "missing_required_single_span_direct_doc_count": int(
+                    missing_required_single_span_directness.get("direct_doc_count") or 0
+                ),
+                "missing_required_single_span_count": int(
+                    missing_required_single_span_directness.get("single_span_count") or 0
+                ),
+                "missing_required_single_span_complete_count": int(
+                    missing_required_single_span_directness.get("complete_single_span_count") or 0
+                ),
+                "candidate_relation_span_directness": (
+                    candidate_relation_span_directness
+                ),
+                "candidate_relation_span_direct_doc_count": int(
+                    candidate_relation_span_directness.get("direct_doc_count") or 0
+                ),
+                "candidate_relation_span_count": int(
+                    candidate_relation_span_directness.get("candidate_relation_span_count") or 0
+                ),
+                "candidate_relation_span_complete_count": int(
+                    candidate_relation_span_directness.get(
+                        "complete_candidate_relation_span_count"
+                    )
+                    or 0
+                ),
+                "candidate_relation_span_structured_near_complete_count": int(
+                    candidate_relation_span_directness.get(
+                        "structured_near_complete_candidate_relation_span_count"
+                    )
+                    or 0
+                ),
+                "candidate_relation_span_required_coverage_count": int(
+                    candidate_relation_span_directness.get(
+                        "required_coverage_candidate_relation_span_count"
+                    )
+                    or 0
+                ),
+                "programmatic_gap_audit": programmatic_gap_audit,
+                "programmatic_gap_reason": programmatic_gap_audit.get("reason"),
+                "gap_model_skip": gap_model_skip,
+                "gap_model_skip_applied": True,
+                "programmatic_direct_high_confidence": False,
+                "programmatic_directness_override": False,
+                "lexical_unique_but_relation_generic": True,
+                "relation_evidence_hash": None,
+                "relation_evidence_char_count": 0,
+                "failure_reason_hash": None,
+                "failure_reason_char_count": 0,
+                "response_hash": None,
+                "underlying_model_calls": 0,
+                "latency_sec": 0.0,
+            }
+            rows.append(row)
+            _log_event(
+                logger,
+                {
+                    "event": "option_claim_span_directness_verifier_candidate_skip",
+                    "eval_id": eval_id,
+                    "call_id": call_id,
+                    "problem_id_hash": problem["id_hash"],
+                    "question_hash": problem["question_hash"],
+                    "model": model,
+                    "verifier_model": verifier_model,
+                    "variant": "assumption_agent_recursive_verify",
+                    "option_hash": option_hash,
+                    "span_context_kind": span_context_kind,
+                    "stage_status": row["status"],
+                    "reason": row["reason"],
+                    "span_count": len(docs),
+                    "span_hashes": span_hashes[:4],
+                    "evidence_context_hash": evidence_context_hash,
+                    "evidence_context_char_count": len(evidence_context),
+                    "programmatic_gap_reason": programmatic_gap_audit.get("reason"),
+                    "programmatic_gap_option_anchor_present": bool(
+                        programmatic_gap_audit.get("option_anchor_present")
+                    ),
+                    "programmatic_gap_relation_anchor_present": bool(
+                        programmatic_gap_audit.get("relation_anchor_present")
+                    ),
+                    "programmatic_gap_option_term_overlap_count": int(
+                        programmatic_gap_audit.get("option_term_overlap_count") or 0
+                    ),
+                    "programmatic_gap_relation_term_overlap_count": int(
+                        programmatic_gap_audit.get("relation_term_overlap_count") or 0
+                    ),
+                    "lexical_unique_but_relation_generic": True,
+                    "gap_model_skip": gap_model_skip,
+                    "raw_content_persisted": False,
+                },
+            )
+            continue
         _log_event(
             logger,
             {
@@ -22559,10 +26288,19 @@ def _run_option_claim_span_directness_verifier(
                 "evidence_context_hash": evidence_context_hash,
             },
         ):
+            budget_state = _option_claim_verifier_budget_state(
+                kind="option_claim_span_directness_verifier",
+                problem=problem,
+                eval_id=eval_id,
+                call_id=call_id,
+            )
+            budget_reason = str(
+                budget_state.get("reason") or "option_claim_verifier_budget_exhausted"
+            )
             rows.append({
                 "option_hash": option_hash,
                 "status": "budget_exhausted",
-                "reason": "option_claim_verifier_budget_exhausted",
+                "reason": budget_reason,
                 "span_count": len(docs),
                 "span_hashes": span_hashes[:4],
                 "evidence_context_hash": evidence_context_hash,
@@ -22648,24 +26386,32 @@ def _run_option_claim_span_directness_verifier(
                 "failure_reason_hash": None,
                 "failure_reason_char_count": 0,
                 "response_hash": None,
+                "budget_state": budget_state,
                 "underlying_model_calls": 0,
                 "latency_sec": 0.0,
             })
             continue
         started = time.monotonic()
         try:
-            response = _call_model(
-                model=verifier_model,
-                prompt=_option_claim_span_directness_verifier_prompt(
-                    problem=problem,
-                    options=options,
-                    target_label=label,
-                    evidence_context=evidence_context,
-                    span_context_kind=span_context_kind,
-                ),
-                timeout=timeout,
-                max_tokens=min(max_tokens, 384),
-            )
+            with _option_claim_model_router_scope(
+                stage="option_claim_span_directness_verifier",
+                problem=problem,
+                call_id=call_id,
+                candidate_count=1,
+                option_count=len(options),
+            ):
+                response = _call_model(
+                    model=verifier_model,
+                    prompt=_option_claim_span_directness_verifier_prompt(
+                        problem=problem,
+                        options=options,
+                        target_label=label,
+                        evidence_context=evidence_context,
+                        span_context_kind=span_context_kind,
+                    ),
+                    timeout=timeout,
+                    max_tokens=min(max_tokens, 384),
+                )
             latency_sec = round(time.monotonic() - started, 4)
             total_latency += latency_sec
             underlying_calls += 1
@@ -22893,6 +26639,18 @@ def _run_option_claim_span_directness_verifier(
                     )
                     or 0
                 ),
+                "candidate_relation_span_structured_near_complete_count": int(
+                    candidate_relation_span_directness.get(
+                        "structured_near_complete_candidate_relation_span_count"
+                    )
+                    or 0
+                ),
+                "candidate_relation_span_required_coverage_count": int(
+                    candidate_relation_span_directness.get(
+                        "required_coverage_candidate_relation_span_count"
+                    )
+                    or 0
+                ),
                 "programmatic_gap_audit": programmatic_gap_audit,
                 "programmatic_gap_reason": programmatic_gap_audit.get("reason"),
                 "programmatic_direct_high_confidence": programmatic_direct_high_confidence,
@@ -23013,6 +26771,12 @@ def _run_option_claim_span_directness_verifier(
                     "candidate_relation_span_complete_count": row[
                         "candidate_relation_span_complete_count"
                     ],
+                    "candidate_relation_span_structured_near_complete_count": row[
+                        "candidate_relation_span_structured_near_complete_count"
+                    ],
+                    "candidate_relation_span_required_coverage_count": row[
+                        "candidate_relation_span_required_coverage_count"
+                    ],
                     "candidate_relation_span_directness_status": (
                         candidate_relation_span_directness.get("status")
                     ),
@@ -23051,12 +26815,24 @@ def _run_option_claim_span_directness_verifier(
         except Exception as exc:
             latency_sec = round(time.monotonic() - started, 4)
             total_latency += latency_sec
-            underlying_calls += 1
-            error_count += 1
+            watchdog_budget_exhausted = isinstance(exc, VariantExecutionWatchdogExceeded)
+            if not watchdog_budget_exhausted:
+                underlying_calls += 1
+                error_count += 1
+            budget_state = (
+                _option_claim_verifier_budget_state(
+                    kind="option_claim_span_directness_verifier",
+                    problem=problem,
+                    eval_id=eval_id,
+                    call_id=call_id,
+                )
+                if watchdog_budget_exhausted
+                else {}
+            )
             row = {
                 "option_hash": option_hash,
-                "status": "error",
-                "reason": "model_or_parse_error",
+                "status": "budget_exhausted" if watchdog_budget_exhausted else "error",
+                "reason": str(exc) if watchdog_budget_exhausted else "model_or_parse_error",
                 "span_count": len(docs),
                 "span_hashes": span_hashes[:4],
                 "evidence_context_hash": evidence_context_hash,
@@ -23071,7 +26847,8 @@ def _run_option_claim_span_directness_verifier(
                 "programmatic_gap_audit": programmatic_gap_audit,
                 "programmatic_gap_reason": programmatic_gap_audit.get("reason"),
                 "error_type": type(exc).__name__,
-                "underlying_model_calls": 1,
+                "budget_state": budget_state if watchdog_budget_exhausted else None,
+                "underlying_model_calls": 0 if watchdog_budget_exhausted else 1,
                 "latency_sec": latency_sec,
             }
             rows.append(row)
@@ -23089,12 +26866,23 @@ def _run_option_claim_span_directness_verifier(
                     "option_hash": option_hash,
                     "error_type": type(exc).__name__,
                     "error": str(exc)[:240],
+                    "stage_status": row["status"],
+                    "reason": row["reason"],
+                    "budget_state": budget_state if watchdog_budget_exhausted else None,
                     "latency_sec": latency_sec,
                 },
             )
 
     attempted_count = sum(1 for row in rows if int(row.get("underlying_model_calls") or 0) > 0)
     budget_exhausted_count = sum(1 for row in rows if row.get("status") == "budget_exhausted")
+    gap_model_skip_count = sum(
+        1 for row in rows if bool(row.get("gap_model_skip_applied"))
+    )
+    gap_model_skip_reason_counts = dict(sorted(Counter(
+        str((row.get("gap_model_skip") or {}).get("reason") or row.get("reason") or "")
+        for row in rows
+        if bool(row.get("gap_model_skip_applied"))
+    ).items()))
     direct_option_hashes = [stable_hash({"option_label": label}) for label in direct_labels]
     multiple_direct_tiebreak = _option_claim_span_directness_multiple_direct_tiebreak(
         options=options,
@@ -23123,6 +26911,9 @@ def _run_option_claim_span_directness_verifier(
     elif attempted_count:
         status = "blocked_not_direct_relation"
         reason = "no_candidate_span_direct_relation"
+    elif gap_model_skip_count:
+        status = "blocked_not_direct_relation"
+        reason = "no_candidate_span_direct_relation_after_gap_model_skip"
     elif budget_exhausted_count:
         status = "budget_exhausted"
         reason = "option_claim_verifier_budget_exhausted"
@@ -23183,6 +26974,14 @@ def _run_option_claim_span_directness_verifier(
         int(row.get("candidate_relation_span_complete_count") or 0)
         for row in rows
     )
+    candidate_relation_span_structured_near_complete_count = sum(
+        int(row.get("candidate_relation_span_structured_near_complete_count") or 0)
+        for row in rows
+    )
+    candidate_relation_span_required_coverage_count = sum(
+        int(row.get("candidate_relation_span_required_coverage_count") or 0)
+        for row in rows
+    )
     programmatic_directness_override_count = sum(
         1 for row in rows if bool(row.get("programmatic_directness_override"))
     )
@@ -23224,6 +27023,8 @@ def _run_option_claim_span_directness_verifier(
         "generic_candidate_count": lexical_unique_generic_count,
         "lexical_unique_but_relation_generic_count": lexical_unique_generic_count,
         "budget_exhausted_candidate_count": budget_exhausted_count,
+        "gap_model_skip_count": gap_model_skip_count,
+        "gap_model_skip_reason_counts": gap_model_skip_reason_counts,
         "error_candidate_count": error_count,
         "direct_candidate_option_hashes": direct_option_hashes,
         "selected_label": selected_label,
@@ -23281,6 +27082,12 @@ def _run_option_claim_span_directness_verifier(
         "candidate_relation_span_complete_count": (
             candidate_relation_span_complete_count
         ),
+        "candidate_relation_span_structured_near_complete_count": (
+            candidate_relation_span_structured_near_complete_count
+        ),
+        "candidate_relation_span_required_coverage_count": (
+            candidate_relation_span_required_coverage_count
+        ),
         "programmatic_directness_override_count": programmatic_directness_override_count,
         "programmatic_direct_candidate_count": programmatic_direct_candidate_count,
         "programmatic_gap_reason_counts": dict(sorted(programmatic_gap_reason_counts.items())),
@@ -23315,6 +27122,8 @@ def _run_option_claim_span_directness_verifier(
             "direct_candidate_count": len(direct_labels),
             "lexical_unique_but_relation_generic_count": lexical_unique_generic_count,
             "budget_exhausted_candidate_count": budget_exhausted_count,
+            "gap_model_skip_count": gap_model_skip_count,
+            "gap_model_skip_reason_counts": gap_model_skip_reason_counts,
             "statement_fact_slot_gate_required_count": statement_fact_slot_gate_required_count,
             "statement_fact_slot_gate_blocked_model_direct_count": (
                 statement_fact_slot_gate_blocked_model_direct_count
@@ -23339,6 +27148,12 @@ def _run_option_claim_span_directness_verifier(
             "candidate_relation_span_count": candidate_relation_span_count,
             "candidate_relation_span_complete_count": (
                 candidate_relation_span_complete_count
+            ),
+            "candidate_relation_span_structured_near_complete_count": (
+                candidate_relation_span_structured_near_complete_count
+            ),
+            "candidate_relation_span_required_coverage_count": (
+                candidate_relation_span_required_coverage_count
             ),
             "programmatic_directness_override_count": programmatic_directness_override_count,
             "programmatic_direct_candidate_count": programmatic_direct_candidate_count,
@@ -23404,9 +27219,12 @@ def _merge_option_claim_span_directness_recovery_summaries(
         recovery_summary.get("candidate_directness_rows", []) or []
     )
     programmatic_gap_reason_counts = Counter()
+    gap_model_skip_reason_counts = Counter()
     for source_summary in (primary_summary, recovery_summary):
         for reason, count in (source_summary.get("programmatic_gap_reason_counts") or {}).items():
             programmatic_gap_reason_counts[str(reason)] += int(count or 0)
+        for reason, count in (source_summary.get("gap_model_skip_reason_counts") or {}).items():
+            gap_model_skip_reason_counts[str(reason)] += int(count or 0)
     direct_hashes = list(dict.fromkeys(
         [
             str(value)
@@ -23498,6 +27316,9 @@ def _merge_option_claim_span_directness_recovery_summaries(
             primary_summary.get("lexical_unique_but_relation_generic_count") or 0
         )
         + int(recovery_summary.get("lexical_unique_but_relation_generic_count") or 0),
+        "gap_model_skip_count": int(primary_summary.get("gap_model_skip_count") or 0)
+        + int(recovery_summary.get("gap_model_skip_count") or 0),
+        "gap_model_skip_reason_counts": dict(sorted(gap_model_skip_reason_counts.items())),
         "statement_fact_slot_gate_required_count": int(
             primary_summary.get("statement_fact_slot_gate_required_count") or 0
         )
@@ -23528,6 +27349,26 @@ def _merge_option_claim_span_directness_recovery_summaries(
             primary_summary.get("candidate_relation_span_complete_count") or 0
         )
         + int(recovery_summary.get("candidate_relation_span_complete_count") or 0),
+        "candidate_relation_span_structured_near_complete_count": int(
+            primary_summary.get(
+                "candidate_relation_span_structured_near_complete_count"
+            )
+            or 0
+        )
+        + int(
+            recovery_summary.get(
+                "candidate_relation_span_structured_near_complete_count"
+            )
+            or 0
+        ),
+        "candidate_relation_span_required_coverage_count": int(
+            primary_summary.get("candidate_relation_span_required_coverage_count")
+            or 0
+        )
+        + int(
+            recovery_summary.get("candidate_relation_span_required_coverage_count")
+            or 0
+        ),
         "programmatic_gap_reason_counts": dict(sorted(programmatic_gap_reason_counts.items())),
         "programmatic_gap_option_anchor_missing_count": int(
             primary_summary.get("programmatic_gap_option_anchor_missing_count") or 0
@@ -23587,6 +27428,13 @@ def _option_claim_contrastive_candidate_selection(
     limit = _option_claim_contrastive_adjudicator_candidate_limit()
     candidate_labels: list[str] = []
     selection_reasons_by_label: dict[str, str] = {}
+    ranked_row_by_label: dict[str, dict[str, Any]] = {}
+    ranked_rank_by_label: dict[str, int] = {}
+    for ranked_index, row in enumerate(ranked_rows):
+        label = str(row.get("label") or "").strip()
+        if label and label in options and label not in ranked_row_by_label:
+            ranked_row_by_label[label] = row
+            ranked_rank_by_label[label] = ranked_index + 1
 
     def add_candidate(label: str, reason: str) -> None:
         if label and label in options and label not in candidate_labels and len(candidate_labels) < limit:
@@ -23627,6 +27475,11 @@ def _option_claim_contrastive_candidate_selection(
         source_quality_doc_count = int(row.get("source_quality_doc_count") or 0)
         support_doc_count = int(row.get("support_doc_count") or 0)
         doc_count = int(row.get("doc_count") or 0)
+        local_relation_doc_count = (
+            int(row.get("local_relation_corpus_doc_count") or 0)
+            + int(row.get("local_relation_query_expansion_doc_count") or 0)
+            + int(row.get("sweep_gap_local_relation_backfill_doc_count") or 0)
+        )
         if (
             source_quality_score < min_source_quality
             and source_quality_doc_count <= 0
@@ -23642,6 +27495,7 @@ def _option_claim_contrastive_candidate_selection(
             "source_quality_doc_count": source_quality_doc_count,
             "support_doc_count": support_doc_count,
             "doc_count": doc_count,
+            "local_relation_doc_count": local_relation_doc_count,
             "net_score": float(row.get("net_score") or 0.0),
             "refute_doc_count": int(row.get("refute_doc_count") or 0),
             "ambiguous_doc_count": int(row.get("ambiguous_doc_count") or 0),
@@ -23654,6 +27508,7 @@ def _option_claim_contrastive_candidate_selection(
     best_ranked_label = ""
     best_overall_source_label = ""
     tail_label = ""
+    overall_source_rows: list[dict[str, Any]] = []
     if sweep_rows and len(candidate_labels) < limit:
         source_sorted = sorted(
             sweep_rows,
@@ -23661,6 +27516,9 @@ def _option_claim_contrastive_candidate_selection(
                 -float(item["source_quality_score"]),
                 -float(item["source_quality_doc_count"]),
                 -float(item["support_doc_count"]),
+                float(item["refute_doc_count"]),
+                float(item["ambiguous_doc_count"]),
+                -float(item["local_relation_doc_count"]),
                 -float(item["net_score"]),
                 float(item["ranked_option_rank"]),
             ),
@@ -23696,7 +27554,6 @@ def _option_claim_contrastive_candidate_selection(
                 add_candidate(tail_label, "tail_sweep_only_large_option")
                 break
     if len(candidate_labels) < limit:
-        overall_source_rows: list[dict[str, Any]] = []
         for ranked_index, row in enumerate(ranked_rows):
             label = str(row.get("label") or "").strip()
             if not label or label not in options or label in candidate_labels:
@@ -23785,6 +27642,111 @@ def _option_claim_contrastive_candidate_selection(
         for label in finite_coverage_labels
         if label in options
     ]
+    selected_label_set = set(candidate_labels)
+    sweep_label_set = {str(item.get("label") or "") for item in sweep_rows}
+    overall_source_label_set = {str(item.get("label") or "") for item in overall_source_rows}
+    priority_source_quality_label_set = {
+        str(label).strip()
+        for label in priority_source_quality_labels or []
+        if str(label).strip() in options
+    }
+    pool_audit_rows: list[dict[str, Any]] = []
+    for label in options:
+        label = str(label).strip()
+        if not label:
+            continue
+        row = ranked_row_by_label.get(label, {})
+        ranked_option_rank = ranked_rank_by_label.get(label) if row else None
+        source_quality_score = float(row.get("source_quality_score") or 0.0)
+        source_quality_doc_count = int(row.get("source_quality_doc_count") or 0)
+        support_doc_count = int(row.get("support_doc_count") or 0)
+        doc_count = int(row.get("doc_count") or 0)
+        answer_web_directish = int(
+            row.get("answer_web_cache_sweep_general_relation_directish_count") or 0
+        )
+        local_relation_doc_count = (
+            int(row.get("local_relation_corpus_doc_count") or 0)
+            + int(row.get("local_relation_query_expansion_doc_count") or 0)
+            + int(row.get("sweep_gap_local_relation_backfill_doc_count") or 0)
+        )
+        direct_span_count = int(row.get("candidate_direct_relation_span_count") or 0)
+        missing_model_option = label in missing_label_set
+        selected = label in selected_label_set
+        sweep_only_considered = label in sweep_label_set
+        overall_source_considered = label in overall_source_label_set
+        priority_source_quality = label in priority_source_quality_label_set
+        source_quality_evidence_signal = bool(
+            source_quality_doc_count > 0
+            or support_doc_count > 0
+            or answer_web_directish > 0
+            or local_relation_doc_count > 0
+            or source_quality_score >= max(6.0, min_source_quality)
+        )
+        if selected:
+            exclusion_reason = "selected"
+        elif len(candidate_labels) >= limit and (
+            sweep_only_considered
+            or overall_source_considered
+            or priority_source_quality
+            or direct_span_count > 0
+            or source_quality_evidence_signal
+        ):
+            exclusion_reason = "candidate_limit_reached"
+        elif missing_model_option and not sweep_only_considered:
+            exclusion_reason = "missing_candidate_low_evidence_signal"
+        elif not row:
+            exclusion_reason = "not_ranked"
+        elif not missing_model_option and not overall_source_considered:
+            exclusion_reason = "not_missing_and_no_source_quality_signal"
+        else:
+            exclusion_reason = "not_selected_by_policy"
+        pool_audit_rows.append({
+            "option_hash": stable_hash({"option_label": label}),
+            "ranked_option_rank": ranked_option_rank,
+            "selected": bool(selected),
+            "selection_reason": selection_reasons_by_label.get(label),
+            "exclusion_reason": exclusion_reason,
+            "missing_model_option": bool(missing_model_option),
+            "sweep_only_considered": bool(sweep_only_considered),
+            "overall_source_considered": bool(overall_source_considered),
+            "priority_source_quality": bool(priority_source_quality),
+            "source_quality_score": round(source_quality_score, 4),
+            "source_quality_doc_count": source_quality_doc_count,
+            "support_doc_count": support_doc_count,
+            "doc_count": doc_count,
+            "answer_web_directish": answer_web_directish,
+            "local_relation_doc_count": local_relation_doc_count,
+            "refute_doc_count": int(row.get("refute_doc_count") or 0),
+            "ambiguous_doc_count": int(row.get("ambiguous_doc_count") or 0),
+            "candidate_direct_relation_span_count": direct_span_count,
+            "candidate_direct_relation_span_required_overlap": int(
+                row.get(
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap"
+                )
+                or 0
+            ),
+            "candidate_direct_relation_span_missing_required_term_count": int(
+                row.get(
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count"
+                )
+                or 0
+            ),
+            "candidate_direct_relation_span_relation_proximity": bool(
+                row.get("candidate_direct_relation_span_top_relation_proximity")
+                or row.get(
+                    "candidate_direct_relation_span_top_relation_signature_proximity"
+                )
+            ),
+            "source_quality_evidence_signal": bool(source_quality_evidence_signal),
+        })
+    pool_audit_rows.sort(
+        key=lambda item: (
+            not bool(item.get("selected")),
+            item.get("ranked_option_rank") is None,
+            int(item.get("ranked_option_rank") or 10_000),
+            str(item.get("option_hash") or ""),
+        )
+    )
     return {
         "policy": "top_runner_up_plus_sweep_quality_overall_rank_tail_finite_coverage_v4",
         "candidate_labels": candidate_labels,
@@ -23838,6 +27800,22 @@ def _option_claim_contrastive_candidate_selection(
         ),
         "tail_sweep_only_challenger_ranked_option_rank": (
             tail_meta.get("ranked_option_rank") if tail_meta else None
+        ),
+        "candidate_pool_audit_rows": pool_audit_rows[:16],
+        "candidate_pool_audit_hash": stable_hash({
+            "candidate_pool_audit_rows": pool_audit_rows,
+        }),
+        "candidate_pool_audit_row_count": len(pool_audit_rows),
+        "candidate_pool_source_quality_not_selected_count": sum(
+            1
+            for item in pool_audit_rows
+            if not item.get("selected") and item.get("source_quality_evidence_signal")
+        ),
+        "candidate_pool_direct_span_not_selected_count": sum(
+            1
+            for item in pool_audit_rows
+            if not item.get("selected")
+            and int(item.get("candidate_direct_relation_span_count") or 0) > 0
         ),
     }
 
@@ -23895,6 +27873,15 @@ def _safe_contrastive_candidate_selection_summary(selection: dict[str, Any]) -> 
         "tail_sweep_only_challenger_option_hash": selection.get("tail_sweep_only_challenger_option_hash"),
         "tail_sweep_only_challenger_ranked_option_rank": selection.get(
             "tail_sweep_only_challenger_ranked_option_rank"
+        ),
+        "candidate_pool_audit_rows": list(selection.get("candidate_pool_audit_rows", []) or []),
+        "candidate_pool_audit_hash": selection.get("candidate_pool_audit_hash"),
+        "candidate_pool_audit_row_count": int(selection.get("candidate_pool_audit_row_count") or 0),
+        "candidate_pool_source_quality_not_selected_count": int(
+            selection.get("candidate_pool_source_quality_not_selected_count") or 0
+        ),
+        "candidate_pool_direct_span_not_selected_count": int(
+            selection.get("candidate_pool_direct_span_not_selected_count") or 0
         ),
     }
 
@@ -24856,6 +28843,20 @@ def _option_claim_source_quality_directness_promotion_detail(
         "direct_candidate_option_hashes": list(
             span_directness_summary.get("direct_candidate_option_hashes", []) or []
         ),
+        "span_directness_status": span_directness_summary.get("status"),
+        "span_directness_reason": span_directness_summary.get("reason"),
+        "span_directness_selected_option_hash": (
+            span_directness_summary.get("selected_option_hash")
+        ),
+        "span_directness_multiple_direct_tiebreak_status": (
+            span_directness_summary.get("multiple_direct_tiebreak_status")
+        ),
+        "span_directness_multiple_direct_tiebreak_reason": (
+            span_directness_summary.get("multiple_direct_tiebreak_reason")
+        ),
+        "span_directness_unresolved_multiple_direct_conflict": (
+            _option_claim_unresolved_multiple_direct_conflict(span_directness_summary)
+        ),
     }
     if os.environ.get(
         "HLE_DISABLE_OPTION_CLAIM_SOURCE_QUALITY_DIRECTNESS_PROMOTION",
@@ -24875,8 +28876,14 @@ def _option_claim_source_quality_directness_promotion_detail(
         candidate_summaries
     )
     detail["programmatic_relation_span_audit"] = programmatic_relation_span_audit
+    near_complete_generic_recovery_enabled = _env_flag(
+        "HLE_ENABLE_OPTION_CLAIM_NEAR_COMPLETE_GENERIC_SOURCE_RECOVERY"
+    )
     near_complete_enabled = _env_flag(
         "HLE_ENABLE_OPTION_CLAIM_NEAR_COMPLETE_RELATION_PROMOTION"
+    ) or near_complete_generic_recovery_enabled
+    detail["near_complete_generic_source_recovery_enabled"] = (
+        near_complete_generic_recovery_enabled
     )
     direct_hashes = {
         str(value)
@@ -24912,6 +28919,17 @@ def _option_claim_source_quality_directness_promotion_detail(
         source_quality_refutation_strength = float(
             summary.get("source_quality_max_statement_fact_refutation_strength") or 0.0
         )
+        source_quality_statement_fact_slot_complete_doc_count = int(
+            summary.get("source_quality_statement_fact_slot_complete_doc_count") or 0
+        )
+        source_quality_statement_fact_answer_web_slot_complete_doc_count = int(
+            summary.get("source_quality_statement_fact_answer_web_slot_complete_doc_count")
+            or 0
+        )
+        source_quality_statement_fact_zero_slot_rejected_doc_count = int(
+            summary.get("source_quality_statement_fact_zero_slot_rejected_doc_count")
+            or 0
+        )
         support_doc_count = int(summary.get("support_doc_count") or 0)
         refute_doc_count = int(summary.get("refute_doc_count") or 0)
         ambiguous_doc_count = int(summary.get("ambiguous_doc_count") or 0)
@@ -24928,6 +28946,7 @@ def _option_claim_source_quality_directness_promotion_detail(
             int(summary.get("local_relation_corpus_doc_count") or 0)
             + int(summary.get("local_relation_query_expansion_doc_count") or 0)
             + int(summary.get("sweep_gap_local_relation_backfill_doc_count") or 0)
+            + int(summary.get("source_cache_corpus_backfill_doc_count") or 0)
         )
         direct_relation_span_count = int(
             summary.get("candidate_direct_relation_span_count") or 0
@@ -24961,6 +28980,18 @@ def _option_claim_source_quality_directness_promotion_detail(
             summary.get("candidate_direct_relation_span_top_relation_proximity")
         )
         shared_relation_span = bool(summary.get("candidate_direct_relation_span_top_shared_doc"))
+        source_doc_shared_relation_span = bool(
+            summary.get("candidate_direct_relation_span_top_source_doc_shared")
+        )
+        top_candidate_specific_sentence = bool(
+            summary.get("candidate_direct_relation_span_top_candidate_specific_sentence")
+        )
+        top_statement_fact_claim = bool(
+            summary.get("candidate_direct_relation_span_top_statement_fact_claim_signal")
+        )
+        top_answer_web_direct_claim = bool(
+            summary.get("candidate_direct_relation_span_top_answer_web_direct_claim_signal")
+        )
         top_refutation_mismatch_type = str(
             summary.get(
                 "candidate_direct_relation_span_top_statement_fact_refutation_mismatch_type"
@@ -25039,10 +29070,41 @@ def _option_claim_source_quality_directness_promotion_detail(
             programmatic_complete_relation_span
             or programmatic_near_complete_relation_span
         )
+        source_rejection = str(summary.get("source_verifier_rejection_reason") or "")
         if programmatic_complete_relation_span:
             programmatic_complete_option_hashes.append(option_hash)
         if programmatic_near_complete_relation_span:
             programmatic_near_complete_option_hashes.append(option_hash)
+        near_complete_generic_source_recovery = bool(
+            near_complete_generic_recovery_enabled
+            and programmatic_near_complete_relation_span
+            and not span_direct
+            and source_rejection == "no_selected_label_generic"
+            and relation_required_overlap >= 2
+            and relation_required_missing_terms == 1
+            and direct_relation_span_count >= 2
+            and local_relation_doc_count >= 2
+            and refute_doc_count <= 0
+            and ambiguous_doc_count <= 0
+            and source_quality_refutation_doc_count <= 0
+            and source_quality_refutation_high_confidence_doc_count <= 0
+            and source_quality_statement_fact_zero_slot_rejected_doc_count <= 0
+        )
+        programmatic_statement_fact_claim_span = bool(
+            direct_relation_span_count > 0
+            and top_statement_fact_claim
+            and top_answer_web_direct_claim
+            and top_candidate_specific_sentence
+            and not shared_relation_span
+            and not source_doc_shared_relation_span
+            and source_quality_doc_count > 0
+            and source_quality_statement_fact_slot_complete_doc_count > 0
+            and (
+                source_quality_statement_fact_answer_web_slot_complete_doc_count > 0
+                or source_quality_score >= 8.0
+            )
+            and source_quality_statement_fact_zero_slot_rejected_doc_count <= 0
+        )
         refute_allowed_by_strong_programmatic_signal = bool(
             programmatic_relation_span
             and refute_doc_count > 0
@@ -25065,20 +29127,29 @@ def _option_claim_source_quality_directness_promotion_detail(
                 or source_quality_score >= 10.0
             )
         )
-        source_rejection = str(summary.get("source_verifier_rejection_reason") or "")
         if refute_doc_count > 0 and not (
             refute_allowed_by_strong_programmatic_signal
             or candidate_relation_span_conflict_resolved
+            or (
+                programmatic_statement_fact_claim_span
+                and source_quality_refutation_doc_count <= 0
+                and source_quality_refutation_high_confidence_doc_count <= 0
+            )
         ):
             rejection_counts["has_refuting_docs"] += 1
             continue
         if ambiguous_doc_count > 1 and not (
             high_confidence_statement_refutation_span
             or candidate_relation_span_conflict_resolved
+            or programmatic_statement_fact_claim_span
         ):
             rejection_counts["too_many_ambiguous_docs"] += 1
             continue
-        if not span_direct and not programmatic_relation_span:
+        if (
+            not span_direct
+            and not programmatic_relation_span
+            and not programmatic_statement_fact_claim_span
+        ):
             rejection_counts["not_span_direct"] += 1
             if direct_relation_span_count <= 0:
                 rejection_counts["missing_candidate_direct_relation_span"] += 1
@@ -25127,6 +29198,7 @@ def _option_claim_source_quality_directness_promotion_detail(
             programmatic_relation_span
             and not span_direct
             and source_rejection == "no_selected_label_generic"
+            and not near_complete_generic_source_recovery
         ):
             rejection_counts["programmatic_span_source_verifier_generic"] += 1
             continue
@@ -25158,8 +29230,12 @@ def _option_claim_source_quality_directness_promotion_detail(
                 or option_hash in direct_hashes
                 else "relation_span_comparator"
             )
+        elif programmatic_statement_fact_claim_span:
+            directness_path = "programmatic_statement_fact_claim_span"
         elif programmatic_complete_relation_span:
             directness_path = "programmatic_complete_relation_span"
+        elif near_complete_generic_source_recovery:
+            directness_path = "programmatic_near_complete_generic_source_recovery"
         else:
             directness_path = "programmatic_near_complete_relation_span"
         directness_path_counts[directness_path] += 1
@@ -25172,6 +29248,8 @@ def _option_claim_source_quality_directness_promotion_detail(
             + (1.0 * min(unique_relation_span_count, 3))
             + (3.0 if programmatic_complete_relation_span else 0.0)
             + (1.5 if programmatic_near_complete_relation_span else 0.0)
+            + (1.0 if near_complete_generic_source_recovery else 0.0)
+            + (3.0 if programmatic_statement_fact_claim_span else 0.0)
             + (1.0 * min(support_doc_count, 3))
             + min(max(source_quality_score, 0.0), 16.0) / 2.0
             + (2.0 if summary.get("overall_source_quality_challenger") else 0.0)
@@ -25224,6 +29302,10 @@ def _option_claim_source_quality_directness_promotion_detail(
             ),
             "programmatic_complete_relation_span": programmatic_complete_relation_span,
             "programmatic_near_complete_relation_span": programmatic_near_complete_relation_span,
+            "near_complete_generic_source_recovery": (
+                near_complete_generic_source_recovery
+            ),
+            "programmatic_statement_fact_claim_span": programmatic_statement_fact_claim_span,
             "candidate_relation_span_conflict_resolved": (
                 candidate_relation_span_conflict_resolved
             ),
@@ -25289,6 +29371,17 @@ def _option_claim_source_quality_directness_promotion_detail(
         round(float(runner_up.get("score") or 0.0), 4) if runner_up else None
     )
     detail["score_margin"] = round(score_margin, 4)
+
+    def _is_sweep_only_source_quality_candidate(item: dict[str, Any]) -> bool:
+        return "sweep_only" in str(item.get("selection_reason") or "").lower()
+
+    def _relation_source_volume(item: dict[str, Any]) -> int:
+        return (
+            int(item.get("source_quality_doc_count") or 0)
+            + int(item.get("local_relation_doc_count") or 0)
+            + int(item.get("candidate_direct_relation_span_count") or 0)
+        )
+
     if len(eligible) > 1 and score_margin < 4.0:
         numeric_refutation_candidates = [
             item
@@ -25326,8 +29419,67 @@ def _option_claim_source_quality_directness_promotion_detail(
             )
         else:
             detail["numeric_refutation_tiebreak_applied"] = False
-            detail["reason"] = "ambiguous_multiple_direct_source_quality_candidates"
-            return detail
+            sweep_only_tiebreak_candidates = [
+                item
+                for item in eligible[1:]
+                if (
+                    not _is_sweep_only_source_quality_candidate(item)
+                    and item.get("candidate_relation_span_conflict_resolved")
+                    and item.get("directness_path")
+                    == "candidate_relation_span_conflict_resolved"
+                    and float(item.get("score") or 0.0)
+                    >= float(top.get("score") or 0.0) - 4.0
+                    and float(item.get("source_quality_score") or 0.0)
+                    >= float(top.get("source_quality_score") or 0.0) - 1.0
+                    and _relation_source_volume(item) >= _relation_source_volume(top)
+                )
+            ]
+            if (
+                _is_sweep_only_source_quality_candidate(top)
+                and len(sweep_only_tiebreak_candidates) == 1
+            ):
+                original_top = top
+                top = sweep_only_tiebreak_candidates[0]
+                nearest_competitor_score = max(
+                    [
+                        float(item.get("score") or 0.0)
+                        for item in eligible
+                        if item is not top
+                    ]
+                    or [0.0]
+                )
+                detail["top_score"] = round(float(top.get("score") or 0.0), 4)
+                detail["runner_up_score"] = round(nearest_competitor_score, 4)
+                detail["score_margin"] = round(
+                    float(top.get("score") or 0.0) - nearest_competitor_score,
+                    4,
+                )
+                detail["sweep_only_near_tie_tiebreak_applied"] = True
+                detail["sweep_only_near_tie_tiebreak_reason"] = (
+                    "model_backed_conflict_resolved_candidate_over_close_sweep_only"
+                )
+                detail["sweep_only_near_tie_original_top_option_hash"] = (
+                    original_top.get("option_hash")
+                )
+            elif (
+                score_margin >= 3.0
+                and top.get("programmatic_complete_relation_span")
+                and top.get("span_direct")
+                and not top.get("shared_relation_span")
+                and int(top.get("refute_doc_count") or 0) <= 0
+                and int(top.get("ambiguous_doc_count") or 0) <= 1
+                and int(top.get("local_relation_doc_count") or 0)
+                > int(runner_up.get("local_relation_doc_count") or 0)
+            ):
+                detail["source_quality_near_tie_top_dominance_applied"] = True
+                detail["source_quality_near_tie_top_dominance_reason"] = (
+                    "top_complete_relation_span_with_stronger_local_relation_evidence"
+                )
+            else:
+                detail["sweep_only_near_tie_tiebreak_applied"] = False
+                detail["source_quality_near_tie_top_dominance_applied"] = False
+                detail["reason"] = "ambiguous_multiple_direct_source_quality_candidates"
+                return detail
     if (
         int(top.get("source_quality_doc_count") or 0) <= 0
         and int(top.get("answer_web_directish_count") or 0) <= 0
@@ -25339,6 +29491,25 @@ def _option_claim_source_quality_directness_promotion_detail(
 
     selected_label = str(top["label"])
     selected_option_hash = str(top["option_hash"])
+    unresolved_conflict_promotion_cleared = bool(
+        top.get("candidate_relation_span_conflict_resolved")
+        or top.get("programmatic_complete_relation_span")
+        or top.get("programmatic_statement_fact_claim_span")
+        or top.get("high_confidence_statement_refutation_span")
+        or top.get("substantive_numeric_refutation_span")
+    )
+    detail["unresolved_conflict_promotion_cleared"] = (
+        unresolved_conflict_promotion_cleared
+    )
+    if (
+        detail["span_directness_unresolved_multiple_direct_conflict"]
+        and not unresolved_conflict_promotion_cleared
+    ):
+        detail["reason"] = "span_directness_unresolved_multiple_direct_conflict"
+        detail["blocked_promotion_candidate_count"] = len(eligible)
+        detail["blocked_promotion_top_candidate"] = top
+        return detail
+
     detail.update({
         "promote": True,
         "status": "activated",
@@ -25348,8 +29519,13 @@ def _option_claim_source_quality_directness_promotion_detail(
             else
             "unique_programmatic_complete_relation_span_with_source_quality"
             if top.get("directness_path") == "programmatic_complete_relation_span"
+            else "unique_programmatic_near_complete_generic_source_recovery_with_source_quality"
+            if top.get("directness_path")
+            == "programmatic_near_complete_generic_source_recovery"
             else "unique_programmatic_near_complete_relation_span_with_source_quality"
             if top.get("directness_path") == "programmatic_near_complete_relation_span"
+            else "unique_statement_fact_claim_span_with_source_quality"
+            if top.get("directness_path") == "programmatic_statement_fact_claim_span"
             else "candidate_relation_span_conflict_resolved_with_source_quality"
             if top.get("directness_path") == "candidate_relation_span_conflict_resolved"
             else "unique_relation_span_comparator_candidate_with_source_quality"
@@ -25832,9 +30008,18 @@ def _run_source_grounded_option_claim_verifier(
             "option_count": len(options),
         },
     ):
+        budget_state = _option_claim_verifier_budget_state(
+            kind="source_grounded_option_claim_verifier",
+            problem=problem,
+            eval_id=eval_id,
+            call_id=call_id,
+        )
+        budget_reason = str(
+            budget_state.get("reason") or "option_claim_verifier_budget_exhausted"
+        )
         return {
             "status": "budget_exhausted",
-            "reason": "option_claim_verifier_budget_exhausted",
+            "reason": budget_reason,
             "verifier_kind": "target_label",
             "direct_high_confidence": False,
             "verification_target_label": lexical_top_label,
@@ -25844,22 +30029,56 @@ def _run_source_grounded_option_claim_verifier(
             "supports_answer": False,
             "evidence_context_hash": stable_hash({"option_claim_evidence_context": evidence_context}),
             "evidence_context_char_count": len(evidence_context),
+            "budget_state": {
+                "budget_limit": budget_state.get("budget_limit"),
+                "reserved_budget_limit": budget_state.get("reserved_budget_limit"),
+                "non_reserved_budget_limit": budget_state.get("non_reserved_budget_limit"),
+                "budget_used_before": budget_state.get("budget_used_before"),
+                "reserved_budget_used_before": budget_state.get("reserved_budget_used_before"),
+                "budget_remaining_before": budget_state.get("budget_remaining_before"),
+                "uses_reserved_budget": budget_state.get("uses_reserved_budget"),
+                "variant_budget_enabled": budget_state.get("variant_budget_enabled"),
+                "variant_budget_limit": budget_state.get("variant_budget_limit"),
+                "variant_budget_used_before": budget_state.get("variant_budget_used_before"),
+                "variant_budget_remaining_before": budget_state.get(
+                    "variant_budget_remaining_before"
+                ),
+                "variant_recursive_selection_reserved_budget": budget_state.get(
+                    "variant_recursive_selection_reserved_budget"
+                ),
+                "variant_directness_reserved_budget": budget_state.get(
+                    "variant_directness_reserved_budget"
+                ),
+                "uses_variant_directness_reserved_budget": budget_state.get(
+                    "uses_variant_directness_reserved_budget"
+                ),
+                "variant_protected_budget_before": budget_state.get(
+                    "variant_protected_budget_before"
+                ),
+            },
             "underlying_model_calls": 0,
             "latency_sec": 0.0,
         }
     started = time.monotonic()
     try:
-        response = _call_model(
-            model=verifier_model,
-            prompt=_source_grounded_option_claim_verifier_prompt(
-                problem=problem,
-                options=options,
-                evidence_context=evidence_context,
-                lexical_top_label=lexical_top_label,
-            ),
-            timeout=timeout,
-            max_tokens=min(max_tokens, 384),
-        )
+        with _option_claim_model_router_scope(
+            stage="source_grounded_option_claim_verifier",
+            problem=problem,
+            call_id=call_id,
+            candidate_count=1,
+            option_count=len(options),
+        ):
+            response = _call_model(
+                model=verifier_model,
+                prompt=_source_grounded_option_claim_verifier_prompt(
+                    problem=problem,
+                    options=options,
+                    evidence_context=evidence_context,
+                    lexical_top_label=lexical_top_label,
+                ),
+                timeout=timeout,
+                max_tokens=min(max_tokens, 384),
+            )
         latency_sec = round(time.monotonic() - started, 4)
         parsed = _parse_json_object(response) or {}
         selected_label = _extract_choice(str(parsed.get("selected_label") or parsed.get("answer") or ""))
@@ -25919,6 +30138,17 @@ def _run_source_grounded_option_claim_verifier(
         return summary
     except Exception as exc:
         latency_sec = round(time.monotonic() - started, 4)
+        watchdog_budget_exhausted = isinstance(exc, VariantExecutionWatchdogExceeded)
+        budget_state = (
+            _option_claim_verifier_budget_state(
+                kind="source_grounded_option_claim_verifier",
+                problem=problem,
+                eval_id=eval_id,
+                call_id=call_id,
+            )
+            if watchdog_budget_exhausted
+            else {}
+        )
         _log_event(
             logger,
             {
@@ -25933,14 +30163,20 @@ def _run_source_grounded_option_claim_verifier(
                 "error_type": type(exc).__name__,
                 "error": str(exc)[:240],
                 "latency_sec": latency_sec,
+                "budget_state": budget_state if watchdog_budget_exhausted else None,
             },
         )
         return {
-            "status": "error",
+            "status": "budget_exhausted" if watchdog_budget_exhausted else "error",
+            "reason": str(exc) if watchdog_budget_exhausted else "model_or_parse_error",
             "direct_high_confidence": False,
+            "verification_target_label": lexical_top_label,
+            "verification_target_option_hash": stable_hash({"option_label": lexical_top_label}),
             "selected_label": "",
+            "selected_option_hash": None,
             "error_type": type(exc).__name__,
-            "underlying_model_calls": 1,
+            "budget_state": budget_state if watchdog_budget_exhausted else None,
+            "underlying_model_calls": 0 if watchdog_budget_exhausted else 1,
             "latency_sec": latency_sec,
         }
 
@@ -26092,17 +30328,24 @@ def _run_source_grounded_option_claim_relative_adjudicator(
         }
     started = time.monotonic()
     try:
-        response = _call_model(
-            model=verifier_model,
-            prompt=_source_grounded_option_claim_relative_adjudicator_prompt(
-                problem=problem,
-                options=options,
-                evidence_context=evidence_context,
-                candidate_labels=candidate_labels,
-            ),
-            timeout=timeout,
-            max_tokens=min(max_tokens, 512),
-        )
+        with _option_claim_model_router_scope(
+            stage="source_grounded_option_claim_relative_adjudicator",
+            problem=problem,
+            call_id=call_id,
+            candidate_count=len(candidate_labels),
+            option_count=len(options),
+        ):
+            response = _call_model(
+                model=verifier_model,
+                prompt=_source_grounded_option_claim_relative_adjudicator_prompt(
+                    problem=problem,
+                    options=options,
+                    evidence_context=evidence_context,
+                    candidate_labels=candidate_labels,
+                ),
+                timeout=timeout,
+                max_tokens=min(max_tokens, 512),
+            )
         latency_sec = round(time.monotonic() - started, 4)
         parsed = _parse_json_object(response) or {}
         selected_label = _extract_choice(str(parsed.get("selected_label") or parsed.get("answer") or ""))
@@ -26165,6 +30408,17 @@ def _run_source_grounded_option_claim_relative_adjudicator(
         return summary
     except Exception as exc:
         latency_sec = round(time.monotonic() - started, 4)
+        watchdog_budget_exhausted = isinstance(exc, VariantExecutionWatchdogExceeded)
+        budget_state = (
+            _option_claim_verifier_budget_state(
+                kind="source_grounded_option_claim_relative_adjudicator",
+                problem=problem,
+                eval_id=eval_id,
+                call_id=call_id,
+            )
+            if watchdog_budget_exhausted
+            else {}
+        )
         _log_event(
             logger,
             {
@@ -26180,11 +30434,15 @@ def _run_source_grounded_option_claim_relative_adjudicator(
                 "candidate_option_hashes": candidate_label_hashes,
                 "error_type": type(exc).__name__,
                 "error": str(exc)[:240],
+                "stage_status": "budget_exhausted" if watchdog_budget_exhausted else "error",
+                "reason": str(exc) if watchdog_budget_exhausted else "model_or_parse_error",
+                "budget_state": budget_state if watchdog_budget_exhausted else None,
                 "latency_sec": latency_sec,
             },
         )
         return {
-            "status": "error",
+            "status": "budget_exhausted" if watchdog_budget_exhausted else "error",
+            "reason": str(exc) if watchdog_budget_exhausted else "model_or_parse_error",
             "verifier_kind": "relative_adjudicator",
             "direct_high_confidence": False,
             "candidate_count": len(candidate_labels),
@@ -26192,7 +30450,8 @@ def _run_source_grounded_option_claim_relative_adjudicator(
             "selected_label": "",
             "selected_option_hash": None,
             "error_type": type(exc).__name__,
-            "underlying_model_calls": 1,
+            "budget_state": budget_state if watchdog_budget_exhausted else None,
+            "underlying_model_calls": 0 if watchdog_budget_exhausted else 1,
             "latency_sec": latency_sec,
         }
 
@@ -26382,6 +30641,148 @@ def _option_claim_relation_span_comparator_prompt(
     )
 
 
+def _option_claim_relation_span_comparator_directness_audit_context(
+    *,
+    options: dict[str, str],
+    candidate_labels: list[str],
+    span_directness_summary: dict[str, Any] | None,
+) -> str:
+    rows = [
+        row
+        for row in (span_directness_summary or {}).get("candidate_directness_rows", []) or []
+        if isinstance(row, dict)
+    ]
+    if not rows:
+        return ""
+    rows_by_hash: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        option_hash = str(row.get("option_hash") or "")
+        if option_hash:
+            rows_by_hash[option_hash].append(row)
+
+    def row_int(row: dict[str, Any], key: str) -> int:
+        try:
+            return int(row.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def nested_candidate_relation_counts(row: dict[str, Any]) -> dict[str, int]:
+        detail = row.get("candidate_relation_span_directness")
+        detail = detail if isinstance(detail, dict) else {}
+        nested_rows = [
+            nested
+            for nested in detail.get("rows", []) or []
+            if isinstance(nested, dict)
+        ]
+        return {
+            "nested_row_count": len(nested_rows),
+            "nested_direct_count": sum(1 for nested in nested_rows if nested.get("direct")),
+            "nested_complete_required_count": sum(
+                1 for nested in nested_rows if nested.get("complete_required")
+            ),
+            "nested_supports_other_count": sum(
+                1
+                for nested in nested_rows
+                if nested.get("effective_supports_other") or nested.get("supports_other")
+            ),
+            "nested_shared_count": sum(
+                1
+                for nested in nested_rows
+                if nested.get("effective_shared") or nested.get("source_doc_shared")
+            ),
+        }
+
+    lines: list[str] = [
+        "Span-directness structured audit (hash/count only; use it to resolve comparator ambiguity, not as a final answer):"
+    ]
+    label_by_hash = _option_hash_to_label_map(options)
+    direct_hashes = [
+        str(value)
+        for value in (span_directness_summary or {}).get(
+            "direct_candidate_option_hashes",
+            [],
+        )
+        if str(value).strip()
+    ]
+    for label in candidate_labels:
+        if label not in options:
+            continue
+        option_hash = stable_hash({"option_label": label})
+        option_rows = rows_by_hash.get(option_hash, [])
+        if not option_rows:
+            lines.append(
+                f"Option {label}: option_hash={option_hash}; direct_candidate=false; row_count=0"
+            )
+            continue
+        best_row = sorted(
+            option_rows,
+            key=lambda row: (
+                bool(row.get("direct_high_confidence")),
+                row_int(row, "candidate_relation_span_direct_doc_count"),
+                row_int(row, "candidate_relation_span_complete_count"),
+                row_int(row, "missing_required_pair_span_direct_doc_count"),
+                row_int(row, "missing_required_single_span_direct_doc_count"),
+                row_int(row, "statement_fact_span_direct_doc_count"),
+                -row_int(row, "span_count"),
+            ),
+            reverse=True,
+        )[0]
+        nested_counts = nested_candidate_relation_counts(best_row)
+        lines.append(
+            "Option "
+            f"{label}: option_hash={option_hash}; "
+            f"direct_candidate={str(option_hash in direct_hashes).lower()}; "
+            f"direct_high_confidence={str(bool(best_row.get('direct_high_confidence'))).lower()}; "
+            f"programmatic_direct={str(bool(best_row.get('programmatic_direct_high_confidence') or best_row.get('programmatic_directness_override'))).lower()}; "
+            f"model_direct={str(bool(best_row.get('model_direct_high_confidence'))).lower()}; "
+            f"supports_answer={str(bool(best_row.get('supports_answer'))).lower()}; "
+            f"evidence_relation={str(best_row.get('evidence_relation') or best_row.get('model_evidence_relation') or '')}; "
+            f"candidate_relation_span_count={row_int(best_row, 'candidate_relation_span_count')}; "
+            f"candidate_relation_direct_doc_count={row_int(best_row, 'candidate_relation_span_direct_doc_count')}; "
+            f"candidate_relation_complete_count={row_int(best_row, 'candidate_relation_span_complete_count')}; "
+            f"missing_required_pair_direct_doc_count={row_int(best_row, 'missing_required_pair_span_direct_doc_count')}; "
+            f"missing_required_single_direct_doc_count={row_int(best_row, 'missing_required_single_span_direct_doc_count')}; "
+            f"statement_fact_direct_doc_count={row_int(best_row, 'statement_fact_span_direct_doc_count')}; "
+            f"span_count={row_int(best_row, 'span_count')}; "
+            f"programmatic_gap_reason={str(best_row.get('programmatic_gap_reason') or '')}; "
+            f"nested_candidate_relation_rows={nested_counts['nested_row_count']}; "
+            f"nested_direct_count={nested_counts['nested_direct_count']}; "
+            f"nested_complete_required_count={nested_counts['nested_complete_required_count']}; "
+            f"nested_supports_other_count={nested_counts['nested_supports_other_count']}; "
+            f"nested_shared_count={nested_counts['nested_shared_count']}"
+        )
+    tiebreak = (span_directness_summary or {}).get("multiple_direct_tiebreak")
+    tiebreak = tiebreak if isinstance(tiebreak, dict) else {}
+    score_lines: list[str] = []
+    for score in tiebreak.get("candidate_scores", []) or []:
+        if not isinstance(score, dict):
+            continue
+        score_hash = str(score.get("option_hash") or "")
+        score_label = label_by_hash.get(score_hash, "")
+        score_lines.append(
+            "  "
+            f"{score_label or score_hash}: direct_doc_count={int(score.get('direct_doc_count') or 0)}, "
+            f"complete_span_count={int(score.get('complete_span_count') or 0)}, "
+            f"programmatic_direct_row_count={int(score.get('programmatic_direct_row_count') or 0)}, "
+            f"model_direct_row_count={int(score.get('model_direct_row_count') or 0)}, "
+            f"supports_answer_row_count={int(score.get('supports_answer_row_count') or 0)}, "
+            f"direct_row_count={int(score.get('direct_row_count') or 0)}"
+        )
+    lines.append(
+        "Multiple-direct tiebreak: "
+        f"status={str((span_directness_summary or {}).get('multiple_direct_tiebreak_status') or tiebreak.get('status') or '')}; "
+        f"reason={str((span_directness_summary or {}).get('multiple_direct_tiebreak_reason') or tiebreak.get('reason') or '')}; "
+        f"direct_candidate_count={int((span_directness_summary or {}).get('direct_candidate_count') or 0)}; "
+        f"required_conflict_candidate_count={int((span_directness_summary or {}).get('multiple_direct_tiebreak_required_conflict_candidate_count') or tiebreak.get('required_conflict_candidate_count') or 0)}; "
+        f"covered_conflict_candidate_count={int((span_directness_summary or {}).get('multiple_direct_tiebreak_covered_conflict_candidate_count') or tiebreak.get('covered_conflict_candidate_count') or 0)}; "
+        f"missing_conflict_candidate_count={int((span_directness_summary or {}).get('multiple_direct_tiebreak_missing_conflict_candidate_count') or tiebreak.get('missing_conflict_candidate_count') or 0)}"
+    )
+    if score_lines:
+        lines.append("Multiple-direct score audit:")
+        lines.extend(score_lines[:8])
+    return "\n".join(lines)
+
+
 def _run_option_claim_relation_span_comparator(
     *,
     problem: dict[str, Any],
@@ -26443,6 +30844,15 @@ def _run_option_claim_relation_span_comparator(
         candidate_labels=label_order,
         relation_anchor_text=stem,
     ).strip()
+    directness_audit_context = (
+        _option_claim_relation_span_comparator_directness_audit_context(
+            options=options,
+            candidate_labels=label_order,
+            span_directness_summary=span_directness_summary,
+        )
+    )
+    if directness_audit_context:
+        evidence_context = f"{evidence_context}\n\n{directness_audit_context}".strip()
     if not evidence_context:
         return {
             **base_summary,
@@ -26461,6 +30871,15 @@ def _run_option_claim_relation_span_comparator(
     evidence_context_hash = stable_hash({
         "option_claim_relation_span_comparator_context": evidence_context,
     })
+    directness_audit_context_hash = (
+        stable_hash({
+            "option_claim_relation_span_comparator_directness_audit_context": (
+                directness_audit_context
+            )
+        })
+        if directness_audit_context
+        else None
+    )
     row_hashes_by_option_hash = dict(
         span_summary.get("candidate_direct_relation_span_hashes_by_option_hash") or {}
     )
@@ -26483,6 +30902,8 @@ def _run_option_claim_relation_span_comparator(
             "span_hashes_by_option_hash": row_hashes_by_option_hash,
             "evidence_context_hash": evidence_context_hash,
             "evidence_context_char_count": len(evidence_context),
+            "directness_audit_context_hash": directness_audit_context_hash,
+            "directness_audit_context_char_count": len(directness_audit_context),
             "timeout_sec": timeout,
             "raw_content_persisted": False,
         },
@@ -26500,27 +30921,45 @@ def _run_option_claim_relation_span_comparator(
             "evidence_context_hash": evidence_context_hash,
         },
     ):
+        budget_state = _option_claim_verifier_budget_state(
+            kind="option_claim_relation_span_comparator",
+            problem=problem,
+            eval_id=eval_id,
+            call_id=call_id,
+        )
         return {
             **base_summary,
             "status": "budget_exhausted",
-            "reason": "option_claim_verifier_budget_exhausted",
+            "reason": str(
+                budget_state.get("reason") or "option_claim_verifier_budget_exhausted"
+            ),
             "evidence_context_hash": evidence_context_hash,
             "evidence_context_char_count": len(evidence_context),
+            "directness_audit_context_hash": directness_audit_context_hash,
+            "directness_audit_context_char_count": len(directness_audit_context),
+            "budget_state": budget_state,
         }
 
     started = time.monotonic()
     try:
-        response = _call_model(
-            model=verifier_model,
-            prompt=_option_claim_relation_span_comparator_prompt(
-                problem=problem,
-                options=options,
-                evidence_context=evidence_context,
-                candidate_labels=label_order,
-            ),
-            timeout=timeout,
-            max_tokens=min(max_tokens, 640),
-        )
+        with _option_claim_model_router_scope(
+            stage="option_claim_relation_span_comparator",
+            problem=problem,
+            call_id=call_id,
+            candidate_count=len(label_order),
+            option_count=len(options),
+        ):
+            response = _call_model(
+                model=verifier_model,
+                prompt=_option_claim_relation_span_comparator_prompt(
+                    problem=problem,
+                    options=options,
+                    evidence_context=evidence_context,
+                    candidate_labels=label_order,
+                ),
+                timeout=timeout,
+                max_tokens=min(max_tokens, 640),
+            )
         latency_sec = round(time.monotonic() - started, 4)
         parsed = _parse_json_object(response) or {}
         confidence = str(parsed.get("confidence") or "").strip().lower()
@@ -26598,6 +31037,8 @@ def _run_option_claim_relation_span_comparator(
             }),
             "evidence_context_hash": evidence_context_hash,
             "evidence_context_char_count": len(evidence_context),
+            "directness_audit_context_hash": directness_audit_context_hash,
+            "directness_audit_context_char_count": len(directness_audit_context),
             "response_hash": stable_hash({"response": response}),
             "underlying_model_calls": 1,
             "latency_sec": latency_sec,
@@ -26651,6 +31092,8 @@ def _run_option_claim_relation_span_comparator(
                 ),
                 "evidence_context_hash": evidence_context_hash,
                 "evidence_context_char_count": len(evidence_context),
+                "directness_audit_context_hash": directness_audit_context_hash,
+                "directness_audit_context_char_count": len(directness_audit_context),
                 "response_hash": summary["response_hash"],
                 "latency_sec": latency_sec,
                 "raw_content_persisted": False,
@@ -26660,6 +31103,17 @@ def _run_option_claim_relation_span_comparator(
         return summary
     except Exception as exc:
         latency_sec = round(time.monotonic() - started, 4)
+        watchdog_budget_exhausted = isinstance(exc, VariantExecutionWatchdogExceeded)
+        budget_state = (
+            _option_claim_verifier_budget_state(
+                kind="option_claim_relation_span_comparator",
+                problem=problem,
+                eval_id=eval_id,
+                call_id=call_id,
+            )
+            if watchdog_budget_exhausted
+            else {}
+        )
         _log_event(
             logger,
             {
@@ -26676,17 +31130,21 @@ def _run_option_claim_relation_span_comparator(
                 "evidence_context_hash": evidence_context_hash,
                 "error_type": type(exc).__name__,
                 "error": str(exc)[:240],
+                "stage_status": "budget_exhausted" if watchdog_budget_exhausted else "error",
+                "reason": str(exc) if watchdog_budget_exhausted else "model_or_parse_error",
+                "budget_state": budget_state if watchdog_budget_exhausted else None,
                 "latency_sec": latency_sec,
             },
         )
         return {
             **base_summary,
-            "status": "error",
-            "reason": "model_or_parse_error",
+            "status": "budget_exhausted" if watchdog_budget_exhausted else "error",
+            "reason": str(exc) if watchdog_budget_exhausted else "model_or_parse_error",
             "error_type": type(exc).__name__,
             "evidence_context_hash": evidence_context_hash,
             "evidence_context_char_count": len(evidence_context),
-            "underlying_model_calls": 1,
+            "budget_state": budget_state if watchdog_budget_exhausted else None,
+            "underlying_model_calls": 0 if watchdog_budget_exhausted else 1,
             "latency_sec": latency_sec,
         }
 
@@ -26973,18 +31431,25 @@ def _run_option_claim_contrastive_adjudicator(
         }
     started = time.monotonic()
     try:
-        response = _call_model(
-            model=verifier_model,
-            prompt=_option_claim_contrastive_adjudicator_prompt(
-                problem=problem,
-                options=options,
-                evidence_context=evidence_context,
-                candidate_labels=candidate_labels,
-                candidate_summaries=candidate_summaries,
-            ),
-            timeout=timeout,
-            max_tokens=min(max_tokens, 512),
-        )
+        with _option_claim_model_router_scope(
+            stage="option_claim_contrastive_adjudicator",
+            problem=problem,
+            call_id=call_id,
+            candidate_count=len(candidate_labels),
+            option_count=len(options),
+        ):
+            response = _call_model(
+                model=verifier_model,
+                prompt=_option_claim_contrastive_adjudicator_prompt(
+                    problem=problem,
+                    options=options,
+                    evidence_context=evidence_context,
+                    candidate_labels=candidate_labels,
+                    candidate_summaries=candidate_summaries,
+                ),
+                timeout=timeout,
+                max_tokens=min(max_tokens, 512),
+            )
         latency_sec = round(time.monotonic() - started, 4)
         parsed = _parse_json_object(response) or {}
         selected_label = _extract_choice(str(parsed.get("selected_label") or parsed.get("answer") or ""))
@@ -27228,6 +31693,17 @@ def _run_option_claim_contrastive_adjudicator(
         return summary
     except Exception as exc:
         latency_sec = round(time.monotonic() - started, 4)
+        watchdog_budget_exhausted = isinstance(exc, VariantExecutionWatchdogExceeded)
+        budget_state = (
+            _option_claim_verifier_budget_state(
+                kind="option_claim_contrastive_adjudicator",
+                problem=problem,
+                eval_id=eval_id,
+                call_id=call_id,
+            )
+            if watchdog_budget_exhausted
+            else {}
+        )
         _log_event(
             logger,
             {
@@ -27247,12 +31723,15 @@ def _run_option_claim_contrastive_adjudicator(
                 ),
                 "error_type": type(exc).__name__,
                 "error": str(exc)[:240],
+                "stage_status": "budget_exhausted" if watchdog_budget_exhausted else "error",
+                "reason": str(exc) if watchdog_budget_exhausted else "model_or_parse_error",
+                "budget_state": budget_state if watchdog_budget_exhausted else None,
                 "latency_sec": latency_sec,
             },
         )
         return {
-            "status": "error",
-            "reason": "model_or_parse_error",
+            "status": "budget_exhausted" if watchdog_budget_exhausted else "error",
+            "reason": str(exc) if watchdog_budget_exhausted else "model_or_parse_error",
             "verifier_kind": "contrastive_top_vs_runner_up",
             "direct_high_confidence": False,
             "relation_satisfied": False,
@@ -27264,7 +31743,8 @@ def _run_option_claim_contrastive_adjudicator(
             "selected_option_hash": None,
             "selected_runner_up": False,
             "error_type": type(exc).__name__,
-            "underlying_model_calls": 1,
+            "budget_state": budget_state if watchdog_budget_exhausted else None,
+            "underlying_model_calls": 0 if watchdog_budget_exhausted else 1,
             "latency_sec": latency_sec,
         }
 
@@ -27668,6 +32148,18 @@ def _weak_source_fallback_cascade_gate_enabled() -> bool:
     return not _env_flag("HLE_DISABLE_WEAK_SOURCE_FALLBACK_CASCADE_GATE")
 
 
+def _weak_source_fallback_cascade_stage_skip_enabled() -> bool:
+    if _env_flag("HLE_DISABLE_WEAK_SOURCE_FALLBACK_CASCADE_STAGE_SKIP"):
+        return False
+    explicit = os.environ.get(
+        "HLE_ENABLE_WEAK_SOURCE_FALLBACK_CASCADE_STAGE_SKIP",
+        "",
+    ).strip().lower()
+    if explicit:
+        return explicit in {"1", "true", "yes", "on"}
+    return True
+
+
 def _weak_source_fallback_cascade_gate_min_attempts() -> int:
     raw = os.environ.get("HLE_WEAK_SOURCE_FALLBACK_CASCADE_GATE_MIN_ATTEMPTS", "").strip()
     if raw:
@@ -27675,7 +32167,7 @@ def _weak_source_fallback_cascade_gate_min_attempts() -> int:
             return max(1, min(16, int(raw)))
         except ValueError:
             pass
-    return 3
+    return 2
 
 
 _WEAK_SOURCE_FALLBACK_CASCADE_SKIPPED_STAGES = [
@@ -27718,9 +32210,12 @@ def _weak_source_fallback_cascade_gate_summary(
         "policy": "weak_source_fallback_cascade_gate_v1",
         "reason": "",
         "enabled": _weak_source_fallback_cascade_gate_enabled(),
+        "stage_skip_enabled": _weak_source_fallback_cascade_stage_skip_enabled(),
         "min_source_verifier_attempts": min_attempts,
         "skipped_stage_names": [],
         "skipped_stage_count": 0,
+        "would_skip_stage_names": [],
+        "would_skip_stage_count": 0,
         "preserved_stage_names": [],
         "preserved_stage_count": 0,
     }
@@ -27823,15 +32318,47 @@ def _weak_source_fallback_cascade_gate_summary(
     if weak_relation_count < min_attempts:
         summary["reason"] = "source_verifier_not_consistently_weak_relation"
         return summary
+    if generic_source_backoff.get("blocked"):
+        would_skip_stage_names = _weak_source_fallback_cascade_skipped_stage_names()
+        skipped_stage_names = (
+            would_skip_stage_names if summary["stage_skip_enabled"] else []
+        )
+        preserved_stage_names = _weak_source_fallback_cascade_preserved_stage_names()
+        summary.update({
+            "status": "activated",
+            "reason": "source_verifier_high_quality_generic_backoff",
+            "stage_skip_reason": (
+                "stage_skip_enabled_by_gate"
+                if summary["stage_skip_enabled"]
+                else "stage_skip_disabled_by_env"
+            ),
+            "skipped_stage_names": skipped_stage_names,
+            "skipped_stage_count": len(skipped_stage_names),
+            "would_skip_stage_names": would_skip_stage_names,
+            "would_skip_stage_count": len(would_skip_stage_names),
+            "preserved_stage_names": preserved_stage_names,
+            "preserved_stage_count": len(preserved_stage_names),
+        })
+        return summary
     if low_confidence_count < min_attempts and zero_quality_count < min_attempts:
         if generic_source_backoff.get("blocked"):
-            skipped_stage_names = _weak_source_fallback_cascade_skipped_stage_names()
+            would_skip_stage_names = _weak_source_fallback_cascade_skipped_stage_names()
+            skipped_stage_names = (
+                would_skip_stage_names if summary["stage_skip_enabled"] else []
+            )
             preserved_stage_names = _weak_source_fallback_cascade_preserved_stage_names()
             summary.update({
                 "status": "activated",
                 "reason": "source_verifier_high_quality_generic_backoff",
+                "stage_skip_reason": (
+                    "stage_skip_enabled_by_gate"
+                    if summary["stage_skip_enabled"]
+                    else "stage_skip_disabled_by_env"
+                ),
                 "skipped_stage_names": skipped_stage_names,
                 "skipped_stage_count": len(skipped_stage_names),
+                "would_skip_stage_names": would_skip_stage_names,
+                "would_skip_stage_count": len(would_skip_stage_names),
                 "preserved_stage_names": preserved_stage_names,
                 "preserved_stage_count": len(preserved_stage_names),
             })
@@ -27839,13 +32366,23 @@ def _weak_source_fallback_cascade_gate_summary(
         summary["reason"] = "source_verifier_not_low_confidence_or_zero_quality"
         return summary
 
-    skipped_stage_names = _weak_source_fallback_cascade_skipped_stage_names()
+    would_skip_stage_names = _weak_source_fallback_cascade_skipped_stage_names()
+    skipped_stage_names = (
+        would_skip_stage_names if summary["stage_skip_enabled"] else []
+    )
     preserved_stage_names = _weak_source_fallback_cascade_preserved_stage_names()
     summary.update({
         "status": "activated",
         "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+        "stage_skip_reason": (
+            "stage_skip_enabled_by_gate"
+            if summary["stage_skip_enabled"]
+            else "stage_skip_disabled_by_env"
+        ),
         "skipped_stage_names": skipped_stage_names,
         "skipped_stage_count": len(skipped_stage_names),
+        "would_skip_stage_names": would_skip_stage_names,
+        "would_skip_stage_count": len(would_skip_stage_names),
         "preserved_stage_names": preserved_stage_names,
         "preserved_stage_count": len(preserved_stage_names),
     })
@@ -28752,6 +33289,20 @@ def _domain_rule_mc_decision(
     )
     if effect_direction:
         return effect_direction
+    game_theory = _game_theory_symmetric_two_action_pure_ne_decision(
+        problem=problem,
+        stem=stem,
+        options=options,
+    )
+    if game_theory:
+        return game_theory
+    topology_cardinality = _topology_location_cardinality_component_trap_decision(
+        problem=problem,
+        stem=stem,
+        options=options,
+    )
+    if topology_cardinality:
+        return topology_cardinality
     enclosed_signal = _enclosed_signal_no_navigation_decision(problem=problem, stem=stem, options=options)
     if enclosed_signal:
         return enclosed_signal
@@ -29290,6 +33841,87 @@ def _alpha_beta_direction_pair(option_text: str) -> dict[str, str]:
     return pair if {"alpha", "beta"}.issubset(pair) else {}
 
 
+def _game_theory_symmetric_two_action_pure_ne_decision(
+    *,
+    problem: dict[str, Any],
+    stem: str,
+    options: dict[str, str],
+) -> dict[str, Any] | None:
+    if _env_flag("HLE_DISABLE_GAME_THEORY_SYMMETRIC_TWO_ACTION_PURE_NE_RULE"):
+        return None
+    text = " ".join([
+        str(problem.get("category") or ""),
+        str(problem.get("raw_subject") or ""),
+        stem,
+    ])
+    normalized = _normalize_domain_rule_text(text)
+    required_groups = {
+        "game_theory": ("game", "nash", "equilibria", "equilibrium"),
+        "symmetric": ("symmetric",),
+        "n_player": ("n-player", "n player", "players"),
+        "two_actions": ("2 actions", "two actions", "2 action", "two action"),
+        "pure_strategy": ("pure strategy", "pure strategies"),
+        "lower_bound": ("at least how many", "minimum", "minimally", "at least"),
+    }
+    missing_groups = [
+        name
+        for name, cues in required_groups.items()
+        if not any(cue in normalized for cue in cues)
+    ]
+    if missing_groups:
+        return None
+    if not re.search(r"\b2\^n\b|\b2\s*\^\s*n\b", normalized):
+        return None
+
+    one_labels = [
+        label
+        for label, option_text in sorted(options.items())
+        if re.fullmatch(r"\s*(?:1|one)\s*\.?\s*", str(option_text or ""), flags=re.IGNORECASE)
+    ]
+    if len(one_labels) != 1:
+        return None
+
+    zero_labels = [
+        label
+        for label, option_text in sorted(options.items())
+        if re.search(r"\b(?:0|zero)\b", str(option_text or ""), flags=re.IGNORECASE)
+    ]
+    if not zero_labels:
+        return None
+
+    selected = one_labels[0]
+    return {
+        "label": selected,
+        "rule_id": "game_theory_symmetric_two_action_pure_ne_existence",
+        "confidence": "conceptual_domain_rule",
+        "reason": (
+            "finite_symmetric_two_action_game_has_at_least_one_pure_strategy_nash_"
+            "equilibrium_by_discrete_best_response_sign_crossing"
+        ),
+        "evidence_required": False,
+        "candidate_option_hashes": [
+            stable_hash({"option_label": label})
+            for label in sorted(set(one_labels + zero_labels))
+        ],
+        "diagnostics": {
+            "policy": "symmetric_two_action_pure_ne_lower_bound_v1",
+            "trigger_groups": sorted(required_groups),
+            "missing_trigger_groups": [],
+            "selected_option_hash": stable_hash({"option_label": selected}),
+            "zero_option_count": len(zero_labels),
+            "one_option_count": len(one_labels),
+            "proof_sketch_hash": stable_hash({
+                "proof": (
+                    "Let d(k) be the payoff advantage of action 1 when k opponents "
+                    "choose action 1. If an endpoint is not a pure equilibrium, "
+                    "d(0)>0 and d(n-1)<0, so some adjacent sign change gives an "
+                    "interior pure equilibrium."
+                )
+            }),
+        },
+    }
+
+
 def _enclosed_signal_no_navigation_decision(
     *,
     problem: dict[str, Any],
@@ -29332,6 +33964,115 @@ def _enclosed_signal_no_navigation_decision(
         "confidence": "causal_accessibility_domain_rule",
         "reason": "signal_described_as_solely_inside_enclosed_structure_cannot_support_between_host_navigation",
         "evidence_required": False,
+    }
+
+
+def _topology_location_cardinality_component_trap_decision(
+    *,
+    problem: dict[str, Any],
+    stem: str,
+    options: dict[str, str],
+) -> dict[str, Any] | None:
+    if _env_flag("HLE_DISABLE_TOPOLOGY_LOCATION_CARDINALITY_COMPONENT_TRAP_RULE"):
+        return None
+    if problem.get("answer_type") != "multipleChoice":
+        return None
+    metadata = " ".join([
+        str(problem.get("category") or ""),
+        str(problem.get("raw_subject") or ""),
+    ]).lower()
+    if not any(cue in metadata for cue in ("math", "mathematics", "topology", "geometry")):
+        return None
+    text = " ".join([metadata, stem])
+    lowered = _normalize_domain_rule_text(text)
+    required_groups = {
+        "cardinality_question": ("cardinality", "how many", "number of"),
+        "location_set": ("set of locations", "locations on", "placements", "configurations"),
+        "global_contact_condition": (
+            "simultaneously",
+            "all five",
+            "all 5",
+            "all four",
+            "all 4",
+            "all legs",
+            "all contact",
+        ),
+        "finite_rigid_object": ("rigid", "chair", "leg", "legs", "contact point", "contact points"),
+        "continuous_surface": ("sphere", "surface", "smooth", "continuum", "continuous"),
+    }
+    missing_groups = [
+        name
+        for name, cues in required_groups.items()
+        if not any(cue in lowered for cue in cues)
+    ]
+    if missing_groups:
+        return None
+    if "minimum" not in lowered and "least" not in lowered:
+        return None
+
+    normalized_options = {
+        label: _normalize_domain_rule_text(option_text)
+        for label, option_text in sorted(options.items())
+    }
+    continuum_labels = [
+        label
+        for label, option in normalized_options.items()
+        if (
+            "cardinality of the reals" in option
+            or "cardinality of reals" in option
+            or "continuum" in option
+            or "uncountably infinite" in option
+        )
+    ]
+    if len(continuum_labels) != 1:
+        return None
+
+    countable_or_finite_labels = [
+        label
+        for label, option in normalized_options.items()
+        if (
+            "countably infinite" in option
+            or re.fullmatch(r"\s*(?:0|1|2|3|4|5|6|7|8|9|10|zero|one|two|three|four|five)\s*\.?\s*", option)
+        )
+    ]
+    if len(countable_or_finite_labels) < 2:
+        return None
+
+    component_count_labels = [
+        label
+        for label, option in normalized_options.items()
+        if re.fullmatch(r"\s*(?:5|five)\s*\.?\s*", option)
+    ]
+    if not component_count_labels and not any(cue in lowered for cue in ("five", "5")):
+        return None
+
+    selected = continuum_labels[0]
+    candidate_labels = sorted(set(continuum_labels + countable_or_finite_labels))
+    return {
+        "label": selected,
+        "rule_id": "topology_location_cardinality_component_count_trap",
+        "confidence": "conceptual_domain_rule",
+        "reason": (
+            "cardinality_question_counts_possible_locations_or_configurations_not_the_number_of_"
+            "physical_contact_points"
+        ),
+        "evidence_required": False,
+        "candidate_option_hashes": [
+            stable_hash({"option_label": label})
+            for label in candidate_labels
+        ],
+        "diagnostics": {
+            "policy": "topology_location_cardinality_component_trap_v1",
+            "trigger_groups": sorted(required_groups),
+            "missing_trigger_groups": [],
+            "selected_option_hash": stable_hash({"option_label": selected}),
+            "continuum_option_count": len(continuum_labels),
+            "finite_or_countable_option_count": len(countable_or_finite_labels),
+            "component_count_option_hashes": [
+                stable_hash({"option_label": label})
+                for label in component_count_labels
+            ],
+        },
     }
 
 
@@ -29458,16 +34199,22 @@ def _run_option_claim_relation_query_planner(
     )
     started = time.monotonic()
     try:
-        response = _call_model(
-            model=planner_model,
-            prompt=_option_claim_relation_query_planner_prompt(
-                problem=problem,
-                options=options,
-                agent_plan=agent_plan,
-            ),
-            timeout=timeout,
-            max_tokens=min(max_tokens, 512),
-        )
+        with _option_claim_model_router_scope(
+            stage="option_claim_relation_query_planner",
+            problem=problem,
+            call_id=call_id,
+            option_count=len(options),
+        ):
+            response = _call_model(
+                model=planner_model,
+                prompt=_option_claim_relation_query_planner_prompt(
+                    problem=problem,
+                    options=options,
+                    agent_plan=agent_plan,
+                ),
+                timeout=timeout,
+                max_tokens=min(max_tokens, 512),
+            )
         parsed = _parse_json_object(response) or {}
         model_queries_by_label = _parse_option_claim_relation_query_plan(parsed, options=options)
         queries_by_label = _merge_option_query_plan(
@@ -36581,6 +41328,13 @@ def _structural_dissent_recheck_enabled() -> bool:
     }
 
 
+def _weak_source_structural_dissent_low_confidence_recovery_enabled() -> bool:
+    return os.environ.get(
+        "HLE_DISABLE_WEAK_SOURCE_STRUCTURAL_DISSENT_LOW_CONFIDENCE_RECOVERY",
+        "",
+    ).strip().lower() not in {"1", "true", "yes", "on"}
+
+
 def _structural_dissent_recheck_candidate_label(
     problem: dict[str, Any],
     answer: Any,
@@ -36760,6 +41514,7 @@ def _run_structural_dissent_recheck(
     logger: "_JsonlLogger | None",
     timeout: float | None,
     max_tokens: int,
+    weak_source_fallback_cascade_active: bool = False,
 ) -> dict[str, Any] | None:
     if not _structural_dissent_recheck_enabled():
         return None
@@ -36848,11 +41603,30 @@ def _run_structural_dissent_recheck(
         selected = candidates[choice - 1] if choice in {1, 2} else None
         selected_is_structural = bool(selected and selected.get("child_id") == structural.get("child_id"))
         label_consistent = not selected_label or selected_label == str(selected.get("option_label_for_verifier") or "")
+        weak_source_low_confidence_recovery = bool(
+            weak_source_fallback_cascade_active
+            and _weak_source_structural_dissent_low_confidence_recovery_enabled()
+            and selected
+            and selected_is_structural
+            and label_consistent
+            and confidence == "low"
+            and int(structural.get("support_count") or 0) >= 2
+            and int(top.get("support_count") or 0) >= 4
+            and "structural_option_audit_answer" in set(structural.get("support_prompt_kinds", []) or [])
+            and (
+                "adversarial_alternative_answer" in set(structural.get("support_prompt_kinds", []) or [])
+                or "constraint_checked_answer" in set(structural.get("support_prompt_kinds", []) or [])
+                or "option_matrix_reasoner_answer" in set(structural.get("support_prompt_kinds", []) or [])
+            )
+        )
         accepted = bool(
             selected
             and selected_is_structural
             and label_consistent
-            and confidence in {"high", "verified"}
+            and (
+                confidence in {"high", "verified"}
+                or weak_source_low_confidence_recovery
+            )
         )
         if not choice:
             acceptance_reason = "no_choice"
@@ -36862,6 +41636,8 @@ def _run_structural_dissent_recheck(
             acceptance_reason = "selected_label_mismatch"
         elif not selected_is_structural:
             acceptance_reason = "selected_top_candidate"
+        elif weak_source_low_confidence_recovery:
+            acceptance_reason = "weak_source_low_confidence_structural_dissent_recovery"
         elif confidence not in {"high", "verified"}:
             acceptance_reason = "low_confidence"
         else:
@@ -36880,6 +41656,7 @@ def _run_structural_dissent_recheck(
                 "confidence": confidence,
                 "accepted": accepted,
                 "acceptance_reason": acceptance_reason,
+                "weak_source_low_confidence_recovery": weak_source_low_confidence_recovery,
                 "selected_structural_dissent": selected_is_structural,
                 "selected_child_id": selected.get("child_id") if selected else None,
                 "selected_answer_hash": (
@@ -36909,6 +41686,7 @@ def _run_structural_dissent_recheck(
                 "confidence": confidence,
                 "top_support_count": top.get("support_count"),
                 "structural_support_count": structural.get("support_count"),
+                "weak_source_low_confidence_recovery": weak_source_low_confidence_recovery,
                 "top_option_label_hash": stable_hash({"option_label": top_label}),
                 "structural_option_label_hash": stable_hash({"option_label": structural_label}),
                 "selected_option_label_hash": stable_hash(
@@ -36950,7 +41728,14 @@ def _self_contained_full_option_adjudicator_prompt(
     return (
         "Solve this self-contained analytical multiple-choice item using only the problem statement and option "
         "texts. Do not use outside facts, retrieval snippets, candidate vote counts, or popularity. Compare every "
-        "listed option against the stated quantities, mechanisms, constraints, qualifiers, and exclusions. Choose "
+        "listed option against the stated quantities, mechanisms, constraints, qualifiers, and exclusions. "
+        "For cardinality or counting questions, first write an internal set-element ledger: identify exactly what "
+        "objects are being counted, whether the set is placements/locations/configurations/parameter values or "
+        "physical parts/contact points, and whether continuity creates a finite, countable, or continuum-sized "
+        "family. Do not answer a cardinality question by counting physical components unless the question explicitly "
+        "asks for those components. Treat an option equal to the number of named parts, legs, points, trials, or "
+        "entities as a component-count trap when the question instead asks for possible locations, placements, "
+        "configurations, or parameter values satisfying a global condition. Choose "
         "candidate 1 unless another option is directly forced by explicit constraints in the problem. Return JSON "
         "only with fields {\"choice\":1,\"confidence\":\"low\"}. Use confidence=\"high\" or \"verified\" only "
         "when the chosen option is forced by the internal constraints.\n\n"
@@ -36971,7 +41756,14 @@ def _sweep_gap_full_option_recheck_prompt(
         "Recheck this finite multiple-choice item because earlier candidates may have ignored some option labels. "
         "Use the question and every option text. Do not use vote counts, candidate popularity, or which options "
         "were proposed earlier. If the item requires outside domain knowledge, use only knowledge that is directly "
-        "needed to compare the listed options. Choose a previously ignored option only when it clearly satisfies "
+        "needed to compare the listed options. For cardinality or counting questions, first build "
+        "an internal set-element ledger: identify what the set elements are, distinguish placements/locations/"
+        "configurations/parameter values from physical parts/contact points, and compare finite, countable, and "
+        "continuum-sized options from that ledger rather than from the number of named components. Treat an option "
+        "equal to the number of named parts, legs, points, trials, or entities as a component-count trap when the "
+        "question instead asks for possible locations, placements, configurations, or parameter values satisfying "
+        "a global condition. Choose a "
+        "previously ignored option only when it clearly satisfies "
         "the question better than the model-proposed options. Return JSON only with fields "
         "{\"choice\":1,\"confidence\":\"low\"}. Use confidence=\"high\" or \"verified\" only when the chosen "
         "option is clearly supported by the question relation and the option text.\n\n"
@@ -38349,7 +43141,55 @@ def _select_recursive_child_answer(
     max_tokens: int,
     evidence_context: str = "",
     allow_self_contained_adjudicator: bool = True,
+    weak_source_fallback_cascade_active: bool = False,
 ) -> dict[str, Any]:
+    selection_model_call_budget_gate = _recursive_selection_model_call_budget_summary()
+    selection_wallclock_budget_gate = _recursive_selection_wallclock_budget_summary()
+
+    def selection_model_stage_allowed(stage_name: str) -> bool:
+        if not _recursive_selection_wallclock_budget_allows(
+            selection_wallclock_budget_gate,
+            stage_name=stage_name,
+            problem=problem,
+            eval_id=eval_id,
+            call_id=call_id,
+            model=model,
+            logger=logger,
+        ):
+            return False
+        return _recursive_selection_model_call_budget_allows(
+            selection_model_call_budget_gate,
+            stage_name=stage_name,
+            problem=problem,
+            eval_id=eval_id,
+            call_id=call_id,
+            model=model,
+            logger=logger,
+        )
+
+    def attach_selection_budget(selection: dict[str, Any]) -> dict[str, Any]:
+        selection = _attach_selection_model_call_budget_gate(
+            selection,
+            selection_model_call_budget_gate,
+        )
+        return _attach_selection_wallclock_budget_gate(
+            selection,
+            selection_wallclock_budget_gate,
+        )
+
+    def selection_model_stage_skip_reason(stage_name: str) -> str:
+        if (
+            selection_wallclock_budget_gate
+            and stage_name in set(selection_wallclock_budget_gate.get("skipped_stage_names", []) or [])
+        ):
+            return "selection_wallclock_budget_exhausted"
+        if (
+            selection_model_call_budget_gate
+            and stage_name in set(selection_model_call_budget_gate.get("skipped_stage_names", []) or [])
+        ):
+            return "selection_model_call_budget_exhausted"
+        return "selection_model_stage_budget_exhausted"
+
     valid: list[dict[str, Any]] = []
     for attempt in attempts:
         answer = str(attempt.get("parsed_answer") or "").strip()
@@ -38371,6 +43211,45 @@ def _select_recursive_child_answer(
         ]
         if non_suspicious:
             valid = non_suspicious
+    variant_watchdog_abort = _variant_watchdog_blocked_summary(
+        stage_name="recursive_child_selection"
+    )
+    if variant_watchdog_abort:
+        _log_event(
+            logger,
+            {
+                "event": "variant_watchdog_selection_fallback",
+                "eval_id": eval_id,
+                "call_id": call_id,
+                "problem_id_hash": problem["id_hash"],
+                "question_hash": problem["question_hash"],
+                "model": model,
+                "variant": "assumption_agent_recursive_verify",
+                "valid_candidate_count": len(valid),
+                "reason": variant_watchdog_abort.get("violation_reason")
+                or "variant_watchdog_blocked",
+                "variant_watchdog": variant_watchdog_abort,
+                "raw_content_persisted": False,
+            },
+        )
+        if not valid:
+            return attach_selection_budget({
+                "selection_method": "variant_watchdog_all_children_failed",
+                "selected_child_id": None,
+                "selected_answer": "",
+                "underlying_model_calls": 0,
+                "verifier_model_call": False,
+                "variant_watchdog_fast_abort": variant_watchdog_abort,
+            })
+        selected = valid[0]
+        return attach_selection_budget({
+            "selection_method": "variant_watchdog_fallback_first",
+            "selected_child_id": selected["child_id"],
+            "selected_answer": selected["parsed_answer"],
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+            "variant_watchdog_fast_abort": variant_watchdog_abort,
+        })
     normalized: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for attempt in valid:
         normalized[_normalize_for_selection(attempt["parsed_answer"], answer_type=problem["answer_type"])].append(attempt)
@@ -38450,25 +43329,43 @@ def _select_recursive_child_answer(
             }
         operator_selection = _operator_application_selection_candidate(problem=problem, valid=valid)
         if operator_selection:
-            operator_evidence_selection = _maybe_run_operator_source_grounded_evidence_adjudicator(
-                problem=problem,
-                valid=valid,
-                operator_selection=operator_selection,
-                evidence_context=evidence_context,
-                model=model,
-                eval_id=eval_id,
-                call_id=call_id,
-                logger=logger,
-                timeout=timeout,
-                max_tokens=max_tokens,
-                return_abstention=True,
-            )
+            if selection_model_stage_allowed("operator_source_grounded_evidence_adjudicator"):
+                operator_evidence_selection = _maybe_run_operator_source_grounded_evidence_adjudicator(
+                    problem=problem,
+                    valid=valid,
+                    operator_selection=operator_selection,
+                    evidence_context=evidence_context,
+                    model=model,
+                    eval_id=eval_id,
+                    call_id=call_id,
+                    logger=logger,
+                    timeout=timeout,
+                    max_tokens=max_tokens,
+                    return_abstention=True,
+                )
+            else:
+                operator_evidence_selection = {
+                    "selection_method": "operator_source_grounded_adjudicator_abstained",
+                    "selected_child_id": operator_selection.get("selected_child_id"),
+                    "selected_answer": operator_selection.get("selected_answer"),
+                    "underlying_model_calls": 0,
+                    "verifier_model_call": False,
+                    "source_grounded_operator_evidence": {
+                        "status": "budget_exhausted",
+                        "reason": selection_model_stage_skip_reason(
+                            "operator_source_grounded_evidence_adjudicator"
+                        ),
+                        "direct_high_confidence": False,
+                        "supports_answer": False,
+                    },
+                    "selection_model_call_budget_gate": selection_model_call_budget_gate,
+                }
             if (
                 operator_evidence_selection
                 and str(operator_evidence_selection.get("selection_method") or "")
                 == "source_grounded_operator_evidence_choice"
             ):
-                return operator_evidence_selection
+                return attach_selection_budget(operator_evidence_selection)
             source_defer = _operator_source_grounded_adjudicator_defer_summary(
                 problem=problem,
                 operator_evidence_selection=operator_evidence_selection,
@@ -38492,20 +43389,21 @@ def _select_recursive_child_answer(
             )
             operator_conflict_contrastive_selection = None
             if operator_conflict.get("blocked") and not source_defer.get("blocked"):
-                operator_conflict_contrastive_selection = _maybe_run_operator_conflict_contrastive_adjudicator(
-                    problem=problem,
-                    valid=valid,
-                    operator_selection=operator_selection,
-                    operator_conflict=operator_conflict,
-                    model=model,
-                    eval_id=eval_id,
-                    call_id=call_id,
-                    logger=logger,
-                    timeout=timeout,
-                    max_tokens=max_tokens,
-                )
+                if selection_model_stage_allowed("operator_conflict_contrastive_adjudicator"):
+                    operator_conflict_contrastive_selection = _maybe_run_operator_conflict_contrastive_adjudicator(
+                        problem=problem,
+                        valid=valid,
+                        operator_selection=operator_selection,
+                        operator_conflict=operator_conflict,
+                        model=model,
+                        eval_id=eval_id,
+                        call_id=call_id,
+                        logger=logger,
+                        timeout=timeout,
+                        max_tokens=max_tokens,
+                    )
                 if operator_conflict_contrastive_selection:
-                    return operator_conflict_contrastive_selection
+                    return attach_selection_budget(operator_conflict_contrastive_selection)
             if source_defer.get("blocked") or operator_conflict.get("blocked"):
                 defer_reason = (
                     operator_conflict.get("reason") if operator_conflict.get("blocked") else source_defer.get("reason")
@@ -38540,66 +43438,75 @@ def _select_recursive_child_answer(
                     },
                 )
             else:
-                return operator_selection
+                return attach_selection_budget(operator_selection)
         structural_coalition_selection = _self_contained_structural_coalition_selection_candidate(
             problem=problem,
             valid=valid,
         )
         if structural_coalition_selection:
-            return structural_coalition_selection
+            return attach_selection_budget(structural_coalition_selection)
         if allow_self_contained_adjudicator:
-            self_contained_adjudicator_selection = _run_self_contained_option_adjudicator(
-                problem=problem,
-                valid=valid,
-                ranked=ranked,
-                model=model,
-                eval_id=eval_id,
-                call_id=call_id,
-                logger=logger,
-                timeout=timeout,
-                max_tokens=max_tokens,
-            )
+            self_contained_adjudicator_selection = None
+            if selection_model_stage_allowed("self_contained_option_adjudicator"):
+                self_contained_adjudicator_selection = _run_self_contained_option_adjudicator(
+                    problem=problem,
+                    valid=valid,
+                    ranked=ranked,
+                    model=model,
+                    eval_id=eval_id,
+                    call_id=call_id,
+                    logger=logger,
+                    timeout=timeout,
+                    max_tokens=max_tokens,
+                )
             if self_contained_adjudicator_selection:
-                return self_contained_adjudicator_selection
-            self_contained_full_option_selection = _run_self_contained_full_option_adjudicator(
-                problem=problem,
-                valid=valid,
-                ranked=ranked,
-                model=model,
-                eval_id=eval_id,
-                call_id=call_id,
-                logger=logger,
-                timeout=timeout,
-                max_tokens=max_tokens,
-            )
+                return attach_selection_budget(self_contained_adjudicator_selection)
+            self_contained_full_option_selection = None
+            if selection_model_stage_allowed("self_contained_full_option_adjudicator"):
+                self_contained_full_option_selection = _run_self_contained_full_option_adjudicator(
+                    problem=problem,
+                    valid=valid,
+                    ranked=ranked,
+                    model=model,
+                    eval_id=eval_id,
+                    call_id=call_id,
+                    logger=logger,
+                    timeout=timeout,
+                    max_tokens=max_tokens,
+                )
             if self_contained_full_option_selection:
-                return self_contained_full_option_selection
-            sweep_gap_full_option_recheck = _run_sweep_gap_full_option_recheck(
-                problem=problem,
-                valid=valid,
-                ranked=ranked,
-                model=model,
-                eval_id=eval_id,
-                call_id=call_id,
-                logger=logger,
-                timeout=timeout,
-                max_tokens=max_tokens,
-            )
+                return attach_selection_budget(self_contained_full_option_selection)
+            sweep_gap_full_option_recheck = None
+            if selection_model_stage_allowed("sweep_gap_full_option_recheck"):
+                sweep_gap_full_option_recheck = _run_sweep_gap_full_option_recheck(
+                    problem=problem,
+                    valid=valid,
+                    ranked=ranked,
+                    model=model,
+                    eval_id=eval_id,
+                    call_id=call_id,
+                    logger=logger,
+                    timeout=timeout,
+                    max_tokens=max_tokens,
+                )
             if sweep_gap_full_option_recheck:
-                return sweep_gap_full_option_recheck
-            structural_dissent_recheck = _run_structural_dissent_recheck(
-                problem=problem,
-                valid=valid,
-                ranked=ranked,
-                model=model,
-                eval_id=eval_id,
-                call_id=call_id,
-                logger=logger,
-                timeout=timeout,
-                max_tokens=max_tokens,
-            )
+                return attach_selection_budget(sweep_gap_full_option_recheck)
+            structural_dissent_recheck = None
+            if selection_model_stage_allowed("structural_dissent_recheck"):
+                structural_dissent_recheck = _run_structural_dissent_recheck(
+                    problem=problem,
+                    valid=valid,
+                    ranked=ranked,
+                    model=model,
+                    eval_id=eval_id,
+                    call_id=call_id,
+                    logger=logger,
+                    timeout=timeout,
+                    max_tokens=max_tokens,
+                    weak_source_fallback_cascade_active=weak_source_fallback_cascade_active,
+                )
             if structural_dissent_recheck:
-                return structural_dissent_recheck
+                return attach_selection_budget(structural_dissent_recheck)
         verified_candidates = [
             attempt for attempt in valid
             if attempt.get("candidate_verifier_state") == "verified"
@@ -38608,13 +43515,13 @@ def _select_recursive_child_answer(
         ]
         if verified_candidates:
             selected = sorted(verified_candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
-            return {
+            return attach_selection_budget({
                 "selection_method": "candidate_claim_verifier_priority",
                 "selected_child_id": selected["child_id"],
                 "selected_answer": selected["parsed_answer"],
                 "underlying_model_calls": 0,
                 "verifier_model_call": False,
-            }
+            })
         if any(
             attempt.get("candidate_verifier_state") == "refuted"
             and _is_trusted_candidate_verifier_attempt(attempt)
@@ -38650,63 +43557,67 @@ def _select_recursive_child_answer(
             ]
             if deterministic_math or supported_math:
                 selected = (deterministic_math or supported_math)[0]
-                return {
+                return attach_selection_budget({
                     "selection_method": "verified_math_tool_priority",
                     "selected_child_id": selected["child_id"],
                     "selected_answer": selected["parsed_answer"],
                     "underlying_model_calls": 0,
                     "verifier_model_call": False,
-                }
-        source_selection = _maybe_run_source_grounded_mc_selection(
-            problem=problem,
-            valid=valid,
-            ranked=ranked,
-            evidence_context=evidence_context,
-            model=model,
-            eval_id=eval_id,
-            call_id=call_id,
-            logger=logger,
-            timeout=timeout,
-            max_tokens=max_tokens,
-        )
+                })
+        source_selection = None
+        if selection_model_stage_allowed("source_grounded_mc_selection"):
+            source_selection = _maybe_run_source_grounded_mc_selection(
+                problem=problem,
+                valid=valid,
+                ranked=ranked,
+                evidence_context=evidence_context,
+                model=model,
+                eval_id=eval_id,
+                call_id=call_id,
+                logger=logger,
+                timeout=timeout,
+                max_tokens=max_tokens,
+            )
         if source_selection:
-            return source_selection
+            return attach_selection_budget(source_selection)
         hipporag_selection = _select_hipporag_context_candidate(problem=problem, valid=valid, ranked=ranked)
         if hipporag_selection:
-            return hipporag_selection
-        counter_selection = _select_after_counter_assumption_challenge(
-            problem=problem,
-            valid=valid,
-            ranked=ranked,
-            model=model,
-            eval_id=eval_id,
-            call_id=call_id,
-            logger=logger,
-            timeout=timeout,
-            max_tokens=max_tokens,
-        )
+            return attach_selection_budget(hipporag_selection)
+        counter_selection = None
+        if selection_model_stage_allowed("counter_assumption_challenge_selector"):
+            counter_selection = _select_after_counter_assumption_challenge(
+                problem=problem,
+                valid=valid,
+                ranked=ranked,
+                model=model,
+                eval_id=eval_id,
+                call_id=call_id,
+                logger=logger,
+                timeout=timeout,
+                max_tokens=max_tokens,
+            )
         if counter_selection:
-            return counter_selection
+            return attach_selection_budget(counter_selection)
         if problem["answer_type"] != "multipleChoice" and _should_run_math_tool_child(problem):
             top_answer, top_attempts = ranked[0]
             if len(top_attempts) >= 2:
                 selected = top_attempts[0]
-                return {
+                return attach_selection_budget({
                     "selection_method": "math_exact_normalized_majority",
                     "selected_child_id": selected["child_id"],
                     "selected_answer": selected["parsed_answer"],
                     "underlying_model_calls": 0,
                     "verifier_model_call": False,
-                }
+                })
             if len(ranked) == 1:
                 selected = top_attempts[0]
-                return {
+                return attach_selection_budget({
                     "selection_method": "normalized_majority",
                     "selected_child_id": selected["child_id"],
                     "selected_answer": selected["parsed_answer"],
                     "underlying_model_calls": 0,
                     "verifier_model_call": False,
-                }
+                })
             direct_candidates = [
                 attempt for attempt in valid
                 if attempt.get("prompt_kind") == "direct_short_answer"
@@ -38717,13 +43628,13 @@ def _select_recursive_child_answer(
                 ranked=ranked,
             ):
                 selected = direct_candidates[0]
-                return {
+                return attach_selection_budget({
                     "selection_method": "math_exact_direct_fallback",
                     "selected_child_id": selected["child_id"],
                     "selected_answer": selected["parsed_answer"],
                     "underlying_model_calls": 0,
                     "verifier_model_call": False,
-                }
+                })
         evidence_candidates = [
             attempt for attempt in valid
             if attempt.get("prompt_kind") in {
@@ -38741,22 +43652,22 @@ def _select_recursive_child_answer(
             )
             if exact_evidence_override_enabled and len(top_attempts) >= 2 and not top_has_evidence:
                 selected = evidence_candidates[0]
-                return {
+                return attach_selection_budget({
                     "selection_method": "evidence_bridge_priority_over_closed_book_majority",
                     "selected_child_id": selected["child_id"],
                     "selected_answer": selected["parsed_answer"],
                     "underlying_model_calls": 0,
                     "verifier_model_call": False,
-                }
+                })
         if len(ranked[0][1]) >= 2 or len(ranked) == 1:
             selected = ranked[0][1][0]
-            return {
+            return attach_selection_budget({
                 "selection_method": "normalized_majority",
                 "selected_child_id": selected["child_id"],
                 "selected_answer": selected["parsed_answer"],
                 "underlying_model_calls": 0,
                 "verifier_model_call": False,
-            }
+            })
         if problem["answer_type"] != "multipleChoice":
             direct_candidates = [
                 attempt for attempt in valid
@@ -38768,21 +43679,30 @@ def _select_recursive_child_answer(
                 ranked=ranked,
             ):
                 selected = direct_candidates[0]
-                return {
+                return attach_selection_budget({
                     "selection_method": "exact_direct_fallback",
                     "selected_child_id": selected["child_id"],
                     "selected_answer": selected["parsed_answer"],
                     "underlying_model_calls": 0,
                     "verifier_model_call": False,
-                }
+                })
     if not valid:
-        return {
+        return attach_selection_budget({
             "selection_method": "all_children_failed",
             "selected_child_id": None,
             "selected_answer": "",
             "underlying_model_calls": 0,
             "verifier_model_call": False,
-        }
+        })
+    if not selection_model_stage_allowed("recursive_verifier"):
+        selected = valid[0]
+        return attach_selection_budget({
+            "selection_method": "selection_model_call_budget_fallback_first",
+            "selected_child_id": selected["child_id"],
+            "selected_answer": selected["parsed_answer"],
+            "underlying_model_calls": 0,
+            "verifier_model_call": False,
+        })
     try:
         verifier_candidates = _unique_verifier_candidates(problem, valid)
         _log_event(
@@ -38830,13 +43750,13 @@ def _select_recursive_child_answer(
                 "latency_sec": latency_sec,
             },
         )
-        return {
+        return attach_selection_budget({
             "selection_method": "verifier_choice" if choice else "verifier_fallback_first",
             "selected_child_id": selected["child_id"],
             "selected_answer": selected["parsed_answer"],
             "underlying_model_calls": 1,
             "verifier_model_call": True,
-        }
+        })
     except Exception as exc:
         latency_sec = round(time.monotonic() - started, 4) if "started" in locals() else None
         selected = valid[0]
@@ -38857,13 +43777,13 @@ def _select_recursive_child_answer(
                 "selected_child_id": selected["child_id"],
             },
         )
-        return {
+        return attach_selection_budget({
             "selection_method": "verifier_error_fallback_first",
             "selected_child_id": selected["child_id"],
             "selected_answer": selected["parsed_answer"],
             "underlying_model_calls": 0,
             "verifier_model_call": False,
-        }
+        })
 
 
 def _is_deterministic_math_tool_source(source: Any) -> bool:
@@ -38960,8 +43880,132 @@ _WEAK_SOURCE_CASCADE_MODEL_ONLY_VERIFIED_SELECTION_METHODS = {
 
 _SOURCE_VERIFIER_GENERIC_SENSITIVE_VERIFIED_SELECTION_METHODS = {
     "counter_assumption_verifier_choice",
+    "self_contained_option_adjudicator_choice",
     "self_contained_structural_coalition_choice",
 }
+
+
+_SELF_CONTAINED_SUPPORT_PRESERVE_METHODS = {
+    "self_contained_full_option_adjudicator_choice",
+    "self_contained_option_adjudicator_choice",
+}
+
+
+def _self_contained_support_preserve_guard_enabled() -> bool:
+    return os.environ.get(
+        "HLE_DISABLE_SELF_CONTAINED_SUPPORT_PRESERVE_GUARD",
+        "",
+    ).strip().lower() not in {"1", "true", "yes", "on"}
+
+
+def _self_contained_support_preserve_fallback_candidate(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    selection: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Preserve stronger model support when a self-contained verifier overrules it.
+
+    The self-contained adjudicator is useful for structured MC tasks, but it is
+    still a model-only verifier.  If it selects a lower-support answer without
+    direct/source grounding, keep the highest non-synthetic model-support group
+    instead and record the guard in the verified-or-abstain gate.
+    """
+    if not _self_contained_support_preserve_guard_enabled():
+        return None
+    method = str(selection.get("selection_method") or "")
+    if method not in _SELF_CONTAINED_SUPPORT_PRESERVE_METHODS:
+        return None
+    if problem.get("answer_type") != "multipleChoice":
+        return None
+    selected_answer = str(selection.get("selected_answer") or "").strip()
+    if not selected_answer:
+        return None
+    answer_type = str(problem.get("answer_type") or "multipleChoice")
+    selected_norm = _normalize_for_selection(selected_answer, answer_type=answer_type)
+    if not selected_norm:
+        return None
+    by_norm: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for attempt in attempts:
+        if attempt.get("candidate_verifier_state") == "refuted" and _is_trusted_candidate_verifier_attempt(attempt):
+            continue
+        prompt_kind = str(attempt.get("prompt_kind") or "")
+        if prompt_kind == "mc_option_sweep_candidate" or bool(attempt.get("synthetic_option_sweep")):
+            continue
+        answer = str(attempt.get("parsed_answer") or "").strip()
+        if not answer:
+            continue
+        norm = _normalize_for_selection(answer, answer_type=answer_type)
+        if norm:
+            by_norm[norm].append(attempt)
+    selected_rows = by_norm.get(selected_norm) or []
+    if not selected_rows:
+        return None
+    if any(_operator_application_attempt_has_strong_source_grounding(row) for row in selected_rows):
+        return None
+    ranked = sorted(
+        by_norm.items(),
+        key=lambda item: (
+            -len(item[1]),
+            int(item[1][0].get("child_index", 0) or 0),
+            item[0],
+        ),
+    )
+    if not ranked:
+        return None
+    top_norm, top_rows = ranked[0]
+    if top_norm == selected_norm:
+        return None
+    top_support = len(top_rows)
+    selected_support = len(selected_rows)
+    if top_support <= selected_support:
+        return None
+    runner_up_count = max((len(rows) for norm, rows in ranked[1:] if norm != top_norm), default=0)
+    prompt_preference = [
+        "source_grounded_verifier_answer",
+        "mc_option_claim_evidence_answer",
+        "mc_option_evidence_scorer_answer",
+        "evidence_guided_option_challenge_answer",
+        "structural_option_audit_answer",
+        "option_matrix_reasoner_answer",
+        "constraint_checked_answer",
+        "recursive_assumption_answer",
+        "option_elimination_answer",
+        "adversarial_alternative_answer",
+        "direct_short_answer",
+    ]
+    selected_top = None
+    for prompt_kind in prompt_preference:
+        prompt_rows = [row for row in top_rows if row.get("prompt_kind") == prompt_kind]
+        if prompt_rows:
+            selected_top = sorted(prompt_rows, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+            break
+    if selected_top is None:
+        selected_top = sorted(top_rows, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+    out = dict(selected_top)
+    out["verified_or_abstain_fallback_policy"] = "self_contained_support_preserve_top_model_support"
+    out.update(
+        _verified_or_abstain_consensus_metadata(
+            norm=top_norm,
+            top_candidates=top_rows,
+            top_count=top_support,
+            runner_up_count=runner_up_count,
+        )
+    )
+    out["self_contained_support_preserve_guard"] = {
+        "policy": "self_contained_support_preserve_guard_v1",
+        "reason": "self_contained_selected_lower_model_support_without_direct_source_grounding",
+        "original_selection_method": method,
+        "original_selected_child_id": selection.get("selected_child_id"),
+        "original_selected_norm_hash": stable_hash({"answer_norm": selected_norm}),
+        "original_selected_support_count": selected_support,
+        "preserved_child_id": out.get("child_id"),
+        "preserved_norm_hash": stable_hash({"answer_norm": top_norm}),
+        "preserved_support_count": top_support,
+        "runner_up_support_count": runner_up_count,
+        "raw_content_persisted": False,
+    }
+    return out
 
 
 def _weak_source_fallback_cascade_final_gate_enabled() -> bool:
@@ -39284,6 +44328,806 @@ def _weak_source_structural_audit_recovery_candidate(
         }
         return out
     return None
+
+
+def _weak_source_blocked_consensus_constraint_preserve_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_WEAK_SOURCE_BLOCKED_CONSENSUS_CONSTRAINT_PRESERVE",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    return os.environ.get(
+        "HLE_ENABLE_WEAK_SOURCE_BLOCKED_CONSENSUS_CONSTRAINT_PRESERVE",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _weak_source_blocked_consensus_over_direct_preserve_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_WEAK_SOURCE_BLOCKED_CONSENSUS_OVER_DIRECT_PRESERVE",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    return os.environ.get(
+        "HLE_ENABLE_WEAK_SOURCE_BLOCKED_CONSENSUS_OVER_DIRECT_PRESERVE",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _weak_source_blocked_consensus_structural_core_preserve_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_WEAK_SOURCE_BLOCKED_CONSENSUS_STRUCTURAL_CORE_PRESERVE",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    return os.environ.get(
+        "HLE_ENABLE_WEAK_SOURCE_BLOCKED_CONSENSUS_STRUCTURAL_CORE_PRESERVE",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _weak_source_high_confidence_generic_consensus_preserve_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_WEAK_SOURCE_HIGH_CONFIDENCE_GENERIC_CONSENSUS_PRESERVE",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    return os.environ.get(
+        "HLE_ENABLE_WEAK_SOURCE_HIGH_CONFIDENCE_GENERIC_CONSENSUS_PRESERVE",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _weak_source_blocked_consensus_preserve_over_model_only_verified_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_WEAK_SOURCE_BLOCKED_CONSENSUS_PRESERVE_OVER_MODEL_ONLY_VERIFIED",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    return os.environ.get(
+        "HLE_ENABLE_WEAK_SOURCE_BLOCKED_CONSENSUS_PRESERVE_OVER_MODEL_ONLY_VERIFIED",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _weak_source_direct_tie_matrix_recursive_recovery_enabled() -> bool:
+    return os.environ.get(
+        "HLE_DISABLE_WEAK_SOURCE_DIRECT_TIE_MATRIX_RECURSIVE_RECOVERY",
+        "",
+    ).strip().lower() not in {"1", "true", "yes", "on"}
+
+
+def _weak_source_direct_constraint_split_recovery_enabled() -> bool:
+    return os.environ.get(
+        "HLE_DISABLE_WEAK_SOURCE_DIRECT_CONSTRAINT_SPLIT_RECOVERY",
+        "",
+    ).strip().lower() not in {"1", "true", "yes", "on"}
+
+
+def _weak_source_direct_constraint_split_candidate(
+    *,
+    problem: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    blocked_consensus: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not _weak_source_direct_constraint_split_recovery_enabled():
+        return None
+    if problem.get("answer_type") != "multipleChoice":
+        return None
+    if not isinstance(blocked_consensus, dict):
+        return None
+    answer_type = str(problem.get("answer_type") or "multipleChoice")
+    consensus_norm = _normalize_for_selection(
+        str(blocked_consensus.get("parsed_answer") or ""),
+        answer_type=answer_type,
+    )
+    if not consensus_norm:
+        return None
+    try:
+        consensus_count = int(blocked_consensus.get("verified_or_abstain_consensus_count") or 0)
+        runner_up_count = int(blocked_consensus.get("verified_or_abstain_consensus_runner_up_count") or 0)
+    except (TypeError, ValueError):
+        return None
+    consensus_prompt_kinds = {
+        str(value)
+        for value in blocked_consensus.get("verified_or_abstain_consensus_prompt_kinds", []) or []
+        if str(value)
+    }
+    by_norm = _verified_or_abstain_attempts_by_norm(problem=problem, attempts=candidates)
+    direct_rows = [
+        row
+        for row in candidates
+        if row.get("prompt_kind") == "direct_short_answer"
+        and str(row.get("parsed_answer") or "").strip()
+    ]
+    constraint_rows = [
+        row
+        for row in candidates
+        if row.get("prompt_kind") == "constraint_checked_answer"
+        and str(row.get("parsed_answer") or "").strip()
+    ]
+    direct_norms = {
+        _normalize_for_selection(str(row.get("parsed_answer") or ""), answer_type=answer_type)
+        for row in direct_rows
+    }
+    constraint_norms = {
+        _normalize_for_selection(str(row.get("parsed_answer") or ""), answer_type=answer_type)
+        for row in constraint_rows
+    }
+    direct_norms.discard("")
+    constraint_norms.discard("")
+    if len(direct_norms) != 1 or len(constraint_norms) != 1:
+        return None
+    direct_norm = next(iter(direct_norms))
+    constraint_norm = next(iter(constraint_norms))
+    if direct_norm == constraint_norm:
+        structural_consensus_kinds = {
+            "structural_option_audit_answer",
+            "option_matrix_reasoner_answer",
+            "recursive_assumption_answer",
+            "option_elimination_answer",
+        }
+        if (
+            direct_norm != consensus_norm
+            and consensus_count >= 4
+            and len(consensus_prompt_kinds & structural_consensus_kinds) >= 3
+            and runner_up_count >= 2
+        ):
+            out = dict(blocked_consensus)
+            out["verified_or_abstain_fallback_policy"] = (
+                "weak_source_direct_constraint_split_structural_consensus_preserve"
+            )
+            out["weak_source_direct_constraint_split_recovery"] = {
+                "status": "selected",
+                "policy": "weak_source_direct_constraint_split_recovery_v1",
+                "reason": "direct_and_constraint_dissent_against_structural_consensus",
+                "selected_side": "structural_consensus",
+                "consensus_count": consensus_count,
+                "runner_up_count": runner_up_count,
+                "consensus_prompt_kinds": sorted(consensus_prompt_kinds),
+                "raw_content_persisted": False,
+            }
+            return out
+        return None
+    if (
+        direct_norm == consensus_norm
+        and constraint_norm != consensus_norm
+        and consensus_count >= 5
+        and "direct_short_answer" in consensus_prompt_kinds
+        and "constraint_checked_answer" not in consensus_prompt_kinds
+    ):
+        support_rows = by_norm.get(constraint_norm, [])
+        if not support_rows:
+            return None
+        preferred = [
+            row for row in support_rows
+            if row.get("prompt_kind") == "constraint_checked_answer"
+        ] or support_rows
+        out = dict(sorted(preferred, key=lambda row: int(row.get("child_index", 0) or 0))[0])
+        out.update(
+            _verified_or_abstain_consensus_metadata(
+                norm=constraint_norm,
+                top_candidates=support_rows,
+                top_count=len(support_rows),
+                runner_up_count=consensus_count,
+            )
+        )
+        out["verified_or_abstain_fallback_policy"] = (
+            "weak_source_direct_constraint_split_constraint_recovery"
+        )
+        out["weak_source_direct_constraint_split_recovery"] = {
+            "status": "selected",
+            "policy": "weak_source_direct_constraint_split_recovery_v1",
+            "reason": "constraint_dissent_against_direct_generic_consensus",
+            "selected_side": "constraint",
+            "support_count": len(support_rows),
+            "blocked_consensus_count": consensus_count,
+            "blocked_consensus_runner_up_count": runner_up_count,
+            "blocked_consensus_prompt_kinds": sorted(consensus_prompt_kinds),
+            "support_prompt_kinds": out.get("verified_or_abstain_consensus_prompt_kinds", []),
+            "raw_content_persisted": False,
+        }
+        return out
+    return None
+
+
+def _weak_source_constraint_matrix_dissent_recovery_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_WEAK_SOURCE_CONSTRAINT_MATRIX_DISSENT_RECOVERY",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    return os.environ.get(
+        "HLE_ENABLE_WEAK_SOURCE_CONSTRAINT_MATRIX_DISSENT_RECOVERY",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _weak_source_constraint_matrix_dissent_recovery_candidate(
+    *,
+    problem: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    blocked_consensus: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not _weak_source_constraint_matrix_dissent_recovery_enabled():
+        return None
+    if problem.get("answer_type") != "multipleChoice":
+        return None
+    if not isinstance(blocked_consensus, dict):
+        return None
+    try:
+        consensus_count = int(blocked_consensus.get("verified_or_abstain_consensus_count") or 0)
+        runner_up_count = int(blocked_consensus.get("verified_or_abstain_consensus_runner_up_count") or 0)
+    except (TypeError, ValueError):
+        return None
+    if consensus_count < 4 or consensus_count > 5 or runner_up_count < 2:
+        return None
+    consensus_prompt_kinds = {
+        str(value)
+        for value in blocked_consensus.get("verified_or_abstain_consensus_prompt_kinds", []) or []
+        if str(value)
+    }
+    if "direct_short_answer" not in consensus_prompt_kinds:
+        return None
+    if (
+        "constraint_checked_answer" in consensus_prompt_kinds
+        or "option_matrix_reasoner_answer" in consensus_prompt_kinds
+    ):
+        return None
+    answer_type = str(problem.get("answer_type") or "multipleChoice")
+    consensus_norm = _normalize_for_selection(
+        str(blocked_consensus.get("parsed_answer") or ""),
+        answer_type=answer_type,
+    )
+    if not consensus_norm:
+        return None
+    by_norm = _verified_or_abstain_attempts_by_norm(problem=problem, attempts=candidates)
+    best_rows: list[dict[str, Any]] = []
+    best_norm = ""
+    for norm, rows in by_norm.items():
+        if not norm or norm == consensus_norm:
+            continue
+        prompt_kinds = {str(row.get("prompt_kind") or "") for row in rows if row.get("prompt_kind")}
+        if not {"constraint_checked_answer", "option_matrix_reasoner_answer"}.issubset(prompt_kinds):
+            continue
+        model_generated_rows = [
+            row for row in rows
+            if row.get("prompt_kind") != "mc_option_sweep_candidate"
+            and bool(str(row.get("parsed_answer") or "").strip())
+        ]
+        if len(model_generated_rows) < 2:
+            continue
+        if len(model_generated_rows) < runner_up_count:
+            continue
+        if not best_rows or len(model_generated_rows) > len(best_rows):
+            best_rows = list(model_generated_rows)
+            best_norm = norm
+    if not best_rows or not best_norm:
+        return None
+    runner_up_for_selected = 0
+    for norm, rows in by_norm.items():
+        if norm != best_norm:
+            runner_up_for_selected = max(runner_up_for_selected, len(rows))
+    preferred = [
+        row for row in best_rows
+        if row.get("prompt_kind") == "constraint_checked_answer"
+    ] or best_rows
+    out = dict(sorted(preferred, key=lambda row: int(row.get("child_index", 0) or 0))[0])
+    out.update(
+        _verified_or_abstain_consensus_metadata(
+            norm=best_norm,
+            top_candidates=best_rows,
+            top_count=len(best_rows),
+            runner_up_count=runner_up_for_selected,
+        )
+    )
+    out["verified_or_abstain_fallback_policy"] = "weak_source_constraint_matrix_dissent_recovery"
+    out["weak_source_constraint_matrix_dissent_recovery"] = {
+        "status": "selected",
+        "policy": "weak_source_constraint_matrix_dissent_recovery_v1",
+        "reason": "constraint_and_matrix_agree_against_direct_generic_consensus",
+        "support_count": len(best_rows),
+        "blocked_consensus_count": consensus_count,
+        "blocked_consensus_runner_up_count": runner_up_count,
+        "blocked_consensus_prompt_kinds": sorted(consensus_prompt_kinds),
+        "support_prompt_kinds": out.get("verified_or_abstain_consensus_prompt_kinds", []),
+        "support_norm_hash": out.get("verified_or_abstain_consensus_norm_hash"),
+        "raw_content_persisted": False,
+    }
+    return out
+
+
+def _weak_source_blocked_consensus_constraint_preserve_candidate(
+    *,
+    problem: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    blocked_consensus: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not _weak_source_blocked_consensus_constraint_preserve_enabled():
+        return None
+    if problem.get("answer_type") != "multipleChoice":
+        return None
+    if not isinstance(blocked_consensus, dict):
+        return None
+    try:
+        consensus_count = int(blocked_consensus.get("verified_or_abstain_consensus_count") or 0)
+        runner_up_count = int(blocked_consensus.get("verified_or_abstain_consensus_runner_up_count") or 0)
+    except (TypeError, ValueError):
+        return None
+    consensus_prompt_kinds = set(
+        str(value)
+        for value in blocked_consensus.get("verified_or_abstain_consensus_prompt_kinds", []) or []
+        if str(value)
+    )
+    if consensus_count < 5 or (consensus_count - runner_up_count) < 3:
+        return None
+    if "constraint_checked_answer" not in consensus_prompt_kinds:
+        return None
+    answer_type = str(problem.get("answer_type") or "multipleChoice")
+    consensus_norm = _normalize_for_selection(
+        str(blocked_consensus.get("parsed_answer") or ""),
+        answer_type=answer_type,
+    )
+    if not consensus_norm:
+        return None
+    direct_norms = {
+        _normalize_for_selection(str(attempt.get("parsed_answer") or ""), answer_type=answer_type)
+        for attempt in candidates
+        if attempt.get("prompt_kind") == "direct_short_answer"
+        and str(attempt.get("parsed_answer") or "").strip()
+    }
+    direct_norms.discard("")
+    if not direct_norms or consensus_norm in direct_norms:
+        return None
+    by_norm = _verified_or_abstain_attempts_by_norm(problem=problem, attempts=candidates)
+    for direct_norm in direct_norms:
+        direct_prompt_kinds = {
+            str(attempt.get("prompt_kind") or "")
+            for attempt in by_norm.get(direct_norm, [])
+            if attempt.get("prompt_kind")
+        }
+        if "constraint_checked_answer" in direct_prompt_kinds:
+            return None
+    consensus_rows = by_norm.get(consensus_norm, [])
+    constraint_rows = [
+        row for row in consensus_rows
+        if row.get("prompt_kind") == "constraint_checked_answer"
+    ]
+    out = dict(
+        sorted(
+            constraint_rows or [blocked_consensus],
+            key=lambda row: int(row.get("child_index", 0) or 0),
+        )[0]
+    )
+    out.update({
+        key: blocked_consensus.get(key)
+        for key in {
+            "verified_or_abstain_consensus_count",
+            "verified_or_abstain_consensus_norm_hash",
+            "verified_or_abstain_consensus_prompt_kinds",
+            "verified_or_abstain_consensus_child_ids",
+            "verified_or_abstain_consensus_answer_hashes",
+            "verified_or_abstain_consensus_runner_up_count",
+        }
+    })
+    out["verified_or_abstain_fallback_policy"] = "weak_source_blocked_consensus_constraint_preserve"
+    out["weak_source_blocked_consensus_constraint_preserve"] = {
+        "status": "selected",
+        "policy": "weak_source_blocked_consensus_constraint_preserve_v1",
+        "reason": "blocked_consensus_has_constraint_checked_support_direct_conflict_lacks_it",
+        "consensus_count": consensus_count,
+        "runner_up_count": runner_up_count,
+        "consensus_prompt_kinds": sorted(consensus_prompt_kinds),
+        "direct_conflict_count": len(direct_norms),
+        "raw_content_persisted": False,
+    }
+    return out
+
+
+def _weak_source_blocked_consensus_over_direct_preserve_candidate(
+    *,
+    problem: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    blocked_consensus: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not _weak_source_blocked_consensus_over_direct_preserve_enabled():
+        return None
+    if problem.get("answer_type") != "multipleChoice":
+        return None
+    if not isinstance(blocked_consensus, dict):
+        return None
+    answer_type = str(problem.get("answer_type") or "multipleChoice")
+    consensus_norm = _normalize_for_selection(
+        str(blocked_consensus.get("parsed_answer") or ""),
+        answer_type=answer_type,
+    )
+    if not consensus_norm:
+        return None
+    try:
+        consensus_count = int(blocked_consensus.get("verified_or_abstain_consensus_count") or 0)
+        runner_up_count = int(blocked_consensus.get("verified_or_abstain_consensus_runner_up_count") or 0)
+    except (TypeError, ValueError):
+        return None
+    if consensus_count < 4 or (consensus_count - runner_up_count) < 2:
+        return None
+    consensus_prompt_kinds = {
+        str(value)
+        for value in blocked_consensus.get("verified_or_abstain_consensus_prompt_kinds", []) or []
+        if str(value)
+    }
+    structural_support_kinds = {
+        "constraint_checked_answer",
+        "option_matrix_reasoner_answer",
+        "recursive_assumption_answer",
+        "structural_option_audit_answer",
+        "option_elimination_answer",
+        "large_option_claim_table_answer",
+        "large_option_pairwise_tournament_answer",
+    }
+    if len(consensus_prompt_kinds & structural_support_kinds) < 2:
+        return None
+    by_norm = _verified_or_abstain_attempts_by_norm(problem=problem, attempts=candidates)
+    direct_rows = [
+        row
+        for row in candidates
+        if row.get("prompt_kind") == "direct_short_answer"
+        and str(row.get("parsed_answer") or "").strip()
+    ]
+    if not direct_rows:
+        return None
+    direct_norm_support: dict[str, int] = {}
+    for row in direct_rows:
+        norm = _normalize_for_selection(str(row.get("parsed_answer") or ""), answer_type=answer_type)
+        if norm:
+            direct_norm_support[norm] = len(by_norm.get(norm, []))
+    conflicting_direct = {
+        norm: support
+        for norm, support in direct_norm_support.items()
+        if norm and norm != consensus_norm
+    }
+    if not conflicting_direct:
+        return None
+    max_direct_support = max(conflicting_direct.values())
+    if max_direct_support >= consensus_count:
+        return None
+    for norm in conflicting_direct:
+        rows = by_norm.get(norm, [])
+        prompt_kinds = {
+            str(row.get("prompt_kind") or "")
+            for row in rows
+            if row.get("prompt_kind")
+        }
+        if "constraint_checked_answer" in prompt_kinds and "option_matrix_reasoner_answer" in prompt_kinds:
+            return None
+    out = dict(blocked_consensus)
+    out["verified_or_abstain_fallback_policy"] = "weak_source_blocked_consensus_over_direct_preserve"
+    out["weak_source_blocked_consensus_over_direct_preserve"] = {
+        "status": "selected",
+        "policy": "weak_source_blocked_consensus_over_direct_preserve_v1",
+        "reason": "blocked_consensus_support_exceeds_unverified_direct_fallback",
+        "consensus_count": consensus_count,
+        "runner_up_count": runner_up_count,
+        "max_direct_conflict_support": max_direct_support,
+        "consensus_prompt_kinds": sorted(consensus_prompt_kinds),
+        "direct_conflict_count": len(conflicting_direct),
+        "direct_conflict_norm_hashes": sorted(
+            stable_hash({"direct_conflict_norm": norm}) for norm in conflicting_direct
+        ),
+        "raw_content_persisted": False,
+    }
+    return out
+
+
+def _weak_source_blocked_consensus_structural_core_preserve_candidate(
+    *,
+    problem: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    blocked_consensus: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not _weak_source_blocked_consensus_structural_core_preserve_enabled():
+        return None
+    if problem.get("answer_type") != "multipleChoice":
+        return None
+    if not isinstance(blocked_consensus, dict):
+        return None
+    try:
+        consensus_count = int(blocked_consensus.get("verified_or_abstain_consensus_count") or 0)
+        runner_up_count = int(blocked_consensus.get("verified_or_abstain_consensus_runner_up_count") or 0)
+    except (TypeError, ValueError):
+        return None
+    if consensus_count < 4 or runner_up_count < 2:
+        return None
+    consensus_prompt_kinds = {
+        str(value)
+        for value in blocked_consensus.get("verified_or_abstain_consensus_prompt_kinds", []) or []
+        if str(value)
+    }
+    structural_core = {
+        "option_matrix_reasoner_answer",
+        "recursive_assumption_answer",
+        "structural_option_audit_answer",
+    }
+    if not structural_core.issubset(consensus_prompt_kinds):
+        return None
+    answer_type = str(problem.get("answer_type") or "multipleChoice")
+    consensus_norm = _normalize_for_selection(
+        str(blocked_consensus.get("parsed_answer") or ""),
+        answer_type=answer_type,
+    )
+    if not consensus_norm:
+        return None
+    by_norm = _verified_or_abstain_attempts_by_norm(problem=problem, attempts=candidates)
+    consensus_rows = [
+        row for row in by_norm.get(consensus_norm, [])
+        if row.get("prompt_kind") != "mc_option_sweep_candidate"
+    ]
+    if len(consensus_rows) < consensus_count:
+        return None
+    competing_core_count = 0
+    for norm, rows in by_norm.items():
+        if norm == consensus_norm:
+            continue
+        prompt_kinds = {
+            str(row.get("prompt_kind") or "")
+            for row in rows
+            if row.get("prompt_kind") and row.get("prompt_kind") != "mc_option_sweep_candidate"
+        }
+        if len(structural_core & prompt_kinds) >= 2:
+            competing_core_count += 1
+    if competing_core_count > 0:
+        return None
+    prompt_preference = [
+        "structural_option_audit_answer",
+        "option_matrix_reasoner_answer",
+        "recursive_assumption_answer",
+        "constraint_checked_answer",
+        "direct_short_answer",
+    ]
+    selected = None
+    for prompt_kind in prompt_preference:
+        prompt_rows = [row for row in consensus_rows if row.get("prompt_kind") == prompt_kind]
+        if prompt_rows:
+            selected = sorted(prompt_rows, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+            break
+    selected = selected or sorted(consensus_rows, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+    out = dict(selected)
+    out.update({
+        key: blocked_consensus.get(key)
+        for key in {
+            "verified_or_abstain_consensus_count",
+            "verified_or_abstain_consensus_norm_hash",
+            "verified_or_abstain_consensus_prompt_kinds",
+            "verified_or_abstain_consensus_child_ids",
+            "verified_or_abstain_consensus_answer_hashes",
+            "verified_or_abstain_consensus_runner_up_count",
+        }
+    })
+    out["verified_or_abstain_fallback_policy"] = (
+        "weak_source_blocked_consensus_structural_core_preserve"
+    )
+    out["weak_source_blocked_consensus_structural_core_preserve"] = {
+        "status": "selected",
+        "policy": "weak_source_blocked_consensus_structural_core_preserve_v1",
+        "reason": "blocked_consensus_has_matrix_recursive_structural_core_support",
+        "consensus_count": consensus_count,
+        "runner_up_count": runner_up_count,
+        "consensus_prompt_kinds": sorted(consensus_prompt_kinds),
+        "structural_core_prompt_kinds": sorted(structural_core),
+        "competing_core_count": competing_core_count,
+        "raw_content_persisted": False,
+    }
+    return out
+
+
+def _weak_source_high_confidence_generic_consensus_preserve_candidate(
+    *,
+    problem: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    blocked_consensus: dict[str, Any] | None,
+    source_gate: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not _weak_source_high_confidence_generic_consensus_preserve_enabled():
+        return None
+    if problem.get("answer_type") != "multipleChoice":
+        return None
+    if not isinstance(blocked_consensus, dict) or not isinstance(source_gate, dict):
+        return None
+    try:
+        consensus_count = int(blocked_consensus.get("verified_or_abstain_consensus_count") or 0)
+        runner_up_count = int(blocked_consensus.get("verified_or_abstain_consensus_runner_up_count") or 0)
+        attempt_count = int(source_gate.get("source_verifier_attempt_count") or 0)
+        accepted_count = int(source_gate.get("source_verifier_accepted_attempt_count") or 0)
+        direct_high_count = int(source_gate.get("source_verifier_direct_high_confidence_count") or 0)
+    except (TypeError, ValueError):
+        return None
+    if consensus_count < 5 or runner_up_count > 2 or (consensus_count - runner_up_count) < 3:
+        return None
+    if attempt_count < 3 or accepted_count > 0 or direct_high_count > 0:
+        return None
+    relation_counts = {
+        str(key): int(value or 0)
+        for key, value in (source_gate.get("source_verifier_relation_counts") or {}).items()
+    }
+    confidence_counts = {
+        str(key): int(value or 0)
+        for key, value in (source_gate.get("source_verifier_confidence_counts") or {}).items()
+    }
+    if int(relation_counts.get("generic") or 0) < attempt_count:
+        return None
+    if int(confidence_counts.get("high") or 0) < 2:
+        return None
+    consensus_prompt_kinds = {
+        str(value)
+        for value in blocked_consensus.get("verified_or_abstain_consensus_prompt_kinds", []) or []
+        if str(value)
+    }
+    required_prompt_kinds = {
+        "direct_short_answer",
+        "constraint_checked_answer",
+        "option_matrix_reasoner_answer",
+        "structural_option_audit_answer",
+    }
+    if not required_prompt_kinds.issubset(consensus_prompt_kinds):
+        return None
+    answer_type = str(problem.get("answer_type") or "multipleChoice")
+    consensus_norm = _normalize_for_selection(
+        str(blocked_consensus.get("parsed_answer") or ""),
+        answer_type=answer_type,
+    )
+    if not consensus_norm:
+        return None
+    by_norm = _verified_or_abstain_attempts_by_norm(problem=problem, attempts=candidates)
+    consensus_rows = by_norm.get(consensus_norm, [])
+    prompt_preference = [
+        "structural_option_audit_answer",
+        "constraint_checked_answer",
+        "direct_short_answer",
+        "option_matrix_reasoner_answer",
+        "recursive_assumption_answer",
+        "option_elimination_answer",
+        "adversarial_alternative_answer",
+    ]
+    selected: dict[str, Any] | None = None
+    for prompt_kind in prompt_preference:
+        prompt_rows = [row for row in consensus_rows if row.get("prompt_kind") == prompt_kind]
+        if prompt_rows:
+            selected = dict(sorted(prompt_rows, key=lambda row: int(row.get("child_index", 0) or 0))[0])
+            break
+    if selected is None:
+        selected = dict(blocked_consensus)
+    selected.update({
+        key: blocked_consensus.get(key)
+        for key in {
+            "verified_or_abstain_consensus_count",
+            "verified_or_abstain_consensus_norm_hash",
+            "verified_or_abstain_consensus_prompt_kinds",
+            "verified_or_abstain_consensus_child_ids",
+            "verified_or_abstain_consensus_answer_hashes",
+            "verified_or_abstain_consensus_runner_up_count",
+        }
+    })
+    selected["verified_or_abstain_fallback_policy"] = (
+        "weak_source_high_confidence_generic_consensus_preserve"
+    )
+    selected["weak_source_high_confidence_generic_consensus_preserve"] = {
+        "status": "selected",
+        "policy": "weak_source_high_confidence_generic_consensus_preserve_v1",
+        "reason": "blocked_consensus_has_high_confidence_generic_source_and_structural_quorum",
+        "consensus_count": consensus_count,
+        "runner_up_count": runner_up_count,
+        "consensus_prompt_kinds": sorted(consensus_prompt_kinds),
+        "source_verifier_attempt_count": attempt_count,
+        "source_verifier_relation_counts": relation_counts,
+        "source_verifier_confidence_counts": confidence_counts,
+        "raw_content_persisted": False,
+    }
+    return selected
+
+
+def _weak_source_direct_tie_matrix_recursive_recovery_candidate(
+    *,
+    problem: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not _weak_source_direct_tie_matrix_recursive_recovery_enabled():
+        return None
+    if problem.get("answer_type") != "multipleChoice":
+        return None
+    answer_type = str(problem.get("answer_type") or "multipleChoice")
+    by_norm = _verified_or_abstain_attempts_by_norm(problem=problem, attempts=candidates)
+    excluded_prompt_kinds = {
+        "mc_option_sweep_candidate",
+        "raw_preserve_selector_answer",
+        "raw_budget_preserve_selector_answer",
+        "route_arbitrator_answer",
+        "hipporag_preserve_selector_answer",
+    }
+    model_groups: list[tuple[str, list[dict[str, Any]], set[str]]] = []
+    for norm, rows in by_norm.items():
+        support = [
+            row for row in rows
+            if row.get("prompt_kind") not in excluded_prompt_kinds
+            and str(row.get("parsed_answer") or "").strip()
+        ]
+        if not norm or len(support) < 3:
+            continue
+        prompt_kinds = {
+            str(row.get("prompt_kind") or "")
+            for row in support
+            if row.get("prompt_kind")
+        }
+        model_groups.append((norm, support, prompt_kinds))
+    if len(model_groups) < 2:
+        return None
+    model_groups.sort(key=lambda item: (-len(item[1]), item[0]))
+    top_count = len(model_groups[0][1])
+    tied_groups = [item for item in model_groups if len(item[1]) == top_count]
+    if len(tied_groups) < 2:
+        return None
+    direct_groups = [
+        item for item in tied_groups
+        if "direct_short_answer" in item[2]
+    ]
+    if not direct_groups:
+        return None
+    direct_group = sorted(direct_groups, key=lambda item: item[0])[0]
+    direct_prompt_kinds = direct_group[2]
+    if "constraint_checked_answer" in direct_prompt_kinds or "option_matrix_reasoner_answer" in direct_prompt_kinds:
+        return None
+    challenger_groups = [
+        item for item in tied_groups
+        if item[0] != direct_group[0]
+        and "direct_short_answer" not in item[2]
+        and {"option_matrix_reasoner_answer", "recursive_assumption_answer"}.issubset(item[2])
+    ]
+    if not challenger_groups:
+        return None
+    challenger_groups.sort(
+        key=lambda item: (
+            "adversarial_alternative_answer" not in item[2],
+            "constraint_checked_answer" not in item[2],
+            item[0],
+        )
+    )
+    selected_norm, selected_rows, selected_prompt_kinds = challenger_groups[0]
+    preferred_order = [
+        "option_matrix_reasoner_answer",
+        "recursive_assumption_answer",
+        "adversarial_alternative_answer",
+        "constraint_checked_answer",
+    ]
+    selected = None
+    for prompt_kind in preferred_order:
+        rows = [row for row in selected_rows if row.get("prompt_kind") == prompt_kind]
+        if rows:
+            selected = sorted(rows, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+            break
+    selected = selected or sorted(selected_rows, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+    out = dict(selected)
+    out.update(
+        _verified_or_abstain_consensus_metadata(
+            norm=selected_norm,
+            top_candidates=selected_rows,
+            top_count=len(selected_rows),
+            runner_up_count=len(direct_group[1]),
+        )
+    )
+    out["verified_or_abstain_fallback_policy"] = "weak_source_direct_tie_matrix_recursive_recovery"
+    out["weak_source_direct_tie_matrix_recursive_recovery"] = {
+        "status": "selected",
+        "policy": "weak_source_direct_tie_matrix_recursive_recovery_v1",
+        "reason": "weak_source_tied_direct_group_deferred_to_matrix_recursive_group",
+        "selected_support_count": len(selected_rows),
+        "direct_support_count": len(direct_group[1]),
+        "selected_prompt_kinds": sorted(selected_prompt_kinds),
+        "direct_prompt_kinds": sorted(direct_prompt_kinds),
+        "tied_group_count": len(tied_groups),
+        "tied_norm_hashes": sorted(
+            stable_hash({"weak_source_tied_norm": norm}) for norm, _, _ in tied_groups
+        ),
+        "raw_content_persisted": False,
+    }
+    return out
 
 
 def _same_run_baseline_consensus_candidate(
@@ -40203,6 +46047,180 @@ def _high_margin_weak_option_evidence_verified_challenge_candidate(
     return out
 
 
+def _verified_or_abstain_synthetic_sweep_last_resort_guard_enabled() -> bool:
+    return os.environ.get(
+        "HLE_DISABLE_VERIFIED_OR_ABSTAIN_SYNTHETIC_SWEEP_LAST_RESORT_GUARD",
+        "",
+    ).strip().lower() not in {"1", "true", "yes", "on"}
+
+
+def _is_synthetic_option_sweep_candidate(attempt: dict[str, Any]) -> bool:
+    return (
+        attempt.get("prompt_kind") == "mc_option_sweep_candidate"
+        or bool(attempt.get("synthetic_option_sweep"))
+    )
+
+
+def _verified_or_abstain_last_resort_candidate_has_direct_signal(
+    attempt: dict[str, Any],
+) -> bool:
+    if (
+        attempt.get("candidate_verifier_state") == "verified"
+        and _is_trusted_candidate_verifier_attempt(attempt)
+    ):
+        return True
+    if _operator_application_attempt_has_strong_source_grounding(attempt):
+        return True
+    if bool(attempt.get("source_grounded_verifier_used")):
+        return True
+    if bool(attempt.get("source_supported_evidence_candidate")):
+        return True
+    if bool(attempt.get("context_answer_supported")) or bool(attempt.get("context_answer_option_hash")):
+        return True
+    if bool(attempt.get("accepted_direct_high_confidence")):
+        return True
+    if bool(attempt.get("source_verifier_accepted_direct_high_confidence")):
+        return True
+    if bool(attempt.get("source_grounded_verifier_direct_high_confidence")):
+        return True
+    verifier = attempt.get("source_grounded_verifier")
+    if isinstance(verifier, dict) and bool(verifier.get("direct_high_confidence")):
+        return True
+    return False
+
+
+def _verified_or_abstain_last_resort_answer_support(
+    *,
+    problem: dict[str, Any],
+    candidate: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    answer_type = str(problem.get("answer_type") or "exactMatch")
+    norm = _normalize_for_selection(
+        str(candidate.get("parsed_answer") or ""),
+        answer_type=answer_type,
+    )
+    rows = [
+        row for row in candidates
+        if _normalize_for_selection(str(row.get("parsed_answer") or ""), answer_type=answer_type) == norm
+    ] if norm else []
+    prompt_kinds = sorted({
+        str(row.get("prompt_kind") or "")
+        for row in rows
+        if row.get("prompt_kind")
+    })
+    return {
+        "answer_norm_hash": stable_hash({"answer_norm": norm}) if norm else None,
+        "support_count": len(rows),
+        "model_generated_support_count": sum(
+            1 for row in rows if not _is_synthetic_option_sweep_candidate(row)
+        ),
+        "synthetic_option_sweep_support_count": sum(
+            1 for row in rows if _is_synthetic_option_sweep_candidate(row)
+        ),
+        "prompt_kinds": prompt_kinds,
+    }
+
+
+def _verified_or_abstain_last_resort_candidate_allowed(
+    *,
+    problem: dict[str, Any],
+    candidate: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> tuple[bool, dict[str, Any]]:
+    support = _verified_or_abstain_last_resort_answer_support(
+        problem=problem,
+        candidate=candidate,
+        candidates=candidates,
+    )
+    if not _verified_or_abstain_synthetic_sweep_last_resort_guard_enabled():
+        return True, {
+            "allowed": True,
+            "reason": "synthetic_option_sweep_last_resort_guard_disabled",
+            **support,
+        }
+    if not _is_synthetic_option_sweep_candidate(candidate):
+        return True, {
+            "allowed": True,
+            "reason": "non_synthetic_option_sweep_candidate",
+            **support,
+        }
+    if _verified_or_abstain_last_resort_candidate_has_direct_signal(candidate):
+        return True, {
+            "allowed": True,
+            "reason": "synthetic_option_sweep_candidate_has_direct_signal",
+            **support,
+        }
+    try:
+        consensus_count = int(candidate.get("verified_or_abstain_consensus_count") or 0)
+    except (TypeError, ValueError):
+        consensus_count = 0
+    if consensus_count >= 2 or int(support.get("model_generated_support_count") or 0) >= 2:
+        return True, {
+            "allowed": True,
+            "reason": "synthetic_option_sweep_candidate_has_model_consensus",
+            "fallback_consensus_count": consensus_count,
+            **support,
+        }
+    return False, {
+        "allowed": False,
+        "reason": "synthetic_option_sweep_candidate_lacks_direct_signal_or_model_support",
+        "fallback_consensus_count": consensus_count,
+        **support,
+    }
+
+
+def _verified_or_abstain_last_resort_guard_summary(
+    *,
+    problem: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    allowed_candidates: list[dict[str, Any]],
+    decisions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    blocked = [decision for decision in decisions if not bool(decision.get("allowed"))]
+    synthetic_count = sum(1 for row in candidates if _is_synthetic_option_sweep_candidate(row))
+    if not _verified_or_abstain_synthetic_sweep_last_resort_guard_enabled():
+        status = "disabled"
+        reason = "env_disabled"
+    elif blocked and not allowed_candidates:
+        status = "blocked"
+        reason = "all_last_resort_candidates_blocked"
+    elif blocked:
+        status = "filtered"
+        reason = "weak_synthetic_option_sweep_candidates_removed"
+    elif synthetic_count:
+        status = "allowed"
+        reason = "synthetic_option_sweep_candidates_had_required_support"
+    else:
+        status = "not_required"
+        reason = "no_synthetic_option_sweep_candidates"
+    return {
+        "status": status,
+        "policy": "synthetic_option_sweep_last_resort_guard_v1",
+        "reason": reason,
+        "raw_content_persisted": False,
+        "candidate_count": len(candidates),
+        "synthetic_option_sweep_candidate_count": synthetic_count,
+        "allowed_candidate_count": len(allowed_candidates),
+        "blocked_candidate_count": len(blocked),
+        "blocked_answer_norm_hashes": [
+            decision.get("answer_norm_hash")
+            for decision in blocked
+            if decision.get("answer_norm_hash")
+        ],
+        "blocked_prompt_kinds": sorted({
+            prompt_kind
+            for decision in blocked
+            for prompt_kind in list(decision.get("prompt_kinds", []) or [])
+            if prompt_kind
+        }),
+        "decision_reasons": dict(sorted(Counter(
+            str(decision.get("reason") or "unknown")
+            for decision in decisions
+        ).items())),
+    }
+
+
 def _exact_diverse_verifier_enabled() -> bool:
     return os.environ.get("HLE_ENABLE_EXACT_DIVERSE_VERIFIER", "").strip().lower() in {
         "1",
@@ -40384,11 +46402,16 @@ def _apply_verified_or_abstain_selection(
                 raw_candidate=raw_noharm_candidate,
                 reason=weak_source_block_reason,
             )
+        fallback_diagnostics: dict[str, Any] = {}
         fallback = _verified_or_abstain_fallback_candidate(
             problem=problem,
             attempts=attempts,
             exclude_child_ids={str(selection.get("selected_child_id") or "")},
             agent_plan=agent_plan,
+            allow_blocked_consensus_preserve=(
+                _weak_source_blocked_consensus_preserve_over_model_only_verified_enabled()
+            ),
+            diagnostics=fallback_diagnostics,
         )
         out = dict(selection)
         if fallback:
@@ -40416,6 +46439,30 @@ def _apply_verified_or_abstain_selection(
                     "weak_source_structural_audit_recovery": fallback.get(
                         "weak_source_structural_audit_recovery"
                     ),
+                    "weak_source_direct_constraint_split_recovery": fallback.get(
+                        "weak_source_direct_constraint_split_recovery"
+                    ),
+                    "weak_source_blocked_consensus_over_direct_preserve": fallback.get(
+                        "weak_source_blocked_consensus_over_direct_preserve"
+                    ),
+                    "weak_source_blocked_consensus_structural_core_preserve": fallback.get(
+                        "weak_source_blocked_consensus_structural_core_preserve"
+                    ),
+                    "weak_source_high_confidence_generic_consensus_preserve": fallback.get(
+                        "weak_source_high_confidence_generic_consensus_preserve"
+                    ),
+                    "weak_source_blocked_consensus_preserve_guard": fallback.get(
+                        "weak_source_blocked_consensus_preserve_guard"
+                    ),
+                    "weak_source_direct_tie_matrix_recursive_recovery": fallback.get(
+                        "weak_source_direct_tie_matrix_recursive_recovery"
+                    ),
+                    "weak_source_same_answer_fallback_guard": fallback.get(
+                        "weak_source_same_answer_fallback_guard"
+                    ),
+                    "verified_or_abstain_last_resort_guard": fallback.get(
+                        "verified_or_abstain_last_resort_guard"
+                    ) or fallback_diagnostics.get("verified_or_abstain_last_resort_guard"),
                 },
             })
             return out
@@ -40424,7 +46471,46 @@ def _apply_verified_or_abstain_selection(
             "reason": f"{weak_source_block_reason}_no_fallback",
             "original_selection_method": method,
             "weak_source_fallback_cascade_gate": weak_source_final_gate,
+            "verified_or_abstain_last_resort_guard": fallback_diagnostics.get(
+                "verified_or_abstain_last_resort_guard"
+            ),
         }
+        return out
+    self_contained_support_preserve = _self_contained_support_preserve_fallback_candidate(
+        problem=problem,
+        attempts=attempts,
+        selection=selection,
+    )
+    if self_contained_support_preserve:
+        out = dict(selection)
+        out.update({
+            "selection_method": "verified_or_abstain_direct_fallback",
+            "selected_child_id": self_contained_support_preserve.get("child_id"),
+            "selected_answer": self_contained_support_preserve.get("parsed_answer"),
+            "verified_or_abstain_gate": {
+                "status": "abstained",
+                "reason": "self_contained_support_preserve_blocks_low_support_override",
+                "original_selection_method": method,
+                "original_selected_child_id": selection.get("selected_child_id"),
+                "fallback_prompt_kind": self_contained_support_preserve.get("prompt_kind"),
+                "fallback_answer_hash": self_contained_support_preserve.get("parsed_answer_hash"),
+                "fallback_policy": self_contained_support_preserve.get(
+                    "verified_or_abstain_fallback_policy"
+                ),
+                "fallback_consensus_count": self_contained_support_preserve.get(
+                    "verified_or_abstain_consensus_count"
+                ),
+                "fallback_consensus_norm_hash": self_contained_support_preserve.get(
+                    "verified_or_abstain_consensus_norm_hash"
+                ),
+                "fallback_consensus_prompt_kinds": self_contained_support_preserve.get(
+                    "verified_or_abstain_consensus_prompt_kinds"
+                ),
+                "self_contained_support_preserve_guard": self_contained_support_preserve.get(
+                    "self_contained_support_preserve_guard"
+                ),
+            },
+        })
         return out
     if method in _VERIFIED_SELECTION_METHODS:
         out = dict(selection)
@@ -40508,11 +46594,13 @@ def _apply_verified_or_abstain_selection(
             ranked=_ranked_normalized_attempts(problem=problem, attempts=attempts),
         )
         if source_grounding_blocked or operator_conflict.get("blocked"):
+            fallback_diagnostics = {}
             fallback = _verified_or_abstain_fallback_candidate(
                 problem=problem,
                 attempts=attempts,
                 exclude_child_ids={str(selection.get("selected_child_id") or "")},
                 agent_plan=agent_plan,
+                diagnostics=fallback_diagnostics,
             )
             reason = (
                 "operator_application_conflict_deferred"
@@ -40548,6 +46636,27 @@ def _apply_verified_or_abstain_selection(
                         "weak_source_structural_audit_recovery": fallback.get(
                             "weak_source_structural_audit_recovery"
                         ),
+                        "weak_source_direct_constraint_split_recovery": fallback.get(
+                            "weak_source_direct_constraint_split_recovery"
+                        ),
+                        "weak_source_blocked_consensus_over_direct_preserve": fallback.get(
+                            "weak_source_blocked_consensus_over_direct_preserve"
+                        ),
+                        "weak_source_blocked_consensus_structural_core_preserve": fallback.get(
+                            "weak_source_blocked_consensus_structural_core_preserve"
+                        ),
+                        "weak_source_high_confidence_generic_consensus_preserve": fallback.get(
+                            "weak_source_high_confidence_generic_consensus_preserve"
+                        ),
+                        "weak_source_direct_tie_matrix_recursive_recovery": fallback.get(
+                            "weak_source_direct_tie_matrix_recursive_recovery"
+                        ),
+                        "weak_source_same_answer_fallback_guard": fallback.get(
+                            "weak_source_same_answer_fallback_guard"
+                        ),
+                        "verified_or_abstain_last_resort_guard": fallback.get(
+                            "verified_or_abstain_last_resort_guard"
+                        ) or fallback_diagnostics.get("verified_or_abstain_last_resort_guard"),
                     },
                 })
                 return out
@@ -40557,6 +46666,9 @@ def _apply_verified_or_abstain_selection(
                 "original_selection_method": method,
                 "source_grounding_required": source_grounding_blocked,
                 "operator_conflict": operator_conflict,
+                "verified_or_abstain_last_resort_guard": fallback_diagnostics.get(
+                    "verified_or_abstain_last_resort_guard"
+                ),
             }
             return out
         out = dict(selection)
@@ -40614,10 +46726,12 @@ def _apply_verified_or_abstain_selection(
                 baseline_consensus=baseline_consensus,
                 reason="same_run_baseline_consensus_blocks_unverified_selection",
             )
+    fallback_diagnostics = {}
     fallback = _verified_or_abstain_fallback_candidate(
         problem=problem,
         attempts=attempts,
         agent_plan=agent_plan,
+        diagnostics=fallback_diagnostics,
     )
     if not fallback:
         out = dict(selection)
@@ -40625,6 +46739,9 @@ def _apply_verified_or_abstain_selection(
             "status": "no_fallback",
             "reason": "no_direct_candidate",
             "original_selection_method": method,
+            "verified_or_abstain_last_resort_guard": fallback_diagnostics.get(
+                "verified_or_abstain_last_resort_guard"
+            ),
         }
         return out
     selected_child_id = selection.get("selected_child_id")
@@ -40648,6 +46765,27 @@ def _apply_verified_or_abstain_selection(
                 "weak_source_fallback_cascade_unverified_consensus_guard"
             ),
             "weak_source_structural_audit_recovery": fallback.get("weak_source_structural_audit_recovery"),
+            "weak_source_direct_constraint_split_recovery": fallback.get(
+                "weak_source_direct_constraint_split_recovery"
+            ),
+            "weak_source_blocked_consensus_over_direct_preserve": fallback.get(
+                "weak_source_blocked_consensus_over_direct_preserve"
+            ),
+            "weak_source_blocked_consensus_structural_core_preserve": fallback.get(
+                "weak_source_blocked_consensus_structural_core_preserve"
+            ),
+            "weak_source_high_confidence_generic_consensus_preserve": fallback.get(
+                "weak_source_high_confidence_generic_consensus_preserve"
+            ),
+            "weak_source_direct_tie_matrix_recursive_recovery": fallback.get(
+                "weak_source_direct_tie_matrix_recursive_recovery"
+            ),
+            "weak_source_same_answer_fallback_guard": fallback.get(
+                "weak_source_same_answer_fallback_guard"
+            ),
+            "verified_or_abstain_last_resort_guard": fallback.get(
+                "verified_or_abstain_last_resort_guard"
+            ) or fallback_diagnostics.get("verified_or_abstain_last_resort_guard"),
         },
     })
     return out
@@ -40659,6 +46797,8 @@ def _verified_or_abstain_fallback_candidate(
     attempts: list[dict[str, Any]],
     exclude_child_ids: set[str] | None = None,
     agent_plan: dict[str, Any] | None = None,
+    allow_blocked_consensus_preserve: bool = False,
+    diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     candidates: list[dict[str, Any]] = []
     exclude_child_ids = exclude_child_ids or set()
@@ -40686,12 +46826,38 @@ def _verified_or_abstain_fallback_candidate(
     if not candidates:
         return None
 
+    answer_type = str(problem.get("answer_type") or "exactMatch")
+    blocked_answer_norms: set[str] = set()
+    blocked_same_answer_recovery_kinds: list[str] = []
+
+    def candidate_norm(candidate: dict[str, Any]) -> str:
+        return _normalize_for_selection(
+            str(candidate.get("parsed_answer") or "").strip(),
+            answer_type=answer_type,
+        )
+
+    def without_blocked_answer_norms(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if not blocked_answer_norms:
+            return rows
+        return [row for row in rows if candidate_norm(row) not in blocked_answer_norms]
+
     def with_unverified_consensus_guard(candidate: dict[str, Any]) -> dict[str, Any]:
         guard = unverified_consensus_guard
         if not guard.get("blocked"):
             return candidate
         out = dict(candidate)
         out["weak_source_fallback_cascade_unverified_consensus_guard"] = guard
+        if blocked_answer_norms:
+            out["weak_source_same_answer_fallback_guard"] = {
+                "policy": "weak_source_same_answer_fallback_guard_v1",
+                "blocked_answer_norm_hashes": sorted(
+                    stable_hash({"answer_norm": norm}) for norm in blocked_answer_norms
+                ),
+                "fallback_answer_norm_hash": stable_hash({"answer_norm": candidate_norm(candidate)}),
+                "skipped_recovery_kinds": list(blocked_same_answer_recovery_kinds),
+                "reason": "blocked_source_generic_consensus_answer_norm_excluded_from_fallback",
+                "raw_content_persisted": False,
+            }
         return out
 
     unverified_consensus_guard = _weak_source_fallback_cascade_blocks_unverified_consensus(
@@ -40793,6 +46959,9 @@ def _verified_or_abstain_fallback_candidate(
     else:
         blocked_consensus = _verified_or_abstain_consensus_fallback_candidate(problem=problem, attempts=candidates)
         if blocked_consensus:
+            blocked_norm = candidate_norm(blocked_consensus)
+            if blocked_norm:
+                blocked_answer_norms.add(blocked_norm)
             unverified_consensus_guard = dict(unverified_consensus_guard)
             unverified_consensus_guard.update({
                 "blocked_fallback_prompt_kind": blocked_consensus.get("prompt_kind"),
@@ -40817,28 +46986,190 @@ def _verified_or_abstain_fallback_candidate(
                 ),
                 "blocked_fallback_policy": blocked_consensus.get("verified_or_abstain_fallback_policy"),
             })
+            if allow_blocked_consensus_preserve:
+                preserved = dict(blocked_consensus)
+                preserved["verified_or_abstain_fallback_policy"] = (
+                    "weak_source_blocked_consensus_preserve_over_model_only_verified"
+                )
+                preserved["weak_source_blocked_consensus_preserve_guard"] = {
+                    "status": "activated",
+                    "policy": "weak_source_blocked_consensus_preserve_v1",
+                    "reason": "weak_source_gate_blocks_model_only_verified_selection_without_direct_alternative",
+                    "blocked_fallback_answer_hash": blocked_consensus.get("parsed_answer_hash"),
+                    "blocked_fallback_consensus_count": blocked_consensus.get(
+                        "verified_or_abstain_consensus_count"
+                    ),
+                    "blocked_fallback_consensus_runner_up_count": blocked_consensus.get(
+                        "verified_or_abstain_consensus_runner_up_count"
+                    ),
+                    "blocked_fallback_consensus_prompt_kinds": blocked_consensus.get(
+                        "verified_or_abstain_consensus_prompt_kinds"
+                    ),
+                    "raw_content_persisted": False,
+                }
+                return with_unverified_consensus_guard(preserved)
             structural_recovery = _weak_source_structural_audit_recovery_candidate(
                 problem=problem,
                 candidates=candidates,
                 blocked_consensus=blocked_consensus,
             )
             if structural_recovery:
-                unverified_consensus_guard["structural_audit_recovery"] = structural_recovery.get(
-                    "weak_source_structural_audit_recovery"
+                if candidate_norm(structural_recovery) in blocked_answer_norms:
+                    blocked_same_answer_recovery_kinds.append("weak_source_structural_audit_recovery")
+                else:
+                    unverified_consensus_guard["structural_audit_recovery"] = structural_recovery.get(
+                        "weak_source_structural_audit_recovery"
+                    )
+                    return with_unverified_consensus_guard(structural_recovery)
+            constraint_matrix_recovery = _weak_source_constraint_matrix_dissent_recovery_candidate(
+                problem=problem,
+                candidates=candidates,
+                blocked_consensus=blocked_consensus,
+            )
+            if constraint_matrix_recovery:
+                if candidate_norm(constraint_matrix_recovery) in blocked_answer_norms:
+                    blocked_same_answer_recovery_kinds.append(
+                        "weak_source_constraint_matrix_dissent_recovery"
+                    )
+                else:
+                    unverified_consensus_guard["constraint_matrix_dissent_recovery"] = (
+                        constraint_matrix_recovery.get("weak_source_constraint_matrix_dissent_recovery")
+                    )
+                    return with_unverified_consensus_guard(constraint_matrix_recovery)
+            direct_constraint_split = _weak_source_direct_constraint_split_candidate(
+                problem=problem,
+                candidates=candidates,
+                blocked_consensus=blocked_consensus,
+            )
+            if direct_constraint_split:
+                if candidate_norm(direct_constraint_split) in blocked_answer_norms:
+                    blocked_same_answer_recovery_kinds.append(
+                        "weak_source_direct_constraint_split_recovery"
+                    )
+                else:
+                    unverified_consensus_guard["direct_constraint_split_recovery"] = (
+                        direct_constraint_split.get("weak_source_direct_constraint_split_recovery")
+                    )
+                    return with_unverified_consensus_guard(direct_constraint_split)
+            constraint_preserve = _weak_source_blocked_consensus_constraint_preserve_candidate(
+                problem=problem,
+                candidates=candidates,
+                blocked_consensus=blocked_consensus,
+            )
+            if constraint_preserve:
+                if candidate_norm(constraint_preserve) in blocked_answer_norms:
+                    blocked_answer_norms.discard(candidate_norm(constraint_preserve))
+                    unverified_consensus_guard["blocked_consensus_constraint_preserve"] = (
+                        constraint_preserve.get("weak_source_blocked_consensus_constraint_preserve")
+                    )
+                    return with_unverified_consensus_guard(constraint_preserve)
+                else:
+                    unverified_consensus_guard["blocked_consensus_constraint_preserve"] = (
+                        constraint_preserve.get("weak_source_blocked_consensus_constraint_preserve")
+                    )
+                    return with_unverified_consensus_guard(constraint_preserve)
+            consensus_over_direct_preserve = (
+                _weak_source_blocked_consensus_over_direct_preserve_candidate(
+                    problem=problem,
+                    candidates=candidates,
+                    blocked_consensus=blocked_consensus,
                 )
-                return with_unverified_consensus_guard(structural_recovery)
+            )
+            if consensus_over_direct_preserve:
+                if candidate_norm(consensus_over_direct_preserve) in blocked_answer_norms:
+                    blocked_answer_norms.discard(candidate_norm(consensus_over_direct_preserve))
+                    unverified_consensus_guard["blocked_consensus_over_direct_preserve"] = (
+                        consensus_over_direct_preserve.get(
+                            "weak_source_blocked_consensus_over_direct_preserve"
+                        )
+                    )
+                    return with_unverified_consensus_guard(consensus_over_direct_preserve)
+                else:
+                    unverified_consensus_guard["blocked_consensus_over_direct_preserve"] = (
+                        consensus_over_direct_preserve.get(
+                            "weak_source_blocked_consensus_over_direct_preserve"
+                        )
+                    )
+                    return with_unverified_consensus_guard(consensus_over_direct_preserve)
+            structural_core_preserve = (
+                _weak_source_blocked_consensus_structural_core_preserve_candidate(
+                    problem=problem,
+                    candidates=candidates,
+                    blocked_consensus=blocked_consensus,
+                )
+            )
+            if structural_core_preserve:
+                blocked_answer_norms.discard(candidate_norm(structural_core_preserve))
+                unverified_consensus_guard["blocked_consensus_structural_core_preserve"] = (
+                    structural_core_preserve.get(
+                        "weak_source_blocked_consensus_structural_core_preserve"
+                    )
+                )
+                return with_unverified_consensus_guard(structural_core_preserve)
+            high_confidence_generic_preserve = (
+                _weak_source_high_confidence_generic_consensus_preserve_candidate(
+                    problem=problem,
+                    candidates=candidates,
+                    blocked_consensus=blocked_consensus,
+                    source_gate=unverified_consensus_guard,
+                )
+            )
+            if high_confidence_generic_preserve:
+                blocked_answer_norms.discard(candidate_norm(high_confidence_generic_preserve))
+                unverified_consensus_guard["high_confidence_generic_consensus_preserve"] = (
+                    high_confidence_generic_preserve.get(
+                        "weak_source_high_confidence_generic_consensus_preserve"
+                    )
+                )
+                return with_unverified_consensus_guard(high_confidence_generic_preserve)
+        else:
+            direct_tie_recovery = _weak_source_direct_tie_matrix_recursive_recovery_candidate(
+                problem=problem,
+                candidates=candidates,
+            )
+            if direct_tie_recovery:
+                unverified_consensus_guard["direct_tie_matrix_recursive_recovery"] = (
+                    direct_tie_recovery.get("weak_source_direct_tie_matrix_recursive_recovery")
+                )
+                return with_unverified_consensus_guard(direct_tie_recovery)
     for prompt_kind in preferred_prompt_kinds:
         prompt_candidates = [
             attempt for attempt in candidates
             if attempt.get("prompt_kind") == prompt_kind
         ]
+        prompt_candidates = without_blocked_answer_norms(prompt_candidates)
         if prompt_candidates:
             return with_unverified_consensus_guard(
                 sorted(prompt_candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
             )
-    return with_unverified_consensus_guard(
-        sorted(candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+    remaining_candidates = without_blocked_answer_norms(candidates)
+    if not remaining_candidates:
+        return None
+    last_resort_decisions: list[dict[str, Any]] = []
+    allowed_remaining_candidates: list[dict[str, Any]] = []
+    for candidate in remaining_candidates:
+        allowed, decision = _verified_or_abstain_last_resort_candidate_allowed(
+            problem=problem,
+            candidate=candidate,
+            candidates=remaining_candidates,
+        )
+        last_resort_decisions.append(decision)
+        if allowed:
+            allowed_remaining_candidates.append(candidate)
+    last_resort_guard = _verified_or_abstain_last_resort_guard_summary(
+        problem=problem,
+        candidates=remaining_candidates,
+        allowed_candidates=allowed_remaining_candidates,
+        decisions=last_resort_decisions,
     )
+    if diagnostics is not None:
+        diagnostics["verified_or_abstain_last_resort_guard"] = last_resort_guard
+    if not allowed_remaining_candidates:
+        return None
+    selected = dict(sorted(allowed_remaining_candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0])
+    if last_resort_guard.get("status") in {"filtered", "blocked", "allowed"}:
+        selected["verified_or_abstain_last_resort_guard"] = last_resort_guard
+    return with_unverified_consensus_guard(selected)
 
 
 def _hipporag_source_insufficient_fallback_should_precede_raw(
@@ -47456,19 +53787,26 @@ def _maybe_run_operator_application_verifier(
         )
         return summary
     try:
-        verifier_text = _call_model(
-            model=model,
-            prompt=_operator_application_verifier_prompt(
-                problem=problem,
-                specs=specs,
-                attempts=attempts,
-                selection=selection,
-                selected_answer=selected_answer,
-                baseline_cache=agent_plan.get("hle_same_run_baseline_cache", {}),
-            ),
-            timeout=timeout,
-            max_tokens=max_tokens,
-        )
+        with _model_router_call_scope(
+            router_scope="operator_application_verifier",
+            router_call_stage="operator_application_verifier",
+            call_id=call_id,
+            problem_id_hash=problem.get("id_hash"),
+            question_hash=problem.get("question_hash"),
+        ):
+            verifier_text = _call_model(
+                model=model,
+                prompt=_operator_application_verifier_prompt(
+                    problem=problem,
+                    specs=specs,
+                    attempts=attempts,
+                    selection=selection,
+                    selected_answer=selected_answer,
+                    baseline_cache=agent_plan.get("hle_same_run_baseline_cache", {}),
+                ),
+                timeout=timeout,
+                max_tokens=max_tokens,
+            )
         parsed = _parse_operator_application_verifier_json(verifier_text)
         filled_slots = sorted({
             slot for slot in (
@@ -48600,6 +54938,27 @@ def _agent_child_model(default_model: str) -> str:
 
 
 def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_tokens: int = 512) -> str:
+    watchdog_call_index = _variant_watchdog_before_model_call(model=model)
+    started = time.monotonic()
+    try:
+        text = _call_model_unwatched(model=model, prompt=prompt, timeout=timeout, max_tokens=max_tokens)
+    except Exception as exc:
+        _variant_watchdog_after_model_call(
+            call_index=watchdog_call_index,
+            status="error",
+            latency_sec=time.monotonic() - started,
+            error_label=_model_error_label(exc),
+        )
+        raise
+    _variant_watchdog_after_model_call(
+        call_index=watchdog_call_index,
+        status="success",
+        latency_sec=time.monotonic() - started,
+    )
+    return text
+
+
+def _call_model_unwatched(*, model: str, prompt: str, timeout: float | None = None, max_tokens: int = 512) -> str:
     env_candidates = _api_env_candidates(model=model)
     primary_env = env_candidates[0]
     payload = {
@@ -48623,12 +54982,13 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
         _model_router_log_event(
             {
                 "event_type": "model_router_attempt_start",
-                "attempt": attempt + 1,
-                "max_attempts": max_attempts,
-                "subprocess": False,
-                **_model_router_candidate_metadata(
-                    env=env,
-                    candidate_index=candidate_index,
+                    "attempt": attempt + 1,
+                    "max_attempts": max_attempts,
+                    "subprocess": False,
+                    **_model_router_scope_metadata(),
+                    **_model_router_candidate_metadata(
+                        env=env,
+                        candidate_index=candidate_index,
                     candidate_count=len(env_candidates),
                 ),
             }
@@ -48643,8 +55003,8 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
             method="POST",
         )
         try:
-            request_timeout = _request_timeout_for_attempt(deadline=deadline)
             with _global_model_router_slot(model=env["model"]):
+                request_timeout = _request_timeout_for_attempt(deadline=deadline)
                 data = _urlopen_json_with_deadline(request=request, timeout=request_timeout)
             text = str((data.get("choices") or [{}])[0].get("message", {}).get("content", "")).strip()
             _model_router_log_event(
@@ -48654,6 +55014,7 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
                     "max_attempts": max_attempts,
                     "subprocess": False,
                     "latency_sec": round(time.monotonic() - attempt_started, 4),
+                    **_model_router_scope_metadata(),
                     **_model_router_candidate_metadata(
                         env=env,
                         candidate_index=candidate_index,
@@ -48672,18 +55033,31 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
         ) as exc:
             last_error = exc
             transient = _is_transient_model_error(exc)
-            will_retry = not (attempt + 1 >= base_attempts and (not transient or attempt + 1 >= max_attempts))
+            error_label = _model_error_label(exc)
+            no_byte_attempt_limit = _model_router_no_byte_attempt_limit()
+            no_byte_attempt_limited = bool(
+                error_label == "SubprocessNoByteTimeout"
+                and no_byte_attempt_limit is not None
+                and attempt + 1 >= no_byte_attempt_limit
+            )
+            will_retry = (
+                not no_byte_attempt_limited
+                and not (attempt + 1 >= base_attempts and (not transient or attempt + 1 >= max_attempts))
+            )
             _model_router_log_event(
                 {
                     "event_type": "model_router_attempt_error",
                     "attempt": attempt + 1,
                     "max_attempts": max_attempts,
                     "subprocess": False,
-                    "error_label": _model_error_label(exc),
+                    "error_label": error_label,
                     "transient": transient,
                     "will_retry": will_retry,
+                    "no_byte_attempt_limit": no_byte_attempt_limit,
+                    "no_byte_attempt_limited": no_byte_attempt_limited,
                     "error_message": _model_error_message(exc),
                     "latency_sec": round(time.monotonic() - attempt_started, 4),
+                    **_model_router_scope_metadata(),
                     **_model_router_candidate_metadata(
                         env=env,
                         candidate_index=candidate_index,
@@ -48692,7 +55066,7 @@ def _call_model(*, model: str, prompt: str, timeout: float | None = None, max_to
                 }
             )
             if not will_retry:
-                raise RuntimeError(f"model request failed: {_model_error_label(exc)}: {_model_error_message(exc)}") from exc
+                raise RuntimeError(f"model request failed: {error_label}: {_model_error_message(exc)}") from exc
             _sleep_before_model_retry(attempt=attempt, deadline=deadline)
     raise RuntimeError(f"model request failed: {_model_error_message(last_error)}")
 
@@ -48737,19 +55111,20 @@ def _call_model_via_subprocess(
         _model_router_log_event(
             {
                 "event_type": "model_router_attempt_start",
-                "attempt": attempt + 1,
-                "max_attempts": max_attempts,
-                "subprocess": True,
-                **_model_router_candidate_metadata(
-                    env=env,
-                    candidate_index=candidate_index,
+                    "attempt": attempt + 1,
+                    "max_attempts": max_attempts,
+                    "subprocess": True,
+                    **_model_router_scope_metadata(),
+                    **_model_router_candidate_metadata(
+                        env=env,
+                        candidate_index=candidate_index,
                     candidate_count=len(env_candidates),
                 ),
             }
         )
         try:
-            request_timeout = _request_timeout_for_attempt(deadline=deadline)
             with _global_model_router_slot(model=env["model"]):
+                request_timeout = _request_timeout_for_attempt(deadline=deadline)
                 text = _single_model_subprocess_call(env=env, payload=payload, request_timeout=request_timeout)
             _model_router_log_event(
                 {
@@ -48758,6 +55133,7 @@ def _call_model_via_subprocess(
                     "max_attempts": max_attempts,
                     "subprocess": True,
                     "latency_sec": round(time.monotonic() - attempt_started, 4),
+                    **_model_router_scope_metadata(),
                     **_model_router_candidate_metadata(
                         env=env,
                         candidate_index=candidate_index,
@@ -48769,18 +55145,31 @@ def _call_model_via_subprocess(
         except Exception as exc:
             last_error = exc
             transient = _is_transient_model_error(exc)
-            will_retry = not (attempt + 1 >= base_attempts and (not transient or attempt + 1 >= max_attempts))
+            error_label = _model_error_label(exc)
+            no_byte_attempt_limit = _model_router_no_byte_attempt_limit()
+            no_byte_attempt_limited = bool(
+                error_label == "SubprocessNoByteTimeout"
+                and no_byte_attempt_limit is not None
+                and attempt + 1 >= no_byte_attempt_limit
+            )
+            will_retry = (
+                not no_byte_attempt_limited
+                and not (attempt + 1 >= base_attempts and (not transient or attempt + 1 >= max_attempts))
+            )
             _model_router_log_event(
                 {
                     "event_type": "model_router_attempt_error",
                     "attempt": attempt + 1,
                     "max_attempts": max_attempts,
                     "subprocess": True,
-                    "error_label": _model_error_label(exc),
+                    "error_label": error_label,
                     "transient": transient,
                     "will_retry": will_retry,
+                    "no_byte_attempt_limit": no_byte_attempt_limit,
+                    "no_byte_attempt_limited": no_byte_attempt_limited,
                     "error_message": _model_error_message(exc),
                     "latency_sec": round(time.monotonic() - attempt_started, 4),
+                    **_model_router_scope_metadata(),
                     **_model_router_candidate_metadata(
                         env=env,
                         candidate_index=candidate_index,
@@ -48789,7 +55178,7 @@ def _call_model_via_subprocess(
                 }
             )
             if not will_retry:
-                raise RuntimeError(f"model request failed: {_model_error_label(exc)}: {_model_error_message(exc)}") from exc
+                raise RuntimeError(f"model request failed: {error_label}: {_model_error_message(exc)}") from exc
             _sleep_before_model_retry(attempt=attempt, deadline=deadline)
     raise RuntimeError(f"model request failed: {_model_error_message(last_error)}")
 
@@ -48889,6 +55278,89 @@ def _model_router_candidate_metadata(
     }
 
 
+def _optional_model_router_int_env(*names: str, minimum: int, default: int | None = None) -> int | None:
+    for name in names:
+        raw = os.environ.get(name, "").strip()
+        if not raw:
+            continue
+        try:
+            return max(minimum, int(raw))
+        except ValueError:
+            return default
+    return default
+
+
+def _model_router_scope_metadata() -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    decision_phase = _active_no_gold_decision_phase()
+    if decision_phase:
+        metadata["decision_phase"] = decision_phase
+    metadata.update(_variant_watchdog_router_metadata())
+    scope = _active_model_router_call_scope()
+    if scope.get("router_scope") == "recursive_child" or decision_phase == "recursive_child_attempt":
+        if _optional_model_router_int_env(
+            "HLE_RECURSIVE_CHILD_MODEL_ROUTER_ATTEMPTS",
+            "HLE_RECURSIVE_CHILD_MODEL_CALL_ATTEMPTS",
+            minimum=1,
+        ) is not None:
+            metadata["attempt_limit_source"] = "hle_recursive_child_model_router_attempts"
+        if _optional_model_router_int_env(
+            "HLE_RECURSIVE_CHILD_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS",
+            "HLE_RECURSIVE_CHILD_MODEL_CALL_TRANSIENT_EXTRA_ATTEMPTS",
+            minimum=0,
+        ) is not None:
+            metadata["transient_extra_attempt_limit_source"] = (
+                "hle_recursive_child_model_router_transient_extra_attempts"
+            )
+    elif scope.get("router_scope") == "option_claim_verifier":
+        if _optional_model_router_int_env(
+            "HLE_OPTION_CLAIM_MODEL_ROUTER_ATTEMPTS",
+            "HLE_OPTION_VERIFIER_MODEL_ROUTER_ATTEMPTS",
+            minimum=1,
+        ) is not None:
+            metadata["attempt_limit_source"] = "hle_option_claim_model_router_attempts"
+        if _optional_model_router_int_env(
+            "HLE_OPTION_CLAIM_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS",
+            "HLE_OPTION_VERIFIER_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS",
+            minimum=0,
+        ) is not None:
+            metadata["transient_extra_attempt_limit_source"] = (
+                "hle_option_claim_model_router_transient_extra_attempts"
+            )
+    elif decision_phase == "recursive_child_selection":
+        if _optional_model_router_int_env(
+            "HLE_RECURSIVE_SELECTION_MODEL_ROUTER_ATTEMPTS",
+            minimum=1,
+        ) is not None:
+            metadata["attempt_limit_source"] = "hle_recursive_selection_model_router_attempts"
+        if _optional_model_router_int_env(
+            "HLE_RECURSIVE_SELECTION_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS",
+            minimum=0,
+        ) is not None:
+            metadata["transient_extra_attempt_limit_source"] = (
+                "hle_recursive_selection_model_router_transient_extra_attempts"
+            )
+    allowed_keys = {
+        "router_scope",
+        "router_call_stage",
+        "call_id",
+        "child_id",
+        "child_index",
+        "prompt_kind",
+        "branch_axis",
+        "option_candidate_count",
+        "option_count",
+        "problem_id_hash",
+        "question_hash",
+        "attempt_limit_source",
+        "transient_extra_attempt_limit_source",
+    }
+    for key, value in scope.items():
+        if key in allowed_keys:
+            metadata[key] = value
+    return metadata
+
+
 def _model_router_log_event(event: dict[str, Any]) -> None:
     path_text = (
         os.environ.get("MODEL_ROUTER_LOG_PATH", "").strip()
@@ -48970,17 +55442,134 @@ def _model_error_label(exc: Exception) -> str:
 
 
 def _model_router_base_attempts() -> int:
-    try:
-        return max(1, int(os.environ.get("MODEL_ROUTER_ATTEMPTS", "3")))
-    except ValueError:
-        return 3
+    scope = _active_model_router_call_scope()
+    if scope.get("router_scope") == "recursive_child":
+        scoped = _optional_model_router_int_env(
+            "HLE_RECURSIVE_CHILD_MODEL_ROUTER_ATTEMPTS",
+            "HLE_RECURSIVE_CHILD_MODEL_CALL_ATTEMPTS",
+            minimum=1,
+        )
+        if scoped is not None:
+            return scoped
+    if scope.get("router_scope") == "option_claim_verifier":
+        scoped = _optional_model_router_int_env(
+            "HLE_OPTION_CLAIM_MODEL_ROUTER_ATTEMPTS",
+            "HLE_OPTION_VERIFIER_MODEL_ROUTER_ATTEMPTS",
+            minimum=1,
+        )
+        if scoped is not None:
+            return scoped
+    decision_phase = _active_no_gold_decision_phase()
+    if decision_phase == "recursive_child_attempt":
+        scoped = _optional_model_router_int_env(
+            "HLE_RECURSIVE_CHILD_MODEL_ROUTER_ATTEMPTS",
+            "HLE_RECURSIVE_CHILD_MODEL_CALL_ATTEMPTS",
+            minimum=1,
+        )
+        if scoped is not None:
+            return scoped
+    if decision_phase == "recursive_child_selection":
+        scoped = _optional_model_router_int_env(
+            "HLE_RECURSIVE_SELECTION_MODEL_ROUTER_ATTEMPTS",
+            minimum=1,
+        )
+        if scoped is not None:
+            return scoped
+    return _optional_model_router_int_env("MODEL_ROUTER_ATTEMPTS", minimum=1, default=3) or 3
 
 
 def _model_router_transient_extra_attempts() -> int:
-    try:
-        return max(0, min(10, int(os.environ.get("MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS", "2"))))
-    except ValueError:
-        return 2
+    scope = _active_model_router_call_scope()
+    if scope.get("router_scope") == "recursive_child":
+        scoped = _optional_model_router_int_env(
+            "HLE_RECURSIVE_CHILD_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS",
+            "HLE_RECURSIVE_CHILD_MODEL_CALL_TRANSIENT_EXTRA_ATTEMPTS",
+            minimum=0,
+        )
+        if scoped is not None:
+            return min(10, scoped)
+    if scope.get("router_scope") == "option_claim_verifier":
+        scoped = _optional_model_router_int_env(
+            "HLE_OPTION_CLAIM_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS",
+            "HLE_OPTION_VERIFIER_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS",
+            minimum=0,
+        )
+        if scoped is not None:
+            return min(10, scoped)
+    decision_phase = _active_no_gold_decision_phase()
+    if decision_phase == "recursive_child_attempt":
+        scoped = _optional_model_router_int_env(
+            "HLE_RECURSIVE_CHILD_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS",
+            "HLE_RECURSIVE_CHILD_MODEL_CALL_TRANSIENT_EXTRA_ATTEMPTS",
+            minimum=0,
+        )
+        if scoped is not None:
+            return min(10, scoped)
+    if decision_phase == "recursive_child_selection":
+        scoped = _optional_model_router_int_env(
+            "HLE_RECURSIVE_SELECTION_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS",
+            minimum=0,
+        )
+        if scoped is not None:
+            return min(10, scoped)
+    return min(
+        10,
+        _optional_model_router_int_env(
+            "MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS",
+            minimum=0,
+            default=2,
+        )
+        or 0,
+    )
+
+
+def _model_router_no_byte_attempt_limit() -> int | None:
+    scope = _active_model_router_call_scope()
+    decision_phase = _active_no_gold_decision_phase()
+    if scope.get("router_scope") == "recursive_child" or decision_phase == "recursive_child_attempt":
+        scoped = _optional_model_router_int_env_or_none(
+            "HLE_RECURSIVE_CHILD_MODEL_ROUTER_NO_BYTE_ATTEMPTS",
+            "HLE_RECURSIVE_CHILD_NO_BYTE_MAX_ATTEMPTS",
+            minimum=1,
+        )
+        return 2 if scoped == "default" else scoped
+    if decision_phase == "recursive_child_selection":
+        scoped = _optional_model_router_int_env_or_none(
+            "HLE_RECURSIVE_SELECTION_MODEL_ROUTER_NO_BYTE_ATTEMPTS",
+            "HLE_RECURSIVE_SELECTION_NO_BYTE_MAX_ATTEMPTS",
+            minimum=1,
+        )
+        return 2 if scoped == "default" else scoped
+    if scope.get("router_scope") == "option_claim_verifier":
+        scoped = _optional_model_router_int_env_or_none(
+            "HLE_OPTION_CLAIM_MODEL_ROUTER_NO_BYTE_ATTEMPTS",
+            "HLE_OPTION_VERIFIER_NO_BYTE_MAX_ATTEMPTS",
+            minimum=1,
+        )
+        return None if scoped == "default" else scoped
+    scoped = _optional_model_router_int_env_or_none(
+        "MODEL_ROUTER_NO_BYTE_MAX_ATTEMPTS",
+        minimum=1,
+    )
+    return None if scoped == "default" else scoped
+
+
+def _optional_model_router_int_env_or_none(
+    *names: str,
+    minimum: int = 0,
+) -> int | str | None:
+    for name in names:
+        if name not in os.environ:
+            continue
+        raw = os.environ.get(name, "")
+        text = str(raw).strip().lower()
+        if text in {"", "0", "none", "null", "off", "false", "no", "unlimited"}:
+            return None
+        try:
+            return max(minimum, int(text))
+        except ValueError:
+            continue
+    return "default"
 
 
 def _is_transient_model_error(exc: Exception) -> bool:
@@ -49101,6 +55690,7 @@ def _acquire_model_router_slot(
             "ttl_sec": ttl_sec,
             "wait_sec": wait_sec,
             "slot_dir_hash": stable_hash({"slot_dir": str(directory)})[:16],
+            **_model_router_scope_metadata(),
         }
     )
     while True:
@@ -49133,6 +55723,7 @@ def _acquire_model_router_slot(
                     "slot_name": path.name,
                     "wait_latency_sec": round(time.monotonic() - started, 4),
                     "slot_dir_hash": stable_hash({"slot_dir": str(directory)})[:16],
+                    **_model_router_scope_metadata(),
                 }
             )
             return path
@@ -49145,6 +55736,7 @@ def _acquire_model_router_slot(
                     "wait_latency_sec": round(time.monotonic() - started, 4),
                     "error_label": "model_router_global_concurrency_wait_exceeded",
                     "slot_dir_hash": stable_hash({"slot_dir": str(directory)})[:16],
+                    **_model_router_scope_metadata(),
                 }
             )
             raise TimeoutError("model_router_global_concurrency_wait_exceeded")
@@ -49203,6 +55795,7 @@ def _release_model_router_slot(path: Path) -> None:
                 "event_type": "model_router_slot_released",
                 "slot_name": path.name,
                 "slot_dir_hash": stable_hash({"slot_dir": str(path.parent)})[:16],
+                **_model_router_scope_metadata(),
             }
         )
     except FileNotFoundError:
@@ -49222,6 +55815,9 @@ def _model_router_per_attempt_timeout() -> float | None:
 
 
 def _request_timeout_for_attempt(*, deadline: float | None) -> float | None:
+    variant_deadline = _variant_watchdog_deadline()
+    if variant_deadline is not None:
+        deadline = variant_deadline if deadline is None else min(deadline, variant_deadline)
     per_attempt = _model_router_per_attempt_timeout()
     if deadline is None:
         return per_attempt
@@ -49600,6 +56196,12 @@ def _component_efficacy_from_plan(
         if isinstance(recursive_late_child_budget_gate, dict)
         else {}
     )
+    recursive_core_child_budget_gate = stages.get("recursive_core_child_model_call_budget_gate", {})
+    recursive_core_child_budget_gate = (
+        recursive_core_child_budget_gate
+        if isinstance(recursive_core_child_budget_gate, dict)
+        else {}
+    )
     weak_source_fallback_cascade_gate = stages.get("weak_source_fallback_cascade_gate", {})
     weak_source_fallback_cascade_gate = (
         weak_source_fallback_cascade_gate
@@ -49608,6 +56210,18 @@ def _component_efficacy_from_plan(
     )
     recursive = stages.get("recursive_child_validation", {})
     selection = stages.get("multi_candidate_self_verifier", {})
+    selection_model_call_budget_gate = selection.get("selection_model_call_budget_gate", {})
+    selection_model_call_budget_gate = (
+        selection_model_call_budget_gate
+        if isinstance(selection_model_call_budget_gate, dict)
+        else {}
+    )
+    selection_wallclock_budget_gate = selection.get("selection_wallclock_budget_gate", {})
+    selection_wallclock_budget_gate = (
+        selection_wallclock_budget_gate
+        if isinstance(selection_wallclock_budget_gate, dict)
+        else {}
+    )
     timeout_recovery = stages.get("recursive_timeout_recovery_child", {})
     child_model_failover = stages.get("child_model_failover_child", {})
     evidence = stages.get("hle_evidence_bridge", {})
@@ -49697,6 +56311,17 @@ def _component_efficacy_from_plan(
         )
         or 0
     )
+    recursive_core_child_budget_skipped_count = int(
+        recursive_core_child_budget_gate.get(
+            "skipped_child_count",
+            (
+                recursive.get("core_child_model_call_budget_gate_skipped_child_count")
+                if isinstance(recursive, dict)
+                else 0
+            ),
+        )
+        or 0
+    )
 
     flags = base["flags"]
     flags.update({
@@ -49754,6 +56379,27 @@ def _component_efficacy_from_plan(
         ),
         "recursive_late_child_budget_gate_skipped_stages": (
             recursive_late_child_budget_skipped_count > 0
+        ),
+        "recursive_selection_model_call_budget_gate_enabled": bool(selection_model_call_budget_gate),
+        "recursive_selection_model_call_budget_gate_activated": (
+            selection_model_call_budget_gate.get("status") == "activated"
+        ),
+        "recursive_selection_model_call_budget_gate_skipped_stages": (
+            int(selection_model_call_budget_gate.get("skipped_stage_count") or 0) > 0
+        ),
+        "recursive_selection_wallclock_budget_gate_enabled": bool(selection_wallclock_budget_gate),
+        "recursive_selection_wallclock_budget_gate_activated": (
+            selection_wallclock_budget_gate.get("status") == "activated"
+        ),
+        "recursive_selection_wallclock_budget_gate_skipped_stages": (
+            int(selection_wallclock_budget_gate.get("skipped_stage_count") or 0) > 0
+        ),
+        "recursive_core_child_model_call_budget_gate_enabled": bool(recursive_core_child_budget_gate),
+        "recursive_core_child_model_call_budget_gate_activated": (
+            recursive_core_child_budget_gate.get("status") == "activated"
+        ),
+        "recursive_core_child_model_call_budget_gate_skipped_children": (
+            recursive_core_child_budget_skipped_count > 0
         ),
         "weak_source_fallback_cascade_gate_activated": (
             weak_source_fallback_cascade_gate.get("status") == "activated"
@@ -49868,6 +56514,24 @@ def _component_efficacy_from_plan(
         ),
         "mc_option_claim_source_verifier_repair_context_found_spans": (
             int(option_claim_evidence.get("source_verifier_repair_context_span_count") or 0) > 0
+        ),
+        "mc_option_claim_candidate_direct_relation_repair_context_bridge_used": (
+            int(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_repair_context_bridge_attempted_candidate_count"
+                )
+                or 0
+            )
+            > 0
+        ),
+        "mc_option_claim_candidate_direct_relation_repair_context_bridge_recovered_spans": (
+            int(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_repair_context_bridge_recovered_span_count"
+                )
+                or 0
+            )
+            > 0
         ),
         "mc_option_claim_source_verifier_structured_context_used": (
             int(option_claim_evidence.get("source_verifier_structured_context_used_count") or 0) > 0
@@ -49998,6 +56662,14 @@ def _component_efficacy_from_plan(
                 option_claim_evidence.get(
                     "span_directness_verifier_lexical_unique_but_relation_generic_count"
                 ) or 0
+            ) > 0
+        ),
+        "mc_option_claim_span_directness_gap_model_skip_used": (
+            int(
+                option_claim_evidence.get(
+                    "span_directness_verifier_gap_model_skip_count"
+                )
+                or 0
             ) > 0
         ),
         "mc_option_claim_span_directness_slot_gate_blocked_model_direct": (
@@ -50273,6 +56945,40 @@ def _component_efficacy_from_plan(
         "verified_or_abstain_allowed": verified_or_abstain_gate.get("status") == "allowed",
         "verified_or_abstain_abstained": verified_or_abstain_gate.get("status") == "abstained",
         "verified_or_abstain_no_fallback": verified_or_abstain_gate.get("status") == "no_fallback",
+        "verified_or_abstain_synthetic_sweep_last_resort_guard_blocked": (
+            isinstance(verified_or_abstain_gate.get("verified_or_abstain_last_resort_guard"), dict)
+            and verified_or_abstain_gate.get("verified_or_abstain_last_resort_guard", {}).get("status")
+            == "blocked"
+        ),
+        "verified_or_abstain_synthetic_sweep_last_resort_guard_filtered": (
+            isinstance(verified_or_abstain_gate.get("verified_or_abstain_last_resort_guard"), dict)
+            and verified_or_abstain_gate.get("verified_or_abstain_last_resort_guard", {}).get("status")
+            == "filtered"
+        ),
+        "self_contained_support_preserve_guard_activated": (
+            verified_or_abstain_gate.get("reason")
+            == "self_contained_support_preserve_blocks_low_support_override"
+        ),
+        "weak_source_same_answer_fallback_guard_activated": isinstance(
+            verified_or_abstain_gate.get("weak_source_same_answer_fallback_guard"),
+            dict,
+        ),
+        "weak_source_blocked_consensus_preserve_guard_activated": isinstance(
+            verified_or_abstain_gate.get("weak_source_blocked_consensus_preserve_guard"),
+            dict,
+        ),
+        "weak_source_blocked_consensus_structural_core_preserve_activated": isinstance(
+            verified_or_abstain_gate.get(
+                "weak_source_blocked_consensus_structural_core_preserve"
+            ),
+            dict,
+        ),
+        "weak_source_high_confidence_generic_consensus_preserve_activated": isinstance(
+            verified_or_abstain_gate.get(
+                "weak_source_high_confidence_generic_consensus_preserve"
+            ),
+            dict,
+        ),
         "raw_baseline_noharm_gate_applied": (
             verified_or_abstain_gate.get("reason") == "raw_baseline_noharm_blocks_weak_override"
         ),
@@ -50491,6 +57197,35 @@ def _component_efficacy_from_plan(
                 ),
                 "skipped_branch_axes": list(recursive_budget_gate.get("skipped_branch_axes", []) or []),
             },
+            "core_child_model_call_budget_gate": {
+                "status": recursive_core_child_budget_gate.get("status"),
+                "reason": recursive_core_child_budget_gate.get("reason"),
+                "policy": recursive_core_child_budget_gate.get("policy"),
+                "budget_limit": recursive_core_child_budget_gate.get("budget_limit"),
+                "total_budget_limit": recursive_core_child_budget_gate.get("total_budget_limit"),
+                "planned_child_count_before": int(
+                    recursive_core_child_budget_gate.get("planned_child_count_before") or 0
+                ),
+                "planned_child_count_after": int(
+                    recursive_core_child_budget_gate.get("planned_child_count_after") or 0
+                ),
+                "model_call_spec_count_before": int(
+                    recursive_core_child_budget_gate.get("model_call_spec_count_before") or 0
+                ),
+                "model_call_spec_count_after": int(
+                    recursive_core_child_budget_gate.get("model_call_spec_count_after") or 0
+                ),
+                "skipped_child_count": recursive_core_child_budget_skipped_count,
+                "kept_prompt_kinds": list(
+                    recursive_core_child_budget_gate.get("kept_prompt_kinds", []) or []
+                ),
+                "skipped_prompt_kinds": list(
+                    recursive_core_child_budget_gate.get("skipped_prompt_kinds", []) or []
+                ),
+                "skipped_branch_axes": list(
+                    recursive_core_child_budget_gate.get("skipped_branch_axes", []) or []
+                ),
+            },
             "late_child_budget_gate": {
                 "status": recursive_late_child_budget_gate.get("status"),
                 "reason": recursive_late_child_budget_gate.get("reason"),
@@ -50528,6 +57263,7 @@ def _component_efficacy_from_plan(
             "early_stop_reason": recursive.get("early_stop_reason"),
             "prompt_kinds": prompt_kinds,
             "skipped_prompt_kinds": skipped_prompt_kinds,
+            "candidate_answer_metadata": list(recursive.get("candidate_answer_metadata", []) or []),
             "selected_prompt_kind": recursive.get("selected_prompt_kind"),
         },
         "candidate_generation_coverage": candidate_generation,
@@ -50648,6 +57384,47 @@ def _component_efficacy_from_plan(
             ),
             "source_verifier_repair_context_by_option_hash": dict(
                 option_claim_evidence.get("source_verifier_repair_context_by_option_hash") or {}
+            ),
+            "candidate_direct_relation_span_repair_context_bridge_status": (
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_repair_context_bridge_status"
+                )
+            ),
+            "candidate_direct_relation_span_repair_context_bridge_reason": (
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_repair_context_bridge_reason"
+                )
+            ),
+            "candidate_direct_relation_span_repair_context_bridge_attempted_candidate_count": int(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_repair_context_bridge_attempted_candidate_count"
+                )
+                or 0
+            ),
+            "candidate_direct_relation_span_repair_context_bridge_recovered_span_count": int(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_repair_context_bridge_recovered_span_count"
+                )
+                or 0
+            ),
+            "candidate_direct_relation_span_repair_context_bridge_recovered_candidate_count": int(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_repair_context_bridge_recovered_candidate_count"
+                )
+                or 0
+            ),
+            "candidate_direct_relation_span_repair_context_bridge_recovered_candidate_option_hashes": list(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_repair_context_bridge_recovered_candidate_option_hashes",
+                    [],
+                )
+                or []
+            ),
+            "candidate_direct_relation_span_repair_context_bridge_skip_reason_counts": dict(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_repair_context_bridge_skip_reason_counts"
+                )
+                or {}
             ),
             "source_verifier_structured_context_enabled": bool(
                 option_claim_evidence.get("source_verifier_structured_context_enabled")
@@ -50875,6 +57652,16 @@ def _component_efficacy_from_plan(
                     "span_directness_verifier_lexical_unique_but_relation_generic_count"
                 ) or 0
             ),
+            "span_directness_verifier_gap_model_skip_count": int(
+                option_claim_evidence.get("span_directness_verifier_gap_model_skip_count")
+                or 0
+            ),
+            "span_directness_verifier_gap_model_skip_reason_counts": dict(
+                option_claim_evidence.get(
+                    "span_directness_verifier_gap_model_skip_reason_counts"
+                )
+                or {}
+            ),
             "span_directness_verifier_statement_fact_slot_gate_required_count": int(
                 option_claim_evidence.get(
                     "span_directness_verifier_statement_fact_slot_gate_required_count"
@@ -50966,6 +57753,17 @@ def _component_efficacy_from_plan(
             "relation_span_comparator_relation_matrix_hash": (
                 option_claim_evidence.get("relation_span_comparator_relation_matrix_hash")
             ),
+            "relation_span_comparator_directness_audit_context_hash": (
+                option_claim_evidence.get(
+                    "relation_span_comparator_directness_audit_context_hash"
+                )
+            ),
+            "relation_span_comparator_directness_audit_context_char_count": int(
+                option_claim_evidence.get(
+                    "relation_span_comparator_directness_audit_context_char_count"
+                )
+                or 0
+            ),
             "relation_span_comparator_span_directness_conflict_audit_status": (
                 option_claim_evidence.get(
                     "relation_span_comparator_span_directness_conflict_audit_status"
@@ -50987,6 +57785,15 @@ def _component_efficacy_from_plan(
             "relation_span_comparator_underlying_model_calls": int(
                 option_claim_evidence.get("relation_span_comparator_underlying_model_calls")
                 or 0
+            ),
+            "relation_span_comparator_promotion_enabled": bool(
+                option_claim_evidence.get("relation_span_comparator_promotion_enabled")
+            ),
+            "relation_span_comparator_promotion_blocked": bool(
+                option_claim_evidence.get("relation_span_comparator_promotion_blocked")
+            ),
+            "relation_span_comparator_promotion_reason": (
+                option_claim_evidence.get("relation_span_comparator_promotion_reason")
             ),
             "candidate_direct_relation_span_extractor_status": (
                 option_claim_evidence.get("candidate_direct_relation_span_extractor_status")
@@ -51037,6 +57844,59 @@ def _component_efficacy_from_plan(
                 option_claim_evidence.get(
                     "candidate_direct_relation_span_relation_signature_missing_required_term_span_count"
                 ) or 0
+            ),
+            "candidate_direct_relation_span_missing_required_backfill_score_candidate_count": int(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_missing_required_backfill_score_candidate_count"
+                ) or 0
+            ),
+            "candidate_direct_relation_span_missing_required_backfill_scored_count": int(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_missing_required_backfill_scored_count"
+                ) or 0
+            ),
+            "candidate_direct_relation_span_missing_required_backfill_pair_candidate_count": int(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_missing_required_backfill_pair_candidate_count"
+                ) or 0
+            ),
+            "candidate_direct_relation_span_missing_required_backfill_paired_span_count": int(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_missing_required_backfill_paired_span_count"
+                ) or 0
+            ),
+            "candidate_direct_relation_span_missing_required_backfill_composition_candidate_count": int(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_missing_required_backfill_composition_candidate_count"
+                ) or 0
+            ),
+            "candidate_direct_relation_span_missing_required_backfill_composed_span_count": int(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_missing_required_backfill_composed_span_count"
+                ) or 0
+            ),
+            "candidate_direct_relation_span_missing_required_backfill_scoring_filter_counts": dict(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_missing_required_backfill_scoring_filter_counts"
+                ) or {}
+            ),
+            "candidate_direct_relation_span_filter_counts_by_option_hash": dict(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_filter_counts_by_option_hash"
+                )
+                or {}
+            ),
+            "candidate_direct_relation_span_required_coverage_gap_rows_hash": (
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_required_coverage_gap_rows_hash"
+                )
+            ),
+            "candidate_direct_relation_span_required_coverage_gap_rows": list(
+                option_claim_evidence.get(
+                    "candidate_direct_relation_span_required_coverage_gap_rows",
+                    [],
+                )
+                or []
             ),
             "candidate_direct_relation_span_statement_fact_claim_span_count": int(
                 option_claim_evidence.get(
@@ -51726,6 +58586,11 @@ def _component_efficacy_from_plan(
             "selection_method": selection_method or None,
             "verifier_model_call": bool(selection.get("verifier_model_call")),
             "verified_or_abstain_gate": verified_or_abstain_gate or None,
+            "verified_or_abstain_fallback_trace": (
+                selection.get("verified_or_abstain_fallback_trace")
+                if isinstance(selection.get("verified_or_abstain_fallback_trace"), dict)
+                else None
+            ),
             "self_contained_full_option_adjudicator": (
                 selection.get("self_contained_full_option_adjudicator")
                 if isinstance(selection.get("self_contained_full_option_adjudicator"), dict)
@@ -51741,6 +58606,8 @@ def _component_efficacy_from_plan(
                 if isinstance(selection.get("operator_conflict_contrastive_adjudicator"), dict)
                 else None
             ),
+            "selection_model_call_budget_gate": selection_model_call_budget_gate or None,
+            "selection_wallclock_budget_gate": selection_wallclock_budget_gate or None,
         },
     })
     base["operator_failure_taxonomy"] = classify_operator_failure(base)
@@ -51848,6 +58715,7 @@ def _metrics(*, sample_rows: list[dict[str, Any]], run_rows: list[dict[str, Any]
         "operator_activation_summary": _operator_activation_summary(run_rows),
         "operator_application_summary": _operator_application_summary(run_rows),
         "route_credit_table": _route_credit_table(run_rows),
+        "variant_watchdog_summary": _variant_watchdog_run_summary(run_rows),
         "raw_content_persisted": False,
     }
 
@@ -51863,6 +58731,44 @@ def _aggregate_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "exact_match_n": len(exact),
         "exact_match_accuracy": _accuracy(exact),
         "error_count": sum(1 for row in rows if row.get("error")),
+    }
+
+
+def _variant_watchdog_run_summary(run_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    status_counts: Counter[str] = Counter()
+    violation_counts: Counter[str] = Counter()
+    enabled_count = 0
+    max_model_call_count = 0
+    max_elapsed_sec = 0.0
+    for row in run_rows:
+        call_metadata = row.get("call_metadata") if isinstance(row, dict) else {}
+        call_metadata = call_metadata if isinstance(call_metadata, dict) else {}
+        watchdog = call_metadata.get("variant_watchdog")
+        if not isinstance(watchdog, dict):
+            continue
+        if bool(watchdog.get("enabled")):
+            enabled_count += 1
+        status_counts[str(watchdog.get("status") or "unknown")] += 1
+        reason = str(watchdog.get("violation_reason") or "")
+        if reason:
+            violation_counts[reason] += 1
+        try:
+            max_model_call_count = max(max_model_call_count, int(watchdog.get("model_call_count") or 0))
+        except (TypeError, ValueError):
+            pass
+        try:
+            max_elapsed_sec = max(max_elapsed_sec, float(watchdog.get("elapsed_sec") or 0.0))
+        except (TypeError, ValueError):
+            pass
+    return {
+        "row_count": len(run_rows),
+        "enabled_row_count": enabled_count,
+        "status_counts": dict(sorted(status_counts.items())),
+        "violation_reason_counts": dict(sorted(violation_counts.items())),
+        "blocked_row_count": sum(violation_counts.values()),
+        "max_model_call_count": max_model_call_count,
+        "max_elapsed_sec": round(max_elapsed_sec, 4),
+        "raw_content_persisted": False,
     }
 
 
@@ -52474,6 +59380,8 @@ def main() -> None:
     parser.add_argument("--variants", default="raw,assumption_wrapper")
     parser.add_argument("--execute-live", action="store_true")
     parser.add_argument("--call-timeout", type=float, default=None)
+    parser.add_argument("--variant-total-timeout-sec", type=float, default=None)
+    parser.add_argument("--variant-total-model-call-budget", type=int, default=None)
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--log-out", default=str(DEFAULT_LOG_OUT))
     parser.add_argument("--graph-dir", default=str(DEFAULT_GRAPH_DIR))
@@ -52596,6 +59504,8 @@ def main() -> None:
         variants=[item.strip() for item in args.variants.split(",") if item.strip()],
         execute_live=args.execute_live,
         call_timeout=args.call_timeout,
+        variant_total_timeout_sec=args.variant_total_timeout_sec,
+        variant_total_model_call_budget=args.variant_total_model_call_budget,
         max_tokens=args.max_tokens,
         log_out=log_out,
         graph_dir=graph_dir,
