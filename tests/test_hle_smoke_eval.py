@@ -11624,6 +11624,436 @@ class HleSmokeEvalTest(unittest.TestCase):
             1,
         )
 
+    def test_verified_or_abstain_last_resort_allows_sweep_with_strict_source_relation_signal(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. selected\nB. weak sweep\nC. source relation sweep",
+        }
+        attempts = [
+            {
+                "child_id": "selected",
+                "child_index": 1,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "sweep-b",
+                "child_index": 2,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "sweep-c",
+                "child_index": 3,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "C",
+                "parsed_answer_hash": "hc",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "mc_option_claim_evidence_verifier": {
+                    "source_quality_directness_promotion_detail": {
+                        "candidate_signal_rows": [
+                            {
+                                "label": "B",
+                                "source_quality_doc_count": 5,
+                                "support_doc_count": 3,
+                                "candidate_direct_relation_span_count": 2,
+                                "relation_required_overlap": 1,
+                                "relation_proximity": True,
+                                "refute_doc_count": 1,
+                            },
+                            {
+                                "label": "C",
+                                "source_quality_doc_count": 2,
+                                "support_doc_count": 2,
+                                "candidate_direct_relation_span_count": 2,
+                                "relation_required_overlap": 1,
+                                "relation_proximity": True,
+                                "refute_doc_count": 0,
+                                "ambiguous_doc_count": 0,
+                            },
+                        ],
+                    },
+                },
+            },
+        }
+        diagnostics = {}
+
+        fallback = _verified_or_abstain_fallback_candidate(
+            problem=problem,
+            attempts=attempts,
+            exclude_child_ids={"selected"},
+            agent_plan=agent_plan,
+            diagnostics=diagnostics,
+        )
+
+        self.assertIsNotNone(fallback)
+        self.assertEqual(fallback["child_id"], "sweep-c")
+        self.assertTrue(fallback["sweep_source_relation_signal"])
+        guard = fallback["verified_or_abstain_last_resort_guard"]
+        self.assertEqual(guard["status"], "filtered")
+        self.assertEqual(guard["allowed_candidate_count"], 1)
+        self.assertEqual(
+            guard["decision_reasons"],
+            {
+                "synthetic_option_sweep_candidate_has_source_relation_signal": 1,
+                "synthetic_option_sweep_candidate_lacks_direct_signal_or_model_support": 1,
+            },
+        )
+
+    def test_verified_or_abstain_last_resort_ranks_sweep_relation_signal_over_unverified_late_candidate(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. selected\nB. late model\nC. relation sweep",
+        }
+        attempts = [
+            {
+                "child_id": "selected",
+                "child_index": 1,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "late-model",
+                "child_index": 2,
+                "prompt_kind": "operator_application_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "sweep-c",
+                "child_index": 3,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "C",
+                "parsed_answer_hash": "hc",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "mc_option_claim_evidence_verifier": {
+                    "source_quality_directness_promotion_detail": {
+                        "candidate_signal_rows": [
+                            {
+                                "label": "C",
+                                "source_quality_doc_count": 3,
+                                "support_doc_count": 2,
+                                "candidate_direct_relation_span_count": 2,
+                                "relation_required_overlap": 1,
+                                "relation_signature_proximity": True,
+                                "refute_doc_count": 0,
+                                "ambiguous_doc_count": 0,
+                            },
+                        ],
+                    },
+                },
+            },
+        }
+
+        fallback = _verified_or_abstain_fallback_candidate(
+            problem=problem,
+            attempts=attempts,
+            exclude_child_ids={"selected"},
+            agent_plan=agent_plan,
+        )
+
+        self.assertIsNotNone(fallback)
+        self.assertEqual(fallback["child_id"], "sweep-c")
+        self.assertEqual(
+            fallback["sweep_source_relation_signal_reason"],
+            "strict_source_relation_signal",
+        )
+
+    def test_verified_or_abstain_last_resort_ranks_sweep_relation_over_weak_source_supported_candidate(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. selected\nB. weak source\nC. relation sweep",
+        }
+        attempts = [
+            {
+                "child_id": "selected",
+                "child_index": 1,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "weak-source",
+                "child_index": 2,
+                "prompt_kind": "answer_bearing_evidence_candidate",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+                "source_supported_evidence_candidate": True,
+            },
+            {
+                "child_id": "sweep-c",
+                "child_index": 3,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "C",
+                "parsed_answer_hash": "hc",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "mc_option_claim_evidence_verifier": {
+                    "source_quality_directness_promotion_detail": {
+                        "candidate_signal_rows": [
+                            {
+                                "label": "C",
+                                "source_quality_doc_count": 2,
+                                "support_doc_count": 2,
+                                "candidate_direct_relation_span_count": 2,
+                                "relation_required_overlap": 1,
+                                "relation_proximity": True,
+                                "refute_doc_count": 0,
+                                "ambiguous_doc_count": 0,
+                            },
+                        ],
+                    },
+                },
+            },
+        }
+
+        fallback = _verified_or_abstain_fallback_candidate(
+            problem=problem,
+            attempts=attempts,
+            exclude_child_ids={"selected"},
+            agent_plan=agent_plan,
+        )
+
+        self.assertIsNotNone(fallback)
+        self.assertEqual(fallback["child_id"], "sweep-c")
+
+    def test_verified_or_abstain_sweep_relation_challenges_unverified_consensus(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. selected\nB. weak consensus\nC. relation sweep",
+        }
+        attempts = [
+            {
+                "child_id": "selected",
+                "child_index": 1,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "direct-b",
+                "child_index": 2,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "context-b",
+                "child_index": 3,
+                "prompt_kind": "agent_context_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "sweep-c",
+                "child_index": 4,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "C",
+                "parsed_answer_hash": "hc",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "mc_option_claim_evidence_verifier": {
+                    "source_quality_directness_promotion_detail": {
+                        "candidate_signal_rows": [
+                            {
+                                "label": "C",
+                                "source_quality_doc_count": 3,
+                                "support_doc_count": 2,
+                                "candidate_direct_relation_span_count": 2,
+                                "relation_required_overlap": 1,
+                                "relation_proximity": True,
+                                "refute_doc_count": 0,
+                                "ambiguous_doc_count": 0,
+                            },
+                        ],
+                    },
+                },
+            },
+        }
+
+        fallback = _verified_or_abstain_fallback_candidate(
+            problem=problem,
+            attempts=attempts,
+            exclude_child_ids={"selected"},
+            agent_plan=agent_plan,
+        )
+
+        self.assertIsNotNone(fallback)
+        self.assertEqual(fallback["child_id"], "sweep-c")
+        self.assertEqual(
+            fallback["verified_or_abstain_fallback_policy"],
+            "sweep_source_relation_challenges_unverified_consensus",
+        )
+        self.assertEqual(
+            fallback["sweep_source_relation_consensus_challenge"]["reason"],
+            "strict_source_relation_signal_over_unverified_consensus",
+        )
+
+    def test_verified_or_abstain_sweep_relation_does_not_challenge_ambiguous_source_rejection(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. selected\nB. consensus\nC. ambiguous relation sweep",
+        }
+        attempts = [
+            {
+                "child_id": "selected",
+                "child_index": 1,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "direct-b",
+                "child_index": 2,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "context-b",
+                "child_index": 3,
+                "prompt_kind": "agent_context_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "sweep-c",
+                "child_index": 4,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "C",
+                "parsed_answer_hash": "hc",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "mc_option_claim_evidence_verifier": {
+                    "source_quality_directness_promotion_detail": {
+                        "candidate_signal_rows": [
+                            {
+                                "label": "C",
+                                "source_quality_doc_count": 3,
+                                "support_doc_count": 3,
+                                "candidate_direct_relation_span_count": 2,
+                                "relation_required_overlap": 2,
+                                "relation_proximity": True,
+                                "source_verifier_rejection_reason": "no_selected_label_ambiguous",
+                            },
+                        ],
+                    },
+                },
+            },
+        }
+
+        fallback = _verified_or_abstain_fallback_candidate(
+            problem=problem,
+            attempts=attempts,
+            exclude_child_ids={"selected"},
+            agent_plan=agent_plan,
+        )
+
+        self.assertIsNotNone(fallback)
+        self.assertEqual(fallback["parsed_answer"], "B")
+        self.assertEqual(
+            fallback["verified_or_abstain_fallback_policy"],
+            "unverified_consensus",
+        )
+        self.assertNotIn("sweep_source_relation_consensus_challenge", fallback)
+
+    def test_verified_or_abstain_sweep_relation_recovers_after_weak_source_blocked_consensus(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. weak consensus\nB. weak fallback\nC. relation sweep",
+        }
+        attempts = [
+            {
+                "child_id": "direct-a",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "context-a",
+                "child_index": 2,
+                "prompt_kind": "agent_context_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "constraint-b",
+                "child_index": 3,
+                "prompt_kind": "constraint_checked_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "sweep-c",
+                "child_index": 4,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "C",
+                "parsed_answer_hash": "hc",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "weak_source_fallback_cascade_gate": {
+                    "status": "activated",
+                    "reason": "source_verifier_exhausted_generic_or_indirect_low_confidence_evidence",
+                    "source_verifier_attempt_count": 2,
+                    "source_verifier_accepted_attempt_count": 0,
+                    "source_verifier_direct_high_confidence_count": 0,
+                    "source_verifier_relation_counts": {"generic": 1, "none": 1},
+                    "source_verifier_confidence_counts": {"low": 1, "none": 1},
+                },
+                "mc_option_claim_evidence_verifier": {
+                    "source_quality_directness_promotion_detail": {
+                        "candidate_signal_rows": [
+                            {
+                                "label": "C",
+                                "source_quality_doc_count": 2,
+                                "support_doc_count": 2,
+                                "candidate_direct_relation_span_count": 2,
+                                "relation_required_overlap": 1,
+                                "relation_proximity": True,
+                                "refute_doc_count": 0,
+                                "ambiguous_doc_count": 0,
+                            },
+                        ],
+                    },
+                },
+            },
+        }
+
+        fallback = _verified_or_abstain_fallback_candidate(
+            problem=problem,
+            attempts=attempts,
+            agent_plan=agent_plan,
+        )
+
+        self.assertIsNotNone(fallback)
+        self.assertEqual(fallback["child_id"], "sweep-c")
+        self.assertEqual(
+            fallback["verified_or_abstain_fallback_policy"],
+            "sweep_source_relation_after_blocked_weak_source_consensus",
+        )
+        self.assertEqual(
+            fallback["sweep_source_relation_consensus_challenge"]["reason"],
+            "strict_source_relation_signal_after_weak_source_blocked_consensus",
+        )
+
     def test_verified_or_abstain_blocks_self_contained_override_against_same_run_consensus(self):
         problem = {
             "answer_type": "multipleChoice",

@@ -13634,6 +13634,178 @@ def _maybe_add_mc_option_sweep_candidates(
     }
 
 
+def _sweep_source_relation_signal_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    try:
+        refute_doc_count = int(row.get("refute_doc_count") or 0)
+    except (TypeError, ValueError):
+        refute_doc_count = 0
+    try:
+        ambiguous_doc_count = int(row.get("ambiguous_doc_count") or 0)
+    except (TypeError, ValueError):
+        ambiguous_doc_count = 0
+    try:
+        source_quality_doc_count = int(row.get("source_quality_doc_count") or 0)
+    except (TypeError, ValueError):
+        source_quality_doc_count = 0
+    try:
+        support_doc_count = int(row.get("support_doc_count") or 0)
+    except (TypeError, ValueError):
+        support_doc_count = 0
+    try:
+        answer_web_directish_count = int(row.get("answer_web_directish_count") or 0)
+    except (TypeError, ValueError):
+        answer_web_directish_count = 0
+    try:
+        answer_web_slot_covered_count = int(row.get("answer_web_relation_slot_covered_count") or 0)
+    except (TypeError, ValueError):
+        answer_web_slot_covered_count = 0
+    try:
+        required_overlap = int(row.get("relation_required_overlap") or 0)
+    except (TypeError, ValueError):
+        required_overlap = 0
+    try:
+        span_count = int(row.get("candidate_direct_relation_span_count") or 0)
+    except (TypeError, ValueError):
+        span_count = 0
+    relation_proximity = bool(
+        row.get("relation_proximity")
+        or row.get("relation_signature_proximity")
+        or int(row.get("answer_web_relation_proximity_count") or 0) > 0
+    )
+    rejection_reason = str(row.get("source_verifier_rejection_reason") or "").strip().lower()
+    semantically_rejected = any(
+        marker in rejection_reason
+        for marker in ("generic", "indirect", "refut", "zero_quality", "not_answer_bearing")
+    )
+    semantically_rejected = bool(semantically_rejected or "ambiguous" in rejection_reason)
+    has_evidence = bool(
+        source_quality_doc_count > 0
+        or support_doc_count > 0
+        or answer_web_directish_count > 0
+        or answer_web_slot_covered_count > 0
+    )
+    allowed = bool(
+        refute_doc_count <= 0
+        and ambiguous_doc_count <= 1
+        and not semantically_rejected
+        and has_evidence
+        and (
+            (source_quality_doc_count >= 2 and support_doc_count >= 2)
+            or (answer_web_directish_count > 0 and source_quality_doc_count + support_doc_count >= 1)
+            or answer_web_slot_covered_count > 0
+        )
+        and relation_proximity
+        and required_overlap > 0
+        and span_count > 0
+    )
+    score = (
+        3.0 * min(span_count, 4)
+        + 2.0 * min(required_overlap, 4)
+        + 1.5 * min(source_quality_doc_count, 6)
+        + 1.0 * min(support_doc_count, 6)
+        + 1.0 * min(answer_web_directish_count, 4)
+        + 0.5 * min(answer_web_slot_covered_count, 4)
+    )
+    if not allowed:
+        if refute_doc_count > 0:
+            reason = "has_refuting_docs"
+        elif ambiguous_doc_count > 1:
+            reason = "too_ambiguous"
+        elif semantically_rejected:
+            reason = "semantic_source_rejection"
+        elif not has_evidence:
+            reason = "missing_source_evidence"
+        elif source_quality_doc_count < 2 or support_doc_count < 2:
+            reason = "weak_source_relation_evidence"
+        elif not relation_proximity:
+            reason = "missing_relation_proximity"
+        elif required_overlap <= 0:
+            reason = "missing_required_relation_overlap"
+        elif span_count <= 0:
+            reason = "missing_candidate_direct_relation_span"
+        else:
+            reason = "blocked"
+    else:
+        reason = "strict_source_relation_signal"
+    return {
+        "allowed": allowed,
+        "reason": reason,
+        "score": round(score, 4) if allowed else 0.0,
+        "source_quality_doc_count": source_quality_doc_count,
+        "support_doc_count": support_doc_count,
+        "answer_web_directish_count": answer_web_directish_count,
+        "answer_web_relation_slot_covered_count": answer_web_slot_covered_count,
+        "relation_required_overlap": required_overlap,
+        "candidate_direct_relation_span_count": span_count,
+        "relation_proximity": relation_proximity,
+        "refute_doc_count": refute_doc_count,
+        "ambiguous_doc_count": ambiguous_doc_count,
+        "source_verifier_rejection_reason": rejection_reason,
+    }
+
+
+def _annotate_synthetic_option_sweep_candidates_from_agent_plan(
+    *,
+    problem: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    agent_plan: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    if problem.get("answer_type") != "multipleChoice" or not isinstance(agent_plan, dict):
+        return candidates
+    stages = agent_plan.get("stages") if isinstance(agent_plan.get("stages"), dict) else {}
+    claim_summary = (
+        stages.get("mc_option_claim_evidence_verifier")
+        if isinstance(stages.get("mc_option_claim_evidence_verifier"), dict)
+        else {}
+    )
+    directness_detail = claim_summary.get("source_quality_directness_promotion_detail")
+    directness_detail = directness_detail if isinstance(directness_detail, dict) else {}
+    rows_by_label: dict[str, dict[str, Any]] = {}
+    for row in directness_detail.get("candidate_signal_rows", []) or []:
+        if not isinstance(row, dict):
+            continue
+        label = str(row.get("label") or "").strip()
+        if label and label not in rows_by_label:
+            rows_by_label[label] = row
+    if not rows_by_label:
+        return candidates
+    annotated: list[dict[str, Any]] = []
+    for candidate in candidates:
+        if not _is_synthetic_option_sweep_candidate(candidate):
+            annotated.append(candidate)
+            continue
+        answer = str(candidate.get("parsed_answer") or "").strip()
+        canonical, _ = _canonicalize_multiple_choice_answer(problem, answer)
+        row = rows_by_label.get(canonical)
+        if not row:
+            annotated.append(candidate)
+            continue
+        signal = _sweep_source_relation_signal_from_row(row)
+        if not bool(signal.get("allowed")):
+            annotated.append(candidate)
+            continue
+        out = dict(candidate)
+        out.update({
+            "sweep_source_relation_signal": True,
+            "sweep_source_relation_signal_policy": "strict_source_relation_sweep_last_resort_v1",
+            "sweep_source_relation_signal_reason": signal.get("reason"),
+            "sweep_source_relation_signal_score": signal.get("score"),
+            "sweep_source_relation_source_quality_doc_count": signal.get("source_quality_doc_count"),
+            "sweep_source_relation_support_doc_count": signal.get("support_doc_count"),
+            "sweep_source_relation_answer_web_directish_count": signal.get("answer_web_directish_count"),
+            "sweep_source_relation_required_overlap": signal.get("relation_required_overlap"),
+            "sweep_source_relation_span_count": signal.get("candidate_direct_relation_span_count"),
+            "sweep_source_relation_refute_doc_count": signal.get("refute_doc_count"),
+            "sweep_source_relation_ambiguous_doc_count": signal.get("ambiguous_doc_count"),
+            "candidate_verifier_backend": out.get("candidate_verifier_backend")
+            or "mc_option_claim_evidence_verifier",
+            "candidate_verifier_trust": out.get("candidate_verifier_trust")
+            or "strict_sweep_source_relation_signal",
+        })
+        annotated.append(out)
+    return annotated
+
+
 def _early_mc_option_sweep_before_claim_verifier_enabled() -> bool:
     return os.environ.get(
         "HLE_DISABLE_EARLY_MC_OPTION_SWEEP_BEFORE_CLAIM_VERIFIER",
@@ -51968,6 +52140,92 @@ def _verified_or_abstain_last_resort_candidate_has_direct_signal(
     return False
 
 
+def _verified_or_abstain_last_resort_candidate_has_trusted_direct_signal(
+    attempt: dict[str, Any],
+) -> bool:
+    if (
+        attempt.get("candidate_verifier_state") == "verified"
+        and _is_trusted_candidate_verifier_attempt(attempt)
+    ):
+        return True
+    if bool(attempt.get("accepted_direct_high_confidence")):
+        return True
+    if bool(attempt.get("source_verifier_accepted_direct_high_confidence")):
+        return True
+    if bool(attempt.get("source_grounded_verifier_direct_high_confidence")):
+        return True
+    verifier = attempt.get("source_grounded_verifier")
+    if isinstance(verifier, dict) and bool(verifier.get("direct_high_confidence")):
+        return True
+    return False
+
+
+def _verified_or_abstain_sweep_source_relation_signal(
+    attempt: dict[str, Any],
+) -> dict[str, Any]:
+    if not _is_synthetic_option_sweep_candidate(attempt):
+        return {
+            "allowed": False,
+            "reason": "non_synthetic_option_sweep_candidate",
+            "score": 0.0,
+        }
+    if not bool(attempt.get("sweep_source_relation_signal")):
+        return {
+            "allowed": False,
+            "reason": "missing_sweep_source_relation_signal",
+            "score": 0.0,
+        }
+    try:
+        score = float(attempt.get("sweep_source_relation_signal_score") or 0.0)
+    except (TypeError, ValueError):
+        score = 0.0
+    if score <= 0.0:
+        return {
+            "allowed": False,
+            "reason": "non_positive_sweep_source_relation_signal_score",
+            "score": score,
+        }
+    try:
+        refute_doc_count = int(attempt.get("sweep_source_relation_refute_doc_count") or 0)
+    except (TypeError, ValueError):
+        refute_doc_count = 0
+    try:
+        ambiguous_doc_count = int(attempt.get("sweep_source_relation_ambiguous_doc_count") or 0)
+    except (TypeError, ValueError):
+        ambiguous_doc_count = 0
+    if refute_doc_count > 0:
+        return {
+            "allowed": False,
+            "reason": "sweep_source_relation_signal_has_refuting_docs",
+            "score": score,
+            "refute_doc_count": refute_doc_count,
+        }
+    if ambiguous_doc_count > 1:
+        return {
+            "allowed": False,
+            "reason": "sweep_source_relation_signal_too_ambiguous",
+            "score": score,
+            "ambiguous_doc_count": ambiguous_doc_count,
+        }
+    return {
+        "allowed": True,
+        "reason": "synthetic_option_sweep_candidate_has_source_relation_signal",
+        "score": score,
+        "refute_doc_count": refute_doc_count,
+        "ambiguous_doc_count": ambiguous_doc_count,
+        "source_quality_doc_count": int(
+            attempt.get("sweep_source_relation_source_quality_doc_count") or 0
+        ),
+        "support_doc_count": int(attempt.get("sweep_source_relation_support_doc_count") or 0),
+        "relation_required_overlap": int(
+            attempt.get("sweep_source_relation_required_overlap") or 0
+        ),
+        "candidate_direct_relation_span_count": int(
+            attempt.get("sweep_source_relation_span_count") or 0
+        ),
+    }
+
+
 def _verified_or_abstain_last_resort_answer_support(
     *,
     problem: dict[str, Any],
@@ -52030,6 +52288,13 @@ def _verified_or_abstain_last_resort_candidate_allowed(
             "reason": "synthetic_option_sweep_candidate_has_direct_signal",
             **support,
         }
+    sweep_relation_signal = _verified_or_abstain_sweep_source_relation_signal(candidate)
+    if bool(sweep_relation_signal.get("allowed")):
+        return True, {
+            "allowed": True,
+            **sweep_relation_signal,
+            **support,
+        }
     try:
         consensus_count = int(candidate.get("verified_or_abstain_consensus_count") or 0)
     except (TypeError, ValueError):
@@ -52047,6 +52312,176 @@ def _verified_or_abstain_last_resort_candidate_allowed(
         "fallback_consensus_count": consensus_count,
         **support,
     }
+
+
+def _verified_or_abstain_last_resort_candidate_sort_key(
+    candidate: dict[str, Any],
+) -> tuple[int, float, int]:
+    if _verified_or_abstain_last_resort_candidate_has_trusted_direct_signal(candidate):
+        tier = 0
+        score = 0.0
+    else:
+        sweep_signal = _verified_or_abstain_sweep_source_relation_signal(candidate)
+        if bool(sweep_signal.get("allowed")):
+            tier = 1
+            try:
+                score = float(sweep_signal.get("score") or 0.0)
+            except (TypeError, ValueError):
+                score = 0.0
+        elif _verified_or_abstain_last_resort_candidate_has_direct_signal(candidate):
+            tier = 2
+            score = 0.0
+        elif _is_synthetic_option_sweep_candidate(candidate):
+            tier = 4
+            score = 0.0
+        else:
+            tier = 3
+            score = 0.0
+    try:
+        child_index = int(candidate.get("child_index") or 0)
+    except (TypeError, ValueError):
+        child_index = 0
+    return (tier, -score, child_index)
+
+
+def _sweep_source_relation_consensus_challenge_min_score() -> float:
+    raw = os.environ.get("HLE_SWEEP_SOURCE_RELATION_CONSENSUS_CHALLENGE_MIN_SCORE", "12").strip()
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return 12.0
+
+
+def _sweep_source_relation_consensus_challenge_max_consensus_count() -> int:
+    raw = os.environ.get("HLE_SWEEP_SOURCE_RELATION_CONSENSUS_CHALLENGE_MAX_CONSENSUS_COUNT", "5").strip()
+    try:
+        return max(2, int(raw))
+    except ValueError:
+        return 5
+
+
+def _sweep_source_relation_challenger_for_unverified_consensus(
+    *,
+    problem: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    consensus: dict[str, Any],
+) -> dict[str, Any] | None:
+    if problem.get("answer_type") != "multipleChoice":
+        return None
+    if _verified_or_abstain_last_resort_candidate_has_direct_signal(consensus):
+        return None
+    if consensus.get("candidate_verifier_state") == "verified" and _is_trusted_candidate_verifier_attempt(consensus):
+        return None
+    try:
+        consensus_count = int(consensus.get("verified_or_abstain_consensus_count") or 0)
+    except (TypeError, ValueError):
+        consensus_count = 0
+    if consensus_count <= 0:
+        return None
+    if consensus_count > _sweep_source_relation_consensus_challenge_max_consensus_count():
+        return None
+    answer_type = str(problem.get("answer_type") or "multipleChoice")
+    consensus_norm = _normalize_for_selection(
+        str(consensus.get("parsed_answer") or ""),
+        answer_type=answer_type,
+    )
+    min_score = _sweep_source_relation_consensus_challenge_min_score()
+    eligible: list[dict[str, Any]] = []
+    for candidate in candidates:
+        signal = _verified_or_abstain_sweep_source_relation_signal(candidate)
+        if not bool(signal.get("allowed")):
+            continue
+        try:
+            score = float(signal.get("score") or 0.0)
+        except (TypeError, ValueError):
+            score = 0.0
+        if score < min_score:
+            continue
+        candidate_norm = _normalize_for_selection(
+            str(candidate.get("parsed_answer") or ""),
+            answer_type=answer_type,
+        )
+        if not candidate_norm or candidate_norm == consensus_norm:
+            continue
+        out = dict(candidate)
+        out["verified_or_abstain_fallback_policy"] = (
+            "sweep_source_relation_challenges_unverified_consensus"
+        )
+        out["sweep_source_relation_consensus_challenge"] = {
+            "status": "activated",
+            "policy": "sweep_source_relation_consensus_challenge_v1",
+            "reason": "strict_source_relation_signal_over_unverified_consensus",
+            "min_score": min_score,
+            "score": score,
+            "consensus_count": consensus_count,
+            "consensus_answer_hash": consensus.get("parsed_answer_hash"),
+            "consensus_prompt_kinds": list(
+                consensus.get("verified_or_abstain_consensus_prompt_kinds", []) or []
+            ),
+            "candidate_answer_hash": candidate.get("parsed_answer_hash"),
+            "raw_content_persisted": False,
+        }
+        eligible.append(out)
+    if not eligible:
+        return None
+    return sorted(
+        eligible,
+        key=_verified_or_abstain_last_resort_candidate_sort_key,
+    )[0]
+
+
+def _sweep_source_relation_fallback_after_blocked_consensus(
+    *,
+    problem: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    blocked_answer_norms: set[str],
+    source_gate: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not bool(source_gate.get("blocked")):
+        return None
+    answer_type = str(problem.get("answer_type") or "multipleChoice")
+    min_score = _sweep_source_relation_consensus_challenge_min_score()
+    eligible: list[dict[str, Any]] = []
+    for candidate in candidates:
+        signal = _verified_or_abstain_sweep_source_relation_signal(candidate)
+        if not bool(signal.get("allowed")):
+            continue
+        try:
+            score = float(signal.get("score") or 0.0)
+        except (TypeError, ValueError):
+            score = 0.0
+        if score < min_score:
+            continue
+        candidate_norm = _normalize_for_selection(
+            str(candidate.get("parsed_answer") or ""),
+            answer_type=answer_type,
+        )
+        if not candidate_norm or candidate_norm in blocked_answer_norms:
+            continue
+        out = dict(candidate)
+        out["verified_or_abstain_fallback_policy"] = (
+            "sweep_source_relation_after_blocked_weak_source_consensus"
+        )
+        out["sweep_source_relation_consensus_challenge"] = {
+            "status": "activated",
+            "policy": "sweep_source_relation_blocked_consensus_recovery_v1",
+            "reason": "strict_source_relation_signal_after_weak_source_blocked_consensus",
+            "min_score": min_score,
+            "score": score,
+            "candidate_answer_hash": candidate.get("parsed_answer_hash"),
+            "blocked_answer_norm_hashes": sorted(
+                stable_hash({"answer_norm": norm}) for norm in blocked_answer_norms
+            ),
+            "source_gate_reason": source_gate.get("reason"),
+            "raw_content_persisted": False,
+        }
+        eligible.append(out)
+    if not eligible:
+        return None
+    return sorted(
+        eligible,
+        key=_verified_or_abstain_last_resort_candidate_sort_key,
+    )[0]
 
 
 def _verified_or_abstain_last_resort_guard_summary(
@@ -52370,6 +52805,9 @@ def _apply_verified_or_abstain_selection(
                     "weak_source_direct_tie_matrix_recursive_recovery": fallback.get(
                         "weak_source_direct_tie_matrix_recursive_recovery"
                     ),
+                    "sweep_source_relation_consensus_challenge": fallback.get(
+                        "sweep_source_relation_consensus_challenge"
+                    ),
                     "weak_source_same_answer_fallback_guard": fallback.get(
                         "weak_source_same_answer_fallback_guard"
                     ),
@@ -52570,6 +53008,9 @@ def _apply_verified_or_abstain_selection(
                         "weak_source_direct_tie_matrix_recursive_recovery": fallback.get(
                             "weak_source_direct_tie_matrix_recursive_recovery"
                         ),
+                        "sweep_source_relation_consensus_challenge": fallback.get(
+                            "sweep_source_relation_consensus_challenge"
+                        ),
                         "weak_source_same_answer_fallback_guard": fallback.get(
                             "weak_source_same_answer_fallback_guard"
                         ),
@@ -52705,6 +53146,9 @@ def _apply_verified_or_abstain_selection(
             "weak_source_direct_tie_matrix_recursive_recovery": fallback.get(
                 "weak_source_direct_tie_matrix_recursive_recovery"
             ),
+            "sweep_source_relation_consensus_challenge": fallback.get(
+                "sweep_source_relation_consensus_challenge"
+            ),
             "weak_source_same_answer_fallback_guard": fallback.get(
                 "weak_source_same_answer_fallback_guard"
             ),
@@ -52748,6 +53192,11 @@ def _verified_or_abstain_fallback_candidate(
         elif _is_suspicious_exact_answer(answer):
             continue
         candidates.append(normalized_attempt)
+    candidates = _annotate_synthetic_option_sweep_candidates_from_agent_plan(
+        problem=problem,
+        candidates=candidates,
+        agent_plan=agent_plan,
+    )
     if not candidates:
         return None
 
@@ -52884,6 +53333,13 @@ def _verified_or_abstain_fallback_candidate(
     if not unverified_consensus_guard.get("blocked"):
         consensus = _verified_or_abstain_consensus_fallback_candidate(problem=problem, attempts=candidates)
         if consensus:
+            challenger = _sweep_source_relation_challenger_for_unverified_consensus(
+                problem=problem,
+                candidates=candidates,
+                consensus=consensus,
+            )
+            if challenger:
+                return with_unverified_consensus_guard(challenger)
             return with_unverified_consensus_guard(consensus)
     else:
         blocked_consensus = _verified_or_abstain_consensus_fallback_candidate(problem=problem, attempts=candidates)
@@ -53090,6 +53546,17 @@ def _verified_or_abstain_fallback_candidate(
                     direct_tie_recovery.get("weak_source_direct_tie_matrix_recursive_recovery")
                 )
                 return with_unverified_consensus_guard(direct_tie_recovery)
+        source_relation_recovery = _sweep_source_relation_fallback_after_blocked_consensus(
+            problem=problem,
+            candidates=candidates,
+            blocked_answer_norms=blocked_answer_norms,
+            source_gate=unverified_consensus_guard,
+        )
+        if source_relation_recovery:
+            unverified_consensus_guard["sweep_source_relation_consensus_challenge"] = (
+                source_relation_recovery.get("sweep_source_relation_consensus_challenge")
+            )
+            return with_unverified_consensus_guard(source_relation_recovery)
     for prompt_kind in preferred_prompt_kinds:
         prompt_candidates = [
             attempt for attempt in candidates
@@ -53124,7 +53591,10 @@ def _verified_or_abstain_fallback_candidate(
         diagnostics["verified_or_abstain_last_resort_guard"] = last_resort_guard
     if not allowed_remaining_candidates:
         return None
-    selected = dict(sorted(allowed_remaining_candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0])
+    selected = dict(sorted(
+        allowed_remaining_candidates,
+        key=_verified_or_abstain_last_resort_candidate_sort_key,
+    )[0])
     if last_resort_guard.get("status") in {"filtered", "blocked", "allowed"}:
         selected["verified_or_abstain_last_resort_guard"] = last_resort_guard
     return with_unverified_consensus_guard(selected)
