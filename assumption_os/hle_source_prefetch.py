@@ -37,6 +37,7 @@ from .hle_smoke_eval import (
     _load_text_only_sample,
     _musicology_short_option_direct_relation_signal,
     _musicology_short_option_phrase_signal,
+    _courtlistener_search,
     _openalex_search,
     _option_claim_answer_web_fallback_queries,
     _option_claim_evidence_queries_for_plan,
@@ -50,10 +51,12 @@ from .hle_smoke_eval import (
     _semantic_scholar_search,
     _split_multiple_choice_question,
     _normalized_phrase_present,
+    _ontario_lso_rules_search,
     _wikipedia_extract_search,
     apply_hle_offline_defaults_to_environ,
 )
 from .hle_operator_cohort_preflight import _operator_family_tags_from_stage
+from .private_env import load_private_env
 
 
 DEFAULT_RUN_DIR = PAPER_DIR / "hle_source_prefetch"
@@ -66,6 +69,10 @@ DEFAULT_SOURCES = (
     "crossref",
     "wikipedia_extract",
     "answer_web",
+)
+SUPPORTED_SOURCES = DEFAULT_SOURCES + (
+    "courtlistener",
+    "lso_rules",
 )
 
 _SOURCE_PREFETCH_GENERIC_TERMS = {
@@ -851,6 +858,12 @@ def _run_source_prefetch(
         max_live_calls=max_live_calls,
         budget_policy=budget_policy,
     )
+    _log_source_prefetch_live_budget_applied(
+        jobs=jobs,
+        max_live_calls=max_live_calls,
+        budget_policy=budget_policy,
+        logger=logger,
+    )
     indexed_jobs = [(index, job) for index, job in enumerate(jobs)]
     execution_jobs = _source_prefetch_execution_order(indexed_jobs)
     workers = max(1, min(int(parallel_workers or 1), max(1, len(indexed_jobs))))
@@ -925,10 +938,12 @@ def _source_prefetch_fair_candidate_order(
             grouped[group_key] = []
             group_order.append(group_key)
         grouped[group_key].append((index, job))
-    problem_orders: dict[str, list[tuple[int, dict[str, Any]]]] = {
-        group_key: _source_prefetch_problem_fair_candidate_order(grouped[group_key])
-        for group_key in group_order
-    }
+    problem_orders: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+    for problem_position, group_key in enumerate(group_order):
+        problem_orders[group_key] = _source_prefetch_problem_fair_candidate_order(
+            grouped[group_key],
+            source_rotation=problem_position,
+        )
     fair_jobs: list[tuple[int, dict[str, Any]]] = []
     offsets = {group_key: 0 for group_key in group_order}
     while True:
@@ -948,6 +963,8 @@ def _source_prefetch_fair_candidate_order(
 
 def _source_prefetch_problem_fair_candidate_order(
     indexed_jobs: list[tuple[int, dict[str, Any]]],
+    *,
+    source_rotation: int = 0,
 ) -> list[tuple[int, dict[str, Any]]]:
     option_groups: dict[str, list[tuple[int, dict[str, Any]]]] = {}
     option_order: list[str] = []
@@ -961,20 +978,27 @@ def _source_prefetch_problem_fair_candidate_order(
             or ""
         )
         if not option_key:
-            option_key = f"__no_option__:{index}"
+            option_key = "__no_option__"
         if option_key not in option_groups:
             option_groups[option_key] = []
             option_order.append(option_key)
         option_groups[option_key].append((index, job))
-    option_orders: dict[str, list[tuple[int, dict[str, Any]]]] = {
-        option_key: _source_prefetch_query_fair_candidate_order(option_groups[option_key])
-        for option_key in option_order
-    }
+    if option_order:
+        option_start = source_rotation % len(option_order)
+        fair_option_order = option_order[option_start:] + option_order[:option_start]
+    else:
+        fair_option_order = []
+    option_orders: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+    for option_position, option_key in enumerate(fair_option_order):
+        option_orders[option_key] = _source_prefetch_query_fair_candidate_order(
+            option_groups[option_key],
+            source_rotation=source_rotation + option_position,
+        )
     ordered: list[tuple[int, dict[str, Any]]] = []
-    offsets = {option_key: 0 for option_key in option_order}
+    offsets = {option_key: 0 for option_key in fair_option_order}
     while True:
         progressed = False
-        for option_key in option_order:
+        for option_key in fair_option_order:
             offset = offsets[option_key]
             group_items = option_orders[option_key]
             if offset >= len(group_items):
@@ -989,6 +1013,8 @@ def _source_prefetch_problem_fair_candidate_order(
 
 def _source_prefetch_query_fair_candidate_order(
     indexed_jobs: list[tuple[int, dict[str, Any]]],
+    *,
+    source_rotation: int = 0,
 ) -> list[tuple[int, dict[str, Any]]]:
     query_groups: dict[str, list[tuple[int, dict[str, Any]]]] = {}
     query_order: list[str] = []
@@ -1005,21 +1031,50 @@ def _source_prefetch_query_fair_candidate_order(
             query_groups[query_key] = []
             query_order.append(query_key)
         query_groups[query_key].append((index, job))
+    query_states: list[dict[str, Any]] = []
+    for query_key in query_order:
+        source_groups: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+        source_order: list[str] = []
+        for index, job in query_groups[query_key]:
+            source_key = _source_prefetch_job_source_key(job)
+            if source_key not in source_groups:
+                source_groups[source_key] = []
+                source_order.append(source_key)
+            source_groups[source_key].append((index, job))
+        query_states.append({
+            "source_groups": source_groups,
+            "source_order": source_order,
+            "offsets": {source_key: 0 for source_key in source_order},
+        })
     ordered: list[tuple[int, dict[str, Any]]] = []
-    offsets = {query_key: 0 for query_key in query_order}
+    round_offset = 0
     while True:
         progressed = False
-        for query_key in query_order:
-            offset = offsets[query_key]
-            group_items = query_groups[query_key]
-            if offset >= len(group_items):
+        for query_position, state in enumerate(query_states):
+            source_order = state["source_order"]
+            if not source_order:
                 continue
-            ordered.append(group_items[offset])
-            offsets[query_key] = offset + 1
-            progressed = True
+            start = (source_rotation + query_position + round_offset) % len(source_order)
+            for probe in range(len(source_order)):
+                source_key = source_order[(start + probe) % len(source_order)]
+                offsets = state["offsets"]
+                offset = offsets[source_key]
+                group_items = state["source_groups"][source_key]
+                if offset >= len(group_items):
+                    continue
+                ordered.append(group_items[offset])
+                offsets[source_key] = offset + 1
+                progressed = True
+                break
         if not progressed:
             break
+        round_offset += 1
     return ordered
+
+
+def _source_prefetch_job_source_key(job: dict[str, Any]) -> str:
+    record = job.get("record") if isinstance(job.get("record"), dict) else {}
+    return str(job.get("source") or record.get("source") or "__no_source__")
 
 
 def _apply_source_prefetch_live_budget(
@@ -1060,6 +1115,49 @@ def _apply_source_prefetch_live_budget(
         next_job["record"] = record
         out.append(next_job)
     return out
+
+
+def _log_source_prefetch_live_budget_applied(
+    *,
+    jobs: list[dict[str, Any]],
+    max_live_calls: int,
+    budget_policy: str,
+    logger: JsonlDiagnosticLogger | None,
+) -> None:
+    candidate_count_by_source: Counter[str] = Counter()
+    selected_count_by_source: Counter[str] = Counter()
+    skipped_count_by_source: Counter[str] = Counter()
+    static_count_by_source: Counter[str] = Counter()
+    for job in jobs:
+        source = _source_prefetch_job_source_key(job)
+        record = job.get("record") if isinstance(job.get("record"), dict) else {}
+        action = str(job.get("action") or "")
+        if action == "fetch":
+            candidate_count_by_source[source] += 1
+            selected_count_by_source[source] += 1
+        elif action == "static" and record.get("status") == "budget_skipped":
+            candidate_count_by_source[source] += 1
+            skipped_count_by_source[source] += 1
+        elif action == "static":
+            static_count_by_source[source] += 1
+    if not candidate_count_by_source:
+        return
+    log_event(
+        logger,
+        {
+            "event": "hle_source_prefetch_live_budget_applied",
+            "max_live_calls": int(max_live_calls or 0),
+            "budget_policy": budget_policy,
+            "candidate_count": sum(candidate_count_by_source.values()),
+            "selected_count": sum(selected_count_by_source.values()),
+            "budget_skipped_count": sum(skipped_count_by_source.values()),
+            "candidate_count_by_source": dict(candidate_count_by_source),
+            "selected_count_by_source": dict(selected_count_by_source),
+            "budget_skipped_count_by_source": dict(skipped_count_by_source),
+            "static_count_by_source": dict(static_count_by_source),
+            "raw_content_persisted": False,
+        },
+    )
 
 
 def _run_source_prefetch_job(
@@ -1375,6 +1473,10 @@ def _fetch_source(
             return _crossref_search(query, limit=limit, timeout=timeout)
         if source == "wikipedia_extract":
             return _wikipedia_extract_search(query, limit=limit, timeout=timeout)
+        if source == "courtlistener":
+            return _courtlistener_search(query, limit=limit, timeout=timeout)
+        if source == "lso_rules":
+            return _ontario_lso_rules_search(query, limit=limit, timeout=timeout)
         if source == "answer_web":
             return _answer_bearing_web_search(query, limit=limit, timeout=timeout)
         raise ValueError(f"unsupported source: {source}")
@@ -1540,7 +1642,7 @@ def _safe_float(value: Any) -> float:
 
 
 def _normalize_sources(sources: list[str]) -> list[str]:
-    allowed = set(DEFAULT_SOURCES)
+    allowed = set(SUPPORTED_SOURCES)
     out: list[str] = []
     for source in sources:
         clean = str(source or "").strip()
@@ -1657,6 +1759,7 @@ def main() -> None:
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--md-out", default=str(DEFAULT_MD_OUT))
     args = parser.parse_args()
+    private_env_status = load_private_env()
 
     root = Path(args.root).resolve()
     graph_dir = Path(args.graph_dir)
@@ -1693,6 +1796,7 @@ def main() -> None:
         enable_option_aware_query_expansion=bool(args.enable_option_aware_query_expansion),
         relation_query_planner_model=args.relation_query_planner_model,
     )
+    payload["private_env"] = private_env_status
     out = Path(args.out)
     out = out if out.is_absolute() else root / out
     out.parent.mkdir(parents=True, exist_ok=True)

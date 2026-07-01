@@ -43,6 +43,7 @@ from .hle_smoke_eval import (
     _problem_from_row,
     _route_credit_table,
 )
+from .private_env import load_private_env
 
 
 DEFAULT_RUN_DIR = PAPER_DIR / "hle_parallel_runs"
@@ -516,6 +517,10 @@ def build_shard_command(
     disable_option_claim_span_directness_verifier: bool = False,
     enable_option_claim_relation_span_comparator: bool = False,
     disable_option_claim_relation_span_comparator: bool = False,
+    enable_option_claim_relation_span_pre_directness_comparator: bool = False,
+    disable_option_claim_relation_span_pre_directness_comparator: bool = False,
+    enable_option_claim_relation_span_pre_directness_no_harm_skip: bool = False,
+    disable_option_claim_relation_span_pre_directness_no_harm_skip: bool = False,
     enable_option_claim_relation_query_planner: bool = False,
     disable_option_claim_relation_query_planner: bool = False,
     enable_option_claim_source_cache_corpus_backfill: bool = False,
@@ -613,6 +618,14 @@ def build_shard_command(
         cmd.append("--enable-option-claim-relation-span-comparator")
     if disable_option_claim_relation_span_comparator:
         cmd.append("--disable-option-claim-relation-span-comparator")
+    if enable_option_claim_relation_span_pre_directness_comparator:
+        cmd.append("--enable-option-claim-relation-span-pre-directness-comparator")
+    if disable_option_claim_relation_span_pre_directness_comparator:
+        cmd.append("--disable-option-claim-relation-span-pre-directness-comparator")
+    if enable_option_claim_relation_span_pre_directness_no_harm_skip:
+        cmd.append("--enable-option-claim-relation-span-pre-directness-no-harm-skip")
+    if disable_option_claim_relation_span_pre_directness_no_harm_skip:
+        cmd.append("--disable-option-claim-relation-span-pre-directness-no-harm-skip")
     if enable_option_claim_relation_query_planner:
         cmd.append("--enable-option-claim-relation-query-planner")
     if disable_option_claim_relation_query_planner:
@@ -655,6 +668,10 @@ def build_runner_env(
     disable_option_claim_relation_query_planner: bool | None = None,
     enable_option_claim_relation_span_comparator: bool | None = None,
     disable_option_claim_relation_span_comparator: bool | None = None,
+    enable_option_claim_relation_span_pre_directness_comparator: bool | None = None,
+    disable_option_claim_relation_span_pre_directness_comparator: bool | None = None,
+    enable_option_claim_relation_span_pre_directness_no_harm_skip: bool | None = None,
+    disable_option_claim_relation_span_pre_directness_no_harm_skip: bool | None = None,
     enable_option_claim_source_cache_corpus_backfill: bool | None = None,
     disable_option_claim_source_cache_corpus_backfill: bool | None = None,
     enable_option_claim_source_verifier_repair_context: bool | None = None,
@@ -713,6 +730,48 @@ def build_runner_env(
             env.pop("HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR", None)
         else:
             env["HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR"] = "0"
+    if enable_option_claim_relation_span_pre_directness_comparator is not None:
+        if enable_option_claim_relation_span_pre_directness_comparator:
+            env["HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_COMPARATOR"] = "1"
+            env.pop(
+                "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_COMPARATOR",
+                None,
+            )
+        else:
+            env["HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_COMPARATOR"] = "0"
+    if disable_option_claim_relation_span_pre_directness_comparator is not None:
+        if disable_option_claim_relation_span_pre_directness_comparator:
+            env["HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_COMPARATOR"] = "1"
+            env.pop(
+                "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_COMPARATOR",
+                None,
+            )
+        else:
+            env["HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_COMPARATOR"] = "0"
+    if enable_option_claim_relation_span_pre_directness_no_harm_skip is not None:
+        if enable_option_claim_relation_span_pre_directness_no_harm_skip:
+            env["HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_NO_HARM_SKIP"] = "1"
+            env.pop(
+                "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_NO_HARM_SKIP",
+                None,
+            )
+        else:
+            env[
+                "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_NO_HARM_SKIP"
+            ] = "0"
+    if disable_option_claim_relation_span_pre_directness_no_harm_skip is not None:
+        if disable_option_claim_relation_span_pre_directness_no_harm_skip:
+            env[
+                "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_NO_HARM_SKIP"
+            ] = "1"
+            env.pop(
+                "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_NO_HARM_SKIP",
+                None,
+            )
+        else:
+            env[
+                "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_NO_HARM_SKIP"
+            ] = "0"
     if enable_option_claim_source_cache_corpus_backfill is not None:
         if enable_option_claim_source_cache_corpus_backfill:
             env["HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"] = "1"
@@ -845,6 +904,34 @@ def runtime_feature_flags_from_args(args: argparse.Namespace) -> dict[str, Any]:
         "option_claim_relation_span_comparator_disabled": bool(
             getattr(args, "disable_option_claim_relation_span_comparator", False)
         ),
+        "option_claim_relation_span_pre_directness_comparator_enabled": bool(
+            getattr(
+                args,
+                "enable_option_claim_relation_span_pre_directness_comparator",
+                False,
+            )
+        ),
+        "option_claim_relation_span_pre_directness_comparator_disabled": bool(
+            getattr(
+                args,
+                "disable_option_claim_relation_span_pre_directness_comparator",
+                False,
+            )
+        ),
+        "option_claim_relation_span_pre_directness_no_harm_skip_enabled": bool(
+            getattr(
+                args,
+                "enable_option_claim_relation_span_pre_directness_no_harm_skip",
+                False,
+            )
+        ),
+        "option_claim_relation_span_pre_directness_no_harm_skip_disabled": bool(
+            getattr(
+                args,
+                "disable_option_claim_relation_span_pre_directness_no_harm_skip",
+                False,
+            )
+        ),
         "option_claim_relation_query_planner_enabled": bool(
             getattr(args, "enable_option_claim_relation_query_planner", False)
         ),
@@ -925,6 +1012,18 @@ def source_policy_from_env(env: dict[str, str]) -> dict[str, Any]:
         ),
         "option_claim_relation_span_comparator_disabled_env": env.get(
             "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR"
+        ),
+        "option_claim_relation_span_pre_directness_comparator_env": env.get(
+            "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_COMPARATOR"
+        ),
+        "option_claim_relation_span_pre_directness_comparator_disabled_env": env.get(
+            "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_COMPARATOR"
+        ),
+        "option_claim_relation_span_pre_directness_no_harm_skip_env": env.get(
+            "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_NO_HARM_SKIP"
+        ),
+        "option_claim_relation_span_pre_directness_no_harm_skip_disabled_env": env.get(
+            "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_NO_HARM_SKIP"
         ),
         "option_claim_source_cache_corpus_backfill_env": env.get(
             "HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"
@@ -2980,6 +3079,34 @@ def build_payload_without_execution(args: argparse.Namespace) -> tuple[list[Shar
                 disable_option_claim_relation_span_comparator=bool(
                     getattr(args, "disable_option_claim_relation_span_comparator", False)
                 ),
+                enable_option_claim_relation_span_pre_directness_comparator=bool(
+                    getattr(
+                        args,
+                        "enable_option_claim_relation_span_pre_directness_comparator",
+                        False,
+                    )
+                ),
+                disable_option_claim_relation_span_pre_directness_comparator=bool(
+                    getattr(
+                        args,
+                        "disable_option_claim_relation_span_pre_directness_comparator",
+                        False,
+                    )
+                ),
+                enable_option_claim_relation_span_pre_directness_no_harm_skip=bool(
+                    getattr(
+                        args,
+                        "enable_option_claim_relation_span_pre_directness_no_harm_skip",
+                        False,
+                    )
+                ),
+                disable_option_claim_relation_span_pre_directness_no_harm_skip=bool(
+                    getattr(
+                        args,
+                        "disable_option_claim_relation_span_pre_directness_no_harm_skip",
+                        False,
+                    )
+                ),
                 enable_option_claim_relation_query_planner=bool(
                     getattr(args, "enable_option_claim_relation_query_planner", False)
                 ),
@@ -3107,6 +3234,10 @@ def main() -> None:
     parser.add_argument("--disable-option-claim-span-directness-verifier", action="store_true")
     parser.add_argument("--enable-option-claim-relation-span-comparator", action="store_true")
     parser.add_argument("--disable-option-claim-relation-span-comparator", action="store_true")
+    parser.add_argument("--enable-option-claim-relation-span-pre-directness-comparator", action="store_true")
+    parser.add_argument("--disable-option-claim-relation-span-pre-directness-comparator", action="store_true")
+    parser.add_argument("--enable-option-claim-relation-span-pre-directness-no-harm-skip", action="store_true")
+    parser.add_argument("--disable-option-claim-relation-span-pre-directness-no-harm-skip", action="store_true")
     parser.add_argument("--enable-option-claim-relation-query-planner", action="store_true")
     parser.add_argument("--disable-option-claim-relation-query-planner", action="store_true")
     parser.add_argument("--enable-option-claim-source-cache-corpus-backfill", action="store_true")
@@ -3176,6 +3307,7 @@ def main() -> None:
     parser.add_argument("--skip-live-model-preflight", action="store_true")
     parser.add_argument("--live-model-preflight-timeout-sec", type=float, default=60.0)
     args = parser.parse_args()
+    private_env_status = load_private_env()
     if bool(args.model_router_subprocess_calls) and bool(args.disable_model_router_subprocess_calls):
         parser.error("--model-router-subprocess-calls and --disable-model-router-subprocess-calls are mutually exclusive")
     args = apply_live_network_defaults(args)
@@ -3241,6 +3373,7 @@ def main() -> None:
             },
             "feature_flags": runner_feature_flags,
             "source_policy": runner_source_policy,
+            "private_env": private_env_status,
             "reuse_completed_shards": bool(args.reuse_completed_shards),
             "dedupe_shard_samples": bool(args.dedupe_shard_samples),
             "generalization_holdout": bool(args.generalization_holdout),
@@ -3265,6 +3398,7 @@ def main() -> None:
             "exclude_existing_hle_artifacts": bool(args.exclude_existing_hle_artifacts),
             "feature_flags": runner_feature_flags,
             "source_policy": runner_source_policy,
+            "private_env": private_env_status,
             "generalization_holdout_policy": getattr(
                 args,
                 "_generalization_holdout_policy",
@@ -3332,6 +3466,26 @@ def main() -> None:
         disable_option_claim_relation_span_comparator=(
             True if args.disable_option_claim_relation_span_comparator else None
         ),
+        enable_option_claim_relation_span_pre_directness_comparator=(
+            True
+            if args.enable_option_claim_relation_span_pre_directness_comparator
+            else None
+        ),
+        disable_option_claim_relation_span_pre_directness_comparator=(
+            True
+            if args.disable_option_claim_relation_span_pre_directness_comparator
+            else None
+        ),
+        enable_option_claim_relation_span_pre_directness_no_harm_skip=(
+            True
+            if args.enable_option_claim_relation_span_pre_directness_no_harm_skip
+            else None
+        ),
+        disable_option_claim_relation_span_pre_directness_no_harm_skip=(
+            True
+            if args.disable_option_claim_relation_span_pre_directness_no_harm_skip
+            else None
+        ),
         enable_option_claim_source_cache_corpus_backfill=(
             True if args.enable_option_claim_source_cache_corpus_backfill else None
         ),
@@ -3385,6 +3539,7 @@ def main() -> None:
             "feature_flags": runner_feature_flags,
             "source_policy": runner_source_policy,
             "model_router": model_router_policy_from_env(env),
+            "private_env": private_env_status,
             "raw_content_persisted": False,
         },
     )

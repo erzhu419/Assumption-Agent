@@ -319,7 +319,7 @@ class TestHleSourcePrefetch(unittest.TestCase):
         self.assertEqual(fetched_by_seed, [1, 2, 3])
         self.assertEqual(skipped_by_seed, [1, 2, 3])
 
-    def test_live_budget_covers_more_queries_before_duplicate_sources(self):
+    def test_live_budget_balances_sources_across_queries(self):
         query_plan = [
             {
                 "problem_id_hash": "problem-1",
@@ -360,10 +360,148 @@ class TestHleSourcePrefetch(unittest.TestCase):
             [
                 ("query-0", "semantic_scholar", "fetched"),
                 ("query-0", "openalex", "budget_skipped"),
-                ("query-1", "semantic_scholar", "fetched"),
-                ("query-1", "openalex", "budget_skipped"),
+                ("query-1", "semantic_scholar", "budget_skipped"),
+                ("query-1", "openalex", "fetched"),
             ],
         )
+
+    def test_live_budget_rotates_first_source_across_problems(self):
+        query_plan = []
+        for seed in [1, 2, 3]:
+            query_plan.append(
+                {
+                    "problem_id_hash": f"problem-{seed}",
+                    "seed_offset": seed,
+                    "operator_family_tags": [],
+                    "query_records": [
+                        {
+                            "query_hash": f"query-{seed}",
+                            "query_kind": "option_claim",
+                            "_query": f"query {seed}",
+                        }
+                    ],
+                }
+            )
+
+        def fetch_source(*, source, query, limit, timeout, ignore_cached_error=False):
+            return [{"title": query, "snippet": "row", "source": source}]
+
+        with (
+            patch.object(prefetch, "_cache_status", return_value="miss"),
+            patch.object(prefetch, "_fetch_source", side_effect=fetch_source),
+        ):
+            records = prefetch._run_source_prefetch(
+                query_plan=query_plan,
+                sources=["semantic_scholar", "openalex", "answer_web"],
+                source_limit=2,
+                timeout=1.0,
+                execute_live=True,
+                max_live_calls=3,
+                delay_sec=0.0,
+                parallel_workers=1,
+            )
+
+        self.assertEqual(
+            [(row["seed_offset"], row["source"]) for row in records if row["status"] == "fetched"],
+            [(1, "semantic_scholar"), (2, "openalex"), (3, "answer_web")],
+        )
+
+    def test_live_budget_rotates_first_option_across_problems(self):
+        query_plan = []
+        for seed in [1, 2, 3]:
+            query_plan.append(
+                {
+                    "problem_id_hash": f"problem-{seed}",
+                    "seed_offset": seed,
+                    "operator_family_tags": [],
+                    "query_records": [
+                        {
+                            "query_hash": f"query-{seed}-{label}",
+                            "query_kind": "option_claim",
+                            "option_hash": f"option-{label.lower()}",
+                            "option_choice": label,
+                            "_query": f"query {seed} {label}",
+                        }
+                        for label in ["A", "B", "C"]
+                    ],
+                }
+            )
+        fetch_order = []
+
+        def fetch_source(*, source, query, limit, timeout, ignore_cached_error=False):
+            fetch_order.append(query)
+            return [{"title": query, "snippet": "row", "source": source}]
+
+        with (
+            patch.object(prefetch, "_cache_status", return_value="miss"),
+            patch.object(prefetch, "_fetch_source", side_effect=fetch_source),
+        ):
+            records = prefetch._run_source_prefetch(
+                query_plan=query_plan,
+                sources=["answer_web"],
+                source_limit=2,
+                timeout=1.0,
+                execute_live=True,
+                max_live_calls=3,
+                delay_sec=0.0,
+                parallel_workers=1,
+            )
+
+        self.assertEqual(fetch_order, ["query 1 A", "query 2 B", "query 3 C"])
+        self.assertEqual(
+            [(row["seed_offset"], row["option_choice"]) for row in records if row["status"] == "fetched"],
+            [(1, "A"), (2, "B"), (3, "C")],
+        )
+
+    def test_run_source_prefetch_logs_live_budget_by_source_without_raw_text(self):
+        query_plan = [
+            {
+                "problem_id_hash": "problem-1",
+                "seed_offset": 1,
+                "operator_family_tags": [],
+                "query_records": [
+                    {
+                        "query_hash": f"query-{index}",
+                        "query_kind": "option_claim",
+                        "_query": f"secret query {index}",
+                    }
+                    for index in range(3)
+                ],
+            }
+        ]
+
+        def fetch_source(*, source, query, limit, timeout, ignore_cached_error=False):
+            return [{"title": query, "snippet": "row", "source": source}]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "prefetch.jsonl"
+            logger = JsonlDiagnosticLogger(log_path)
+            with (
+                patch.object(prefetch, "_cache_status", return_value="miss"),
+                patch.object(prefetch, "_fetch_source", side_effect=fetch_source),
+            ):
+                prefetch._run_source_prefetch(
+                    query_plan=query_plan,
+                    sources=["semantic_scholar", "openalex", "answer_web"],
+                    source_limit=2,
+                    timeout=1.0,
+                    execute_live=True,
+                    max_live_calls=3,
+                    delay_sec=0.0,
+                    parallel_workers=1,
+                    logger=logger,
+                )
+            events = [json.loads(line) for line in log_path.read_text().splitlines()]
+
+        budget_events = [
+            event for event in events if event.get("event") == "hle_source_prefetch_live_budget_applied"
+        ]
+        self.assertEqual(len(budget_events), 1)
+        self.assertEqual(
+            budget_events[0]["selected_count_by_source"],
+            {"semantic_scholar": 1, "openalex": 1, "answer_web": 1},
+        )
+        self.assertNotIn("secret query", json.dumps(budget_events))
 
     def test_live_budget_round_robins_options_within_problem(self):
         query_plan = [
@@ -980,6 +1118,45 @@ class TestHleSourcePrefetch(unittest.TestCase):
 
         self.assertEqual(rows[0]["source"], "answer_web")
         search.assert_called_once()
+
+    def test_legal_sources_are_supported_but_not_default(self):
+        self.assertNotIn("lso_rules", prefetch.DEFAULT_SOURCES)
+        self.assertNotIn("courtlistener", prefetch.DEFAULT_SOURCES)
+
+        sources = prefetch._normalize_sources(["lso_rules", "courtlistener"])
+
+        self.assertEqual(sources, ["lso_rules", "courtlistener"])
+
+    def test_fetch_source_supports_legal_sources(self):
+        with (
+            patch.object(
+                prefetch,
+                "_ontario_lso_rules_search",
+                return_value=[{"title": "Rules", "source": "lso_rules"}],
+            ) as lso_search,
+            patch.object(
+                prefetch,
+                "_courtlistener_search",
+                return_value=[{"title": "Case", "source": "courtlistener"}],
+            ) as court_search,
+        ):
+            lso_rows = prefetch._fetch_source(
+                source="lso_rules",
+                query="law firm adequate measures",
+                limit=2,
+                timeout=1.0,
+            )
+            court_rows = prefetch._fetch_source(
+                source="courtlistener",
+                query="former client conflict",
+                limit=2,
+                timeout=1.0,
+            )
+
+        self.assertEqual(lso_rows[0]["source"], "lso_rules")
+        self.assertEqual(court_rows[0]["source"], "courtlistener")
+        lso_search.assert_called_once()
+        court_search.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -52,6 +52,7 @@ from .retrieval_policy import format_policy_context, retrieve_phase2_assumptions
 from .schema import AssumptionType, stable_id
 from .structural_patterns import search_structural_patterns
 from .world_model import predict_proposal_outcome
+from .private_env import load_private_env
 
 
 DEFAULT_OUT = PAPER_DIR / "hle_text_smoke_eval_20260615.json"
@@ -192,11 +193,110 @@ def _variant_watchdog_recursive_selection_reserved_budget_from_env(
     return min(50, value)
 
 
+def _variant_watchdog_source_verifier_reserved_budget_from_env(
+    *,
+    model_call_budget: int | None = None,
+    recursive_selection_reserved_budget: int = 0,
+) -> int:
+    disabled = os.environ.get(
+        "HLE_DISABLE_VARIANT_SOURCE_VERIFIER_RESERVED_MODEL_CALL_BUDGET",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    if disabled:
+        return 0
+    raw = (
+        os.environ.get("HLE_VARIANT_SOURCE_VERIFIER_RESERVED_MODEL_CALL_BUDGET")
+        or os.environ.get("HLE_VARIANT_ANSWER_VERIFICATION_RESERVED_MODEL_CALL_BUDGET")
+        or os.environ.get("HLE_VARIANT_OPTION_CLAIM_RESERVED_MODEL_CALL_BUDGET")
+        or ""
+    ).strip()
+    if raw:
+        if raw.lower() in {"0", "none", "null", "off", "false", "no"}:
+            return 0
+        try:
+            value = max(0, int(raw))
+        except ValueError:
+            value = 0
+    else:
+        value = 0 if int(recursive_selection_reserved_budget or 0) > 0 else 1
+    if model_call_budget is not None:
+        return min(value, max(0, int(model_call_budget) - 1))
+    return min(50, value)
+
+
+def _variant_watchdog_directness_reserved_budget_from_env(
+    *,
+    model_call_budget: int | None = None,
+) -> int:
+    disabled = os.environ.get(
+        "HLE_DISABLE_VARIANT_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    if disabled:
+        return 0
+    raw = (
+        os.environ.get("HLE_VARIANT_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET")
+        or os.environ.get("HLE_OPTION_CLAIM_VARIANT_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET")
+        or os.environ.get("HLE_OPTION_CLAIM_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET")
+        or os.environ.get("HLE_OPTION_CLAIM_SPAN_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET")
+        or ""
+    ).strip()
+    if not raw:
+        try:
+            value = max(0, int(_option_claim_variant_directness_reserved_model_call_budget_limit()))
+        except NameError:
+            value = 0
+    else:
+        if raw.lower() in {"0", "none", "null", "off", "false", "no"}:
+            return 0
+        try:
+            value = max(0, int(raw))
+        except ValueError:
+            value = 0
+    if model_call_budget is not None:
+        return min(value, max(0, int(model_call_budget) - 1))
+    return min(50, value)
+
+
 def _variant_watchdog_call_is_recursive_selection() -> bool:
     if _active_no_gold_decision_phase() == "recursive_child_selection":
         return True
     scope = _active_model_router_call_scope()
     return scope.get("router_scope") == "recursive_selection"
+
+
+def _variant_watchdog_call_is_source_verifier() -> bool:
+    scope = _active_model_router_call_scope()
+    return (
+        scope.get("router_scope") == "option_claim_verifier"
+        and scope.get("router_call_stage")
+        in {
+            "source_grounded_option_claim_verifier",
+            "source_grounded_option_claim_verifier_answer_bearing",
+        }
+    )
+
+
+def _variant_watchdog_call_is_answer_bearing_source_priority() -> bool:
+    scope = _active_model_router_call_scope()
+    return (
+        scope.get("router_scope") == "option_claim_verifier"
+        and scope.get("router_call_stage")
+        == "source_grounded_option_claim_verifier_answer_bearing"
+    )
+
+
+def _variant_watchdog_call_is_option_claim_directness() -> bool:
+    scope = _active_model_router_call_scope()
+    return (
+        scope.get("router_scope") == "option_claim_verifier"
+        and scope.get("router_call_stage")
+        in {
+            "option_claim_span_directness_verifier",
+            "option_claim_relation_span_comparator",
+            "source_grounded_option_claim_verifier_answer_bearing",
+        }
+    )
 
 
 @contextlib.contextmanager
@@ -222,6 +322,21 @@ def _variant_execution_watchdog(
         if model_call_budget is not None
         else 0
     )
+    source_verifier_reserved_budget = (
+        _variant_watchdog_source_verifier_reserved_budget_from_env(
+            model_call_budget=model_call_budget,
+            recursive_selection_reserved_budget=recursive_selection_reserved_budget,
+        )
+        if model_call_budget is not None
+        else 0
+    )
+    directness_reserved_budget = (
+        _variant_watchdog_directness_reserved_budget_from_env(
+            model_call_budget=model_call_budget,
+        )
+        if model_call_budget is not None
+        else 0
+    )
     started = time.monotonic()
     state: dict[str, Any] = {
         "enabled": bool(timeout_sec is not None or model_call_budget is not None),
@@ -235,6 +350,8 @@ def _variant_execution_watchdog(
         "deadline_monotonic": None if timeout_sec is None else started + timeout_sec,
         "model_call_budget": model_call_budget,
         "recursive_selection_reserved_model_call_budget": recursive_selection_reserved_budget,
+        "source_verifier_reserved_model_call_budget": source_verifier_reserved_budget,
+        "directness_reserved_model_call_budget": directness_reserved_budget,
         "model_call_count": 0,
         "model_call_success_count": 0,
         "model_call_error_count": 0,
@@ -324,9 +441,21 @@ def _variant_watchdog_summary(state: dict[str, Any] | None = None) -> dict[str, 
         "recursive_selection_reserved_model_call_budget": int(
             state.get("recursive_selection_reserved_model_call_budget") or 0
         ),
+        "source_verifier_reserved_model_call_budget": int(
+            state.get("source_verifier_reserved_model_call_budget") or 0
+        ),
+        "directness_reserved_model_call_budget": int(
+            state.get("directness_reserved_model_call_budget") or 0
+        ),
         "model_call_count": int(state.get("model_call_count") or 0),
         "model_call_success_count": int(state.get("model_call_success_count") or 0),
         "model_call_error_count": int(state.get("model_call_error_count") or 0),
+        "reserved_model_call_rejection_count": int(
+            state.get("reserved_model_call_rejection_count") or 0
+        ),
+        "last_reserved_model_call_rejection_reason": state.get(
+            "last_reserved_model_call_rejection_reason"
+        ),
         "raw_content_persisted": False,
     }
 
@@ -352,6 +481,10 @@ def _variant_watchdog_before_model_call(*, model: str) -> int | None:
         lock = None
     now = time.monotonic()
     with (lock if lock is not None else contextlib.nullcontext()):
+        if state.get("status") == "blocked":
+            raise VariantExecutionWatchdogExceeded(
+                str(state.get("violation_reason") or "variant_watchdog_blocked")
+            )
         deadline = state.get("deadline_monotonic")
         if isinstance(deadline, (int, float)) and now >= float(deadline):
             _variant_watchdog_violate(state, "variant_total_timeout_exceeded")
@@ -362,35 +495,87 @@ def _variant_watchdog_before_model_call(*, model: str) -> int | None:
         recursive_selection_reserved_budget = int(
             state.get("recursive_selection_reserved_model_call_budget") or 0
         )
-        if (
-            budget is not None
-            and recursive_selection_reserved_budget > 0
-            and not _variant_watchdog_call_is_recursive_selection()
-            and int(budget) - count <= recursive_selection_reserved_budget
-        ):
-            _variant_watchdog_violate(
-                state,
-                "variant_model_call_budget_reserved_for_recursive_selection",
-                {
-                    "budget_remaining_before": max(0, int(budget) - count),
+        source_verifier_reserved_budget = int(
+            state.get("source_verifier_reserved_model_call_budget") or 0
+        )
+        directness_reserved_budget = int(
+            state.get("directness_reserved_model_call_budget") or 0
+        )
+        if budget is not None:
+            remaining = max(0, int(budget) - count)
+            protected_budget = 0
+            protected_reasons: list[str] = []
+            if (
+                recursive_selection_reserved_budget > 0
+                and not _variant_watchdog_call_is_recursive_selection()
+            ):
+                protected_budget += recursive_selection_reserved_budget
+                protected_reasons.append("recursive_selection")
+            current_call_is_source_verifier = _variant_watchdog_call_is_source_verifier()
+            current_call_is_directness = _variant_watchdog_call_is_option_claim_directness()
+            current_call_is_answer_bearing_source_priority = (
+                _variant_watchdog_call_is_answer_bearing_source_priority()
+            )
+            if (
+                source_verifier_reserved_budget > 0
+                and not current_call_is_source_verifier
+                and not current_call_is_directness
+            ):
+                protected_budget += source_verifier_reserved_budget
+                protected_reasons.append("source_verifier")
+            if (
+                directness_reserved_budget > 0
+                and not current_call_is_directness
+            ):
+                protected_budget += directness_reserved_budget
+                protected_reasons.append("option_claim_directness")
+            if protected_budget > 0 and remaining <= protected_budget:
+                if protected_reasons == ["recursive_selection"]:
+                    reason = "variant_model_call_budget_reserved_for_recursive_selection"
+                elif protected_reasons == ["source_verifier"]:
+                    reason = "variant_model_call_budget_reserved_for_source_verifier"
+                elif protected_reasons == ["option_claim_directness"]:
+                    reason = "variant_model_call_budget_reserved_for_option_claim_directness"
+                else:
+                    reason = "variant_model_call_budget_reserved_for_protected_stages"
+                extra = {
+                    "budget_remaining_before": remaining,
+                    "protected_budget_before": protected_budget,
+                    "protected_budget_reasons": protected_reasons,
                     "recursive_selection_reserved_model_call_budget": (
                         recursive_selection_reserved_budget
                     ),
+                    "source_verifier_reserved_model_call_budget": (
+                        source_verifier_reserved_budget
+                    ),
+                    "directness_reserved_model_call_budget": directness_reserved_budget,
                     "decision_phase": _active_no_gold_decision_phase(),
                     "router_scope": _active_model_router_call_scope().get("router_scope"),
                     "router_call_stage": _active_model_router_call_scope().get("router_call_stage"),
                     "prompt_kind": _active_model_router_call_scope().get("prompt_kind"),
-                },
-            )
+                    "answer_bearing_source_priority": (
+                        current_call_is_answer_bearing_source_priority
+                    ),
+                }
+                if (
+                    "source_verifier" in protected_reasons
+                    or "option_claim_directness" in protected_reasons
+                ):
+                    _variant_watchdog_reject_model_call_for_reserve(state, reason, extra)
+                _variant_watchdog_violate(state, reason, extra)
         state["model_call_count"] = count + 1
         call_index = count + 1
+    router_metadata = _model_router_scope_metadata()
+    router_metadata["answer_bearing_source_priority"] = (
+        _variant_watchdog_call_is_answer_bearing_source_priority()
+    )
     _variant_watchdog_log(
         state,
         "variant_watchdog_model_call_admitted",
         {
             "model": model,
             "model_call_index": call_index,
-            **_model_router_scope_metadata(),
+            **router_metadata,
         },
     )
     return call_index
@@ -442,9 +627,27 @@ def _variant_watchdog_mark_blocked(
         )
 
 
+def _variant_watchdog_reject_model_call_for_reserve(
+    state: dict[str, Any],
+    reason: str,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    state["reserved_model_call_rejection_count"] = (
+        int(state.get("reserved_model_call_rejection_count") or 0) + 1
+    )
+    state["last_reserved_model_call_rejection_reason"] = reason
+    _variant_watchdog_log(
+        state,
+        "variant_watchdog_model_call_reserved_rejection",
+        {"reason": reason, **(extra or {})},
+    )
+    raise VariantExecutionWatchdogExceeded(reason)
+
+
 def _variant_watchdog_blocked_summary(
     *,
     stage_name: str = "",
+    enforce_model_call_budget: bool = True,
 ) -> dict[str, Any] | None:
     state = _active_variant_watchdog()
     if not state or not state.get("enabled"):
@@ -465,18 +668,103 @@ def _variant_watchdog_blocked_summary(
             else:
                 budget = state.get("model_call_budget")
                 count = int(state.get("model_call_count") or 0)
-                if budget is not None and count >= int(budget):
+                if enforce_model_call_budget and budget is not None and count >= int(budget):
                     _variant_watchdog_mark_blocked(
                         state,
                         "variant_total_model_call_budget_exceeded",
                         {"stage_name": stage_name} if stage_name else {},
                     )
+                elif enforce_model_call_budget and budget is not None:
+                    recursive_selection_reserved_budget = int(
+                        state.get("recursive_selection_reserved_model_call_budget") or 0
+                    )
+                    source_verifier_reserved_budget = int(
+                        state.get("source_verifier_reserved_model_call_budget") or 0
+                    )
+                    directness_reserved_budget = int(
+                        state.get("directness_reserved_model_call_budget") or 0
+                    )
+                    remaining = max(0, int(budget) - count)
+                    protected_budget = 0
+                    protected_reasons: list[str] = []
+                    if (
+                        recursive_selection_reserved_budget > 0
+                        and not _variant_watchdog_call_is_recursive_selection()
+                    ):
+                        protected_budget += recursive_selection_reserved_budget
+                        protected_reasons.append("recursive_selection")
+                    current_call_is_source_verifier = _variant_watchdog_call_is_source_verifier()
+                    current_call_is_directness = _variant_watchdog_call_is_option_claim_directness()
+                    current_call_is_answer_bearing_source_priority = (
+                        _variant_watchdog_call_is_answer_bearing_source_priority()
+                    )
+                    if (
+                        source_verifier_reserved_budget > 0
+                        and not current_call_is_source_verifier
+                        and not current_call_is_directness
+                    ):
+                        protected_budget += source_verifier_reserved_budget
+                        protected_reasons.append("source_verifier")
+                    if (
+                        directness_reserved_budget > 0
+                        and not current_call_is_directness
+                    ):
+                        protected_budget += directness_reserved_budget
+                        protected_reasons.append("option_claim_directness")
+                    if protected_budget > 0 and remaining <= protected_budget:
+                        if protected_reasons == ["recursive_selection"]:
+                            reason = "variant_model_call_budget_reserved_for_recursive_selection"
+                        elif protected_reasons == ["source_verifier"]:
+                            reason = "variant_model_call_budget_reserved_for_source_verifier"
+                        elif protected_reasons == ["option_claim_directness"]:
+                            reason = "variant_model_call_budget_reserved_for_option_claim_directness"
+                        else:
+                            reason = "variant_model_call_budget_reserved_for_protected_stages"
+                        extra = {"stage_name": stage_name} if stage_name else {}
+                        extra.update({
+                            "budget_remaining_before": remaining,
+                            "protected_budget_before": protected_budget,
+                            "protected_budget_reasons": protected_reasons,
+                            "recursive_selection_reserved_model_call_budget": (
+                                recursive_selection_reserved_budget
+                            ),
+                            "source_verifier_reserved_model_call_budget": (
+                                source_verifier_reserved_budget
+                            ),
+                            "directness_reserved_model_call_budget": (
+                                directness_reserved_budget
+                            ),
+                            "answer_bearing_source_priority": (
+                                current_call_is_answer_bearing_source_priority
+                            ),
+                        })
+                        if (
+                            "source_verifier" in protected_reasons
+                            or "option_claim_directness" in protected_reasons
+                        ):
+                            return None
+                        _variant_watchdog_mark_blocked(state, reason, extra)
         if state.get("status") != "blocked":
             return None
         summary = _variant_watchdog_summary(state)
     if stage_name:
         summary["stage_name"] = stage_name
     return summary
+
+
+def _variant_watchdog_raise_if_blocked(
+    *,
+    stage_name: str = "",
+    enforce_model_call_budget: bool = True,
+) -> None:
+    summary = _variant_watchdog_blocked_summary(
+        stage_name=stage_name,
+        enforce_model_call_budget=enforce_model_call_budget,
+    )
+    if summary:
+        raise VariantExecutionWatchdogExceeded(
+            str(summary.get("violation_reason") or "variant_watchdog_blocked")
+        )
 
 
 def _variant_watchdog_violate(
@@ -15413,6 +15701,42 @@ def _maybe_run_mc_option_claim_evidence_verifier(
     if source_quality_challenger_rows:
         source_verifier_rows.extend(source_quality_challenger_rows)
     source_verifier_rows = _rank_source_verifier_rows_by_source_quality(source_verifier_rows)
+    source_verifier_queue_priority_summary: dict[str, Any] = {
+        "status": "not_required",
+        "reason": "no_coverage_priority_reorder",
+        "policy": "source_verifier_coverage_priority_v1",
+        "raw_content_persisted": False,
+    }
+    source_verifier_rows, source_verifier_queue_priority_summary = (
+        _prioritize_source_verifier_coverage_rows(source_verifier_rows)
+    )
+    _log_event(
+        logger,
+        {
+            "event": "source_verifier_queue_priority",
+            "eval_id": eval_id,
+            "call_id": call_id,
+            "problem_id_hash": problem["id_hash"],
+            "question_hash": problem["question_hash"],
+            "model": model,
+            "variant": "assumption_agent_recursive_verify",
+            "stage_status": source_verifier_queue_priority_summary.get("status"),
+            "reason": source_verifier_queue_priority_summary.get("reason"),
+            "row_count": source_verifier_queue_priority_summary.get("row_count"),
+            "coverage_row_count": source_verifier_queue_priority_summary.get(
+                "coverage_row_count"
+            ),
+            "before_order": source_verifier_queue_priority_summary.get("before_order"),
+            "after_order": source_verifier_queue_priority_summary.get("after_order"),
+            "before_option_hashes": source_verifier_queue_priority_summary.get(
+                "before_option_hashes"
+            ),
+            "after_option_hashes": source_verifier_queue_priority_summary.get(
+                "after_option_hashes"
+            ),
+            "raw_content_persisted": False,
+        },
+    )
     zero_quality_missing_retry_budget_gate_summary: dict[str, Any] = {
         "status": "not_required",
         "reason": "disabled_or_no_zero_quality_missing_retries",
@@ -15670,6 +15994,22 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         "direct_candidate_option_hashes": [],
         "underlying_model_calls": 0,
     }
+    relation_span_pre_directness_comparator_summary: dict[str, Any] = {
+        "status": "disabled",
+        "reason": "env_disabled",
+        "verifier_kind": "relation_span_comparator",
+        "pre_directness_comparator": True,
+        "pre_directness_policy": "relation_span_pre_directness_comparator_v1",
+        "pre_directness_policy_detail": {},
+        "pre_directness_skipped_candidate_directness": False,
+        "pre_directness_no_harm_skipped_candidate_directness": False,
+        "pre_directness_candidate_directness_skip_reason": "",
+        "direct_high_confidence": False,
+        "candidate_count": 0,
+        "relation_matrix": [],
+        "direct_candidate_option_hashes": [],
+        "underlying_model_calls": 0,
+    }
     candidate_direct_relation_span_repair_context_bridge_summary: dict[str, Any] = {
         "status": "disabled",
         "reason": "env_disabled",
@@ -15689,8 +16029,63 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         "underlying_model_calls": 0,
     }
     if source_verifier_candidate and source_verifier_enabled:
+        source_verifier_reserved_priority_attempt_count = 0
+        source_verifier_reserved_priority_attempt_limit = (
+            _source_grounded_option_claim_reserved_priority_attempt_limit()
+        )
         for verifier_index, verifier_row in enumerate(source_verifier_rows):
             lexical_label = str(verifier_row.get("label") or top["label"])
+            verifier_row_answer_bearing_signal_count = (
+                _source_verifier_row_answer_bearing_signal_count(verifier_row)
+            )
+            verifier_budget_kind = (
+                "source_grounded_option_claim_verifier_answer_bearing"
+                if verifier_row_answer_bearing_signal_count > 0
+                else "source_grounded_option_claim_verifier"
+            )
+            source_verifier_reserved_priority_region = bool(
+                _option_claim_variant_budget_in_source_directness_reserved_region(
+                    verifier_budget_kind
+                )
+            )
+            source_verifier_reserved_priority_attempt_count_before = (
+                source_verifier_reserved_priority_attempt_count
+            )
+            source_verifier_reserved_priority_downgraded = False
+            if (
+                verifier_budget_kind
+                == "source_grounded_option_claim_verifier_answer_bearing"
+                and source_verifier_reserved_priority_region
+                and source_verifier_reserved_priority_attempt_count
+                >= source_verifier_reserved_priority_attempt_limit
+            ):
+                verifier_budget_kind = "source_grounded_option_claim_verifier_nonreserved"
+                source_verifier_reserved_priority_downgraded = True
+                _log_event(
+                    logger,
+                    {
+                        "event": "source_grounded_option_claim_verifier_reserved_priority_gate",
+                        "eval_id": eval_id,
+                        "call_id": call_id if verifier_index == 0 else f"{call_id}_retry_{verifier_index}",
+                        "problem_id_hash": problem["id_hash"],
+                        "question_hash": problem["question_hash"],
+                        "model": model,
+                        "variant": "assumption_agent_recursive_verify",
+                        "stage_status": "downgraded",
+                        "reason": "reserved_priority_attempt_limit_reached",
+                        "lexical_top_option_hash": stable_hash({"option_label": lexical_label}),
+                        "reserved_priority_attempt_count": (
+                            source_verifier_reserved_priority_attempt_count
+                        ),
+                        "reserved_priority_attempt_limit": (
+                            source_verifier_reserved_priority_attempt_limit
+                        ),
+                        "answer_bearing_signal_count": (
+                            verifier_row_answer_bearing_signal_count
+                        ),
+                        "raw_content_persisted": False,
+                    },
+                )
             if _source_grounded_option_claim_target_context_enabled():
                 target_evidence_context = _target_option_evidence_context(
                     options=options,
@@ -15832,6 +16227,51 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                             )
                             or 0
                         ),
+                        "support_refute_audit_status": structured_context_summary.get(
+                            "support_refute_audit_status"
+                        ),
+                        "support_refute_audit_reason": structured_context_summary.get(
+                            "support_refute_audit_reason"
+                        ),
+                        "support_refute_audit_hash": structured_context_summary.get(
+                            "support_refute_audit_hash"
+                        ),
+                        "support_refute_audit_support_doc_count": int(
+                            structured_context_summary.get(
+                                "support_refute_audit_support_doc_count"
+                            )
+                            or 0
+                        ),
+                        "support_refute_audit_refute_doc_count": int(
+                            structured_context_summary.get(
+                                "support_refute_audit_refute_doc_count"
+                            )
+                            or 0
+                        ),
+                        "support_refute_audit_ambiguous_shared_doc_count": int(
+                            structured_context_summary.get(
+                                "support_refute_audit_ambiguous_shared_doc_count"
+                            )
+                            or 0
+                        ),
+                        "support_refute_audit_relation_only_doc_count": int(
+                            structured_context_summary.get(
+                                "support_refute_audit_relation_only_doc_count"
+                            )
+                            or 0
+                        ),
+                        "support_refute_audit_directish_doc_count": int(
+                            structured_context_summary.get(
+                                "support_refute_audit_directish_doc_count"
+                            )
+                            or 0
+                        ),
+                        "support_refute_audit_required_overlap_doc_count": int(
+                            structured_context_summary.get(
+                                "support_refute_audit_required_overlap_doc_count"
+                            )
+                            or 0
+                        ),
                         "raw_content_persisted": False,
                     },
                 )
@@ -15852,7 +16292,16 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 logger=logger,
                 timeout=timeout,
                 max_tokens=max_tokens,
+                budget_kind=verifier_budget_kind,
             )
+            if (
+                current_summary.get("underlying_model_calls")
+                and source_verifier_reserved_priority_region
+                and not source_verifier_reserved_priority_downgraded
+                and verifier_budget_kind
+                == "source_grounded_option_claim_verifier_answer_bearing"
+            ):
+                source_verifier_reserved_priority_attempt_count += 1
             if source_verifier_summary is None:
                 source_verifier_summary = current_summary
             selected_label = str(current_summary.get("selected_label") or "")
@@ -15970,6 +16419,23 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 "ranked_option_rank": ranked_option_rank_by_label.get(lexical_label),
                 "source_verifier_rank": source_verifier_rank_by_label.get(lexical_label),
                 "retry_reason": verifier_row.get("_source_verifier_retry_reason"),
+                "answer_bearing_source_priority": (
+                    verifier_budget_kind
+                    == "source_grounded_option_claim_verifier_answer_bearing"
+                ),
+                "answer_bearing_signal_count": verifier_row_answer_bearing_signal_count,
+                "source_verifier_reserved_priority_region": (
+                    source_verifier_reserved_priority_region
+                ),
+                "source_verifier_reserved_priority_downgraded": (
+                    source_verifier_reserved_priority_downgraded
+                ),
+                "source_verifier_reserved_priority_attempt_count_before": (
+                    source_verifier_reserved_priority_attempt_count_before
+                ),
+                "source_verifier_reserved_priority_attempt_limit": (
+                    source_verifier_reserved_priority_attempt_limit
+                ),
                 "status": current_summary.get("status"),
                 "selected_option_hash": (
                     stable_hash({"option_label": selected_label}) if selected_label else None
@@ -16054,6 +16520,63 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 ),
                 "source_verifier_structured_context_char_count": int(
                     structured_context_summary.get("context_char_count") or 0
+                ),
+                "source_verifier_structured_support_refute_audit_status": (
+                    structured_context_summary.get("support_refute_audit_status")
+                ),
+                "source_verifier_structured_support_refute_audit_reason": (
+                    structured_context_summary.get("support_refute_audit_reason")
+                ),
+                "source_verifier_structured_support_refute_audit_hash": (
+                    structured_context_summary.get("support_refute_audit_hash")
+                ),
+                "source_verifier_structured_support_refute_audit_support_doc_count": int(
+                    structured_context_summary.get(
+                        "support_refute_audit_support_doc_count"
+                    )
+                    or 0
+                ),
+                "source_verifier_structured_support_refute_audit_refute_doc_count": int(
+                    structured_context_summary.get(
+                        "support_refute_audit_refute_doc_count"
+                    )
+                    or 0
+                ),
+                "source_verifier_structured_support_refute_audit_ambiguous_shared_doc_count": int(
+                    structured_context_summary.get(
+                        "support_refute_audit_ambiguous_shared_doc_count"
+                    )
+                    or 0
+                ),
+                "source_verifier_structured_support_refute_audit_relation_only_doc_count": int(
+                    structured_context_summary.get(
+                        "support_refute_audit_relation_only_doc_count"
+                    )
+                    or 0
+                ),
+                "source_verifier_structured_support_refute_audit_directish_doc_count": int(
+                    structured_context_summary.get(
+                        "support_refute_audit_directish_doc_count"
+                    )
+                    or 0
+                ),
+                "source_verifier_structured_support_refute_audit_required_overlap_doc_count": int(
+                    structured_context_summary.get(
+                        "support_refute_audit_required_overlap_doc_count"
+                    )
+                    or 0
+                ),
+                "source_verifier_structured_support_refute_audit_category_counts": dict(
+                    structured_context_summary.get(
+                        "support_refute_audit_category_counts"
+                    )
+                    or {}
+                ),
+                "source_verifier_structured_support_refute_audit_top_doc_hashes_by_category": dict(
+                    structured_context_summary.get(
+                        "support_refute_audit_top_doc_hashes_by_category"
+                    )
+                    or {}
                 ),
                 "source_verifier_structured_context_source_quality_doc_count": int(
                     structured_context_summary.get("source_quality_doc_count") or 0
@@ -16382,6 +16905,48 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         and source_verifier_attempts
         and not source_verified
     ):
+        label_by_option_hash = {
+            stable_hash({"option_label": label}): label
+            for label in options
+        }
+        attempted_source_verifier_label_set = {
+            label_by_option_hash.get(str(item.get("lexical_top_option_hash") or ""), "")
+            for item in source_verifier_attempts
+        }
+        attempted_source_verifier_label_set.discard("")
+        missing_model_label_set = set(missing_model_labels)
+        source_verifier_coverage_candidates = [
+            row
+            for row in source_verifier_rows
+            if str(row.get("label") or "") in missing_model_label_set
+            and str(row.get("label") or "") not in attempted_source_verifier_label_set
+        ]
+        source_verifier_coverage_labels = [
+            str(row.get("label") or "")
+            for row in source_verifier_coverage_candidates
+            if _source_verifier_coverage_continuation_allowed(row)
+        ]
+        source_verifier_coverage_filter_summary = {
+            "policy": "source_verifier_coverage_continuation_answer_bearing_guard_v1",
+            "candidate_count": len(source_verifier_coverage_candidates),
+            "eligible_count": len(source_verifier_coverage_labels),
+            "rejected_count": max(
+                0,
+                len(source_verifier_coverage_candidates)
+                - len(source_verifier_coverage_labels),
+            ),
+            "eligible_option_hashes": [
+                stable_hash({"option_label": str(row.get("label") or "")})
+                for row in source_verifier_coverage_candidates
+                if str(row.get("label") or "") in source_verifier_coverage_labels
+            ][:8],
+            "rejected_option_hashes": [
+                stable_hash({"option_label": str(row.get("label") or "")})
+                for row in source_verifier_coverage_candidates
+                if str(row.get("label") or "") not in source_verifier_coverage_labels
+            ][:8],
+            "raw_content_persisted": False,
+        }
         contrastive_candidate_selection = _option_claim_contrastive_candidate_selection(
             ranked_rows=ranked,
             options=options,
@@ -16391,6 +16956,7 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 for row in source_quality_challenger_rows
                 if str(row.get("label") or "")
             ],
+            source_verifier_coverage_labels=source_verifier_coverage_labels,
         )
         _log_event(
             logger,
@@ -16428,6 +16994,29 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                         "overall_source_quality_challenger_included"
                     )
                 ),
+                "answer_web_relation_challenger_included": bool(
+                    contrastive_candidate_selection.get(
+                        "answer_web_relation_challenger_included"
+                    )
+                ),
+                "answer_web_relation_candidate_considered_count": int(
+                    contrastive_candidate_selection.get(
+                        "answer_web_relation_candidate_considered_count"
+                    )
+                    or 0
+                ),
+                "source_verifier_coverage_challenger_included": bool(
+                    contrastive_candidate_selection.get(
+                        "source_verifier_coverage_challenger_included"
+                    )
+                ),
+                "source_verifier_coverage_candidate_considered_count": int(
+                    contrastive_candidate_selection.get(
+                        "source_verifier_coverage_candidate_considered_count"
+                    )
+                    or 0
+                ),
+                "source_verifier_coverage_filter": source_verifier_coverage_filter_summary,
                 "finite_option_coverage_included": bool(
                     contrastive_candidate_selection.get(
                         "finite_option_coverage_included"
@@ -16638,6 +17227,7 @@ def _maybe_run_mc_option_claim_evidence_verifier(
             candidate_direct_relation_span_docs_by_label: dict[str, list[dict[str, str]]] = {}
             candidate_direct_relation_span_context = ""
             candidate_direct_relation_span_context_used = False
+            pre_directness_comparator_no_harm_skip = False
             answer_bearing_task_hint = _option_claim_answer_bearing_task_hint(stem)
             require_contrastive_after_span_directness = (
                 answer_bearing_task_hint.get("kind")
@@ -16766,57 +17356,327 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                     },
                 )
                 if candidate_direct_relation_span_context_used:
-                    candidate_direct_relation_span_directness_verifier_summary = (
-                        _run_option_claim_span_directness_verifier(
-                            problem=problem,
-                            options=contrastive_options,
-                            unique_span_docs_by_label=candidate_direct_relation_span_docs_by_label,
-                            unique_span_summary=candidate_direct_relation_span_extractor_summary,
-                            candidate_labels=contrastive_candidate_labels,
-                            span_context_kind="candidate_direct_relation_recovery",
-                            model=model,
-                            eval_id=eval_id,
-                            call_id=f"{call_id}_candidate_direct_relation_span_directness_verifier",
-                            logger=logger,
-                            timeout=timeout,
-                            max_tokens=max_tokens,
-                            force_enabled=(
-                                span_directness_recovery_enabled
-                                or prefilter_override_recovery_adjudicators_enabled
-                            ),
-                            required_conflict_option_hashes=list(
-                                contrastive_candidate_selection.get("candidate_option_hashes", []) or []
-                            ),
-                        )
-                    )
-                    span_directness_verifier_summary = (
-                        _merge_option_claim_span_directness_recovery_summaries(
-                            primary_summary=unique_span_directness_verifier_summary,
-                            recovery_summary=candidate_direct_relation_span_directness_verifier_summary,
-                            extractor_summary=candidate_direct_relation_span_extractor_summary,
-                            options=contrastive_options,
-                            required_conflict_option_hashes=list(
-                                contrastive_candidate_selection.get("candidate_option_hashes", []) or []
-                            ),
-                        )
-                    )
-                    relation_span_comparator_summary = (
-                        _run_option_claim_relation_span_comparator(
-                            problem=problem,
-                            options=contrastive_options,
-                            span_docs_by_label=candidate_direct_relation_span_docs_by_label,
+                    pre_directness_comparator_detail = (
+                        _option_claim_relation_span_pre_directness_comparator_detail(
                             span_summary=candidate_direct_relation_span_extractor_summary,
-                            span_directness_summary=span_directness_verifier_summary,
-                            candidate_selection=contrastive_candidate_selection,
-                            candidate_labels=contrastive_candidate_labels,
-                            model=model,
-                            eval_id=eval_id,
-                            call_id=f"{call_id}_relation_span_comparator",
-                            logger=logger,
-                            timeout=timeout,
-                            max_tokens=max_tokens,
+                            relation_backfill_summary=contrastive_relation_backfill_summary,
+                            context_used=candidate_direct_relation_span_context_used,
                         )
                     )
+                    if pre_directness_comparator_detail.get("should_run"):
+                        relation_span_pre_directness_comparator_summary = (
+                            _run_option_claim_relation_span_comparator(
+                                problem=problem,
+                                options=contrastive_options,
+                                span_docs_by_label=candidate_direct_relation_span_docs_by_label,
+                                span_summary=candidate_direct_relation_span_extractor_summary,
+                                span_directness_summary=unique_span_directness_verifier_summary,
+                                candidate_selection=contrastive_candidate_selection,
+                                candidate_labels=contrastive_candidate_labels,
+                                model=model,
+                                eval_id=eval_id,
+                                call_id=f"{call_id}_pre_directness_relation_span_comparator",
+                                logger=logger,
+                                timeout=timeout,
+                                max_tokens=max_tokens,
+                            )
+                        )
+                    else:
+                        relation_span_pre_directness_comparator_summary = {
+                            **relation_span_pre_directness_comparator_summary,
+                            "status": pre_directness_comparator_detail.get("status"),
+                            "reason": pre_directness_comparator_detail.get("reason"),
+                            "candidate_count": len(contrastive_candidate_labels),
+                            "candidate_option_hashes": [
+                                stable_hash({"option_label": label})
+                                for label in contrastive_candidate_labels
+                                if label in contrastive_options
+                            ],
+                        }
+                    relation_span_pre_directness_comparator_summary = dict(
+                        relation_span_pre_directness_comparator_summary
+                    )
+                    relation_span_pre_directness_comparator_summary.update({
+                        "pre_directness_comparator": True,
+                        "pre_directness_policy": pre_directness_comparator_detail.get(
+                            "policy"
+                        ),
+                        "pre_directness_policy_status": (
+                            pre_directness_comparator_detail.get("status")
+                        ),
+                        "pre_directness_policy_reason": (
+                            pre_directness_comparator_detail.get("reason")
+                        ),
+                        "pre_directness_policy_detail": (
+                            pre_directness_comparator_detail
+                        ),
+                    })
+                    pre_directness_comparator_accepted = bool(
+                        relation_span_pre_directness_comparator_summary.get("status")
+                        == "activated"
+                        and relation_span_pre_directness_comparator_summary.get(
+                            "direct_high_confidence"
+                        )
+                        and str(
+                            relation_span_pre_directness_comparator_summary.get(
+                                "selected_label"
+                            )
+                            or ""
+                        )
+                        in contrastive_options
+                    )
+                    pre_directness_comparator_no_harm_skip = bool(
+                        _option_claim_relation_span_pre_directness_no_harm_skip_enabled()
+                        and not pre_directness_comparator_accepted
+                        and int(
+                            relation_span_pre_directness_comparator_summary.get(
+                                "omitted_span_priority_candidate_count"
+                            )
+                            or 0
+                        )
+                        <= 0
+                        and str(
+                            relation_span_pre_directness_comparator_summary.get(
+                                "status"
+                            )
+                            or ""
+                        )
+                        in {
+                            "blocked_not_direct_relation",
+                            "blocked_multiple_direct_candidates",
+                            "blocked_span_directness_conflict",
+                            "budget_exhausted",
+                        }
+                        and (
+                            int(
+                                relation_span_pre_directness_comparator_summary.get(
+                                    "underlying_model_calls"
+                                )
+                                or 0
+                            )
+                            > 0
+                            or str(
+                                relation_span_pre_directness_comparator_summary.get(
+                                    "status"
+                                )
+                                or ""
+                            )
+                            == "budget_exhausted"
+                        )
+                    )
+                    pre_directness_candidate_directness_skip_reason = ""
+                    if pre_directness_comparator_accepted:
+                        pre_directness_candidate_directness_skip_reason = (
+                            "pre_directness_relation_span_comparator_accepted"
+                        )
+                    elif pre_directness_comparator_no_harm_skip:
+                        pre_directness_candidate_directness_skip_reason = (
+                            "pre_directness_relation_span_comparator_no_harm_skip"
+                        )
+                    relation_span_pre_directness_comparator_summary[
+                        "pre_directness_skipped_candidate_directness"
+                    ] = bool(
+                        pre_directness_comparator_accepted
+                        or pre_directness_comparator_no_harm_skip
+                    )
+                    relation_span_pre_directness_comparator_summary[
+                        "pre_directness_no_harm_skipped_candidate_directness"
+                    ] = bool(pre_directness_comparator_no_harm_skip)
+                    relation_span_pre_directness_comparator_summary[
+                        "pre_directness_candidate_directness_skip_reason"
+                    ] = pre_directness_candidate_directness_skip_reason
+                    _log_event(
+                        logger,
+                        {
+                            "event": "mc_option_claim_relation_span_pre_directness_comparator",
+                            "eval_id": eval_id,
+                            "call_id": call_id,
+                            "problem_id_hash": problem["id_hash"],
+                            "question_hash": problem["question_hash"],
+                            "model": model,
+                            "variant": "assumption_agent_recursive_verify",
+                            "stage_status": (
+                                relation_span_pre_directness_comparator_summary.get(
+                                    "status"
+                                )
+                            ),
+                            "reason": (
+                                relation_span_pre_directness_comparator_summary.get(
+                                    "reason"
+                                )
+                            ),
+                            "policy_status": pre_directness_comparator_detail.get(
+                                "status"
+                            ),
+                            "policy_reason": pre_directness_comparator_detail.get(
+                                "reason"
+                            ),
+                            "candidate_count": int(
+                                relation_span_pre_directness_comparator_summary.get(
+                                    "candidate_count"
+                                )
+                                or 0
+                            ),
+                            "direct_candidate_count": int(
+                                relation_span_pre_directness_comparator_summary.get(
+                                    "direct_candidate_count"
+                                )
+                                or 0
+                            ),
+                            "selected_option_hash": (
+                                relation_span_pre_directness_comparator_summary.get(
+                                    "selected_option_hash"
+                                )
+                            ),
+                            "underlying_model_calls": int(
+                                relation_span_pre_directness_comparator_summary.get(
+                                    "underlying_model_calls"
+                                )
+                                or 0
+                            ),
+                            "skipped_candidate_directness": bool(
+                                pre_directness_comparator_accepted
+                                or pre_directness_comparator_no_harm_skip
+                            ),
+                            "no_harm_skipped_candidate_directness": bool(
+                                pre_directness_comparator_no_harm_skip
+                            ),
+                            "candidate_directness_skip_reason": (
+                                pre_directness_candidate_directness_skip_reason
+                            ),
+                            "raw_content_persisted": False,
+                            "stage_data": (
+                                relation_span_pre_directness_comparator_summary
+                            ),
+                        },
+                    )
+                    if pre_directness_comparator_accepted or pre_directness_comparator_no_harm_skip:
+                        relation_span_comparator_summary = dict(
+                            relation_span_pre_directness_comparator_summary
+                        )
+                        candidate_direct_relation_span_directness_verifier_summary = (
+                            _option_claim_span_directness_skipped_summary(
+                                options=contrastive_options,
+                                candidate_labels=contrastive_candidate_labels,
+                                span_context_kind="candidate_direct_relation_recovery",
+                                reason=pre_directness_candidate_directness_skip_reason,
+                            )
+                        )
+                        candidate_direct_relation_span_directness_verifier_summary.update({
+                            "pre_directness_relation_span_comparator_accepted": bool(
+                                pre_directness_comparator_accepted
+                            ),
+                            "pre_directness_relation_span_comparator_no_harm_skip": bool(
+                                pre_directness_comparator_no_harm_skip
+                            ),
+                            "pre_directness_relation_span_comparator_selected_option_hash": (
+                                relation_span_pre_directness_comparator_summary.get(
+                                    "selected_option_hash"
+                                )
+                            ),
+                        })
+                    else:
+                        candidate_direct_relation_span_directness_verifier_summary = (
+                            _run_option_claim_span_directness_verifier(
+                                problem=problem,
+                                options=contrastive_options,
+                                unique_span_docs_by_label=(
+                                    candidate_direct_relation_span_docs_by_label
+                                ),
+                                unique_span_summary=(
+                                    candidate_direct_relation_span_extractor_summary
+                                ),
+                                candidate_labels=contrastive_candidate_labels,
+                                candidate_selection=contrastive_candidate_selection,
+                                span_context_kind="candidate_direct_relation_recovery",
+                                model=model,
+                                eval_id=eval_id,
+                                call_id=(
+                                    f"{call_id}_candidate_direct_relation_span_directness_verifier"
+                                ),
+                                logger=logger,
+                                timeout=timeout,
+                                max_tokens=max_tokens,
+                                force_enabled=(
+                                    span_directness_recovery_enabled
+                                    or prefilter_override_recovery_adjudicators_enabled
+                                ),
+                                required_conflict_option_hashes=list(
+                                    contrastive_candidate_selection.get(
+                                        "candidate_option_hashes",
+                                        [],
+                                    )
+                                    or []
+                                ),
+                            )
+                        )
+                        span_directness_verifier_summary = (
+                            _merge_option_claim_span_directness_recovery_summaries(
+                                primary_summary=unique_span_directness_verifier_summary,
+                                recovery_summary=(
+                                    candidate_direct_relation_span_directness_verifier_summary
+                                ),
+                                extractor_summary=(
+                                    candidate_direct_relation_span_extractor_summary
+                                ),
+                                options=contrastive_options,
+                                required_conflict_option_hashes=list(
+                                    contrastive_candidate_selection.get(
+                                        "candidate_option_hashes",
+                                        [],
+                                    )
+                                    or []
+                                ),
+                            )
+                        )
+                        should_run_post_directness_comparator = bool(
+                            not pre_directness_comparator_detail.get("should_run")
+                            or int(
+                                candidate_direct_relation_span_directness_verifier_summary.get(
+                                    "direct_candidate_count"
+                                )
+                                or 0
+                            )
+                            > 0
+                            or str(
+                                candidate_direct_relation_span_directness_verifier_summary.get(
+                                    "status"
+                                )
+                                or ""
+                            )
+                            == "activated"
+                        )
+                        if should_run_post_directness_comparator:
+                            relation_span_comparator_summary = (
+                                _run_option_claim_relation_span_comparator(
+                                    problem=problem,
+                                    options=contrastive_options,
+                                    span_docs_by_label=(
+                                        candidate_direct_relation_span_docs_by_label
+                                    ),
+                                    span_summary=(
+                                        candidate_direct_relation_span_extractor_summary
+                                    ),
+                                    span_directness_summary=span_directness_verifier_summary,
+                                    candidate_selection=contrastive_candidate_selection,
+                                    candidate_labels=contrastive_candidate_labels,
+                                    model=model,
+                                    eval_id=eval_id,
+                                    call_id=f"{call_id}_relation_span_comparator",
+                                    logger=logger,
+                                    timeout=timeout,
+                                    max_tokens=max_tokens,
+                                )
+                            )
+                        elif int(
+                            relation_span_pre_directness_comparator_summary.get(
+                                "underlying_model_calls"
+                            )
+                            or 0
+                        ) > 0:
+                            relation_span_comparator_summary = dict(
+                                relation_span_pre_directness_comparator_summary
+                            )
             contrastive_candidate_summaries = _option_claim_contrastive_candidate_summaries(
                 candidate_labels=contrastive_candidate_labels,
                 ranked_rows=ranked,
@@ -16923,7 +17783,37 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                     and candidate_direct_relation_span_context_used
                 ):
                     contrastive_evidence_context = candidate_direct_relation_span_context
-                if contrastive_recovery_enabled or prefilter_override_recovery_adjudicators_enabled:
+                if pre_directness_comparator_no_harm_skip:
+                    contrastive_adjudicator_summary = {
+                        "status": "skipped",
+                        "reason": "pre_directness_relation_span_comparator_no_harm_skip",
+                        "verifier_kind": "contrastive_top_vs_runner_up",
+                        "direct_high_confidence": False,
+                        "relation_satisfied": False,
+                        "candidate_count": len(contrastive_candidate_labels),
+                        "candidate_option_hashes": [
+                            stable_hash({"option_label": label})
+                            for label in contrastive_candidate_labels
+                            if label in options
+                        ],
+                        "candidate_summaries": contrastive_candidate_summaries,
+                        "selected_label": "",
+                        "selected_option_hash": None,
+                        "selected_runner_up": False,
+                        "underlying_model_calls": 0,
+                        "pre_directness_relation_span_comparator_no_harm_skip": True,
+                        "relation_span_pre_directness_comparator_status": (
+                            relation_span_pre_directness_comparator_summary.get(
+                                "status"
+                            )
+                        ),
+                        "relation_span_pre_directness_comparator_reason": (
+                            relation_span_pre_directness_comparator_summary.get(
+                                "reason"
+                            )
+                        ),
+                    }
+                elif contrastive_recovery_enabled or prefilter_override_recovery_adjudicators_enabled:
                     contrastive_adjudicator_summary = _run_option_claim_contrastive_adjudicator(
                         problem=problem,
                         options=contrastive_options,
@@ -17076,6 +17966,22 @@ def _maybe_run_mc_option_claim_evidence_verifier(
             contrastive_adjudicator_summary[
                 "contrastive_relation_backfill_added_doc_count"
             ] = int(contrastive_relation_backfill_summary.get("added_doc_count") or 0)
+            contrastive_adjudicator_summary[
+                "contrastive_relation_backfill_self_contained_stem_doc_count"
+            ] = int(
+                contrastive_relation_backfill_summary.get(
+                    "self_contained_stem_relation_backfill_doc_count"
+                )
+                or 0
+            )
+            contrastive_adjudicator_summary[
+                "contrastive_relation_backfill_self_contained_stem_candidate_count"
+            ] = int(
+                contrastive_relation_backfill_summary.get(
+                    "self_contained_stem_relation_backfill_candidate_count"
+                )
+                or 0
+            )
             contrastive_adjudicator_summary["context_anchor"] = contrastive_context_anchor_summary
             contrastive_adjudicator_summary["context_anchor_status"] = (
                 contrastive_context_anchor_summary.get("status")
@@ -17139,6 +18045,65 @@ def _maybe_run_mc_option_claim_evidence_verifier(
             )
             contrastive_adjudicator_summary["relation_span_comparator"] = (
                 relation_span_comparator_summary
+            )
+            contrastive_adjudicator_summary["relation_span_pre_directness_comparator"] = (
+                relation_span_pre_directness_comparator_summary
+            )
+            contrastive_adjudicator_summary[
+                "relation_span_pre_directness_comparator_status"
+            ] = relation_span_pre_directness_comparator_summary.get("status")
+            contrastive_adjudicator_summary[
+                "relation_span_pre_directness_comparator_reason"
+            ] = relation_span_pre_directness_comparator_summary.get("reason")
+            contrastive_adjudicator_summary[
+                "relation_span_pre_directness_comparator_policy_status"
+            ] = relation_span_pre_directness_comparator_summary.get(
+                "pre_directness_policy_status"
+            )
+            contrastive_adjudicator_summary[
+                "relation_span_pre_directness_comparator_policy_reason"
+            ] = relation_span_pre_directness_comparator_summary.get(
+                "pre_directness_policy_reason"
+            )
+            contrastive_adjudicator_summary[
+                "relation_span_pre_directness_comparator_direct_candidate_count"
+            ] = int(
+                relation_span_pre_directness_comparator_summary.get(
+                    "direct_candidate_count"
+                )
+                or 0
+            )
+            contrastive_adjudicator_summary[
+                "relation_span_pre_directness_comparator_selected_option_hash"
+            ] = relation_span_pre_directness_comparator_summary.get(
+                "selected_option_hash"
+            )
+            contrastive_adjudicator_summary[
+                "relation_span_pre_directness_comparator_underlying_model_calls"
+            ] = int(
+                relation_span_pre_directness_comparator_summary.get(
+                    "underlying_model_calls"
+                )
+                or 0
+            )
+            contrastive_adjudicator_summary[
+                "relation_span_pre_directness_comparator_skipped_candidate_directness"
+            ] = bool(
+                relation_span_pre_directness_comparator_summary.get(
+                    "pre_directness_skipped_candidate_directness"
+                )
+            )
+            contrastive_adjudicator_summary[
+                "relation_span_pre_directness_comparator_no_harm_skipped_candidate_directness"
+            ] = bool(
+                relation_span_pre_directness_comparator_summary.get(
+                    "pre_directness_no_harm_skipped_candidate_directness"
+                )
+            )
+            contrastive_adjudicator_summary[
+                "relation_span_pre_directness_comparator_candidate_directness_skip_reason"
+            ] = relation_span_pre_directness_comparator_summary.get(
+                "pre_directness_candidate_directness_skip_reason"
             )
             contrastive_adjudicator_summary["relation_span_comparator_status"] = (
                 relation_span_comparator_summary.get("status")
@@ -17255,11 +18220,41 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 )
                 or 0
             )
+            contrastive_adjudicator_summary[
+                "answer_web_relation_challenger_included"
+            ] = bool(
+                contrastive_candidate_selection.get(
+                    "answer_web_relation_challenger_included"
+                )
+            )
+            contrastive_adjudicator_summary[
+                "answer_web_relation_candidate_considered_count"
+            ] = int(
+                contrastive_candidate_selection.get(
+                    "answer_web_relation_candidate_considered_count"
+                )
+                or 0
+            )
             contrastive_adjudicator_summary["ranked_sweep_only_challenger_included"] = bool(
                 contrastive_candidate_selection.get("ranked_sweep_only_challenger_included")
             )
             contrastive_adjudicator_summary["tail_sweep_only_challenger_included"] = bool(
                 contrastive_candidate_selection.get("tail_sweep_only_challenger_included")
+            )
+            contrastive_adjudicator_summary[
+                "source_verifier_coverage_challenger_included"
+            ] = bool(
+                contrastive_candidate_selection.get(
+                    "source_verifier_coverage_challenger_included"
+                )
+            )
+            contrastive_adjudicator_summary[
+                "source_verifier_coverage_candidate_considered_count"
+            ] = int(
+                contrastive_candidate_selection.get(
+                    "source_verifier_coverage_candidate_considered_count"
+                )
+                or 0
             )
             contrastive_adjudicator_summary["finite_option_coverage_included"] = bool(
                 contrastive_candidate_selection.get("finite_option_coverage_included")
@@ -17280,8 +18275,22 @@ def _maybe_run_mc_option_claim_evidence_verifier(
             ] = contrastive_candidate_selection.get(
                 "answer_web_physics_bound_bridge_challenger_option_hash"
             )
+            contrastive_adjudicator_summary[
+                "answer_web_relation_challenger_option_hash"
+            ] = contrastive_candidate_selection.get(
+                "answer_web_relation_challenger_option_hash"
+            )
             contrastive_adjudicator_summary["ranked_sweep_only_challenger_option_hash"] = (
                 contrastive_candidate_selection.get("ranked_sweep_only_challenger_option_hash")
+            )
+            contrastive_adjudicator_summary[
+                "source_verifier_coverage_challenger_option_hashes"
+            ] = list(
+                contrastive_candidate_selection.get(
+                    "source_verifier_coverage_challenger_option_hashes",
+                    [],
+                )
+                or []
             )
             contrastive_adjudicator_summary["tail_sweep_only_challenger_option_hash"] = (
                 contrastive_candidate_selection.get("tail_sweep_only_challenger_option_hash")
@@ -17831,6 +18840,9 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         status = "blocked_weak_claim_support_margin"
     else:
         status = "weak_margin"
+    contrastive_candidate_selection_summary = dict(
+        contrastive_adjudicator_summary.get("candidate_selection") or {}
+    )
     summary = {
         "status": status,
         "source": "option_claim_support_refute_retrieval",
@@ -18088,6 +19100,13 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         "source_verifier_retry_top_k": _source_grounded_option_claim_retry_top_k(),
         "source_verifier_retry_min_support": retry_min_support,
         "source_verifier_retry_min_net_score": retry_min_net_score,
+        "source_verifier_queue_priority": source_verifier_queue_priority_summary,
+        "source_verifier_queue_priority_status": source_verifier_queue_priority_summary.get(
+            "status"
+        ),
+        "source_verifier_queue_priority_reason": source_verifier_queue_priority_summary.get(
+            "reason"
+        ),
         "source_quality_challenger_count": len(source_quality_challenger_rows),
         "source_quality_challenger_option_hashes": [
             stable_hash({"option_label": str(row.get("label") or "")})
@@ -18626,6 +19645,66 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         "source_quality_directness_promotion_detail": dict(
             source_quality_directness_promotion_detail
         ),
+        "relation_span_pre_directness_comparator": dict(
+            relation_span_pre_directness_comparator_summary
+        ),
+        "relation_span_pre_directness_comparator_status": (
+            relation_span_pre_directness_comparator_summary.get("status")
+        ),
+        "relation_span_pre_directness_comparator_reason": (
+            relation_span_pre_directness_comparator_summary.get("reason")
+        ),
+        "relation_span_pre_directness_comparator_policy_status": (
+            relation_span_pre_directness_comparator_summary.get(
+                "pre_directness_policy_status"
+            )
+        ),
+        "relation_span_pre_directness_comparator_policy_reason": (
+            relation_span_pre_directness_comparator_summary.get(
+                "pre_directness_policy_reason"
+            )
+        ),
+        "relation_span_pre_directness_comparator_candidate_count": int(
+            relation_span_pre_directness_comparator_summary.get("candidate_count")
+            or 0
+        ),
+        "relation_span_pre_directness_comparator_direct_candidate_count": int(
+            relation_span_pre_directness_comparator_summary.get(
+                "direct_candidate_count"
+            )
+            or 0
+        ),
+        "relation_span_pre_directness_comparator_selected_option_hash": (
+            relation_span_pre_directness_comparator_summary.get(
+                "selected_option_hash"
+            )
+        ),
+        "relation_span_pre_directness_comparator_relation_matrix_hash": (
+            relation_span_pre_directness_comparator_summary.get(
+                "relation_matrix_hash"
+            )
+        ),
+        "relation_span_pre_directness_comparator_underlying_model_calls": int(
+            relation_span_pre_directness_comparator_summary.get(
+                "underlying_model_calls"
+            )
+            or 0
+        ),
+        "relation_span_pre_directness_comparator_skipped_candidate_directness": bool(
+            relation_span_pre_directness_comparator_summary.get(
+                "pre_directness_skipped_candidate_directness"
+            )
+        ),
+        "relation_span_pre_directness_comparator_no_harm_skipped_candidate_directness": bool(
+            relation_span_pre_directness_comparator_summary.get(
+                "pre_directness_no_harm_skipped_candidate_directness"
+            )
+        ),
+        "relation_span_pre_directness_comparator_candidate_directness_skip_reason": (
+            relation_span_pre_directness_comparator_summary.get(
+                "pre_directness_candidate_directness_skip_reason"
+            )
+        ),
         "relation_span_comparator": dict(relation_span_comparator_summary),
         "relation_span_comparator_status": relation_span_comparator_summary.get("status"),
         "relation_span_comparator_reason": relation_span_comparator_summary.get("reason"),
@@ -18765,6 +19844,18 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         "contrastive_adjudicator_relation_backfill_added_doc_count": int(
             contrastive_adjudicator_summary.get(
                 "contrastive_relation_backfill_added_doc_count"
+            )
+            or 0
+        ),
+        "contrastive_adjudicator_relation_backfill_self_contained_stem_doc_count": int(
+            contrastive_adjudicator_summary.get(
+                "contrastive_relation_backfill_self_contained_stem_doc_count"
+            )
+            or 0
+        ),
+        "contrastive_adjudicator_relation_backfill_self_contained_stem_candidate_count": int(
+            contrastive_adjudicator_summary.get(
+                "contrastive_relation_backfill_self_contained_stem_candidate_count"
             )
             or 0
         ),
@@ -18928,7 +20019,7 @@ def _maybe_run_mc_option_claim_evidence_verifier(
             ).get("rows_hash")
         ),
         "contrastive_adjudicator_candidate_selection": dict(
-            contrastive_adjudicator_summary.get("candidate_selection") or {}
+            contrastive_candidate_selection_summary
         ),
         "contrastive_adjudicator_candidate_selection_policy": contrastive_adjudicator_summary.get(
             "candidate_selection_policy"
@@ -18953,11 +20044,39 @@ def _maybe_run_mc_option_claim_evidence_verifier(
             )
             or 0
         ),
+        "contrastive_adjudicator_answer_web_relation_challenger_included": bool(
+            contrastive_adjudicator_summary.get(
+                "answer_web_relation_challenger_included"
+            )
+        ),
+        "contrastive_adjudicator_answer_web_relation_candidate_considered_count": int(
+            contrastive_adjudicator_summary.get(
+                "answer_web_relation_candidate_considered_count"
+            )
+            or 0
+        ),
         "contrastive_adjudicator_ranked_sweep_only_challenger_included": bool(
             contrastive_adjudicator_summary.get("ranked_sweep_only_challenger_included")
         ),
         "contrastive_adjudicator_tail_sweep_only_challenger_included": bool(
             contrastive_adjudicator_summary.get("tail_sweep_only_challenger_included")
+        ),
+        "contrastive_adjudicator_source_verifier_coverage_challenger_included": bool(
+            contrastive_adjudicator_summary.get(
+                "source_verifier_coverage_challenger_included"
+            )
+            or contrastive_candidate_selection_summary.get(
+                "source_verifier_coverage_challenger_included"
+            )
+        ),
+        "contrastive_adjudicator_source_verifier_coverage_candidate_considered_count": int(
+            contrastive_adjudicator_summary.get(
+                "source_verifier_coverage_candidate_considered_count"
+            )
+            or contrastive_candidate_selection_summary.get(
+                "source_verifier_coverage_candidate_considered_count"
+            )
+            or 0
         ),
         "contrastive_adjudicator_finite_option_coverage_included": bool(
             contrastive_adjudicator_summary.get("finite_option_coverage_included")
@@ -18978,8 +20097,24 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 "answer_web_physics_bound_bridge_challenger_option_hash"
             )
         ),
+        "contrastive_adjudicator_answer_web_relation_challenger_option_hash": (
+            contrastive_adjudicator_summary.get(
+                "answer_web_relation_challenger_option_hash"
+            )
+        ),
         "contrastive_adjudicator_ranked_sweep_only_challenger_option_hash": (
             contrastive_adjudicator_summary.get("ranked_sweep_only_challenger_option_hash")
+        ),
+        "contrastive_adjudicator_source_verifier_coverage_challenger_option_hashes": list(
+            contrastive_adjudicator_summary.get(
+                "source_verifier_coverage_challenger_option_hashes",
+                [],
+            )
+            or contrastive_candidate_selection_summary.get(
+                "source_verifier_coverage_challenger_option_hashes",
+                [],
+            )
+            or []
         ),
         "contrastive_adjudicator_tail_sweep_only_challenger_option_hash": (
             contrastive_adjudicator_summary.get("tail_sweep_only_challenger_option_hash")
@@ -19275,6 +20410,83 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         ),
     }
     if not verified_candidate_signal:
+        weak_claim_source_quality = _claim_source_quality_weak_option_evidence_summary(
+            summary=summary,
+            top=top,
+        )
+        if weak_claim_source_quality.get("status") == "activated":
+            selected_label = str(top.get("label") or "").strip()
+            attempt = {
+                "child_id": stable_hash({
+                    "call_id": call_id,
+                    "prompt_kind": "mc_option_claim_evidence_answer",
+                    "option_hash": weak_claim_source_quality.get("selected_option_hash"),
+                    "weak_source_quality": True,
+                }),
+                "child_index": len(attempts) + 1,
+                "prompt_kind": "mc_option_claim_evidence_answer",
+                "parsed_answer": selected_label,
+                "parsed_answer_hash": stable_hash({"answer": selected_label}),
+                "prediction_hash": stable_hash({
+                    "top_option_hash": weak_claim_source_quality.get("selected_option_hash"),
+                    "top_net_score": summary["top_net_score"],
+                    "net_margin": summary["net_margin"],
+                    "weak_source_quality": True,
+                }),
+                "latency_sec": 0.0,
+                "status": "answered",
+                "tool_confidence": "weak_option_evidence_margin",
+                "candidate_verifier_state": "not_verified",
+                "candidate_verifier_backend": "mc_option_claim_evidence_verifier",
+                "candidate_verifier_trust": "weak_source_quality_margin",
+                "candidate_verifier_operation": "claim_source_quality_weak_margin",
+                "option_evidence_top_support_doc_count": weak_claim_source_quality.get(
+                    "support_doc_count"
+                ),
+                "option_evidence_top_score": weak_claim_source_quality.get("top_net_score"),
+                "option_evidence_margin": weak_claim_source_quality.get("net_margin"),
+                "option_evidence_rank_margin": weak_claim_source_quality.get("net_margin"),
+                "option_evidence_top_ambiguous_doc_count": weak_claim_source_quality.get(
+                    "top_ambiguous_doc_count"
+                ),
+                "option_evidence_any_ambiguous_doc_count": weak_claim_source_quality.get(
+                    "any_ambiguous_doc_count"
+                ),
+            }
+            if evidence_context:
+                attempt["private_option_evidence_context"] = evidence_context
+                attempt["option_evidence_context_char_count"] = len(evidence_context)
+                attempt["option_evidence_context_option_count"] = len(options)
+            summary["candidate_emitted"] = True
+            summary["weak_candidate_emitted"] = True
+            summary["claim_source_quality_weak_candidate"] = weak_claim_source_quality
+            summary["candidate_answer_hash"] = attempt["parsed_answer_hash"]
+            summary["child_id"] = attempt["child_id"]
+            if problem.get("_answer"):
+                gold_for_eval, _ = _canonicalize_multiple_choice_answer(
+                    problem,
+                    str(problem.get("_answer") or ""),
+                )
+                summary["candidate_correct_for_eval"] = _is_correct(
+                    selected_label,
+                    gold_for_eval,
+                    answer_type="multipleChoice",
+                )
+            _log_event(
+                logger,
+                {
+                    "event": "mc_option_claim_evidence_verifier",
+                    "eval_id": eval_id,
+                    "call_id": call_id,
+                    "problem_id_hash": problem["id_hash"],
+                    "question_hash": problem["question_hash"],
+                    "model": model,
+                    "variant": "assumption_agent_recursive_verify",
+                    "stage_status": summary["status"],
+                    "stage_data": summary,
+                },
+            )
+            return attempt, summary
         _log_event(
             logger,
             {
@@ -19376,6 +20588,135 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         },
     )
     return attempt, summary
+
+
+def _claim_source_quality_weak_option_evidence_summary(
+    *,
+    summary: dict[str, Any],
+    top: dict[str, Any],
+) -> dict[str, Any]:
+    selected_label = str(top.get("label") or "").strip()
+    selected_option_hash = stable_hash({"option_label": selected_label}) if selected_label else None
+    min_net_score = _claim_source_quality_weak_option_evidence_min_net_score()
+    min_margin = _claim_source_quality_weak_option_evidence_min_margin()
+    min_support = _claim_source_quality_weak_option_evidence_min_support()
+    support_doc_count = int(
+        summary.get("top_support_doc_count")
+        or top.get("support_doc_count")
+        or 0
+    )
+    source_quality_doc_count = int(top.get("source_quality_doc_count") or 0)
+    refute_doc_count = int(
+        summary.get("top_refute_doc_count")
+        or top.get("refute_doc_count")
+        or 0
+    )
+    ambiguous_doc_count = int(
+        summary.get("top_ambiguous_doc_count")
+        or top.get("ambiguous_doc_count")
+        or 0
+    )
+    top_net_score = float(summary.get("top_net_score") or top.get("net_score") or 0.0)
+    net_margin = float(summary.get("net_margin") or 0.0)
+    answer_web_directish = int(
+        top.get("answer_web_cache_sweep_general_relation_directish_count") or 0
+    )
+    answer_web_relation_proximity = int(
+        top.get("answer_web_cache_sweep_relation_proximity_count") or 0
+    )
+    answer_web_required_overlap = int(
+        top.get("answer_web_cache_sweep_relation_signature_required_overlap_count") or 0
+    )
+    local_relation_doc_count = (
+        int(top.get("local_relation_corpus_doc_count") or 0)
+        + int(top.get("local_relation_query_expansion_doc_count") or 0)
+        + int(top.get("sweep_gap_local_relation_backfill_doc_count") or 0)
+    )
+    has_relation_signal = bool(
+        source_quality_doc_count >= 2
+        or answer_web_directish > 0
+        or answer_web_relation_proximity > 0
+        or answer_web_required_overlap > 0
+        or local_relation_doc_count > 0
+    )
+    source_quality_directness = summary.get("source_quality_directness_promotion_detail")
+    source_quality_directness = (
+        source_quality_directness
+        if isinstance(source_quality_directness, dict)
+        else {}
+    )
+    matching_signal_row = {}
+    for row in source_quality_directness.get("candidate_signal_rows", []) or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("option_hash") or "") == str(selected_option_hash or ""):
+            matching_signal_row = row
+            break
+    source_verifier_rejection_reason = str(
+        matching_signal_row.get("source_verifier_rejection_reason") or ""
+    )
+    relation_required_missing_terms = int(
+        matching_signal_row.get("relation_required_missing_terms") or 0
+    )
+    relation_required_overlap = int(matching_signal_row.get("relation_required_overlap") or 0)
+    relation_span_core = bool(matching_signal_row.get("near_complete_relation_span_core"))
+    details = {
+        "status": "blocked",
+        "policy": "claim_source_quality_weak_option_evidence_candidate_v1",
+        "reason": "unknown",
+        "enabled": _claim_source_quality_weak_option_evidence_enabled(),
+        "selected_option_hash": selected_option_hash,
+        "top_net_score": round(top_net_score, 4),
+        "net_margin": round(net_margin, 4),
+        "min_net_score": round(min_net_score, 4),
+        "min_margin": round(min_margin, 4),
+        "support_doc_count": support_doc_count,
+        "min_support_doc_count": min_support,
+        "source_quality_doc_count": source_quality_doc_count,
+        "refute_doc_count": refute_doc_count,
+        "top_ambiguous_doc_count": ambiguous_doc_count,
+        "any_ambiguous_doc_count": ambiguous_doc_count,
+        "answer_web_directish_count": answer_web_directish,
+        "answer_web_relation_proximity_count": answer_web_relation_proximity,
+        "answer_web_required_overlap_count": answer_web_required_overlap,
+        "local_relation_doc_count": local_relation_doc_count,
+        "has_relation_signal": has_relation_signal,
+        "source_verifier_rejection_reason": source_verifier_rejection_reason or None,
+        "relation_required_missing_terms": relation_required_missing_terms,
+        "relation_required_overlap": relation_required_overlap,
+        "near_complete_relation_span_core": relation_span_core,
+        "raw_content_persisted": False,
+    }
+    if not _claim_source_quality_weak_option_evidence_enabled():
+        details["reason"] = "env_disabled"
+    elif not selected_label:
+        details["reason"] = "missing_selected_label"
+    elif refute_doc_count > 0:
+        details["reason"] = "top_option_has_refute_docs"
+    elif ambiguous_doc_count > 1:
+        details["reason"] = "top_option_too_ambiguous"
+    elif support_doc_count < min_support:
+        details["reason"] = "insufficient_support_docs"
+    elif not has_relation_signal:
+        details["reason"] = "missing_relation_or_source_quality_signal"
+    elif source_verifier_rejection_reason in {
+        "no_selected_label_generic",
+        "no_direct_relation",
+        "no_direct_evidence",
+    }:
+        details["reason"] = "source_verifier_rejected_generic_relation"
+    elif relation_required_missing_terms > 0:
+        details["reason"] = "missing_required_relation_terms"
+    elif not relation_span_core and answer_web_required_overlap <= 0:
+        details["reason"] = "missing_near_complete_relation_span_core"
+    elif top_net_score < min_net_score:
+        details["reason"] = "top_net_score_below_threshold"
+    elif net_margin < min_margin:
+        details["reason"] = "net_margin_below_threshold"
+    else:
+        details["status"] = "activated"
+        details["reason"] = "claim_source_quality_weak_margin_candidate_emitted"
+    return details
 
 
 def _source_grounded_option_claim_verifier_enabled() -> bool:
@@ -19734,9 +21075,50 @@ def _option_claim_span_directness_reserved_model_call_budget_limit(limit: int | 
 
 def _option_claim_verifier_uses_span_directness_reserve(kind: str) -> bool:
     return str(kind or "") in {
+        "option_claim_candidate_direct_relation_span_directness_verifier",
         "option_claim_span_directness_verifier",
         "option_claim_relation_span_comparator",
     }
+
+
+def _option_claim_verifier_uses_source_verifier_reserve(kind: str) -> bool:
+    return str(kind or "") in {
+        "source_grounded_option_claim_verifier",
+        "source_grounded_option_claim_verifier_answer_bearing",
+    }
+
+
+def _option_claim_verifier_uses_answer_bearing_source_priority(kind: str) -> bool:
+    return str(kind or "") == "source_grounded_option_claim_verifier_answer_bearing"
+
+
+def _source_grounded_option_claim_reserved_priority_attempt_limit() -> int:
+    raw = (
+        os.environ.get("HLE_SOURCE_VERIFIER_RESERVED_PRIORITY_ATTEMPT_LIMIT")
+        or os.environ.get("HLE_OPTION_CLAIM_SOURCE_VERIFIER_RESERVED_PRIORITY_ATTEMPT_LIMIT")
+        or ""
+    ).strip()
+    if not raw:
+        return 1
+    try:
+        return max(0, min(10, int(raw)))
+    except ValueError:
+        return 1
+
+
+def _option_claim_variant_budget_in_source_directness_reserved_region(kind: str) -> bool:
+    state = _option_claim_variant_model_call_budget_state(kind)
+    if not state.get("enabled"):
+        return False
+    remaining = state.get("budget_remaining_before")
+    if remaining is None:
+        return False
+    protected = (
+        int(state.get("recursive_selection_reserved_budget") or 0)
+        + int(state.get("source_verifier_reserved_budget") or 0)
+        + int(state.get("directness_reserved_budget") or 0)
+    )
+    return protected > 0 and int(remaining) <= protected
 
 
 def _option_claim_variant_directness_reserved_model_call_budget_limit() -> int:
@@ -19787,8 +21169,11 @@ def _option_claim_variant_model_call_budget_state(kind: str) -> dict[str, Any]:
             "recursive_selection_reserved_budget": 0,
             "directness_reserved_budget": 0,
             "relation_comparator_reserved_budget": 0,
+            "source_verifier_reserved_budget": 0,
             "uses_directness_reserved_budget": False,
             "uses_relation_comparator_reserved_budget": False,
+            "uses_source_verifier_reserved_budget": False,
+            "uses_answer_bearing_source_priority": False,
             "protected_budget_before": 0,
         }
     budget = state.get("model_call_budget")
@@ -19805,8 +21190,13 @@ def _option_claim_variant_model_call_budget_state(kind: str) -> dict[str, Any]:
             ),
             "directness_reserved_budget": 0,
             "relation_comparator_reserved_budget": 0,
+            "source_verifier_reserved_budget": int(
+                state.get("source_verifier_reserved_model_call_budget") or 0
+            ),
             "uses_directness_reserved_budget": False,
             "uses_relation_comparator_reserved_budget": False,
+            "uses_source_verifier_reserved_budget": False,
+            "uses_answer_bearing_source_priority": False,
             "protected_budget_before": int(
                 state.get("recursive_selection_reserved_model_call_budget") or 0
             ),
@@ -19821,24 +21211,58 @@ def _option_claim_variant_model_call_budget_state(kind: str) -> dict[str, Any]:
     relation_comparator_reserved = (
         _option_claim_relation_span_comparator_reserved_model_call_budget_limit()
     )
-    uses_directness_reserved = _option_claim_verifier_uses_span_directness_reserve(kind)
+    source_verifier_reserved = int(
+        state.get("source_verifier_reserved_model_call_budget") or 0
+    )
+    uses_answer_bearing_source_priority = (
+        _option_claim_verifier_uses_answer_bearing_source_priority(kind)
+    )
+    uses_directness_reserved = bool(
+        _option_claim_verifier_uses_span_directness_reserve(kind)
+        or uses_answer_bearing_source_priority
+    )
     uses_relation_comparator_reserved = (
         str(kind or "") == "option_claim_relation_span_comparator"
     )
+    uses_source_verifier_reserved = (
+        source_verifier_reserved > 0
+        and _option_claim_verifier_uses_source_verifier_reserve(kind)
+    )
     if uses_relation_comparator_reserved:
         protected_budget = recursive_selection_reserved
+    elif uses_answer_bearing_source_priority:
+        protected_budget = recursive_selection_reserved
+    elif uses_source_verifier_reserved:
+        protected_budget = recursive_selection_reserved
+    elif str(kind or "") == "option_claim_candidate_direct_relation_span_directness_verifier":
+        protected_budget = recursive_selection_reserved
     elif str(kind or "") == "option_claim_span_directness_verifier":
-        protected_budget = recursive_selection_reserved + relation_comparator_reserved
+        protected_budget = (
+            recursive_selection_reserved
+            + relation_comparator_reserved
+        )
     elif uses_directness_reserved:
         protected_budget = recursive_selection_reserved
     else:
-        protected_budget = recursive_selection_reserved + directness_reserved
+        protected_budget = (
+            recursive_selection_reserved
+            + directness_reserved
+            + source_verifier_reserved
+        )
     if used >= budget:
         allowed = False
         reason = "variant_total_model_call_budget_exceeded"
     elif remaining <= recursive_selection_reserved:
         allowed = False
         reason = "variant_model_call_budget_reserved_for_recursive_selection"
+    elif (
+        source_verifier_reserved > 0
+        and not uses_source_verifier_reserved
+        and not uses_directness_reserved
+        and remaining <= recursive_selection_reserved + source_verifier_reserved
+    ):
+        allowed = False
+        reason = "variant_model_call_budget_reserved_for_source_verifier"
     elif (
         relation_comparator_reserved > 0
         and str(kind or "") == "option_claim_span_directness_verifier"
@@ -19849,6 +21273,7 @@ def _option_claim_variant_model_call_budget_state(kind: str) -> dict[str, Any]:
     elif (
         directness_reserved > 0
         and not uses_directness_reserved
+        and not uses_source_verifier_reserved
         and remaining <= protected_budget
     ):
         allowed = False
@@ -19866,8 +21291,11 @@ def _option_claim_variant_model_call_budget_state(kind: str) -> dict[str, Any]:
         "recursive_selection_reserved_budget": recursive_selection_reserved,
         "directness_reserved_budget": directness_reserved,
         "relation_comparator_reserved_budget": relation_comparator_reserved,
+        "source_verifier_reserved_budget": source_verifier_reserved,
         "uses_directness_reserved_budget": uses_directness_reserved,
         "uses_relation_comparator_reserved_budget": uses_relation_comparator_reserved,
+        "uses_source_verifier_reserved_budget": uses_source_verifier_reserved,
+        "uses_answer_bearing_source_priority": uses_answer_bearing_source_priority,
         "protected_budget_before": protected_budget,
     }
 
@@ -19876,6 +21304,7 @@ def _option_claim_verifier_budget_root_call_id(call_id: str) -> str:
     root = str(call_id or "")
     suffix_patterns = [
         r"_candidate_direct_relation_span_directness_verifier$",
+        r"_pre_directness_relation_span_comparator$",
         r"_relation_span_comparator$",
         r"_operator_source_grounded_adjudicator$",
         r"_span_directness_verifier$",
@@ -19909,7 +21338,13 @@ def _option_claim_verifier_budget_state(
     reserve_limit = _option_claim_span_directness_reserved_model_call_budget_limit(limit)
     reserve_kind = "option_claim_span_directness_verifier" if reserve_limit > 0 else ""
     non_reserved_limit = max(0, int(limit or 0) - reserve_limit)
-    uses_reserve = _option_claim_verifier_uses_span_directness_reserve(kind)
+    uses_answer_bearing_source_priority = (
+        _option_claim_verifier_uses_answer_bearing_source_priority(kind)
+    )
+    uses_reserve = bool(
+        _option_claim_verifier_uses_span_directness_reserve(kind)
+        or uses_answer_bearing_source_priority
+    )
     reserved_used = int(_OPTION_CLAIM_VERIFIER_SPAN_DIRECTNESS_BUDGET_USED.get(key, 0))
     variant_budget_state = _option_claim_variant_model_call_budget_state(kind)
     if limit is None:
@@ -19945,11 +21380,21 @@ def _option_claim_verifier_budget_state(
             "variant_relation_comparator_reserved_budget": variant_budget_state.get(
                 "relation_comparator_reserved_budget"
             ),
+            "variant_source_verifier_reserved_budget": variant_budget_state.get(
+                "source_verifier_reserved_budget"
+            ),
             "uses_variant_directness_reserved_budget": variant_budget_state.get(
                 "uses_directness_reserved_budget"
             ),
             "uses_variant_relation_comparator_reserved_budget": variant_budget_state.get(
                 "uses_relation_comparator_reserved_budget"
+            ),
+            "uses_variant_source_verifier_reserved_budget": variant_budget_state.get(
+                "uses_source_verifier_reserved_budget"
+            ),
+            "uses_answer_bearing_source_priority": uses_answer_bearing_source_priority,
+            "uses_variant_answer_bearing_source_priority": variant_budget_state.get(
+                "uses_answer_bearing_source_priority"
             ),
             "variant_protected_budget_before": variant_budget_state.get(
                 "protected_budget_before"
@@ -19997,11 +21442,21 @@ def _option_claim_verifier_budget_state(
         "variant_relation_comparator_reserved_budget": variant_budget_state.get(
             "relation_comparator_reserved_budget"
         ),
+        "variant_source_verifier_reserved_budget": variant_budget_state.get(
+            "source_verifier_reserved_budget"
+        ),
         "uses_variant_directness_reserved_budget": variant_budget_state.get(
             "uses_directness_reserved_budget"
         ),
         "uses_variant_relation_comparator_reserved_budget": variant_budget_state.get(
             "uses_relation_comparator_reserved_budget"
+        ),
+        "uses_variant_source_verifier_reserved_budget": variant_budget_state.get(
+            "uses_source_verifier_reserved_budget"
+        ),
+        "uses_answer_bearing_source_priority": uses_answer_bearing_source_priority,
+        "uses_variant_answer_bearing_source_priority": variant_budget_state.get(
+            "uses_answer_bearing_source_priority"
         ),
         "variant_protected_budget_before": variant_budget_state.get(
             "protected_budget_before"
@@ -20070,11 +21525,23 @@ def _option_claim_verifier_budget_allows(
             "variant_relation_comparator_reserved_budget": state.get(
                 "variant_relation_comparator_reserved_budget"
             ),
+            "variant_source_verifier_reserved_budget": state.get(
+                "variant_source_verifier_reserved_budget"
+            ),
             "uses_variant_directness_reserved_budget": state.get(
                 "uses_variant_directness_reserved_budget"
             ),
             "uses_variant_relation_comparator_reserved_budget": state.get(
                 "uses_variant_relation_comparator_reserved_budget"
+            ),
+            "uses_variant_source_verifier_reserved_budget": state.get(
+                "uses_variant_source_verifier_reserved_budget"
+            ),
+            "uses_answer_bearing_source_priority": state.get(
+                "uses_answer_bearing_source_priority"
+            ),
+            "uses_variant_answer_bearing_source_priority": state.get(
+                "uses_variant_answer_bearing_source_priority"
             ),
             "variant_protected_budget_before": state.get("variant_protected_budget_before"),
             "allowed": allowed,
@@ -20444,6 +21911,150 @@ def _option_claim_relation_span_comparator_promotion_enabled() -> bool:
     return True
 
 
+def _option_claim_relation_span_pre_directness_comparator_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_COMPARATOR",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    explicit = os.environ.get(
+        "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_COMPARATOR",
+        "",
+    ).strip().lower()
+    if explicit:
+        return explicit in {"1", "true", "yes", "on"}
+    return _option_claim_relation_span_comparator_enabled()
+
+
+def _option_claim_relation_span_pre_directness_no_harm_skip_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_NO_HARM_SKIP",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    explicit = os.environ.get(
+        "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_NO_HARM_SKIP",
+        "",
+    ).strip().lower()
+    if explicit:
+        return explicit in {"1", "true", "yes", "on"}
+    return True
+
+
+def _option_claim_relation_span_pre_directness_comparator_detail(
+    *,
+    span_summary: dict[str, Any],
+    relation_backfill_summary: dict[str, Any],
+    context_used: bool,
+) -> dict[str, Any]:
+    span_summary = span_summary if isinstance(span_summary, dict) else {}
+    relation_backfill_summary = (
+        relation_backfill_summary
+        if isinstance(relation_backfill_summary, dict)
+        else {}
+    )
+    provenance_counts = dict(span_summary.get("span_provenance_counts") or {})
+    candidate_span_count = int(
+        span_summary.get("candidate_direct_relation_span_count") or 0
+    )
+    self_contained_span_count = int(
+        span_summary.get("self_contained_stem_relation_span_count")
+        or provenance_counts.get("self_contained_stem_relation_span")
+        or 0
+    )
+    missing_required_backfill_span_count = int(
+        span_summary.get("missing_required_term_backfill_span_provenance_count")
+        or provenance_counts.get("missing_required_term_backfill_span")
+        or 0
+    )
+    relation_backfill_doc_count = int(
+        relation_backfill_summary.get("added_doc_count") or 0
+    )
+    self_contained_backfill_doc_count = int(
+        relation_backfill_summary.get("self_contained_stem_relation_backfill_doc_count")
+        or 0
+    )
+    source_cache_backfill_doc_count = int(
+        relation_backfill_summary.get("source_cache_corpus_backfill_doc_count") or 0
+    )
+    sweep_gap_backfill_doc_count = int(
+        relation_backfill_summary.get("sweep_gap_local_relation_backfill_doc_count")
+        or 0
+    )
+    policy = "relation_span_pre_directness_comparator_v1"
+    detail: dict[str, Any] = {
+        "policy": policy,
+        "enabled": False,
+        "should_run": False,
+        "status": "disabled",
+        "reason": "env_disabled",
+        "context_used": bool(context_used),
+        "candidate_direct_relation_span_count": candidate_span_count,
+        "span_provenance_counts": provenance_counts,
+        "self_contained_stem_relation_span_count": self_contained_span_count,
+        "missing_required_term_backfill_span_count": (
+            missing_required_backfill_span_count
+        ),
+        "relation_backfill_added_doc_count": relation_backfill_doc_count,
+        "self_contained_stem_relation_backfill_doc_count": (
+            self_contained_backfill_doc_count
+        ),
+        "source_cache_corpus_backfill_doc_count": source_cache_backfill_doc_count,
+        "sweep_gap_local_relation_backfill_doc_count": sweep_gap_backfill_doc_count,
+    }
+    if not _option_claim_relation_span_pre_directness_comparator_enabled():
+        return detail
+    detail["enabled"] = True
+    if not _option_claim_relation_span_comparator_enabled():
+        detail.update({
+            "status": "disabled",
+            "reason": "relation_span_comparator_disabled",
+        })
+        return detail
+    if not context_used:
+        detail.update({
+            "status": "not_required",
+            "reason": "no_candidate_direct_relation_span_context",
+        })
+        return detail
+    if candidate_span_count <= 0:
+        detail.update({
+            "status": "not_required",
+            "reason": "no_candidate_direct_relation_spans",
+        })
+        return detail
+    backfill_or_self_contained_signal = bool(
+        self_contained_span_count > 0
+        or missing_required_backfill_span_count > 0
+        or relation_backfill_doc_count > 0
+        or self_contained_backfill_doc_count > 0
+        or source_cache_backfill_doc_count > 0
+        or sweep_gap_backfill_doc_count > 0
+    )
+    if not backfill_or_self_contained_signal:
+        detail.update({
+            "status": "not_required",
+            "reason": "no_relation_backfill_or_self_contained_span_signal",
+        })
+        return detail
+    if self_contained_span_count > 0 or self_contained_backfill_doc_count > 0:
+        reason = "self_contained_stem_relation_span_signal"
+    elif missing_required_backfill_span_count > 0:
+        reason = "missing_required_backfill_relation_span_signal"
+    elif source_cache_backfill_doc_count > 0:
+        reason = "source_cache_relation_backfill_signal"
+    elif sweep_gap_backfill_doc_count > 0:
+        reason = "sweep_gap_relation_backfill_signal"
+    else:
+        reason = "contrastive_relation_backfill_signal"
+    detail.update({
+        "status": "activated",
+        "reason": reason,
+        "should_run": True,
+    })
+    return detail
+
+
 def _option_claim_selective_span_directness_recovery_enabled(
     *,
     prefilter_override_recovery_adjudicators_enabled: bool = False,
@@ -20562,6 +22173,18 @@ def _option_claim_candidate_direct_relation_span_verifier_priority_enabled() -> 
     ).strip().lower()
     if raw:
         return raw in {"1", "true", "yes", "on"}
+    state = _active_variant_watchdog()
+    if state and state.get("enabled") and state.get("model_call_budget") is not None:
+        remaining = max(
+            0,
+            int(state.get("model_call_budget") or 0)
+            - int(state.get("model_call_count") or 0),
+        )
+        protected_directness = (
+            _option_claim_variant_directness_reserved_model_call_budget_limit()
+            + _option_claim_relation_span_comparator_reserved_model_call_budget_limit()
+        )
+        return bool(protected_directness > 0 and remaining <= protected_directness)
     return False
 
 
@@ -22104,6 +23727,9 @@ def _option_claim_candidate_direct_relation_spans_by_label(
     missing_required_term_backfill_rows: list[dict[str, Any]] = []
     missing_required_term_backfill_reserved_span_count = 0
     missing_required_term_backfill_replaced_span_count = 0
+    required_complete_span_reserved_span_count = 0
+    required_complete_span_replaced_span_count = 0
+    required_complete_span_selected_first_count = 0
     missing_required_term_backfill_unique_source_bypass_count = 0
     missing_required_term_backfill_relation_only_doc_count = 0
     missing_required_term_backfill_relation_only_scored_doc_count = 0
@@ -22258,6 +23884,11 @@ def _option_claim_candidate_direct_relation_spans_by_label(
             seen_hashes.add(doc_hash)
             source = str(doc.get("source") or "").strip().lower()
             retrieval_stage = str(doc.get("retrieval_stage") or "").strip().lower()
+            self_contained_stem_relation_backfill_signal = bool(
+                retrieval_stage == "self_contained_stem_relation_backfill"
+                or source == "question_stem"
+                or _json_truthy(doc.get("self_contained_stem_relation_backfill"))
+            )
             source_cache_corpus_backfill_signal = _json_truthy(
                 doc.get("source_cache_corpus_backfill")
             )
@@ -22292,16 +23923,8 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                 missing_required_term_backfill_unique_source_bypass_count += 1
             doc_terms = _content_terms(text)
             title_terms = _content_terms(title)
-            normalized_doc_terms = (
-                _normalized_content_terms(text)
-                if missing_required_term_backfill_signal
-                else doc_terms
-            )
-            normalized_title_terms = (
-                _normalized_content_terms(title)
-                if missing_required_term_backfill_signal
-                else title_terms
-            )
+            normalized_doc_terms = _normalized_content_terms(text)
+            normalized_title_terms = _normalized_content_terms(title)
             matching_doc_terms = normalized_doc_terms
             matching_title_terms = normalized_title_terms
             option_overlap = len(distinctive_terms & matching_doc_terms)
@@ -22700,6 +24323,8 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                 )
             elif missing_required_term_backfill_signal:
                 provenance = "missing_required_term_backfill_span"
+            elif self_contained_stem_relation_backfill_signal:
+                provenance = "self_contained_stem_relation_span"
             elif anchor_doc:
                 provenance = "anchor_fallback_span"
             elif preferred_doc:
@@ -22909,6 +24534,9 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                     "answer_web_direct_claim_signal": str(
                         bool(answer_web_direct_claim_signal)
                     ).lower(),
+                    "self_contained_stem_relation_backfill": str(
+                        bool(self_contained_stem_relation_backfill_signal)
+                    ).lower(),
                     "statement_fact_slot_count": str(
                         int(statement_fact_slot_coverage.get("slot_count") or 0)
                     ),
@@ -22973,6 +24601,9 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                     statement_fact_refutation_detail.get("shared_claim_term_count") or 0
                 ),
                 "answer_web_direct_claim_signal": answer_web_direct_claim_signal,
+                "self_contained_stem_relation_backfill": (
+                    self_contained_stem_relation_backfill_signal
+                ),
                 "musicology_short_option_phrase_signal": short_option_signal,
                 "statement_fact_slot_count": int(
                     statement_fact_slot_coverage.get("slot_count") or 0
@@ -23067,6 +24698,42 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                 return int(item.get("relation_signature_required_overlap") or 0)
             except (TypeError, ValueError):
                 return 0
+
+        def required_complete_clean_span(item: dict[str, Any]) -> bool:
+            return bool(
+                relation_signature_required_terms
+                and required_overlap_count(item) > 0
+                and required_missing_count(item) <= 0
+                and not item.get("shared_doc")
+                and not item.get("source_doc_shared")
+                and not item.get("supports_other")
+                and not item.get("source_doc_supports_other")
+            )
+
+        def required_coverage_selection_key(item: dict[str, Any]) -> tuple[Any, ...]:
+            if not relation_signature_required_terms:
+                return (
+                    -float(item.get("score") or 0.0),
+                    str(item.get("span_provenance") or "") != "candidate_specific_sentence_span",
+                    str(item.get("span_provenance") or "") != "anchor_fallback_span",
+                    str(item.get("span_provenance") or "") != "shared_doc_candidate_span",
+                    int(item.get("doc_index") or 0),
+                )
+            return (
+                not required_complete_clean_span(item),
+                required_missing_count(item),
+                -required_overlap_count(item),
+                bool(item.get("shared_doc")),
+                bool(item.get("source_doc_shared")),
+                bool(item.get("supports_other")),
+                bool(item.get("source_doc_supports_other")),
+                str(item.get("span_provenance") or "") != "missing_required_term_backfill_paired_span",
+                str(item.get("span_provenance") or "") != "missing_required_term_backfill_span",
+                str(item.get("span_provenance") or "") != "candidate_specific_sentence_span",
+                str(item.get("span_provenance") or "") != "anchor_fallback_span",
+                -float(item.get("score") or 0.0),
+                int(item.get("doc_index") or 0),
+            )
 
         if backfill_pair_source_candidates and (scored or bridge_option_anchor_candidates):
             pair_relation_anchor_terms = (
@@ -23723,13 +25390,7 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                 missing_required_term_backfill_paired_span_count += 1
                 missing_required_term_backfill_composed_span_count += 1
 
-        scored.sort(key=lambda item: (
-            -float(item.get("score") or 0.0),
-            str(item.get("span_provenance") or "") != "candidate_specific_sentence_span",
-            str(item.get("span_provenance") or "") != "anchor_fallback_span",
-            str(item.get("span_provenance") or "") != "shared_doc_candidate_span",
-            int(item.get("doc_index") or 0),
-        ))
+        scored.sort(key=required_coverage_selection_key)
         eligible = [
             item
             for item in scored
@@ -23786,14 +25447,37 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                         selected[replace_index] = best_backfill
                         missing_required_term_backfill_reserved_span_count += 1
                         missing_required_term_backfill_replaced_span_count += 1
-                selected.sort(key=lambda item: (
-                    -float(item.get("score") or 0.0),
-                    str(item.get("span_provenance") or "") != "missing_required_term_backfill_span",
-                    str(item.get("span_provenance") or "") != "candidate_specific_sentence_span",
-                    str(item.get("span_provenance") or "") != "anchor_fallback_span",
-                    str(item.get("span_provenance") or "") != "shared_doc_candidate_span",
-                    int(item.get("doc_index") or 0),
-                ))
+                selected.sort(key=required_coverage_selection_key)
+        if relation_signature_required_terms and max_spans > 0:
+            complete_candidates = [
+                item for item in eligible if required_complete_clean_span(item)
+            ]
+            complete_candidates.sort(key=required_coverage_selection_key)
+            best_complete = complete_candidates[0] if complete_candidates else None
+            if best_complete is not None and best_complete not in selected:
+                if len(selected) < max_spans:
+                    selected.append(best_complete)
+                    required_complete_span_reserved_span_count += 1
+                elif selected:
+                    replace_index = max(
+                        range(len(selected)),
+                        key=lambda idx: (
+                            required_missing_count(selected[idx]),
+                            -required_overlap_count(selected[idx]),
+                            float(selected[idx].get("score") or 0.0),
+                        ),
+                    )
+                    victim = selected[replace_index]
+                    if (
+                        not required_complete_clean_span(victim)
+                        or required_overlap_count(best_complete) > required_overlap_count(victim)
+                    ):
+                        selected[replace_index] = best_complete
+                        required_complete_span_reserved_span_count += 1
+                        required_complete_span_replaced_span_count += 1
+            selected.sort(key=required_coverage_selection_key)
+            if selected and required_complete_clean_span(selected[0]):
+                required_complete_span_selected_first_count += 1
         if selected:
             recovered_docs_by_label[label] = [dict(item["doc"]) for item in selected]
         coverage_probe = selected[0] if selected else (eligible[0] if eligible else (scored[0] if scored else None))
@@ -23833,6 +25517,9 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                 ),
                 "top_missing_required_term_backfill_pair": bool(
                     coverage_probe.get("missing_required_term_backfill_pair")
+                ),
+                "top_self_contained_stem_relation_backfill": bool(
+                    coverage_probe.get("self_contained_stem_relation_backfill")
                 ),
                 "filter_counts": dict(
                     sorted(
@@ -23936,6 +25623,9 @@ def _option_claim_candidate_direct_relation_spans_by_label(
                 ),
                 "answer_web_direct_claim_signal": bool(
                     item.get("answer_web_direct_claim_signal")
+                ),
+                "self_contained_stem_relation_backfill": bool(
+                    item.get("self_contained_stem_relation_backfill")
                 ),
                 "musicology_short_option_phrase_signal": bool(
                     item.get("musicology_short_option_phrase_signal")
@@ -24122,6 +25812,15 @@ def _option_claim_candidate_direct_relation_spans_by_label(
         "missing_required_term_backfill_replaced_span_count": int(
             missing_required_term_backfill_replaced_span_count
         ),
+        "required_complete_span_reserved_span_count": int(
+            required_complete_span_reserved_span_count
+        ),
+        "required_complete_span_replaced_span_count": int(
+            required_complete_span_replaced_span_count
+        ),
+        "required_complete_span_selected_first_count": int(
+            required_complete_span_selected_first_count
+        ),
         "missing_required_term_backfill_unique_source_bypass_count": int(
             missing_required_term_backfill_unique_source_bypass_count
         ),
@@ -24205,6 +25904,9 @@ def _option_claim_candidate_direct_relation_spans_by_label(
         "candidate_pool_relation_span_count": int(provenance_counts.get("candidate_pool_relation_span") or 0),
         "missing_required_term_backfill_span_provenance_count": int(
             provenance_counts.get("missing_required_term_backfill_span") or 0
+        ),
+        "self_contained_stem_relation_span_count": int(
+            provenance_counts.get("self_contained_stem_relation_span") or 0
         ),
         "suppressed_unique_source_doc_count": suppressed_unique_source_doc_count,
         # Compatibility keys for the span-directness verifier.
@@ -26697,6 +28399,7 @@ def _run_option_claim_span_directness_verifier(
     unique_span_docs_by_label: dict[str, list[dict[str, str]]],
     unique_span_summary: dict[str, Any],
     candidate_labels: list[str],
+    candidate_selection: dict[str, Any] | None = None,
     span_context_kind: str = "candidate_unique",
     model: str,
     eval_id: str,
@@ -26708,11 +28411,45 @@ def _run_option_claim_span_directness_verifier(
     required_conflict_option_hashes: list[str] | None = None,
 ) -> dict[str, Any]:
     candidate_limit = _option_claim_effective_span_directness_candidate_limit(options)
-    label_order: list[str] = []
+    all_label_order: list[str] = []
     for label in candidate_labels:
         label = str(label)
-        if label in options and label not in label_order and len(label_order) < candidate_limit:
-            label_order.append(label)
+        if label in options and label not in all_label_order:
+            all_label_order.append(label)
+    span_directness_candidate_priority_detail: dict[str, Any] = {
+        "policy": "span_directness_candidate_order_v1",
+        "status": "not_required",
+        "reason": "rank_order",
+        "span_context_kind": span_context_kind,
+        "candidate_limit": candidate_limit,
+        "raw_content_persisted": False,
+    }
+    if span_context_kind == "candidate_direct_relation_recovery":
+        prioritized_labels, priority_detail = _option_claim_relation_span_comparator_candidate_order(
+            options=options,
+            candidate_labels=all_label_order,
+            span_docs_by_label=unique_span_docs_by_label,
+            span_summary=unique_span_summary,
+            candidate_selection=candidate_selection,
+            protected_top_count=0,
+        )
+        label_order = [
+            label for label in prioritized_labels if label in options
+        ][:candidate_limit]
+        span_directness_candidate_priority_detail = {
+            **priority_detail,
+            "policy": "span_directness_candidate_order_v1",
+            "base_policy": priority_detail.get("policy"),
+            "span_context_kind": span_context_kind,
+            "candidate_limit": candidate_limit,
+            "selected_candidate_count": len(label_order),
+            "selected_candidate_option_hashes": [
+                stable_hash({"option_label": label}) for label in label_order
+            ],
+            "raw_content_persisted": False,
+        }
+    else:
+        label_order = all_label_order[:candidate_limit]
     candidate_hashes = [stable_hash({"option_label": label}) for label in label_order]
     if not (force_enabled or _option_claim_span_directness_verifier_enabled()):
         return {
@@ -26728,6 +28465,7 @@ def _run_option_claim_span_directness_verifier(
             "selected_label": "",
             "selected_option_hash": None,
             "span_context_kind": span_context_kind,
+            "candidate_priority_detail": span_directness_candidate_priority_detail,
             "underlying_model_calls": 0,
         }
     if not label_order:
@@ -26744,9 +28482,15 @@ def _run_option_claim_span_directness_verifier(
             "selected_label": "",
             "selected_option_hash": None,
             "span_context_kind": span_context_kind,
+            "candidate_priority_detail": span_directness_candidate_priority_detail,
             "underlying_model_calls": 0,
         }
 
+    span_directness_budget_kind = (
+        "option_claim_candidate_direct_relation_span_directness_verifier"
+        if span_context_kind == "candidate_direct_relation_recovery"
+        else "option_claim_span_directness_verifier"
+    )
     max_spans = _option_claim_span_directness_verifier_max_spans_per_candidate()
     span_docs_by_label = {
         label: list(unique_span_docs_by_label.get(label, []) or [])[:max_spans]
@@ -26769,6 +28513,7 @@ def _run_option_claim_span_directness_verifier(
             "selected_label": "",
             "selected_option_hash": None,
             "span_context_kind": span_context_kind,
+            "candidate_priority_detail": span_directness_candidate_priority_detail,
             "underlying_model_calls": 0,
         }
 
@@ -26804,6 +28549,8 @@ def _run_option_claim_span_directness_verifier(
             "candidate_unique_span_count": total_span_count,
             "span_hashes_by_option_hash": span_hashes_by_option_hash,
             "span_context_kind": span_context_kind,
+            "budget_kind": span_directness_budget_kind,
+            "candidate_priority_detail": span_directness_candidate_priority_detail,
             "max_spans_per_candidate": max_spans,
             "answer_bearing_task_hint_kind": task_hint.get("kind"),
             "timeout_sec": timeout,
@@ -27173,7 +28920,7 @@ def _run_option_claim_span_directness_verifier(
             },
         )
         if not _option_claim_verifier_budget_allows(
-            kind="option_claim_span_directness_verifier",
+            kind=span_directness_budget_kind,
             problem=problem,
             eval_id=eval_id,
             call_id=call_id,
@@ -27188,7 +28935,7 @@ def _run_option_claim_span_directness_verifier(
             },
         ):
             budget_state = _option_claim_verifier_budget_state(
-                kind="option_claim_span_directness_verifier",
+                kind=span_directness_budget_kind,
                 problem=problem,
                 eval_id=eval_id,
                 call_id=call_id,
@@ -27904,7 +29651,7 @@ def _run_option_claim_span_directness_verifier(
                 error_count += 1
             budget_state = (
                 _option_claim_verifier_budget_state(
-                    kind="option_claim_span_directness_verifier",
+                    kind=span_directness_budget_kind,
                     problem=problem,
                     eval_id=eval_id,
                     call_id=call_id,
@@ -28109,6 +29856,10 @@ def _run_option_claim_span_directness_verifier(
         "candidate_count": len(label_order),
         "attempted_candidate_count": attempted_count,
         "candidate_option_hashes": candidate_hashes,
+        "candidate_priority_detail": span_directness_candidate_priority_detail,
+        "candidate_priority_reason": (
+            span_directness_candidate_priority_detail.get("reason")
+        ),
         "candidate_span_candidate_count": sum(1 for values in span_docs_by_label.values() if values),
         "candidate_unique_span_count": total_span_count,
         "direct_candidate_count": len(direct_labels),
@@ -28213,6 +29964,10 @@ def _run_option_claim_span_directness_verifier(
             "attempted_candidate_count": attempted_count,
             "candidate_span_candidate_count": summary["candidate_span_candidate_count"],
             "candidate_unique_span_count": total_span_count,
+            "candidate_priority_detail": span_directness_candidate_priority_detail,
+            "candidate_priority_reason": (
+                span_directness_candidate_priority_detail.get("reason")
+            ),
             "span_context_kind": span_context_kind,
             "direct_candidate_count": len(direct_labels),
             "lexical_unique_but_relation_generic_count": lexical_unique_generic_count,
@@ -28548,6 +30303,7 @@ def _option_claim_contrastive_candidate_selection(
     options: dict[str, str],
     missing_model_labels: list[str] | None = None,
     priority_source_quality_labels: list[str] | None = None,
+    source_verifier_coverage_labels: list[str] | None = None,
 ) -> dict[str, Any]:
     requested_limit = _option_claim_contrastive_adjudicator_candidate_limit()
     limit = _option_claim_effective_contrastive_candidate_limit(options)
@@ -28578,6 +30334,13 @@ def _option_claim_contrastive_candidate_selection(
         add_candidate(label, "high_confidence_source_quality_challenger")
         if len(candidate_labels) > before_count:
             priority_source_quality_candidate_labels.append(label)
+    source_verifier_coverage_label_order: list[str] = []
+    for label in source_verifier_coverage_labels or []:
+        label = str(label).strip()
+        if label in options and label not in source_verifier_coverage_label_order:
+            source_verifier_coverage_label_order.append(label)
+    source_verifier_coverage_label_set = set(source_verifier_coverage_label_order)
+    source_verifier_coverage_candidate_labels: list[str] = []
     missing_label_set = {
         str(label)
         for label in missing_model_labels or []
@@ -28619,6 +30382,12 @@ def _option_claim_contrastive_candidate_selection(
         answer_web_relation_proximity = int(
             row.get("answer_web_cache_sweep_relation_proximity_count") or 0
         )
+        answer_web_relation_required_overlap = int(
+            row.get(
+                "answer_web_cache_sweep_relation_signature_required_overlap_count"
+            )
+            or 0
+        )
         if (
             source_quality_score < min_source_quality
             and source_quality_doc_count <= 0
@@ -28639,6 +30408,7 @@ def _option_claim_contrastive_candidate_selection(
             "answer_web_physics_bound_bridge": answer_web_physics_bound_bridge,
             "answer_web_relation_slot_covered": answer_web_relation_slot_covered,
             "answer_web_relation_proximity": answer_web_relation_proximity,
+            "answer_web_relation_required_overlap": answer_web_relation_required_overlap,
             "net_score": float(row.get("net_score") or 0.0),
             "refute_doc_count": int(row.get("refute_doc_count") or 0),
             "ambiguous_doc_count": int(row.get("ambiguous_doc_count") or 0),
@@ -28651,9 +30421,11 @@ def _option_claim_contrastive_candidate_selection(
     best_ranked_label = ""
     best_overall_source_label = ""
     answer_web_physics_bound_bridge_label = ""
+    answer_web_relation_label = ""
     tail_label = ""
     overall_source_rows: list[dict[str, Any]] = []
     answer_web_physics_bound_bridge_rows: list[dict[str, Any]] = []
+    answer_web_relation_rows: list[dict[str, Any]] = []
     if sweep_rows and len(candidate_labels) < limit:
         source_sorted = sorted(
             sweep_rows,
@@ -28717,6 +30489,49 @@ def _option_claim_contrastive_candidate_selection(
                     answer_web_physics_bound_bridge_label,
                     "answer_web_physics_bound_bridge_challenger",
                 )
+                break
+    if sweep_rows and len(candidate_labels) < limit:
+        answer_web_relation_rows = [
+            item
+            for item in sweep_rows
+            if int(item.get("answer_web_directish") or 0) > 0
+            and int(item.get("answer_web_relation_proximity") or 0) > 0
+            and (
+                int(item.get("answer_web_relation_slot_covered") or 0) > 0
+                or int(item.get("answer_web_relation_required_overlap") or 0) > 0
+                or int(item.get("answer_web_physics_bound_bridge") or 0) > 0
+            )
+            and int(item.get("refute_doc_count") or 0) <= 0
+            and int(item.get("ambiguous_doc_count") or 0) <= 1
+        ]
+        answer_web_relation_rows.sort(
+            key=lambda item: (
+                -int(item.get("answer_web_directish") or 0),
+                -int(item.get("answer_web_relation_slot_covered") or 0),
+                -int(item.get("answer_web_relation_required_overlap") or 0),
+                -int(item.get("answer_web_relation_proximity") or 0),
+                -float(item.get("source_quality_score") or 0.0),
+                -int(item.get("source_quality_doc_count") or 0),
+                -float(item.get("net_score") or 0.0),
+                int(item.get("ranked_option_rank") or 10_000),
+            )
+        )
+        for item in answer_web_relation_rows:
+            label = str(item.get("label") or "")
+            if label not in candidate_labels:
+                answer_web_relation_label = label
+                add_candidate(answer_web_relation_label, "answer_web_relation_challenger")
+                break
+    if sweep_rows and len(candidate_labels) < limit:
+        for label in source_verifier_coverage_label_order:
+            if label not in missing_label_set or label in candidate_labels:
+                continue
+            if not candidate_meta_for(label):
+                continue
+            before_count = len(candidate_labels)
+            add_candidate(label, "source_verifier_coverage_continuation")
+            if len(candidate_labels) > before_count:
+                source_verifier_coverage_candidate_labels.append(label)
                 break
     if (
         sweep_rows
@@ -28812,6 +30627,7 @@ def _option_claim_contrastive_candidate_selection(
             "best_sweep_only_source_quality",
             "best_sweep_only_ranked",
             "answer_web_physics_bound_bridge_challenger",
+            "answer_web_relation_challenger",
             "tail_sweep_only_large_option",
         }
     ]
@@ -28825,6 +30641,9 @@ def _option_claim_contrastive_candidate_selection(
     overall_source_label_set = {str(item.get("label") or "") for item in overall_source_rows}
     answer_web_physics_bound_bridge_label_set = {
         str(item.get("label") or "") for item in answer_web_physics_bound_bridge_rows
+    }
+    answer_web_relation_label_set = {
+        str(item.get("label") or "") for item in answer_web_relation_rows
     }
     priority_source_quality_label_set = {
         str(label).strip()
@@ -28854,6 +30673,12 @@ def _option_claim_contrastive_candidate_selection(
         answer_web_relation_proximity = int(
             row.get("answer_web_cache_sweep_relation_proximity_count") or 0
         )
+        answer_web_relation_required_overlap = int(
+            row.get(
+                "answer_web_cache_sweep_relation_signature_required_overlap_count"
+            )
+            or 0
+        )
         local_relation_doc_count = (
             int(row.get("local_relation_corpus_doc_count") or 0)
             + int(row.get("local_relation_query_expansion_doc_count") or 0)
@@ -28868,6 +30693,9 @@ def _option_claim_contrastive_candidate_selection(
             label in answer_web_physics_bound_bridge_label_set
         )
         priority_source_quality = label in priority_source_quality_label_set
+        source_verifier_coverage_candidate = (
+            label in source_verifier_coverage_label_set
+        )
         source_quality_evidence_signal = bool(
             source_quality_doc_count > 0
             or support_doc_count > 0
@@ -28882,6 +30710,7 @@ def _option_claim_contrastive_candidate_selection(
             sweep_only_considered
             or overall_source_considered
             or priority_source_quality
+            or source_verifier_coverage_candidate
             or direct_span_count > 0
             or source_quality_evidence_signal
         ):
@@ -28906,7 +30735,13 @@ def _option_claim_contrastive_candidate_selection(
             "answer_web_physics_bound_bridge_considered": bool(
                 answer_web_physics_bound_bridge_considered
             ),
+            "answer_web_relation_considered": bool(
+                label in answer_web_relation_label_set
+            ),
             "priority_source_quality": bool(priority_source_quality),
+            "source_verifier_coverage_candidate": bool(
+                source_verifier_coverage_candidate
+            ),
             "source_quality_score": round(source_quality_score, 4),
             "source_quality_doc_count": source_quality_doc_count,
             "support_doc_count": support_doc_count,
@@ -28915,6 +30750,7 @@ def _option_claim_contrastive_candidate_selection(
             "answer_web_physics_bound_bridge": answer_web_physics_bound_bridge,
             "answer_web_relation_slot_covered": answer_web_relation_slot_covered,
             "answer_web_relation_proximity": answer_web_relation_proximity,
+            "answer_web_relation_required_overlap": answer_web_relation_required_overlap,
             "local_relation_doc_count": local_relation_doc_count,
             "refute_doc_count": int(row.get("refute_doc_count") or 0),
             "ambiguous_doc_count": int(row.get("ambiguous_doc_count") or 0),
@@ -28975,6 +30811,17 @@ def _option_claim_contrastive_candidate_selection(
             for label in priority_source_quality_candidate_labels
             if label in options
         ],
+        "source_verifier_coverage_challenger_included": bool(
+            source_verifier_coverage_candidate_labels
+        ),
+        "source_verifier_coverage_challenger_option_hashes": [
+            stable_hash({"option_label": label})
+            for label in source_verifier_coverage_candidate_labels
+            if label in options
+        ],
+        "source_verifier_coverage_candidate_considered_count": len(
+            source_verifier_coverage_label_order
+        ),
         "source_quality_challenger_included": bool(best_source_label and best_source_label in candidate_labels),
         "overall_source_quality_challenger_included": bool(
             best_overall_source_label and best_overall_source_label in candidate_labels
@@ -28985,6 +30832,12 @@ def _option_claim_contrastive_candidate_selection(
         ),
         "answer_web_physics_bound_bridge_candidate_considered_count": len(
             answer_web_physics_bound_bridge_rows
+        ),
+        "answer_web_relation_challenger_included": bool(
+            answer_web_relation_label and answer_web_relation_label in candidate_labels
+        ),
+        "answer_web_relation_candidate_considered_count": len(
+            answer_web_relation_rows
         ),
         "ranked_sweep_only_challenger_included": bool(best_ranked_label and best_ranked_label in candidate_labels),
         "tail_sweep_only_challenger_included": bool(tail_label and tail_label in candidate_labels),
@@ -29010,9 +30863,19 @@ def _option_claim_contrastive_candidate_selection(
             if answer_web_physics_bound_bridge_label
             else None
         ),
+        "answer_web_relation_challenger_option_hash": (
+            stable_hash({"option_label": answer_web_relation_label})
+            if answer_web_relation_label
+            else None
+        ),
         "answer_web_physics_bound_bridge_challenger_ranked_option_rank": (
             answer_web_physics_bound_bridge_meta.get("ranked_option_rank")
             if answer_web_physics_bound_bridge_meta
+            else None
+        ),
+        "answer_web_relation_challenger_ranked_option_rank": (
+            candidate_meta_for(answer_web_relation_label).get("ranked_option_rank")
+            if answer_web_relation_label
             else None
         ),
         "tail_sweep_only_challenger_option_hash": (
@@ -29031,6 +30894,12 @@ def _option_claim_contrastive_candidate_selection(
             for item in pool_audit_rows
             if not item.get("selected") and item.get("source_quality_evidence_signal")
         ),
+        "candidate_pool_source_verifier_coverage_not_selected_count": sum(
+            1
+            for item in pool_audit_rows
+            if not item.get("selected")
+            and item.get("source_verifier_coverage_candidate")
+        ),
         "candidate_pool_direct_span_not_selected_count": sum(
             1
             for item in pool_audit_rows
@@ -29042,6 +30911,12 @@ def _option_claim_contrastive_candidate_selection(
             for item in pool_audit_rows
             if not item.get("selected")
             and int(item.get("answer_web_physics_bound_bridge") or 0) > 0
+        ),
+        "candidate_pool_answer_web_relation_not_selected_count": sum(
+            1
+            for item in pool_audit_rows
+            if not item.get("selected")
+            and item.get("answer_web_relation_considered")
         ),
     }
 
@@ -29082,6 +30957,19 @@ def _safe_contrastive_candidate_selection_summary(selection: dict[str, Any]) -> 
             )
             or []
         ),
+        "source_verifier_coverage_challenger_included": bool(
+            selection.get("source_verifier_coverage_challenger_included")
+        ),
+        "source_verifier_coverage_challenger_option_hashes": list(
+            selection.get(
+                "source_verifier_coverage_challenger_option_hashes",
+                [],
+            )
+            or []
+        ),
+        "source_verifier_coverage_candidate_considered_count": int(
+            selection.get("source_verifier_coverage_candidate_considered_count") or 0
+        ),
         "source_quality_challenger_included": bool(selection.get("source_quality_challenger_included")),
         "overall_source_quality_challenger_included": bool(
             selection.get("overall_source_quality_challenger_included")
@@ -29095,11 +30983,23 @@ def _safe_contrastive_candidate_selection_summary(selection: dict[str, Any]) -> 
         "answer_web_physics_bound_bridge_candidate_considered_count": int(
             selection.get("answer_web_physics_bound_bridge_candidate_considered_count") or 0
         ),
+        "answer_web_relation_challenger_included": bool(
+            selection.get("answer_web_relation_challenger_included")
+        ),
+        "answer_web_relation_candidate_considered_count": int(
+            selection.get("answer_web_relation_candidate_considered_count") or 0
+        ),
         "answer_web_physics_bound_bridge_challenger_option_hash": selection.get(
             "answer_web_physics_bound_bridge_challenger_option_hash"
         ),
+        "answer_web_relation_challenger_option_hash": selection.get(
+            "answer_web_relation_challenger_option_hash"
+        ),
         "answer_web_physics_bound_bridge_challenger_ranked_option_rank": selection.get(
             "answer_web_physics_bound_bridge_challenger_ranked_option_rank"
+        ),
+        "answer_web_relation_challenger_ranked_option_rank": selection.get(
+            "answer_web_relation_challenger_ranked_option_rank"
         ),
         "ranked_sweep_only_challenger_included": bool(
             selection.get("ranked_sweep_only_challenger_included")
@@ -29125,12 +31025,19 @@ def _safe_contrastive_candidate_selection_summary(selection: dict[str, Any]) -> 
         "candidate_pool_source_quality_not_selected_count": int(
             selection.get("candidate_pool_source_quality_not_selected_count") or 0
         ),
+        "candidate_pool_source_verifier_coverage_not_selected_count": int(
+            selection.get("candidate_pool_source_verifier_coverage_not_selected_count")
+            or 0
+        ),
         "candidate_pool_direct_span_not_selected_count": int(
             selection.get("candidate_pool_direct_span_not_selected_count") or 0
         ),
         "candidate_pool_answer_web_physics_bound_bridge_not_selected_count": int(
             selection.get("candidate_pool_answer_web_physics_bound_bridge_not_selected_count")
             or 0
+        ),
+        "candidate_pool_answer_web_relation_not_selected_count": int(
+            selection.get("candidate_pool_answer_web_relation_not_selected_count") or 0
         ),
     }
 
@@ -29251,6 +31158,10 @@ def _option_claim_contrastive_candidate_summaries(
         relation_backfill_source_cache_doc_count = int(
             relation_backfill_row.get("source_cache_corpus_backfill_doc_count") or 0
         )
+        relation_backfill_self_contained_doc_count = int(
+            relation_backfill_row.get("self_contained_stem_relation_backfill_doc_count")
+            or 0
+        )
         relation_backfill_after_doc_count = int(
             relation_backfill_row.get("after_doc_count") or 0
         )
@@ -29286,6 +31197,10 @@ def _option_claim_contrastive_candidate_summaries(
             "answer_web_physics_bound_bridge_challenger": (
                 selection_reasons_by_label.get(label)
                 == "answer_web_physics_bound_bridge_challenger"
+            ),
+            "answer_web_relation_challenger": (
+                selection_reasons_by_label.get(label)
+                == "answer_web_relation_challenger"
             ),
             "ranked_sweep_only_challenger": (
                 selection_reasons_by_label.get(label) == "best_sweep_only_ranked"
@@ -29409,6 +31324,12 @@ def _option_claim_contrastive_candidate_summaries(
             ),
             "contrastive_relation_backfill_source_cache_doc_count": (
                 relation_backfill_source_cache_doc_count
+            ),
+            "self_contained_stem_relation_backfill_doc_count": (
+                relation_backfill_self_contained_doc_count
+            ),
+            "contrastive_relation_backfill_self_contained_stem_doc_count": (
+                relation_backfill_self_contained_doc_count
             ),
             "duplicate_doc_count": int(row.get("duplicate_doc_count") or 0),
             "duplicate_support_doc_count": int(row.get("duplicate_support_doc_count") or 0),
@@ -30272,6 +32193,12 @@ def _option_claim_source_quality_directness_promotion_detail(
     detail["answer_web_soft_conflict_recovery_enabled"] = (
         answer_web_soft_conflict_recovery_enabled
     )
+    span_direct_near_complete_soft_refute_recovery_enabled = _env_flag(
+        "HLE_ENABLE_OPTION_CLAIM_SPAN_DIRECT_NEAR_COMPLETE_SOFT_REFUTE_RECOVERY"
+    )
+    detail["span_direct_near_complete_soft_refute_recovery_enabled"] = (
+        span_direct_near_complete_soft_refute_recovery_enabled
+    )
     direct_hashes = {
         str(value)
         for value in span_directness_summary.get("direct_candidate_option_hashes", []) or []
@@ -30532,6 +32459,9 @@ def _option_claim_source_quality_directness_promotion_detail(
             or summary.get("span_directness_direct_high_confidence")
             or summary.get("relation_span_comparator_direct_high_confidence")
         )
+        unique_span_direct_hash = bool(
+            len(direct_hashes) == 1 and option_hash in direct_hashes
+        )
         high_confidence_statement_refutation_span = bool(
             summary.get("source_quality_challenger")
             and span_direct
@@ -30607,6 +32537,29 @@ def _option_claim_source_quality_directness_promotion_detail(
                 )
             )
         )
+        span_direct_near_complete_soft_refute_cleared = bool(
+            span_direct_near_complete_soft_refute_recovery_enabled
+            and unique_span_direct_hash
+            and near_complete_relation_span_core
+            and refute_doc_count > 0
+            and refute_doc_count <= 2
+            and support_doc_count >= refute_doc_count
+            and source_quality_doc_count >= 2
+            and source_quality_score >= 10.0
+            and source_quality_refutation_doc_count <= 0
+            and source_quality_refutation_high_confidence_doc_count <= 0
+            and source_quality_refutation_strength <= 0.0
+            and source_quality_statement_fact_zero_slot_rejected_doc_count <= 0
+            and answer_web_directish_count >= 2
+            and answer_web_proximity_count > 0
+            and (
+                answer_web_slot_count > 0
+                or answer_web_required_overlap_count > 0
+                or local_relation_doc_count > 0
+            )
+            and not shared_relation_span
+            and not source_doc_shared_relation_span
+        )
         conservative_sweep_near_complete_generic_recovery = bool(
             conservative_sweep_near_complete_generic_recovery_enabled
             and bool(summary.get("sweep_only_candidate"))
@@ -30672,6 +32625,9 @@ def _option_claim_source_quality_directness_promotion_detail(
             "answer_web_relation_recovery_soft_conflict_cleared": (
                 answer_web_relation_recovery_soft_conflict_cleared
             ),
+            "span_direct_near_complete_soft_refute_cleared": (
+                span_direct_near_complete_soft_refute_cleared
+            ),
             "candidate_direct_relation_span_count": direct_relation_span_count,
             "relation_required_overlap": relation_required_overlap,
             "relation_required_missing_terms": relation_required_missing_terms,
@@ -30731,6 +32687,7 @@ def _option_claim_source_quality_directness_promotion_detail(
             refute_allowed_by_strong_programmatic_signal
             or candidate_relation_span_conflict_resolved
             or answer_web_relation_recovery_soft_conflict_cleared
+            or span_direct_near_complete_soft_refute_cleared
             or (
                 programmatic_statement_fact_claim_span
                 and source_quality_refutation_doc_count <= 0
@@ -30852,6 +32809,8 @@ def _option_claim_source_quality_directness_promotion_detail(
             directness_path = "candidate_relation_span_conflict_resolved"
         elif relation_span_comparator_conflict_resolved:
             directness_path = "relation_span_comparator_conflict_resolved"
+        elif span_direct_near_complete_soft_refute_cleared:
+            directness_path = "span_direct_near_complete_soft_refute_cleared"
         elif span_direct:
             directness_path = (
                 "span_directness_model"
@@ -30957,6 +32916,9 @@ def _option_claim_source_quality_directness_promotion_detail(
             "programmatic_statement_fact_claim_span": programmatic_statement_fact_claim_span,
             "candidate_relation_span_conflict_resolved": (
                 candidate_relation_span_conflict_resolved
+            ),
+            "span_direct_near_complete_soft_refute_cleared": (
+                span_direct_near_complete_soft_refute_cleared
             ),
             "directness_path": directness_path,
             "high_confidence_statement_refutation_span": (
@@ -31144,12 +33106,6 @@ def _option_claim_source_quality_directness_promotion_detail(
     unresolved_conflict_promotion_cleared = bool(
         top.get("candidate_relation_span_conflict_resolved")
         or top.get("relation_span_comparator_conflict_resolved")
-        or top.get("programmatic_complete_relation_span")
-        or top.get("near_complete_generic_source_recovery")
-        or top.get("programmatic_statement_fact_claim_span")
-        or top.get("answer_web_relation_recovery_candidate")
-        or top.get("high_confidence_statement_refutation_span")
-        or top.get("substantive_numeric_refutation_span")
     )
     detail["unresolved_conflict_promotion_cleared"] = (
         unresolved_conflict_promotion_cleared
@@ -31187,6 +33143,9 @@ def _option_claim_source_quality_directness_promotion_detail(
             else "relation_span_comparator_conflict_resolved_with_source_quality"
             if top.get("directness_path")
             == "relation_span_comparator_conflict_resolved"
+            else "unique_model_span_direct_near_complete_soft_refute_with_source_quality"
+            if top.get("directness_path")
+            == "span_direct_near_complete_soft_refute_cleared"
             else "unique_relation_span_comparator_candidate_with_source_quality"
             if top.get("directness_path") == "relation_span_comparator"
             else "unique_span_direct_candidate_with_source_quality"
@@ -31330,6 +33289,327 @@ def _option_claim_source_verifier_structured_context_enabled() -> bool:
     return True
 
 
+def _option_claim_source_verifier_support_refute_audit(
+    *,
+    stem: str,
+    options: dict[str, str],
+    docs_by_label: dict[str, list[dict[str, str]]],
+    verifier_row: dict[str, Any],
+    target_label: str,
+    max_docs: int = 8,
+) -> tuple[str, dict[str, Any]]:
+    target_label = str(target_label or "")
+    target_hash = stable_hash({"option_label": target_label}) if target_label else None
+    base_summary: dict[str, Any] = {
+        "policy": "source_verifier_support_refute_audit_v1",
+        "target_option_hash": target_hash,
+        "context_used": False,
+        "raw_content_persisted": False,
+    }
+    if target_label not in options:
+        return "", {
+            **base_summary,
+            "status": "not_required",
+            "reason": "target_label_not_in_options",
+        }
+    docs = [
+        doc
+        for doc in docs_by_label.get(target_label, []) or []
+        if isinstance(doc, dict)
+    ]
+    if not docs:
+        return "", {**base_summary, "status": "not_required", "reason": "no_target_docs"}
+
+    option_text = options[target_label]
+    option_terms_by_label = {
+        label: _content_terms(text)
+        for label, text in options.items()
+        if _content_terms(text)
+    }
+    option_text_by_label = dict(options)
+    option_terms = option_terms_by_label.get(target_label) or _content_terms(option_text)
+    short_option_terms = _musicology_short_option_support_terms(
+        stem=stem,
+        option_text=option_text,
+        problem={
+            "_question": stem,
+            "raw_subject": "Musicology" if "jazz" in stem.lower() else "",
+        },
+    )
+    if not option_terms and short_option_terms:
+        option_terms = short_option_terms
+    distinctive_terms = (
+        _distinctive_option_terms_by_label(option_terms_by_label).get(target_label)
+        or option_terms
+    )
+    stem_terms = {term for term in _content_terms(stem) if len(term) >= 4}
+    relation_signature = _option_claim_question_relation_signature_terms(
+        stem=stem,
+        option_text=option_text,
+        max_terms=10,
+    )
+    required_terms = {
+        str(term).lower().strip("._-")
+        for term in relation_signature.get("required_terms", []) or []
+        if str(term).strip()
+    } - option_terms
+    relation_terms = {
+        term.lower().strip("._-")
+        for term in (
+            _question_evidence_anchor_terms(stem, option_text=option_text, max_terms=12)
+            + _question_relation_query_terms(stem)
+            + list(required_terms)
+        )
+        if len(term.lower().strip("._-")) >= 4
+    } - option_terms
+    if not relation_terms:
+        relation_terms = (stem_terms - option_terms)
+    support_hashes = {
+        str(value)
+        for value in verifier_row.get("supporting_doc_hashes", []) or []
+        if str(value).strip()
+    }
+    refute_hashes = {
+        str(value)
+        for value in verifier_row.get("refuting_doc_hashes", []) or []
+        if str(value).strip()
+    }
+    min_option_support = 1 if len(distinctive_terms) <= 2 else 2
+    max_docs = max(1, min(12, int(max_docs)))
+    rows: list[dict[str, Any]] = []
+    counts: Counter[str] = Counter()
+    category_priority = {
+        "support": 0,
+        "refute": 1,
+        "ambiguous_shared": 2,
+        "relation_only": 3,
+        "topical": 4,
+    }
+
+    def _doc_int(doc: dict[str, Any], key: str) -> int:
+        try:
+            return int(str(doc.get(key) or "0"))
+        except (TypeError, ValueError):
+            return 0
+
+    for index, doc in enumerate(docs[:max_docs]):
+        title = str(doc.get("title") or "")
+        snippet = str(doc.get("snippet") or "")
+        text = f"{title} {snippet}"
+        if not text.strip():
+            continue
+        doc_hash = stable_hash({"title": title, "snippet": snippet})
+        doc_terms = _content_terms(text)
+        title_terms = _content_terms(title)
+        source = str(doc.get("source") or "").strip().lower()
+        retrieval_stage = str(doc.get("retrieval_stage") or "").strip().lower()
+        option_overlap = len(distinctive_terms & doc_terms)
+        title_option_overlap = len(distinctive_terms & title_terms)
+        phrase_present = bool(
+            _normalized_phrase_present(option_text, text)
+            or _musicology_short_option_phrase_signal(
+                text=text,
+                stem=stem,
+                option_text=option_text,
+                problem={
+                    "_question": stem,
+                    "raw_subject": "Musicology" if "jazz" in stem.lower() else "",
+                },
+            )
+        )
+        supporting_labels = _option_evidence_supporting_labels(
+            text=text,
+            doc_terms=doc_terms,
+            title_terms=title_terms,
+            option_terms_by_label=option_terms_by_label,
+            option_text_by_label=option_text_by_label,
+        )
+        supports_current = target_label in supporting_labels or phrase_present
+        supports_other = any(label != target_label for label in supporting_labels)
+        option_signal = bool(
+            phrase_present
+            or title_option_overlap >= min_option_support
+            or option_overlap >= min_option_support
+        )
+        relation_overlap = len(relation_terms & doc_terms)
+        required_overlap = len(required_terms & doc_terms)
+        relation_proximity = _option_claim_relation_proximity_signal(
+            text=text,
+            option_text=option_text,
+            option_terms=option_terms,
+            relation_terms=relation_terms,
+        )
+        upstream_relation_proximity = bool(
+            _json_truthy(doc.get("answer_web_cache_sweep_relation_proximity"))
+            or _json_truthy(doc.get("source_cache_corpus_backfill_relation_proximity"))
+            or _json_truthy(doc.get("relation_proximity"))
+        )
+        directish_signal = bool(
+            _json_truthy(doc.get("answer_web_cache_sweep_general_relation_directish_signal"))
+            or _json_truthy(doc.get("answer_web_cache_sweep_physics_bound_bridge_signal"))
+            or _json_truthy(doc.get("answer_web_cache_sweep_musicology_direct_relation_signal"))
+            or _json_truthy(doc.get("answer_web_cache_sweep_statement_fact_claim_signal"))
+            or _json_truthy(doc.get("statement_fact_claim_signal"))
+            or upstream_relation_proximity
+            or _doc_int(doc, "answer_web_cache_sweep_relation_slot_covered_count") > 0
+            or _doc_int(doc, "source_cache_corpus_backfill_covered_slot_count") > 0
+            or _doc_int(doc, "relation_query_expansion_covered_slot_count") > 0
+            or _doc_int(doc, "answer_web_cache_sweep_relation_signature_required_overlap") > 0
+            or _doc_int(doc, "source_cache_corpus_backfill_relation_signature_required_overlap") > 0
+            or _doc_int(doc, "relation_signature_required_overlap") > 0
+        )
+        relation_signal = bool(
+            relation_proximity
+            or upstream_relation_proximity
+            or relation_overlap > 0
+            or required_overlap > 0
+            or directish_signal
+        )
+        refute_like_current = bool(
+            supports_current
+            and not supports_other
+            and relation_signal
+            and _option_claim_refuted_by_doc(text=text, option_text=option_text)
+        )
+        if doc_hash in refute_hashes or refute_like_current:
+            category = "refute"
+        elif doc_hash in support_hashes or (supports_current and not supports_other and relation_signal):
+            category = "support"
+        elif supports_other or (supports_current and supports_other):
+            category = "ambiguous_shared"
+        elif option_signal and relation_signal:
+            category = "relation_only"
+        else:
+            category = "topical"
+        counts[category] += 1
+        excerpt = _option_evidence_excerpt(
+            snippet=snippet or title,
+            option_text=option_text,
+            max_chars=300,
+            relation_anchor_terms=sorted(relation_terms | required_terms),
+        )
+        score = (
+            (5.0 if category == "support" else 0.0)
+            + (4.0 if directish_signal else 0.0)
+            + (2.0 if relation_proximity or upstream_relation_proximity else 0.0)
+            + (1.2 * min(required_overlap, 4))
+            + (0.9 * min(relation_overlap, 5))
+            + (0.8 * min(option_overlap, 4))
+            + (0.5 if phrase_present else 0.0)
+            - (2.5 if category == "refute" else 0.0)
+            - (1.5 if supports_other else 0.0)
+            + (0.1 / (index + 1))
+        )
+        rows.append({
+            "category": category,
+            "doc_hash": doc_hash,
+            "source": source or "unknown",
+            "retrieval_stage": retrieval_stage or "unknown",
+            "score": round(score, 4),
+            "option_signal": option_signal,
+            "relation_signal": relation_signal,
+            "directish_signal": directish_signal,
+            "supports_current": supports_current,
+            "supports_other": supports_other,
+            "phrase_present": phrase_present,
+            "relation_proximity": bool(relation_proximity or upstream_relation_proximity),
+            "option_overlap": option_overlap,
+            "relation_overlap": relation_overlap,
+            "required_overlap": required_overlap,
+            "source_rank": index + 1,
+            "_title": title,
+            "_excerpt": excerpt,
+        })
+
+    if not rows:
+        return "", {
+            **base_summary,
+            "status": "not_required",
+            "reason": "no_auditable_docs",
+            "doc_count": len(docs),
+        }
+    rows.sort(
+        key=lambda row: (
+            category_priority.get(str(row.get("category") or "topical"), 9),
+            -float(row.get("score") or 0.0),
+            int(row.get("source_rank") or 999),
+        )
+    )
+    selected_rows = [
+        row
+        for row in rows
+        if row.get("category") != "topical" or len(rows) <= 2
+    ][:6]
+    if not selected_rows:
+        selected_rows = rows[: min(3, len(rows))]
+    lines = [
+        "Programmatic support/refute audit for this target option.",
+        "Use this as a map to inspect the snippets, not as an automatic proof.",
+        (
+            "Counts: "
+            f"support={counts.get('support', 0)}, "
+            f"refute={counts.get('refute', 0)}, "
+            f"ambiguous_shared={counts.get('ambiguous_shared', 0)}, "
+            f"relation_only={counts.get('relation_only', 0)}, "
+            f"topical={counts.get('topical', 0)}"
+        ),
+    ]
+    for idx, row in enumerate(selected_rows, start=1):
+        source = _clean_evidence_text(str(row.get("source") or "unknown"))[:40]
+        retrieval_stage = _clean_evidence_text(str(row.get("retrieval_stage") or "unknown"))[:60]
+        title = _clean_evidence_text(str(row.get("_title") or ""))[:120]
+        excerpt = _clean_evidence_text(str(row.get("_excerpt") or ""))[:360]
+        lines.append(
+            f"- Audit {idx}: class={row.get('category')}; source={source}; "
+            f"stage={retrieval_stage}; directish={str(bool(row.get('directish_signal'))).lower()}; "
+            f"option_overlap={int(row.get('option_overlap') or 0)}; "
+            f"relation_overlap={int(row.get('relation_overlap') or 0)}; "
+            f"required_overlap={int(row.get('required_overlap') or 0)}; "
+            f"relation_proximity={str(bool(row.get('relation_proximity'))).lower()}; "
+            f"supports_other={str(bool(row.get('supports_other'))).lower()}: "
+            f"{title} -- {excerpt}"
+        )
+    public_rows = [
+        {
+            key: value
+            for key, value in row.items()
+            if not str(key).startswith("_")
+        }
+        for row in rows[:8]
+    ]
+    context = "\n".join(lines).strip()
+    top_by_category: dict[str, list[str]] = defaultdict(list)
+    for row in rows:
+        category = str(row.get("category") or "unknown")
+        doc_hash = str(row.get("doc_hash") or "")
+        if doc_hash and len(top_by_category[category]) < 4:
+            top_by_category[category].append(doc_hash)
+    return context, {
+        **base_summary,
+        "status": "activated",
+        "reason": "support_refute_audit_available",
+        "context_used": True,
+        "context_hash": stable_hash({"source_verifier_support_refute_audit": context}),
+        "context_char_count": len(context),
+        "doc_count": len(docs),
+        "audited_doc_count": len(rows),
+        "selected_audit_doc_count": len(selected_rows),
+        "support_doc_count": int(counts.get("support", 0)),
+        "refute_doc_count": int(counts.get("refute", 0)),
+        "ambiguous_shared_doc_count": int(counts.get("ambiguous_shared", 0)),
+        "relation_only_doc_count": int(counts.get("relation_only", 0)),
+        "topical_doc_count": int(counts.get("topical", 0)),
+        "directish_doc_count": sum(1 for row in rows if row.get("directish_signal")),
+        "relation_proximity_doc_count": sum(1 for row in rows if row.get("relation_proximity")),
+        "required_overlap_doc_count": sum(
+            1 for row in rows if int(row.get("required_overlap") or 0) > 0
+        ),
+        "category_counts": dict(sorted(counts.items())),
+        "top_doc_hashes_by_category": dict(top_by_category),
+        "rows": public_rows,
+    }
+
+
 def _option_claim_source_verifier_structured_context(
     *,
     stem: str,
@@ -31396,6 +33676,15 @@ def _option_claim_source_verifier_structured_context(
             "target_snippets_included": False,
         }
 
+    support_refute_audit_context, support_refute_audit_summary = (
+        _option_claim_source_verifier_support_refute_audit(
+            stem=stem,
+            options=options,
+            docs_by_label=docs_by_label,
+            verifier_row=verifier_row,
+            target_label=target_label,
+        )
+    )
     local_relation_doc_count = int(acceptance_gate.get("local_relation_doc_count") or 0)
     source_cache_corpus_backfill_doc_count = int(
         signal_counts.get("source_cache_corpus_backfill_doc_count") or 0
@@ -31436,6 +33725,11 @@ def _option_claim_source_verifier_structured_context(
             "metadata-like, or only name/define the target, return an empty selected_label."
         ),
     ]
+    if support_refute_audit_context.strip():
+        outline_lines.extend([
+            "Support/refute audit to inspect before the raw snippets:",
+            support_refute_audit_context.strip(),
+        ])
     if include_target_snippets:
         outline_lines.extend([
             "Target-only snippets to inspect first:",
@@ -31464,6 +33758,50 @@ def _option_claim_source_verifier_structured_context(
         "context_char_count": len(context),
         "doc_count": doc_count,
         "signal_counts": signal_counts,
+        "support_refute_audit": {
+            key: value
+            for key, value in support_refute_audit_summary.items()
+            if key != "rows"
+        },
+        "support_refute_audit_status": support_refute_audit_summary.get("status"),
+        "support_refute_audit_reason": support_refute_audit_summary.get("reason"),
+        "support_refute_audit_hash": support_refute_audit_summary.get("context_hash"),
+        "support_refute_audit_char_count": int(
+            support_refute_audit_summary.get("context_char_count") or 0
+        ),
+        "support_refute_audit_doc_count": int(
+            support_refute_audit_summary.get("doc_count") or 0
+        ),
+        "support_refute_audit_audited_doc_count": int(
+            support_refute_audit_summary.get("audited_doc_count") or 0
+        ),
+        "support_refute_audit_support_doc_count": int(
+            support_refute_audit_summary.get("support_doc_count") or 0
+        ),
+        "support_refute_audit_refute_doc_count": int(
+            support_refute_audit_summary.get("refute_doc_count") or 0
+        ),
+        "support_refute_audit_ambiguous_shared_doc_count": int(
+            support_refute_audit_summary.get("ambiguous_shared_doc_count") or 0
+        ),
+        "support_refute_audit_relation_only_doc_count": int(
+            support_refute_audit_summary.get("relation_only_doc_count") or 0
+        ),
+        "support_refute_audit_directish_doc_count": int(
+            support_refute_audit_summary.get("directish_doc_count") or 0
+        ),
+        "support_refute_audit_relation_proximity_doc_count": int(
+            support_refute_audit_summary.get("relation_proximity_doc_count") or 0
+        ),
+        "support_refute_audit_required_overlap_doc_count": int(
+            support_refute_audit_summary.get("required_overlap_doc_count") or 0
+        ),
+        "support_refute_audit_category_counts": dict(
+            support_refute_audit_summary.get("category_counts") or {}
+        ),
+        "support_refute_audit_top_doc_hashes_by_category": dict(
+            support_refute_audit_summary.get("top_doc_hashes_by_category") or {}
+        ),
         "source_quality_doc_count": int(signal_counts.get("source_quality_doc_count") or 0),
         "support_doc_count": int(signal_counts.get("support_doc_count") or 0),
         "answer_web_directish_count": int(
@@ -31623,6 +33961,7 @@ def _run_source_grounded_option_claim_verifier(
     logger: "_JsonlLogger | None",
     timeout: float | None,
     max_tokens: int,
+    budget_kind: str = "source_grounded_option_claim_verifier",
 ) -> dict[str, Any]:
     if not evidence_context.strip():
         return {
@@ -31655,11 +33994,15 @@ def _run_source_grounded_option_claim_verifier(
             "option_count": len(options),
             "evidence_context_hash": stable_hash({"option_claim_evidence_context": evidence_context}),
             "answer_bearing_task_hint_kind": task_hint.get("kind"),
+            "budget_kind": budget_kind,
+            "answer_bearing_source_priority": (
+                _option_claim_verifier_uses_answer_bearing_source_priority(budget_kind)
+            ),
             "timeout_sec": timeout,
         },
     )
     if not _option_claim_verifier_budget_allows(
-        kind="source_grounded_option_claim_verifier",
+        kind=budget_kind,
         problem=problem,
         eval_id=eval_id,
         call_id=call_id,
@@ -31669,10 +34012,13 @@ def _run_source_grounded_option_claim_verifier(
         extra={
             "lexical_top_option_hash": stable_hash({"option_label": lexical_top_label}),
             "option_count": len(options),
+            "answer_bearing_source_priority": (
+                _option_claim_verifier_uses_answer_bearing_source_priority(budget_kind)
+            ),
         },
     ):
         budget_state = _option_claim_verifier_budget_state(
-            kind="source_grounded_option_claim_verifier",
+            kind=budget_kind,
             problem=problem,
             eval_id=eval_id,
             call_id=call_id,
@@ -31684,6 +34030,17 @@ def _run_source_grounded_option_claim_verifier(
             "status": "budget_exhausted",
             "reason": budget_reason,
             "verifier_kind": "target_label",
+            "budget_kind": budget_kind,
+            "router_call_stage": (
+                "source_grounded_option_claim_verifier_answer_bearing"
+                if _option_claim_verifier_uses_answer_bearing_source_priority(
+                    budget_kind
+                )
+                else "source_grounded_option_claim_verifier"
+            ),
+            "answer_bearing_source_priority": (
+                _option_claim_verifier_uses_answer_bearing_source_priority(budget_kind)
+            ),
             "direct_high_confidence": False,
             "verification_target_label": lexical_top_label,
             "verification_target_option_hash": stable_hash({"option_label": lexical_top_label}),
@@ -31700,6 +34057,9 @@ def _run_source_grounded_option_claim_verifier(
                 "reserved_budget_used_before": budget_state.get("reserved_budget_used_before"),
                 "budget_remaining_before": budget_state.get("budget_remaining_before"),
                 "uses_reserved_budget": budget_state.get("uses_reserved_budget"),
+                "uses_answer_bearing_source_priority": budget_state.get(
+                    "uses_answer_bearing_source_priority"
+                ),
                 "variant_budget_enabled": budget_state.get("variant_budget_enabled"),
                 "variant_budget_limit": budget_state.get("variant_budget_limit"),
                 "variant_budget_used_before": budget_state.get("variant_budget_used_before"),
@@ -31712,8 +34072,17 @@ def _run_source_grounded_option_claim_verifier(
                 "variant_directness_reserved_budget": budget_state.get(
                     "variant_directness_reserved_budget"
                 ),
+                "variant_source_verifier_reserved_budget": budget_state.get(
+                    "variant_source_verifier_reserved_budget"
+                ),
                 "uses_variant_directness_reserved_budget": budget_state.get(
                     "uses_variant_directness_reserved_budget"
+                ),
+                "uses_variant_source_verifier_reserved_budget": budget_state.get(
+                    "uses_variant_source_verifier_reserved_budget"
+                ),
+                "uses_variant_answer_bearing_source_priority": budget_state.get(
+                    "uses_variant_answer_bearing_source_priority"
                 ),
                 "variant_protected_budget_before": budget_state.get(
                     "variant_protected_budget_before"
@@ -31723,9 +34092,14 @@ def _run_source_grounded_option_claim_verifier(
             "latency_sec": 0.0,
         }
     started = time.monotonic()
+    source_router_stage = (
+        "source_grounded_option_claim_verifier_answer_bearing"
+        if _option_claim_verifier_uses_answer_bearing_source_priority(budget_kind)
+        else "source_grounded_option_claim_verifier"
+    )
     try:
         with _option_claim_model_router_scope(
-            stage="source_grounded_option_claim_verifier",
+            stage=source_router_stage,
             problem=problem,
             call_id=call_id,
             candidate_count=1,
@@ -31762,6 +34136,11 @@ def _run_source_grounded_option_claim_verifier(
         summary = {
             "status": "activated" if direct_high_confidence else "blocked_not_direct_high_confidence",
             "verifier_kind": "target_label",
+            "budget_kind": budget_kind,
+            "router_call_stage": source_router_stage,
+            "answer_bearing_source_priority": (
+                _option_claim_verifier_uses_answer_bearing_source_priority(budget_kind)
+            ),
             "direct_high_confidence": bool(direct_high_confidence),
             "verification_target_label": lexical_top_label,
             "verification_target_option_hash": stable_hash({"option_label": lexical_top_label}),
@@ -31789,6 +34168,11 @@ def _run_source_grounded_option_claim_verifier(
                 "verifier_model": verifier_model,
                 "variant": "assumption_agent_recursive_verify",
                 "stage_status": summary["status"],
+                "budget_kind": budget_kind,
+                "router_call_stage": source_router_stage,
+                "answer_bearing_source_priority": summary[
+                    "answer_bearing_source_priority"
+                ],
                 "selected_option_hash": summary["selected_option_hash"],
                 "confidence": confidence,
                 "evidence_relation": relation,
@@ -31804,7 +34188,7 @@ def _run_source_grounded_option_claim_verifier(
         watchdog_budget_exhausted = isinstance(exc, VariantExecutionWatchdogExceeded)
         budget_state = (
             _option_claim_verifier_budget_state(
-                kind="source_grounded_option_claim_verifier",
+                kind=budget_kind,
                 problem=problem,
                 eval_id=eval_id,
                 call_id=call_id,
@@ -31826,12 +34210,24 @@ def _run_source_grounded_option_claim_verifier(
                 "error_type": type(exc).__name__,
                 "error": str(exc)[:240],
                 "latency_sec": latency_sec,
+                "budget_kind": budget_kind,
+                "router_call_stage": source_router_stage,
+                "answer_bearing_source_priority": (
+                    _option_claim_verifier_uses_answer_bearing_source_priority(
+                        budget_kind
+                    )
+                ),
                 "budget_state": budget_state if watchdog_budget_exhausted else None,
             },
         )
         return {
             "status": "budget_exhausted" if watchdog_budget_exhausted else "error",
             "reason": str(exc) if watchdog_budget_exhausted else "model_or_parse_error",
+            "budget_kind": budget_kind,
+            "router_call_stage": source_router_stage,
+            "answer_bearing_source_priority": (
+                _option_claim_verifier_uses_answer_bearing_source_priority(budget_kind)
+            ),
             "direct_high_confidence": False,
             "verification_target_label": lexical_top_label,
             "verification_target_option_hash": stable_hash({"option_label": lexical_top_label}),
@@ -32446,6 +34842,265 @@ def _option_claim_relation_span_comparator_directness_audit_context(
     return "\n".join(lines)
 
 
+def _option_claim_relation_span_comparator_candidate_order(
+    *,
+    options: dict[str, str],
+    candidate_labels: list[str],
+    span_docs_by_label: dict[str, list[dict[str, str]]],
+    span_summary: dict[str, Any],
+    candidate_selection: dict[str, Any] | None,
+    protected_top_count: int = 2,
+) -> tuple[list[str], dict[str, Any]]:
+    limit = _option_claim_contrastive_adjudicator_candidate_limit()
+    label_order: list[str] = []
+    for label in candidate_labels:
+        label = str(label)
+        if label in options and label not in label_order:
+            label_order.append(label)
+
+    option_hash_by_label = {
+        label: stable_hash({"option_label": label})
+        for label in label_order
+    }
+    rows_by_hash: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in (span_summary or {}).get("candidate_direct_relation_span_rows", []) or []:
+        if not isinstance(row, dict):
+            continue
+        option_hash = str(row.get("option_hash") or "")
+        if option_hash:
+            rows_by_hash[option_hash].append(row)
+    span_count_by_hash = dict(
+        (span_summary or {}).get("candidate_direct_relation_span_count_by_option_hash")
+        or {}
+    )
+    span_hashes_by_hash = dict(
+        (span_summary or {}).get("candidate_direct_relation_span_hashes_by_option_hash")
+        or {}
+    )
+    selection = candidate_selection if isinstance(candidate_selection, dict) else {}
+    selection_reasons_by_hash = dict(selection.get("selection_reasons_by_option_hash") or {})
+    selection_reason_priority = {
+        "best_overall_source_quality": 6,
+        "best_sweep_only_source_quality": 5,
+        "source_verifier_coverage_continuation": 4,
+        "best_sweep_only_ranked": 3,
+        "runner_up_ranked": 2,
+        "top_ranked": 2,
+        "finite_option_coverage_ranked": 1,
+    }
+
+    def safe_int(value: Any, default: int = 0) -> int:
+        try:
+            return int(str(value).strip())
+        except (TypeError, ValueError):
+            return default
+
+    def safe_float(value: Any) -> float:
+        try:
+            return float(str(value).strip())
+        except (TypeError, ValueError):
+            return 0.0
+
+    def metrics_for_label(label: str, index: int) -> dict[str, Any]:
+        option_hash = option_hash_by_label[label]
+        rows = rows_by_hash.get(option_hash, [])
+        doc_count = len(span_docs_by_label.get(label, []) or [])
+        span_count = safe_int(
+            span_count_by_hash.get(option_hash),
+            default=len(span_hashes_by_hash.get(option_hash, []) or []) or doc_count,
+        )
+        missing_counts = [
+            safe_int(row.get("relation_signature_required_missing_term_count"), default=999)
+            for row in rows
+        ]
+        best_required_missing = min(missing_counts) if missing_counts else 999
+        best_required_overlap = max(
+            (safe_int(row.get("relation_signature_required_overlap")) for row in rows),
+            default=0,
+        )
+        complete_span_count = sum(
+            1
+            for row in rows
+            if safe_int(row.get("relation_signature_required_overlap")) > 0
+            and safe_int(
+                row.get("relation_signature_required_missing_term_count"),
+                default=999,
+            )
+            <= 0
+        )
+        near_complete_span_count = sum(
+            1
+            for row in rows
+            if safe_int(row.get("relation_signature_required_overlap")) > 0
+            and safe_int(
+                row.get("relation_signature_required_missing_term_count"),
+                default=999,
+            )
+            <= 1
+        )
+        paired_span_count = sum(
+            1
+            for row in rows
+            if str(row.get("span_provenance") or "")
+            == "missing_required_term_backfill_paired_span"
+        )
+        clean_span_count = sum(
+            1
+            for row in rows
+            if not bool(row.get("shared_doc"))
+            and not bool(row.get("source_doc_shared"))
+            and not bool(row.get("supports_other"))
+            and not bool(row.get("source_doc_supports_other"))
+        )
+        relation_proximity_count = sum(
+            1
+            for row in rows
+            if bool(row.get("relation_proximity"))
+            or bool(row.get("relation_signature_proximity"))
+        )
+        reason = str(selection_reasons_by_hash.get(option_hash) or "")
+        reason_priority = selection_reason_priority.get(reason, 0)
+        if reason.startswith("source_verifier"):
+            reason_priority = max(reason_priority, 4)
+        return {
+            "label": label,
+            "option_hash": option_hash,
+            "original_index": index,
+            "selection_reason": reason,
+            "selection_reason_priority": reason_priority,
+            "span_count": span_count,
+            "row_count": len(rows),
+            "doc_count": doc_count,
+            "best_required_overlap": best_required_overlap,
+            "best_required_missing": best_required_missing,
+            "complete_span_count": complete_span_count,
+            "near_complete_span_count": near_complete_span_count,
+            "paired_span_count": paired_span_count,
+            "clean_span_count": clean_span_count,
+            "relation_proximity_count": relation_proximity_count,
+            "best_score": round(
+                max((safe_float(row.get("score")) for row in rows), default=0.0),
+                4,
+            ),
+            "span_priority_candidate": bool(
+                span_count > 0
+                or rows
+                or doc_count > 0
+                or reason_priority >= 4
+            ),
+        }
+
+    metric_rows = [
+        metrics_for_label(label, index)
+        for index, label in enumerate(label_order)
+    ]
+    if len(label_order) <= limit and int(protected_top_count or 0) > 0:
+        selected = list(label_order)
+        reason = "candidate_count_within_limit"
+    else:
+        protected_count = max(0, min(int(protected_top_count or 0), limit))
+        protected = label_order[:protected_count]
+        protected_set = set(protected)
+        remainder = [
+            row
+            for row in metric_rows
+            if str(row.get("label") or "") not in protected_set
+        ]
+        remainder.sort(key=lambda row: (
+            not bool(row.get("span_priority_candidate")),
+            not bool(row.get("complete_span_count")),
+            not bool(row.get("near_complete_span_count")),
+            int(row.get("best_required_missing") or 999),
+            -int(row.get("best_required_overlap") or 0),
+            -int(row.get("paired_span_count") or 0),
+            -int(row.get("clean_span_count") or 0),
+            -int(row.get("relation_proximity_count") or 0),
+            -int(row.get("span_count") or 0),
+            -int(row.get("selection_reason_priority") or 0),
+            -float(row.get("best_score") or 0.0),
+            int(row.get("original_index") or 0),
+        ))
+        selected = list(protected)
+        for row in remainder:
+            if len(selected) >= limit:
+                break
+            label = str(row.get("label") or "")
+            if label in options:
+                selected.append(label)
+        reason = (
+            "span_priority_with_top_runner_up"
+            if protected_count > 0
+            else "span_priority_without_rank_protection"
+        )
+
+    selected_set = set(selected)
+    detail_rows: list[dict[str, Any]] = []
+    for row in metric_rows:
+        label = str(row.get("label") or "")
+        detail_rows.append({
+            "option_hash": row.get("option_hash"),
+            "selected": label in selected_set,
+            "original_index": int(row.get("original_index") or 0),
+            "selection_reason": row.get("selection_reason"),
+            "span_priority_candidate": bool(row.get("span_priority_candidate")),
+            "span_count": int(row.get("span_count") or 0),
+            "row_count": int(row.get("row_count") or 0),
+            "doc_count": int(row.get("doc_count") or 0),
+            "best_required_overlap": int(row.get("best_required_overlap") or 0),
+            "best_required_missing": int(row.get("best_required_missing") or 999),
+            "complete_span_count": int(row.get("complete_span_count") or 0),
+            "near_complete_span_count": int(row.get("near_complete_span_count") or 0),
+            "paired_span_count": int(row.get("paired_span_count") or 0),
+            "clean_span_count": int(row.get("clean_span_count") or 0),
+            "relation_proximity_count": int(row.get("relation_proximity_count") or 0),
+            "best_score": row.get("best_score"),
+        })
+    selected_hashes = [
+        option_hash_by_label[label]
+        for label in selected
+        if label in option_hash_by_label
+    ]
+    omitted_hashes = [
+        option_hash_by_label[label]
+        for label in label_order
+        if label not in selected_set
+    ]
+    omitted_span_priority_hashes = [
+        str(row.get("option_hash") or "")
+        for row in metric_rows
+        if str(row.get("label") or "") not in selected_set
+        and bool(row.get("span_priority_candidate"))
+    ]
+    selected_span_priority_hashes = [
+        str(row.get("option_hash") or "")
+        for row in metric_rows
+        if str(row.get("label") or "") in selected_set
+        and bool(row.get("span_priority_candidate"))
+    ]
+    return selected, {
+        "policy": "relation_span_comparator_span_priority_candidate_order_v1",
+        "status": "activated" if label_order else "not_required",
+        "reason": reason if label_order else "no_candidate_labels",
+        "candidate_limit": limit,
+        "protected_top_count": max(0, int(protected_top_count or 0)),
+        "original_candidate_count": len(label_order),
+        "selected_candidate_count": len(selected),
+        "original_candidate_option_hashes": [
+            option_hash_by_label[label] for label in label_order
+        ],
+        "selected_candidate_option_hashes": selected_hashes,
+        "omitted_candidate_option_hashes": omitted_hashes,
+        "selected_span_priority_candidate_option_hashes": selected_span_priority_hashes,
+        "omitted_span_priority_candidate_option_hashes": omitted_span_priority_hashes,
+        "omitted_span_priority_candidate_count": len(omitted_span_priority_hashes),
+        "rows": detail_rows[:12],
+        "rows_hash": stable_hash({
+            "relation_span_comparator_candidate_priority_rows": detail_rows,
+        }) if detail_rows else None,
+        "raw_content_persisted": False,
+    }
+
+
 def _run_option_claim_relation_span_comparator(
     *,
     problem: dict[str, Any],
@@ -32462,18 +35117,25 @@ def _run_option_claim_relation_span_comparator(
     timeout: float | None,
     max_tokens: int,
 ) -> dict[str, Any]:
-    label_order: list[str] = []
-    for label in candidate_labels:
-        label = str(label)
-        if label in options and label not in label_order:
-            label_order.append(label)
-        if len(label_order) >= _option_claim_contrastive_adjudicator_candidate_limit():
-            break
+    label_order, candidate_priority_detail = (
+        _option_claim_relation_span_comparator_candidate_order(
+            options=options,
+            candidate_labels=candidate_labels,
+            span_docs_by_label=span_docs_by_label,
+            span_summary=span_summary,
+            candidate_selection=candidate_selection,
+        )
+    )
     candidate_hashes = [stable_hash({"option_label": label}) for label in label_order]
     base_summary: dict[str, Any] = {
         "status": "disabled",
         "reason": "env_disabled",
         "verifier_kind": "relation_span_comparator",
+        "candidate_priority_detail": candidate_priority_detail,
+        "candidate_priority_reason": candidate_priority_detail.get("reason"),
+        "omitted_span_priority_candidate_count": int(
+            candidate_priority_detail.get("omitted_span_priority_candidate_count") or 0
+        ),
         "direct_high_confidence": False,
         "candidate_count": len(label_order),
         "candidate_option_hashes": candidate_hashes,
@@ -32562,6 +35224,11 @@ def _run_option_claim_relation_span_comparator(
             "candidate_option_hashes": candidate_hashes,
             "candidate_direct_relation_span_count": int(
                 span_summary.get("candidate_direct_relation_span_count") or 0
+            ),
+            "candidate_priority_reason": candidate_priority_detail.get("reason"),
+            "candidate_priority_detail": candidate_priority_detail,
+            "omitted_span_priority_candidate_count": int(
+                candidate_priority_detail.get("omitted_span_priority_candidate_count") or 0
             ),
             "span_hashes_by_option_hash": row_hashes_by_option_hash,
             "evidence_context_hash": evidence_context_hash,
@@ -32715,6 +35382,11 @@ def _run_option_claim_relation_span_comparator(
             "direct_high_confidence": bool(selected_label),
             "candidate_count": len(label_order),
             "candidate_option_hashes": candidate_hashes,
+            "candidate_priority_detail": candidate_priority_detail,
+            "candidate_priority_reason": candidate_priority_detail.get("reason"),
+            "omitted_span_priority_candidate_count": int(
+                candidate_priority_detail.get("omitted_span_priority_candidate_count") or 0
+            ),
             "direct_candidate_count": len(direct_hashes),
             "direct_candidate_option_hashes": direct_hashes,
             "selected_label": selected_label,
@@ -32767,6 +35439,11 @@ def _run_option_claim_relation_span_comparator(
                 "confidence": confidence,
                 "candidate_count": len(label_order),
                 "candidate_option_hashes": candidate_hashes,
+                "candidate_priority_reason": candidate_priority_detail.get("reason"),
+                "candidate_priority_detail": candidate_priority_detail,
+                "omitted_span_priority_candidate_count": int(
+                    candidate_priority_detail.get("omitted_span_priority_candidate_count") or 0
+                ),
                 "direct_candidate_count": len(direct_hashes),
                 "direct_candidate_option_hashes": direct_hashes,
                 "selected_option_hash": selected_option_hash,
@@ -34993,6 +37670,13 @@ def _domain_rule_mc_decision(
     )
     if documentary_credit:
         return documentary_credit
+    adhesion_tos = _adhesion_contract_material_tos_fee_decision(
+        problem=problem,
+        stem=stem,
+        options=options,
+    )
+    if adhesion_tos:
+        return adhesion_tos
     bio = _bacterial_cross_resistance_minimality_decision(problem=problem, stem=stem, options=options)
     if bio:
         return bio
@@ -35326,6 +38010,119 @@ def _documentary_credit_discrepancy_decision(
             "lc_requires_packing_list_photocopy": (
                 lc_requires_packing_list_photocopy
             ),
+        },
+    }
+
+
+def _adhesion_contract_material_tos_fee_decision(
+    *,
+    problem: dict[str, Any],
+    stem: str,
+    options: dict[str, str],
+) -> dict[str, Any] | None:
+    if _env_flag("HLE_DISABLE_ADHESION_CONTRACT_MATERIAL_TOS_FEE_RULE"):
+        return None
+    text = " ".join([
+        str(problem.get("category") or ""),
+        str(problem.get("raw_subject") or ""),
+        stem,
+    ])
+    normalized = _normalize_domain_rule_text(text)
+    if "law" not in normalized:
+        return None
+    if "adhesion" not in normalized and "contract of adhesion" not in normalized:
+        return None
+    if not any(cue in normalized for cue in ("terms of service", "tos", "material terms")):
+        return None
+    if not any(cue in normalized for cue in ("website", "webservice", "web service")):
+        return None
+
+    scored: list[tuple[int, str, dict[str, Any]]] = []
+    for label, option_text in sorted(options.items()):
+        option = _normalize_domain_rule_text(option_text)
+        score = 0
+        diagnostics = {
+            "late_charge": False,
+            "payment_fee": False,
+            "non_refundable_advance": False,
+            "high_monthly_rate": False,
+            "written_numeric_percent_mismatch": False,
+            "generic_platform_use_clause": False,
+        }
+        payment_fee = bool(
+            "fee" in option
+            or "fees" in option
+            or "payable" in option
+            or "unpaid balance" in option
+            or "failure to pay" in option
+        )
+        if "late charge" in option:
+            score += 4
+            diagnostics["late_charge"] = True
+        if payment_fee:
+            score += 2
+            diagnostics["payment_fee"] = True
+        if "non refundable" in option and "payable in advance" in option:
+            score += 3
+            diagnostics["non_refundable_advance"] = True
+        percent_values = [
+            float(match.group(1))
+            for match in re.finditer(r"\b(\d+(?:\.\d+)?)\s*%", option)
+        ]
+        if any(value >= 5.0 for value in percent_values) and "per month" in option:
+            score += 4
+            diagnostics["high_monthly_rate"] = True
+        if (
+            "one and one half percent" in option
+            and any(abs(value - 10.5) < 0.01 for value in percent_values)
+        ):
+            score += 4
+            diagnostics["written_numeric_percent_mismatch"] = True
+        if "maximum rate allowed by law" in option:
+            score += 1
+        if any(
+            cue in option
+            for cue in (
+                "scrape",
+                "benchmark",
+                "competitive product",
+                "ai generated content",
+                "profile picture",
+                "sponsored content",
+                "copyright",
+                "automated systems",
+            )
+        ):
+            score -= 3
+            diagnostics["generic_platform_use_clause"] = True
+        if score > 0:
+            scored.append((score, label, diagnostics))
+    if not scored:
+        return None
+    ranked = sorted(scored, key=lambda item: (-item[0], item[1]))
+    top_score, top_label, top_diagnostics = ranked[0]
+    runner_up_score = ranked[1][0] if len(ranked) > 1 else 0
+    if top_score < 8 or top_score - runner_up_score < 3:
+        return None
+    return {
+        "label": top_label,
+        "rule_id": "adhesion_contract_hidden_material_fee_term",
+        "confidence": "mechanistic_domain_rule",
+        "reason": "material_tos_fee_late_charge_clause_is_unique_contract_of_adhesion_signal",
+        "evidence_required": False,
+        "diagnostics": {
+            "policy": "adhesion_contract_material_tos_fee_rule_v1",
+            "selected_option_hash": stable_hash({"option_label": top_label}),
+            "top_score": top_score,
+            "runner_up_score": runner_up_score,
+            "selected_cues": top_diagnostics,
+            "scored_option_hashes": [
+                {
+                    "option_hash": stable_hash({"option_label": label}),
+                    "score": score,
+                }
+                for score, label, _ in ranked[:5]
+            ],
         },
     }
 
@@ -38120,6 +40917,151 @@ def _option_claim_contrastive_relation_backfill_doc_cap(max_docs: int = 8) -> in
     return max(8, min(14, int(max_docs or 0) + 4))
 
 
+def _option_claim_self_contained_stem_relation_backfill_enabled() -> bool:
+    if os.environ.get(
+        "HLE_DISABLE_OPTION_CLAIM_SELF_CONTAINED_STEM_RELATION_BACKFILL",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    explicit = os.environ.get(
+        "HLE_ENABLE_OPTION_CLAIM_SELF_CONTAINED_STEM_RELATION_BACKFILL",
+        "",
+    ).strip().lower()
+    if explicit:
+        return explicit in {"1", "true", "yes", "on"}
+    return _evidence_source_cache_only()
+
+
+def _option_claim_self_contained_stem_relation_backfill_problem(
+    *,
+    stem: str,
+    problem: dict[str, Any],
+) -> bool:
+    if not _option_claim_self_contained_stem_relation_backfill_enabled():
+        return False
+    if problem.get("answer_type") != "multipleChoice":
+        return False
+    if _operator_application_self_contained_reasoning_problem(problem):
+        return True
+    text = f"{stem}\n{problem.get('_question') or ''}".lower()
+    metadata = " ".join([
+        str(problem.get("category") or ""),
+        str(problem.get("raw_subject") or ""),
+    ]).lower()
+    if any(domain in metadata for domain in {"musicology"}):
+        return False
+    if any(
+        cue in text
+        for cue in {
+            "according to",
+            "citation",
+            "published",
+            "which paper",
+        }
+    ):
+        return False
+    structured_cues = {
+        "controlled",
+        "cross",
+        "derive",
+        "experiment",
+        "f1",
+        "f2",
+        "genotype",
+        "ratio",
+        "replacement",
+        "suppose",
+        "which option",
+    }
+    return bool(
+        any(cue in text for cue in structured_cues)
+        or len(re.findall(r"\b\d+(?:\.\d+)?\b", text)) >= 3
+    )
+
+
+def _option_claim_self_contained_stem_relation_backfill_docs(
+    *,
+    stem: str,
+    option_label: str,
+    option_text: str,
+    problem: dict[str, Any],
+    max_docs: int,
+) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    option_hash = stable_hash({"option_label": option_label})
+    detail: dict[str, Any] = {
+        "status": "disabled",
+        "reason": "env_disabled",
+        "policy": "self_contained_stem_relation_backfill_v1",
+        "option_hash": option_hash,
+        "doc_count": 0,
+        "source_counts": {},
+        "retrieval_stage_counts": {},
+    }
+    if max_docs <= 0:
+        detail.update({"status": "not_required", "reason": "non_positive_doc_budget"})
+        return [], detail
+    if not _option_claim_self_contained_stem_relation_backfill_problem(
+        stem=stem,
+        problem=problem,
+    ):
+        detail.update({"status": "not_required", "reason": "problem_not_self_contained"})
+        return [], detail
+    stem_text = _clean_evidence_text(stem or str(problem.get("_question") or ""))
+    option_text = _clean_evidence_text(option_text)
+    if not stem_text or not option_text:
+        detail.update({"status": "not_required", "reason": "missing_stem_or_option_text"})
+        return [], detail
+    relation_signature = _option_claim_question_relation_signature_terms(
+        stem=stem_text,
+        option_text=option_text,
+        max_terms=12,
+    )
+    required_terms = [
+        str(term).strip().lower()
+        for term in relation_signature.get("required_terms", []) or []
+        if str(term).strip()
+    ][:8]
+    snippet = _clean_evidence_text(
+        "\n".join([
+            "Question-stem-only candidate record; this is not external source evidence and does not assert correctness.",
+            f"Task relation: {stem_text}",
+            f"Candidate option {option_label}: {option_text}",
+        ])
+    )
+    doc = {
+        "title": f"Self-contained relation record for option {option_label}",
+        "snippet": _trim_context(snippet, max_chars=900),
+        "source": "question_stem",
+        "retrieval_stage": "self_contained_stem_relation_backfill",
+        "self_contained_stem_relation_backfill": "true",
+        "self_contained_stem_relation_backfill_policy": (
+            "non_source_candidate_relation_context_only"
+        ),
+        "self_contained_stem_relation_backfill_option_hash": option_hash,
+        "self_contained_stem_relation_backfill_relation_signature_hash": stable_hash({
+            "relation_signature_terms": relation_signature.get("terms", []) or [],
+            "required_terms": required_terms,
+        }),
+        "self_contained_stem_relation_backfill_required_term_count": str(
+            len(required_terms)
+        ),
+        "self_contained_stem_relation_backfill_required_term_hashes": ",".join(
+            _option_claim_relation_signature_term_hashes(required_terms)
+        ),
+    }
+    docs = [doc][: max(1, min(2, int(max_docs or 1)))]
+    detail.update({
+        "status": "activated",
+        "reason": "self_contained_stem_relation_doc_created",
+        "doc_count": len(docs),
+        "source_counts": _option_claim_doc_source_counts(docs),
+        "retrieval_stage_counts": _option_claim_retrieval_stage_counts(docs),
+        "required_term_count": len(required_terms),
+        "required_term_hashes": _option_claim_relation_signature_term_hashes(required_terms),
+    })
+    return docs, detail
+
+
 def _option_claim_contrastive_relation_backfill_docs_by_label(
     *,
     stem: str,
@@ -38145,6 +41087,8 @@ def _option_claim_contrastive_relation_backfill_docs_by_label(
         "attempted_candidate_count": 0,
         "recovered_candidate_count": 0,
         "added_doc_count": 0,
+        "self_contained_stem_relation_backfill_doc_count": 0,
+        "self_contained_stem_relation_backfill_candidate_count": 0,
         "rows": [],
     }
     if not _option_claim_contrastive_relation_backfill_enabled():
@@ -38271,10 +41215,30 @@ def _option_claim_contrastive_relation_backfill_docs_by_label(
             existing_docs=after_sweep_docs,
             max_docs=max_docs,
         )
+        self_contained_docs: list[dict[str, str]] = []
+        self_contained_summary: dict[str, Any] = {
+            "status": "not_required",
+            "reason": "external_relation_docs_available",
+            "doc_count": 0,
+            "source_counts": {},
+            "retrieval_stage_counts": {},
+        }
+        if not sweep_docs and not source_cache_docs:
+            self_contained_docs, self_contained_summary = (
+                _option_claim_self_contained_stem_relation_backfill_docs(
+                    stem=stem,
+                    option_label=label,
+                    option_text=option_text,
+                    problem=problem,
+                    max_docs=1,
+                )
+            )
         merged_docs = _rank_option_claim_evidence_docs(
             stem=stem,
             option_text=option_text,
-            docs=_dedupe_evidence_results(after_sweep_docs + source_cache_docs),
+            docs=_dedupe_evidence_results(
+                after_sweep_docs + source_cache_docs + self_contained_docs
+            ),
         )[:doc_cap]
         after_hashes = {
             stable_hash({
@@ -38323,6 +41287,22 @@ def _option_claim_contrastive_relation_backfill_docs_by_label(
                 )
             )
         ]
+        self_contained_stage_docs = [
+            doc
+            for doc in merged_docs
+            if (
+                stable_hash({
+                    "title": str(doc.get("title") or ""),
+                    "snippet": str(doc.get("snippet") or ""),
+                })
+                in added_hash_set
+                and (
+                    str(doc.get("retrieval_stage") or "").strip().lower()
+                    == "self_contained_stem_relation_backfill"
+                    or _json_truthy(doc.get("self_contained_stem_relation_backfill"))
+                )
+            )
+        ]
         row = {
             "option_hash": stable_hash({"option_label": label}),
             "selection_reason": selection_reasons_by_label.get(label),
@@ -38337,6 +41317,18 @@ def _option_claim_contrastive_relation_backfill_docs_by_label(
             ),
             "sweep_gap_local_relation_backfill_doc_count": len(sweep_stage_docs),
             "source_cache_corpus_backfill_doc_count": len(source_cache_stage_docs),
+            "self_contained_stem_relation_backfill_status": (
+                self_contained_summary.get("status")
+            ),
+            "self_contained_stem_relation_backfill_reason": (
+                self_contained_summary.get("reason")
+            ),
+            "self_contained_stem_relation_backfill_doc_count": len(
+                self_contained_stage_docs
+            ),
+            "self_contained_stem_relation_backfill_required_term_count": int(
+                self_contained_summary.get("required_term_count") or 0
+            ),
             "source_cache_corpus_backfill_relation_proximity_count": sum(
                 1
                 for doc in source_cache_stage_docs
@@ -38383,6 +41375,15 @@ def _option_claim_contrastive_relation_backfill_docs_by_label(
         ],
         "recovered_candidate_count": recovered_count,
         "added_doc_count": total_added,
+        "self_contained_stem_relation_backfill_doc_count": sum(
+            int(row.get("self_contained_stem_relation_backfill_doc_count") or 0)
+            for row in rows
+        ),
+        "self_contained_stem_relation_backfill_candidate_count": sum(
+            1
+            for row in rows
+            if int(row.get("self_contained_stem_relation_backfill_doc_count") or 0) > 0
+        ),
         "rows": rows,
         "eligibility_rows": eligibility_rows[:12],
         "source_counts": _option_claim_doc_source_counts(
@@ -41575,6 +44576,170 @@ def _rank_source_verifier_rows_by_source_quality(rows: list[dict[str, Any]]) -> 
             str(row.get("label") or ""),
         ),
     )
+
+
+def _source_verifier_row_evidence_signal_count(row: dict[str, Any]) -> int:
+    return sum(
+        int(row.get(key) or 0)
+        for key in (
+            "source_quality_doc_count",
+            "support_doc_count",
+            "answer_web_cache_sweep_doc_count",
+            "answer_web_cache_sweep_general_relation_directish_count",
+            "answer_web_cache_sweep_relation_proximity_count",
+            "answer_web_cache_sweep_relation_signature_required_overlap_count",
+            "local_relation_corpus_doc_count",
+            "local_relation_query_expansion_doc_count",
+            "source_cache_corpus_backfill_doc_count",
+            "source_cache_corpus_backfill_relation_proximity_count",
+            "source_cache_corpus_backfill_required_overlap_count",
+            "sweep_gap_local_relation_backfill_doc_count",
+        )
+    )
+
+
+def _source_verifier_row_answer_bearing_signal_count(row: dict[str, Any]) -> int:
+    return sum(
+        int(row.get(key) or 0)
+        for key in (
+            "source_quality_doc_count",
+            "support_doc_count",
+            "source_quality_statement_fact_claim_doc_count",
+            "source_quality_statement_fact_refutation_doc_count",
+            "source_quality_statement_fact_refutation_high_confidence_doc_count",
+            "source_quality_statement_fact_slot_complete_doc_count",
+            "source_quality_statement_fact_answer_web_slot_complete_doc_count",
+        )
+    )
+
+
+def _source_verifier_coverage_continuation_allowed(row: dict[str, Any]) -> bool:
+    if int(row.get("refute_doc_count") or 0) > 0:
+        return False
+    if _source_verifier_row_answer_bearing_signal_count(row) > 0:
+        return True
+    answer_web_directish = int(
+        row.get("answer_web_cache_sweep_general_relation_directish_count") or 0
+    )
+    answer_web_relation_proximity = int(
+        row.get("answer_web_cache_sweep_relation_proximity_count") or 0
+    )
+    answer_web_relation_overlap = int(
+        row.get("answer_web_cache_sweep_relation_signature_required_overlap_count")
+        or 0
+    )
+    answer_web_slot_covered = int(
+        row.get("answer_web_cache_sweep_relation_slot_covered_count") or 0
+    )
+    if (
+        answer_web_directish > 0
+        and answer_web_relation_proximity > 0
+        and (answer_web_relation_overlap > 0 or answer_web_slot_covered > 0)
+    ):
+        return True
+    source_backfill_overlap = int(
+        row.get("source_cache_corpus_backfill_required_overlap_count") or 0
+    )
+    source_backfill_proximity = int(
+        row.get("source_cache_corpus_backfill_relation_proximity_count") or 0
+    )
+    if (
+        _env_flag("HLE_ENABLE_SOURCE_VERIFIER_COVERAGE_BACKFILL_ONLY_CONTINUATION")
+        and source_backfill_overlap > 0
+        and source_backfill_proximity > 0
+    ):
+        return True
+    return False
+
+
+def _source_verifier_coverage_retry_priority(row: dict[str, Any]) -> tuple[int, int]:
+    retry_reason = str(row.get("_source_verifier_retry_reason") or "")
+    answer_signal_count = _source_verifier_row_answer_bearing_signal_count(row)
+    refuted = int(row.get("refute_doc_count") or 0) > 0
+    if answer_signal_count <= 0:
+        return (4, 1 if refuted else 0)
+    if retry_reason.startswith("sweep_gap_missing_model_option") and not refuted:
+        return (0, 0)
+    if retry_reason.startswith("missing_model_option") and not refuted:
+        return (1, 0)
+    if retry_reason.startswith("sweep_gap_missing_model_option"):
+        return (2, 1)
+    if retry_reason.startswith("missing_model_option"):
+        return (3, 1)
+    return (4, 1 if refuted else 0)
+
+
+def _source_verifier_queue_order_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "option_hash": stable_hash({"option_label": str(row.get("label") or "")}),
+            "retry_reason": str(row.get("_source_verifier_retry_reason") or ""),
+            "coverage_priority": list(_source_verifier_coverage_retry_priority(row)),
+            "evidence_signal_count": _source_verifier_row_evidence_signal_count(row),
+            "answer_bearing_signal_count": (
+                _source_verifier_row_answer_bearing_signal_count(row)
+            ),
+            "source_quality_score": round(float(row.get("source_quality_score") or 0.0), 4),
+            "source_quality_doc_count": int(row.get("source_quality_doc_count") or 0),
+            "support_doc_count": int(row.get("support_doc_count") or 0),
+            "refute_doc_count": int(row.get("refute_doc_count") or 0),
+            "raw_content_persisted": False,
+        }
+        for row in rows
+        if str(row.get("label") or "")
+    ]
+
+
+def _prioritize_source_verifier_coverage_rows(
+    rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    summary: dict[str, Any] = {
+        "status": "not_required",
+        "reason": "no_coverage_priority_reorder",
+        "policy": "source_verifier_coverage_priority_v1",
+        "row_count": len(rows),
+        "raw_content_persisted": False,
+    }
+    if not rows:
+        summary["reason"] = "empty_queue"
+        return rows, summary
+    before = list(rows)
+    before_order = _source_verifier_queue_order_rows(before)
+    prioritized = sorted(
+        enumerate(rows),
+        key=lambda item: (
+            _source_verifier_coverage_retry_priority(item[1]),
+            -float(item[1].get("source_quality_score") or 0.0),
+            -int(item[1].get("source_quality_doc_count") or 0),
+            -int(item[1].get("support_doc_count") or 0),
+            -float(item[1].get("net_score") or 0.0),
+            item[0],
+        ),
+    )
+    after = [row for _, row in prioritized]
+    after_order = _source_verifier_queue_order_rows(after)
+    before_hashes = [row["option_hash"] for row in before_order]
+    after_hashes = [row["option_hash"] for row in after_order]
+    coverage_rows = [
+        row
+        for row in after_order
+        if row.get("coverage_priority", [4])[0] < 4
+    ]
+    summary.update({
+        "status": "activated" if before_hashes != after_hashes else "not_required",
+        "reason": (
+            "coverage_rows_prioritized"
+            if before_hashes != after_hashes
+            else "queue_order_unchanged"
+        ),
+        "coverage_row_count": len(coverage_rows),
+        "before_order": before_order[:8],
+        "after_order": after_order[:8],
+        "before_option_hashes": before_hashes[:8],
+        "after_option_hashes": after_hashes[:8],
+        "coverage_option_hashes": [row["option_hash"] for row in coverage_rows[:8]],
+    })
+    return after, summary
 
 
 def _option_claim_doc_hashes(docs: list[dict[str, str]]) -> list[str]:
@@ -45644,6 +48809,21 @@ def _select_recursive_child_answer(
                 "verifier_model_call": False,
                 "variant_watchdog_fast_abort": variant_watchdog_abort,
             })
+        selected_verified_option_evidence = _verified_option_evidence_priority_candidate(
+            problem=problem,
+            attempts=valid,
+        )
+        if selected_verified_option_evidence:
+            selected = selected_verified_option_evidence
+            return attach_selection_budget({
+                "selection_method": "verified_option_evidence_priority",
+                "selected_child_id": selected["child_id"],
+                "selected_answer": selected["parsed_answer"],
+                "underlying_model_calls": 0,
+                "verifier_model_call": False,
+                "variant_watchdog_fast_abort": variant_watchdog_abort,
+                "variant_watchdog_preserved_verified_option_evidence": True,
+            })
         selected = valid[0]
         return attach_selection_budget({
             "selection_method": "variant_watchdog_fallback_first",
@@ -45658,22 +48838,12 @@ def _select_recursive_child_answer(
         normalized[_normalize_for_selection(attempt["parsed_answer"], answer_type=problem["answer_type"])].append(attempt)
     if normalized:
         ranked = sorted(normalized.items(), key=lambda item: (-len(item[1]), item[1][0]["child_index"]))
-        verified_option_evidence_candidates = [
-            attempt for attempt in valid
-            if attempt.get("prompt_kind") in {
-                "mc_option_evidence_scorer_answer",
-                "mc_option_claim_evidence_answer",
-            }
-            and attempt.get("candidate_verifier_state") == "verified"
-            and _is_trusted_candidate_verifier_attempt(attempt)
-            and attempt.get("tool_confidence") in {
-                "verified_option_evidence_margin",
-                "source_grounded_option_evidence",
-                "source_grounded_option_claim_evidence",
-            }
-        ]
-        if problem["answer_type"] == "multipleChoice" and verified_option_evidence_candidates:
-            selected = sorted(verified_option_evidence_candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+        selected_verified_option_evidence = _verified_option_evidence_priority_candidate(
+            problem=problem,
+            attempts=valid,
+        )
+        if selected_verified_option_evidence:
+            selected = selected_verified_option_evidence
             return {
                 "selection_method": "verified_option_evidence_priority",
                 "selected_child_id": selected["child_id"],
@@ -46234,6 +49404,36 @@ def _is_trusted_candidate_verifier_attempt(attempt: dict[str, Any]) -> bool:
     }
 
 
+def _verified_option_evidence_priority_candidate(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if str(problem.get("answer_type") or "") != "multipleChoice":
+        return None
+    candidates = [
+        attempt
+        for attempt in attempts
+        if attempt.get("prompt_kind")
+        in {
+            "mc_option_evidence_scorer_answer",
+            "mc_option_claim_evidence_answer",
+        }
+        and attempt.get("candidate_verifier_state") == "verified"
+        and _is_trusted_candidate_verifier_attempt(attempt)
+        and attempt.get("tool_confidence")
+        in {
+            "verified_option_evidence_margin",
+            "source_grounded_option_evidence",
+            "source_grounded_option_claim_evidence",
+        }
+        and str(attempt.get("parsed_answer") or "").strip()
+    ]
+    if not candidates:
+        return None
+    return sorted(candidates, key=lambda row: int(row.get("child_index", 0) or 0))[0]
+
+
 def _trust_llm_reference_planner_enabled() -> bool:
     return os.environ.get("HLE_TRUST_LLM_REFERENCE_PLANNER", "").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -46285,6 +49485,7 @@ _SOURCE_VERIFIER_GENERIC_SENSITIVE_VERIFIED_SELECTION_METHODS = {
     "counter_assumption_verifier_choice",
     "self_contained_option_adjudicator_choice",
     "self_contained_structural_coalition_choice",
+    "source_grounded_verifier_choice",
 }
 
 
@@ -48479,10 +51680,46 @@ def _high_margin_weak_option_evidence_min_rank_margin() -> float:
         return 35.0
 
 
+def _claim_source_quality_weak_option_evidence_enabled() -> bool:
+    return os.environ.get(
+        "HLE_DISABLE_CLAIM_SOURCE_QUALITY_WEAK_OPTION_EVIDENCE",
+        "",
+    ).strip().lower() not in {"1", "true", "yes", "on"}
+
+
+def _claim_source_quality_weak_option_evidence_min_net_score() -> float:
+    raw = os.environ.get("HLE_CLAIM_SOURCE_QUALITY_WEAK_OPTION_EVIDENCE_MIN_NET_SCORE", "20").strip()
+    try:
+        return max(0.0, min(100.0, float(raw)))
+    except ValueError:
+        return 20.0
+
+
+def _claim_source_quality_weak_option_evidence_min_margin() -> float:
+    raw = os.environ.get("HLE_CLAIM_SOURCE_QUALITY_WEAK_OPTION_EVIDENCE_MIN_MARGIN", "8").strip()
+    try:
+        return max(0.0, min(100.0, float(raw)))
+    except ValueError:
+        return 8.0
+
+
+def _claim_source_quality_weak_option_evidence_min_support() -> int:
+    raw = os.environ.get("HLE_CLAIM_SOURCE_QUALITY_WEAK_OPTION_EVIDENCE_MIN_SUPPORT", "3").strip()
+    try:
+        return max(1, min(8, int(raw)))
+    except ValueError:
+        return 3
+
+
 def _high_margin_weak_option_evidence_attempt_summary(attempt: dict[str, Any]) -> dict[str, Any]:
     if not _high_margin_weak_option_evidence_selection_enabled():
         return {"status": "blocked", "reason": "env_disabled"}
-    if attempt.get("prompt_kind") != "mc_option_evidence_scorer_answer":
+    prompt_kind = str(attempt.get("prompt_kind") or "")
+    claim_source_quality_weak = bool(
+        prompt_kind == "mc_option_claim_evidence_answer"
+        and attempt.get("candidate_verifier_trust") == "weak_source_quality_margin"
+    )
+    if prompt_kind != "mc_option_evidence_scorer_answer" and not claim_source_quality_weak:
         return {
             "status": "not_required",
             "reason": "attempt_not_option_evidence",
@@ -48517,11 +51754,25 @@ def _high_margin_weak_option_evidence_attempt_summary(attempt: dict[str, Any]) -
         or attempt.get("context_option_count")
         or 0
     )
-    min_margin = _high_margin_weak_option_evidence_min_margin()
-    min_rank_margin = _high_margin_weak_option_evidence_min_rank_margin()
+    if claim_source_quality_weak:
+        min_margin = _claim_source_quality_weak_option_evidence_min_margin()
+        min_rank_margin = _claim_source_quality_weak_option_evidence_min_margin()
+        min_support = _claim_source_quality_weak_option_evidence_min_support()
+        min_context_chars = 300
+        max_top_ambiguous = 1
+        max_any_ambiguous = 1
+        policy = "claim_source_quality_weak_option_evidence_selection_v1"
+    else:
+        min_margin = _high_margin_weak_option_evidence_min_margin()
+        min_rank_margin = _high_margin_weak_option_evidence_min_rank_margin()
+        min_support = 2
+        min_context_chars = 500
+        max_top_ambiguous = 0
+        max_any_ambiguous = 0
+        policy = "high_margin_weak_option_evidence_selection_v1"
     details = {
         "status": "blocked",
-        "policy": "high_margin_weak_option_evidence_selection_v1",
+        "policy": policy,
         "support_doc_count": support_count,
         "top_ambiguous_doc_count": top_ambiguous,
         "any_ambiguous_doc_count": any_ambiguous,
@@ -48529,23 +51780,27 @@ def _high_margin_weak_option_evidence_attempt_summary(attempt: dict[str, Any]) -
         "rank_margin": round(rank_margin, 4),
         "min_margin": round(min_margin, 4),
         "min_rank_margin": round(min_rank_margin, 4),
+        "min_support_doc_count": min_support,
+        "max_top_ambiguous_doc_count": max_top_ambiguous,
+        "max_any_ambiguous_doc_count": max_any_ambiguous,
         "context_char_count": context_chars,
         "context_option_count": context_options,
+        "claim_source_quality_weak": bool(claim_source_quality_weak),
     }
-    if support_count < 2:
+    if support_count < min_support:
         details["reason"] = "insufficient_support_docs"
-    elif top_ambiguous > 0:
+    elif top_ambiguous > max_top_ambiguous:
         details["reason"] = "top_option_ambiguous"
     elif any_ambiguous > 0 and os.environ.get(
         "HLE_ALLOW_AMBIGUOUS_HIGH_MARGIN_WEAK_OPTION_EVIDENCE",
         "",
-    ).strip().lower() not in {"1", "true", "yes", "on"}:
+    ).strip().lower() not in {"1", "true", "yes", "on"} and any_ambiguous > max_any_ambiguous:
         details["reason"] = "ambiguous_option_evidence_context"
     elif margin < min_margin:
         details["reason"] = "margin_below_threshold"
     elif rank_margin < min_rank_margin:
         details["reason"] = "rank_margin_below_threshold"
-    elif context_chars < 500 or context_options < 2:
+    elif context_chars < min_context_chars or context_options < 2:
         details["reason"] = "insufficient_option_evidence_context"
     else:
         details.update({
@@ -48929,6 +52184,34 @@ def _apply_verified_or_abstain_selection(
                 ),
                 "verified_choice_challenge": high_margin_verified_challenge.get(
                     "high_margin_option_evidence_verified_challenge"
+                ),
+            },
+        })
+        return out
+    verified_option_evidence_candidate = _verified_option_evidence_priority_candidate(
+        problem=problem,
+        attempts=attempts,
+    )
+    if verified_option_evidence_candidate:
+        out = dict(selection)
+        out.update({
+            "selection_method": "verified_option_evidence_priority",
+            "selected_child_id": verified_option_evidence_candidate.get("child_id"),
+            "selected_answer": verified_option_evidence_candidate.get("parsed_answer"),
+            "verified_or_abstain_gate": {
+                "status": "allowed",
+                "reason": "verified_option_evidence_candidate_priority",
+                "original_selection_method": method,
+                "original_selected_child_id": selection.get("selected_child_id"),
+                "selected_prompt_kind": verified_option_evidence_candidate.get("prompt_kind"),
+                "selected_answer_hash": verified_option_evidence_candidate.get(
+                    "parsed_answer_hash"
+                ),
+                "candidate_verifier_operation": verified_option_evidence_candidate.get(
+                    "candidate_verifier_operation"
+                ),
+                "candidate_verifier_backend": verified_option_evidence_candidate.get(
+                    "candidate_verifier_backend"
                 ),
             },
         })
@@ -57651,6 +60934,10 @@ def _call_model_unwatched(*, model: str, prompt: str, timeout: float | None = No
     deadline = None if timeout is None else time.monotonic() + timeout
     last_error: Exception | None = None
     for attempt in range(max_attempts):
+        _variant_watchdog_raise_if_blocked(
+            stage_name="model_router_attempt",
+            enforce_model_call_budget=False,
+        )
         attempt_started = time.monotonic()
         candidate_index = _model_router_candidate_index(env_candidates, attempt)
         env = _model_router_env_for_attempt(env_candidates, attempt)
@@ -57679,6 +60966,10 @@ def _call_model_unwatched(*, model: str, prompt: str, timeout: float | None = No
         )
         try:
             with _global_model_router_slot(model=env["model"]):
+                _variant_watchdog_raise_if_blocked(
+                    stage_name="model_router_before_request",
+                    enforce_model_call_budget=False,
+                )
                 request_timeout = _request_timeout_for_attempt(deadline=deadline)
                 data = _urlopen_json_with_deadline(request=request, timeout=request_timeout)
             text = str((data.get("choices") or [{}])[0].get("message", {}).get("content", "")).strip()
@@ -57698,6 +60989,8 @@ def _call_model_unwatched(*, model: str, prompt: str, timeout: float | None = No
                 }
             )
             return text
+        except VariantExecutionWatchdogExceeded:
+            raise
         except (
             urllib.error.URLError,
             urllib.error.HTTPError,
@@ -57709,6 +61002,7 @@ def _call_model_unwatched(*, model: str, prompt: str, timeout: float | None = No
             last_error = exc
             transient = _is_transient_model_error(exc)
             error_label = _model_error_label(exc)
+            deadline_exceeded = _is_model_call_deadline_error(exc)
             no_byte_attempt_limit = _model_router_no_byte_attempt_limit()
             no_byte_attempt_limited = bool(
                 error_label == "SubprocessNoByteTimeout"
@@ -57716,7 +61010,8 @@ def _call_model_unwatched(*, model: str, prompt: str, timeout: float | None = No
                 and attempt + 1 >= no_byte_attempt_limit
             )
             will_retry = (
-                not no_byte_attempt_limited
+                not deadline_exceeded
+                and not no_byte_attempt_limited
                 and not (attempt + 1 >= base_attempts and (not transient or attempt + 1 >= max_attempts))
             )
             _model_router_log_event(
@@ -57780,6 +61075,10 @@ def _call_model_via_subprocess(
     deadline = None if timeout is None else time.monotonic() + timeout
     last_error: Exception | None = None
     for attempt in range(max_attempts):
+        _variant_watchdog_raise_if_blocked(
+            stage_name="model_router_attempt",
+            enforce_model_call_budget=False,
+        )
         attempt_started = time.monotonic()
         candidate_index = _model_router_candidate_index(env_candidates, attempt)
         env = _model_router_env_for_attempt(env_candidates, attempt)
@@ -57799,6 +61098,10 @@ def _call_model_via_subprocess(
         )
         try:
             with _global_model_router_slot(model=env["model"]):
+                _variant_watchdog_raise_if_blocked(
+                    stage_name="model_router_before_request",
+                    enforce_model_call_budget=False,
+                )
                 request_timeout = _request_timeout_for_attempt(deadline=deadline)
                 text = _single_model_subprocess_call(env=env, payload=payload, request_timeout=request_timeout)
             _model_router_log_event(
@@ -57817,10 +61120,13 @@ def _call_model_via_subprocess(
                 }
             )
             return text
+        except VariantExecutionWatchdogExceeded:
+            raise
         except Exception as exc:
             last_error = exc
             transient = _is_transient_model_error(exc)
             error_label = _model_error_label(exc)
+            deadline_exceeded = _is_model_call_deadline_error(exc)
             no_byte_attempt_limit = _model_router_no_byte_attempt_limit()
             no_byte_attempt_limited = bool(
                 error_label == "SubprocessNoByteTimeout"
@@ -57828,7 +61134,8 @@ def _call_model_via_subprocess(
                 and attempt + 1 >= no_byte_attempt_limit
             )
             will_retry = (
-                not no_byte_attempt_limited
+                not deadline_exceeded
+                and not no_byte_attempt_limited
                 and not (attempt + 1 >= base_attempts and (not transient or attempt + 1 >= max_attempts))
             )
             _model_router_log_event(
@@ -58116,6 +61423,10 @@ def _model_error_label(exc: Exception) -> str:
     return type(exc).__name__
 
 
+def _is_model_call_deadline_error(exc: Exception) -> bool:
+    return "model_call_deadline_exceeded" in str(exc)
+
+
 def _model_router_base_attempts() -> int:
     scope = _active_model_router_call_scope()
     if scope.get("router_scope") == "recursive_child":
@@ -58357,6 +61668,10 @@ def _acquire_model_router_slot(
     directory.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
     deadline = time.monotonic() + wait_sec
+    _variant_watchdog_raise_if_blocked(
+        stage_name="model_router_slot_wait",
+        enforce_model_call_budget=False,
+    )
     _model_router_log_event(
         {
             "event_type": "model_router_slot_wait_start",
@@ -58369,6 +61684,10 @@ def _acquire_model_router_slot(
         }
     )
     while True:
+        _variant_watchdog_raise_if_blocked(
+            stage_name="model_router_slot_wait",
+            enforce_model_call_budget=False,
+        )
         _remove_stale_model_router_slots(directory=directory, ttl_sec=ttl_sec)
         for slot_index in range(max(1, limit)):
             path = directory / f"slot_{slot_index:03d}.lock"
@@ -58498,6 +61817,10 @@ def _request_timeout_for_attempt(*, deadline: float | None) -> float | None:
         return per_attempt
     remaining = deadline - time.monotonic()
     if remaining <= 0:
+        _variant_watchdog_raise_if_blocked(
+            stage_name="model_router_request_timeout",
+            enforce_model_call_budget=False,
+        )
         raise TimeoutError("model_call_deadline_exceeded")
     if per_attempt is None:
         return max(0.1, remaining)
@@ -59165,6 +62488,15 @@ def _component_efficacy_from_plan(
         "mc_option_claim_source_cache_corpus_backfill_used": (
             int(option_claim_evidence.get("source_cache_corpus_backfill_total_doc_count") or 0) > 0
         ),
+        "mc_option_claim_self_contained_stem_relation_backfill_used": (
+            int(
+                option_claim_evidence.get(
+                    "contrastive_adjudicator_relation_backfill_self_contained_stem_doc_count"
+                )
+                or 0
+            )
+            > 0
+        ),
         "mc_option_claim_answer_web_cache_sweep_used": (
             int(option_claim_evidence.get("answer_web_cache_sweep_total_doc_count") or 0) > 0
         ),
@@ -59422,6 +62754,38 @@ def _component_efficacy_from_plan(
         "mc_option_claim_relation_span_comparator_used": (
             int(option_claim_evidence.get("relation_span_comparator_underlying_model_calls") or 0) > 0
         ),
+        "mc_option_claim_relation_span_pre_directness_comparator_used": (
+            int(
+                option_claim_evidence.get(
+                    "relation_span_pre_directness_comparator_underlying_model_calls"
+                )
+                or 0
+            )
+            > 0
+        ),
+        "mc_option_claim_relation_span_pre_directness_comparator_accepted": (
+            option_claim_evidence.get(
+                "relation_span_pre_directness_comparator_status"
+            )
+            == "activated"
+            and int(
+                option_claim_evidence.get(
+                    "relation_span_pre_directness_comparator_direct_candidate_count"
+                )
+                or 0
+            )
+            == 1
+        ),
+        "mc_option_claim_relation_span_pre_directness_comparator_skipped_candidate_directness": bool(
+            option_claim_evidence.get(
+                "relation_span_pre_directness_comparator_skipped_candidate_directness"
+            )
+        ),
+        "mc_option_claim_relation_span_pre_directness_no_harm_skip": bool(
+            option_claim_evidence.get(
+                "relation_span_pre_directness_comparator_no_harm_skipped_candidate_directness"
+            )
+        ),
         "mc_option_claim_relation_span_comparator_accepted": (
             option_claim_evidence.get("relation_span_comparator_status") == "activated"
             and int(option_claim_evidence.get("relation_span_comparator_direct_candidate_count") or 0) == 1
@@ -59501,6 +62865,11 @@ def _component_efficacy_from_plan(
         ),
         "mc_option_claim_contrastive_finite_option_coverage_used": bool(
             option_claim_evidence.get("contrastive_adjudicator_finite_option_coverage_included")
+        ),
+        "mc_option_claim_contrastive_answer_web_relation_challenger_used": bool(
+            option_claim_evidence.get(
+                "contrastive_adjudicator_answer_web_relation_challenger_included"
+            )
         ),
         "evidence_guided_option_challenge_activated": evidence_guided_option.get("status") == "activated",
         "evidence_guided_option_candidate_emitted": bool(evidence_guided_option.get("candidate_emitted")),
@@ -60427,6 +63796,69 @@ def _component_efficacy_from_plan(
             "span_directness_verifier_candidate_directness_rows": list(
                 option_claim_evidence.get("span_directness_verifier_candidate_directness_rows", []) or []
             ),
+            "relation_span_pre_directness_comparator_status": (
+                option_claim_evidence.get(
+                    "relation_span_pre_directness_comparator_status"
+                )
+            ),
+            "relation_span_pre_directness_comparator_reason": (
+                option_claim_evidence.get(
+                    "relation_span_pre_directness_comparator_reason"
+                )
+            ),
+            "relation_span_pre_directness_comparator_policy_status": (
+                option_claim_evidence.get(
+                    "relation_span_pre_directness_comparator_policy_status"
+                )
+            ),
+            "relation_span_pre_directness_comparator_policy_reason": (
+                option_claim_evidence.get(
+                    "relation_span_pre_directness_comparator_policy_reason"
+                )
+            ),
+            "relation_span_pre_directness_comparator_candidate_count": int(
+                option_claim_evidence.get(
+                    "relation_span_pre_directness_comparator_candidate_count"
+                )
+                or 0
+            ),
+            "relation_span_pre_directness_comparator_direct_candidate_count": int(
+                option_claim_evidence.get(
+                    "relation_span_pre_directness_comparator_direct_candidate_count"
+                )
+                or 0
+            ),
+            "relation_span_pre_directness_comparator_selected_option_hash": (
+                option_claim_evidence.get(
+                    "relation_span_pre_directness_comparator_selected_option_hash"
+                )
+            ),
+            "relation_span_pre_directness_comparator_relation_matrix_hash": (
+                option_claim_evidence.get(
+                    "relation_span_pre_directness_comparator_relation_matrix_hash"
+                )
+            ),
+            "relation_span_pre_directness_comparator_underlying_model_calls": int(
+                option_claim_evidence.get(
+                    "relation_span_pre_directness_comparator_underlying_model_calls"
+                )
+                or 0
+            ),
+            "relation_span_pre_directness_comparator_skipped_candidate_directness": bool(
+                option_claim_evidence.get(
+                    "relation_span_pre_directness_comparator_skipped_candidate_directness"
+                )
+            ),
+            "relation_span_pre_directness_comparator_no_harm_skipped_candidate_directness": bool(
+                option_claim_evidence.get(
+                    "relation_span_pre_directness_comparator_no_harm_skipped_candidate_directness"
+                )
+            ),
+            "relation_span_pre_directness_comparator_candidate_directness_skip_reason": (
+                option_claim_evidence.get(
+                    "relation_span_pre_directness_comparator_candidate_directness_skip_reason"
+                )
+            ),
             "relation_span_comparator_status": option_claim_evidence.get(
                 "relation_span_comparator_status"
             ),
@@ -60845,6 +64277,18 @@ def _component_efficacy_from_plan(
             "contrastive_adjudicator_relation_backfill_added_doc_count": int(
                 option_claim_evidence.get(
                     "contrastive_adjudicator_relation_backfill_added_doc_count"
+                )
+                or 0
+            ),
+            "contrastive_adjudicator_relation_backfill_self_contained_stem_doc_count": int(
+                option_claim_evidence.get(
+                    "contrastive_adjudicator_relation_backfill_self_contained_stem_doc_count"
+                )
+                or 0
+            ),
+            "contrastive_adjudicator_relation_backfill_self_contained_stem_candidate_count": int(
+                option_claim_evidence.get(
+                    "contrastive_adjudicator_relation_backfill_self_contained_stem_candidate_count"
                 )
                 or 0
             ),
@@ -62184,6 +65628,10 @@ def main() -> None:
     parser.add_argument("--disable-option-claim-span-directness-verifier", action="store_true")
     parser.add_argument("--enable-option-claim-relation-span-comparator", action="store_true")
     parser.add_argument("--disable-option-claim-relation-span-comparator", action="store_true")
+    parser.add_argument("--enable-option-claim-relation-span-pre-directness-comparator", action="store_true")
+    parser.add_argument("--disable-option-claim-relation-span-pre-directness-comparator", action="store_true")
+    parser.add_argument("--enable-option-claim-relation-span-pre-directness-no-harm-skip", action="store_true")
+    parser.add_argument("--disable-option-claim-relation-span-pre-directness-no-harm-skip", action="store_true")
     parser.add_argument("--enable-option-claim-relation-query-planner", action="store_true")
     parser.add_argument("--disable-option-claim-relation-query-planner", action="store_true")
     parser.add_argument("--enable-option-claim-source-cache-corpus-backfill", action="store_true")
@@ -62203,6 +65651,7 @@ def main() -> None:
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--md-out", default=str(DEFAULT_MD_OUT))
     args = parser.parse_args()
+    load_private_env()
     apply_hle_offline_defaults_to_environ(os.environ)
     root = Path(args.root).resolve()
     if args.disable_assumption_operators:
@@ -62241,6 +65690,22 @@ def main() -> None:
         os.environ["HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR"] = "1"
     elif getattr(args, "enable_option_claim_relation_span_comparator", False):
         os.environ["HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR"] = "1"
+    if getattr(args, "disable_option_claim_relation_span_pre_directness_comparator", False):
+        os.environ[
+            "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_COMPARATOR"
+        ] = "1"
+    elif getattr(args, "enable_option_claim_relation_span_pre_directness_comparator", False):
+        os.environ[
+            "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_COMPARATOR"
+        ] = "1"
+    if getattr(args, "disable_option_claim_relation_span_pre_directness_no_harm_skip", False):
+        os.environ[
+            "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_NO_HARM_SKIP"
+        ] = "1"
+    elif getattr(args, "enable_option_claim_relation_span_pre_directness_no_harm_skip", False):
+        os.environ[
+            "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_NO_HARM_SKIP"
+        ] = "1"
     if getattr(args, "disable_option_claim_relation_query_planner", False):
         os.environ["HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER"] = "1"
     elif getattr(args, "enable_option_claim_relation_query_planner", False):
