@@ -13744,6 +13744,134 @@ def _sweep_source_relation_signal_from_row(row: dict[str, Any]) -> dict[str, Any
     }
 
 
+def _sweep_source_relation_soft_refute_appeal_enabled() -> bool:
+    return os.environ.get(
+        "HLE_DISABLE_SWEEP_SOURCE_RELATION_SOFT_REFUTE_APPEAL",
+        "",
+    ).strip().lower() not in {"1", "true", "yes", "on"}
+
+
+def _sweep_source_relation_soft_refute_appeal_signal_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    if not _sweep_source_relation_soft_refute_appeal_enabled():
+        return {"allowed": False, "reason": "soft_refute_appeal_disabled", "score": 0.0}
+    base_signal = _sweep_source_relation_signal_from_row(row)
+    if bool(base_signal.get("allowed")):
+        return {"allowed": False, "reason": "strict_signal_already_allowed", "score": 0.0}
+    rejection_reason = str(base_signal.get("source_verifier_rejection_reason") or "").strip().lower()
+    hard_semantic_rejection = any(
+        marker in rejection_reason
+        for marker in ("indirect", "refut", "zero_quality", "not_answer_bearing", "ambiguous")
+    )
+    if hard_semantic_rejection:
+        return {
+            **base_signal,
+            "allowed": False,
+            "reason": "hard_semantic_source_rejection",
+            "score": 0.0,
+        }
+    selection_reason = str(row.get("selection_reason") or "").strip()
+    if selection_reason != "best_sweep_only_source_quality":
+        return {
+            **base_signal,
+            "allowed": False,
+            "reason": "not_best_sweep_only_source_quality",
+            "score": 0.0,
+        }
+    if int(base_signal.get("refute_doc_count") or 0) != 1:
+        return {
+            **base_signal,
+            "allowed": False,
+            "reason": "requires_single_soft_refute_doc",
+            "score": 0.0,
+        }
+    if int(base_signal.get("ambiguous_doc_count") or 0) > 1:
+        return {
+            **base_signal,
+            "allowed": False,
+            "reason": "too_ambiguous_for_soft_refute_appeal",
+            "score": 0.0,
+        }
+    hard_refutation_count = int(row.get("source_quality_statement_fact_refutation_high_confidence_doc_count") or 0)
+    hard_refutation_strength = float(row.get("source_quality_max_statement_fact_refutation_strength") or 0.0)
+    if hard_refutation_count > 0 or hard_refutation_strength >= 2.0:
+        return {
+            **base_signal,
+            "allowed": False,
+            "reason": "hard_statement_fact_refutation",
+            "score": 0.0,
+        }
+    if (
+        int(base_signal.get("source_quality_doc_count") or 0) < 3
+        or int(base_signal.get("support_doc_count") or 0) < 2
+        or int(base_signal.get("candidate_direct_relation_span_count") or 0) < 2
+        or int(base_signal.get("relation_required_overlap") or 0) < 1
+        or not bool(base_signal.get("relation_proximity"))
+    ):
+        return {
+            **base_signal,
+            "allowed": False,
+            "reason": "insufficient_relation_signal_for_soft_refute_appeal",
+            "score": 0.0,
+        }
+    score = (
+        3.0 * min(int(base_signal.get("candidate_direct_relation_span_count") or 0), 4)
+        + 2.0 * min(int(base_signal.get("relation_required_overlap") or 0), 4)
+        + 1.5 * min(int(base_signal.get("source_quality_doc_count") or 0), 6)
+        + 1.0 * min(int(base_signal.get("support_doc_count") or 0), 6)
+        + 1.0 * min(int(base_signal.get("answer_web_directish_count") or 0), 4)
+        + 0.5 * min(int(base_signal.get("answer_web_relation_slot_covered_count") or 0), 4)
+        - 1.5
+    )
+    return {
+        **base_signal,
+        "allowed": True,
+        "reason": "soft_refute_unique_sweep_source_relation_appeal",
+        "score": round(max(0.0, score), 4),
+    }
+
+
+def _sweep_source_relation_soft_refute_appeal_signals_by_label(
+    rows: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    eligible: list[tuple[str, dict[str, Any]]] = []
+    near_strict_competitor_count = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        label = str(row.get("label") or "").strip()
+        if not label:
+            continue
+        signal = _sweep_source_relation_soft_refute_appeal_signal_from_row(row)
+        if bool(signal.get("allowed")):
+            eligible.append((label, signal))
+            near_strict_competitor_count += 1
+            continue
+        base_signal = _sweep_source_relation_signal_from_row(row)
+        rejection_reason = str(base_signal.get("source_verifier_rejection_reason") or "").strip().lower()
+        hard_semantic_rejection = any(
+            marker in rejection_reason
+            for marker in ("indirect", "refut", "zero_quality", "not_answer_bearing", "ambiguous")
+        )
+        if (
+            int(base_signal.get("source_quality_doc_count") or 0) >= 3
+            and int(base_signal.get("support_doc_count") or 0) >= 2
+            and int(base_signal.get("candidate_direct_relation_span_count") or 0) >= 2
+            and int(base_signal.get("relation_required_overlap") or 0) >= 1
+            and bool(base_signal.get("relation_proximity"))
+            and int(base_signal.get("refute_doc_count") or 0) <= 1
+            and int(base_signal.get("ambiguous_doc_count") or 0) <= 1
+            and not hard_semantic_rejection
+        ):
+            near_strict_competitor_count += 1
+    if len(eligible) != 1 or near_strict_competitor_count != 1:
+        return {}
+    label, signal = eligible[0]
+    signal = dict(signal)
+    signal["soft_refute_appeal_unique_candidate"] = True
+    signal["soft_refute_appeal_near_strict_competitor_count"] = near_strict_competitor_count
+    return {label: signal}
+
+
 def _annotate_synthetic_option_sweep_candidates_from_agent_plan(
     *,
     problem: dict[str, Any],
@@ -13769,6 +13897,12 @@ def _annotate_synthetic_option_sweep_candidates_from_agent_plan(
             rows_by_label[label] = row
     if not rows_by_label:
         return candidates
+    soft_refute_appeal_by_label = _sweep_source_relation_soft_refute_appeal_signals_by_label(
+        [
+            row for row in directness_detail.get("candidate_signal_rows", []) or []
+            if isinstance(row, dict)
+        ]
+    )
     annotated: list[dict[str, Any]] = []
     for candidate in candidates:
         if not _is_synthetic_option_sweep_candidate(candidate):
@@ -13781,13 +13915,21 @@ def _annotate_synthetic_option_sweep_candidates_from_agent_plan(
             annotated.append(candidate)
             continue
         signal = _sweep_source_relation_signal_from_row(row)
+        soft_refute_appeal = False
         if not bool(signal.get("allowed")):
-            annotated.append(candidate)
-            continue
+            signal = soft_refute_appeal_by_label.get(canonical, {})
+            soft_refute_appeal = bool(signal.get("allowed"))
+            if not soft_refute_appeal:
+                annotated.append(candidate)
+                continue
         out = dict(candidate)
         out.update({
             "sweep_source_relation_signal": True,
-            "sweep_source_relation_signal_policy": "strict_source_relation_sweep_last_resort_v1",
+            "sweep_source_relation_signal_policy": (
+                "soft_refute_unique_sweep_source_relation_appeal_v1"
+                if soft_refute_appeal
+                else "strict_source_relation_sweep_last_resort_v1"
+            ),
             "sweep_source_relation_signal_reason": signal.get("reason"),
             "sweep_source_relation_signal_score": signal.get("score"),
             "sweep_source_relation_source_quality_doc_count": signal.get("source_quality_doc_count"),
@@ -13800,8 +13942,22 @@ def _annotate_synthetic_option_sweep_candidates_from_agent_plan(
             "candidate_verifier_backend": out.get("candidate_verifier_backend")
             or "mc_option_claim_evidence_verifier",
             "candidate_verifier_trust": out.get("candidate_verifier_trust")
-            or "strict_sweep_source_relation_signal",
+            or (
+                "soft_refute_sweep_source_relation_appeal"
+                if soft_refute_appeal
+                else "strict_sweep_source_relation_signal"
+            ),
         })
+        if soft_refute_appeal:
+            out.update({
+                "sweep_source_relation_soft_refute_appeal": True,
+                "sweep_source_relation_soft_refute_appeal_unique_candidate": bool(
+                    signal.get("soft_refute_appeal_unique_candidate")
+                ),
+                "sweep_source_relation_soft_refute_appeal_near_strict_competitor_count": int(
+                    signal.get("soft_refute_appeal_near_strict_competitor_count") or 0
+                ),
+            })
         annotated.append(out)
     return annotated
 
@@ -52193,10 +52349,18 @@ def _verified_or_abstain_sweep_source_relation_signal(
         ambiguous_doc_count = int(attempt.get("sweep_source_relation_ambiguous_doc_count") or 0)
     except (TypeError, ValueError):
         ambiguous_doc_count = 0
-    if refute_doc_count > 0:
+    soft_refute_appeal = bool(attempt.get("sweep_source_relation_soft_refute_appeal"))
+    if refute_doc_count > 0 and not soft_refute_appeal:
         return {
             "allowed": False,
             "reason": "sweep_source_relation_signal_has_refuting_docs",
+            "score": score,
+            "refute_doc_count": refute_doc_count,
+        }
+    if soft_refute_appeal and refute_doc_count != 1:
+        return {
+            "allowed": False,
+            "reason": "soft_refute_appeal_requires_single_refute_doc",
             "score": score,
             "refute_doc_count": refute_doc_count,
         }
@@ -52209,10 +52373,15 @@ def _verified_or_abstain_sweep_source_relation_signal(
         }
     return {
         "allowed": True,
-        "reason": "synthetic_option_sweep_candidate_has_source_relation_signal",
+        "reason": (
+            "synthetic_option_sweep_candidate_has_soft_refute_source_relation_appeal"
+            if soft_refute_appeal
+            else "synthetic_option_sweep_candidate_has_source_relation_signal"
+        ),
         "score": score,
         "refute_doc_count": refute_doc_count,
         "ambiguous_doc_count": ambiguous_doc_count,
+        "soft_refute_appeal": soft_refute_appeal,
         "source_quality_doc_count": int(
             attempt.get("sweep_source_relation_source_quality_doc_count") or 0
         ),
@@ -52403,6 +52572,11 @@ def _sweep_source_relation_challenger_for_unverified_consensus(
         )
         if not candidate_norm or candidate_norm == consensus_norm:
             continue
+        challenge_reason = (
+            "soft_refute_source_relation_appeal_over_unverified_consensus"
+            if bool(signal.get("soft_refute_appeal"))
+            else "strict_source_relation_signal_over_unverified_consensus"
+        )
         out = dict(candidate)
         out["verified_or_abstain_fallback_policy"] = (
             "sweep_source_relation_challenges_unverified_consensus"
@@ -52410,7 +52584,9 @@ def _sweep_source_relation_challenger_for_unverified_consensus(
         out["sweep_source_relation_consensus_challenge"] = {
             "status": "activated",
             "policy": "sweep_source_relation_consensus_challenge_v1",
-            "reason": "strict_source_relation_signal_over_unverified_consensus",
+            "reason": challenge_reason,
+            "source_relation_signal_reason": signal.get("reason"),
+            "soft_refute_appeal": bool(signal.get("soft_refute_appeal")),
             "min_score": min_score,
             "score": score,
             "consensus_count": consensus_count,
@@ -52458,6 +52634,11 @@ def _sweep_source_relation_fallback_after_blocked_consensus(
         )
         if not candidate_norm or candidate_norm in blocked_answer_norms:
             continue
+        challenge_reason = (
+            "soft_refute_source_relation_appeal_after_weak_source_blocked_consensus"
+            if bool(signal.get("soft_refute_appeal"))
+            else "strict_source_relation_signal_after_weak_source_blocked_consensus"
+        )
         out = dict(candidate)
         out["verified_or_abstain_fallback_policy"] = (
             "sweep_source_relation_after_blocked_weak_source_consensus"
@@ -52465,7 +52646,9 @@ def _sweep_source_relation_fallback_after_blocked_consensus(
         out["sweep_source_relation_consensus_challenge"] = {
             "status": "activated",
             "policy": "sweep_source_relation_blocked_consensus_recovery_v1",
-            "reason": "strict_source_relation_signal_after_weak_source_blocked_consensus",
+            "reason": challenge_reason,
+            "source_relation_signal_reason": signal.get("reason"),
+            "soft_refute_appeal": bool(signal.get("soft_refute_appeal")),
             "min_score": min_score,
             "score": score,
             "candidate_answer_hash": candidate.get("parsed_answer_hash"),

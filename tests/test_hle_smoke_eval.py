@@ -11828,6 +11828,264 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertIsNotNone(fallback)
         self.assertEqual(fallback["child_id"], "sweep-c")
 
+    def test_verified_or_abstain_last_resort_allows_unique_soft_refute_generic_relation_appeal(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. selected\nB. soft relation sweep",
+        }
+        attempts = [
+            {
+                "child_id": "selected",
+                "child_index": 1,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "sweep-b",
+                "child_index": 2,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "mc_option_claim_evidence_verifier": {
+                    "source_quality_directness_promotion_detail": {
+                        "candidate_signal_rows": [
+                            {
+                                "label": "B",
+                                "selection_reason": "best_sweep_only_source_quality",
+                                "source_quality_doc_count": 4,
+                                "support_doc_count": 2,
+                                "candidate_direct_relation_span_count": 2,
+                                "relation_required_overlap": 1,
+                                "relation_proximity": True,
+                                "refute_doc_count": 1,
+                                "ambiguous_doc_count": 1,
+                                "source_verifier_rejection_reason": "no_selected_label_generic",
+                            },
+                        ],
+                    },
+                },
+            },
+        }
+
+        fallback = _verified_or_abstain_fallback_candidate(
+            problem=problem,
+            attempts=attempts,
+            exclude_child_ids={"selected"},
+            agent_plan=agent_plan,
+        )
+
+        self.assertIsNotNone(fallback)
+        self.assertEqual(fallback["child_id"], "sweep-b")
+        self.assertTrue(fallback["sweep_source_relation_signal"])
+        self.assertTrue(fallback["sweep_source_relation_soft_refute_appeal"])
+        self.assertEqual(
+            fallback["sweep_source_relation_signal_policy"],
+            "soft_refute_unique_sweep_source_relation_appeal_v1",
+        )
+        self.assertEqual(
+            fallback["verified_or_abstain_last_resort_guard"]["decision_reasons"],
+            {
+                "synthetic_option_sweep_candidate_has_soft_refute_source_relation_appeal": 1,
+            },
+        )
+
+    def test_verified_or_abstain_last_resort_blocks_soft_refute_when_relation_competes(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. selected\nB. sweep one\nC. sweep two",
+        }
+        attempts = [
+            {
+                "child_id": "selected",
+                "child_index": 1,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "sweep-b",
+                "child_index": 2,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+            {
+                "child_id": "sweep-c",
+                "child_index": 3,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "C",
+                "parsed_answer_hash": "hc",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "mc_option_claim_evidence_verifier": {
+                    "source_quality_directness_promotion_detail": {
+                        "candidate_signal_rows": [
+                            {
+                                "label": "B",
+                                "selection_reason": "best_sweep_only_source_quality",
+                                "source_quality_doc_count": 4,
+                                "support_doc_count": 2,
+                                "candidate_direct_relation_span_count": 2,
+                                "relation_required_overlap": 1,
+                                "relation_proximity": True,
+                                "refute_doc_count": 1,
+                                "ambiguous_doc_count": 0,
+                            },
+                            {
+                                "label": "C",
+                                "selection_reason": "runner_up_ranked",
+                                "source_quality_doc_count": 3,
+                                "support_doc_count": 2,
+                                "candidate_direct_relation_span_count": 2,
+                                "relation_required_overlap": 1,
+                                "relation_proximity": True,
+                                "refute_doc_count": 1,
+                                "ambiguous_doc_count": 0,
+                            },
+                        ],
+                    },
+                },
+            },
+        }
+
+        fallback = _verified_or_abstain_fallback_candidate(
+            problem=problem,
+            attempts=attempts,
+            exclude_child_ids={"selected"},
+            agent_plan=agent_plan,
+        )
+
+        self.assertIsNone(fallback)
+
+    def test_verified_or_abstain_last_resort_blocks_soft_refute_indirect_rejection(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. selected\nB. indirect sweep",
+        }
+        attempts = [
+            {
+                "child_id": "selected",
+                "child_index": 1,
+                "prompt_kind": "option_matrix_reasoner_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "sweep-b",
+                "child_index": 2,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "mc_option_claim_evidence_verifier": {
+                    "source_quality_directness_promotion_detail": {
+                        "candidate_signal_rows": [
+                            {
+                                "label": "B",
+                                "selection_reason": "best_sweep_only_source_quality",
+                                "source_quality_doc_count": 4,
+                                "support_doc_count": 2,
+                                "candidate_direct_relation_span_count": 2,
+                                "relation_required_overlap": 1,
+                                "relation_proximity": True,
+                                "refute_doc_count": 1,
+                                "ambiguous_doc_count": 0,
+                                "source_verifier_rejection_reason": "no_selected_label_indirect",
+                            },
+                        ],
+                    },
+                },
+            },
+        }
+
+        fallback = _verified_or_abstain_fallback_candidate(
+            problem=problem,
+            attempts=attempts,
+            exclude_child_ids={"selected"},
+            agent_plan=agent_plan,
+        )
+
+        self.assertIsNone(fallback)
+
+    def test_verified_or_abstain_soft_refute_challenge_logs_soft_reason(self):
+        problem = {
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. consensus\nB. soft relation sweep",
+        }
+        attempts = [
+            {
+                "child_id": "direct-a",
+                "child_index": 1,
+                "prompt_kind": "direct_short_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "context-a",
+                "child_index": 2,
+                "prompt_kind": "agent_context_answer",
+                "parsed_answer": "A",
+                "parsed_answer_hash": "ha",
+            },
+            {
+                "child_id": "sweep-b",
+                "child_index": 3,
+                "prompt_kind": "mc_option_sweep_candidate",
+                "parsed_answer": "B",
+                "parsed_answer_hash": "hb",
+            },
+        ]
+        agent_plan = {
+            "stages": {
+                "mc_option_claim_evidence_verifier": {
+                    "source_quality_directness_promotion_detail": {
+                        "candidate_signal_rows": [
+                            {
+                                "label": "B",
+                                "selection_reason": "best_sweep_only_source_quality",
+                                "source_quality_doc_count": 4,
+                                "support_doc_count": 2,
+                                "candidate_direct_relation_span_count": 2,
+                                "relation_required_overlap": 1,
+                                "relation_proximity": True,
+                                "refute_doc_count": 1,
+                                "ambiguous_doc_count": 0,
+                            },
+                        ],
+                    },
+                },
+            },
+        }
+
+        fallback = _verified_or_abstain_fallback_candidate(
+            problem=problem,
+            attempts=attempts,
+            agent_plan=agent_plan,
+        )
+
+        self.assertIsNotNone(fallback)
+        self.assertEqual(fallback["child_id"], "sweep-b")
+        challenge = fallback["sweep_source_relation_consensus_challenge"]
+        self.assertEqual(
+            challenge["reason"],
+            "soft_refute_source_relation_appeal_over_unverified_consensus",
+        )
+        self.assertTrue(challenge["soft_refute_appeal"])
+        self.assertEqual(
+            challenge["source_relation_signal_reason"],
+            "synthetic_option_sweep_candidate_has_soft_refute_source_relation_appeal",
+        )
+
     def test_verified_or_abstain_sweep_relation_challenges_unverified_consensus(self):
         problem = {
             "answer_type": "multipleChoice",
