@@ -173,6 +173,7 @@ from assumption_os.hle_smoke_eval import (
     _option_claim_answer_web_fallback_queries,
     _option_claim_relation_query_planner_enabled,
     _option_claim_relation_span_comparator_promotion_enabled,
+    _option_claim_relation_span_comparator_promotion_quality_gate,
     _option_claim_relation_comparator_single_recovery_promotion_blocked,
     _option_claim_relation_span_pre_directness_comparator_detail,
     _option_claim_relation_query_planner_prompt,
@@ -20117,6 +20118,66 @@ class HleSmokeEvalTest(unittest.TestCase):
                 )
             )
 
+    def test_relation_span_comparator_promotion_quality_gate_blocks_indirect_low_support(self):
+        a_hash = stable_hash({"option_label": "A"})
+
+        detail = _option_claim_relation_span_comparator_promotion_quality_gate(
+            relation_span_comparator_summary={
+                "direct_high_confidence": True,
+                "selected_option_hash": a_hash,
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": a_hash,
+                    "source_quality_doc_count": 1,
+                    "support_doc_count": 1,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 3,
+                    "source_verifier_status": "blocked_not_direct_high_confidence",
+                    "source_verifier_rejection_reason": "no_selected_label_indirect",
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                },
+            ],
+            selected_option_hash=a_hash,
+        )
+
+        self.assertFalse(detail["allowed"])
+        self.assertEqual(detail["reason"], "source_verifier_semantic_rejection")
+        self.assertIn("ambiguous_low_source_quality", detail["blocked_reasons"])
+        self.assertIn("source_verifier_rejected_low_support", detail["blocked_reasons"])
+
+    def test_relation_span_comparator_promotion_quality_gate_allows_clean_source_signal(self):
+        b_hash = stable_hash({"option_label": "B"})
+
+        detail = _option_claim_relation_span_comparator_promotion_quality_gate(
+            relation_span_comparator_summary={
+                "direct_high_confidence": True,
+                "selected_option_hash": b_hash,
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": b_hash,
+                    "source_quality_doc_count": 3,
+                    "support_doc_count": 2,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "source_verifier_rejection_reason": "",
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                },
+            ],
+            selected_option_hash=b_hash,
+        )
+
+        self.assertTrue(detail["allowed"])
+        self.assertEqual(detail["reason"], "quality_gate_passed")
+        self.assertEqual(detail["blocked_reasons"], [])
+
     def test_span_directness_tiebreaks_multiple_direct_by_direct_doc_strength(self):
         problem = {
             "_question": (
@@ -33093,6 +33154,108 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(
             detail["selected_directness_path"],
             "programmatic_complete_relation_span",
+        )
+
+    def test_source_quality_directness_promotion_blocks_budget_reserved_refuted_programmatic_span(self):
+        d_hash = stable_hash({"option_label": "D"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": d_hash,
+                    "source_quality_score": 11.75,
+                    "source_quality_doc_count": 4,
+                    "support_doc_count": 3,
+                    "refute_doc_count": 1,
+                    "answer_web_cache_sweep_general_relation_directish_count": 3,
+                    "answer_web_cache_sweep_relation_proximity_count": 3,
+                    "answer_web_cache_sweep_relation_slot_covered_count": 3,
+                    "answer_web_cache_sweep_relation_signature_required_overlap_count": 3,
+                    "local_relation_query_expansion_doc_count": 2,
+                    "source_cache_corpus_backfill_doc_count": 3,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "source_verifier_rejection_reason": (
+                        "variant_model_call_budget_reserved_for_option_claim_directness"
+                    ),
+                    "selection_reason": "top_ranked",
+                    "sweep_only_candidate": True,
+                },
+            ],
+            options={"D": "Delta"},
+            candidate_labels=["D"],
+        )
+
+        self.assertFalse(detail["promote"])
+        self.assertEqual(detail["status"], "blocked")
+        self.assertEqual(detail["eligible_candidate_count"], 0)
+        self.assertEqual(
+            detail["rejection_counts"][
+                "programmatic_refute_source_verifier_budget_reserved"
+            ],
+            1,
+        )
+        self.assertTrue(detail["candidate_signal_rows"][0]["source_verifier_budget_reserved"])
+
+    def test_source_quality_directness_promotion_blocks_comparator_indirect_programmatic_complete_span(self):
+        c_hash = stable_hash({"option_label": "C"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": c_hash,
+                    "source_quality_score": 10.8,
+                    "source_quality_doc_count": 2,
+                    "support_doc_count": 2,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 1,
+                    "answer_web_cache_sweep_general_relation_directish_count": 3,
+                    "answer_web_cache_sweep_relation_proximity_count": 3,
+                    "answer_web_cache_sweep_relation_slot_covered_count": 2,
+                    "answer_web_cache_sweep_relation_signature_required_overlap_count": 2,
+                    "local_relation_query_expansion_doc_count": 2,
+                    "source_cache_corpus_backfill_doc_count": 3,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "relation_span_comparator_evidence_relation": "indirect",
+                    "selection_reason": "best_sweep_only_ranked",
+                    "sweep_only_candidate": True,
+                },
+            ],
+            options={"C": "Gamma"},
+            candidate_labels=["C"],
+        )
+
+        self.assertFalse(detail["promote"])
+        self.assertEqual(detail["status"], "blocked")
+        self.assertEqual(detail["eligible_candidate_count"], 0)
+        self.assertEqual(
+            detail["rejection_counts"][
+                "programmatic_complete_relation_span_comparator_indirect"
+            ],
+            1,
         )
 
     def test_source_quality_directness_promotion_logs_missing_required_terms_without_promotion(self):

@@ -18848,6 +18848,13 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                     relation_span_comparator_summary=relation_span_comparator_summary,
                 )
             )
+            relation_comparator_promotion_quality_gate = (
+                _option_claim_relation_span_comparator_promotion_quality_gate(
+                    relation_span_comparator_summary=relation_span_comparator_summary,
+                    candidate_summaries=contrastive_candidate_summaries,
+                    selected_option_hash=relation_comparator_selected_hash,
+                )
+            )
             contrastive_adjudicator_summary[
                 "relation_span_comparator_promotion_enabled"
             ] = bool(relation_comparator_promotion_enabled)
@@ -18860,10 +18867,20 @@ def _maybe_run_mc_option_claim_evidence_verifier(
             contrastive_adjudicator_summary[
                 "relation_span_comparator_single_recovery_promotion_blocked"
             ] = bool(relation_comparator_single_recovery_promotion_blocked)
+            contrastive_adjudicator_summary[
+                "relation_span_comparator_promotion_quality_gate"
+            ] = relation_comparator_promotion_quality_gate
+            contrastive_adjudicator_summary[
+                "relation_span_comparator_promotion_quality_gate_allowed"
+            ] = bool(relation_comparator_promotion_quality_gate.get("allowed"))
+            contrastive_adjudicator_summary[
+                "relation_span_comparator_promotion_quality_gate_reason"
+            ] = relation_comparator_promotion_quality_gate.get("reason")
             if (
                 (not source_verified)
                 and relation_comparator_promotion_enabled
                 and not relation_comparator_single_recovery_promotion_blocked
+                and bool(relation_comparator_promotion_quality_gate.get("allowed"))
                 and relation_span_comparator_summary.get("direct_high_confidence")
                 and relation_comparator_selected_label in options
                 and relation_comparator_selected_label in set(contrastive_candidate_labels)
@@ -18907,6 +18924,23 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 contrastive_adjudicator_summary[
                     "relation_span_comparator_promotion_reason"
                 ] = "relation_span_comparator_promoted_candidate"
+            elif (
+                (not source_verified)
+                and relation_comparator_promotion_enabled
+                and not bool(relation_comparator_promotion_quality_gate.get("allowed"))
+                and relation_span_comparator_summary.get("direct_high_confidence")
+                and relation_comparator_selected_label in options
+                and relation_comparator_selected_label in set(contrastive_candidate_labels)
+            ):
+                contrastive_adjudicator_summary[
+                    "relation_span_comparator_promotion_blocked"
+                ] = True
+                contrastive_adjudicator_summary[
+                    "relation_span_comparator_promotion_reason"
+                ] = (
+                    "relation_span_comparator_promotion_quality_gate_"
+                    f"{relation_comparator_promotion_quality_gate.get('reason')}"
+                )
             elif (
                 (not source_verified)
                 and relation_comparator_promotion_enabled
@@ -20093,6 +20127,21 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         "relation_span_comparator_promotion_blocked": bool(
             contrastive_adjudicator_summary.get(
                 "relation_span_comparator_promotion_blocked"
+            )
+        ),
+        "relation_span_comparator_promotion_quality_gate": (
+            contrastive_adjudicator_summary.get(
+                "relation_span_comparator_promotion_quality_gate"
+            )
+        ),
+        "relation_span_comparator_promotion_quality_gate_allowed": bool(
+            contrastive_adjudicator_summary.get(
+                "relation_span_comparator_promotion_quality_gate_allowed"
+            )
+        ),
+        "relation_span_comparator_promotion_quality_gate_reason": (
+            contrastive_adjudicator_summary.get(
+                "relation_span_comparator_promotion_quality_gate_reason"
             )
         ),
         "relation_span_comparator_single_recovery_promotion_blocked": bool(
@@ -22237,6 +22286,115 @@ def _option_claim_relation_span_comparator_promotion_enabled() -> bool:
     if explicit:
         return explicit in {"1", "true", "yes", "on"}
     return True
+
+
+def _option_claim_relation_span_comparator_promotion_quality_gate(
+    *,
+    relation_span_comparator_summary: dict[str, Any],
+    candidate_summaries: list[dict[str, Any]],
+    selected_option_hash: str | None,
+) -> dict[str, Any]:
+    selected_option_hash = str(selected_option_hash or "").strip()
+    policy = "relation_span_comparator_promotion_quality_gate_v1"
+    if os.environ.get(
+        "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR_PROMOTION_QUALITY_GATE",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        return {
+            "policy": policy,
+            "allowed": True,
+            "reason": "env_disabled",
+            "selected_option_hash": selected_option_hash or None,
+            "raw_content_persisted": False,
+        }
+    if not bool(relation_span_comparator_summary.get("direct_high_confidence")):
+        return {
+            "policy": policy,
+            "allowed": False,
+            "reason": "relation_span_comparator_not_direct_high_confidence",
+            "selected_option_hash": selected_option_hash or None,
+            "raw_content_persisted": False,
+        }
+    selected_candidate = next(
+        (
+            item for item in candidate_summaries
+            if str(item.get("option_hash") or "") == selected_option_hash
+        ),
+        {},
+    )
+    if not selected_candidate:
+        return {
+            "policy": policy,
+            "allowed": True,
+            "reason": "selected_candidate_summary_unavailable",
+            "selected_option_hash": selected_option_hash or None,
+            "raw_content_persisted": False,
+        }
+    source_rejection = str(
+        selected_candidate.get("source_verifier_rejection_reason") or ""
+    ).strip().lower()
+    source_status = str(selected_candidate.get("source_verifier_status") or "").strip().lower()
+    source_quality_doc_count = int(selected_candidate.get("source_quality_doc_count") or 0)
+    support_doc_count = int(selected_candidate.get("support_doc_count") or 0)
+    refute_doc_count = int(selected_candidate.get("refute_doc_count") or 0)
+    ambiguous_doc_count = int(selected_candidate.get("ambiguous_doc_count") or 0)
+    span_count = int(selected_candidate.get("candidate_direct_relation_span_count") or 0)
+    required_overlap = int(
+        selected_candidate.get(
+            "candidate_direct_relation_span_top_relation_signature_required_overlap"
+        )
+        or 0
+    )
+    relation_proximity = bool(
+        selected_candidate.get("candidate_direct_relation_span_top_relation_proximity")
+        or selected_candidate.get("candidate_direct_relation_span_top_relation_signature_proximity")
+    )
+    source_accepted = bool(
+        selected_candidate.get("source_verifier_accepted_direct_high_confidence")
+        or selected_candidate.get("source_verifier_direct_high_confidence")
+    )
+    hard_source_rejection = any(
+        marker in source_rejection
+        for marker in ("indirect", "refut", "zero_quality", "not_answer_bearing", "ambiguous")
+    )
+    blocked_reasons: list[str] = []
+    if source_accepted:
+        allowed = True
+        reason = "source_verifier_direct_high_confidence"
+    else:
+        if hard_source_rejection:
+            blocked_reasons.append("source_verifier_semantic_rejection")
+        if ambiguous_doc_count > 1 and source_quality_doc_count < 2:
+            blocked_reasons.append("ambiguous_low_source_quality")
+        if refute_doc_count > 0 and support_doc_count < 3:
+            blocked_reasons.append("refuted_low_support")
+        if (
+            (source_rejection or source_status.startswith("blocked"))
+            and (source_quality_doc_count < 2 or support_doc_count < 2)
+        ):
+            blocked_reasons.append("source_verifier_rejected_low_support")
+        if span_count <= 0 or required_overlap <= 0 or not relation_proximity:
+            blocked_reasons.append("insufficient_relation_span_signal")
+        allowed = not blocked_reasons
+        reason = "quality_gate_passed" if allowed else blocked_reasons[0]
+    return {
+        "policy": policy,
+        "allowed": bool(allowed),
+        "reason": reason,
+        "blocked_reasons": sorted(set(blocked_reasons)),
+        "selected_option_hash": selected_option_hash or None,
+        "source_verifier_rejection_reason": source_rejection,
+        "source_verifier_status": source_status,
+        "source_verifier_accepted_direct_high_confidence": source_accepted,
+        "source_quality_doc_count": source_quality_doc_count,
+        "support_doc_count": support_doc_count,
+        "refute_doc_count": refute_doc_count,
+        "ambiguous_doc_count": ambiguous_doc_count,
+        "candidate_direct_relation_span_count": span_count,
+        "relation_required_overlap": required_overlap,
+        "relation_proximity": relation_proximity,
+        "raw_content_persisted": False,
+    }
 
 
 def _option_claim_relation_span_pre_directness_comparator_enabled() -> bool:
@@ -32808,6 +32966,9 @@ def _option_claim_source_quality_directness_promotion_detail(
         relation_span_comparator_shared = bool(
             summary.get("relation_span_comparator_shared_with_other_candidates")
         )
+        relation_span_comparator_evidence_relation = str(
+            summary.get("relation_span_comparator_evidence_relation") or ""
+        ).strip().lower()
         relation_span_comparator_conflict_resolved = bool(
             relation_span_comparator_direct
             and option_hash == relation_comparator_selected_option_hash
@@ -32845,6 +33006,9 @@ def _option_claim_source_quality_directness_promotion_detail(
             or programmatic_near_complete_relation_span
         )
         source_rejection = str(summary.get("source_verifier_rejection_reason") or "")
+        source_verifier_budget_reserved = bool(
+            source_rejection.startswith("variant_model_call_budget_reserved")
+        )
         answer_web_relation_recovery_candidate = bool(
             option_hash in answer_web_relation_recovery_unique_hashes
         )
@@ -32929,6 +33093,7 @@ def _option_claim_source_quality_directness_promotion_detail(
             "sweep_only_candidate": bool(summary.get("sweep_only_candidate")),
             "selection_reason": summary.get("selection_reason"),
             "source_verifier_rejection_reason": source_rejection,
+            "source_verifier_budget_reserved": source_verifier_budget_reserved,
             "source_verifier_confidence": summary.get("source_verifier_confidence"),
             "source_quality_doc_count": source_quality_doc_count,
             "source_quality_score": round(source_quality_score, 4),
@@ -32992,6 +33157,7 @@ def _option_claim_source_quality_directness_promotion_detail(
         refute_allowed_by_strong_programmatic_signal = bool(
             programmatic_relation_span
             and refute_doc_count > 0
+            and not source_verifier_budget_reserved
             and support_doc_count > refute_doc_count
             and source_quality_doc_count >= 2
             and local_relation_doc_count > 0
@@ -33011,6 +33177,33 @@ def _option_claim_source_quality_directness_promotion_detail(
                 or source_quality_score >= 10.0
             )
         )
+        if (
+            programmatic_relation_span
+            and not span_direct
+            and not programmatic_statement_fact_claim_span
+            and refute_doc_count > 0
+            and source_verifier_budget_reserved
+            and not answer_web_relation_recovery_soft_conflict_cleared
+            and not span_direct_near_complete_soft_refute_cleared
+        ):
+            rejection_counts["programmatic_refute_source_verifier_budget_reserved"] += 1
+            continue
+        if (
+            programmatic_complete_relation_span
+            and not span_direct
+            and not programmatic_statement_fact_claim_span
+            and not candidate_relation_span_conflict_resolved
+            and not relation_span_comparator_conflict_resolved
+            and relation_span_comparator_evidence_relation in {"generic", "indirect"}
+        ):
+            rejection_counts[
+                "programmatic_complete_relation_span_comparator_not_direct"
+            ] += 1
+            rejection_counts[
+                "programmatic_complete_relation_span_comparator_"
+                + relation_span_comparator_evidence_relation
+            ] += 1
+            continue
         if refute_doc_count > 0 and not (
             refute_allowed_by_strong_programmatic_signal
             or candidate_relation_span_conflict_resolved
@@ -33221,8 +33414,8 @@ def _option_claim_source_quality_directness_promotion_detail(
             "shared_relation_span": shared_relation_span,
             "span_direct": span_direct,
             "relation_span_comparator_direct": relation_span_comparator_direct,
-            "relation_span_comparator_evidence_relation": summary.get(
-                "relation_span_comparator_evidence_relation"
+            "relation_span_comparator_evidence_relation": (
+                relation_span_comparator_evidence_relation
             ),
             "relation_span_comparator_conflict_resolved": (
                 relation_span_comparator_conflict_resolved
@@ -33257,6 +33450,7 @@ def _option_claim_source_quality_directness_promotion_detail(
             "refute_allowed_by_strong_programmatic_signal": (
                 refute_allowed_by_strong_programmatic_signal
             ),
+            "source_verifier_budget_reserved": source_verifier_budget_reserved,
             "source_verifier_rejection_reason": source_rejection,
             "selection_reason": summary.get("selection_reason"),
         })
