@@ -2,6 +2,7 @@ import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from assumption_os.hle_operator_cohort_preflight import (
     _choose_underfilled_family,
@@ -224,6 +225,49 @@ class HleOperatorCohortPreflightTest(unittest.TestCase):
         self.assertNotIn("raw HLE text", json.dumps(row))
         self.assertNotIn("raw HLE text", markdown)
 
+    def test_programmatic_domain_rule_families_cover_answer_time_rules(self) -> None:
+        self.assertEqual(
+            _programmatic_domain_rule_family("bioinformatics_reference_imputation_pi_only_bias"),
+            "reference_imputation_diversity_bias",
+        )
+        self.assertEqual(
+            _programmatic_domain_rule_family("quant_genetics_heritability_pgs_necessity_none_true"),
+            "quant_genetics_necessity",
+        )
+        self.assertEqual(
+            _programmatic_domain_rule_family("ecology_voc_latitude_alpha_beta_direction_matrix"),
+            "ecology_effect_direction",
+        )
+        self.assertEqual(
+            _programmatic_domain_rule_family("enclosed_signal_not_available_for_between_host_navigation"),
+            "enclosed_signal_navigation",
+        )
+        self.assertEqual(
+            _programmatic_domain_rule_family("ontario_former_client_confidential_screen"),
+            "legal_confidential_screen",
+        )
+
+        tagged = _programmatic_domain_rule_candidate_tags(
+            problem={
+                "category": "Biology/Medicine",
+                "raw_subject": "Bioinformatics",
+            },
+            stem=(
+                "Reference genome imputed low quality variants; Watterson theta and nucleotide diversity pi "
+                "are compared. A GWAS polygenic score is evaluated against heritability. Plant VOC latitude "
+                "effects list alpha and beta diversity directions. A syconium signal is solely within the "
+                "enclosed structure and asks about long distance host tree navigation. An Ontario law firm "
+                "has confidential former client information."
+            ),
+            options={},
+        )
+
+        self.assertIn("reference_imputation_diversity_bias", tagged)
+        self.assertIn("quant_genetics_necessity", tagged)
+        self.assertIn("ecology_effect_direction", tagged)
+        self.assertIn("enclosed_signal_navigation", tagged)
+        self.assertIn("legal_confidential_screen", tagged)
+
     def test_preflight_diagnostic_log_is_metadata_only(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -249,6 +293,69 @@ class HleOperatorCohortPreflightTest(unittest.TestCase):
         self.assertEqual(events[-1]["event"], "hle_operator_cohort_preflight_completed")
         self.assertTrue(all(event.get("raw_content_persisted") is False for event in events))
         self.assertNotIn("raw HLE text", json.dumps(events, ensure_ascii=False))
+
+    def test_preflight_can_exclude_existing_hle_hashes(self) -> None:
+        fake_rows = [
+            {"question": "raw seen text", "answer": "A", "answer_type": "multipleChoice"},
+            {"question": "raw new text", "answer": "B", "answer_type": "multipleChoice"},
+        ]
+        fake_stage = {
+            "status": "activated",
+            "reason": "operator_specs_compiled_for_internal_reasoning",
+            "operator_source_ids": ["framework_answer_bearing_relation"],
+            "operator_source_types": ["framework"],
+            "operator_specs": [
+                {
+                    "source_id": "framework_answer_bearing_relation",
+                    "required_output_slots": ["question_target_relation"],
+                }
+            ],
+            "fallback_retrieval": {},
+            "verifier_check_count": 1,
+        }
+
+        def fake_problem_from_row(row, *, scanned, skipped_before):
+            return {
+                "scanned_index": scanned,
+                "id_hash": "seen" if scanned == 1 else "new",
+                "question_hash": f"q{scanned}",
+                "category": "Biology/Medicine",
+                "raw_subject": "Biology",
+                "answer_type": "multipleChoice",
+                "_question": row["question"],
+                "_answer": row["answer"],
+            }
+
+        with TemporaryDirectory() as tmp, patch(
+            "assumption_os.hle_operator_cohort_preflight._load_hle_test_dataset",
+            return_value=fake_rows,
+        ), patch(
+            "assumption_os.hle_operator_cohort_preflight._collect_existing_hle_problem_hashes",
+            return_value={"seen"},
+        ), patch(
+            "assumption_os.hle_operator_cohort_preflight._problem_from_row",
+            side_effect=fake_problem_from_row,
+        ), patch(
+            "assumption_os.hle_operator_cohort_preflight._compile_hle_operator_stage",
+            return_value=fake_stage,
+        ), patch(
+            "assumption_os.hle_operator_cohort_preflight._classify_hle_domain",
+            return_value="science",
+        ):
+            payload = build_hle_operator_cohort_preflight_payload(
+                root=Path(tmp),
+                eval_id="exclude-existing",
+                target_size=1,
+                max_scan=2,
+                graph_dir=Path(tmp) / "graph",
+                exclude_existing_hle_artifacts=True,
+            )
+
+        self.assertEqual(payload["sampling"]["excluded_existing_problem_count"], 1)
+        self.assertEqual(payload["metrics"]["scan_summary"]["skipped_existing_problem_hash"], 1)
+        self.assertEqual([row["problem_id_hash"] for row in payload["rows"]], ["new"])
+        self.assertNotIn("raw seen text", json.dumps(payload))
+        self.assertNotIn("raw new text", json.dumps(payload))
 
 
 if __name__ == "__main__":

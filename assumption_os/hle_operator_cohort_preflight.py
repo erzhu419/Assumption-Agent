@@ -25,6 +25,7 @@ from .hle_smoke_eval import (
     DEFAULT_GRAPH_DIR,
     _call_model,
     _classify_hle_domain,
+    _collect_existing_hle_problem_hashes,
     _compile_hle_operator_stage,
     _domain_rule_mc_decision,
     _has_image_payload,
@@ -68,6 +69,11 @@ _OPERATOR_FAMILY_ALIASES = {
 _PROGRAMMATIC_DOMAIN_RULE_FAMILIES = {
     "sec_mals_mass_balance_affinity_monomer": "sec_mals_mass_balance",
     "bacterial_cross_resistance_minimal_extra_assumption": "cross_resistance_minimality",
+    "bioinformatics_reference_imputation_pi_only_bias": "reference_imputation_diversity_bias",
+    "quant_genetics_heritability_pgs_necessity_none_true": "quant_genetics_necessity",
+    "ecology_voc_latitude_alpha_beta_direction_matrix": "ecology_effect_direction",
+    "enclosed_signal_not_available_for_between_host_navigation": "enclosed_signal_navigation",
+    "ontario_former_client_confidential_screen": "legal_confidential_screen",
 }
 
 
@@ -90,6 +96,8 @@ def build_hle_operator_cohort_preflight_payload(
     applicability_probe_min_slot_rate: float = 0.75,
     include_programmatic_domain_rules: bool = False,
     programmatic_domain_rule_target_size: int | None = None,
+    exclude_existing_hle_artifacts: bool = False,
+    exclude_artifact_glob: str = "phase four/assumption_graph/paper_readiness_20260604/hle_parallel_runs/hle*.json*",
     log_out: Path | None = None,
     diagnostic_log_interval: int = 1000,
 ) -> dict[str, Any]:
@@ -106,6 +114,8 @@ def build_hle_operator_cohort_preflight_payload(
             "subject_contains_filter_enabled": bool(subject_contains),
             "include_programmatic_domain_rules": bool(include_programmatic_domain_rules),
             "programmatic_domain_rule_target_size": programmatic_domain_rule_target_size,
+            "exclude_existing_hle_artifacts": bool(exclude_existing_hle_artifacts),
+            "exclude_artifact_glob": exclude_artifact_glob,
             "diagnostic_log_interval": int(diagnostic_log_interval),
         },
     )
@@ -113,6 +123,14 @@ def build_hle_operator_cohort_preflight_payload(
     graph_path = graph_path if graph_path.is_absolute() else root / graph_path
     store = JsonlGraphStore(graph_path)
     graph = SimpleAssumptionGraph(store)
+    excluded_problem_hashes = (
+        _collect_existing_hle_problem_hashes(
+            root=root,
+            artifact_glob=exclude_artifact_glob,
+        )
+        if exclude_existing_hle_artifacts
+        else set()
+    )
 
     previous_env = {
         "HLE_ENABLE_ASSUMPTION_OPERATORS": os.environ.get("HLE_ENABLE_ASSUMPTION_OPERATORS"),
@@ -148,6 +166,7 @@ def build_hle_operator_cohort_preflight_payload(
             applicability_probe_model=applicability_probe_model,
             applicability_probe_max_tokens=applicability_probe_max_tokens,
             applicability_probe_min_slot_rate=applicability_probe_min_slot_rate,
+            exclude_problem_hashes=excluded_problem_hashes,
             logger=logger,
             log_interval=diagnostic_log_interval,
         )
@@ -164,6 +183,7 @@ def build_hle_operator_cohort_preflight_payload(
                 seed_offset=seed_offset,
                 answer_type_filter=answer_type_filter,
                 subject_contains=subject_contains,
+                exclude_problem_hashes=excluded_problem_hashes,
                 logger=logger,
                 log_interval=diagnostic_log_interval,
             )
@@ -227,6 +247,9 @@ def build_hle_operator_cohort_preflight_payload(
                 if programmatic_domain_rule_target_size is None
                 else max(0, int(programmatic_domain_rule_target_size))
             ),
+            "exclude_existing_hle_artifacts": bool(exclude_existing_hle_artifacts),
+            "exclude_artifact_glob": exclude_artifact_glob,
+            "excluded_existing_problem_count": len(excluded_problem_hashes),
         },
         "operator_policy": {
             "fallback_enabled": True,
@@ -273,6 +296,7 @@ def _scan_operator_rows(
     applicability_probe_model: str,
     applicability_probe_max_tokens: int,
     applicability_probe_min_slot_rate: float,
+    exclude_problem_hashes: set[str] | None = None,
     logger: JsonlDiagnosticLogger | None = None,
     log_interval: int = 1000,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
@@ -304,6 +328,7 @@ def _scan_operator_rows(
     rows: list[dict[str, Any]] = []
     counts: Counter[str] = Counter()
     family_counts: Counter[str] = Counter()
+    exclude_problem_hashes = exclude_problem_hashes or set()
     scanned = 0
     for raw_row in dataset:
         scanned += 1
@@ -344,6 +369,9 @@ def _scan_operator_rows(
                 continue
 
         problem = _problem_from_row(raw_row, scanned=scanned, skipped_before=sum(counts.values()))
+        if str(problem.get("id_hash") or "") in exclude_problem_hashes:
+            counts["skipped_existing_problem_hash"] += 1
+            continue
         domain = _classify_hle_domain(problem)
         stage = _compile_hle_operator_stage(
             retrieval_result=SimpleNamespace(subgraph=SimpleNamespace(nodes=[])),
@@ -500,6 +528,7 @@ def _scan_programmatic_domain_rule_rows(
     seed_offset: int,
     answer_type_filter: str,
     subject_contains: str,
+    exclude_problem_hashes: set[str] | None = None,
     logger: JsonlDiagnosticLogger | None = None,
     log_interval: int = 1000,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -529,6 +558,7 @@ def _scan_programmatic_domain_rule_rows(
     rows: list[dict[str, Any]] = []
     counts: Counter[str] = Counter()
     family_counts: Counter[str] = Counter()
+    exclude_problem_hashes = exclude_problem_hashes or set()
     scanned = 0
     for raw_row in dataset:
         scanned += 1
@@ -569,6 +599,9 @@ def _scan_programmatic_domain_rule_rows(
                 continue
 
         problem = _problem_from_row(raw_row, scanned=scanned, skipped_before=sum(counts.values()))
+        if str(problem.get("id_hash") or "") in exclude_problem_hashes:
+            counts["skipped_existing_problem_hash"] += 1
+            continue
         stem, options = _split_multiple_choice_question(problem)
         if len(options) < 2:
             counts["skipped_options_not_parsed"] += 1
@@ -707,6 +740,22 @@ def _programmatic_domain_rule_candidate_tags(
         tags.add("stoichiometry_mass_balance")
     if "bacteria" in text and "resistance" in text:
         tags.add("cross_resistance_minimality")
+    if any(token in text for token in ("reference genome", "imputed", "watterson", "nucleotide diversity")):
+        tags.add("reference_imputation_diversity_bias")
+    if any(token in text for token in ("heritability", "polygenic score", "gwas")):
+        tags.add("quant_genetics_necessity")
+    if all(token in text for token in ("latitude", "alpha", "beta")) and any(
+        token in text for token in ("volatile", "vocs", "diversity")
+    ):
+        tags.add("ecology_effect_direction")
+    if any(token in text for token in ("syconium", "enclosed", "solely within", "only within")) and any(
+        token in text for token in ("navigate", "long distance", "host trees")
+    ):
+        tags.add("enclosed_signal_navigation")
+    if all(token in text for token in ("confidential", "former client")) and any(
+        token in text for token in ("ontario", "toronto", "law firm")
+    ):
+        tags.add("legal_confidential_screen")
     if any(token in text for token in ("controlled variable", "control group", "all else equal", "controlled for")):
         tags.add("causal_controlled_variable")
     if any(token in text for token in ("experiment", "condition", "replacement", "migration", "substitution")):
@@ -1093,6 +1142,11 @@ def main() -> None:
     parser.add_argument("--operator-applicability-probe-min-slot-rate", type=float, default=0.75)
     parser.add_argument("--include-programmatic-domain-rules", action="store_true")
     parser.add_argument("--programmatic-domain-rule-target-size", type=int, default=None)
+    parser.add_argument("--exclude-existing-hle-artifacts", action="store_true")
+    parser.add_argument(
+        "--exclude-artifact-glob",
+        default="phase four/assumption_graph/paper_readiness_20260604/hle_parallel_runs/hle*.json*",
+    )
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--md-out", default=str(DEFAULT_MD_OUT))
     parser.add_argument(
@@ -1130,6 +1184,8 @@ def main() -> None:
         applicability_probe_min_slot_rate=args.operator_applicability_probe_min_slot_rate,
         include_programmatic_domain_rules=args.include_programmatic_domain_rules,
         programmatic_domain_rule_target_size=args.programmatic_domain_rule_target_size,
+        exclude_existing_hle_artifacts=args.exclude_existing_hle_artifacts,
+        exclude_artifact_glob=args.exclude_artifact_glob,
         log_out=log_out,
         diagnostic_log_interval=args.diagnostic_log_interval,
     )

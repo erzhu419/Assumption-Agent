@@ -191,11 +191,11 @@ def apply_generalization_holdout_defaults(args: argparse.Namespace) -> argparse.
             False,
         )
     )
-    args.exclude_existing_hle_artifacts = True
+    args.exclude_existing_hle_artifacts = not preserve_explicit_seed_offsets
     args.dedupe_shard_samples = not preserve_explicit_seed_offsets
     setattr(args, "_generalization_holdout_policy", {
         "enabled": True,
-        "exclude_existing_hle_artifacts": True,
+        "exclude_existing_hle_artifacts": bool(args.exclude_existing_hle_artifacts),
         "dedupe_shard_samples": args.dedupe_shard_samples,
         "explicit_seed_offsets_remapped": bool(
             explicit_seed_offsets and not preserve_explicit_seed_offsets
@@ -405,6 +405,34 @@ def _dedupe_single_row_shards_by_scan_index(
         "duplicate_fallback_count": sum(1 for row in remaps if row.get("status") == "duplicate"),
         "distinct_problem_hash_count": len(seen),
         "remaps": remaps,
+    }
+
+
+def distinct_shard_sample_requirement_violation(
+    *,
+    dedupe_summary: dict[str, Any],
+    shard_count: int,
+) -> dict[str, Any] | None:
+    """Return a metadata-only violation when a deduped cohort is not distinct."""
+    if not dedupe_summary.get("enabled"):
+        return None
+    duplicate_fallback_count = int(dedupe_summary.get("duplicate_fallback_count") or 0)
+    accepted_shard_count = int(dedupe_summary.get("accepted_shard_count") or 0)
+    distinct_problem_hash_count = int(dedupe_summary.get("distinct_problem_hash_count") or 0)
+    if (
+        duplicate_fallback_count <= 0
+        and accepted_shard_count >= shard_count
+        and distinct_problem_hash_count >= shard_count
+    ):
+        return None
+    return {
+        "status": "failed",
+        "reason": "distinct_shard_sample_requirement_not_met",
+        "accepted_shard_count": accepted_shard_count,
+        "duplicate_fallback_count": duplicate_fallback_count,
+        "distinct_problem_hash_count": distinct_problem_hash_count,
+        "shard_count": int(shard_count),
+        "raw_content_persisted": False,
     }
 
 
@@ -662,6 +690,7 @@ def build_runner_env(
     model_router_attempts: int | None,
     model_router_timeout: float | None,
     model_router_transient_extra_attempts: int | None = None,
+    variant_total_model_router_attempt_budget: int | None = None,
     recursive_selection_model_call_budget: int | None = None,
     recursive_selection_wallclock_budget_sec: float | None = None,
     enable_option_claim_relation_query_planner: bool | None = None,
@@ -698,6 +727,10 @@ def build_runner_env(
         env["MODEL_ROUTER_ATTEMPTS"] = str(model_router_attempts)
     if model_router_transient_extra_attempts is not None:
         env["MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS"] = str(model_router_transient_extra_attempts)
+    if variant_total_model_router_attempt_budget is not None:
+        env["HLE_VARIANT_TOTAL_MODEL_ROUTER_ATTEMPT_BUDGET"] = str(
+            max(1, int(variant_total_model_router_attempt_budget))
+        )
     if recursive_selection_model_call_budget is not None:
         env["HLE_RECURSIVE_SELECTION_MODEL_CALL_BUDGET"] = str(
             max(0, int(recursive_selection_model_call_budget))
@@ -775,7 +808,9 @@ def build_runner_env(
     if enable_option_claim_source_cache_corpus_backfill is not None:
         if enable_option_claim_source_cache_corpus_backfill:
             env["HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"] = "1"
+            env["HLE_ENABLE_SOURCE_CACHE_ANSWER_BEARING_OPTION_CLAIM_RETRY"] = "1"
             env.pop("HLE_DISABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL", None)
+            env.pop("HLE_DISABLE_SOURCE_CACHE_ANSWER_BEARING_OPTION_CLAIM_RETRY", None)
         else:
             env["HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"] = "0"
     if disable_option_claim_source_cache_corpus_backfill is not None:
@@ -859,6 +894,9 @@ def model_router_policy_from_env(env: dict[str, str]) -> dict[str, Any]:
         "global_slot_ttl_sec": env.get("MODEL_ROUTER_GLOBAL_SLOT_TTL_SEC"),
         "global_slot_wait_sec": env.get("MODEL_ROUTER_GLOBAL_SLOT_WAIT_SEC"),
         "parallel_shard_workers": env.get("HLE_PARALLEL_SHARD_WORKERS"),
+        "variant_total_model_router_attempt_budget": env.get(
+            "HLE_VARIANT_TOTAL_MODEL_ROUTER_ATTEMPT_BUDGET"
+        ),
         "router_aware_child_worker_cap_enabled": env.get("HLE_ENABLE_ROUTER_AWARE_CHILD_WORKER_CAP"),
         "router_aware_child_workers_per_shard": env.get("HLE_ROUTER_AWARE_CHILD_WORKERS_PER_SHARD"),
         "router_aware_child_worker_cap_disabled": env.get("HLE_DISABLE_ROUTER_AWARE_CHILD_WORKER_CAP"),
@@ -1028,8 +1066,14 @@ def source_policy_from_env(env: dict[str, str]) -> dict[str, Any]:
         "option_claim_source_cache_corpus_backfill_env": env.get(
             "HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"
         ),
+        "source_cache_answer_bearing_option_claim_retry_env": env.get(
+            "HLE_ENABLE_SOURCE_CACHE_ANSWER_BEARING_OPTION_CLAIM_RETRY"
+        ),
         "option_claim_source_cache_corpus_backfill_disabled_env": env.get(
             "HLE_DISABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"
+        ),
+        "source_cache_answer_bearing_option_claim_retry_disabled_env": env.get(
+            "HLE_DISABLE_SOURCE_CACHE_ANSWER_BEARING_OPTION_CLAIM_RETRY"
         ),
         "option_claim_source_verifier_repair_context_env": env.get(
             "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT"
@@ -3186,6 +3230,14 @@ def main() -> None:
     parser.add_argument("--dedupe-shard-samples", action="store_true")
     parser.add_argument("--dedupe-shard-max-attempts", type=int, default=25)
     parser.add_argument(
+        "--require-distinct-shard-samples",
+        action="store_true",
+        help=(
+            "Fail before launching shards when sample-hash dedupe reports duplicate "
+            "fallbacks or fewer distinct problem hashes than shard count."
+        ),
+    )
+    parser.add_argument(
         "--generalization-holdout",
         action="store_true",
         help=(
@@ -3210,6 +3262,7 @@ def main() -> None:
     parser.add_argument("--call-timeout", type=float, default=None)
     parser.add_argument("--variant-total-timeout-sec", type=float, default=None)
     parser.add_argument("--variant-total-model-call-budget", type=int, default=None)
+    parser.add_argument("--variant-total-model-router-attempt-budget", type=int, default=None)
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--graph-dir", default=str(Path("phase four/assumption_graph")))
     parser.add_argument("--agent-top-k", type=int, default=5)
@@ -3365,9 +3418,13 @@ def main() -> None:
             "variant_watchdog": {
                 "total_timeout_sec": args.variant_total_timeout_sec,
                 "total_model_call_budget": args.variant_total_model_call_budget,
+                "total_model_router_attempt_budget": (
+                    args.variant_total_model_router_attempt_budget
+                ),
                 "enabled": bool(
                     args.variant_total_timeout_sec is not None
                     or args.variant_total_model_call_budget is not None
+                    or args.variant_total_model_router_attempt_budget is not None
                 ),
                 "raw_content_persisted": False,
             },
@@ -3376,6 +3433,7 @@ def main() -> None:
             "private_env": private_env_status,
             "reuse_completed_shards": bool(args.reuse_completed_shards),
             "dedupe_shard_samples": bool(args.dedupe_shard_samples),
+            "require_distinct_shard_samples": bool(args.require_distinct_shard_samples),
             "generalization_holdout": bool(args.generalization_holdout),
             "generalization_holdout_policy": getattr(
                 args,
@@ -3395,6 +3453,7 @@ def main() -> None:
             "total_sample_size": args.total_sample_size,
             "shard_size": args.shard_size,
             "dedupe_shard_samples": bool(args.dedupe_shard_samples),
+            "require_distinct_shard_samples": bool(args.require_distinct_shard_samples),
             "exclude_existing_hle_artifacts": bool(args.exclude_existing_hle_artifacts),
             "feature_flags": runner_feature_flags,
             "source_policy": runner_source_policy,
@@ -3436,6 +3495,68 @@ def main() -> None:
             "hash_cache_path": str(hash_cache_path),
         },
     )
+    distinct_violation = (
+        distinct_shard_sample_requirement_violation(
+            dedupe_summary=getattr(args, "_shard_sample_dedupe_summary", {"enabled": False}),
+            shard_count=len(states),
+        )
+        if bool(args.require_distinct_shard_samples)
+        else None
+    )
+    if distinct_violation is not None:
+        failure_payload = {
+            "eval_id": args.eval_id,
+            "pass": False,
+            "failed_gates": ["distinct_shard_samples"],
+            "distinct_shard_sample_requirement": distinct_violation,
+            "shard_sample_dedupe": getattr(args, "_shard_sample_dedupe_summary", {"enabled": False}),
+            "generalization_holdout_policy": getattr(
+                args,
+                "_generalization_holdout_policy",
+                {"enabled": False},
+            ),
+            "shards": build_heartbeat(states)["shards"],
+            "heartbeat_out": str(heartbeat_path),
+            "log_out": str(diagnostic_log_out),
+            "raw_content_persisted": False,
+        }
+        log_event(
+            logger,
+            {
+                "event": "hle_parallel_runner_distinct_shard_sample_requirement_failed",
+                "eval_id": args.eval_id,
+                "distinct_shard_sample_requirement": distinct_violation,
+                "dedupe_summary": getattr(args, "_shard_sample_dedupe_summary", {"enabled": False}),
+            },
+        )
+        write_preflight_heartbeat(
+            heartbeat_path,
+            eval_id=args.eval_id,
+            phase="distinct_shard_samples_failed",
+            run_dir=run_dir,
+            details=failure_payload,
+        )
+        out.parent.mkdir(parents=True, exist_ok=True)
+        md_out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(failure_payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+        md_out.write_text(
+            "\n".join([
+                f"# HLE Parallel Shard Run: {args.eval_id}",
+                "",
+                "Failed before shard launch: distinct shard sample requirement was not met.",
+                "",
+                f"- accepted_shard_count: `{distinct_violation['accepted_shard_count']}`",
+                f"- duplicate_fallback_count: `{distinct_violation['duplicate_fallback_count']}`",
+                f"- distinct_problem_hash_count: `{distinct_violation['distinct_problem_hash_count']}`",
+                f"- shard_count: `{distinct_violation['shard_count']}`",
+                "",
+                "Raw HLE questions, answers, rationales, canaries, and prediction text are not persisted.",
+                "",
+            ]),
+            encoding="utf-8",
+        )
+        print(json.dumps(failure_payload, ensure_ascii=True, indent=2, sort_keys=True))
+        raise SystemExit(2)
     reuse_summary = (
         mark_reusable_completed_shards(states)
         if args.reuse_completed_shards
@@ -3519,6 +3640,9 @@ def main() -> None:
             else None
         ),
         parallel_workers=args.parallel_workers,
+        variant_total_model_router_attempt_budget=(
+            args.variant_total_model_router_attempt_budget
+        ),
         model_router_per_attempt_timeout=args.model_router_per_attempt_timeout,
         model_router_subprocess_calls=args.model_router_subprocess_calls,
         model_router_no_byte_timeout_sec=args.model_router_no_byte_timeout_sec,
@@ -3684,9 +3808,13 @@ def main() -> None:
             "enabled": bool(
                 args.variant_total_timeout_sec is not None
                 or args.variant_total_model_call_budget is not None
+                or args.variant_total_model_router_attempt_budget is not None
             ),
             "total_timeout_sec": args.variant_total_timeout_sec,
             "total_model_call_budget": args.variant_total_model_call_budget,
+            "total_model_router_attempt_budget": (
+                args.variant_total_model_router_attempt_budget
+            ),
             "raw_content_persisted": False,
         },
         feature_flags=runner_feature_flags,

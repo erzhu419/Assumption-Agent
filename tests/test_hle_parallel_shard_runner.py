@@ -32,6 +32,7 @@ from assumption_os.hle_parallel_shard_runner import (
     build_shard_specs,
     build_shard_specs_for_seed_offsets,
     dedupe_shard_specs_by_sample_hash,
+    distinct_shard_sample_requirement_violation,
     format_parallel_markdown,
     mark_reusable_completed_shards,
     model_router_policy_from_env,
@@ -188,17 +189,49 @@ class TestHleParallelShardRunner(unittest.TestCase):
             ) as dedupe:
                 specs, states = build_payload_without_execution(args)
 
-        self.assertTrue(args.exclude_existing_hle_artifacts)
+        self.assertFalse(args.exclude_existing_hle_artifacts)
         self.assertFalse(args.dedupe_shard_samples)
         self.assertFalse(args._generalization_holdout_policy["explicit_seed_offsets_remapped"])
         self.assertTrue(args._generalization_holdout_policy["explicit_seed_offsets_preserved"])
+        self.assertFalse(args._generalization_holdout_policy["exclude_existing_hle_artifacts"])
         dedupe.assert_not_called()
         self.assertEqual([spec.seed_offset for spec in specs], [2022, 2087])
         self.assertEqual(
             args._shard_sample_dedupe_summary["reason"],
             "preflighted_explicit_seed_offsets_preserved_for_generalization_holdout",
         )
-        self.assertIn("--exclude-existing-hle-artifacts", states[0].command)
+        self.assertNotIn("--exclude-existing-hle-artifacts", states[0].command)
+
+    def test_distinct_shard_sample_requirement_violation_flags_duplicate_fallback(self) -> None:
+        violation = distinct_shard_sample_requirement_violation(
+            dedupe_summary={
+                "enabled": True,
+                "accepted_shard_count": 5,
+                "duplicate_fallback_count": 7,
+                "distinct_problem_hash_count": 5,
+                "raw_content_persisted": False,
+            },
+            shard_count=12,
+        )
+
+        self.assertIsNotNone(violation)
+        self.assertEqual(violation["reason"], "distinct_shard_sample_requirement_not_met")
+        self.assertEqual(violation["duplicate_fallback_count"], 7)
+        self.assertFalse(violation["raw_content_persisted"])
+
+    def test_distinct_shard_sample_requirement_violation_accepts_full_distinct_cohort(self) -> None:
+        violation = distinct_shard_sample_requirement_violation(
+            dedupe_summary={
+                "enabled": True,
+                "accepted_shard_count": 12,
+                "duplicate_fallback_count": 0,
+                "distinct_problem_hash_count": 12,
+                "raw_content_persisted": False,
+            },
+            shard_count=12,
+        )
+
+        self.assertIsNone(violation)
 
     def test_module_ablation_plan_builds_real_toggles_without_secrets(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -386,6 +419,8 @@ class TestHleParallelShardRunner(unittest.TestCase):
             "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR": "",
             "HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL": "1",
             "HLE_DISABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL": "",
+            "HLE_ENABLE_SOURCE_CACHE_ANSWER_BEARING_OPTION_CLAIM_RETRY": "1",
+            "HLE_DISABLE_SOURCE_CACHE_ANSWER_BEARING_OPTION_CLAIM_RETRY": "",
             "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT": "1",
             "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT": "",
             "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE": "1",
@@ -1102,6 +1137,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
             model_router_attempts=7,
             model_router_timeout=7200,
             model_router_transient_extra_attempts=0,
+            variant_total_model_router_attempt_budget=20,
             enable_option_claim_relation_query_planner=True,
             parallel_workers=4,
             model_router_per_attempt_timeout=90,
@@ -1117,6 +1153,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
         )
         self.assertEqual(env["MODEL_ROUTER_ATTEMPTS"], "7")
         self.assertEqual(env["MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS"], "0")
+        self.assertEqual(env["HLE_VARIANT_TOTAL_MODEL_ROUTER_ATTEMPT_BUDGET"], "20")
         self.assertEqual(env["HLE_ENABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER"], "1")
         self.assertNotIn("HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER", env)
         self.assertEqual(env["MODEL_ROUTER_TIMEOUT"], "7200")
@@ -1135,6 +1172,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(policy["subprocess_calls"], "1")
         self.assertEqual(policy["subprocess_no_byte_timeout_sec"], "120")
         self.assertEqual(policy["parallel_shard_workers"], "4")
+        self.assertEqual(policy["variant_total_model_router_attempt_budget"], "20")
         self.assertEqual(policy["recursive_selection_model_call_budget"], "2")
         self.assertEqual(policy["recursive_selection_wallclock_budget_sec"], "180.0")
         self.assertFalse(policy["raw_content_persisted"])
@@ -1143,6 +1181,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
             for key in (
                 "MODEL_ROUTER_ATTEMPTS",
                 "MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS",
+                "HLE_VARIANT_TOTAL_MODEL_ROUTER_ATTEMPT_BUDGET",
                 "MODEL_ROUTER_TIMEOUT",
                 "MODEL_ROUTER_PER_ATTEMPT_TIMEOUT",
                 "MODEL_ROUTER_SUBPROCESS_CALLS",
@@ -1197,8 +1236,16 @@ class TestHleParallelShardRunner(unittest.TestCase):
                 env["HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL"],
                 "1",
             )
+            self.assertEqual(
+                env["HLE_ENABLE_SOURCE_CACHE_ANSWER_BEARING_OPTION_CLAIM_RETRY"],
+                "1",
+            )
             self.assertNotIn(
                 "HLE_DISABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL",
+                env,
+            )
+            self.assertNotIn(
+                "HLE_DISABLE_SOURCE_CACHE_ANSWER_BEARING_OPTION_CLAIM_RETRY",
                 env,
             )
             self.assertEqual(env["HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_REPAIR_CONTEXT"], "1")
