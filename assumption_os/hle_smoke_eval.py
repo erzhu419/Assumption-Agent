@@ -229,6 +229,32 @@ def _variant_watchdog_min_remaining_before_model_call_sec() -> float | None:
         return None
 
 
+def _variant_watchdog_protected_stage_min_remaining_before_model_call_sec(
+    default_min_remaining: float | None,
+) -> float | None:
+    if not (
+        _variant_watchdog_call_is_source_verifier()
+        or _variant_watchdog_call_is_answer_bearing_source_priority()
+        or _variant_watchdog_call_is_option_claim_directness()
+        or _variant_watchdog_call_is_post_directness_source_reallocation()
+    ):
+        return default_min_remaining
+    raw = (
+        os.environ.get("HLE_VARIANT_PROTECTED_STAGE_MODEL_CALL_MIN_REMAINING_SEC")
+        or os.environ.get("HLE_PROTECTED_STAGE_MODEL_CALL_MIN_REMAINING_SEC")
+        or "2"
+    ).strip().lower()
+    if not raw or raw in {"none", "null", "off", "false", "no", "unlimited"}:
+        return None
+    try:
+        protected_min = max(0.0, float(raw))
+    except ValueError:
+        protected_min = 2.0
+    if default_min_remaining is None:
+        return protected_min
+    return min(float(default_min_remaining), protected_min)
+
+
 def _variant_watchdog_recursive_selection_reserved_budget_from_env(
     model_call_budget: int | None = None,
 ) -> int:
@@ -342,7 +368,8 @@ def _variant_watchdog_post_directness_source_reallocation_reserved_budget_from_e
         except ValueError:
             value = 0
     elif (
-        int(recursive_selection_reserved_budget or 0) == 0
+        _env_flag("HLE_ENABLE_DEFAULT_POST_DIRECTNESS_SOURCE_REALLOCATION_RESERVED_MODEL_CALL_BUDGET")
+        and int(recursive_selection_reserved_budget or 0) == 0
         and int(source_verifier_reserved_budget or 0) > 0
         and int(directness_reserved_budget or 0) > 0
     ):
@@ -691,7 +718,10 @@ def _variant_watchdog_model_call_preflight_rejection(
                 "model_call_budget": state.get("model_call_budget"),
                 "raw_content_persisted": False,
             }
-        min_remaining = _variant_watchdog_min_remaining_before_model_call_sec()
+        default_min_remaining = _variant_watchdog_min_remaining_before_model_call_sec()
+        min_remaining = _variant_watchdog_protected_stage_min_remaining_before_model_call_sec(
+            default_min_remaining
+        )
         if isinstance(deadline, (int, float)) and min_remaining is not None:
             remaining_sec = float(deadline) - now
             if remaining_sec < min_remaining:
@@ -700,6 +730,7 @@ def _variant_watchdog_model_call_preflight_rejection(
                     "stage_name": stage_name,
                     "remaining_sec_before": round(remaining_sec, 4),
                     "min_remaining_sec": min_remaining,
+                    "default_min_remaining_sec": default_min_remaining,
                     "model_call_count": int(state.get("model_call_count") or 0),
                     "model_call_budget": state.get("model_call_budget"),
                     "raw_content_persisted": False,
@@ -827,13 +858,17 @@ def _variant_watchdog_before_model_call(*, model: str) -> int | None:
         deadline = _variant_watchdog_effective_deadline(state)
         if isinstance(deadline, (int, float)) and now >= float(deadline):
             _variant_watchdog_violate(state, "variant_total_timeout_exceeded")
-        min_remaining = _variant_watchdog_min_remaining_before_model_call_sec()
+        default_min_remaining = _variant_watchdog_min_remaining_before_model_call_sec()
+        min_remaining = _variant_watchdog_protected_stage_min_remaining_before_model_call_sec(
+            default_min_remaining
+        )
         if isinstance(deadline, (int, float)) and min_remaining is not None:
             remaining_sec = float(deadline) - now
             if remaining_sec < min_remaining:
                 extra = {
                     "remaining_sec_before": round(remaining_sec, 4),
                     "min_remaining_sec": min_remaining,
+                    "default_min_remaining_sec": default_min_remaining,
                     "decision_phase": _active_no_gold_decision_phase(),
                     "router_scope": _active_model_router_call_scope().get("router_scope"),
                     "router_call_stage": _active_model_router_call_scope().get("router_call_stage"),
@@ -1041,7 +1076,10 @@ def _variant_watchdog_before_model_router_attempt(
                 "variant_total_timeout_exceeded",
                 extra,
             )
-        min_remaining = _variant_watchdog_min_remaining_before_model_call_sec()
+        default_min_remaining = _variant_watchdog_min_remaining_before_model_call_sec()
+        min_remaining = _variant_watchdog_protected_stage_min_remaining_before_model_call_sec(
+            default_min_remaining
+        )
         if isinstance(deadline, (int, float)) and min_remaining is not None:
             remaining_sec = float(deadline) - now
             if remaining_sec < min_remaining:
@@ -1052,6 +1090,7 @@ def _variant_watchdog_before_model_router_attempt(
                         **extra,
                         "remaining_sec_before": round(remaining_sec, 4),
                         "min_remaining_sec": min_remaining,
+                        "default_min_remaining_sec": default_min_remaining,
                     },
                 )
         attempt_budget = state.get("model_router_attempt_budget")
@@ -3924,6 +3963,10 @@ def _call_recursive_verified_answer(
             attempts.extend(option_sweep_attempts)
     option_claim_evidence_summary: dict[str, Any] | None = None
     option_claim_evidence_attempt = None
+    option_claim_second_pass_attempt = None
+    option_claim_second_pass_summary = None
+    option_claim_second_pass_stage_summary = None
+    option_claim_second_pass_already_ran = False
     if not domain_rule_locked:
         option_claim_evidence_attempt, option_claim_evidence_summary = _maybe_run_mc_option_claim_evidence_verifier(
             problem=problem,
@@ -3943,6 +3986,63 @@ def _call_recursive_verified_answer(
         )
     if option_claim_evidence_attempt:
         attempts.append(option_claim_evidence_attempt)
+    early_option_claim_second_pass_watchdog_abort = variant_watchdog_fast_abort(
+        "mc_option_claim_evidence_verifier_second_pass"
+    )
+    if (
+        not early_option_claim_second_pass_watchdog_abort
+        and not endpoint_error_abort
+        and not domain_rule_locked
+    ):
+        option_claim_second_pass_attempt, option_claim_second_pass_summary = (
+            _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
+                problem=problem,
+                attempts=attempts,
+                agent_plan=agent_plan,
+                option_evidence_summary=option_evidence_summary,
+                option_claim_evidence_summary=option_claim_evidence_summary,
+                option_sweep_summary=option_sweep_summary,
+                eval_id=eval_id,
+                call_id=call_id,
+                model=model,
+                logger=logger,
+                timeout=child_timeout if child_timeout is not None else timeout,
+                max_tokens=min(max_tokens, 384),
+            )
+        )
+    elif early_option_claim_second_pass_watchdog_abort:
+        option_claim_second_pass_summary = {
+            "status": "skipped_by_variant_watchdog",
+            "reason": early_option_claim_second_pass_watchdog_abort.get("reason"),
+            "variant_watchdog": early_option_claim_second_pass_watchdog_abort.get("variant_watchdog"),
+            "raw_content_persisted": False,
+        }
+    if option_claim_second_pass_summary:
+        option_claim_second_pass_already_ran = True
+        if isinstance(option_claim_second_pass_summary, dict):
+            post = option_claim_second_pass_summary.get("post_sweep_second_pass")
+            if isinstance(post, dict):
+                post["execution_stage"] = "before_late_challenges"
+            option_claim_second_pass_summary[
+                "post_sweep_second_pass_execution_stage"
+            ] = "before_late_challenges"
+        option_claim_evidence_summary, option_claim_second_pass_stage_summary = (
+            _merge_option_claim_second_pass_summary(
+                prior_summary=option_claim_evidence_summary,
+                second_pass_summary=option_claim_second_pass_summary,
+            )
+        )
+        use_private_option_claim_source_context(
+            option_claim_evidence_summary,
+            source_stage="mc_option_claim_evidence_verifier_second_pass",
+        )
+    if option_claim_second_pass_stage_summary:
+        agent_plan.setdefault("stages", {})["mc_option_claim_evidence_verifier_second_pass"] = (
+            option_claim_second_pass_stage_summary
+        )
+    if option_claim_second_pass_attempt:
+        option_claim_evidence_attempt = option_claim_second_pass_attempt
+        attempts.append(option_claim_second_pass_attempt)
     answer_bearing_option_directness_gate_summary = _apply_answer_bearing_option_directness_gate(
         attempts=attempts,
         option_claim_evidence_summary=option_claim_evidence_summary,
@@ -4467,13 +4567,12 @@ def _call_recursive_verified_answer(
         if option_sweep_attempts:
             attempts.extend(option_sweep_attempts)
 
-    option_claim_second_pass_attempt = None
-    option_claim_second_pass_summary = None
     option_claim_second_pass_watchdog_abort = variant_watchdog_fast_abort(
         "mc_option_claim_evidence_verifier_second_pass"
-    )
+    ) if not option_claim_second_pass_already_ran else None
     if (
-        not option_claim_second_pass_watchdog_abort
+        not option_claim_second_pass_already_ran
+        and not option_claim_second_pass_watchdog_abort
         and not endpoint_error_abort
         and not domain_rule_locked
         and not weak_source_fallback_cascade_stage_skip_active
@@ -4494,20 +4593,20 @@ def _call_recursive_verified_answer(
                 max_tokens=min(max_tokens, 384),
             )
         )
-    elif option_claim_second_pass_watchdog_abort:
+    elif not option_claim_second_pass_already_ran and option_claim_second_pass_watchdog_abort:
         option_claim_second_pass_summary = {
             "status": "skipped_by_variant_watchdog",
             "reason": option_claim_second_pass_watchdog_abort.get("reason"),
             "variant_watchdog": option_claim_second_pass_watchdog_abort.get("variant_watchdog"),
             "raw_content_persisted": False,
         }
-    elif weak_source_fallback_cascade_stage_skip_active:
+    elif not option_claim_second_pass_already_ran and weak_source_fallback_cascade_stage_skip_active:
         option_claim_second_pass_summary = _weak_source_fallback_cascade_skip_summary(
             weak_source_fallback_cascade_gate_summary,
             stage_name="mc_option_claim_evidence_verifier_second_pass",
         )
     option_claim_second_pass_stage_summary = None
-    if option_claim_second_pass_summary:
+    if option_claim_second_pass_summary and not option_claim_second_pass_already_ran:
         option_claim_evidence_summary, option_claim_second_pass_stage_summary = (
             _merge_option_claim_second_pass_summary(
                 prior_summary=option_claim_evidence_summary,
@@ -9226,10 +9325,17 @@ def _recursive_core_child_budget_split_specs(
     return kept, summary
 
 
-def _recursive_child_variant_budget_admission_enabled() -> bool:
+def _recursive_child_variant_budget_admission_enabled(problem: dict[str, Any] | None = None) -> bool:
     if _env_flag("HLE_DISABLE_RECURSIVE_CHILD_VARIANT_BUDGET_ADMISSION_GATE"):
         return False
-    return _env_flag("HLE_ENABLE_RECURSIVE_CHILD_VARIANT_BUDGET_ADMISSION_GATE")
+    if _env_flag("HLE_ENABLE_RECURSIVE_CHILD_VARIANT_BUDGET_ADMISSION_GATE"):
+        return True
+    if _env_flag("HLE_DISABLE_RECURSIVE_CHILD_SOURCE_VERIFIER_BUDGET_ADMISSION"):
+        return False
+    return (
+        (problem or {}).get("answer_type") == "multipleChoice"
+        and _source_grounded_option_claim_verifier_enabled()
+    )
 
 
 def _recursive_child_variant_budget_admission_budget_state() -> dict[str, Any]:
@@ -9319,7 +9425,7 @@ def _recursive_child_variant_budget_admission_split_specs(
         row = dict(spec)
         row["_planned_child_index"] = int(row.get("_planned_child_index") or start_index + offset)
         indexed_specs.append(row)
-    if not indexed_specs or not _recursive_child_variant_budget_admission_enabled():
+    if not indexed_specs or not _recursive_child_variant_budget_admission_enabled(problem):
         return indexed_specs, {}
     budget_state = _recursive_child_variant_budget_admission_budget_state()
     if budget_state.get("available_model_child_calls") is None:
@@ -10607,6 +10713,163 @@ def _recursive_child_batch_max_wait_sec(timeout: float | None) -> float | None:
     return min(candidates)
 
 
+def _recursive_child_source_verifier_reserve_wait_sec(
+    problem: dict[str, Any],
+    *,
+    timeout: float | None,
+    variant: str,
+) -> tuple[float | None, dict[str, Any]]:
+    summary: dict[str, Any] = {
+        "status": "skipped",
+        "policy": "recursive_child_source_verifier_wait_reserve",
+        "reason": "not_applicable",
+        "answer_type": problem.get("answer_type"),
+        "variant": variant,
+        "raw_content_persisted": False,
+    }
+    if _env_flag("HLE_DISABLE_RECURSIVE_CHILD_SOURCE_VERIFIER_WAIT_RESERVE"):
+        summary["reason"] = "disabled_by_env"
+        return None, summary
+    if variant != "assumption_agent_recursive_verify":
+        summary["reason"] = "non_agent_variant"
+        return None, summary
+    if problem.get("answer_type") != "multipleChoice":
+        summary["reason"] = "not_multiple_choice"
+        return None, summary
+    if not _source_grounded_option_claim_verifier_enabled():
+        summary["reason"] = "source_verifier_disabled"
+        return None, summary
+
+    normalized_timeout = _normalize_optional_timeout(timeout)
+    state = _active_variant_watchdog()
+    deadline = _variant_watchdog_effective_deadline(state) if state else None
+    remaining_from_watchdog: float | None = None
+    if isinstance(deadline, (int, float)):
+        remaining_from_watchdog = max(0.0, float(deadline) - time.monotonic())
+    base_candidates = [
+        value for value in (normalized_timeout, remaining_from_watchdog)
+        if isinstance(value, (int, float)) and float(value) > 0
+    ]
+    if not base_candidates:
+        summary["reason"] = "no_finite_timeout_or_watchdog"
+        summary["child_timeout_sec"] = normalized_timeout
+        summary["variant_watchdog_remaining_sec"] = (
+            round(remaining_from_watchdog, 4)
+            if remaining_from_watchdog is not None
+            else None
+        )
+        return None, summary
+    base_timeout = min(float(value) for value in base_candidates)
+
+    reserve_raw = os.environ.get(
+        "HLE_RECURSIVE_CHILD_SOURCE_VERIFIER_RESERVE_SEC",
+        "60",
+    ).strip().lower()
+    try:
+        reserve_sec = max(0.0, float(reserve_raw))
+    except ValueError:
+        reserve_sec = 60.0
+    fraction_raw = os.environ.get(
+        "HLE_RECURSIVE_CHILD_SOURCE_VERIFIER_MAX_WAIT_FRACTION",
+        "0.65",
+    ).strip().lower()
+    try:
+        wait_fraction = max(0.05, min(1.0, float(fraction_raw)))
+    except ValueError:
+        wait_fraction = 0.65
+    min_wait_raw = os.environ.get(
+        "HLE_RECURSIVE_CHILD_SOURCE_VERIFIER_MIN_WAIT_SEC",
+        "10",
+    ).strip().lower()
+    try:
+        min_wait_sec = max(0.0, float(min_wait_raw))
+    except ValueError:
+        min_wait_sec = 10.0
+
+    reserve_cap = max(min_wait_sec, base_timeout - reserve_sec) if reserve_sec > 0 else base_timeout
+    fraction_cap = max(min_wait_sec, base_timeout * wait_fraction)
+    cap = min(base_timeout, reserve_cap, fraction_cap)
+    if cap >= base_timeout:
+        summary.update(
+            {
+                "status": "not_required",
+                "reason": "reserve_does_not_reduce_wait",
+                "child_timeout_sec": normalized_timeout,
+                "variant_watchdog_remaining_sec": (
+                    round(remaining_from_watchdog, 4)
+                    if remaining_from_watchdog is not None
+                    else None
+                ),
+                "base_timeout_sec": round(base_timeout, 4),
+                "reserve_sec": reserve_sec,
+                "max_wait_fraction": wait_fraction,
+                "min_wait_sec": min_wait_sec,
+            }
+        )
+        return None, summary
+    summary.update(
+        {
+            "status": "activated",
+            "reason": "reserve_time_for_source_verifier_and_directness",
+            "child_timeout_sec": normalized_timeout,
+            "variant_watchdog_remaining_sec": (
+                round(remaining_from_watchdog, 4)
+                if remaining_from_watchdog is not None
+                else None
+            ),
+            "base_timeout_sec": round(base_timeout, 4),
+            "wait_timeout_sec": round(cap, 4),
+            "reserve_sec": reserve_sec,
+            "max_wait_fraction": wait_fraction,
+            "min_wait_sec": min_wait_sec,
+        }
+    )
+    return cap, summary
+
+
+def _recursive_child_batch_wait_policy(
+    problem: dict[str, Any],
+    *,
+    timeout: float | None,
+    variant: str,
+) -> tuple[float | None, dict[str, Any]]:
+    configured_wait = _recursive_child_batch_max_wait_sec(timeout)
+    source_reserve_wait, source_reserve_summary = _recursive_child_source_verifier_reserve_wait_sec(
+        problem,
+        timeout=timeout,
+        variant=variant,
+    )
+    candidates = [
+        (value, source)
+        for value, source in (
+            (configured_wait, "recursive_child_batch_max_wait"),
+            (source_reserve_wait, "recursive_child_source_verifier_reserve"),
+        )
+        if isinstance(value, (int, float)) and float(value) > 0
+    ]
+    if not candidates:
+        return None, {
+            "status": "not_required",
+            "reason": "no_batch_wait_cap",
+            "source": "none",
+            "configured_wait_timeout_sec": configured_wait,
+            "source_verifier_reserve": source_reserve_summary,
+            "raw_content_persisted": False,
+        }
+    wait_timeout, source = min(candidates, key=lambda item: float(item[0]))
+    normalized_timeout = _normalize_optional_timeout(timeout)
+    if source == "recursive_child_batch_max_wait" and normalized_timeout == wait_timeout:
+        source = "child_timeout"
+    return float(wait_timeout), {
+        "status": "activated",
+        "reason": "bounded_recursive_child_batch_wait",
+        "source": source,
+        "configured_wait_timeout_sec": configured_wait,
+        "source_verifier_reserve": source_reserve_summary,
+        "raw_content_persisted": False,
+    }
+
+
 def _force_serial_child_execution_reason(*, mode: str, timeout: float | None) -> str:
     if mode != "parallel_quorum":
         return ""
@@ -10758,8 +11021,13 @@ def _run_child_batch(
                 max_tokens=max_tokens,
             )
             future_specs[future] = (spec, child_index)
-        wait_timeout = _recursive_child_batch_max_wait_sec(timeout)
+        wait_timeout, wait_policy = _recursive_child_batch_wait_policy(
+            problem,
+            timeout=timeout,
+            variant=variant,
+        )
         done, pending = concurrent.futures.wait(future_specs, timeout=wait_timeout)
+        wait_cap_source = str(wait_policy.get("source") or "none")
         _log_event(
             logger,
             {
@@ -10782,13 +11050,8 @@ def _run_child_batch(
                 "latency_sec": round(time.monotonic() - batch_started, 4),
                 "wait_timeout_sec": wait_timeout,
                 "batch_wait_cap_configured": wait_timeout is not None,
-                "batch_wait_cap_source": (
-                    "recursive_child_batch_max_wait"
-                    if wait_timeout is not None and _normalize_optional_timeout(timeout) != wait_timeout
-                    else "child_timeout"
-                    if wait_timeout is not None
-                    else "none"
-                ),
+                "batch_wait_cap_source": wait_cap_source,
+                "batch_wait_policy": wait_policy,
             },
         )
         for future in done:
@@ -10811,8 +11074,11 @@ def _run_child_batch(
                         timeout=timeout,
                         latency_sec=elapsed,
                         timeout_reason=(
+                            "recursive_child_source_verifier_reserve_wait_exceeded"
+                            if wait_cap_source == "recursive_child_source_verifier_reserve"
+                            else
                             "recursive_child_batch_max_wait_exceeded"
-                            if wait_timeout is not None and _normalize_optional_timeout(timeout) != wait_timeout
+                            if wait_cap_source == "recursive_child_batch_max_wait"
                             else "child_timeout_exceeded"
                         ),
                     )
@@ -10839,12 +11105,15 @@ def _run_child_batch(
             "status_counts": dict(sorted(status_counts.items())),
             "latency_sec": round(time.monotonic() - batch_started, 4),
             "batch_wait_timeout_sec": wait_timeout,
+            "batch_wait_cap_source": str(wait_policy.get("source") or "none"),
+            "batch_wait_policy": wait_policy,
         },
     )
     return {
         "attempts": attempts,
         "underlying_model_calls": sum(1 for attempt in attempts if attempt.get("status") == "answered"),
         "max_workers": max_workers,
+        "batch_wait_policy": wait_policy,
     }
 
 
@@ -29864,7 +30133,7 @@ def _source_cache_answer_bearing_soft_refute_focused_retry_enabled() -> bool:
     ).strip().lower()
     if explicit:
         return explicit in {"1", "true", "yes", "on"}
-    return False
+    return True
 
 
 def _source_cache_answer_bearing_soft_refute_focused_retry_max_ambiguous() -> int:
@@ -31660,6 +31929,8 @@ def _option_claim_variant_directness_reserved_model_call_budget_limit() -> int:
             span_reserve,
             1 + _option_claim_relation_span_comparator_reserved_model_call_budget_limit(),
         )
+    if _source_grounded_option_claim_verifier_enabled():
+        return max(span_reserve, 1)
     return span_reserve
 
 
@@ -33006,7 +33277,7 @@ def _option_claim_relation_span_comparator_enabled() -> bool:
     ).strip().lower()
     if explicit:
         return explicit in {"1", "true", "yes", "on"}
-    return False
+    return True
 
 
 def _option_claim_relation_span_comparator_promotion_enabled() -> bool:

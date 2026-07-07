@@ -358,6 +358,53 @@ from assumption_os.schema import AssumptionNode, AssumptionType
 
 
 class HleSmokeEvalTest(unittest.TestCase):
+    @staticmethod
+    def _strict_option_claim_structured_context(**kwargs):
+        target_label = str(kwargs.get("target_label") or "B")
+        target_hash = stable_hash({"option_label": target_label})
+        witness = {
+            "category": "direct_support",
+            "doc_hash": f"doc-{target_label.lower()}",
+            "strict_direct_support": True,
+            "candidate_specific_span": True,
+            "directish_signal": True,
+            "relation_proximity": True,
+            "supports_other": False,
+            "required_overlap": 2,
+            "required_missing_count": 0,
+            "required_count": 2,
+            "option_overlap": 2,
+            "relation_overlap": 2,
+            "score": 9.5,
+        }
+        context = (
+            "Candidate-specific relation witness audit for this target option.\n"
+            f"Target label: {target_label}\n"
+            "- Witness 1: direct support with required relation terms complete."
+        )
+        summary = {
+            "status": "activated",
+            "reason": "test_strict_candidate_relation_witness",
+            "target_option_hash": target_hash,
+            "context_used": True,
+            "context_hash": stable_hash({"context": context}),
+            "context_char_count": len(context),
+            "target_snippets_included": True,
+            "candidate_relation_witness_rows": [witness],
+            "candidate_relation_witness_audit_rows": [witness],
+            "candidate_relation_witness_audit_direct_support_doc_count": 1,
+            "candidate_relation_witness_audit_strict_direct_support_doc_count": 1,
+            "candidate_relation_witness_audit_candidate_relation_witness_doc_count": 1,
+            "candidate_relation_witness_audit_candidate_specific_span_doc_count": 1,
+            "candidate_relation_witness_audit_directish_doc_count": 1,
+            "candidate_relation_witness_audit_required_overlap_doc_count": 1,
+            "candidate_relation_witness_audit_relation_proximity_doc_count": 1,
+            "source_quality_doc_count": 2,
+            "support_doc_count": 1,
+            "raw_content_persisted": False,
+        }
+        return context, summary
+
     def test_parse_answer_json(self):
         self.assertEqual(_parse_answer_json('{"answer": "D"}'), "D")
 
@@ -1679,6 +1726,118 @@ class HleSmokeEvalTest(unittest.TestCase):
             gate["skipped_prompt_kinds"],
             ["recursive_assumption_answer", "option_elimination_answer"],
         )
+
+    def test_recursive_child_variant_budget_admission_defaults_on_for_mc_source_path(self):
+        problem = {
+            "id_hash": "pid-budget-mc-default",
+            "question_hash": "qid-budget-mc-default",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. one\nB. two\nC. three\nD. four",
+        }
+        specs = [
+            {"prompt_kind": "direct_short_answer", "prompt": "answer 1", "branch_axis": "closed_book_direct"},
+            {"prompt_kind": "constraint_checked_answer", "prompt": "answer 2", "branch_axis": "format_constraint"},
+            {"prompt_kind": "recursive_assumption_answer", "prompt": "answer 3", "branch_axis": "assumption_falsification"},
+            {"prompt_kind": "option_matrix_reasoner_answer", "prompt": "answer 4", "branch_axis": "option_matrix_reasoning"},
+            {"prompt_kind": "option_elimination_answer", "prompt": "answer 5", "branch_axis": "option_elimination"},
+            {"prompt_kind": "adversarial_alternative_answer", "prompt": "answer 6", "branch_axis": "adversarial_boundary_search"},
+        ]
+        called_prompt_kinds: list[str] = []
+
+        def counted_child_attempt(**kwargs):
+            prompt_kind = kwargs["spec"]["prompt_kind"]
+            _variant_watchdog_before_model_call(model=kwargs["model"])
+            called_prompt_kinds.append(prompt_kind)
+            return {
+                "child_id": f"child-{kwargs['child_index']}",
+                "child_index": kwargs["child_index"],
+                "prompt_kind": prompt_kind,
+                "branch_axis": kwargs["spec"].get("branch_axis"),
+                "parsed_answer": "A",
+                "parsed_answer_hash": "hA",
+                "prediction_hash": f"p{kwargs['child_index']}",
+                "latency_sec": 0.01,
+                "status": "answered",
+            }
+
+        with TemporaryDirectory() as tmp:
+            logger = _JsonlLogger(Path(tmp) / "events.jsonl")
+            with patch.dict(
+                os.environ,
+                {
+                    "HLE_ENABLE_RECURSIVE_CHILD_VARIANT_BUDGET_ADMISSION_GATE": "",
+                    "HLE_DISABLE_RECURSIVE_CHILD_VARIANT_BUDGET_ADMISSION_GATE": "",
+                    "HLE_DISABLE_RECURSIVE_CHILD_SOURCE_VERIFIER_BUDGET_ADMISSION": "",
+                    "HLE_DISABLE_SOURCE_GROUNDED_OPTION_CLAIM_VERIFIER": "",
+                    "HLE_VARIANT_RECURSIVE_SELECTION_RESERVED_MODEL_CALL_BUDGET": "0",
+                    "HLE_VARIANT_SOURCE_VERIFIER_RESERVED_MODEL_CALL_BUDGET": "1",
+                    "HLE_VARIANT_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET": "",
+                    "HLE_OPTION_CLAIM_VARIANT_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET": "",
+                    "HLE_OPTION_CLAIM_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET": "",
+                    "HLE_OPTION_CLAIM_SPAN_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET": "",
+                    "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR": "",
+                    "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR": "1",
+                },
+                clear=False,
+            ):
+                with _variant_execution_watchdog(
+                    eval_id="eval",
+                    call_id="call",
+                    problem=problem,
+                    model="gpt-5.4-mini",
+                    variant="assumption_agent_recursive_verify",
+                    logger=logger,
+                    timeout_sec=None,
+                    model_call_budget=6,
+                ):
+                    with patch("assumption_os.hle_smoke_eval._run_child_attempt", side_effect=counted_child_attempt):
+                        result = _execute_recursive_child_attempts(
+                            problem=problem,
+                            specs=specs,
+                            model="gpt-5.4-mini",
+                            eval_id="eval",
+                            call_id="call",
+                            logger=logger,
+                            timeout=30,
+                            max_tokens=64,
+                            mode="parallel_quorum",
+                        )
+            events = [
+                json.loads(line)
+                for line in logger.path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertCountEqual(
+            called_prompt_kinds,
+            [
+                "direct_short_answer",
+                "constraint_checked_answer",
+                "option_matrix_reasoner_answer",
+                "option_elimination_answer",
+            ],
+        )
+        gate = result["variant_budget_admission_gate"]
+        self.assertEqual(gate["status"], "activated")
+        self.assertEqual(gate["available_model_child_calls"], 2)
+        self.assertEqual(gate["protected_budget_before"], 2)
+        self.assertEqual(gate["source_verifier_reserved_model_call_budget"], 1)
+        self.assertEqual(gate["directness_reserved_model_call_budget"], 1)
+        self.assertEqual(
+            gate["kept_prompt_kinds"],
+            ["option_matrix_reasoner_answer", "option_elimination_answer"],
+        )
+        self.assertEqual(
+            gate["skipped_prompt_kinds"],
+            ["recursive_assumption_answer", "adversarial_alternative_answer"],
+        )
+        gate_events = [
+            event for event in events
+            if event.get("event") == "recursive_child_variant_budget_admission_gate"
+        ]
+        self.assertEqual(len(gate_events), 1)
+        self.assertEqual(gate_events[0]["stage_status"], "activated")
+        self.assertFalse(gate_events[0]["raw_content_persisted"])
 
     def test_recursive_selection_model_call_budget_skips_model_adjudicators(self):
         problem = {
@@ -3411,6 +3570,7 @@ class HleSmokeEvalTest(unittest.TestCase):
             logger = _JsonlLogger(log_path)
             env = {
                 "HLE_VARIANT_SOURCE_VERIFIER_RESERVED_MODEL_CALL_BUDGET": "1",
+                "HLE_VARIANT_DIRECTNESS_RESERVED_MODEL_CALL_BUDGET": "0",
                 "HLE_VARIANT_RECURSIVE_SELECTION_RESERVED_MODEL_CALL_BUDGET": "0",
             }
             with patch.dict(os.environ, env, clear=False):
@@ -3426,7 +3586,7 @@ class HleSmokeEvalTest(unittest.TestCase):
                         variant="assumption_agent_recursive_verify",
                         logger=logger,
                         timeout_sec=None,
-                        model_call_budget=3,
+                        model_call_budget=2,
                     ) as watchdog:
                         self.assertEqual(
                             _call_model(model="gpt-5.4-mini", prompt="Q", timeout=None, max_tokens=8),
@@ -3448,7 +3608,7 @@ class HleSmokeEvalTest(unittest.TestCase):
                         variant="assumption_agent_recursive_verify",
                         logger=logger,
                         timeout_sec=None,
-                        model_call_budget=3,
+                        model_call_budget=2,
                     ) as watchdog:
                         self.assertEqual(
                             _call_model(model="gpt-5.4-mini", prompt="Q", timeout=None, max_tokens=8),
@@ -3551,6 +3711,90 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertLess(reserved_events[0]["remaining_sec_before"], 45.0)
         self.assertEqual(reserved_events[0]["min_remaining_sec"], 45.0)
         self.assertNotIn("Question text is not logged by time reserve watchdog", json.dumps(events))
+
+    def test_variant_watchdog_uses_lower_min_remaining_for_protected_directness_scope(self):
+        problem = _HleProblem({
+            "id_hash": "p-watchdog-protected-time-reserve",
+            "question_hash": "q-watchdog-protected-time-reserve",
+            "answer_hash": "a-watchdog-protected-time-reserve",
+            "_question": "Question text is not logged by protected time reserve watchdog",
+            "_answer": "A",
+            "answer_type": "multipleChoice",
+            "category": "unit",
+            "raw_subject": "unit",
+        })
+        with TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "watchdog.jsonl"
+            logger = _JsonlLogger(log_path)
+            env = {
+                "HLE_VARIANT_MODEL_CALL_MIN_REMAINING_SEC": "15",
+                "HLE_VARIANT_PROTECTED_STAGE_MODEL_CALL_MIN_REMAINING_SEC": "5",
+            }
+            with patch.dict(os.environ, env, clear=False):
+                with _variant_execution_watchdog(
+                    eval_id="wd",
+                    call_id="protected-time-reserve-block",
+                    problem=problem,
+                    model="gpt-5.4-mini",
+                    variant="assumption_agent_recursive_verify",
+                    logger=logger,
+                    timeout_sec=10,
+                    model_call_budget=None,
+                ) as watchdog:
+                    with self.assertRaisesRegex(
+                        VariantExecutionWatchdogExceeded,
+                        "variant_model_call_min_remaining_time_reserved",
+                    ):
+                        _variant_watchdog_before_model_call(model="gpt-5.4-mini")
+                    blocked_summary = _variant_watchdog_summary(watchdog)
+
+                with _variant_execution_watchdog(
+                    eval_id="wd",
+                    call_id="protected-time-reserve-allow",
+                    problem=problem,
+                    model="gpt-5.4-mini",
+                    variant="assumption_agent_recursive_verify",
+                    logger=logger,
+                    timeout_sec=10,
+                    model_call_budget=None,
+                ) as watchdog:
+                    with _option_claim_model_router_scope(
+                        stage="option_claim_span_directness_verifier",
+                        problem=problem,
+                        call_id="protected-time-reserve-allow_directness",
+                        candidate_count=1,
+                        option_count=2,
+                    ):
+                        call_index = _variant_watchdog_before_model_call(model="gpt-5.4-mini")
+                    allowed_summary = _variant_watchdog_summary(watchdog)
+            events = [
+                json.loads(line)
+                for line in log_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertEqual(blocked_summary["reserved_model_call_rejection_count"], 1)
+        self.assertEqual(call_index, 1)
+        self.assertEqual(allowed_summary["model_call_count"], 1)
+        reserved_events = [
+            event for event in events
+            if event.get("event") == "variant_watchdog_model_call_reserved_rejection"
+        ]
+        admitted_events = [
+            event for event in events
+            if event.get("event") == "variant_watchdog_model_call_admitted"
+        ]
+        self.assertEqual(len(reserved_events), 1)
+        self.assertEqual(reserved_events[0]["min_remaining_sec"], 15.0)
+        self.assertEqual(len(admitted_events), 1)
+        self.assertEqual(
+            admitted_events[0]["router_call_stage"],
+            "option_claim_span_directness_verifier",
+        )
+        self.assertNotIn(
+            "Question text is not logged by protected time reserve watchdog",
+            json.dumps(events),
+        )
 
     def test_variant_watchdog_rejects_router_attempt_when_remaining_time_too_low(self):
         problem = _HleProblem({
@@ -4592,7 +4836,7 @@ class HleSmokeEvalTest(unittest.TestCase):
                         variant="assumption_agent_recursive_verify",
                         logger=logger,
                         timeout_sec=None,
-                        model_call_budget=3,
+                        model_call_budget=2,
                     ) as watchdog:
                         self.assertEqual(
                             _call_model(model="gpt-5.4-mini", prompt="Q", timeout=None, max_tokens=8),
@@ -11380,6 +11624,103 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(len(timeout_events), 2)
         self.assertEqual(timeout_events[0]["timeout_reason"], "recursive_child_batch_max_wait_exceeded")
 
+    def test_parallel_child_batch_reserves_time_for_source_verifier(self):
+        problem = {
+            "id_hash": "pid",
+            "question_hash": "qid",
+            "answer_type": "multipleChoice",
+            "_question": "Which option is correct?\nA. Alpha\nB. Beta\nC. Gamma\nD. Delta",
+        }
+        specs = [
+            {"prompt_kind": "constraint_checked_answer", "prompt": "fast"},
+            {"prompt_kind": "direct_short_answer", "prompt": "slow"},
+        ]
+
+        def mixed_child_attempt(**kwargs):
+            prompt_kind = kwargs["spec"]["prompt_kind"]
+            if prompt_kind == "constraint_checked_answer":
+                time.sleep(0.01)
+                return {
+                    "child_id": f"child-{kwargs['child_index']}",
+                    "child_index": kwargs["child_index"],
+                    "prompt_kind": prompt_kind,
+                    "parsed_answer": "B",
+                    "parsed_answer_hash": "hash-b",
+                    "prediction_hash": "hash-b",
+                    "latency_sec": 0.01,
+                    "status": "answered",
+                }
+            time.sleep(0.2)
+            return {
+                "child_id": f"child-{kwargs['child_index']}",
+                "child_index": kwargs["child_index"],
+                "prompt_kind": prompt_kind,
+                "parsed_answer": "late",
+                "parsed_answer_hash": "late",
+                "prediction_hash": "late",
+                "latency_sec": 0.2,
+                "status": "answered",
+            }
+
+        with TemporaryDirectory() as tmp:
+            logger = _JsonlLogger(Path(tmp) / "events.jsonl")
+            started = time.monotonic()
+            with patch.dict(
+                os.environ,
+                {
+                    "HLE_RECURSIVE_CHILD_BATCH_MAX_WAIT_SEC": "0",
+                    "HLE_RECURSIVE_CHILD_SOURCE_VERIFIER_RESERVE_SEC": "0.12",
+                    "HLE_RECURSIVE_CHILD_SOURCE_VERIFIER_MAX_WAIT_FRACTION": "1",
+                    "HLE_RECURSIVE_CHILD_SOURCE_VERIFIER_MIN_WAIT_SEC": "0.01",
+                },
+                clear=False,
+            ):
+                with patch("assumption_os.hle_smoke_eval._run_child_attempt", side_effect=mixed_child_attempt):
+                    result = _run_child_batch(
+                        problem=problem,
+                        specs=specs,
+                        start_index=1,
+                        model="m",
+                        eval_id="e",
+                        call_id="c",
+                        logger=logger,
+                        timeout=0.2,
+                        max_tokens=32,
+                        max_workers=2,
+                    )
+            elapsed = time.monotonic() - started
+            events = [
+                json.loads(line)
+                for line in logger.path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertLess(elapsed, 0.16)
+        self.assertEqual([row["status"] for row in result["attempts"]], ["answered", "timeout"])
+        self.assertEqual(
+            result["attempts"][1]["timeout_reason"],
+            "recursive_child_source_verifier_reserve_wait_exceeded",
+        )
+        self.assertEqual(result["underlying_model_calls"], 1)
+        wait_events = [event for event in events if event.get("event") == "recursive_child_batch_wait_end"]
+        self.assertEqual(len(wait_events), 1)
+        self.assertEqual(
+            wait_events[0]["batch_wait_cap_source"],
+            "recursive_child_source_verifier_reserve",
+        )
+        policy = wait_events[0]["batch_wait_policy"]
+        self.assertEqual(policy["source_verifier_reserve"]["status"], "activated")
+        self.assertEqual(
+            policy["source_verifier_reserve"]["reason"],
+            "reserve_time_for_source_verifier_and_directness",
+        )
+        timeout_events = [event for event in events if event.get("event") == "recursive_child_timeout"]
+        self.assertEqual(len(timeout_events), 1)
+        self.assertEqual(
+            timeout_events[0]["timeout_reason"],
+            "recursive_child_source_verifier_reserve_wait_exceeded",
+        )
+
     def test_recursive_child_no_byte_cascade_guard_skips_remaining_parallel_children(self):
         problem = {
             "id_hash": "pid",
@@ -11895,6 +12236,226 @@ class HleSmokeEvalTest(unittest.TestCase):
             "before_option_claim_evidence_verifier",
         )
         self.assertTrue(plan["stages"]["mc_option_sweep_candidates"]["early_before_claim_verifier"])
+
+    def test_option_claim_second_pass_runs_before_late_challenges(self):
+        problem = {
+            "id_hash": "pid-second-pass-order",
+            "question_hash": "qid-second-pass-order",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Physics",
+            "_question": "Which option is correct?\nA. model pick\nB. sweep-only option\nC. distractor",
+        }
+        plan = {"stages": {}}
+        execute_result = {
+            "attempts": [
+                {
+                    "child_id": "c1",
+                    "child_index": 1,
+                    "prompt_kind": "direct_short_answer",
+                    "parsed_answer": "A",
+                    "parsed_answer_hash": stable_hash({"answer": "A"}),
+                    "status": "answered",
+                }
+            ],
+            "underlying_model_calls": 1,
+            "early_stop_reason": None,
+            "skipped_prompt_kinds": [],
+            "execution_mode": "serial",
+            "serial_forced_reason": None,
+            "child_timeout_sec": 30,
+            "child_max_workers": 1,
+        }
+        selection = {
+            "status": "activated",
+            "selection_method": "normalized_majority",
+            "selected_child_id": "c1",
+            "selected_answer": "A",
+            "underlying_model_calls": 0,
+        }
+        call_order = []
+
+        sweep_attempt = {
+            "child_id": "sweep-b",
+            "child_index": 2,
+            "prompt_kind": "mc_option_sweep_candidate",
+            "parsed_answer": "B",
+            "parsed_answer_hash": stable_hash({"answer": "B"}),
+            "status": "answered",
+        }
+        sweep_summary = {
+            "status": "activated",
+            "reason": "test_sweep",
+            "insertion_stage": "before_option_claim_evidence_verifier",
+            "early_before_claim_verifier": True,
+            "added_candidate_count": 1,
+        }
+
+        def fake_second_pass(**kwargs):
+            call_order.append("second_pass")
+            self.assertTrue(
+                any(
+                    attempt.get("prompt_kind") == "mc_option_sweep_candidate"
+                    for attempt in kwargs["attempts"]
+                )
+            )
+            attempt = {
+                "child_id": "claim-b",
+                "child_index": len(kwargs["attempts"]) + 1,
+                "prompt_kind": "mc_option_claim_evidence_answer",
+                "parsed_answer": "B",
+                "parsed_answer_hash": stable_hash({"answer": "B"}),
+                "status": "answered",
+            }
+            summary = {
+                "status": "activated",
+                "reason": "test_second_pass",
+                "candidate_emitted": True,
+                "post_sweep_second_pass": {
+                    "status": "activated",
+                    "reason": "reran_claim_verifier_after_option_sweep",
+                },
+                "post_sweep_second_pass_status": "activated",
+                "raw_content_persisted": False,
+            }
+            return attempt, summary
+
+        def fake_evidence_guided(**kwargs):
+            del kwargs
+            call_order.append("evidence_guided_option_challenge")
+            return None, {"status": "not_required", "reason": "test_noop"}, ""
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_OPTION_CLAIM_SWEEP_GAP_SECOND_PASS": "1"},
+            clear=True,
+        ):
+            with ExitStack() as stack:
+                stack.enter_context(
+                    patch(
+                        "assumption_os.hle_smoke_eval._execute_recursive_child_attempts",
+                        return_value=execute_result,
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "assumption_os.hle_smoke_eval._select_recursive_child_answer",
+                        return_value=selection,
+                    )
+                )
+                stack.enter_context(
+                    patch("assumption_os.hle_smoke_eval._maybe_run_timeout_recovery_child", return_value=(None, None))
+                )
+                stack.enter_context(
+                    patch("assumption_os.hle_smoke_eval._maybe_run_child_model_failover_child", return_value=(None, None))
+                )
+                stack.enter_context(patch("assumption_os.hle_smoke_eval._should_run_math_tool_child", return_value=False))
+                stack.enter_context(
+                    patch("assumption_os.hle_smoke_eval._should_run_candidate_claim_verifier", return_value=False)
+                )
+                stack.enter_context(
+                    patch(
+                        "assumption_os.hle_smoke_eval._maybe_run_mc_option_evidence_scorer",
+                        return_value=(None, {"status": "weak_margin", "top_support_doc_count": 0}),
+                    )
+                )
+                stack.enter_context(
+                    patch("assumption_os.hle_smoke_eval._maybe_run_domain_rule_mc_verifier", return_value=(None, None))
+                )
+                stack.enter_context(
+                    patch(
+                        "assumption_os.hle_smoke_eval._maybe_add_mc_option_sweep_candidates",
+                        return_value=([sweep_attempt], sweep_summary),
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "assumption_os.hle_smoke_eval._maybe_run_mc_option_claim_evidence_verifier",
+                        return_value=(
+                            None,
+                            {
+                                "status": "prefiltered_by_option_evidence_scorer",
+                                "reason": "insufficient_option_evidence_support_for_claim_scan",
+                            },
+                        ),
+                    )
+                )
+                second_pass = stack.enter_context(
+                    patch(
+                        "assumption_os.hle_smoke_eval._maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep",
+                        side_effect=fake_second_pass,
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "assumption_os.hle_smoke_eval._apply_answer_bearing_option_directness_gate",
+                        return_value={"status": "not_required", "reason": "test_noop"},
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "assumption_os.hle_smoke_eval._weak_source_fallback_cascade_gate_summary",
+                        return_value={
+                            "status": "not_required",
+                            "reason": "test_noop",
+                            "stage_skip_enabled": False,
+                            "skipped_stage_names": [],
+                        },
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "assumption_os.hle_smoke_eval._maybe_run_evidence_guided_option_challenge",
+                        side_effect=fake_evidence_guided,
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "assumption_os.hle_smoke_eval._maybe_run_operator_application_verifier",
+                        return_value={"status": "not_required", "reason": "test_noop"},
+                    )
+                )
+                for name in (
+                    "_maybe_run_structural_option_audit_child",
+                    "_maybe_run_evidence_forced_alternative_challenge",
+                    "_maybe_run_raw_preserve_selector_child",
+                    "_maybe_run_raw_budget_preserve_selector_child",
+                    "_maybe_run_hipporag_preserve_selector_child",
+                    "_maybe_add_route_arbitrator_candidate",
+                    "_maybe_run_counter_assumption_challenge",
+                    "_maybe_run_critic_synthesis_child",
+                ):
+                    stack.enter_context(patch(f"assumption_os.hle_smoke_eval.{name}", return_value=(None, None)))
+
+                result = _call_recursive_verified_answer(
+                    problem=problem,
+                    model="gpt-5.4-mini",
+                    agent_plan=plan,
+                    eval_id="e",
+                    call_id="call",
+                    logger=None,
+                    timeout=60,
+                    child_mode="serial",
+                    child_timeout=30,
+                    max_tokens=128,
+                    evidence_bridge_enabled=False,
+                )
+
+        self.assertEqual(json.loads(result["answer_text"])["answer"], "B")
+        self.assertEqual(second_pass.call_count, 1)
+        self.assertLess(
+            call_order.index("second_pass"),
+            call_order.index("evidence_guided_option_challenge"),
+        )
+        claim_stage = plan["stages"]["mc_option_claim_evidence_verifier"]
+        self.assertEqual(
+            claim_stage["post_sweep_second_pass_execution_stage"],
+            "before_late_challenges",
+        )
+        self.assertEqual(
+            claim_stage["post_sweep_second_pass"]["execution_stage"],
+            "before_late_challenges",
+        )
 
     def test_early_option_sweep_before_claim_verifier_disable_flag(self):
         with patch.dict(os.environ, {}, clear=True):
@@ -44799,19 +45360,23 @@ class HleSmokeEvalTest(unittest.TestCase):
                             "assumption_os.hle_smoke_eval._run_source_grounded_option_claim_verifier",
                             side_effect=fake_source_verifier,
                         ) as verifier:
-                            second_attempt, second_summary = (
-                                _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
-                                    problem=problem,
-                                    attempts=attempts,
-                                    option_evidence_summary=option_evidence_summary,
-                                    option_claim_evidence_summary=first_summary,
-                                    option_sweep_summary={"status": "activated"},
-                                    eval_id="e",
-                                    call_id="c",
-                                    model="m",
-                                    logger=None,
+                            with patch(
+                                "assumption_os.hle_smoke_eval._option_claim_source_verifier_structured_context",
+                                side_effect=self._strict_option_claim_structured_context,
+                            ):
+                                second_attempt, second_summary = (
+                                    _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
+                                        problem=problem,
+                                        attempts=attempts,
+                                        option_evidence_summary=option_evidence_summary,
+                                        option_claim_evidence_summary=first_summary,
+                                        option_sweep_summary={"status": "activated"},
+                                        eval_id="e",
+                                        call_id="c",
+                                        model="m",
+                                        logger=None,
+                                    )
                                 )
-                            )
 
         self.assertIsNotNone(second_attempt)
         self.assertEqual(second_attempt["parsed_answer"], "B")
@@ -44959,19 +45524,23 @@ class HleSmokeEvalTest(unittest.TestCase):
                             "assumption_os.hle_smoke_eval._run_source_grounded_option_claim_verifier",
                             side_effect=fake_source_verifier,
                         ) as verifier:
-                            second_attempt, second_summary = (
-                                _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
-                                    problem=problem,
-                                    attempts=attempts,
-                                    option_evidence_summary=option_evidence_summary,
-                                    option_claim_evidence_summary=None,
-                                    option_sweep_summary={"status": "activated"},
-                                    eval_id="e",
-                                    call_id="c",
-                                    model="m",
-                                    logger=None,
+                            with patch(
+                                "assumption_os.hle_smoke_eval._option_claim_source_verifier_structured_context",
+                                side_effect=self._strict_option_claim_structured_context,
+                            ):
+                                second_attempt, second_summary = (
+                                    _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
+                                        problem=problem,
+                                        attempts=attempts,
+                                        option_evidence_summary=option_evidence_summary,
+                                        option_claim_evidence_summary=None,
+                                        option_sweep_summary={"status": "activated"},
+                                        eval_id="e",
+                                        call_id="c",
+                                        model="m",
+                                        logger=None,
+                                    )
                                 )
-                            )
 
         self.assertIsNotNone(second_attempt)
         self.assertEqual(second_attempt["parsed_answer"], "B")
@@ -45123,19 +45692,23 @@ class HleSmokeEvalTest(unittest.TestCase):
                             "assumption_os.hle_smoke_eval._run_source_grounded_option_claim_verifier",
                             side_effect=fake_source_verifier,
                         ) as verifier:
-                            second_attempt, second_summary = (
-                                _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
-                                    problem=problem,
-                                    attempts=attempts,
-                                    option_evidence_summary=option_evidence_summary,
-                                    option_claim_evidence_summary=first_summary,
-                                    option_sweep_summary={"status": "activated"},
-                                    eval_id="e",
-                                    call_id="c",
-                                    model="m",
-                                    logger=None,
+                            with patch(
+                                "assumption_os.hle_smoke_eval._option_claim_source_verifier_structured_context",
+                                side_effect=self._strict_option_claim_structured_context,
+                            ):
+                                second_attempt, second_summary = (
+                                    _maybe_run_mc_option_claim_evidence_verifier_second_pass_after_option_sweep(
+                                        problem=problem,
+                                        attempts=attempts,
+                                        option_evidence_summary=option_evidence_summary,
+                                        option_claim_evidence_summary=first_summary,
+                                        option_sweep_summary={"status": "activated"},
+                                        eval_id="e",
+                                        call_id="c",
+                                        model="m",
+                                        logger=None,
+                                    )
                                 )
-                            )
 
         self.assertIsNotNone(second_attempt)
         self.assertEqual(second_attempt["parsed_answer"], "B")
