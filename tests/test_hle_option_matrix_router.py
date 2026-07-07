@@ -1,6 +1,7 @@
 import unittest
 
 from assumption_os.autonomy_journal import stable_hash
+from assumption_os.fast_policy_memory import FastPolicyHypothesis, select_fast_policies
 from assumption_os.hle_lane_router import route_option_lanes
 from assumption_os.hle_option_matrix import build_option_matrix
 from assumption_os.hle_option_span_bundle import build_option_span_bundles
@@ -203,6 +204,41 @@ class HleOptionMatrixRouterTests(unittest.TestCase):
         self.assertEqual(route["selected_label"], "D")
         self.assertEqual(route["selection_method"], "hipporag_fallback")
         self.assertNotEqual(route["reason"], "no_fallback")
+        self.assertTrue(route["slow_baseline_required"])
+
+    def test_lane_router_records_fast_policy_memory_trace(self):
+        fast_policy = select_fast_policies(
+            [
+                FastPolicyHypothesis(
+                    id="solver_lane_promoted_v1",
+                    kind="solver_lane",
+                    action="self_contained_solver_lane",
+                    trigger_terms=["chemistry", "probe"],
+                    expected_utility=0.8,
+                    expected_harm=0.1,
+                    promotion_status="promoted",
+                )
+            ],
+            problem_text="A chemistry probe question.",
+        )
+
+        route = route_option_lanes(
+            source_lane={"status": "generic", "pair_binding_verdict": "reject_generic"},
+            solver_lane={"status": "not_required"},
+            baseline_lane={"raw_label": "B"},
+            fast_policy_decision=fast_policy,
+        )
+
+        self.assertEqual(route["selected_label"], "B")
+        self.assertEqual(
+            route["fast_policy_memory"]["selected_policy_ids"],
+            ["solver_lane_promoted_v1"],
+        )
+        self.assertEqual(
+            route["fast_policy_memory"]["selected_actions"],
+            ["self_contained_solver_lane"],
+        )
+        self.assertFalse(route["fast_policy_memory"]["raw_content_persisted"])
 
     def test_lane_router_prefers_pair_bound_source(self):
         route = route_option_lanes(

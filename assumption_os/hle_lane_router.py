@@ -107,6 +107,7 @@ def route_option_lanes(
     source_lane: dict[str, Any] | None = None,
     solver_lane: dict[str, Any] | None = None,
     baseline_lane: dict[str, Any] | None = None,
+    fast_policy_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Route source, solver, and baseline lanes without returning no_fallback."""
 
@@ -136,6 +137,7 @@ def route_option_lanes(
             reason = "fallback_conflict_or_low_margin"
         method = baseline_source
 
+    policy_summary = _fast_policy_summary(fast_policy_decision)
     route = {
         "selected_label": selected,
         "selection_method": method,
@@ -146,7 +148,31 @@ def route_option_lanes(
         "selected_label_hash": stable_hash({"option_label": selected}) if selected else None,
         "source_confidence": source_confidence,
         "solver_confidence": solver_confidence,
+        "fast_policy_memory": policy_summary,
+        "slow_baseline_required": policy_summary["slow_baseline_required"],
         "raw_content_persisted": False,
     }
     route["router_payload_hash"] = stable_hash(route)
     return route
+
+
+def _fast_policy_summary(decision: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(decision, dict):
+        return {
+            "policy_version": "",
+            "selected_policy_ids": [],
+            "selected_policy_kinds": [],
+            "selected_actions": [],
+            "slow_baseline_required": True,
+            "fast_policy_payload_hash": None,
+            "raw_content_persisted": False,
+        }
+    return {
+        "policy_version": str(decision.get("policy_version") or ""),
+        "selected_policy_ids": list(decision.get("selected_policy_ids") or []),
+        "selected_policy_kinds": list(decision.get("selected_policy_kinds") or []),
+        "selected_actions": list(decision.get("selected_actions") or []),
+        "slow_baseline_required": bool(decision.get("slow_baseline_required", True)),
+        "fast_policy_payload_hash": decision.get("fast_policy_payload_hash"),
+        "raw_content_persisted": False,
+    }
