@@ -31,6 +31,14 @@ FAILURE_FLAG_PRIORITY = (
         "source_grounded_verifier_blocked_no_fallback",
     ),
     ("verified_or_abstain_no_fallback", "verified_or_abstain no_fallback"),
+    (
+        "source_grounded_verifier_blocked_preserve_original",
+        "source_grounded_verifier_blocked_preserve_original",
+    ),
+    (
+        "verified_or_abstain_preserve_original_no_direct_fallback",
+        "verified_or_abstain preserve_original_no_direct_fallback",
+    ),
     ("gold_option_source_verifier_unaccepted", "gold_option_source_verifier_unaccepted"),
     (
         "gold_option_source_verifier_direct_source_insufficient",
@@ -244,6 +252,12 @@ def _failure_bucket(row: dict[str, Any]) -> str:
         reason = _first_str(verified_gate, "reason")
         if status == "no_fallback":
             return "verified_or_abstain no_fallback"
+        fallback_policy = _first_str(verified_gate, "fallback_policy")
+        if (
+            status == "abstained"
+            and fallback_policy == "preserve_original_selection_no_direct_fallback"
+        ):
+            return "verified_or_abstain preserve_original_no_direct_fallback"
         if status == "abstained" and reason:
             return f"verified_or_abstain abstained:{reason}"
         if status:
@@ -306,6 +320,9 @@ def _path_hashes(row: dict[str, Any], route: dict[str, Any]) -> dict[str, Any]:
             out["verified_or_abstain_gate_status"] = status
         if reason:
             out["verified_or_abstain_gate_reason_hash"] = stable_hash({"reason": reason})
+        fallback_policy = _first_str(verified_gate, "fallback_policy")
+        if fallback_policy:
+            out["verified_or_abstain_gate_fallback_policy"] = fallback_policy
     fast_policy = _fast_policy(row, route)
     if fast_policy.get("fast_policy_payload_hash"):
         out["fast_policy_payload_hash"] = fast_policy["fast_policy_payload_hash"]

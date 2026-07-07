@@ -67,6 +67,33 @@ class HleFastPolicyMinerTests(unittest.TestCase):
         self.assertIn("record_ref_hash", evidence)
         self.assertFalse(evidence["raw_content_persisted"])
 
+    def test_mines_preserve_original_no_direct_fallback_policy_without_no_fallback_blocker(self):
+        dataset = {
+            "records": [
+                _row(
+                    "q1",
+                    correct=False,
+                    failure_bucket="verified_or_abstain preserve_original_no_direct_fallback",
+                    gate_status="abstained",
+                    fallback_policy="preserve_original_selection_no_direct_fallback",
+                ),
+                _row(
+                    "q2",
+                    correct=False,
+                    failure_bucket="verified_or_abstain preserve_original_no_direct_fallback",
+                    gate_status="abstained",
+                    fallback_policy="preserve_original_selection_no_direct_fallback",
+                ),
+            ]
+        }
+
+        report = mine_fast_policy_hypotheses(dataset, min_support=2)
+
+        actions = {policy["action"] for policy in report["hypotheses"]}
+        self.assertIn("preserve_slow_baseline_when_verified_gate_has_no_direct_candidate", actions)
+        self.assertEqual(report["summary"]["no_fallback_count"], 0)
+        self.assertNotIn("no_fallback_present", report["promotion_gate_blockers"])
+
 
 def _row(
     question_id: str,
@@ -74,8 +101,12 @@ def _row(
     correct: bool,
     failure_bucket: str,
     gate_status: str = "unknown",
+    fallback_policy: str | None = None,
     latency: float = 10.0,
 ) -> dict:
+    path_hashes = {"verified_or_abstain_gate_status": gate_status}
+    if fallback_policy:
+        path_hashes["verified_or_abstain_gate_fallback_policy"] = fallback_policy
     return {
         "question_id": question_id,
         "question_hash": f"{question_id}-hash",
@@ -86,7 +117,7 @@ def _row(
         "failure_bucket": failure_bucket,
         "selected_label_hash": f"{question_id}-pred",
         "gold_after_run_label_hash": f"{question_id}-gold",
-        "path_hashes": {"verified_or_abstain_gate_status": gate_status},
+        "path_hashes": path_hashes,
         "latency_seconds": latency,
         "cost": 9.0,
         "raw_content_persisted": False,

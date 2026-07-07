@@ -132,6 +132,49 @@ class HleTransitionDatasetTests(unittest.TestCase):
         self.assertIn("verified_or_abstain_gate_reason_hash", payload["path_hashes"])
         self.assertFalse(payload["raw_content_persisted"])
 
+    def test_transition_record_tracks_preserve_original_no_direct_fallback(self):
+        dataset = build_transition_dataset([
+            {
+                "problem_id_hash": "problem-hash",
+                "question_hash": "question-hash",
+                "prediction_hash": "prediction-hash",
+                "answer_hash": "answer-hash",
+                "correct": False,
+                "component_efficacy": {
+                    "selection": {
+                        "selection_method": "verified_or_abstain_direct_fallback",
+                        "verified_or_abstain_gate": {
+                            "status": "abstained",
+                            "reason": "no_direct_candidate_preserve_original_selection",
+                            "fallback_policy": (
+                                "preserve_original_selection_no_direct_fallback"
+                            ),
+                        },
+                    },
+                    "flags": {
+                        "verified_or_abstain_abstained": True,
+                        "verified_or_abstain_preserve_original_no_direct_fallback": True,
+                    },
+                },
+            },
+        ])
+
+        record = dataset["records"][0]
+        self.assertEqual(
+            record["failure_bucket"],
+            "verified_or_abstain preserve_original_no_direct_fallback",
+        )
+        self.assertEqual(dataset["summary"]["no_fallback_count"], 0)
+        self.assertEqual(
+            dataset["summary"]["verified_or_abstain_gate_status_counts"]["abstained"],
+            1,
+        )
+        self.assertEqual(
+            record["path_hashes"]["verified_or_abstain_gate_fallback_policy"],
+            "preserve_original_selection_no_direct_fallback",
+        )
+        self.assertFalse(dataset["raw_content_persisted"])
+
     def test_failure_bucket_prefers_candidate_generation_gap_flag(self):
         record = transition_record_from_hle_row({
             "problem_id_hash": "problem-hash",

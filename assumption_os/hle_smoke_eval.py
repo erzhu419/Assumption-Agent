@@ -89811,6 +89811,87 @@ def _blocked_verified_no_fallback_selection_method(method: str) -> str:
     return "verified_selection_blocked_no_fallback"
 
 
+def _verified_or_abstain_preserve_original_selection(
+    *,
+    problem: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    selection: dict[str, Any],
+    reason: str,
+    fallback_diagnostics: dict[str, Any] | None = None,
+    weak_source_fallback_cascade_gate: dict[str, Any] | None = None,
+    blocked_selection_method: str | None = None,
+    extra_gate_fields: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Make the no-direct-candidate path explicit without promoting weak evidence."""
+
+    out = dict(selection)
+    method = str(selection.get("selection_method") or "")
+    selected_attempt = _selected_attempt_for_selection(
+        problem=problem,
+        attempts=attempts,
+        selection=selection,
+    )
+    selected_child_id = selection.get("selected_child_id")
+    if selected_child_id is None and isinstance(selected_attempt, dict):
+        selected_child_id = selected_attempt.get("child_id")
+    selected_answer = str(selection.get("selected_answer") or "").strip()
+    if not selected_answer and isinstance(selected_attempt, dict):
+        selected_answer = str(selected_attempt.get("parsed_answer") or "").strip()
+    fallback_answer_hash = None
+    if isinstance(selected_attempt, dict):
+        fallback_answer_hash = selected_attempt.get("parsed_answer_hash")
+    if not fallback_answer_hash and selected_answer:
+        fallback_answer_hash = stable_hash({"answer": selected_answer})
+    fallback_prompt_kind = (
+        selected_attempt.get("prompt_kind")
+        if isinstance(selected_attempt, dict)
+        else selection.get("selected_prompt_kind")
+    ) or "preserve_original_selection"
+    preserve_guard = {
+        "status": "activated",
+        "policy": "preserve_original_selection_no_direct_fallback_v1",
+        "reason": "no_safe_direct_or_baseline_fallback_candidate",
+        "original_selection_method": method,
+        "original_selected_child_id": selected_child_id,
+        "fallback_prompt_kind": fallback_prompt_kind,
+        "fallback_answer_hash": fallback_answer_hash,
+        "blocked_selection_method": blocked_selection_method,
+        "raw_content_persisted": False,
+    }
+    gate = {
+        "status": "abstained",
+        "reason": reason,
+        "original_selection_method": method,
+        "original_selected_child_id": selected_child_id,
+        "fallback_prompt_kind": fallback_prompt_kind,
+        "fallback_answer_hash": fallback_answer_hash,
+        "fallback_policy": "preserve_original_selection_no_direct_fallback",
+        "preserve_original_selection_no_direct_fallback": preserve_guard,
+    }
+    if blocked_selection_method:
+        out["blocked_verified_selection_method"] = method
+        gate["blocked_selection_method"] = blocked_selection_method
+    if weak_source_fallback_cascade_gate is not None:
+        gate["weak_source_fallback_cascade_gate"] = weak_source_fallback_cascade_gate
+    diagnostics = fallback_diagnostics if isinstance(fallback_diagnostics, dict) else {}
+    for key in (
+        "weak_source_fallback_cascade_unverified_consensus_guard",
+        "weak_source_blocked_consensus_no_direct_fallback_guard",
+        "verified_or_abstain_last_resort_guard",
+    ):
+        if diagnostics.get(key) is not None:
+            gate[key] = diagnostics.get(key)
+    if isinstance(extra_gate_fields, dict):
+        gate.update(extra_gate_fields)
+    out.update({
+        "selection_method": "verified_or_abstain_direct_fallback",
+        "selected_child_id": selected_child_id,
+        "selected_answer": selected_answer,
+        "verified_or_abstain_gate": gate,
+    })
+    return out
+
+
 _SELF_CONTAINED_SUPPORT_PRESERVE_METHODS = {
     "self_contained_full_option_adjudicator_choice",
     "self_contained_option_adjudicator_choice",
@@ -93796,30 +93877,15 @@ def _apply_verified_or_abstain_selection(
                 },
             })
             return out
-        blocked_method = _blocked_verified_no_fallback_selection_method(method)
-        out["selection_method"] = blocked_method
-        out["blocked_verified_selection_method"] = method
-        out["verified_or_abstain_gate"] = {
-            "status": "no_fallback",
-            "reason": f"{weak_source_block_reason}_no_fallback",
-            "original_selection_method": method,
-            "blocked_selection_method": blocked_method,
-            "weak_source_fallback_cascade_gate": weak_source_final_gate,
-            "weak_source_fallback_cascade_unverified_consensus_guard": (
-                fallback_diagnostics.get(
-                    "weak_source_fallback_cascade_unverified_consensus_guard"
-                )
-            ),
-            "weak_source_blocked_consensus_no_direct_fallback_guard": (
-                fallback_diagnostics.get(
-                    "weak_source_blocked_consensus_no_direct_fallback_guard"
-                )
-            ),
-            "verified_or_abstain_last_resort_guard": fallback_diagnostics.get(
-                "verified_or_abstain_last_resort_guard"
-            ),
-        }
-        return out
+        return _verified_or_abstain_preserve_original_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=out,
+            reason=weak_source_block_reason,
+            fallback_diagnostics=fallback_diagnostics,
+            weak_source_fallback_cascade_gate=weak_source_final_gate,
+            blocked_selection_method=_blocked_verified_no_fallback_selection_method(method),
+        )
     self_contained_support_preserve = _self_contained_support_preserve_fallback_candidate(
         problem=problem,
         attempts=attempts,
@@ -94028,31 +94094,18 @@ def _apply_verified_or_abstain_selection(
                     },
                 })
                 return out
-            blocked_method = _blocked_verified_no_fallback_selection_method(method)
-            out["selection_method"] = blocked_method
-            out["blocked_verified_selection_method"] = method
-            out["verified_or_abstain_gate"] = {
-                "status": "no_fallback",
-                "reason": f"{reason}_no_fallback",
-                "original_selection_method": method,
-                "blocked_selection_method": blocked_method,
-                "source_grounding_required": source_grounding_blocked,
-                "operator_conflict": operator_conflict,
-                "weak_source_fallback_cascade_unverified_consensus_guard": (
-                    fallback_diagnostics.get(
-                        "weak_source_fallback_cascade_unverified_consensus_guard"
-                    )
-                ),
-                "weak_source_blocked_consensus_no_direct_fallback_guard": (
-                    fallback_diagnostics.get(
-                        "weak_source_blocked_consensus_no_direct_fallback_guard"
-                    )
-                ),
-                "verified_or_abstain_last_resort_guard": fallback_diagnostics.get(
-                    "verified_or_abstain_last_resort_guard"
-                ),
-            }
-            return out
+            return _verified_or_abstain_preserve_original_selection(
+                problem=problem,
+                attempts=attempts,
+                selection=out,
+                reason=reason,
+                fallback_diagnostics=fallback_diagnostics,
+                blocked_selection_method=_blocked_verified_no_fallback_selection_method(method),
+                extra_gate_fields={
+                    "source_grounding_required": source_grounding_blocked,
+                    "operator_conflict": operator_conflict,
+                },
+            )
         out = dict(selection)
         out["verified_or_abstain_gate"] = {
             "status": "allowed",
@@ -94118,26 +94171,13 @@ def _apply_verified_or_abstain_selection(
         diagnostics=fallback_diagnostics,
     )
     if not fallback:
-        out = dict(selection)
-        out["verified_or_abstain_gate"] = {
-            "status": "no_fallback",
-            "reason": "no_direct_candidate",
-            "original_selection_method": method,
-            "weak_source_fallback_cascade_unverified_consensus_guard": (
-                fallback_diagnostics.get(
-                    "weak_source_fallback_cascade_unverified_consensus_guard"
-                )
-            ),
-            "weak_source_blocked_consensus_no_direct_fallback_guard": (
-                fallback_diagnostics.get(
-                    "weak_source_blocked_consensus_no_direct_fallback_guard"
-                )
-            ),
-            "verified_or_abstain_last_resort_guard": fallback_diagnostics.get(
-                "verified_or_abstain_last_resort_guard"
-            ),
-        }
-        return out
+        return _verified_or_abstain_preserve_original_selection(
+            problem=problem,
+            attempts=attempts,
+            selection=selection,
+            reason="no_direct_candidate_preserve_original_selection",
+            fallback_diagnostics=fallback_diagnostics,
+        )
     selected_child_id = selection.get("selected_child_id")
     out = dict(selection)
     out.update({
@@ -106509,6 +106549,16 @@ def _component_efficacy_from_plan(
                 "source_grounded_operator_evidence_choice",
             }
         ),
+        "source_grounded_verifier_blocked_preserve_original": (
+            verified_or_abstain_gate.get("status") == "abstained"
+            and verified_or_abstain_gate.get("fallback_policy")
+            == "preserve_original_selection_no_direct_fallback"
+            and original_selection_method
+            in {
+                "source_grounded_verifier_choice",
+                "source_grounded_operator_evidence_choice",
+            }
+        ),
         "operator_conflict_contrastive_adjudicator_used": (
             selection_method == "operator_conflict_contrastive_adjudicator_choice"
         ),
@@ -106541,6 +106591,10 @@ def _component_efficacy_from_plan(
         "verified_or_abstain_allowed": verified_or_abstain_gate.get("status") == "allowed",
         "verified_or_abstain_abstained": verified_or_abstain_gate.get("status") == "abstained",
         "verified_or_abstain_no_fallback": verified_or_abstain_gate.get("status") == "no_fallback",
+        "verified_or_abstain_preserve_original_no_direct_fallback": (
+            verified_or_abstain_gate.get("fallback_policy")
+            == "preserve_original_selection_no_direct_fallback"
+        ),
         "verified_or_abstain_synthetic_sweep_last_resort_guard_blocked": (
             isinstance(verified_or_abstain_gate.get("verified_or_abstain_last_resort_guard"), dict)
             and verified_or_abstain_gate.get("verified_or_abstain_last_resort_guard", {}).get("status")

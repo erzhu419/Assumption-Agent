@@ -94,7 +94,19 @@ def mine_fast_policy_hypotheses(
         if "no_fallback" in str(row.get("failure_bucket") or "")
         or (row.get("path_hashes") or {}).get("verified_or_abstain_gate_status") == "no_fallback"
     ]
-    if len(no_fallback_rows) >= min_support:
+    preserve_original_no_direct_rows = [
+        row
+        for row in records
+        if "preserve_original_no_direct_fallback" in str(row.get("failure_bucket") or "")
+        or (
+            (row.get("path_hashes") or {}).get("verified_or_abstain_gate_fallback_policy")
+            == "preserve_original_selection_no_direct_fallback"
+        )
+    ]
+    fallback_gap_rows = no_fallback_rows + [
+        row for row in preserve_original_no_direct_rows if row not in no_fallback_rows
+    ]
+    if len(fallback_gap_rows) >= min_support:
         hypotheses.append(
             _make_policy(
                 kind="fallback_policy",
@@ -103,14 +115,15 @@ def mine_fast_policy_hypotheses(
                     "verified_or_abstain",
                     "no_fallback",
                     "no_direct_candidate",
+                    "preserve_original",
                     "slow_baseline",
                 ],
-                support_rows=no_fallback_rows,
+                support_rows=fallback_gap_rows,
                 all_records=records,
                 max_evidence_rows=max_evidence_rows,
                 expected_harm=0.1,
                 notes=[
-                    "No-fallback states must not force a weak source path into final selection.",
+                    "No-direct-candidate states must not force a weak source path into final selection.",
                     "This is a safety policy; it still needs budget-matched unseen validation.",
                 ],
             )

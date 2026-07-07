@@ -16305,15 +16305,19 @@ class HleSmokeEvalTest(unittest.TestCase):
             agent_plan=agent_plan,
         )
 
-        self.assertEqual(gated["selection_method"], "source_grounded_verifier_blocked_no_fallback")
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
         self.assertEqual(gated["selected_child_id"], "source")
         self.assertEqual(gated["selected_answer"], "B")
         self.assertEqual(gated["blocked_verified_selection_method"], "source_grounded_verifier_choice")
         gate = gated["verified_or_abstain_gate"]
-        self.assertEqual(gate["status"], "no_fallback")
+        self.assertEqual(gate["status"], "abstained")
         self.assertEqual(
             gate["reason"],
-            "source_verifier_generic_blocks_model_only_verified_selection_no_fallback",
+            "source_verifier_generic_blocks_model_only_verified_selection",
+        )
+        self.assertEqual(
+            gate["fallback_policy"],
+            "preserve_original_selection_no_direct_fallback",
         )
         self.assertEqual(gate["blocked_selection_method"], "source_grounded_verifier_blocked_no_fallback")
         self.assertEqual(gate["original_selection_method"], "source_grounded_verifier_choice")
@@ -16326,8 +16330,12 @@ class HleSmokeEvalTest(unittest.TestCase):
             error=None,
         )
         self.assertFalse(efficacy["flags"]["source_grounded_verifier_used"])
-        self.assertTrue(efficacy["flags"]["source_grounded_verifier_blocked_no_fallback"])
-        self.assertTrue(efficacy["flags"]["verified_or_abstain_no_fallback"])
+        self.assertFalse(efficacy["flags"]["source_grounded_verifier_blocked_no_fallback"])
+        self.assertTrue(efficacy["flags"]["source_grounded_verifier_blocked_preserve_original"])
+        self.assertFalse(efficacy["flags"]["verified_or_abstain_no_fallback"])
+        self.assertTrue(
+            efficacy["flags"]["verified_or_abstain_preserve_original_no_direct_fallback"]
+        )
 
     def test_operator_source_recovery_downgrades_when_global_conflict_lacks_candidate_provenance(self):
         problem = {
@@ -16419,20 +16427,21 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertEqual(
             gated["selection_method"],
-            "source_grounded_operator_evidence_blocked_no_fallback",
+            "verified_or_abstain_direct_fallback",
         )
         self.assertEqual(
             gated["blocked_verified_selection_method"],
             "source_grounded_operator_evidence_choice",
         )
         gate = gated["verified_or_abstain_gate"]
-        self.assertEqual(gate["status"], "no_fallback")
+        self.assertEqual(gate["status"], "abstained")
         self.assertEqual(
             gate["reason"],
-            (
-                "operator_source_recovery_global_conflict_lacks_candidate_relation_provenance"
-                "_no_fallback"
-            ),
+            "operator_source_recovery_global_conflict_lacks_candidate_relation_provenance",
+        )
+        self.assertEqual(
+            gate["fallback_policy"],
+            "preserve_original_selection_no_direct_fallback",
         )
         weak_gate = gate["weak_source_fallback_cascade_gate"]
         self.assertEqual(
@@ -16453,7 +16462,8 @@ class HleSmokeEvalTest(unittest.TestCase):
             error=None,
         )
         self.assertFalse(efficacy["flags"]["source_grounded_verifier_used"])
-        self.assertTrue(efficacy["flags"]["source_grounded_verifier_blocked_no_fallback"])
+        self.assertFalse(efficacy["flags"]["source_grounded_verifier_blocked_no_fallback"])
+        self.assertTrue(efficacy["flags"]["source_grounded_verifier_blocked_preserve_original"])
 
     def test_operator_source_recovery_global_conflict_allows_candidate_provenance(self):
         problem = {
@@ -16615,16 +16625,17 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertEqual(
             gated["selection_method"],
-            "source_grounded_operator_evidence_blocked_no_fallback",
+            "verified_or_abstain_direct_fallback",
         )
         gate = gated["verified_or_abstain_gate"]
-        self.assertEqual(gate["status"], "no_fallback")
+        self.assertEqual(gate["status"], "abstained")
         self.assertEqual(
             gate["reason"],
-            (
-                "operator_source_recovery_global_conflict_lacks_candidate_relation_provenance"
-                "_no_fallback"
-            ),
+            "operator_source_recovery_global_conflict_lacks_candidate_relation_provenance",
+        )
+        self.assertEqual(
+            gate["fallback_policy"],
+            "preserve_original_selection_no_direct_fallback",
         )
         weak_gate = gate["weak_source_fallback_cascade_gate"]
         self.assertEqual(
@@ -63725,8 +63736,14 @@ class HleSmokeEvalTest(unittest.TestCase):
                 agent_plan=agent_plan,
             )
 
-        self.assertEqual(gated["selection_method"], "normalized_majority")
-        self.assertEqual(gated["verified_or_abstain_gate"]["status"], "no_fallback")
+        self.assertEqual(gated["selection_method"], "verified_or_abstain_direct_fallback")
+        self.assertEqual(gated["selected_child_id"], "direct-a")
+        self.assertEqual(gated["selected_answer"], "A")
+        self.assertEqual(gated["verified_or_abstain_gate"]["status"], "abstained")
+        self.assertEqual(
+            gated["verified_or_abstain_gate"]["fallback_policy"],
+            "preserve_original_selection_no_direct_fallback",
+        )
         self.assertIsNone(
             gated["verified_or_abstain_gate"].get(
                 "weak_source_blocked_consensus_source_quality_challenger_recovery"
