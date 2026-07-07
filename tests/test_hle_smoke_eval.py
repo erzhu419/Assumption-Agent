@@ -277,6 +277,8 @@ from assumption_os.hle_smoke_eval import (
     _option_claim_programmatic_relation_span_audit,
     _prioritize_source_verifier_coverage_rows,
     _option_claim_source_quality_directness_promotion_detail,
+    _option_matrix_source_lane_existing_verified_override_detail,
+    _option_claim_source_verifier_lane_candidate_summaries,
     _option_claim_source_verifier_acceptance_lane_guard_detail,
     _operator_source_direct_relation_multiple_direct_guard,
     _option_claim_variant_model_call_budget_state,
@@ -316,6 +318,7 @@ from assumption_os.hle_smoke_eval import (
     _source_verifier_row_answer_bearing_signal_count,
     _source_verifier_row_planned_query_answer_bearing_signal_count,
     _source_verifier_row_strict_planned_query_answer_bearing_signal,
+    _source_verifier_row_strict_source_cache_answer_bearing_signal,
     _source_verifier_row_relation_coverage_signal_count,
     _source_verifier_row_source_cache_answer_bearing_signal_count,
     _source_verifier_row_strict_answer_web_relation_signal,
@@ -3018,6 +3021,150 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(summary["after_order"][0]["coverage_priority"], [0, -1])
         self.assertFalse(summary["after_order"][2]["strict_planned_query_answer_bearing_signal"])
 
+    def test_source_verifier_queue_prioritizes_required_completion_direct_source_cache(self):
+        rows = [
+            {
+                "label": "B",
+                "_source_verifier_retry_reason": "sweep_gap_missing_model_option",
+                "source_quality_score": 13.0,
+                "source_quality_doc_count": 1,
+                "support_doc_count": 1,
+                "net_score": 20.0,
+            },
+            {
+                "label": "G",
+                "_source_verifier_retry_reason": "sweep_gap_missing_model_option",
+                "source_quality_score": 2.0,
+                "source_cache_corpus_backfill_doc_count": 1,
+                "source_cache_corpus_backfill_required_term_completion_direct_count": 1,
+                "net_score": -4.0,
+            },
+            {
+                "label": "A",
+                "_source_verifier_retry_reason": "score_threshold",
+                "source_quality_score": 11.0,
+                "source_quality_doc_count": 2,
+                "support_doc_count": 2,
+                "net_score": 18.0,
+            },
+        ]
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL": "1"},
+            clear=False,
+        ):
+            ordered, summary = _prioritize_source_verifier_coverage_rows(rows)
+
+        self.assertEqual([row["label"] for row in ordered[:2]], ["G", "B"])
+        self.assertTrue(_source_verifier_row_strict_source_cache_answer_bearing_signal(rows[1]))
+        self.assertEqual(summary["after_order"][0]["coverage_priority"], [0, -2])
+        self.assertTrue(summary["after_order"][0]["strict_source_cache_answer_bearing_signal"])
+        self.assertEqual(
+            summary["after_order"][0]["source_cache_required_term_completion_direct_count"],
+            1,
+        )
+
+    def test_source_verifier_queue_prioritizes_low_conf_refuted_strict_missing_candidate(self):
+        rows = [
+            {
+                "label": "E",
+                "_source_verifier_retry_reason": "sweep_gap_missing_model_option",
+                "source_quality_score": 6.8,
+                "planned_query_answer_bearing_direct_doc_count": 1,
+                "planned_query_relation_proximity_doc_count": 3,
+                "planned_query_required_overlap_doc_count": 1,
+                "planned_query_slot_covered_doc_count": 2,
+                "refute_doc_count": 0,
+            },
+            {
+                "label": "C",
+                "_source_verifier_retry_reason": (
+                    "sweep_gap_missing_model_option_refuted_low_support"
+                ),
+                "source_quality_score": 11.5,
+                "source_quality_doc_count": 1,
+                "source_cache_corpus_backfill_doc_count": 4,
+                "source_cache_corpus_backfill_targeted_direct_count": 1,
+                "source_cache_corpus_backfill_answer_bearing_direct_count": 1,
+                "source_cache_corpus_backfill_relation_proximity_count": 4,
+                "source_cache_corpus_backfill_required_overlap_count": 1,
+                "source_cache_corpus_backfill_slot_covered_count": 2,
+                "planned_query_answer_bearing_direct_doc_count": 1,
+                "planned_query_relation_proximity_doc_count": 3,
+                "planned_query_required_overlap_doc_count": 1,
+                "planned_query_slot_covered_doc_count": 2,
+                "refute_doc_count": 1,
+            },
+            {
+                "label": "A",
+                "_source_verifier_retry_reason": "score_threshold",
+                "source_quality_score": 11.8,
+                "source_quality_doc_count": 1,
+                "support_doc_count": 2,
+                "refute_doc_count": 0,
+            },
+        ]
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_SOURCE_CACHE_ANSWER_BEARING_OPTION_CLAIM_RETRY": "1"},
+            clear=False,
+        ):
+            ordered, summary = _prioritize_source_verifier_coverage_rows(rows)
+
+        self.assertEqual([row["label"] for row in ordered[:2]], ["C", "E"])
+        self.assertEqual(summary["after_order"][0]["coverage_priority"], [0, -3])
+        self.assertTrue(
+            summary["after_order"][0]["low_confidence_refuted_strict_missing_signal"]
+        )
+
+    def test_source_verifier_queue_blocks_high_conf_refuted_strict_missing_priority(self):
+        rows = [
+            {
+                "label": "E",
+                "_source_verifier_retry_reason": "sweep_gap_missing_model_option",
+                "source_quality_score": 6.8,
+                "planned_query_answer_bearing_direct_doc_count": 1,
+                "planned_query_relation_proximity_doc_count": 3,
+                "planned_query_required_overlap_doc_count": 1,
+                "planned_query_slot_covered_doc_count": 2,
+                "refute_doc_count": 0,
+            },
+            {
+                "label": "C",
+                "_source_verifier_retry_reason": (
+                    "sweep_gap_missing_model_option_refuted_low_support"
+                ),
+                "source_quality_score": 11.5,
+                "source_quality_doc_count": 1,
+                "source_cache_corpus_backfill_doc_count": 4,
+                "source_cache_corpus_backfill_targeted_direct_count": 1,
+                "source_cache_corpus_backfill_answer_bearing_direct_count": 1,
+                "source_cache_corpus_backfill_relation_proximity_count": 4,
+                "source_cache_corpus_backfill_required_overlap_count": 1,
+                "source_quality_statement_fact_refutation_high_confidence_doc_count": 1,
+                "source_quality_max_statement_fact_refutation_strength": 3.0,
+                "refute_doc_count": 1,
+            },
+        ]
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_SOURCE_CACHE_ANSWER_BEARING_OPTION_CLAIM_RETRY": "1"},
+            clear=False,
+        ):
+            ordered, summary = _prioritize_source_verifier_coverage_rows(rows)
+
+        self.assertEqual(ordered[0]["label"], "E")
+        self.assertFalse(
+            next(
+                row
+                for row in summary["after_order"]
+                if row["option_hash"] == stable_hash({"option_label": "C"})
+            )["low_confidence_refuted_strict_missing_signal"]
+        )
+
     def test_source_verifier_queue_can_prioritize_ranked_score_threshold_candidates(self):
         rows = [
             {
@@ -3257,6 +3404,75 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertGreaterEqual(
             int(docs[0]["source_cache_corpus_backfill_targeted_required_overlap"]),
             1,
+        )
+
+    def test_source_cache_backfill_marks_local_fulltext_required_term_completion_direct(self):
+        question = (
+            "Which mechanism preserves the controlled variable under replacement?\n"
+            "A. Alpha mechanism\n"
+            "B. Beta mechanism\n"
+            "C. Gamma mechanism"
+        )
+        problem = {
+            "id_hash": "p-required-local-fulltext",
+            "question_hash": "q-required-local-fulltext",
+            "answer_type": "multipleChoice",
+            "category": "Science",
+            "raw_subject": "Systems Biology",
+            "_question": question,
+        }
+        corpus_rows = [
+            {
+                "title": "Replacement control experiment",
+                "snippet": (
+                    "In the replacement experiment, Beta mechanism preserves the "
+                    "controlled variable and maintains the target relation."
+                ),
+                "source": "local_fulltext",
+            }
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            corpus_path = Path(tmpdir) / "corpus.json"
+            corpus_path.write_text(json.dumps(corpus_rows), encoding="utf-8")
+            _LOCAL_EVIDENCE_CORPUS_CACHE.clear()
+            _LOCAL_EVIDENCE_CORPUS_CACHE_ORDER.clear()
+            with patch.dict(
+                os.environ,
+                {
+                    "HLE_EVIDENCE_SOURCE_CACHE_ONLY": "1",
+                    "HLE_EVIDENCE_SOURCE_CORPUS_PATHS": str(corpus_path),
+                    "HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL": "1",
+                    "HLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL_TARGETED_QUERY_LIMIT": "8",
+                },
+                clear=False,
+            ):
+                docs = _option_claim_source_cache_corpus_backfill_docs(
+                    stem=question.split("\n", 1)[0],
+                    option_text="Beta mechanism",
+                    problem=problem,
+                    planned_queries=[],
+                    existing_docs=[],
+                    max_docs=4,
+                )
+            _LOCAL_EVIDENCE_CORPUS_CACHE.clear()
+            _LOCAL_EVIDENCE_CORPUS_CACHE_ORDER.clear()
+
+        self.assertTrue(docs)
+        self.assertEqual(docs[0]["source"], "local_fulltext")
+        self.assertEqual(
+            docs[0]["source_cache_corpus_backfill_required_term_completion_direct"],
+            "true",
+        )
+        self.assertIn(
+            docs[0]["source_cache_corpus_backfill_targeted_query_provenance"],
+            {
+                "source_cache_required_exact_option",
+                "source_cache_required_identity_completion",
+                "source_cache_required_phrase_term",
+                "source_cache_required_term_completion",
+                "source_cache_required_term_pair",
+            },
         )
 
     def test_source_verifier_support_refute_audit_separates_evidence_classes(self):
@@ -31863,7 +32079,13 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertTrue(row["source_cache_corpus_backfill_targeted_query_hash"])
         self.assertIn(
             row["source_cache_corpus_backfill_targeted_query_provenance"],
-            {"planned", "local_relation_query_expansion", "deterministic_relation"},
+            {
+                "planned",
+                "local_relation_query_expansion",
+                "deterministic_relation",
+                "source_cache_required_identity_completion",
+                "source_cache_required_term_completion",
+            },
         )
         self.assertGreaterEqual(
             int(row["source_cache_corpus_backfill_targeted_query_relation_overlap"]),
@@ -34646,6 +34868,261 @@ class HleSmokeEvalTest(unittest.TestCase):
         )
         self.assertFalse(forward["raw_content_persisted"])
 
+    def test_candidate_span_bundle_prefers_complete_required_terms_over_single_inferred_witness(self):
+        options = {
+            "A": "Alpha mechanism",
+            "B": "Beta mechanism",
+            "C": "Gamma mechanism",
+        }
+        b_hash = stable_hash({"option_label": "B"})
+        c_hash = stable_hash({"option_label": "C"})
+
+        detail = _option_claim_candidate_span_bundle_from_rows(
+            options=options,
+            candidate_labels=["A", "B", "C"],
+            span_summary={
+                "candidate_direct_relation_span_rows": [
+                    {
+                        "option_hash": c_hash,
+                        "span_hash": "gamma-complete-span",
+                        "source_doc_hash": "gamma-complete-doc",
+                        "retrieval_stage": "source_cache_corpus_backfill",
+                        "span_provenance": "candidate_specific_sentence_span",
+                        "source_cache_corpus_backfill": True,
+                        "source_cache_strict_answer_bearing_span": True,
+                        "source_cache_corpus_backfill_targeted_direct": True,
+                        "source_cache_corpus_backfill_answer_bearing_direct": True,
+                        "source_cache_corpus_backfill_option_overlap": 1,
+                        "source_cache_corpus_backfill_relation_proximity": True,
+                        "source_cache_corpus_backfill_relation_signature_required_overlap": 2,
+                        "source_cache_corpus_backfill_planned_query_relation_overlap": 2,
+                        "relation_signature_required_term_count": 2,
+                        "relation_signature_required_overlap": 2,
+                        "relation_signature_required_missing_term_count": 0,
+                        "candidate_specific_sentence_span": True,
+                    }
+                ]
+            },
+            source_verifier_structured_context_by_label={
+                "B": {
+                    "candidate_relation_witness_rows": [
+                        {
+                            "category": "direct_support",
+                            "doc_hash": "beta-single-term-doc",
+                            "strict_direct_support": True,
+                            "candidate_specific_span": True,
+                            "directish_signal": True,
+                            "relation_proximity": True,
+                            "supports_current": True,
+                            "supports_other": False,
+                            "required_overlap": 1,
+                            "relation_overlap": 4,
+                            "option_overlap": 2,
+                            "score": 16.0,
+                        }
+                    ]
+                }
+            },
+            top_witnesses_per_option=2,
+        )
+
+        by_hash = {
+            bundle["option_hash"]: bundle
+            for bundle in detail["option_bundles"]
+        }
+        self.assertEqual(detail["selected_option_hash"], c_hash)
+        self.assertEqual(detail["option_with_direct_witness_count"], 1)
+        self.assertEqual(detail["direct_required_floor_witness_count"], 1)
+        self.assertEqual(detail["single_required_inferred_witness_count"], 1)
+        self.assertEqual(
+            by_hash[b_hash]["top_witnesses"][0]["witness_type"],
+            "indirect_relation",
+        )
+        self.assertFalse(
+            by_hash[b_hash]["top_witnesses"][0]["direct_required_floor_met"]
+        )
+        self.assertEqual(
+            by_hash[c_hash]["top_witnesses"][0]["witness_type"],
+            "direct_relation",
+        )
+        self.assertTrue(
+            by_hash[c_hash]["top_witnesses"][0]["direct_required_floor_met"]
+        )
+
+    def test_candidate_span_bundle_infers_option_bound_for_complete_candidate_specific_span(self):
+        options = {"A": "Alpha mechanism", "B": "Beta mechanism"}
+        b_hash = stable_hash({"option_label": "B"})
+
+        detail = _option_claim_candidate_span_bundle_from_rows(
+            options=options,
+            candidate_labels=["A", "B"],
+            span_summary={
+                "candidate_direct_relation_span_rows": [
+                    {
+                        "option_hash": b_hash,
+                        "span_hash": "beta-complete-candidate-span",
+                        "source_doc_hash": "beta-complete-doc",
+                        "retrieval_stage": "missing_required_term_backfill",
+                        "span_provenance": "candidate_specific_sentence_span",
+                        "source_cache_strict_answer_bearing_span": True,
+                        "source_cache_corpus_backfill_answer_bearing_direct": True,
+                        "source_cache_corpus_backfill_relation_proximity": True,
+                        "source_cache_corpus_backfill_relation_signature_required_overlap": 2,
+                        "source_cache_corpus_backfill_planned_query_relation_overlap": 2,
+                        "relation_signature_required_term_count": 2,
+                        "relation_signature_required_overlap": 2,
+                        "relation_signature_required_missing_term_count": 0,
+                        "candidate_specific_sentence_span": True,
+                        "option_overlap": 0,
+                    }
+                ]
+            },
+            top_witnesses_per_option=2,
+        )
+
+        by_hash = {
+            bundle["option_hash"]: bundle
+            for bundle in detail["option_bundles"]
+        }
+        witness = by_hash[b_hash]["top_witnesses"][0]
+        self.assertEqual(detail["selected_option_hash"], b_hash)
+        self.assertEqual(detail["option_with_direct_witness_count"], 1)
+        self.assertEqual(witness["witness_type"], "direct_relation")
+        self.assertEqual(witness["option_overlap"], 1)
+        self.assertTrue(witness["option_bound_inferred_from_candidate_specific_span"])
+        self.assertTrue(witness["direct_required_floor_met"])
+
+    def test_candidate_span_bundle_ranks_required_completion_above_thin_direct(self):
+        options = {
+            "A": "Alpha mechanism",
+            "B": "Thin but topical mechanism",
+            "C": "Complete relation mechanism",
+        }
+        b_hash = stable_hash({"option_label": "B"})
+        c_hash = stable_hash({"option_label": "C"})
+
+        detail = _option_claim_candidate_span_bundle_from_rows(
+            options=options,
+            candidate_labels=["A", "B", "C"],
+            span_summary={
+                "candidate_direct_relation_span_rows": [
+                    {
+                        "option_hash": b_hash,
+                        "span_hash": "thin-direct-span",
+                        "source_doc_hash": "thin-direct-doc",
+                        "retrieval_stage": "source_cache_corpus_backfill",
+                        "span_provenance": "candidate_specific_sentence_span",
+                        "source_cache_corpus_backfill": True,
+                        "source_cache_strict_answer_bearing_span": True,
+                        "source_cache_corpus_backfill_targeted_direct": True,
+                        "source_cache_corpus_backfill_answer_bearing_direct": True,
+                        "source_cache_corpus_backfill_option_overlap": 1,
+                        "source_cache_corpus_backfill_relation_proximity": True,
+                        "source_cache_corpus_backfill_relation_signature_required_overlap": 1,
+                        "source_cache_corpus_backfill_planned_query_relation_overlap": 1,
+                        "relation_signature_required_term_count": 1,
+                        "relation_signature_required_overlap": 1,
+                        "relation_signature_required_missing_term_count": 0,
+                        "candidate_specific_sentence_span": True,
+                    },
+                    {
+                        "option_hash": c_hash,
+                        "span_hash": "complete-direct-span",
+                        "source_doc_hash": "complete-direct-doc",
+                        "retrieval_stage": "source_cache_corpus_backfill",
+                        "span_provenance": "candidate_specific_sentence_span",
+                        "source_cache_corpus_backfill": True,
+                        "source_cache_strict_answer_bearing_span": True,
+                        "source_cache_corpus_backfill_targeted_direct": True,
+                        "source_cache_corpus_backfill_answer_bearing_direct": True,
+                        "source_cache_corpus_backfill_option_overlap": 1,
+                        "source_cache_corpus_backfill_relation_proximity": True,
+                        "source_cache_corpus_backfill_relation_signature_required_overlap": 4,
+                        "source_cache_corpus_backfill_planned_query_relation_overlap": 4,
+                        "source_cache_corpus_backfill_covered_slot_count": 4,
+                        "relation_signature_required_term_count": 4,
+                        "relation_signature_required_overlap": 4,
+                        "relation_signature_required_missing_term_count": 0,
+                        "candidate_specific_sentence_span": True,
+                    },
+                ]
+            },
+            top_witnesses_per_option=2,
+        )
+
+        by_hash = {
+            bundle["option_hash"]: bundle
+            for bundle in detail["option_bundles"]
+        }
+        self.assertEqual(detail["top_direct_option_hash"], c_hash)
+        self.assertEqual(detail["selected_option_hash"], c_hash)
+        self.assertGreater(
+            by_hash[c_hash]["best_direct_score"],
+            by_hash[b_hash]["best_direct_score"],
+        )
+        self.assertGreaterEqual(detail["direct_source_margin"], 5.0)
+
+    def test_candidate_span_bundle_blocks_contested_single_required_recommendation(self):
+        options = {
+            "A": "Alpha mechanism",
+            "B": "Thin direct mechanism",
+            "C": "Competing sourced mechanism",
+        }
+        b_hash = stable_hash({"option_label": "B"})
+        c_hash = stable_hash({"option_label": "C"})
+
+        detail = _option_claim_candidate_span_bundle_from_rows(
+            options=options,
+            candidate_labels=["A", "B", "C"],
+            span_summary={
+                "candidate_direct_relation_span_rows": [
+                    {
+                        "option_hash": b_hash,
+                        "span_hash": "thin-direct-span",
+                        "source_doc_hash": "thin-direct-doc",
+                        "retrieval_stage": "source_verifier_candidate_relation_witness",
+                        "span_provenance": "candidate_specific_sentence_span",
+                        "planned_query_answer_bearing_direct": True,
+                        "option_overlap": 3,
+                        "relation_overlap": 1,
+                        "relation_proximity": True,
+                        "relation_signature_required_term_count": 1,
+                        "relation_signature_required_overlap": 1,
+                        "relation_signature_required_missing_term_count": 0,
+                        "candidate_specific_sentence_span": True,
+                    },
+                    {
+                        "option_hash": c_hash,
+                        "span_hash": "competing-source-span",
+                        "source_doc_hash": "competing-source-doc",
+                        "retrieval_stage": "source_cache_corpus_backfill",
+                        "span_provenance": "candidate_specific_sentence_span",
+                        "source_cache_corpus_backfill": True,
+                        "source_cache_strict_answer_bearing_span": True,
+                        "source_cache_corpus_backfill_targeted_direct": True,
+                        "source_cache_corpus_backfill_answer_bearing_direct": True,
+                        "source_cache_corpus_backfill_option_overlap": 2,
+                        "source_cache_corpus_backfill_relation_proximity": True,
+                        "source_cache_corpus_backfill_relation_signature_required_overlap": 0,
+                        "source_cache_corpus_backfill_planned_query_relation_overlap": 2,
+                        "relation_signature_required_term_count": 1,
+                        "relation_signature_required_overlap": 0,
+                        "relation_signature_required_missing_term_count": 1,
+                        "candidate_specific_sentence_span": True,
+                    },
+                ]
+            },
+            top_witnesses_per_option=2,
+        )
+
+        self.assertEqual(detail["top_direct_option_hash"], b_hash)
+        self.assertIsNone(detail["selected_option_hash"])
+        self.assertTrue(detail["top_direct_contested_single_required"])
+        self.assertEqual(
+            detail["recommendation_reason"],
+            "contested_single_required_direct_requires_stronger_source",
+        )
+
     def test_candidate_span_bundle_aggregates_strict_partial_required_witnesses(self):
         options = {
             "A": "Alpha mechanism",
@@ -34729,6 +35206,79 @@ class HleSmokeEvalTest(unittest.TestCase):
             ]
         )
         self.assertFalse(detail["raw_content_persisted"])
+
+    def test_candidate_span_bundle_aggregates_required_completion_source_cache_witnesses(self):
+        options = {
+            "A": "Alpha mechanism",
+            "B": "Beta mechanism",
+        }
+        b_hash = stable_hash({"option_label": "B"})
+        rows = [
+            {
+                "option_hash": b_hash,
+                "span_hash": "beta-required-cache-1",
+                "source_doc_hash": "beta-required-doc-1",
+                "retrieval_stage": "source_cache_corpus_backfill",
+                "span_provenance": "source_cache_required_term_completion",
+                "source_cache_corpus_backfill": True,
+                "source_cache_corpus_backfill_required_term_completion_direct": True,
+                "source_cache_corpus_backfill_option_overlap": 1,
+                "source_cache_corpus_backfill_relation_proximity": True,
+                "source_cache_corpus_backfill_relation_signature_required_overlap": 1,
+                "source_cache_corpus_backfill_planned_query_relation_overlap": 1,
+                "relation_signature_required_term_count": 2,
+                "relation_signature_required_overlap": 1,
+                "relation_signature_required_missing_term_count": 1,
+                "relation_signature_required_missing_term_hashes": ["req-2"],
+                "candidate_specific_sentence_span": True,
+            },
+            {
+                "option_hash": b_hash,
+                "span_hash": "beta-required-cache-2",
+                "source_doc_hash": "beta-required-doc-2",
+                "retrieval_stage": "source_cache_corpus_backfill",
+                "span_provenance": "source_cache_required_identity_completion",
+                "source_cache_corpus_backfill": True,
+                "source_cache_corpus_backfill_required_term_completion_direct": True,
+                "source_cache_corpus_backfill_option_overlap": 1,
+                "source_cache_corpus_backfill_relation_proximity": True,
+                "source_cache_corpus_backfill_relation_signature_required_overlap": 1,
+                "source_cache_corpus_backfill_planned_query_relation_overlap": 1,
+                "relation_signature_required_term_count": 2,
+                "relation_signature_required_overlap": 1,
+                "relation_signature_required_missing_term_count": 1,
+                "relation_signature_required_missing_term_hashes": ["req-1"],
+                "candidate_specific_sentence_span": True,
+            },
+        ]
+
+        detail = _option_claim_candidate_span_bundle_from_rows(
+            options=options,
+            candidate_labels=["A", "B"],
+            span_summary={
+                "candidate_direct_relation_span_rows": rows,
+                "relation_signature_required_term_hashes_by_option_hash": {
+                    b_hash: ["req-1", "req-2"],
+                },
+            },
+            top_witnesses_per_option=3,
+        )
+
+        by_hash = {
+            bundle["option_hash"]: bundle
+            for bundle in detail["option_bundles"]
+        }
+        self.assertEqual(detail["selected_option_hash"], b_hash)
+        self.assertEqual(detail["option_with_direct_witness_count"], 1)
+        self.assertTrue(
+            by_hash[b_hash]["top_witnesses"][0][
+                "multi_witness_required_completion"
+            ]
+        )
+        self.assertEqual(
+            by_hash[b_hash]["top_witnesses"][0]["source_kind"],
+            "candidate_span_bundle_multi_witness_required_completion",
+        )
 
     def test_candidate_span_bundle_context_is_hash_count_only(self):
         options = {
@@ -34834,7 +35384,7 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertNotIn("Do not persist", context)
         self.assertFalse(detail["raw_content_persisted"])
 
-    def test_candidate_span_bundle_infers_required_complete_for_strict_source_witness(self):
+    def test_candidate_span_bundle_tracks_single_term_inferred_source_witness_without_direct_promotion(self):
         options = {"A": "Alpha mechanism", "B": "Beta mechanism"}
         b_hash = stable_hash({"option_label": "B"})
 
@@ -34864,8 +35414,10 @@ class HleSmokeEvalTest(unittest.TestCase):
         )
 
         self.assertEqual(detail["status"], "activated")
-        self.assertEqual(detail["selected_option_hash"], b_hash)
-        self.assertEqual(detail["option_with_direct_witness_count"], 1)
+        self.assertIsNone(detail["selected_option_hash"])
+        self.assertEqual(detail["option_with_direct_witness_count"], 0)
+        self.assertEqual(detail["direct_required_floor_witness_count"], 0)
+        self.assertEqual(detail["single_required_inferred_witness_count"], 1)
         self.assertEqual(detail["required_completion_inferred_witness_count"], 1)
         self.assertEqual(detail["option_bound_inferred_witness_count"], 1)
         by_hash = {
@@ -34874,7 +35426,11 @@ class HleSmokeEvalTest(unittest.TestCase):
         }
         self.assertEqual(
             by_hash[b_hash]["coverage_gap_reason"],
-            "direct_relation_witness_available",
+            "no_source_cache_answer_bearing",
+        )
+        self.assertEqual(
+            by_hash[b_hash]["top_witnesses"][0]["witness_type"],
+            "indirect_relation",
         )
         self.assertEqual(
             by_hash[b_hash]["top_witnesses"][0]["required_missing_count"],
@@ -34893,6 +35449,63 @@ class HleSmokeEvalTest(unittest.TestCase):
             by_hash[b_hash]["top_witnesses"][0][
                 "option_bound_inferred_from_source_verifier"
             ]
+        )
+        self.assertFalse(
+            by_hash[b_hash]["top_witnesses"][0]["direct_required_floor_met"]
+        )
+        self.assertEqual(
+            by_hash[b_hash]["top_witnesses"][0]["required_completion_confidence"],
+            "single_term_inferred",
+        )
+
+    def test_candidate_span_bundle_allows_explicit_single_required_term_source_witness(self):
+        options = {"A": "Alpha mechanism", "B": "Beta mechanism"}
+        b_hash = stable_hash({"option_label": "B"})
+
+        _, detail = _option_claim_candidate_span_bundle_context(
+            options=options,
+            candidate_labels=["A", "B"],
+            span_summary={"candidate_direct_relation_span_rows": []},
+            source_verifier_structured_context_by_label={
+                "B": {
+                    "candidate_relation_witness_rows": [
+                        {
+                            "category": "direct_support",
+                            "doc_hash": "doc-b",
+                            "strict_direct_support": True,
+                            "candidate_specific_span": True,
+                            "directish_signal": True,
+                            "relation_proximity": True,
+                            "supports_other": False,
+                            "required_count": 1,
+                            "required_overlap": 1,
+                            "required_missing_count": 0,
+                            "option_overlap": 2,
+                            "relation_overlap": 1,
+                            "score": 10.0,
+                        }
+                    ]
+                }
+            },
+        )
+
+        by_hash = {
+            bundle["option_hash"]: bundle
+            for bundle in detail["option_bundles"]
+        }
+        self.assertEqual(detail["selected_option_hash"], b_hash)
+        self.assertEqual(detail["option_with_direct_witness_count"], 1)
+        self.assertEqual(detail["direct_required_floor_witness_count"], 1)
+        self.assertEqual(
+            by_hash[b_hash]["top_witnesses"][0]["witness_type"],
+            "direct_relation",
+        )
+        self.assertTrue(
+            by_hash[b_hash]["top_witnesses"][0]["direct_required_floor_met"]
+        )
+        self.assertEqual(
+            by_hash[b_hash]["top_witnesses"][0]["required_completion_confidence"],
+            "explicit",
         )
 
     def test_candidate_span_bundle_matches_source_context_by_target_option_hash(self):
@@ -34924,8 +35537,9 @@ class HleSmokeEvalTest(unittest.TestCase):
         )
 
         self.assertEqual(detail["status"], "activated")
-        self.assertEqual(detail["selected_option_hash"], b_hash)
-        self.assertEqual(detail["option_with_direct_witness_count"], 1)
+        self.assertIsNone(detail["selected_option_hash"])
+        self.assertEqual(detail["option_with_direct_witness_count"], 0)
+        self.assertEqual(detail["single_required_inferred_witness_count"], 1)
 
     def test_candidate_span_bundle_rejects_source_verifier_witness_without_required_overlap(self):
         options = {"A": "Alpha mechanism", "B": "Beta mechanism"}
@@ -35155,6 +35769,159 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(override["selected_option_hash"], b_hash)
         self.assertEqual(override["failed_checks"], [])
         self.assertFalse(override["raw_content_persisted"])
+
+    def test_candidate_span_bundle_override_allows_nondominant_non_direct_contradiction(self):
+        b_hash = stable_hash({"option_label": "B"})
+        detail = {
+            "status": "activated",
+            "recommendation_reason": "strong_direct_source_quality_margin",
+            "selected_option_hash": b_hash,
+            "direct_source_margin": 9.5,
+            "option_with_witness_count": 3,
+            "option_bundles": [
+                {
+                    "option_hash": b_hash,
+                    "best_witness_type": "direct_relation",
+                    "best_source_quality_score": 9.5,
+                    "best_direct_score": 9.5,
+                    "coverage_gap_reason": "direct_relation_witness_available",
+                    "direct_witness_count": 1,
+                    "required_complete_witness_count": 2,
+                    "candidate_specific_witness_count": 2,
+                    "source_cache_answer_bearing_witness_count": 0,
+                    "contradiction_witness_count": 1,
+                    "shared_generic_witness_count": 0,
+                    "top_witness_hashes": ["w-direct", "w-contradiction"],
+                    "top_witnesses": [
+                        {
+                            "witness_id": "w-direct",
+                            "witness_type": "direct_relation",
+                            "required_overlap": 3,
+                            "required_missing_count": 0,
+                            "direct_required_floor_met": True,
+                            "required_completion_confidence": "explicit",
+                            "candidate_specific": True,
+                            "strict_answer_bearing": True,
+                            "shared_or_other": False,
+                            "refutation": False,
+                        },
+                        {
+                            "witness_id": "w-contradiction",
+                            "witness_type": "contradiction",
+                            "refutation": True,
+                        },
+                    ],
+                }
+            ],
+        }
+
+        override = _option_claim_relation_span_comparator_candidate_span_bundle_override(
+            candidate_span_bundle_detail=detail,
+            relation_matrix=[{"option_hash": b_hash}],
+            candidate_hashes=[b_hash],
+        )
+
+        self.assertEqual(override["status"], "activated")
+        self.assertEqual(override["failed_checks"], [])
+        self.assertTrue(
+            override["selected_bundle"]["contradiction_not_dominant"]
+        )
+
+    def test_candidate_span_bundle_override_blocks_dominant_contradictions(self):
+        b_hash = stable_hash({"option_label": "B"})
+        detail = {
+            "status": "activated",
+            "recommendation_reason": "strong_direct_source_quality_margin",
+            "selected_option_hash": b_hash,
+            "direct_source_margin": 9.5,
+            "option_bundles": [
+                {
+                    "option_hash": b_hash,
+                    "best_witness_type": "direct_relation",
+                    "best_source_quality_score": 9.5,
+                    "best_direct_score": 9.5,
+                    "coverage_gap_reason": "direct_relation_witness_available",
+                    "direct_witness_count": 1,
+                    "required_complete_witness_count": 1,
+                    "candidate_specific_witness_count": 1,
+                    "contradiction_witness_count": 2,
+                    "top_witnesses": [
+                        {
+                            "witness_id": "w-direct",
+                            "witness_type": "direct_relation",
+                            "required_overlap": 2,
+                            "required_missing_count": 0,
+                            "direct_required_floor_met": True,
+                            "candidate_specific": True,
+                            "strict_answer_bearing": True,
+                            "shared_or_other": False,
+                            "refutation": False,
+                        }
+                    ],
+                }
+            ],
+        }
+
+        override = _option_claim_relation_span_comparator_candidate_span_bundle_override(
+            candidate_span_bundle_detail=detail,
+            relation_matrix=[{"option_hash": b_hash}],
+            candidate_hashes=[b_hash],
+        )
+
+        self.assertEqual(override["status"], "blocked")
+        self.assertIn("contradiction_not_dominant", override["failed_checks"])
+
+    def test_candidate_span_bundle_override_blocks_contested_single_required_direct(self):
+        b_hash = stable_hash({"option_label": "B"})
+        detail = {
+            "status": "activated",
+            "recommendation_reason": "strong_direct_source_quality_margin",
+            "selected_option_hash": b_hash,
+            "direct_source_margin": 9.3,
+            "option_with_witness_count": 5,
+            "option_bundles": [
+                {
+                    "option_hash": b_hash,
+                    "best_witness_type": "direct_relation",
+                    "best_source_quality_score": 9.3,
+                    "best_direct_score": 9.3,
+                    "coverage_gap_reason": "direct_relation_witness_available",
+                    "direct_witness_count": 1,
+                    "required_complete_witness_count": 1,
+                    "candidate_specific_witness_count": 1,
+                    "contradiction_witness_count": 0,
+                    "top_witnesses": [
+                        {
+                            "witness_id": "w-single",
+                            "witness_type": "direct_relation",
+                            "required_overlap": 1,
+                            "required_missing_count": 0,
+                            "required_completion_confidence": "explicit",
+                            "candidate_specific": True,
+                            "strict_answer_bearing": True,
+                            "source_cache_answer_bearing": False,
+                            "shared_or_other": False,
+                            "refutation": False,
+                        }
+                    ],
+                }
+            ],
+        }
+
+        override = _option_claim_relation_span_comparator_candidate_span_bundle_override(
+            candidate_span_bundle_detail=detail,
+            relation_matrix=[{"option_hash": b_hash}],
+            candidate_hashes=[b_hash],
+        )
+
+        self.assertEqual(override["status"], "blocked")
+        self.assertIn(
+            "contested_direct_has_multi_required_or_strong_source",
+            override["failed_checks"],
+        )
+        self.assertTrue(
+            override["selected_bundle"]["contested_single_required_direct"]
+        )
 
     def test_candidate_span_bundle_override_blocks_incomplete_bundle(self):
         b_hash = stable_hash({"option_label": "B"})
@@ -38378,6 +39145,83 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertTrue(detail["selected_candidate"]["finite_model_candidate"])
         self.assertFalse(detail["selected_candidate"]["source_attempted"])
 
+    def test_negative_except_programmatic_promotion_accepts_refuting_near_complete_gap(self):
+        a_hash = stable_hash({"option_label": "A"})
+        b_hash = stable_hash({"option_label": "B"})
+        c_hash = stable_hash({"option_label": "C"})
+        detail = _option_claim_negative_except_programmatic_promotion_detail(
+            answer_bearing_task_hint={"kind": "negative_except_relation"},
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": a_hash,
+                    "support_doc_count": 1,
+                    "source_quality_doc_count": 0,
+                    "source_verifier_attempt_count": 1,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 2,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                },
+                {
+                    "option_hash": b_hash,
+                    "support_doc_count": 1,
+                    "source_quality_doc_count": 1,
+                    "source_verifier_attempt_count": 1,
+                    "source_verifier_rejection_reason": "no_selected_label_indirect",
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 2,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                },
+                {
+                    "option_hash": c_hash,
+                    "selection_reason": "best_sweep_only_source_quality",
+                    "sweep_only_candidate": True,
+                    "support_doc_count": 0,
+                    "source_quality_doc_count": 1,
+                    "refute_doc_count": 1,
+                    "ambiguous_doc_count": 3,
+                    "source_verifier_attempt_count": 1,
+                    "source_verifier_rejection_reason": "no_selected_label_indirect",
+                    "span_directness_status": "blocked_not_direct_relation",
+                    "span_directness_lexical_unique_but_relation_generic": True,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 2,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "candidate_direct_relation_span_top_provenance": "candidate_pool_relation_span",
+                    "local_relation_query_expansion_doc_count": 4,
+                    "doc_count": 4,
+                },
+            ],
+            options={
+                "A": "Positive relation option",
+                "B": "Another positive relation option",
+                "C": "Exception with refuting source signal",
+            },
+            candidate_labels=["A", "B", "C"],
+        )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(detail["reason"], "single_negative_except_relation_gap_candidate")
+        self.assertEqual(detail["selected_option_hash"], c_hash)
+        self.assertEqual(detail["positive_relation_candidate_count"], 2)
+        self.assertEqual(detail["eligible_candidate_count"], 1)
+        self.assertTrue(detail["selected_candidate"]["negative_evidence_signal"])
+        self.assertTrue(
+            detail["selected_candidate"]["refuting_near_complete_relation_gap"]
+        )
+
     def test_negative_except_programmatic_promotion_blocks_multiple_outliers(self):
         a_hash = stable_hash({"option_label": "A"})
         b_hash = stable_hash({"option_label": "B"})
@@ -38777,6 +39621,29 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(negative["kind"], "negative_except_relation")
         self.assertIn("positive relation", negative["text"])
 
+    def test_negative_except_relation_signature_uses_final_question_relation(self):
+        signature = _option_claim_question_relation_signature_terms(
+            stem=(
+                "Automation bias can happen when AI advice replaces careful judgment. "
+                "Which of the following measures will NOT reduce automation bias in "
+                "teachers' assessments of student performance?\n\n"
+                "Answer Choices:\n"
+                "A. Encouraging teachers accountability for decisions made with AI support.\n"
+                "B. Regular practice using AI tools to assess student performance."
+            ),
+            option_text="Regular practice using AI tools to assess student performance.",
+        )
+
+        self.assertEqual(signature["source"], "negative_except_relation_target")
+        self.assertEqual(
+            signature["required_terms"][:3],
+            ["reduce", "automation", "bias"],
+        )
+        self.assertIn("reduce", signature["query_terms"])
+        self.assertIn("automation", signature["terms"])
+        self.assertNotIn("replacement", signature["required_terms"])
+
+    def test_source_grounded_option_claim_verifier_prompt_marks_statement_fact_hint(self):
         prompt = _source_grounded_option_claim_verifier_prompt(
             problem={
                 "answer_type": "multipleChoice",
@@ -44251,6 +45118,51 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(queries[0], "Beta lactamase resistance controlled experiment")
         self.assertEqual(seen_queries[0], "Beta lactamase resistance controlled experiment")
 
+    def test_option_claim_evidence_search_prepends_negative_except_required_relation_query(self):
+        stem = (
+            "Automation bias can happen when AI advice replaces careful judgment. "
+            "Which of the following measures will NOT reduce automation bias in "
+            "teachers' assessments of student performance?"
+        )
+        problem = {
+            "category": "Education/Humanities",
+            "raw_subject": "Education",
+            "_question": stem,
+        }
+        seen_queries = []
+
+        def fake_search(query, *, limit, timeout):
+            del limit, timeout
+            seen_queries.append(query)
+            return [{"title": "Query row", "snippet": query, "source": "wikipedia"}]
+
+        with patch.dict(os.environ, {
+            "HLE_DISABLE_OPTION_CLAIM_LOCAL_RELATION_QUERY_EXPANSION": "1",
+            "HLE_DISABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL": "1",
+            "HLE_DISABLE_OPTION_CLAIM_EMPTY_DOC_FALLBACK": "1",
+            "HLE_DISABLE_OPTION_CLAIM_SEMANTIC_SCHOLAR_SOURCE_FALLBACK": "1",
+            "HLE_DISABLE_OPTION_CLAIM_WIKIPEDIA_EXTRACT_FALLBACK": "1",
+            "HLE_DISABLE_OPTION_CLAIM_ANSWER_WEB_FALLBACK": "1",
+        }, clear=False):
+            with patch("assumption_os.hle_smoke_eval._wikipedia_search", side_effect=fake_search):
+                with patch("assumption_os.hle_smoke_eval._domain_evidence_search", return_value=[]):
+                    docs, queries, errors = _option_claim_evidence_search_docs(
+                        stem=stem,
+                        option_text="Regular practice using AI tools to assess student performance.",
+                        problem=problem,
+                        max_docs=3,
+                    )
+
+        self.assertEqual(errors, [])
+        self.assertTrue(docs)
+        self.assertTrue(queries)
+        first_query = queries[0].lower()
+        self.assertIn("reduce", first_query)
+        self.assertIn("automation", first_query)
+        self.assertIn("bias", first_query)
+        self.assertTrue({"practice", "tools", "performance"} & set(first_query.split()))
+        self.assertEqual(seen_queries[0], queries[0])
+
     def test_option_claim_evidence_search_uses_social_science_domain_sources_in_cache_only(self):
         problem = {"category": "Humanities/Social Science", "raw_subject": "Education"}
         seen_domain_queries = []
@@ -45653,6 +46565,75 @@ class HleSmokeEvalTest(unittest.TestCase):
         )
 
         self.assertEqual(ranked[0]["title"], "XeF4 low temperature preparation")
+
+    def test_option_claim_doc_rerank_prefers_answer_bearing_source_cache_metadata(self):
+        docs = [
+            {
+                "title": "Beta mechanism background",
+                "snippet": (
+                    "Beta mechanism appears in replacement experiments. "
+                    "This general background repeats controlled variable and target relation "
+                    "terms without directly binding the option to the preserved relation."
+                ),
+                "source": "semantic_scholar",
+            },
+            {
+                "title": "Replacement control experiment",
+                "snippet": (
+                    "In the replacement experiment, Beta mechanism preserves the "
+                    "controlled variable and maintains the target relation."
+                ),
+                "source": "local_fulltext",
+                "retrieval_stage": "source_cache_corpus_backfill",
+                "source_cache_corpus_backfill_answer_bearing_direct": "true",
+                "source_cache_corpus_backfill_required_term_completion_direct": "true",
+                "source_cache_corpus_backfill_targeted_direct": "true",
+                "source_cache_corpus_backfill_relation_signature_required_overlap": "2",
+                "source_cache_corpus_backfill_targeted_required_overlap": "2",
+                "source_cache_corpus_backfill_covered_slot_count": "1",
+            },
+        ]
+
+        ranked = _rank_option_claim_evidence_docs(
+            stem="Which mechanism preserves the controlled variable under replacement?",
+            option_text="Beta mechanism",
+            docs=docs,
+        )
+
+        self.assertEqual(ranked[0]["title"], "Replacement control experiment")
+
+    def test_option_claim_doc_rerank_prefers_planned_answer_bearing_direct_metadata(self):
+        docs = [
+            {
+                "title": "Beta mechanism catalog",
+                "snippet": (
+                    "Beta mechanism catalog entry with repeated controlled variable, "
+                    "replacement, mechanism, and relation terms."
+                ),
+                "source": "semantic_scholar",
+            },
+            {
+                "title": "Pair binding evidence",
+                "snippet": (
+                    "The experiment reports that Beta mechanism preserves the controlled "
+                    "variable during replacement."
+                ),
+                "source": "wikipedia",
+                "planned_query_answer_bearing_direct": "true",
+                "planned_query_candidate_specific_answer_bearing": "true",
+                "planned_query_relation_overlap": "2",
+                "planned_query_relation_signature_required_overlap": "2",
+                "planned_query_slot_coverage": "1",
+            },
+        ]
+
+        ranked = _rank_option_claim_evidence_docs(
+            stem="Which mechanism preserves the controlled variable under replacement?",
+            option_text="Beta mechanism",
+            docs=docs,
+        )
+
+        self.assertEqual(ranked[0]["title"], "Pair binding evidence")
 
     def test_option_claim_support_requires_option_relation_proximity(self):
         option_terms_by_label = {
@@ -51440,6 +52421,21 @@ class HleSmokeEvalTest(unittest.TestCase):
             clear=False,
         ):
             self.assertEqual(_source_verifier_row_source_cache_answer_bearing_signal_count(row), 1)
+            required_completion_row = {
+                "source_cache_corpus_backfill_doc_count": 1,
+                "source_cache_corpus_backfill_required_term_completion_direct_count": 1,
+            }
+            self.assertEqual(
+                _source_verifier_row_source_cache_answer_bearing_signal_count(
+                    required_completion_row
+                ),
+                1,
+            )
+            self.assertTrue(
+                _source_verifier_row_strict_source_cache_answer_bearing_signal(
+                    required_completion_row
+                )
+            )
         with patch.dict(
             os.environ,
             {
@@ -52609,6 +53605,49 @@ class HleSmokeEvalTest(unittest.TestCase):
             "source_cache_answer_bearing_challenger",
         )
         self.assertEqual(selection["source_cache_answer_bearing_row_signal_candidate_count"], 1)
+        self.assertEqual(
+            selection["source_cache_answer_bearing_row_signal_option_hashes"],
+            [c_hash],
+        )
+
+    def test_option_claim_contrastive_candidate_selection_promotes_required_completion_direct_signal(self):
+        rows = [
+            {"label": "A", "net_score": 30.0, "source_quality_score": 8.0, "source_quality_doc_count": 1},
+            {"label": "B", "net_score": 20.0, "source_quality_score": 7.0, "source_quality_doc_count": 1},
+            {
+                "label": "C",
+                "net_score": -5.0,
+                "source_quality_score": 0.0,
+                "source_quality_doc_count": 0,
+                "source_cache_corpus_backfill_doc_count": 1,
+                "source_cache_corpus_backfill_required_term_completion_direct_count": 1,
+                "refute_doc_count": 0,
+                "ambiguous_doc_count": 0,
+            },
+        ]
+
+        with patch.dict(os.environ, {"HLE_OPTION_CLAIM_CONTRASTIVE_ADJUDICATOR_CANDIDATE_LIMIT": "3"}):
+            selection = _option_claim_contrastive_candidate_selection(
+                ranked_rows=rows,
+                options={label: label for label in "ABC"},
+                missing_model_labels=[],
+                source_cache_answer_bearing_labels=[],
+            )
+
+        c_hash = stable_hash({"option_label": "C"})
+        self.assertIn(c_hash, selection["candidate_option_hashes"])
+        self.assertEqual(
+            selection["selection_reasons_by_option_hash"][c_hash],
+            "source_cache_answer_bearing_challenger",
+        )
+        audit_by_hash = {
+            row["option_hash"]: row
+            for row in selection["candidate_pool_audit_rows"]
+        }
+        self.assertEqual(
+            audit_by_hash[c_hash]["source_cache_backfill_required_completion_direct"],
+            1,
+        )
         self.assertEqual(
             selection["source_cache_answer_bearing_row_signal_option_hashes"],
             [c_hash],
@@ -54856,6 +55895,378 @@ class HleSmokeEvalTest(unittest.TestCase):
             "candidate_span_bundle",
         )
 
+    def test_source_quality_directness_promotion_blocks_source_lane_pair_binding_over_none_option(
+        self,
+    ):
+        b_hash = stable_hash({"option_label": "B"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "status": "blocked_not_direct_relation",
+                "reason": "no_candidate_span_direct_relation",
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": b_hash,
+                    "source_quality_score": 6.0,
+                    "source_quality_doc_count": 1,
+                    "support_doc_count": 1,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "local_relation_query_expansion_doc_count": 3,
+                    "source_cache_corpus_backfill_doc_count": 4,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_provenance": (
+                        "shared_doc_candidate_span"
+                    ),
+                    "candidate_direct_relation_span_top_shared_doc": True,
+                    "candidate_direct_relation_span_top_source_doc_shared": True,
+                    "candidate_direct_relation_span_top_source_cache_strict_answer_bearing_span": True,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 3,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "source_cache_answer_bearing_focused_retry_strict_direct_support_doc_count": 2,
+                    "source_cache_answer_bearing_focused_retry_candidate_specific_span_doc_count": 2,
+                    "source_cache_answer_bearing_focused_retry_directish_doc_count": 4,
+                    "source_cache_answer_bearing_focused_retry_required_overlap_doc_count": 5,
+                    "source_cache_answer_bearing_focused_retry_relation_proximity_doc_count": 6,
+                    "source_verifier_rejection_reason": "no_selected_label_indirect",
+                },
+            ],
+            candidate_span_bundle_detail={
+                "status": "activated",
+                "reason": "candidate_span_bundles_built",
+                "bundle_hash": "bundle-hash",
+                "rows_hash": "rows-hash",
+                "selected_option_hash": b_hash,
+                "direct_source_margin": 10.2,
+                "recommendation_reason": "strong_direct_source_quality_margin",
+                "option_with_direct_witness_count": 1,
+                "direct_witness_count": 2,
+                "option_bundles": [
+                    {
+                        "option_hash": b_hash,
+                        "direct_witness_count": 2,
+                        "top_witnesses": [
+                            {
+                                "witness_id": "b-direct-1",
+                                "source_doc_hash": "doc-b-1",
+                                "witness_type": "direct_relation",
+                                "required_overlap": 3,
+                                "required_missing_count": 0,
+                                "option_overlap": 1,
+                                "relation_overlap": 1,
+                                "slot_coverage": 1,
+                                "relation_proximity": True,
+                                "candidate_specific": True,
+                                "strict_answer_bearing": True,
+                                "source_cache_answer_bearing": True,
+                                "shared_or_other": False,
+                                "refutation": False,
+                                "source_quality_score": 6.0,
+                            },
+                            {
+                                "witness_id": "b-direct-2",
+                                "source_doc_hash": "doc-b-2",
+                                "witness_type": "direct_relation",
+                                "required_overlap": 2,
+                                "required_missing_count": 0,
+                                "option_overlap": 1,
+                                "relation_overlap": 1,
+                                "slot_coverage": 1,
+                                "relation_proximity": True,
+                                "candidate_specific": True,
+                                "strict_answer_bearing": True,
+                                "source_cache_answer_bearing": True,
+                                "shared_or_other": False,
+                                "refutation": False,
+                                "source_quality_score": 6.0,
+                            },
+                        ],
+                    }
+                ],
+            },
+            options={"B": "Beta", "D": "none"},
+            candidate_labels=["B"],
+        )
+
+        self.assertFalse(detail["promote"])
+        self.assertEqual(detail["status"], "blocked")
+        self.assertEqual(
+            detail["reason"],
+            "none_option_source_lane_pair_binding_requires_stronger_semantic_witness",
+        )
+        self.assertEqual(
+            detail["none_option_source_promotion_guard_status"],
+            "blocked",
+        )
+        self.assertEqual(
+            detail["blocked_promote_original_reason"],
+            "none_option_source_promotion_guard",
+        )
+
+    def test_source_quality_directness_promotion_blocks_weak_span_directness_over_none_option(
+        self,
+    ):
+        b_hash = stable_hash({"option_label": "B"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "status": "activated",
+                "reason": "single_direct_span_candidate_after_recovery",
+                "direct_candidate_count": 1,
+                "direct_candidate_option_hashes": [b_hash],
+                "selected_option_hash": b_hash,
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": b_hash,
+                    "source_quality_score": 8.0,
+                    "source_quality_doc_count": 0,
+                    "support_doc_count": 1,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 1,
+                    "candidate_direct_relation_span_count": 1,
+                    "candidate_direct_relation_span_source_cache_answer_bearing_count": 1,
+                    "candidate_direct_relation_span_top_source_cache_strict_answer_bearing_span": True,
+                    "candidate_direct_relation_span_top_source_cache_targeted_direct": True,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 2,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "candidate_direct_relation_span_top_source_doc_shared": False,
+                    "source_verifier_rejection_reason": "",
+                    "selection_reason": "best_sweep_only_source_quality",
+                },
+            ],
+            options={"B": "Beta", "D": "none"},
+            candidate_labels=["B"],
+        )
+
+        self.assertFalse(detail["promote"])
+        self.assertEqual(detail["status"], "blocked")
+        self.assertEqual(
+            detail["reason"],
+            "none_option_span_directness_model_requires_stronger_source",
+        )
+        self.assertEqual(
+            detail["none_option_source_promotion_guard_status"],
+            "blocked",
+        )
+
+    def test_source_quality_directness_promotion_uses_source_lane_best_bundle_completion(
+        self,
+    ):
+        b_hash = stable_hash({"option_label": "B"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "status": "blocked_not_direct_relation",
+                "reason": "no_candidate_span_direct_relation",
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": b_hash,
+                    "source_quality_score": 10.0,
+                    "source_quality_doc_count": 1,
+                    "support_doc_count": 1,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "candidate_direct_relation_span_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": False,
+                    "source_verifier_rejection_reason": "no_selected_label_ambiguous",
+                },
+            ],
+            candidate_span_bundle_detail={
+                "status": "activated",
+                "reason": "candidate_span_bundles_built",
+                "bundle_hash": "bundle-hash",
+                "rows_hash": "rows-hash",
+                "selected_option_hash": b_hash,
+                "direct_source_margin": 9.5,
+                "recommendation_reason": "strong_direct_source_quality_margin",
+                "option_with_direct_witness_count": 1,
+                "direct_witness_count": 5,
+                "option_bundles": [
+                    {
+                        "option_hash": b_hash,
+                        "direct_witness_count": 5,
+                        "top_witnesses": [
+                            {
+                                "witness_id": "b-direct-1",
+                                "source_doc_hash": "doc-b-1",
+                                "witness_type": "direct_relation",
+                                "required_overlap": 3,
+                                "required_missing_count": 0,
+                                "option_overlap": 1,
+                                "relation_overlap": 2,
+                                "slot_coverage": 1,
+                                "relation_proximity": True,
+                                "candidate_specific": True,
+                                "strict_answer_bearing": True,
+                                "source_cache_answer_bearing": True,
+                                "shared_or_other": False,
+                                "refutation": False,
+                                "source_quality_score": 10.0,
+                            },
+                            {
+                                "witness_id": "b-direct-2",
+                                "source_doc_hash": "doc-b-2",
+                                "witness_type": "direct_relation",
+                                "required_overlap": 2,
+                                "required_missing_count": 0,
+                                "option_overlap": 1,
+                                "relation_overlap": 1,
+                                "slot_coverage": 1,
+                                "relation_proximity": True,
+                                "candidate_specific": True,
+                                "strict_answer_bearing": True,
+                                "source_cache_answer_bearing": True,
+                                "shared_or_other": False,
+                                "refutation": False,
+                                "source_quality_score": 9.0,
+                            },
+                        ],
+                    }
+                ],
+            },
+            options={"B": "Beta"},
+            candidate_labels=["B"],
+        )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(detail["selected_option_hash"], b_hash)
+        self.assertEqual(
+            detail["source_quality_regression_protection"]["reason"],
+            "strong_candidate_span_bundle_source_lane_pair_binding",
+        )
+        selected = detail["selected_candidate"]
+        self.assertEqual(selected["relation_required_overlap"], 3)
+        self.assertEqual(selected["relation_required_missing_terms"], 0)
+        self.assertTrue(selected["relation_proximity"])
+        self.assertEqual(
+            selected[
+                "source_cache_answer_bearing_focused_retry_required_overlap_doc_count"
+            ],
+            5,
+        )
+        self.assertEqual(
+            selected["option_matrix_source_lane_best_required_overlap"],
+            3,
+        )
+        self.assertEqual(
+            selected["option_matrix_source_lane_best_required_missing"],
+            0,
+        )
+
+    def test_option_matrix_source_lane_override_allows_strong_lane_over_weak_verified(
+        self,
+    ):
+        a_hash = stable_hash({"option_label": "A"})
+        b_hash = stable_hash({"option_label": "B"})
+        detail = _option_matrix_source_lane_existing_verified_override_detail(
+            option_matrix_source_lane={
+                "status": "activated",
+                "pair_binding_accept": True,
+                "candidate_span_bundle_direct_source_margin": 8.1,
+                "candidate_span_bundle_direct_witness_count": 3,
+                "direct_witness_row_count": 3,
+                "candidate_span_bundle_option_with_direct_witness_count": 1,
+                "best_required_overlap": 2,
+                "best_required_missing": 0,
+            },
+            option_matrix_source_lane_source="candidate_span_bundle",
+            selected_option_hash=b_hash,
+            directness_verified_hashes={a_hash},
+            candidate_summaries=[
+                {
+                    "option_hash": b_hash,
+                    "source_quality_doc_count": 4,
+                    "support_doc_count": 3,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 1,
+                    "source_quality_score": 14.8,
+                },
+                {
+                    "option_hash": a_hash,
+                    "source_quality_doc_count": 0,
+                    "support_doc_count": 0,
+                    "refute_doc_count": 1,
+                    "source_quality_score": 3.75,
+                    "source_verifier_rejection_reason": "no_selected_label_generic",
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 2,
+                },
+            ],
+        )
+
+        self.assertEqual(detail["status"], "allowed")
+        self.assertTrue(detail["allow_override"])
+        self.assertEqual(
+            detail["reason"],
+            "strong_source_lane_over_weak_verified_conflict",
+        )
+        self.assertEqual(detail["weak_verified_conflict_option_hashes"], [a_hash])
+
+    def test_option_matrix_source_lane_override_blocks_strong_verified_conflict(self):
+        a_hash = stable_hash({"option_label": "A"})
+        b_hash = stable_hash({"option_label": "B"})
+        detail = _option_matrix_source_lane_existing_verified_override_detail(
+            option_matrix_source_lane={
+                "status": "activated",
+                "pair_binding_accept": True,
+                "candidate_span_bundle_direct_source_margin": 8.1,
+                "candidate_span_bundle_direct_witness_count": 3,
+                "direct_witness_row_count": 3,
+                "candidate_span_bundle_option_with_direct_witness_count": 1,
+                "best_required_overlap": 2,
+                "best_required_missing": 0,
+            },
+            option_matrix_source_lane_source="candidate_span_bundle",
+            selected_option_hash=b_hash,
+            directness_verified_hashes={a_hash},
+            candidate_summaries=[
+                {
+                    "option_hash": b_hash,
+                    "source_quality_doc_count": 4,
+                    "support_doc_count": 3,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 1,
+                    "source_quality_score": 14.8,
+                },
+                {
+                    "option_hash": a_hash,
+                    "source_quality_doc_count": 2,
+                    "support_doc_count": 1,
+                    "refute_doc_count": 0,
+                    "source_quality_score": 10.0,
+                    "source_verifier_rejection_reason": "",
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+                },
+            ],
+        )
+
+        self.assertEqual(detail["status"], "blocked")
+        self.assertFalse(detail["allow_override"])
+        self.assertEqual(detail["reason"], "existing_verified_conflict_not_weak")
+
     def test_source_quality_directness_promotion_blocks_weak_candidate_span_bundle_lane(
         self,
     ):
@@ -55177,6 +56588,50 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(detail["reason"], "no_source_quality_directness_eligible_candidate")
         self.assertEqual(detail["rejection_counts"]["has_refuting_docs"], 1)
 
+    def test_source_verifier_lane_candidate_summaries_preserve_ranking_identity_fields(self):
+        c_hash = stable_hash({"option_label": "C"})
+
+        summaries = _option_claim_source_verifier_lane_candidate_summaries(
+            options={"A": "Alpha", "C": "Gamma"},
+            candidate_labels=["C"],
+            source_verifier_attempts=[],
+            source_verifier_rows=[
+                {
+                    "label": "C",
+                    "option_hash": c_hash,
+                    "selection_reason": "best_sweep_only_source_quality",
+                    "sweep_only_candidate": True,
+                    "source_quality_challenger": True,
+                    "source_quality_score": 12.0,
+                    "source_quality_doc_count": 3,
+                    "support_doc_count": 2,
+                    "answer_web_cache_sweep_general_relation_directish_count": 2,
+                    "answer_web_cache_sweep_relation_proximity_count": 2,
+                    "answer_web_cache_sweep_relation_signature_required_overlap_count": 2,
+                    "source_cache_corpus_backfill_required_overlap_count": 2,
+                    "planned_query_answer_bearing_direct_doc_count": 1,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 2,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "raw_content_persisted": False,
+                },
+            ],
+        )
+
+        self.assertEqual(len(summaries), 1)
+        summary = summaries[0]
+        self.assertEqual(summary["selection_reason"], "best_sweep_only_source_quality")
+        self.assertTrue(summary["sweep_only_candidate"])
+        self.assertTrue(summary["source_quality_challenger"])
+        self.assertEqual(
+            summary["answer_web_cache_sweep_relation_signature_required_overlap_count"],
+            2,
+        )
+        self.assertEqual(summary["planned_query_answer_bearing_direct_doc_count"], 1)
+        self.assertFalse(summary["raw_content_persisted"])
+
     def test_source_quality_directness_promotion_accepts_unique_sweep_only_answer_web_relation(self):
         c_hash = stable_hash({"option_label": "C"})
         detail = _option_claim_source_quality_directness_promotion_detail(
@@ -55326,7 +56781,7 @@ class HleSmokeEvalTest(unittest.TestCase):
                     "source_verifier_rejection_reason": "no_selected_label_generic",
                 },
             ],
-            options={"B": "Beta", "C": "Gamma"},
+            options={"B": "Beta", "C": "Gamma", "D": "none"},
             candidate_labels=["B", "C"],
         )
 
@@ -57874,6 +59329,67 @@ class HleSmokeEvalTest(unittest.TestCase):
             "programmatic_complete_relation_span",
         )
 
+    def test_source_quality_directness_promotion_blocks_positive_relation_support_in_negative_except_stem(self):
+        a_hash = stable_hash({"option_label": "A"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": a_hash,
+                    "source_quality_score": 11.0,
+                    "source_quality_doc_count": 1,
+                    "support_doc_count": 1,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "candidate_direct_relation_span_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 3,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "span_directness_status": "blocked_not_direct_relation",
+                    "span_directness_lexical_unique_but_relation_generic": True,
+                    "overall_source_quality_challenger": True,
+                },
+            ],
+            options={
+                "A": "Encouraging teacher accountability and careful review",
+                "C": "Regular practice using AI tools",
+            },
+            candidate_labels=["A"],
+            stem=(
+                "Which of the following measures will NOT reduce automation bias "
+                "in teachers' assessments?"
+            ),
+        )
+
+        self.assertFalse(detail["promote"])
+        self.assertEqual(detail["status"], "blocked")
+        self.assertEqual(
+            detail["reason"],
+            "negative_except_positive_relation_support_excludes_candidate",
+        )
+        self.assertEqual(
+            detail["negative_except_source_promotion_guard_status"],
+            "blocked",
+        )
+        self.assertEqual(
+            detail["negative_except_source_promotion_guard_reason"],
+            "negative_except_positive_relation_support_excludes_candidate",
+        )
+        self.assertTrue(
+            detail["negative_except_source_promotion_guard"][
+                "positive_relation_support"
+            ]
+        )
+
     def test_source_quality_directness_promotion_blocks_programmatic_span_after_global_directness_rejection(self):
         c_hash = stable_hash({"option_label": "C"})
         detail = _option_claim_source_quality_directness_promotion_detail(
@@ -57985,7 +59501,7 @@ class HleSmokeEvalTest(unittest.TestCase):
                     "selection_reason": "runner_up_ranked",
                 },
             ],
-            options={"B": "Beta", "C": "Gamma"},
+            options={"B": "Beta", "C": "Gamma", "D": "none"},
             candidate_labels=["B", "C"],
         )
 
@@ -58196,7 +59712,7 @@ class HleSmokeEvalTest(unittest.TestCase):
                     "selection_reason": "runner_up_ranked",
                 },
             ],
-            options={"B": "Beta", "C": "Gamma"},
+            options={"B": "Beta", "C": "Gamma", "D": "none"},
             candidate_labels=["B", "C"],
         )
 
@@ -58277,6 +59793,205 @@ class HleSmokeEvalTest(unittest.TestCase):
                 "rejection_counts"
             ]["semantic_relation_complete"],
             1,
+        )
+
+    def test_source_quality_directness_promotion_accepts_required_term_semantic_completion(self):
+        b_hash = stable_hash({"option_label": "B"})
+        c_hash = stable_hash({"option_label": "C"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "reason": "not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "status": "blocked_not_direct_relation",
+                "reason": "no_candidate_span_direct_relation_after_recovery",
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": b_hash,
+                    "source_quality_score": 12.0,
+                    "source_quality_doc_count": 2,
+                    "support_doc_count": 2,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "candidate_direct_relation_span_count": 1,
+                    "candidate_direct_relation_span_source_cache_answer_bearing_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "candidate_direct_relation_span_top_source_doc_shared": False,
+                    "candidate_direct_relation_span_top_source_cache_strict_answer_bearing_span": True,
+                    "source_cache_corpus_backfill_required_term_completion_direct_count": 1,
+                    "source_cache_answer_bearing_focused_retry_strict_direct_support_doc_count": 3,
+                    "source_cache_answer_bearing_focused_retry_candidate_specific_span_doc_count": 8,
+                    "source_cache_answer_bearing_focused_retry_directish_doc_count": 7,
+                    "source_cache_answer_bearing_focused_retry_required_overlap_doc_count": 7,
+                    "source_cache_answer_bearing_focused_retry_relation_proximity_doc_count": 7,
+                    "source_verifier_rejection_reason": "no_selected_label_generic",
+                    "selection_reason": "source_cache_answer_bearing_challenger",
+                },
+                {
+                    "option_hash": c_hash,
+                    "source_quality_score": 4.0,
+                    "source_quality_doc_count": 0,
+                    "support_doc_count": 0,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "candidate_direct_relation_span_count": 0,
+                    "source_verifier_rejection_reason": "no_selected_label_generic",
+                    "selection_reason": "runner_up_ranked",
+                },
+            ],
+            options={"B": "Beta", "C": "Gamma", "D": "none"},
+            candidate_labels=["B", "C"],
+        )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(detail["selected_label"], "B")
+        self.assertEqual(
+            detail["selected_directness_path"],
+            "candidate_specific_witness_semantic_comparator",
+        )
+        self.assertTrue(
+            detail["candidate_specific_witness_semantic_comparator"][
+                "selected_candidate"
+            ]["required_term_semantic_completion"]
+        )
+        self.assertTrue(
+            detail["selected_candidate"][
+                "candidate_specific_witness_semantic_required_completion"
+            ]
+        )
+        self.assertTrue(
+            detail["source_quality_regression_protection"][
+                "candidate_specific_witness_semantic_required_completion"
+            ]
+        )
+        self.assertFalse(
+            detail["candidate_specific_witness_semantic_comparator"][
+                "relaxed_required_terms_enabled"
+            ]
+        )
+        self.assertEqual(
+            detail["none_option_source_promotion_guard_status"],
+            "allowed",
+        )
+        self.assertEqual(
+            detail["none_option_source_promotion_guard_reason"],
+            "strong_semantic_witness_can_override_none_option",
+        )
+
+    def test_source_quality_directness_promotion_blocks_answer_web_only_after_directness_rejection(self):
+        b_hash = stable_hash({"option_label": "B"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "activated",
+                "relation_span_comparator_status": "blocked_not_direct_relation",
+                "relation_span_comparator_reason": "no_direct_relation_span_candidate",
+            },
+            span_directness_summary={
+                "status": "blocked_not_direct_relation",
+                "reason": "no_candidate_span_direct_relation_after_recovery",
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": b_hash,
+                    "sweep_only_candidate": True,
+                    "selection_reason": "answer_web_relation_challenger",
+                    "source_quality_score": 11.875,
+                    "source_quality_doc_count": 4,
+                    "support_doc_count": 4,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "answer_web_cache_sweep_general_relation_directish_count": 2,
+                    "answer_web_cache_sweep_relation_proximity_count": 2,
+                    "answer_web_cache_sweep_relation_signature_required_overlap_count": 2,
+                    "answer_web_cache_sweep_relation_slot_covered_count": 2,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "source_verifier_rejection_reason": "no_selected_label_generic",
+                },
+            ],
+            options={"B": "Beta"},
+            candidate_labels=["B"],
+        )
+
+        self.assertFalse(detail["promote"])
+        self.assertEqual(detail["status"], "blocked")
+        self.assertEqual(
+            detail["rejection_counts"][
+                "answer_web_relation_recovery_directness_rejected"
+            ],
+            1,
+        )
+        self.assertFalse(
+            detail["candidate_signal_rows"][0][
+                "answer_web_relation_recovery_candidate"
+            ]
+        )
+        self.assertTrue(
+            detail["candidate_signal_rows"][0][
+                "answer_web_relation_recovery_candidate_raw"
+            ]
+        )
+
+    def test_source_quality_directness_promotion_allows_answer_web_gap_recovery_without_candidate_spans(self):
+        b_hash = stable_hash({"option_label": "B"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "activated",
+                "relation_span_comparator_status": "blocked_not_direct_relation",
+                "relation_span_comparator_reason": "no_direct_relation_span_candidate",
+            },
+            span_directness_summary={
+                "status": "blocked_not_direct_relation",
+                "reason": "no_candidate_span_direct_relation",
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": b_hash,
+                    "sweep_only_candidate": True,
+                    "selection_reason": "runner_up_ranked",
+                    "source_quality_score": 11.5,
+                    "source_quality_doc_count": 2,
+                    "support_doc_count": 2,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "answer_web_cache_sweep_general_relation_directish_count": 1,
+                    "answer_web_cache_sweep_relation_proximity_count": 1,
+                    "answer_web_cache_sweep_relation_slot_covered_count": 1,
+                    "local_relation_query_expansion_doc_count": 2,
+                    "candidate_direct_relation_span_count": 0,
+                    "source_verifier_rejection_reason": "no_selected_label_generic",
+                },
+            ],
+            options={"B": "Beta"},
+            candidate_labels=["B"],
+        )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(detail["selected_label"], "B")
+        self.assertEqual(
+            detail["selected_directness_path"],
+            "unique_sweep_only_answer_web_relation_recovery",
+        )
+        self.assertTrue(
+            detail["candidate_signal_rows"][0][
+                "answer_web_relation_recovery_candidate"
+            ]
         )
 
     def test_source_quality_directness_promotion_can_opt_in_relaxed_candidate_specific_semantic_witness_terms(self):
@@ -58486,6 +60201,167 @@ class HleSmokeEvalTest(unittest.TestCase):
                 "programmatic_complete_relation_span_comparator_indirect"
             ],
             1,
+        )
+
+    def test_source_quality_directness_promotion_accepts_strong_none_global_source_elimination(self):
+        a_hash = stable_hash({"option_label": "A"})
+        b_hash = stable_hash({"option_label": "B"})
+        c_hash = stable_hash({"option_label": "C"})
+        d_hash = stable_hash({"option_label": "D"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "status": "blocked_not_direct_relation",
+                "reason": "no_candidate_span_direct_relation",
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": d_hash,
+                    "source_quality_score": 14.8,
+                    "source_quality_doc_count": 4,
+                    "support_doc_count": 3,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 1,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "local_relation_query_expansion_doc_count": 5,
+                    "selection_reason": "top_ranked",
+                    "sweep_only_candidate": True,
+                },
+                {
+                    "option_hash": a_hash,
+                    "source_quality_score": 3.5,
+                    "source_quality_doc_count": 0,
+                    "support_doc_count": 0,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "candidate_direct_relation_span_count": 0,
+                    "selection_reason": "finite_option_coverage_ranked",
+                },
+                {
+                    "option_hash": b_hash,
+                    "source_quality_score": 4.0,
+                    "source_quality_doc_count": 0,
+                    "support_doc_count": 1,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 1,
+                    "candidate_direct_relation_span_count": 0,
+                    "source_verifier_rejection_reason": "no_selected_label_generic",
+                    "selection_reason": "runner_up_ranked",
+                    "sweep_only_candidate": True,
+                },
+                {
+                    "option_hash": c_hash,
+                    "source_quality_score": 3.75,
+                    "source_quality_doc_count": 0,
+                    "support_doc_count": 0,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "candidate_direct_relation_span_count": 0,
+                    "source_verifier_rejection_reason": "no_selected_label_generic",
+                    "selection_reason": "best_sweep_only_ranked",
+                    "sweep_only_candidate": True,
+                },
+            ],
+            options={
+                "A": "Early phase is strongest",
+                "B": "Late phase is strongest",
+                "C": "The effect is constant",
+                "D": "none",
+            },
+            candidate_labels=["D", "A", "B", "C"],
+        )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(detail["selected_label"], "D")
+        self.assertEqual(
+            detail["selected_directness_path"],
+            "none_option_global_source_elimination",
+        )
+        self.assertEqual(
+            detail["reason"],
+            "none_option_global_source_elimination_with_source_quality",
+        )
+        self.assertEqual(
+            detail["none_option_global_source_elimination_status"],
+            "activated",
+        )
+        self.assertEqual(
+            detail["source_quality_regression_protection"]["reason"],
+            "strong_none_option_global_source_elimination",
+        )
+
+    def test_source_quality_directness_promotion_blocks_none_global_source_elimination_with_strong_concrete_option(self):
+        a_hash = stable_hash({"option_label": "A"})
+        d_hash = stable_hash({"option_label": "D"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+            },
+            span_directness_summary={
+                "status": "blocked_not_direct_relation",
+                "direct_candidate_count": 0,
+                "direct_candidate_option_hashes": [],
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": d_hash,
+                    "source_quality_score": 14.8,
+                    "source_quality_doc_count": 4,
+                    "support_doc_count": 3,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 1,
+                    "candidate_direct_relation_span_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "selection_reason": "top_ranked",
+                },
+                {
+                    "option_hash": a_hash,
+                    "source_quality_score": 10.0,
+                    "source_quality_doc_count": 2,
+                    "support_doc_count": 2,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 2,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "span_directness_direct_high_confidence": True,
+                    "selection_reason": "runner_up_ranked",
+                },
+            ],
+            options={"A": "Strong concrete option", "D": "none"},
+            candidate_labels=["D", "A"],
+        )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(detail["selected_label"], "A")
+        self.assertFalse(
+            detail.get("none_option_global_source_elimination_injected_candidate", False)
+        )
+        self.assertNotEqual(
+            detail["selected_directness_path"],
+            "none_option_global_source_elimination",
+        )
+        self.assertEqual(
+            detail["none_option_global_source_elimination_reason"],
+            "existing_source_quality_eligible_candidate",
         )
 
     def test_source_quality_directness_promotion_logs_missing_required_terms_without_promotion(self):
@@ -58894,12 +60770,12 @@ class HleSmokeEvalTest(unittest.TestCase):
         )
         self.assertEqual(
             summary["policy"],
-            "source_verifier_candidate_limit_preserve_queue_priority_v3",
+            "source_verifier_candidate_limit_preserve_queue_priority_v4",
         )
         self.assertTrue(summary["queue_priority_diversity_applied"])
         self.assertEqual(
             summary["queue_priority_diversity_reason"],
-            "replace_second_with_top_ranked_source_backed_sweep_gap",
+            "replace_second_with_source_signal_stronger_sweep_gap",
         )
         self.assertEqual(
             summary["queue_priority_diversity_candidate_option_hash"],
@@ -58964,12 +60840,12 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual([row["label"] for row in capped], ["B", "A"])
         self.assertEqual(
             summary["policy"],
-            "source_verifier_candidate_limit_preserve_queue_priority_v3",
+            "source_verifier_candidate_limit_preserve_queue_priority_v4",
         )
         self.assertTrue(summary["queue_priority_diversity_applied"])
         self.assertEqual(
             summary["queue_priority_diversity_reason"],
-            "replace_second_with_top_ranked_source_backed_candidate",
+            "replace_second_with_source_signal_stronger_candidate",
         )
         self.assertEqual(
             summary["queue_priority_diversity_candidate_option_hash"],
@@ -58984,6 +60860,70 @@ class HleSmokeEvalTest(unittest.TestCase):
             "queue_priority_diversity_top_ranked_source_backed_candidate",
         )
         self.assertIn(stable_hash({"option_label": "D"}), summary["dropped_option_hashes"])
+
+    def test_source_verifier_candidate_cap_keeps_stronger_source_signal_over_rank(self):
+        source_rows = [
+            {
+                "label": "B",
+                "source_quality_score": 11.0,
+                "_source_verifier_retry_reason": "sweep_gap_missing_model_option",
+                "source_cache_corpus_backfill_doc_count": 2,
+                "source_cache_corpus_backfill_targeted_direct_count": 1,
+                "source_cache_corpus_backfill_answer_bearing_direct_count": 1,
+                "source_cache_corpus_backfill_relation_proximity_count": 1,
+            },
+            {
+                "label": "C",
+                "source_quality_score": 10.5,
+                "_source_verifier_retry_reason": "sweep_gap_missing_model_option",
+                "source_cache_corpus_backfill_doc_count": 3,
+                "source_cache_corpus_backfill_targeted_direct_count": 2,
+                "source_cache_corpus_backfill_answer_bearing_direct_count": 2,
+                "source_cache_corpus_backfill_relation_proximity_count": 2,
+            },
+            {
+                "label": "A",
+                "source_quality_score": 12.0,
+                "source_quality_doc_count": 1,
+                "planned_query_answer_bearing_direct_doc_count": 1,
+                "planned_query_relation_proximity_doc_count": 1,
+                "planned_query_required_overlap_doc_count": 1,
+                "_source_verifier_retry_reason": "score_threshold",
+            },
+        ]
+        ranked_rows = [
+            {"label": "A", "net_score": 3.0},
+            {"label": "C", "net_score": 1.0},
+            {"label": "B", "net_score": 0.5},
+        ]
+        queue_summary = {
+            "status": "activated",
+            "reason": "coverage_rows_prioritized",
+            "after_option_hashes": [
+                stable_hash({"option_label": row["label"]}) for row in source_rows
+            ],
+        }
+
+        with patch.dict(
+            os.environ,
+            {"HLE_ENABLE_SOURCE_CACHE_ANSWER_BEARING_OPTION_CLAIM_RETRY": "1"},
+            clear=False,
+        ):
+            capped, summary = _cap_source_verifier_rows_after_queue_priority(
+                source_verifier_rows=source_rows,
+                ranked_rows=ranked_rows,
+                limit=2,
+                queue_priority_summary=queue_summary,
+            )
+
+        self.assertEqual([row["label"] for row in capped], ["B", "C"])
+        self.assertEqual(
+            summary["policy"],
+            "source_verifier_candidate_limit_preserve_queue_priority_v4",
+        )
+        self.assertFalse(summary["queue_priority_diversity_applied"])
+        self.assertTrue(summary["queue_priority_diversity_blocked_by_source_signal"])
+        self.assertIn(stable_hash({"option_label": "A"}), summary["dropped_option_hashes"])
 
     def test_source_verifier_candidate_cap_can_fall_back_to_coverage_cap(self):
         source_rows = [
