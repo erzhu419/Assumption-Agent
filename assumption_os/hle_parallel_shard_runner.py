@@ -727,6 +727,26 @@ def build_runner_env(
         env["MODEL_ROUTER_ATTEMPTS"] = str(model_router_attempts)
     if model_router_transient_extra_attempts is not None:
         env["MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS"] = str(model_router_transient_extra_attempts)
+    if not str(env.get("HLE_RECURSIVE_CHILD_MODEL_ROUTER_ATTEMPTS", "")).strip():
+        env["HLE_RECURSIVE_CHILD_MODEL_ROUTER_ATTEMPTS"] = "1"
+    if not str(env.get("HLE_RECURSIVE_CHILD_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS", "")).strip():
+        env["HLE_RECURSIVE_CHILD_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS"] = "0"
+    if not str(env.get("HLE_VARIANT_RELATION_COMPARATOR_MODEL_CALL_MIN_REMAINING_SEC", "")).strip():
+        env["HLE_VARIANT_RELATION_COMPARATOR_MODEL_CALL_MIN_REMAINING_SEC"] = "60"
+    if not str(env.get("HLE_SOURCE_GROUNDED_OPTION_CLAIM_VERIFIER_CANDIDATE_LIMIT", "")).strip():
+        env["HLE_SOURCE_GROUNDED_OPTION_CLAIM_VERIFIER_CANDIDATE_LIMIT"] = "2"
+    if not str(env.get("HLE_SOURCE_GROUNDED_OPTION_CLAIM_VERIFIER_MODEL_CALL_LIMIT", "")).strip():
+        env["HLE_SOURCE_GROUNDED_OPTION_CLAIM_VERIFIER_MODEL_CALL_LIMIT"] = "2"
+    if not str(env.get("HLE_SOURCE_GROUNDED_OPTION_CLAIM_RETRY_TOP_K", "")).strip():
+        env["HLE_SOURCE_GROUNDED_OPTION_CLAIM_RETRY_TOP_K"] = "1"
+    if not str(env.get("HLE_SOURCE_GROUNDED_OPTION_CLAIM_MISSING_MODEL_RETRY_LIMIT", "")).strip():
+        env["HLE_SOURCE_GROUNDED_OPTION_CLAIM_MISSING_MODEL_RETRY_LIMIT"] = "1"
+    if not str(env.get("HLE_SOURCE_GROUNDED_OPTION_CLAIM_SOURCE_QUALITY_CHALLENGER_LIMIT", "")).strip():
+        env["HLE_SOURCE_GROUNDED_OPTION_CLAIM_SOURCE_QUALITY_CHALLENGER_LIMIT"] = "1"
+    if not str(env.get("HLE_LOW_SUPPORT_OPTION_CLAIM_SOURCE_VERIFIER_LIMIT", "")).strip():
+        env["HLE_LOW_SUPPORT_OPTION_CLAIM_SOURCE_VERIFIER_LIMIT"] = "1"
+    if not str(env.get("HLE_ZERO_QUALITY_SWEEP_GAP_OPTION_CLAIM_SOURCE_VERIFIER_LIMIT", "")).strip():
+        env["HLE_ZERO_QUALITY_SWEEP_GAP_OPTION_CLAIM_SOURCE_VERIFIER_LIMIT"] = "1"
     if variant_total_model_router_attempt_budget is not None:
         env["HLE_VARIANT_TOTAL_MODEL_ROUTER_ATTEMPT_BUDGET"] = str(
             max(1, int(variant_total_model_router_attempt_budget))
@@ -884,6 +904,13 @@ def model_router_policy_from_env(env: dict[str, str]) -> dict[str, Any]:
     return {
         "attempts": env.get("MODEL_ROUTER_ATTEMPTS"),
         "transient_extra_attempts": env.get("MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS"),
+        "recursive_child_attempts": env.get("HLE_RECURSIVE_CHILD_MODEL_ROUTER_ATTEMPTS"),
+        "recursive_child_transient_extra_attempts": env.get(
+            "HLE_RECURSIVE_CHILD_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS"
+        ),
+        "recursive_child_prompt_kind_limit": env.get(
+            "HLE_RECURSIVE_CHILD_PROMPT_KIND_LIMIT"
+        ),
         "timeout_sec": env.get("MODEL_ROUTER_TIMEOUT"),
         "per_attempt_timeout_sec": env.get("MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"),
         "subprocess_calls": env.get("MODEL_ROUTER_SUBPROCESS_CALLS"),
@@ -902,6 +929,9 @@ def model_router_policy_from_env(env: dict[str, str]) -> dict[str, Any]:
         "router_aware_child_worker_cap_disabled": env.get("HLE_DISABLE_ROUTER_AWARE_CHILD_WORKER_CAP"),
         "recursive_selection_model_call_budget": env.get("HLE_RECURSIVE_SELECTION_MODEL_CALL_BUDGET"),
         "recursive_selection_wallclock_budget_sec": env.get("HLE_RECURSIVE_SELECTION_WALLCLOCK_BUDGET_SEC"),
+        "variant_relation_comparator_model_call_min_remaining_sec": env.get(
+            "HLE_VARIANT_RELATION_COMPARATOR_MODEL_CALL_MIN_REMAINING_SEC"
+        ),
         "raw_content_persisted": False,
     }
 
@@ -1057,6 +1087,12 @@ def source_policy_from_env(env: dict[str, str]) -> dict[str, Any]:
         "option_claim_relation_span_pre_directness_comparator_disabled_env": env.get(
             "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_COMPARATOR"
         ),
+        "option_claim_early_source_queue_relation_span_comparator_env": env.get(
+            "HLE_ENABLE_OPTION_CLAIM_EARLY_SOURCE_QUEUE_RELATION_SPAN_COMPARATOR"
+        ),
+        "option_claim_early_source_queue_relation_span_comparator_disabled_env": env.get(
+            "HLE_DISABLE_OPTION_CLAIM_EARLY_SOURCE_QUEUE_RELATION_SPAN_COMPARATOR"
+        ),
         "option_claim_relation_span_pre_directness_no_harm_skip_env": env.get(
             "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_PRE_DIRECTNESS_NO_HARM_SKIP"
         ),
@@ -1092,6 +1128,64 @@ def source_policy_from_env(env: dict[str, str]) -> dict[str, Any]:
         ),
         "option_claim_source_verifier_structured_context_disabled_env": env.get(
             "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT"
+        ),
+        "source_grounded_option_claim_retry_top_k": env.get(
+            "HLE_SOURCE_GROUNDED_OPTION_CLAIM_RETRY_TOP_K"
+        ),
+        "source_grounded_option_claim_verifier_candidate_limit": env.get(
+            "HLE_SOURCE_GROUNDED_OPTION_CLAIM_VERIFIER_CANDIDATE_LIMIT"
+        ),
+        "source_grounded_option_claim_verifier_model_call_limit": env.get(
+            "HLE_SOURCE_GROUNDED_OPTION_CLAIM_VERIFIER_MODEL_CALL_LIMIT"
+        ),
+        "option_claim_source_directness_model_call_cap": (
+            env.get("HLE_OPTION_CLAIM_SOURCE_DIRECTNESS_MODEL_CALL_CAP")
+            or env.get("HLE_OPTION_CLAIM_SOURCE_DIRECTNESS_TOTAL_MODEL_CALL_CAP")
+        ),
+        "source_verifier_candidate_limit_preserve_queue_priority_disabled_env": env.get(
+            "HLE_DISABLE_SOURCE_VERIFIER_CANDIDATE_LIMIT_PRESERVE_QUEUE_PRIORITY"
+        ),
+        "strict_planned_query_answer_bearing_source_priority_disabled_env": env.get(
+            "HLE_DISABLE_STRICT_PLANNED_QUERY_ANSWER_BEARING_SOURCE_PRIORITY"
+        ),
+        "answer_bearing_source_verifier_directness_reserve_bridge_env": env.get(
+            "HLE_ENABLE_ANSWER_BEARING_SOURCE_VERIFIER_DIRECTNESS_RESERVE_BRIDGE"
+        ),
+        "answer_bearing_source_verifier_directness_reserve_bridge_disabled_env": env.get(
+            "HLE_DISABLE_ANSWER_BEARING_SOURCE_VERIFIER_DIRECTNESS_RESERVE_BRIDGE"
+        ),
+        "source_grounded_option_claim_missing_model_retry_limit": env.get(
+            "HLE_SOURCE_GROUNDED_OPTION_CLAIM_MISSING_MODEL_RETRY_LIMIT"
+        ),
+        "source_grounded_option_claim_source_quality_challenger_limit": env.get(
+            "HLE_SOURCE_GROUNDED_OPTION_CLAIM_SOURCE_QUALITY_CHALLENGER_LIMIT"
+        ),
+        "low_support_option_claim_source_verifier_limit": env.get(
+            "HLE_LOW_SUPPORT_OPTION_CLAIM_SOURCE_VERIFIER_LIMIT"
+        ),
+        "zero_quality_sweep_gap_option_claim_source_verifier_limit": env.get(
+            "HLE_ZERO_QUALITY_SWEEP_GAP_OPTION_CLAIM_SOURCE_VERIFIER_LIMIT"
+        ),
+        "source_verifier_semantic_generic_backoff_attempt_pressure_env": env.get(
+            "HLE_ENABLE_SOURCE_VERIFIER_SEMANTIC_GENERIC_BACKOFF_ATTEMPT_PRESSURE"
+        ),
+        "source_verifier_semantic_generic_backoff_attempt_pressure_min_attempts": env.get(
+            "HLE_SOURCE_VERIFIER_SEMANTIC_GENERIC_BACKOFF_ATTEMPT_PRESSURE_MIN_ATTEMPTS"
+        ),
+        "source_verifier_semantic_generic_backoff_min_attempts": env.get(
+            "HLE_SOURCE_VERIFIER_SEMANTIC_GENERIC_BACKOFF_MIN_ATTEMPTS"
+        ),
+        "mc_option_claim_evidence_verifier_parallel_enabled_env": env.get(
+            "HLE_ENABLE_MC_OPTION_CLAIM_EVIDENCE_VERIFIER_PARALLEL"
+        ),
+        "mc_option_claim_evidence_verifier_parallel_workers_env": env.get(
+            "HLE_MC_OPTION_CLAIM_EVIDENCE_VERIFIER_PARALLEL_WORKERS"
+        ),
+        "recursive_rest_child_source_path_preemption_threshold_env": env.get(
+            "HLE_RECURSIVE_REST_CHILD_SOURCE_PATH_PREEMPTION_REMAINING_SEC"
+        ),
+        "recursive_rest_child_source_path_preemption_disabled_env": env.get(
+            "HLE_DISABLE_RECURSIVE_REST_CHILD_SOURCE_PATH_PREEMPTION"
         ),
         "raw_content_persisted": False,
     }
@@ -1264,7 +1358,8 @@ def apply_live_network_defaults(args: argparse.Namespace) -> argparse.Namespace:
         args.model_router_backoff_base_sec = 1.5
     if getattr(args, "model_router_global_concurrency", None) is None:
         workers = max(1, int(getattr(args, "parallel_workers", 1) or 1))
-        args.model_router_global_concurrency = max(1, min(4, workers))
+        min_child_slots = 2 if getattr(args, "agent_child_mode", "parallel_quorum") == "parallel_quorum" else 1
+        args.model_router_global_concurrency = min(4, max(min_child_slots, workers))
     if not getattr(args, "model_router_global_concurrency_dir", ""):
         eval_id = str(getattr(args, "eval_id", "hle_parallel_shard_eval")).replace(os.sep, "_")
         args.model_router_global_concurrency_dir = f"/tmp/assumption_agent_model_slots_{eval_id}"

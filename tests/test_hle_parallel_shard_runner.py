@@ -417,6 +417,8 @@ class TestHleParallelShardRunner(unittest.TestCase):
             "HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER": "",
             "HLE_ENABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR": "1",
             "HLE_DISABLE_OPTION_CLAIM_RELATION_SPAN_COMPARATOR": "",
+            "HLE_ENABLE_OPTION_CLAIM_EARLY_SOURCE_QUEUE_RELATION_SPAN_COMPARATOR": "1",
+            "HLE_DISABLE_OPTION_CLAIM_EARLY_SOURCE_QUEUE_RELATION_SPAN_COMPARATOR": "",
             "HLE_ENABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL": "1",
             "HLE_DISABLE_OPTION_CLAIM_SOURCE_CACHE_CORPUS_BACKFILL": "",
             "HLE_ENABLE_SOURCE_CACHE_ANSWER_BEARING_OPTION_CLAIM_RETRY": "1",
@@ -427,6 +429,17 @@ class TestHleParallelShardRunner(unittest.TestCase):
             "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_ACCEPTANCE_QUALITY_GATE": "",
             "HLE_ENABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT": "1",
             "HLE_DISABLE_OPTION_CLAIM_SOURCE_VERIFIER_STRUCTURED_CONTEXT": "",
+            "HLE_SOURCE_GROUNDED_OPTION_CLAIM_VERIFIER_CANDIDATE_LIMIT": "2",
+            "HLE_SOURCE_GROUNDED_OPTION_CLAIM_VERIFIER_MODEL_CALL_LIMIT": "2",
+            "HLE_OPTION_CLAIM_SOURCE_DIRECTNESS_MODEL_CALL_CAP": "4",
+            "HLE_SOURCE_GROUNDED_OPTION_CLAIM_RETRY_TOP_K": "1",
+            "HLE_SOURCE_GROUNDED_OPTION_CLAIM_MISSING_MODEL_RETRY_LIMIT": "1",
+            "HLE_SOURCE_GROUNDED_OPTION_CLAIM_SOURCE_QUALITY_CHALLENGER_LIMIT": "1",
+            "HLE_LOW_SUPPORT_OPTION_CLAIM_SOURCE_VERIFIER_LIMIT": "1",
+            "HLE_ZERO_QUALITY_SWEEP_GAP_OPTION_CLAIM_SOURCE_VERIFIER_LIMIT": "1",
+            "HLE_ENABLE_SOURCE_VERIFIER_SEMANTIC_GENERIC_BACKOFF_ATTEMPT_PRESSURE": "1",
+            "HLE_SOURCE_VERIFIER_SEMANTIC_GENERIC_BACKOFF_ATTEMPT_PRESSURE_MIN_ATTEMPTS": "2",
+            "HLE_SOURCE_VERIFIER_SEMANTIC_GENERIC_BACKOFF_MIN_ATTEMPTS": "2",
             "SEMANTIC_SCHOLAR_API_KEY": "test-semantic-key",
             "OPENALEX_API_KEY": "test-openalex-key",
         })
@@ -445,6 +458,12 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(source_policy["source_search_cache_only"], "1")
         self.assertEqual(source_policy["option_claim_relation_query_planner_env"], "1")
         self.assertEqual(source_policy["option_claim_relation_span_comparator_env"], "1")
+        self.assertEqual(
+            source_policy[
+                "option_claim_early_source_queue_relation_span_comparator_env"
+            ],
+            "1",
+        )
         self.assertEqual(source_policy["option_claim_source_cache_corpus_backfill_env"], "1")
         self.assertEqual(source_policy["option_claim_source_verifier_repair_context_env"], "1")
         self.assertEqual(
@@ -454,6 +473,28 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(
             source_policy["option_claim_source_verifier_structured_context_env"],
             "1",
+        )
+        self.assertEqual(source_policy["source_grounded_option_claim_verifier_candidate_limit"], "2")
+        self.assertEqual(source_policy["source_grounded_option_claim_verifier_model_call_limit"], "2")
+        self.assertEqual(source_policy["option_claim_source_directness_model_call_cap"], "4")
+        self.assertEqual(source_policy["source_grounded_option_claim_retry_top_k"], "1")
+        self.assertEqual(source_policy["source_grounded_option_claim_missing_model_retry_limit"], "1")
+        self.assertEqual(source_policy["source_grounded_option_claim_source_quality_challenger_limit"], "1")
+        self.assertEqual(source_policy["low_support_option_claim_source_verifier_limit"], "1")
+        self.assertEqual(source_policy["zero_quality_sweep_gap_option_claim_source_verifier_limit"], "1")
+        self.assertEqual(
+            source_policy["source_verifier_semantic_generic_backoff_attempt_pressure_env"],
+            "1",
+        )
+        self.assertEqual(
+            source_policy[
+                "source_verifier_semantic_generic_backoff_attempt_pressure_min_attempts"
+            ],
+            "2",
+        )
+        self.assertEqual(
+            source_policy["source_verifier_semantic_generic_backoff_min_attempts"],
+            "2",
         )
         self.assertTrue(source_policy["semantic_scholar_api_key_present"])
         self.assertTrue(source_policy["openalex_api_key_present"])
@@ -1153,6 +1194,18 @@ class TestHleParallelShardRunner(unittest.TestCase):
         )
         self.assertEqual(env["MODEL_ROUTER_ATTEMPTS"], "7")
         self.assertEqual(env["MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS"], "0")
+        self.assertEqual(env["HLE_RECURSIVE_CHILD_MODEL_ROUTER_ATTEMPTS"], "1")
+        self.assertEqual(env["HLE_RECURSIVE_CHILD_MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS"], "0")
+        self.assertEqual(env["HLE_VARIANT_RELATION_COMPARATOR_MODEL_CALL_MIN_REMAINING_SEC"], "60")
+        self.assertEqual(env["HLE_SOURCE_GROUNDED_OPTION_CLAIM_VERIFIER_CANDIDATE_LIMIT"], "2")
+        self.assertEqual(env["HLE_SOURCE_GROUNDED_OPTION_CLAIM_RETRY_TOP_K"], "1")
+        self.assertEqual(env["HLE_SOURCE_GROUNDED_OPTION_CLAIM_MISSING_MODEL_RETRY_LIMIT"], "1")
+        self.assertEqual(env["HLE_SOURCE_GROUNDED_OPTION_CLAIM_SOURCE_QUALITY_CHALLENGER_LIMIT"], "1")
+        self.assertEqual(env["HLE_LOW_SUPPORT_OPTION_CLAIM_SOURCE_VERIFIER_LIMIT"], "1")
+        self.assertEqual(env["HLE_ZERO_QUALITY_SWEEP_GAP_OPTION_CLAIM_SOURCE_VERIFIER_LIMIT"], "1")
+        self.assertNotIn("HLE_ENABLE_SOURCE_VERIFIER_SEMANTIC_GENERIC_BACKOFF_ATTEMPT_PRESSURE", env)
+        self.assertNotIn("HLE_SOURCE_VERIFIER_SEMANTIC_GENERIC_BACKOFF_ATTEMPT_PRESSURE_MIN_ATTEMPTS", env)
+        self.assertNotIn("HLE_SOURCE_VERIFIER_SEMANTIC_GENERIC_BACKOFF_MIN_ATTEMPTS", env)
         self.assertEqual(env["HLE_VARIANT_TOTAL_MODEL_ROUTER_ATTEMPT_BUDGET"], "20")
         self.assertEqual(env["HLE_ENABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER"], "1")
         self.assertNotIn("HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER", env)
@@ -1171,11 +1224,27 @@ class TestHleParallelShardRunner(unittest.TestCase):
         policy = model_router_policy_from_env(env)
         self.assertEqual(policy["subprocess_calls"], "1")
         self.assertEqual(policy["subprocess_no_byte_timeout_sec"], "120")
+        self.assertEqual(policy["recursive_child_attempts"], "1")
+        self.assertEqual(policy["recursive_child_transient_extra_attempts"], "0")
         self.assertEqual(policy["parallel_shard_workers"], "4")
         self.assertEqual(policy["variant_total_model_router_attempt_budget"], "20")
         self.assertEqual(policy["recursive_selection_model_call_budget"], "2")
         self.assertEqual(policy["recursive_selection_wallclock_budget_sec"], "180.0")
+        self.assertEqual(policy["variant_relation_comparator_model_call_min_remaining_sec"], "60")
         self.assertFalse(policy["raw_content_persisted"])
+        source_policy = source_policy_from_env(env)
+        self.assertEqual(source_policy["source_grounded_option_claim_verifier_candidate_limit"], "2")
+        self.assertEqual(source_policy["source_grounded_option_claim_verifier_model_call_limit"], "2")
+        self.assertEqual(source_policy["source_grounded_option_claim_retry_top_k"], "1")
+        self.assertEqual(source_policy["source_grounded_option_claim_missing_model_retry_limit"], "1")
+        self.assertEqual(source_policy["source_grounded_option_claim_source_quality_challenger_limit"], "1")
+        self.assertEqual(source_policy["low_support_option_claim_source_verifier_limit"], "1")
+        self.assertEqual(source_policy["zero_quality_sweep_gap_option_claim_source_verifier_limit"], "1")
+        self.assertIsNone(source_policy["source_verifier_semantic_generic_backoff_attempt_pressure_env"])
+        self.assertIsNone(
+            source_policy["source_verifier_semantic_generic_backoff_attempt_pressure_min_attempts"]
+        )
+        self.assertIsNone(source_policy["source_verifier_semantic_generic_backoff_min_attempts"])
         configured_values = " ".join(
             env[key]
             for key in (
@@ -1187,6 +1256,13 @@ class TestHleParallelShardRunner(unittest.TestCase):
                 "MODEL_ROUTER_SUBPROCESS_CALLS",
                 "MODEL_ROUTER_SUBPROCESS_NO_BYTE_TIMEOUT_SEC",
                 "HLE_PARALLEL_SHARD_WORKERS",
+                "HLE_VARIANT_RELATION_COMPARATOR_MODEL_CALL_MIN_REMAINING_SEC",
+                "HLE_SOURCE_GROUNDED_OPTION_CLAIM_VERIFIER_CANDIDATE_LIMIT",
+                "HLE_SOURCE_GROUNDED_OPTION_CLAIM_RETRY_TOP_K",
+                "HLE_SOURCE_GROUNDED_OPTION_CLAIM_MISSING_MODEL_RETRY_LIMIT",
+                "HLE_SOURCE_GROUNDED_OPTION_CLAIM_SOURCE_QUALITY_CHALLENGER_LIMIT",
+                "HLE_LOW_SUPPORT_OPTION_CLAIM_SOURCE_VERIFIER_LIMIT",
+                "HLE_ZERO_QUALITY_SWEEP_GAP_OPTION_CLAIM_SOURCE_VERIFIER_LIMIT",
                 "MODEL_ROUTER_BACKOFF_BASE_SEC",
                 "MODEL_ROUTER_GLOBAL_CONCURRENCY",
                 "MODEL_ROUTER_GLOBAL_CONCURRENCY_DIR",
@@ -1321,8 +1397,34 @@ class TestHleParallelShardRunner(unittest.TestCase):
             env = build_runner_env(
                 model_router_attempts=None,
                 model_router_timeout=None,
-            )
+        )
         self.assertEqual(env["HLE_RECURSIVE_CHILD_BATCH_MAX_WAIT_SEC"], "90")
+
+    def test_model_router_policy_logs_recursive_child_prompt_kind_limit(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            env = build_runner_env(
+                model_router_attempts=None,
+                model_router_timeout=None,
+            )
+        self.assertNotIn("HLE_RECURSIVE_CHILD_PROMPT_KIND_LIMIT", env)
+        self.assertIsNone(
+            model_router_policy_from_env(env)["recursive_child_prompt_kind_limit"]
+        )
+
+        with patch.dict(
+            os.environ,
+            {"HLE_RECURSIVE_CHILD_PROMPT_KIND_LIMIT": "4"},
+            clear=True,
+        ):
+            env = build_runner_env(
+                model_router_attempts=None,
+                model_router_timeout=None,
+            )
+        self.assertEqual(env["HLE_RECURSIVE_CHILD_PROMPT_KIND_LIMIT"], "4")
+        self.assertEqual(
+            model_router_policy_from_env(env)["recursive_child_prompt_kind_limit"],
+            "4",
+        )
 
     def test_live_model_preflight_fails_fast_without_model_key(self) -> None:
         with patch("assumption_os.hle_parallel_shard_runner.subprocess.run") as run:
@@ -1449,10 +1551,51 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(args.model_router_global_slot_ttl_sec, 7200.0)
         self.assertEqual(args.model_router_global_slot_wait_sec, 7200.0)
 
+        single_parallel = Namespace(
+            execute_live=True,
+            eval_id="eval/single",
+            parallel_workers=1,
+            agent_child_mode="parallel_quorum",
+            model_router_attempts=None,
+            model_router_transient_extra_attempts=None,
+            model_router_per_attempt_timeout=None,
+            model_router_subprocess_calls=None,
+            disable_model_router_subprocess_calls=False,
+            model_router_no_byte_timeout_sec=None,
+            model_router_backoff_base_sec=None,
+            model_router_global_concurrency=None,
+            model_router_global_concurrency_dir="",
+            model_router_global_slot_ttl_sec=None,
+            model_router_global_slot_wait_sec=None,
+        )
+        apply_live_network_defaults(single_parallel)
+        self.assertEqual(single_parallel.model_router_global_concurrency, 2)
+
+        single_serial = Namespace(
+            execute_live=True,
+            eval_id="eval/single-serial",
+            parallel_workers=1,
+            agent_child_mode="serial",
+            model_router_attempts=None,
+            model_router_transient_extra_attempts=None,
+            model_router_per_attempt_timeout=None,
+            model_router_subprocess_calls=None,
+            disable_model_router_subprocess_calls=False,
+            model_router_no_byte_timeout_sec=None,
+            model_router_backoff_base_sec=None,
+            model_router_global_concurrency=None,
+            model_router_global_concurrency_dir="",
+            model_router_global_slot_ttl_sec=None,
+            model_router_global_slot_wait_sec=None,
+        )
+        apply_live_network_defaults(single_serial)
+        self.assertEqual(single_serial.model_router_global_concurrency, 1)
+
         explicit = Namespace(
             execute_live=True,
             eval_id="eval",
             parallel_workers=8,
+            agent_child_mode="parallel_quorum",
             model_router_attempts=3,
             model_router_transient_extra_attempts=4,
             model_router_per_attempt_timeout=45,
@@ -1482,6 +1625,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
             execute_live=False,
             eval_id="eval",
             parallel_workers=8,
+            agent_child_mode="parallel_quorum",
             model_router_attempts=None,
             model_router_transient_extra_attempts=None,
             model_router_per_attempt_timeout=None,
@@ -1507,6 +1651,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
             execute_live=True,
             eval_id="eval",
             parallel_workers=2,
+            agent_child_mode="parallel_quorum",
             model_router_attempts=None,
             model_router_transient_extra_attempts=None,
             model_router_per_attempt_timeout=None,
