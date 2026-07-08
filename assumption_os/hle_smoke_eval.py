@@ -2440,6 +2440,8 @@ def _collect_existing_hle_problem_hashes(*, root: Path, artifact_glob: str) -> s
     for path in root.glob(artifact_glob):
         if not path.is_file():
             continue
+        if _is_existing_hle_hash_cache_artifact(path):
+            continue
         if path.suffix == ".jsonl":
             _collect_problem_hashes_from_jsonl(path, hashes)
         elif path.suffix == ".json":
@@ -2454,10 +2456,17 @@ def _collect_existing_hle_problem_hashes(*, root: Path, artifact_glob: str) -> s
     return hashes
 
 
+def _is_existing_hle_hash_cache_artifact(path: Path) -> bool:
+    """Return true for preflight hash-cache files, not scored HLE artifacts."""
+    return path.name.endswith(".existing_hash_cache.json")
+
+
 def _existing_hle_hash_manifest(*, root: Path, artifact_glob: str) -> list[dict[str, Any]]:
     manifest: list[dict[str, Any]] = []
     for path in sorted(root.glob(artifact_glob)):
         if not path.is_file():
+            continue
+        if _is_existing_hle_hash_cache_artifact(path):
             continue
         try:
             stat = path.stat()

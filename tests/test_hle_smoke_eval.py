@@ -69690,6 +69690,34 @@ class HleSmokeEvalTest(unittest.TestCase):
 
         self.assertEqual(hashes, {"parallel-old"})
 
+    def test_collect_existing_hle_problem_hashes_ignores_preflight_hash_caches(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_dir = root / "phase four" / "assumption_graph" / "paper_readiness_20260604" / "hle_parallel_runs"
+            run_dir.mkdir(parents=True)
+            (run_dir / "hle_old.json").write_text(
+                __import__("json").dumps({"rows": [{"problem_id_hash": "scored"}]}),
+                encoding="utf-8",
+            )
+            (run_dir / "hle_old.existing_hash_cache.json").write_text(
+                __import__("json").dumps(
+                    {
+                        "artifact_glob": "phase four/assumption_graph/paper_readiness_20260604/hle_parallel_runs/hle*.json*",
+                        "manifest": [],
+                        "problem_id_hashes": ["cache-only"],
+                        "raw_content_persisted": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            hashes = _collect_existing_hle_problem_hashes(
+                root=root,
+                artifact_glob="phase four/assumption_graph/paper_readiness_20260604/hle_parallel_runs/hle*.json*",
+            )
+
+        self.assertEqual(hashes, {"scored"})
+
     def test_collect_existing_hle_problem_hashes_can_use_stale_frozen_cache(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
