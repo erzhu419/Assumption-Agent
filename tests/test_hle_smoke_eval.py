@@ -153,6 +153,7 @@ from assumption_os.hle_smoke_eval import (
     _recursive_late_child_model_attempt_count,
     _recursive_timeout_recovery_trigger,
     _recursive_verifier_timeout,
+    _request_timeout_for_attempt,
     _child_model_failover_trigger,
     _call_model,
     _call_model_unwatched,
@@ -4885,6 +4886,53 @@ class HleSmokeEvalTest(unittest.TestCase):
             "Question text is not logged by router sec budget",
             json.dumps(events),
         )
+
+    def test_model_router_request_timeout_clamps_to_router_sec_budget_remaining(self):
+        problem = _HleProblem({
+            "id_hash": "p-router-sec-timeout",
+            "question_hash": "q-router-sec-timeout",
+            "answer_hash": "a-router-sec-timeout",
+            "_question": "Question text is not logged by router sec timeout",
+            "_answer": "A",
+            "answer_type": "multipleChoice",
+            "category": "unit",
+            "raw_subject": "unit",
+        })
+        with TemporaryDirectory() as tmpdir:
+            logger = _JsonlLogger(Path(tmpdir) / "watchdog.jsonl")
+            with patch.dict(
+                os.environ,
+                {
+                    "HLE_VARIANT_TOTAL_MODEL_ROUTER_SEC_BUDGET": "10",
+                    "MODEL_ROUTER_PER_ATTEMPT_TIMEOUT": "100",
+                },
+                clear=False,
+            ):
+                with _variant_execution_watchdog(
+                    eval_id="wd",
+                    call_id="router-sec-timeout-clamp",
+                    problem=problem,
+                    model="gpt-5.4-mini",
+                    variant="raw",
+                    logger=logger,
+                    timeout_sec=None,
+                    model_call_budget=None,
+                ) as watchdog:
+                    attempt_index = _variant_watchdog_before_model_router_attempt(
+                        model="gpt-5.4-mini",
+                        attempt=1,
+                        max_attempts=1,
+                        subprocess=True,
+                    )
+                    active = watchdog[
+                        "_model_router_attempt_started_monotonic_by_index"
+                    ]
+                    active[str(attempt_index)] = time.monotonic() - 7.0
+                    request_timeout = _request_timeout_for_attempt(deadline=None)
+
+        self.assertIsNotNone(request_timeout)
+        self.assertLessEqual(request_timeout, 3.1)
+        self.assertGreater(request_timeout, 0.0)
 
     def test_source_verifier_programmatic_witness_margin_activates_on_generic_false_negative(self):
         options = {"A": "candidate alpha", "B": "candidate beta"}

@@ -756,6 +756,16 @@ def _variant_watchdog_model_router_remaining_sec(
     )
 
 
+def _variant_watchdog_model_router_deadline() -> float | None:
+    state = _active_variant_watchdog()
+    if not state or not state.get("enabled"):
+        return None
+    remaining = _variant_watchdog_model_router_remaining_sec(state)
+    if not isinstance(remaining, (int, float)):
+        return None
+    return time.monotonic() + max(0.0, float(remaining))
+
+
 def _variant_watchdog_router_metadata() -> dict[str, Any]:
     state = _active_variant_watchdog()
     if not state or not state.get("enabled"):
@@ -112129,6 +112139,9 @@ def _request_timeout_for_attempt(*, deadline: float | None) -> float | None:
     variant_deadline = _variant_watchdog_deadline()
     if variant_deadline is not None:
         deadline = variant_deadline if deadline is None else min(deadline, variant_deadline)
+    router_deadline = _variant_watchdog_model_router_deadline()
+    if router_deadline is not None:
+        deadline = router_deadline if deadline is None else min(deadline, router_deadline)
     per_attempt = _model_router_per_attempt_timeout()
     if deadline is None:
         return per_attempt
