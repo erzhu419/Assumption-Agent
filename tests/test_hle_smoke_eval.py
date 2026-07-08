@@ -328,6 +328,7 @@ from assumption_os.hle_smoke_eval import (
     _source_grounded_option_claim_finite_coverage_relation_rows,
     _source_grounded_option_claim_verifier_model_call_limit,
     _cap_source_verifier_rows_after_queue_priority,
+    _strong_sweep_source_quality_guard_option_hashes_from_ranked_rows,
     _source_cache_answer_bearing_focused_retry_detail,
     _source_cache_answer_bearing_focused_retry_coverage_gate_detail,
     _source_cache_answer_bearing_focused_retry_context,
@@ -53560,6 +53561,102 @@ class HleSmokeEvalTest(unittest.TestCase):
             [c_hash],
         )
 
+    def test_option_claim_contrastive_candidate_selection_protects_strong_sweep_source_quality_label(self):
+        rows = [
+            {"label": "A", "net_score": 40.0, "source_quality_score": 8.0, "source_quality_doc_count": 1},
+            {"label": "B", "net_score": 30.0, "source_quality_score": 7.0, "source_quality_doc_count": 1},
+            {
+                "label": "C",
+                "net_score": 8.0,
+                "source_quality_score": 12.0,
+                "source_quality_doc_count": 3,
+                "support_doc_count": 2,
+                "local_relation_query_expansion_doc_count": 4,
+                "refute_doc_count": 1,
+                "ambiguous_doc_count": 0,
+            },
+            {"label": "D", "net_score": 6.0, "source_quality_score": 2.0, "source_quality_doc_count": 0, "doc_count": 2},
+            {
+                "label": "E",
+                "net_score": 2.0,
+                "source_quality_score": 6.5,
+                "source_quality_doc_count": 0,
+                "doc_count": 3,
+                "local_relation_query_expansion_doc_count": 2,
+                "refute_doc_count": 0,
+                "ambiguous_doc_count": 0,
+            },
+            {
+                "label": "F",
+                "net_score": -1.0,
+                "source_quality_score": 14.0,
+                "source_quality_doc_count": 3,
+                "answer_web_cache_sweep_general_relation_directish_count": 1,
+                "local_relation_query_expansion_doc_count": 2,
+                "refute_doc_count": 0,
+            },
+            {
+                "label": "G",
+                "net_score": -2.0,
+                "source_quality_score": 9.0,
+                "source_quality_doc_count": 1,
+                "answer_web_cache_sweep_general_relation_directish_count": 1,
+                "answer_web_cache_sweep_relation_slot_covered_count": 1,
+                "answer_web_cache_sweep_relation_proximity_count": 1,
+                "answer_web_cache_sweep_relation_signature_required_overlap_count": 1,
+                "refute_doc_count": 0,
+                "ambiguous_doc_count": 0,
+            },
+        ]
+
+        with patch.dict(os.environ, {"HLE_OPTION_CLAIM_CONTRASTIVE_ADJUDICATOR_CANDIDATE_LIMIT": "5"}):
+            selection = _option_claim_contrastive_candidate_selection(
+                ranked_rows=rows,
+                options={label: label for label in "ABCDEFG"},
+                missing_model_labels=["C", "D", "E"],
+            )
+
+        c_hash = stable_hash({"option_label": "C"})
+        d_hash = stable_hash({"option_label": "D"})
+        g_hash = stable_hash({"option_label": "G"})
+        self.assertIn(c_hash, selection["candidate_option_hashes"])
+        self.assertNotIn(d_hash, selection["candidate_option_hashes"])
+        self.assertNotIn(g_hash, selection["candidate_option_hashes"])
+        self.assertEqual(
+            selection["strong_sweep_source_quality_guard_option_hashes"],
+            [c_hash],
+        )
+        self.assertFalse(selection["overall_answer_web_relation_challenger_replaced"])
+        self.assertEqual(
+            selection["source_cache_answer_bearing_replacement_protected_by_reason"],
+            {"overall_answer_web_relation_challenger": [c_hash]},
+        )
+        trace_actions = {
+            (
+                item.get("action"),
+                item.get("reason"),
+                item.get("option_hash"),
+                item.get("blocked_existing_option_hash"),
+            )
+            for item in selection["candidate_selection_trace"]
+        }
+        self.assertIn(
+            (
+                "skip_protected_replacement",
+                "overall_answer_web_relation_challenger",
+                g_hash,
+                c_hash,
+            ),
+            trace_actions,
+        )
+        audit_by_hash = {
+            row["option_hash"]: row
+            for row in selection["candidate_pool_audit_rows"]
+        }
+        self.assertTrue(audit_by_hash[c_hash]["strong_sweep_source_quality_guard_candidate"])
+        safe = _safe_contrastive_candidate_selection_summary(selection)
+        self.assertEqual(safe["strong_sweep_source_quality_guard_option_hashes"], [c_hash])
+
     def test_option_claim_contrastive_candidate_selection_promotes_source_cache_row_signal(self):
         rows = [
             {"label": "A", "net_score": 30.0, "source_quality_score": 8.0, "source_quality_doc_count": 1},
@@ -55777,6 +55874,256 @@ class HleSmokeEvalTest(unittest.TestCase):
             detail["source_quality_regression_protection"]["reason"],
             "span_directness_model_candidate_insufficient_regression_protection",
         )
+
+    def test_source_quality_directness_promotion_allows_protected_strong_sweep_dual_directness_consensus(self):
+        f_hash = stable_hash({"option_label": "F"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+                "relation_span_comparator_status": "activated",
+                "relation_span_comparator_reason": (
+                    "single_direct_relation_span_candidate"
+                ),
+                "relation_span_comparator_selected_option_hash": f_hash,
+                "relation_span_comparator_direct_candidate_option_hashes": [f_hash],
+            },
+            span_directness_summary={
+                "status": "activated",
+                "reason": "single_direct_span_candidate_after_recovery",
+                "direct_candidate_count": 1,
+                "direct_candidate_option_hashes": [f_hash],
+                "selected_option_hash": f_hash,
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": f_hash,
+                    "selection_reason": "best_sweep_only_source_quality",
+                    "source_quality_score": 11.8,
+                    "source_quality_doc_count": 3,
+                    "support_doc_count": 2,
+                    "refute_doc_count": 1,
+                    "ambiguous_doc_count": 0,
+                    "local_relation_query_expansion_doc_count": 8,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_unique_span_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 2,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "candidate_direct_relation_span_top_source_doc_shared": False,
+                    "span_directness_candidate_relation_span_direct_doc_count": 1,
+                    "span_directness_candidate_relation_span_complete_count": 1,
+                    "span_directness_direct_high_confidence": True,
+                    "relation_span_comparator_direct_high_confidence": True,
+                    "relation_span_comparator_evidence_relation": "answer_bearing",
+                    "source_cache_answer_bearing_focused_retry_strict_direct_support_doc_count": 3,
+                    "source_cache_answer_bearing_focused_retry_required_overlap_doc_count": 5,
+                    "source_cache_answer_bearing_focused_retry_candidate_specific_span_doc_count": 3,
+                    "source_cache_answer_bearing_focused_retry_directish_doc_count": 3,
+                    "source_cache_answer_bearing_focused_retry_relation_proximity_doc_count": 8,
+                    "source_quality_statement_fact_refutation_doc_count": 0,
+                    "source_quality_statement_fact_refutation_high_confidence_doc_count": 0,
+                    "source_quality_max_statement_fact_refutation_strength": 0.0,
+                    "source_verifier_rejection_reason": "no_selected_label_generic",
+                },
+            ],
+            options={"F": "Foxtrot"},
+            candidate_labels=["F"],
+            protected_strong_sweep_source_quality_option_hashes=[f_hash],
+        )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(detail["status"], "activated")
+        self.assertEqual(detail["selected_option_hash"], f_hash)
+        self.assertEqual(
+            detail["source_quality_regression_protection"]["reason"],
+            "protected_strong_sweep_dual_directness_consensus",
+        )
+        protected_detail = detail["source_quality_regression_protection"][
+            "protected_strong_sweep_dual_directness_consensus"
+        ]
+        self.assertTrue(protected_detail["allowed"])
+        self.assertTrue(protected_detail["protected_hash_match"])
+        self.assertTrue(protected_detail["span_consensus"])
+        self.assertTrue(protected_detail["relation_consensus"])
+        self.assertTrue(protected_detail["source_gate"])
+
+    def test_source_quality_directness_promotion_blocks_protected_strong_sweep_without_relation_consensus(self):
+        f_hash = stable_hash({"option_label": "F"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+                "relation_span_comparator_status": "blocked_not_direct_relation",
+                "relation_span_comparator_reason": "no_direct_relation_span_candidate",
+            },
+            span_directness_summary={
+                "status": "activated",
+                "reason": "single_direct_span_candidate_after_recovery",
+                "direct_candidate_count": 1,
+                "direct_candidate_option_hashes": [f_hash],
+                "selected_option_hash": f_hash,
+            },
+            candidate_summaries=[
+                {
+                    "option_hash": f_hash,
+                    "selection_reason": "best_sweep_only_source_quality",
+                    "source_quality_score": 11.8,
+                    "source_quality_doc_count": 3,
+                    "support_doc_count": 2,
+                    "refute_doc_count": 1,
+                    "ambiguous_doc_count": 0,
+                    "local_relation_query_expansion_doc_count": 8,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_unique_span_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 2,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "candidate_direct_relation_span_top_source_doc_shared": False,
+                    "span_directness_candidate_relation_span_direct_doc_count": 1,
+                    "span_directness_candidate_relation_span_complete_count": 1,
+                    "span_directness_direct_high_confidence": True,
+                    "relation_span_comparator_direct_high_confidence": False,
+                    "source_cache_answer_bearing_focused_retry_strict_direct_support_doc_count": 3,
+                    "source_cache_answer_bearing_focused_retry_required_overlap_doc_count": 5,
+                    "source_cache_answer_bearing_focused_retry_candidate_specific_span_doc_count": 3,
+                    "source_cache_answer_bearing_focused_retry_directish_doc_count": 3,
+                    "source_cache_answer_bearing_focused_retry_relation_proximity_doc_count": 8,
+                    "source_quality_statement_fact_refutation_doc_count": 0,
+                    "source_quality_statement_fact_refutation_high_confidence_doc_count": 0,
+                    "source_quality_max_statement_fact_refutation_strength": 0.0,
+                    "source_verifier_rejection_reason": "no_selected_label_generic",
+                },
+            ],
+            options={"F": "Foxtrot"},
+            candidate_labels=["F"],
+            protected_strong_sweep_source_quality_option_hashes=[f_hash],
+        )
+
+        self.assertFalse(detail["promote"])
+        self.assertEqual(detail["status"], "blocked")
+        self.assertEqual(
+            detail["reason"],
+            "span_directness_model_candidate_insufficient_regression_protection",
+        )
+        protected_detail = detail["source_quality_regression_protection"][
+            "protected_strong_sweep_dual_directness_consensus"
+        ]
+        self.assertFalse(protected_detail["allowed"])
+        self.assertTrue(protected_detail["protected_hash_match"])
+        self.assertTrue(protected_detail["span_consensus"])
+        self.assertFalse(protected_detail["relation_consensus"])
+        self.assertEqual(
+            protected_detail["reason"],
+            "missing_single_relation_span_comparator_consensus",
+        )
+
+    def test_source_quality_directness_promotion_tiebreaks_protected_dual_direct_over_unverified_source_top(self):
+        f_hash = stable_hash({"option_label": "F"})
+        l_hash = stable_hash({"option_label": "L"})
+        detail = _option_claim_source_quality_directness_promotion_detail(
+            contrastive_adjudicator_summary={
+                "status": "blocked_not_direct_high_confidence",
+                "direct_high_confidence": False,
+                "relation_span_comparator_status": "activated",
+                "relation_span_comparator_reason": (
+                    "single_direct_relation_span_candidate"
+                ),
+                "relation_span_comparator_selected_option_hash": f_hash,
+                "relation_span_comparator_direct_candidate_option_hashes": [f_hash],
+            },
+            span_directness_summary={
+                "status": "activated",
+                "reason": "single_direct_span_candidate",
+                "direct_candidate_count": 1,
+                "direct_candidate_option_hashes": [f_hash],
+                "selected_option_hash": f_hash,
+            },
+            candidate_summaries=[
+                {
+                    "label": "L",
+                    "option_hash": l_hash,
+                    "selection_reason": "runner_up_ranked",
+                    "source_quality_score": 11.875,
+                    "source_quality_doc_count": 4,
+                    "support_doc_count": 4,
+                    "refute_doc_count": 0,
+                    "ambiguous_doc_count": 0,
+                    "local_relation_query_expansion_doc_count": 6,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 1,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "span_directness_direct_high_confidence": False,
+                    "relation_span_comparator_direct_high_confidence": False,
+                    "relation_span_comparator_evidence_relation": "generic",
+                    "answer_web_cache_sweep_general_relation_directish_count": 2,
+                    "answer_web_cache_sweep_relation_slot_covered_count": 1,
+                    "answer_web_cache_sweep_relation_proximity_count": 2,
+                    "answer_web_cache_sweep_relation_signature_required_overlap_count": 2,
+                    "source_verifier_rejection_reason": "no_selected_label_generic",
+                },
+                {
+                    "label": "F",
+                    "option_hash": f_hash,
+                    "selection_reason": "best_sweep_only_source_quality",
+                    "source_quality_score": 11.8333,
+                    "source_quality_doc_count": 3,
+                    "support_doc_count": 2,
+                    "refute_doc_count": 1,
+                    "ambiguous_doc_count": 0,
+                    "local_relation_query_expansion_doc_count": 8,
+                    "candidate_direct_relation_span_count": 2,
+                    "candidate_unique_span_count": 1,
+                    "candidate_direct_relation_span_top_relation_signature_required_overlap": 2,
+                    "candidate_direct_relation_span_top_relation_signature_missing_term_count": 0,
+                    "candidate_direct_relation_span_top_relation_signature_proximity": True,
+                    "candidate_direct_relation_span_top_relation_proximity": True,
+                    "candidate_direct_relation_span_top_shared_doc": False,
+                    "candidate_direct_relation_span_top_source_doc_shared": False,
+                    "span_directness_candidate_relation_span_direct_doc_count": 1,
+                    "span_directness_candidate_relation_span_complete_count": 1,
+                    "span_directness_direct_high_confidence": True,
+                    "relation_span_comparator_direct_high_confidence": True,
+                    "relation_span_comparator_evidence_relation": "answer_bearing",
+                    "source_quality_statement_fact_refutation_doc_count": 0,
+                    "source_quality_statement_fact_refutation_high_confidence_doc_count": 0,
+                    "source_quality_max_statement_fact_refutation_strength": 0.0,
+                    "source_verifier_rejection_reason": "",
+                },
+            ],
+            options={"F": "Foxtrot", "L": "Lima"},
+            candidate_labels=["L", "F"],
+            protected_strong_sweep_source_quality_option_hashes=[f_hash],
+        )
+
+        self.assertTrue(detail["promote"])
+        self.assertEqual(detail["selected_option_hash"], f_hash)
+        self.assertTrue(
+            detail["protected_strong_sweep_dual_directness_tiebreak_applied"]
+        )
+        self.assertEqual(
+            detail["protected_strong_sweep_dual_directness_tiebreak_reason"],
+            "single_protected_dual_direct_candidate_over_unverified_top",
+        )
+        self.assertEqual(
+            detail["protected_strong_sweep_dual_directness_tiebreak_original_top_option_hash"],
+            l_hash,
+        )
+        self.assertEqual(
+            detail["source_quality_regression_protection"]["reason"],
+            "protected_strong_sweep_dual_directness_consensus",
+        )
+        protected_detail = detail["source_quality_regression_protection"][
+            "protected_strong_sweep_dual_directness_consensus"
+        ]
+        self.assertTrue(protected_detail["accepted_source_verifier_direct_gate"])
 
     def test_source_quality_directness_promotion_accepts_strong_candidate_span_bundle_lane(
         self,
@@ -60770,7 +61117,7 @@ class HleSmokeEvalTest(unittest.TestCase):
         )
         self.assertEqual(
             summary["policy"],
-            "source_verifier_candidate_limit_preserve_queue_priority_v4",
+            "source_verifier_candidate_limit_preserve_queue_priority_v5",
         )
         self.assertTrue(summary["queue_priority_diversity_applied"])
         self.assertEqual(
@@ -60840,7 +61187,7 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual([row["label"] for row in capped], ["B", "A"])
         self.assertEqual(
             summary["policy"],
-            "source_verifier_candidate_limit_preserve_queue_priority_v4",
+            "source_verifier_candidate_limit_preserve_queue_priority_v5",
         )
         self.assertTrue(summary["queue_priority_diversity_applied"])
         self.assertEqual(
@@ -60860,6 +61207,264 @@ class HleSmokeEvalTest(unittest.TestCase):
             "queue_priority_diversity_top_ranked_source_backed_candidate",
         )
         self.assertIn(stable_hash({"option_label": "D"}), summary["dropped_option_hashes"])
+
+    def test_source_verifier_candidate_cap_preserves_refuted_strong_sweep_source_guard(self):
+        source_rows = [
+            {
+                "label": "B",
+                "source_quality_score": 11.0,
+                "source_quality_doc_count": 1,
+                "_source_verifier_retry_reason": "sweep_gap_missing_model_option",
+            },
+            {
+                "label": "D",
+                "source_quality_score": 7.0,
+                "_source_verifier_retry_reason": "sweep_gap_missing_model_option",
+            },
+            {
+                "label": "A",
+                "source_quality_score": 12.0,
+                "source_quality_doc_count": 3,
+                "support_doc_count": 2,
+                "local_relation_query_expansion_doc_count": 4,
+                "refute_doc_count": 1,
+                "ambiguous_doc_count": 0,
+                "_source_verifier_retry_reason": (
+                    "sweep_gap_missing_model_option_refuted_low_support"
+                ),
+            },
+            {
+                "label": "E",
+                "source_quality_score": 6.0,
+                "_source_verifier_retry_reason": "sweep_gap_missing_model_option",
+            },
+        ]
+        ranked_rows = [
+            {"label": "B", "net_score": 1.0},
+            {"label": "A", "net_score": 0.5},
+            {"label": "D", "net_score": -1.0},
+            {"label": "E", "net_score": -2.0},
+        ]
+        queue_summary = {
+            "status": "activated",
+            "reason": "coverage_rows_prioritized",
+            "after_option_hashes": [
+                stable_hash({"option_label": row["label"]}) for row in source_rows
+            ],
+        }
+
+        capped, summary = _cap_source_verifier_rows_after_queue_priority(
+            source_verifier_rows=source_rows,
+            ranked_rows=ranked_rows,
+            limit=2,
+            queue_priority_summary=queue_summary,
+        )
+
+        self.assertEqual([row["label"] for row in capped], ["B", "A"])
+        self.assertTrue(summary["queue_priority_diversity_applied"])
+        self.assertEqual(
+            summary["queue_priority_diversity_reason"],
+            "replace_second_with_strong_sweep_source_quality_guard",
+        )
+        self.assertEqual(
+            summary["queue_priority_diversity_candidate_option_hash"],
+            stable_hash({"option_label": "A"}),
+        )
+        self.assertEqual(
+            summary["queue_priority_diversity_replaced_option_hash"],
+            stable_hash({"option_label": "D"}),
+        )
+        self.assertIn(stable_hash({"option_label": "D"}), summary["dropped_option_hashes"])
+
+    def test_source_verifier_candidate_cap_reserves_strong_sweep_guard_over_duplicate_family(self):
+        source_rows = [
+            {
+                "label": "B",
+                "source_quality_score": 13.0,
+                "planned_query_answer_bearing_direct_doc_count": 2,
+                "planned_query_relation_proximity_doc_count": 2,
+                "planned_query_required_overlap_doc_count": 2,
+                "refute_doc_count": 1,
+                "_source_verifier_retry_reason": (
+                    "sweep_gap_missing_model_option_refuted_low_support"
+                ),
+            },
+            {
+                "label": "D",
+                "source_quality_score": 12.0,
+                "planned_query_answer_bearing_direct_doc_count": 2,
+                "planned_query_relation_proximity_doc_count": 2,
+                "planned_query_required_overlap_doc_count": 2,
+                "refute_doc_count": 1,
+                "_source_verifier_retry_reason": (
+                    "sweep_gap_missing_model_option_refuted_low_support"
+                ),
+            },
+            {
+                "label": "A",
+                "source_quality_score": 10.5,
+                "source_quality_doc_count": 3,
+                "support_doc_count": 2,
+                "local_relation_query_expansion_doc_count": 4,
+                "refute_doc_count": 1,
+                "ambiguous_doc_count": 0,
+                "_source_verifier_retry_reason": (
+                    "sweep_gap_missing_model_option_refuted_low_support"
+                ),
+            },
+            {
+                "label": "C",
+                "source_quality_score": 14.0,
+                "source_quality_doc_count": 4,
+                "support_doc_count": 3,
+                "local_relation_query_expansion_doc_count": 5,
+                "refute_doc_count": 1,
+                "ambiguous_doc_count": 0,
+                "_source_verifier_retry_reason": (
+                    "sweep_gap_missing_model_option_refuted_low_support"
+                ),
+            },
+        ]
+        ranked_rows = [
+            {"label": "B", "net_score": 2.0},
+            {"label": "D", "net_score": 1.5},
+            {"label": "A", "net_score": -3.0},
+            {"label": "C", "net_score": -4.0},
+        ]
+        queue_summary = {
+            "status": "activated",
+            "reason": "coverage_rows_prioritized",
+            "after_option_hashes": [
+                stable_hash({"option_label": row["label"]}) for row in source_rows
+            ],
+        }
+
+        capped, summary = _cap_source_verifier_rows_after_queue_priority(
+            source_verifier_rows=source_rows,
+            ranked_rows=ranked_rows,
+            limit=2,
+            queue_priority_summary=queue_summary,
+        )
+
+        self.assertEqual([row["label"] for row in capped], ["B", "A"])
+        self.assertTrue(summary["queue_priority_diversity_applied"])
+        self.assertEqual(
+            summary["queue_priority_diversity_reason"],
+            "reserve_strong_sweep_source_quality_guard_slot",
+        )
+        self.assertEqual(
+            summary["queue_priority_diversity_candidate_option_hash"],
+            stable_hash({"option_label": "A"}),
+        )
+        self.assertEqual(
+            summary["queue_priority_diversity_replaced_option_hash"],
+            stable_hash({"option_label": "D"}),
+        )
+
+    def test_source_verifier_candidate_cap_reserves_protected_strong_sweep_guard(self):
+        source_rows = [
+            {
+                "label": "B",
+                "source_quality_score": 13.0,
+                "planned_query_answer_bearing_direct_doc_count": 2,
+                "planned_query_relation_proximity_doc_count": 2,
+                "planned_query_required_overlap_doc_count": 2,
+                "refute_doc_count": 1,
+                "_source_verifier_retry_reason": (
+                    "sweep_gap_missing_model_option_refuted_low_support"
+                ),
+            },
+            {
+                "label": "C",
+                "source_quality_score": 12.0,
+                "planned_query_answer_bearing_direct_doc_count": 2,
+                "planned_query_relation_proximity_doc_count": 2,
+                "planned_query_required_overlap_doc_count": 2,
+                "refute_doc_count": 1,
+                "_source_verifier_retry_reason": "missing_model_option_refuted_low_support",
+            },
+            {
+                "label": "A",
+                "source_quality_score": 10.5,
+                "source_quality_doc_count": 3,
+                "support_doc_count": 2,
+                "local_relation_query_expansion_doc_count": 4,
+                "refute_doc_count": 1,
+                "ambiguous_doc_count": 0,
+                "_source_verifier_retry_reason": (
+                    "sweep_gap_missing_model_option_refuted_low_support"
+                ),
+            },
+        ]
+        ranked_rows = [
+            {
+                "label": "B",
+                "net_score": 2.0,
+                "source_quality_score": 13.0,
+                "source_quality_doc_count": 4,
+                "support_doc_count": 3,
+                "local_relation_query_expansion_doc_count": 5,
+                "refute_doc_count": 1,
+                "ambiguous_doc_count": 0,
+            },
+            {
+                "label": "C",
+                "net_score": 1.5,
+                "source_quality_score": 12.0,
+                "source_quality_doc_count": 4,
+                "support_doc_count": 3,
+                "local_relation_query_expansion_doc_count": 5,
+                "refute_doc_count": 1,
+                "ambiguous_doc_count": 0,
+            },
+            {
+                "label": "A",
+                "net_score": -3.0,
+                "source_quality_score": 10.5,
+                "source_quality_doc_count": 3,
+                "support_doc_count": 2,
+                "local_relation_query_expansion_doc_count": 4,
+                "refute_doc_count": 1,
+                "ambiguous_doc_count": 0,
+            },
+        ]
+        queue_summary = {
+            "status": "activated",
+            "reason": "coverage_rows_prioritized",
+            "after_option_hashes": [
+                stable_hash({"option_label": row["label"]}) for row in source_rows
+            ],
+        }
+        protected_hashes = (
+            _strong_sweep_source_quality_guard_option_hashes_from_ranked_rows(
+                ranked_rows,
+                ["A", "B", "C"],
+            )
+        )
+
+        capped, summary = _cap_source_verifier_rows_after_queue_priority(
+            source_verifier_rows=source_rows,
+            ranked_rows=ranked_rows,
+            limit=2,
+            queue_priority_summary=queue_summary,
+            protected_option_hashes=protected_hashes,
+        )
+
+        self.assertEqual(protected_hashes, [stable_hash({"option_label": "A"})])
+        self.assertEqual([row["label"] for row in capped], ["B", "A"])
+        self.assertTrue(summary["queue_priority_diversity_applied"])
+        self.assertEqual(
+            summary["queue_priority_diversity_reason"],
+            "reserve_protected_strong_sweep_source_quality_guard_slot",
+        )
+        self.assertEqual(
+            summary["queue_priority_diversity_candidate_option_hash"],
+            stable_hash({"option_label": "A"}),
+        )
+        self.assertEqual(
+            summary["queue_priority_diversity_replaced_option_hash"],
+            stable_hash({"option_label": "C"}),
+        )
 
     def test_source_verifier_candidate_cap_keeps_stronger_source_signal_over_rank(self):
         source_rows = [
@@ -60919,7 +61524,7 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual([row["label"] for row in capped], ["B", "C"])
         self.assertEqual(
             summary["policy"],
-            "source_verifier_candidate_limit_preserve_queue_priority_v4",
+            "source_verifier_candidate_limit_preserve_queue_priority_v5",
         )
         self.assertFalse(summary["queue_priority_diversity_applied"])
         self.assertTrue(summary["queue_priority_diversity_blocked_by_source_signal"])

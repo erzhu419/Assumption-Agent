@@ -21514,6 +21514,7 @@ def _maybe_run_mc_option_claim_evidence_verifier(
         "coverage_reason_by_option_hash": {},
         "coverage_option_hashes": [],
         "dropped_option_hashes": [],
+        "protected_strong_sweep_source_quality_option_hashes": [],
         "raw_content_persisted": False,
     }
     source_verifier_candidate_limit = (
@@ -21522,12 +21523,19 @@ def _maybe_run_mc_option_claim_evidence_verifier(
     if source_verifier_rows and source_verifier_candidate_limit is not None:
         original_source_verifier_rows = list(source_verifier_rows)
         if len(source_verifier_rows) > source_verifier_candidate_limit:
+            protected_strong_sweep_source_quality_hashes = (
+                _strong_sweep_source_quality_guard_option_hashes_from_ranked_rows(
+                    ranked,
+                    missing_model_labels,
+                )
+            )
             capped_source_verifier_rows, coverage_cap_summary = (
                 _cap_source_verifier_rows_after_queue_priority(
                     source_verifier_rows=source_verifier_rows,
                     ranked_rows=ranked,
                     limit=source_verifier_candidate_limit,
                     queue_priority_summary=source_verifier_queue_priority_summary,
+                    protected_option_hashes=protected_strong_sweep_source_quality_hashes,
                 )
             )
             kept_ids = {id(row) for row in capped_source_verifier_rows}
@@ -21588,6 +21596,9 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                     coverage_cap_summary.get(
                         "queue_priority_diversity_blocked_by_source_signal"
                     )
+                ),
+                "protected_strong_sweep_source_quality_option_hashes": list(
+                    protected_strong_sweep_source_quality_hashes
                 ),
                 "raw_content_persisted": False,
             }
@@ -21677,6 +21688,13 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                 source_verifier_candidate_limit_gate_summary.get(
                     "queue_priority_diversity_blocked_by_source_signal"
                 )
+            ),
+            "protected_strong_sweep_source_quality_option_hashes": list(
+                source_verifier_candidate_limit_gate_summary.get(
+                    "protected_strong_sweep_source_quality_option_hashes",
+                    [],
+                )
+                or []
             ),
             "raw_content_persisted": False,
         },
@@ -28120,6 +28138,13 @@ def _maybe_run_mc_option_claim_evidence_verifier(
                         candidate_span_bundle_detail=(
                             source_quality_candidate_span_bundle_detail
                         ),
+                        protected_strong_sweep_source_quality_option_hashes=(
+                            source_verifier_candidate_limit_gate_summary.get(
+                                "protected_strong_sweep_source_quality_option_hashes",
+                                [],
+                            )
+                            or []
+                        ),
                         stem=stem,
                     )
                 )
@@ -34020,12 +34045,96 @@ def _cap_low_support_source_verifier_rows_with_coverage(
     return selected_rows, summary
 
 
+def _strong_sweep_source_quality_guard_option_hashes_from_ranked_rows(
+    ranked_rows: list[dict[str, Any]],
+    missing_model_labels: Iterable[str] | None,
+) -> list[str]:
+    missing_label_set = {
+        str(label).strip()
+        for label in (missing_model_labels or [])
+        if str(label).strip()
+    }
+    initial_candidate_label_set = {
+        str(row.get("label") or "").strip()
+        for row in list(ranked_rows or [])[:2]
+        if str(row.get("label") or "").strip()
+    }
+    candidates: list[dict[str, Any]] = []
+    for ranked_index, row in enumerate(ranked_rows or []):
+        label = str(row.get("label") or "").strip()
+        if not label or label not in missing_label_set:
+            continue
+        if label in initial_candidate_label_set:
+            continue
+        source_quality_score = float(row.get("source_quality_score") or 0.0)
+        source_quality_doc_count = int(row.get("source_quality_doc_count") or 0)
+        support_doc_count = int(row.get("support_doc_count") or 0)
+        refute_doc_count = int(row.get("refute_doc_count") or 0)
+        ambiguous_doc_count = int(row.get("ambiguous_doc_count") or 0)
+        local_relation_doc_count = (
+            int(row.get("local_relation_corpus_doc_count") or 0)
+            + int(row.get("local_relation_query_expansion_doc_count") or 0)
+            + int(row.get("sweep_gap_local_relation_backfill_doc_count") or 0)
+            + int(row.get("source_cache_corpus_backfill_doc_count") or 0)
+        )
+        if ambiguous_doc_count > 1 or refute_doc_count > 1:
+            continue
+        guarded = bool(
+            source_quality_score >= 10.0
+            and (
+                (
+                    refute_doc_count == 0
+                    and (
+                        source_quality_doc_count >= 2
+                        or support_doc_count >= 2
+                        or local_relation_doc_count >= 3
+                    )
+                )
+                or (
+                    refute_doc_count == 1
+                    and source_quality_doc_count >= 2
+                    and support_doc_count >= 2
+                    and local_relation_doc_count >= 3
+                )
+            )
+        )
+        if not guarded:
+            continue
+        candidates.append({
+            "label": label,
+            "ranked_option_rank": ranked_index + 1,
+            "source_quality_score": source_quality_score,
+            "source_quality_doc_count": source_quality_doc_count,
+            "support_doc_count": support_doc_count,
+            "refute_doc_count": refute_doc_count,
+            "ambiguous_doc_count": ambiguous_doc_count,
+            "local_relation_doc_count": local_relation_doc_count,
+            "net_score": float(row.get("net_score") or 0.0),
+        })
+    if not candidates:
+        return []
+    candidates.sort(
+        key=lambda item: (
+            -float(item["source_quality_score"]),
+            -float(item["source_quality_doc_count"]),
+            -float(item["support_doc_count"]),
+            float(item["refute_doc_count"]),
+            float(item["ambiguous_doc_count"]),
+            -float(item["local_relation_doc_count"]),
+            -float(item["net_score"]),
+            float(item["ranked_option_rank"]),
+        )
+    )
+    return [stable_hash({"option_label": str(candidates[0]["label"])})]
+
+
 def _cap_source_verifier_rows_after_queue_priority(
     *,
     source_verifier_rows: list[dict[str, Any]],
     ranked_rows: list[dict[str, Any]],
     limit: int,
     queue_priority_summary: dict[str, Any] | None,
+    protected_option_hashes: Iterable[str] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     original_rows = list(source_verifier_rows or [])
     limit = max(1, min(12, int(limit or 0)))
@@ -34047,6 +34156,11 @@ def _cap_source_verifier_rows_after_queue_priority(
         diversity_candidate: dict[str, Any] | None = None
         diversity_replaced: dict[str, Any] | None = None
         diversity_blocked_by_source_signal = False
+        protected_option_hash_set = {
+            str(item)
+            for item in (protected_option_hashes or [])
+            if str(item)
+        }
 
         def retry_reason(row: dict[str, Any] | None) -> str:
             if not isinstance(row, dict):
@@ -34067,6 +34181,10 @@ def _cap_source_verifier_rows_after_queue_priority(
             if not isinstance(row, dict):
                 return ""
             return str(row.get("label") or "")
+
+        def row_option_hash(row: dict[str, Any] | None) -> str:
+            label = row_label(row)
+            return stable_hash({"option_label": label}) if label else ""
 
         def row_rank(row: dict[str, Any] | None) -> int:
             label = row_label(row)
@@ -34135,7 +34253,10 @@ def _cap_source_verifier_rows_after_queue_priority(
                 if row_label(row)
                 and row_label(row) not in selected_label_set
                 and has_source_or_relation_signal(row)
-                and int(row.get("refute_doc_count") or 0) <= 0
+                and (
+                    int(row.get("refute_doc_count") or 0) <= 0
+                    or _source_verifier_row_strong_sweep_source_quality_guard(row)
+                )
             ]
             if replacement_candidates:
                 source_backed_candidates = [
@@ -34144,6 +34265,23 @@ def _cap_source_verifier_rows_after_queue_priority(
                 top_ranked_replacement_row = min(
                     source_backed_candidates or replacement_candidates,
                     key=source_attempt_sort_key,
+                )
+                strong_sweep_guard_candidates = [
+                    row
+                    for row in replacement_candidates
+                    if _source_verifier_row_strong_sweep_source_quality_guard(row)
+                ]
+                protected_strong_sweep_guard_candidates = [
+                    row
+                    for row in strong_sweep_guard_candidates
+                    if row_option_hash(row) in protected_option_hash_set
+                ]
+                reserved_strong_sweep_guard_row = (
+                    protected_strong_sweep_guard_candidates[0]
+                    if protected_strong_sweep_guard_candidates
+                    else strong_sweep_guard_candidates[0]
+                    if strong_sweep_guard_candidates
+                    else None
                 )
                 first_family = retry_family(selected_rows[0])
                 second_family = retry_family(selected_rows[1])
@@ -34162,6 +34300,11 @@ def _cap_source_verifier_rows_after_queue_priority(
                 candidate_source_signal_stronger = bool(
                     candidate_source_signal_score > replaced_source_signal_score
                 )
+                reserved_candidate_protected = bool(
+                    reserved_strong_sweep_guard_row is not None
+                    and row_option_hash(reserved_strong_sweep_guard_row)
+                    in protected_option_hash_set
+                )
                 if (
                     candidate_source_signal_stronger
                     and candidate_rank < second_rank
@@ -34175,6 +34318,12 @@ def _cap_source_verifier_rows_after_queue_priority(
                         diversity_reason = (
                             "replace_second_with_source_signal_stronger_sweep_gap"
                         )
+                    if _source_verifier_row_strong_sweep_source_quality_guard(
+                        top_ranked_replacement_row
+                    ):
+                        diversity_reason = (
+                            "replace_second_with_strong_sweep_source_quality_guard"
+                        )
                     elif not candidate_source_backed and same_family_pair:
                         diversity_reason = (
                             "replace_second_same_family_with_top_ranked_coverage"
@@ -34184,6 +34333,27 @@ def _cap_source_verifier_rows_after_queue_priority(
                     selected_rows = [
                         selected_rows[0],
                         top_ranked_replacement_row,
+                        *selected_rows[2:],
+                    ]
+                elif (
+                    (same_family_pair or reserved_candidate_protected)
+                    and reserved_strong_sweep_guard_row is not None
+                    and not any(
+                        _source_verifier_row_strong_sweep_source_quality_guard(row)
+                        for row in selected_rows
+                    )
+                ):
+                    diversity_applied = True
+                    diversity_reason = (
+                        "reserve_protected_strong_sweep_source_quality_guard_slot"
+                        if reserved_candidate_protected
+                        else "reserve_strong_sweep_source_quality_guard_slot"
+                    )
+                    diversity_candidate = reserved_strong_sweep_guard_row
+                    diversity_replaced = selected_rows[1]
+                    selected_rows = [
+                        selected_rows[0],
+                        reserved_strong_sweep_guard_row,
                         *selected_rows[2:],
                     ]
                 elif candidate_rank < second_rank and (
@@ -34207,7 +34377,7 @@ def _cap_source_verifier_rows_after_queue_priority(
         return selected_rows, {
             "status": "activated",
             "reason": "cap_preserved_source_verifier_queue_priority",
-            "policy": "source_verifier_candidate_limit_preserve_queue_priority_v4",
+            "policy": "source_verifier_candidate_limit_preserve_queue_priority_v5",
             "original_source_verifier_row_count": len(original_rows),
             "capped_source_verifier_row_count": len(selected_rows),
             "limit": limit,
@@ -34257,6 +34427,7 @@ def _cap_source_verifier_rows_after_queue_priority(
             "queue_priority_diversity_blocked_by_source_signal": (
                 diversity_blocked_by_source_signal
             ),
+            "protected_option_hashes": sorted(protected_option_hash_set),
             "raw_content_persisted": False,
         }
     return _cap_low_support_source_verifier_rows_with_coverage(
@@ -37744,6 +37915,7 @@ def _option_claim_query_bound_option_anchor_bridge_priority_hashes(
         "source_cache_answer_bearing_top_signal_selected_option_hashes",
         "overall_source_quality_runner_up_challenger_option_hashes",
         "source_cache_answer_bearing_row_signal_option_hashes",
+        "strong_sweep_source_quality_guard_option_hashes",
     )
     single_keys = (
         "best_sweep_only_challenger_option_hash",
@@ -58281,11 +58453,46 @@ def _option_claim_contrastive_candidate_selection(
     protected_sweep_relation_replaced_label = ""
     best_overall_source_replaced_label = ""
     tail_label = ""
+    strong_sweep_source_quality_guard_label_set: set[str] = set()
     overall_source_rows: list[dict[str, Any]] = []
     answer_web_physics_bound_bridge_rows: list[dict[str, Any]] = []
     answer_web_relation_rows: list[dict[str, Any]] = []
     overall_answer_web_relation_rows: list[dict[str, Any]] = []
     protected_sweep_relation_rows: list[dict[str, Any]] = []
+
+    def strong_sweep_source_quality_guard(label: str) -> bool:
+        item = candidate_meta_for(label)
+        if not item:
+            return False
+        if label not in missing_label_set:
+            return False
+        if int(item.get("ambiguous_doc_count") or 0) > 1:
+            return False
+        refute_doc_count = int(item.get("refute_doc_count") or 0)
+        source_quality_doc_count = int(item.get("source_quality_doc_count") or 0)
+        support_doc_count = int(item.get("support_doc_count") or 0)
+        local_relation_doc_count = int(item.get("local_relation_doc_count") or 0)
+        if refute_doc_count > 1:
+            return False
+        return bool(
+            float(item.get("source_quality_score") or 0.0) >= 10.0
+            and (
+                (
+                    refute_doc_count == 0
+                    and (
+                        source_quality_doc_count >= 2
+                        or support_doc_count >= 2
+                        or local_relation_doc_count >= 3
+                    )
+                )
+                or (
+                    refute_doc_count == 1
+                    and source_quality_doc_count >= 2
+                    and support_doc_count >= 2
+                    and local_relation_doc_count >= 3
+                )
+            )
+        )
     if sweep_rows and len(candidate_labels) < limit:
         source_sorted = sorted(
             sweep_rows,
@@ -58501,6 +58708,12 @@ def _option_claim_contrastive_candidate_selection(
             if protected_sweep_relation_replaced_label:
                 break
             protected_sweep_relation_label = ""
+    strong_sweep_source_quality_guard_label_set = {
+        label
+        for label, reason in selection_reasons_by_label.items()
+        if reason == "best_sweep_only_source_quality"
+        and strong_sweep_source_quality_guard(label)
+    }
     if sweep_rows:
         for label in source_verifier_coverage_label_order:
             if label not in missing_label_set or label in candidate_labels:
@@ -58516,6 +58729,7 @@ def _option_claim_contrastive_candidate_selection(
                 label,
                 "source_verifier_coverage_continuation",
                 replaceable_reasons={
+                    "best_sweep_only_source_quality",
                     "best_sweep_only_ranked",
                     "tail_sweep_only_large_option",
                     "finite_option_coverage_ranked",
@@ -58705,7 +58919,10 @@ def _option_claim_contrastive_candidate_selection(
                     "finite_option_coverage_ranked",
                     "finite_option_coverage_option_order",
                 },
-                protected_existing_labels=source_cache_answer_bearing_label_set,
+                protected_existing_labels=(
+                    source_cache_answer_bearing_label_set
+                    | strong_sweep_source_quality_guard_label_set
+                ),
             )
     try:
         overall_source_runner_up_limit = int(
@@ -58933,6 +59150,9 @@ def _option_claim_contrastive_candidate_selection(
         source_cache_answer_bearing_top_signal_candidate = (
             label in source_cache_answer_bearing_top_signal_label_set
         )
+        strong_sweep_source_quality_guard_candidate = (
+            label in strong_sweep_source_quality_guard_label_set
+        )
         source_quality_evidence_signal = bool(
             source_quality_doc_count > 0
             or support_doc_count > 0
@@ -58994,6 +59214,9 @@ def _option_claim_contrastive_candidate_selection(
             "source_cache_answer_bearing_top_signal_candidate": bool(
                 source_cache_answer_bearing_top_signal_candidate
             ),
+            "strong_sweep_source_quality_guard_candidate": bool(
+                strong_sweep_source_quality_guard_candidate
+            ),
             "source_quality_score": round(source_quality_score, 4),
             "source_quality_doc_count": source_quality_doc_count,
             "support_doc_count": support_doc_count,
@@ -59043,7 +59266,7 @@ def _option_claim_contrastive_candidate_selection(
         )
     )
     return {
-        "policy": "top_runner_up_plus_sweep_quality_bridge_overall_rank_tail_finite_coverage_v7",
+        "policy": "top_runner_up_plus_sweep_quality_bridge_overall_rank_tail_finite_coverage_v8",
         "candidate_labels": candidate_labels,
         "candidate_option_hashes": [stable_hash({"option_label": label}) for label in candidate_labels],
         "selection_reasons_by_label": selection_reasons_by_label,
@@ -59129,6 +59352,14 @@ def _option_claim_contrastive_candidate_selection(
             for item in source_cache_answer_bearing_row_signal_rows
             if str(item.get("label") or "") in options
         ],
+        "strong_sweep_source_quality_guard_option_hashes": [
+            stable_hash({"option_label": label})
+            for label in sorted(strong_sweep_source_quality_guard_label_set)
+            if label in options
+        ],
+        "strong_sweep_source_quality_guard_count": len(
+            strong_sweep_source_quality_guard_label_set
+        ),
         "source_cache_answer_bearing_replacement_protected_count": sum(
             len(values) for values in protected_replacement_skip_labels_by_reason.values()
         ),
@@ -59439,6 +59670,12 @@ def _safe_contrastive_candidate_selection_summary(selection: dict[str, Any]) -> 
         ),
         "source_cache_answer_bearing_row_signal_option_hashes": list(
             selection.get("source_cache_answer_bearing_row_signal_option_hashes", []) or []
+        ),
+        "strong_sweep_source_quality_guard_option_hashes": list(
+            selection.get("strong_sweep_source_quality_guard_option_hashes", []) or []
+        ),
+        "strong_sweep_source_quality_guard_count": int(
+            selection.get("strong_sweep_source_quality_guard_count") or 0
         ),
         "source_cache_answer_bearing_replacement_protected_count": int(
             selection.get("source_cache_answer_bearing_replacement_protected_count") or 0
@@ -61519,12 +61756,18 @@ def _option_claim_source_quality_directness_promotion_detail(
     options: dict[str, str],
     candidate_labels: list[str],
     candidate_span_bundle_detail: dict[str, Any] | None = None,
+    protected_strong_sweep_source_quality_option_hashes: Iterable[str] | None = None,
     stem: str = "",
 ) -> dict[str, Any]:
     label_by_hash = {
         stable_hash({"option_label": label}): label
         for label in candidate_labels
         if label in options
+    }
+    protected_strong_sweep_source_quality_hashes = {
+        str(value)
+        for value in protected_strong_sweep_source_quality_option_hashes or []
+        if str(value).strip()
     }
     detail: dict[str, Any] = {
         "promote": False,
@@ -61553,6 +61796,9 @@ def _option_claim_source_quality_directness_promotion_detail(
         ),
         "span_directness_unresolved_multiple_direct_conflict": (
             _option_claim_unresolved_multiple_direct_conflict(span_directness_summary)
+        ),
+        "protected_strong_sweep_source_quality_option_hashes": sorted(
+            protected_strong_sweep_source_quality_hashes
         ),
     }
     relation_comparator_selected_option_hash = str(
@@ -66737,6 +66983,322 @@ def _option_claim_source_quality_directness_promotion_detail(
             + int(item.get("candidate_direct_relation_span_count") or 0)
         )
 
+    def _protected_strong_sweep_dual_directness_consensus_detail(
+        item: dict[str, Any],
+    ) -> dict[str, Any]:
+        policy = "protected_strong_sweep_dual_directness_consensus_v1"
+        disabled = _env_flag(
+            "HLE_DISABLE_OPTION_CLAIM_PROTECTED_STRONG_SWEEP_DUAL_DIRECTNESS_PROMOTION"
+        )
+        option_hash = str(item.get("option_hash") or "")
+        directness_path = str(item.get("directness_path") or "")
+        span_direct_hashes = {
+            str(value)
+            for value in detail.get("direct_candidate_option_hashes", []) or []
+            if str(value).strip()
+        }
+        span_selected_hash = str(
+            detail.get("span_directness_selected_option_hash") or ""
+        )
+        span_status = str(detail.get("span_directness_status") or "")
+        span_reason = str(detail.get("span_directness_reason") or "")
+        relation_selected_hash = str(
+            detail.get("relation_span_comparator_selected_option_hash") or ""
+        )
+        relation_status = str(detail.get("relation_span_comparator_status") or "")
+        relation_reason = str(detail.get("relation_span_comparator_reason") or "")
+        relation_direct_hashes = {
+            str(value)
+            for value in detail.get(
+                "relation_span_comparator_direct_candidate_option_hashes",
+                [],
+            )
+            or []
+            if str(value).strip()
+        }
+        score = float(item.get("source_quality_score") or 0.0)
+        doc_count = int(item.get("source_quality_doc_count") or 0)
+        support_doc_count = int(item.get("support_doc_count") or 0)
+        refute_doc_count = int(item.get("refute_doc_count") or 0)
+        ambiguous_doc_count = int(item.get("ambiguous_doc_count") or 0)
+        relation_required_overlap = int(item.get("relation_required_overlap") or 0)
+        relation_required_missing_terms = int(
+            item.get("relation_required_missing_terms") or 0
+        )
+        relation_signature_proximity = bool(item.get("relation_signature_proximity"))
+        relation_proximity = bool(item.get("relation_proximity"))
+        shared_relation_span = bool(item.get("shared_relation_span"))
+        source_doc_shared_relation_span = bool(
+            item.get("source_doc_shared_relation_span")
+        )
+        local_relation_doc_count = int(item.get("local_relation_doc_count") or 0)
+        candidate_direct_relation_span_count = int(
+            item.get("candidate_direct_relation_span_count") or 0
+        )
+        focused_retry_strict_direct = int(
+            item.get(
+                "source_cache_answer_bearing_focused_retry_strict_direct_support_doc_count"
+            )
+            or 0
+        )
+        focused_retry_required_overlap = int(
+            item.get(
+                "source_cache_answer_bearing_focused_retry_required_overlap_doc_count"
+            )
+            or 0
+        )
+        focused_retry_candidate_specific = int(
+            item.get(
+                "source_cache_answer_bearing_focused_retry_candidate_specific_span_doc_count"
+            )
+            or 0
+        )
+        focused_retry_directish = int(
+            item.get("source_cache_answer_bearing_focused_retry_directish_doc_count")
+            or 0
+        )
+        focused_retry_relation_proximity = int(
+            item.get(
+                "source_cache_answer_bearing_focused_retry_relation_proximity_doc_count"
+            )
+            or 0
+        )
+        statement_refutation_count = int(
+            item.get("source_quality_statement_fact_refutation_doc_count") or 0
+        )
+        statement_refutation_high_confidence_count = int(
+            item.get(
+                "source_quality_statement_fact_refutation_high_confidence_doc_count"
+            )
+            or 0
+        )
+        max_statement_refutation_strength = float(
+            item.get("source_quality_max_statement_fact_refutation_strength") or 0.0
+        )
+        source_rejection = str(item.get("source_verifier_rejection_reason") or "")
+        source_rejection_allowed = source_rejection in {
+            "",
+            "no_selected_label_generic",
+            "no_selected_label_unsupported",
+            "variant_model_call_budget_reserved_for_option_claim_directness",
+            "variant_model_call_budget_reserved_for_protected_stages",
+        }
+        protected_hash_match = bool(
+            option_hash
+            and option_hash in protected_strong_sweep_source_quality_hashes
+        )
+        span_consensus = bool(
+            span_status == "activated"
+            and span_reason
+            in {
+                "single_direct_span_candidate",
+                "single_direct_span_candidate_after_recovery",
+            }
+            and span_selected_hash == option_hash
+            and span_direct_hashes == {option_hash}
+            and int(detail.get("direct_candidate_count") or 0) == 1
+        )
+        relation_consensus = bool(
+            relation_status == "activated"
+            and relation_reason == "single_direct_relation_span_candidate"
+            and relation_selected_hash == option_hash
+            and relation_direct_hashes == {option_hash}
+            and bool(item.get("relation_span_comparator_direct"))
+            and str(
+                item.get("relation_span_comparator_evidence_relation") or ""
+            ).strip().lower()
+            == "answer_bearing"
+        )
+        focused_retry_gate = bool(
+            focused_retry_strict_direct >= 2
+            and focused_retry_required_overlap >= 3
+            and focused_retry_candidate_specific >= 2
+            and focused_retry_directish >= 3
+            and focused_retry_relation_proximity >= 4
+        )
+        accepted_source_verifier_direct_gate = bool(
+            source_rejection == ""
+            and relation_consensus
+            and bool(item.get("relation_span_comparator_direct"))
+            and str(
+                item.get("relation_span_comparator_evidence_relation") or ""
+            ).strip().lower()
+            == "answer_bearing"
+        )
+        source_gate = bool(
+            score >= 10.0
+            and doc_count >= 3
+            and support_doc_count >= 2
+            and refute_doc_count <= 1
+            and ambiguous_doc_count <= 1
+            and statement_refutation_count <= 0
+            and statement_refutation_high_confidence_count <= 0
+            and max_statement_refutation_strength <= 0.0
+            and relation_required_overlap >= 2
+            and relation_required_missing_terms <= 0
+            and relation_signature_proximity
+            and relation_proximity
+            and not shared_relation_span
+            and not source_doc_shared_relation_span
+            and local_relation_doc_count >= 4
+            and candidate_direct_relation_span_count >= 2
+            and (
+                focused_retry_gate
+                or accepted_source_verifier_direct_gate
+            )
+            and source_rejection_allowed
+        )
+        allowed = bool(
+            not disabled
+            and directness_path == "span_directness_model"
+            and protected_hash_match
+            and span_consensus
+            and relation_consensus
+            and source_gate
+        )
+        if allowed:
+            reason = "protected_strong_sweep_dual_directness_consensus"
+        elif disabled:
+            reason = "protected_strong_sweep_dual_directness_disabled"
+        elif directness_path != "span_directness_model":
+            reason = "not_span_directness_model_path"
+        elif not protected_hash_match:
+            reason = "selected_hash_not_protected_strong_sweep_source_quality"
+        elif not span_consensus:
+            reason = "missing_single_span_directness_consensus"
+        elif not relation_consensus:
+            reason = "missing_single_relation_span_comparator_consensus"
+        elif not source_gate:
+            reason = "protected_strong_sweep_source_gate_insufficient"
+        else:
+            reason = "blocked"
+        return {
+            "policy": policy,
+            "enabled": not disabled,
+            "allowed": allowed,
+            "reason": reason,
+            "selected_option_hash": option_hash or None,
+            "protected_hash_match": protected_hash_match,
+            "span_consensus": span_consensus,
+            "relation_consensus": relation_consensus,
+            "source_gate": source_gate,
+            "focused_retry_gate": focused_retry_gate,
+            "accepted_source_verifier_direct_gate": (
+                accepted_source_verifier_direct_gate
+            ),
+            "span_status": span_status or None,
+            "span_reason": span_reason or None,
+            "span_selected_option_hash": span_selected_hash or None,
+            "span_direct_option_hashes": sorted(span_direct_hashes),
+            "relation_status": relation_status or None,
+            "relation_reason": relation_reason or None,
+            "relation_selected_option_hash": relation_selected_hash or None,
+            "relation_direct_option_hashes": sorted(relation_direct_hashes),
+            "source_quality_score": round(score, 4),
+            "source_quality_doc_count": doc_count,
+            "support_doc_count": support_doc_count,
+            "refute_doc_count": refute_doc_count,
+            "ambiguous_doc_count": ambiguous_doc_count,
+            "source_quality_statement_fact_refutation_doc_count": (
+                statement_refutation_count
+            ),
+            "source_quality_statement_fact_refutation_high_confidence_doc_count": (
+                statement_refutation_high_confidence_count
+            ),
+            "source_quality_max_statement_fact_refutation_strength": round(
+                max_statement_refutation_strength,
+                4,
+            ),
+            "relation_required_overlap": relation_required_overlap,
+            "relation_required_missing_terms": relation_required_missing_terms,
+            "relation_signature_proximity": relation_signature_proximity,
+            "relation_proximity": relation_proximity,
+            "shared_relation_span": shared_relation_span,
+            "source_doc_shared_relation_span": source_doc_shared_relation_span,
+            "local_relation_doc_count": local_relation_doc_count,
+            "candidate_direct_relation_span_count": (
+                candidate_direct_relation_span_count
+            ),
+            "focused_retry_strict_direct_support_doc_count": (
+                focused_retry_strict_direct
+            ),
+            "focused_retry_required_overlap_doc_count": (
+                focused_retry_required_overlap
+            ),
+            "focused_retry_candidate_specific_span_doc_count": (
+                focused_retry_candidate_specific
+            ),
+            "focused_retry_directish_doc_count": focused_retry_directish,
+            "focused_retry_relation_proximity_doc_count": (
+                focused_retry_relation_proximity
+            ),
+            "source_verifier_rejection_reason": source_rejection or None,
+            "source_rejection_allowed": source_rejection_allowed,
+            "raw_content_persisted": False,
+        }
+
+    def _protected_strong_sweep_dual_directness_tiebreak_detail(
+        *,
+        top_candidate: dict[str, Any],
+        eligible_candidates: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        policy = "protected_strong_sweep_dual_directness_tiebreak_v1"
+        top_hash = str(top_candidate.get("option_hash") or "")
+        top_directness_verified = bool(
+            top_hash and top_hash in directness_verified_hashes
+        )
+        consensus_rows: list[dict[str, Any]] = []
+        for item in eligible_candidates:
+            consensus = _protected_strong_sweep_dual_directness_consensus_detail(
+                item
+            )
+            if consensus.get("allowed"):
+                consensus_rows.append({
+                    "candidate": item,
+                    "consensus": consensus,
+                })
+        selected_row = consensus_rows[0] if len(consensus_rows) == 1 else {}
+        selected_candidate = (
+            selected_row.get("candidate")
+            if isinstance(selected_row.get("candidate"), dict)
+            else {}
+        )
+        selected_hash = str(selected_candidate.get("option_hash") or "")
+        allowed = bool(
+            len(consensus_rows) == 1
+            and selected_hash
+            and selected_hash != top_hash
+            and not top_directness_verified
+        )
+        if allowed:
+            reason = "single_protected_dual_direct_candidate_over_unverified_top"
+        elif len(consensus_rows) <= 0:
+            reason = "no_protected_dual_direct_candidate"
+        elif len(consensus_rows) > 1:
+            reason = "multiple_protected_dual_direct_candidates"
+        elif selected_hash == top_hash:
+            reason = "protected_dual_direct_candidate_already_top"
+        elif top_directness_verified:
+            reason = "top_candidate_already_directness_verified"
+        else:
+            reason = "blocked"
+        return {
+            "policy": policy,
+            "allowed": allowed,
+            "reason": reason,
+            "top_option_hash": top_hash or None,
+            "top_directness_verified": top_directness_verified,
+            "selected_option_hash": selected_hash or None,
+            "candidate_count": len(consensus_rows),
+            "candidate_option_hashes": [
+                str(row.get("candidate", {}).get("option_hash") or "")
+                for row in consensus_rows
+                if isinstance(row.get("candidate"), dict)
+            ],
+            "selected_consensus": selected_row.get("consensus") or {},
+            "raw_content_persisted": False,
+        }
+
     def _source_quality_regression_protection_detail(
         item: dict[str, Any],
     ) -> dict[str, Any]:
@@ -66918,6 +67480,9 @@ def _option_claim_source_quality_directness_promotion_detail(
                 "option_matrix_source_lane_candidate_span_bundle_option_with_direct_witness_count"
             )
             or 0
+        )
+        protected_strong_sweep_dual_directness_consensus = (
+            _protected_strong_sweep_dual_directness_consensus_detail(item)
         )
         if disabled:
             reason = "source_quality_regression_protection_disabled"
@@ -67127,7 +67692,7 @@ def _option_claim_source_quality_directness_promotion_detail(
                 and focused_retry_required_overlap >= 3
                 and focused_retry_relation_proximity >= 4
             )
-            allowed = bool(
+            standard_span_directness_allowed = bool(
                 refute_doc_count <= 0
                 and ambiguous_doc_count <= 1
                 and (
@@ -67145,13 +67710,23 @@ def _option_claim_source_quality_directness_promotion_detail(
                     or has_strict_focused_cache_bridge
                 )
             )
+            allowed = bool(
+                standard_span_directness_allowed
+                or protected_strong_sweep_dual_directness_consensus.get("allowed")
+            )
             reason = (
                 "strong_span_directness_model_focused_cache_binding"
-                if allowed and has_strict_focused_cache_bridge
+                if standard_span_directness_allowed and has_strict_focused_cache_bridge
                 else (
                     "strong_span_directness_model_source_binding"
-                    if allowed
-                    else "span_directness_model_candidate_insufficient_regression_protection"
+                    if standard_span_directness_allowed
+                    else (
+                        "protected_strong_sweep_dual_directness_consensus"
+                        if protected_strong_sweep_dual_directness_consensus.get(
+                            "allowed"
+                        )
+                        else "span_directness_model_candidate_insufficient_regression_protection"
+                    )
                 )
             )
         elif directness_path == "strict_answer_bearing_cache_directish_recovery":
@@ -67533,6 +68108,9 @@ def _option_claim_source_quality_directness_promotion_detail(
             ),
             "answer_web_relation_recovery_soft_conflict_cleared": (
                 answer_web_recovery_soft_conflict_cleared
+            ),
+            "protected_strong_sweep_dual_directness_consensus": (
+                protected_strong_sweep_dual_directness_consensus
             ),
             "raw_content_persisted": False,
         }
@@ -68034,6 +68612,52 @@ def _option_claim_source_quality_directness_promotion_detail(
     ):
         detail["reason"] = "selected_candidate_source_quality_too_weak"
         return detail
+
+    protected_strong_sweep_dual_directness_tiebreak = (
+        _protected_strong_sweep_dual_directness_tiebreak_detail(
+            top_candidate=top,
+            eligible_candidates=eligible,
+        )
+    )
+    detail["protected_strong_sweep_dual_directness_tiebreak"] = (
+        protected_strong_sweep_dual_directness_tiebreak
+    )
+    if protected_strong_sweep_dual_directness_tiebreak.get("allowed"):
+        original_top = top
+        replacement = next(
+            (
+                item
+                for item in eligible
+                if str(item.get("option_hash") or "")
+                == str(
+                    protected_strong_sweep_dual_directness_tiebreak.get(
+                        "selected_option_hash"
+                    )
+                    or ""
+                )
+            ),
+            {},
+        )
+        if replacement:
+            top = replacement
+            runner_up = original_top
+            detail["protected_strong_sweep_dual_directness_tiebreak_applied"] = True
+            detail["protected_strong_sweep_dual_directness_tiebreak_reason"] = (
+                protected_strong_sweep_dual_directness_tiebreak.get("reason")
+            )
+            detail["protected_strong_sweep_dual_directness_tiebreak_original_top_option_hash"] = (
+                original_top.get("option_hash")
+            )
+            detail["top_score"] = round(float(top.get("score") or 0.0), 4)
+            detail["runner_up_score"] = round(
+                float(runner_up.get("score") or 0.0),
+                4,
+            )
+            detail["score_margin"] = round(
+                float(top.get("score") or 0.0)
+                - float(runner_up.get("score") or 0.0),
+                4,
+            )
 
     selected_label = str(top["label"])
     selected_option_hash = str(top["option_hash"])
@@ -88119,6 +88743,33 @@ def _source_verifier_row_low_confidence_refuted_strict_missing_signal(
     )
 
 
+def _source_verifier_row_strong_sweep_source_quality_guard(row: dict[str, Any]) -> bool:
+    retry_reason = str(row.get("_source_verifier_retry_reason") or "")
+    if "missing_model" not in retry_reason and not retry_reason.startswith("sweep_gap_"):
+        return False
+    refute_doc_count = int(row.get("refute_doc_count") or 0)
+    if refute_doc_count > 1:
+        return False
+    if int(row.get("ambiguous_doc_count") or 0) > 1:
+        return False
+    if float(row.get("source_quality_score") or 0.0) < 10.0:
+        return False
+    source_quality_doc_count = int(row.get("source_quality_doc_count") or 0)
+    support_doc_count = int(row.get("support_doc_count") or 0)
+    relation_signal_count = _source_verifier_row_relation_coverage_signal_count(row)
+    if refute_doc_count == 0:
+        return bool(
+            source_quality_doc_count >= 2
+            or support_doc_count >= 2
+            or relation_signal_count >= 3
+        )
+    return bool(
+        source_quality_doc_count >= 2
+        and support_doc_count >= 2
+        and relation_signal_count >= 3
+    )
+
+
 def _source_verifier_score_threshold_relation_priority_enabled() -> bool:
     return _env_flag("HLE_ENABLE_SCORE_THRESHOLD_RELATION_COVERAGE_PRIORITY")
 
@@ -88226,6 +88877,8 @@ def _source_verifier_coverage_retry_priority(row: dict[str, Any]) -> tuple[int, 
         return (0, 0)
     if _source_verifier_row_low_confidence_refuted_strict_missing_signal(row):
         return (0, -3)
+    if _source_verifier_row_strong_sweep_source_quality_guard(row):
+        return (0, -2)
     if (
         not refuted
         and _source_verifier_row_strict_source_cache_answer_bearing_signal(row)
@@ -88287,6 +88940,8 @@ def _source_verifier_coverage_retry_priority_legacy(row: dict[str, Any]) -> tupl
         return (0, 0)
     if _source_verifier_row_low_confidence_refuted_strict_missing_signal(row):
         return (0, -3)
+    if _source_verifier_row_strong_sweep_source_quality_guard(row):
+        return (0, -2)
     if (
         not refuted
         and _source_verifier_row_strict_source_cache_answer_bearing_signal(row)
@@ -88363,6 +89018,9 @@ def _source_verifier_queue_order_rows(rows: list[dict[str, Any]]) -> list[dict[s
             ),
             "low_confidence_refuted_strict_missing_signal": (
                 _source_verifier_row_low_confidence_refuted_strict_missing_signal(row)
+            ),
+            "strong_sweep_source_quality_guard": (
+                _source_verifier_row_strong_sweep_source_quality_guard(row)
             ),
             "source_cache_required_term_completion_direct_count": int(
                 row.get(
