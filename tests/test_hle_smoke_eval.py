@@ -159,6 +159,7 @@ from assumption_os.hle_smoke_eval import (
     _call_recursive_verified_answer,
     _claim_source_quality_weak_option_evidence_summary,
     _variant_execution_watchdog,
+    _variant_watchdog_after_model_router_attempt,
     _variant_watchdog_before_model_call,
     _variant_watchdog_before_model_router_attempt,
     _variant_watchdog_blocked_summary,
@@ -4797,6 +4798,91 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(blocked_events[0]["model_router_attempt_budget"], 2)
         self.assertNotIn(
             "Question text is not logged by router attempt budget",
+            json.dumps(events),
+        )
+
+    def test_variant_watchdog_blocks_after_model_router_sec_budget(self):
+        problem = _HleProblem({
+            "id_hash": "p-router-sec-budget",
+            "question_hash": "q-router-sec-budget",
+            "answer_hash": "a-router-sec-budget",
+            "_question": "Question text is not logged by router sec budget",
+            "_answer": "A",
+            "answer_type": "multipleChoice",
+            "category": "unit",
+            "raw_subject": "unit",
+        })
+        with TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "watchdog.jsonl"
+            logger = _JsonlLogger(log_path)
+            with patch.dict(
+                os.environ,
+                {"HLE_VARIANT_TOTAL_MODEL_ROUTER_SEC_BUDGET": "0.2"},
+                clear=False,
+            ):
+                with _variant_execution_watchdog(
+                    eval_id="wd",
+                    call_id="router-sec-budget-block",
+                    problem=problem,
+                    model="gpt-5.4-mini",
+                    variant="assumption_agent_recursive_verify",
+                    logger=logger,
+                    timeout_sec=None,
+                    model_call_budget=None,
+                ) as watchdog:
+                    first = _variant_watchdog_before_model_router_attempt(
+                        model="gpt-5.4-mini",
+                        attempt=1,
+                        max_attempts=3,
+                        subprocess=True,
+                    )
+                    active = watchdog[
+                        "_model_router_attempt_started_monotonic_by_index"
+                    ]
+                    active[str(first)] = time.monotonic() - 0.25
+                    _variant_watchdog_after_model_router_attempt(
+                        attempt_index=first,
+                        status="error",
+                        latency_sec=0.25,
+                        error_label="RemoteDisconnected",
+                    )
+                    with self.assertRaisesRegex(
+                        VariantExecutionWatchdogExceeded,
+                        "variant_total_model_router_sec_budget_exceeded",
+                    ):
+                        _variant_watchdog_before_model_router_attempt(
+                            model="gpt-5.4-mini",
+                            attempt=2,
+                            max_attempts=3,
+                            subprocess=True,
+                        )
+                    summary = _variant_watchdog_summary(watchdog)
+            events = [
+                json.loads(line)
+                for line in log_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertEqual(first, 1)
+        self.assertEqual(summary["status"], "blocked")
+        self.assertEqual(
+            summary["violation_reason"],
+            "variant_total_model_router_sec_budget_exceeded",
+        )
+        self.assertEqual(summary["model_router_attempt_count"], 1)
+        self.assertEqual(summary["model_router_sec_budget"], 0.2)
+        self.assertGreaterEqual(summary["model_router_elapsed_sec"], 0.2)
+        blocked_events = [
+            event for event in events if event.get("event") == "variant_watchdog_blocked"
+        ]
+        self.assertEqual(len(blocked_events), 1)
+        self.assertEqual(
+            blocked_events[0]["reason"],
+            "variant_total_model_router_sec_budget_exceeded",
+        )
+        self.assertGreaterEqual(blocked_events[0]["model_router_elapsed_sec"], 0.2)
+        self.assertNotIn(
+            "Question text is not logged by router sec budget",
             json.dumps(events),
         )
 

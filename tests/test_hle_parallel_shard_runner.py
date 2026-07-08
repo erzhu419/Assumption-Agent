@@ -1179,6 +1179,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
             model_router_timeout=7200,
             model_router_transient_extra_attempts=0,
             variant_total_model_router_attempt_budget=20,
+            variant_total_model_router_sec_budget=360,
             enable_option_claim_relation_query_planner=True,
             parallel_workers=4,
             model_router_per_attempt_timeout=90,
@@ -1207,6 +1208,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertNotIn("HLE_SOURCE_VERIFIER_SEMANTIC_GENERIC_BACKOFF_ATTEMPT_PRESSURE_MIN_ATTEMPTS", env)
         self.assertNotIn("HLE_SOURCE_VERIFIER_SEMANTIC_GENERIC_BACKOFF_MIN_ATTEMPTS", env)
         self.assertEqual(env["HLE_VARIANT_TOTAL_MODEL_ROUTER_ATTEMPT_BUDGET"], "20")
+        self.assertEqual(env["HLE_VARIANT_TOTAL_MODEL_ROUTER_SEC_BUDGET"], "360.0")
         self.assertEqual(env["HLE_ENABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER"], "1")
         self.assertNotIn("HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER", env)
         self.assertEqual(env["MODEL_ROUTER_TIMEOUT"], "7200")
@@ -1228,6 +1230,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(policy["recursive_child_transient_extra_attempts"], "0")
         self.assertEqual(policy["parallel_shard_workers"], "4")
         self.assertEqual(policy["variant_total_model_router_attempt_budget"], "20")
+        self.assertEqual(policy["variant_total_model_router_sec_budget"], "360.0")
         self.assertEqual(policy["recursive_selection_model_call_budget"], "2")
         self.assertEqual(policy["recursive_selection_wallclock_budget_sec"], "180.0")
         self.assertEqual(policy["variant_relation_comparator_model_call_min_remaining_sec"], "60")
@@ -1251,6 +1254,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
                 "MODEL_ROUTER_ATTEMPTS",
                 "MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS",
                 "HLE_VARIANT_TOTAL_MODEL_ROUTER_ATTEMPT_BUDGET",
+                "HLE_VARIANT_TOTAL_MODEL_ROUTER_SEC_BUDGET",
                 "MODEL_ROUTER_TIMEOUT",
                 "MODEL_ROUTER_PER_ATTEMPT_TIMEOUT",
                 "MODEL_ROUTER_SUBPROCESS_CALLS",

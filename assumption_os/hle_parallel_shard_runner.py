@@ -691,6 +691,7 @@ def build_runner_env(
     model_router_timeout: float | None,
     model_router_transient_extra_attempts: int | None = None,
     variant_total_model_router_attempt_budget: int | None = None,
+    variant_total_model_router_sec_budget: float | None = None,
     recursive_selection_model_call_budget: int | None = None,
     recursive_selection_wallclock_budget_sec: float | None = None,
     enable_option_claim_relation_query_planner: bool | None = None,
@@ -750,6 +751,10 @@ def build_runner_env(
     if variant_total_model_router_attempt_budget is not None:
         env["HLE_VARIANT_TOTAL_MODEL_ROUTER_ATTEMPT_BUDGET"] = str(
             max(1, int(variant_total_model_router_attempt_budget))
+        )
+    if variant_total_model_router_sec_budget is not None:
+        env["HLE_VARIANT_TOTAL_MODEL_ROUTER_SEC_BUDGET"] = str(
+            max(0.1, float(variant_total_model_router_sec_budget))
         )
     if recursive_selection_model_call_budget is not None:
         env["HLE_RECURSIVE_SELECTION_MODEL_CALL_BUDGET"] = str(
@@ -923,6 +928,9 @@ def model_router_policy_from_env(env: dict[str, str]) -> dict[str, Any]:
         "parallel_shard_workers": env.get("HLE_PARALLEL_SHARD_WORKERS"),
         "variant_total_model_router_attempt_budget": env.get(
             "HLE_VARIANT_TOTAL_MODEL_ROUTER_ATTEMPT_BUDGET"
+        ),
+        "variant_total_model_router_sec_budget": env.get(
+            "HLE_VARIANT_TOTAL_MODEL_ROUTER_SEC_BUDGET"
         ),
         "router_aware_child_worker_cap_enabled": env.get("HLE_ENABLE_ROUTER_AWARE_CHILD_WORKER_CAP"),
         "router_aware_child_workers_per_shard": env.get("HLE_ROUTER_AWARE_CHILD_WORKERS_PER_SHARD"),
@@ -3358,6 +3366,7 @@ def main() -> None:
     parser.add_argument("--variant-total-timeout-sec", type=float, default=None)
     parser.add_argument("--variant-total-model-call-budget", type=int, default=None)
     parser.add_argument("--variant-total-model-router-attempt-budget", type=int, default=None)
+    parser.add_argument("--variant-total-model-router-sec-budget", type=float, default=None)
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--graph-dir", default=str(Path("phase four/assumption_graph")))
     parser.add_argument("--agent-top-k", type=int, default=5)
@@ -3508,6 +3517,9 @@ def main() -> None:
                 "global_slot_wait_sec": args.model_router_global_slot_wait_sec,
                 "recursive_selection_model_call_budget": args.recursive_selection_model_call_budget,
                 "recursive_selection_wallclock_budget_sec": args.recursive_selection_wallclock_budget_sec,
+                "variant_total_model_router_sec_budget": (
+                    args.variant_total_model_router_sec_budget
+                ),
                 "raw_content_persisted": False,
             },
             "variant_watchdog": {
@@ -3516,10 +3528,14 @@ def main() -> None:
                 "total_model_router_attempt_budget": (
                     args.variant_total_model_router_attempt_budget
                 ),
+                "total_model_router_sec_budget": (
+                    args.variant_total_model_router_sec_budget
+                ),
                 "enabled": bool(
                     args.variant_total_timeout_sec is not None
                     or args.variant_total_model_call_budget is not None
                     or args.variant_total_model_router_attempt_budget is not None
+                    or args.variant_total_model_router_sec_budget is not None
                 ),
                 "raw_content_persisted": False,
             },
@@ -3738,6 +3754,9 @@ def main() -> None:
         variant_total_model_router_attempt_budget=(
             args.variant_total_model_router_attempt_budget
         ),
+        variant_total_model_router_sec_budget=(
+            args.variant_total_model_router_sec_budget
+        ),
         model_router_per_attempt_timeout=args.model_router_per_attempt_timeout,
         model_router_subprocess_calls=args.model_router_subprocess_calls,
         model_router_no_byte_timeout_sec=args.model_router_no_byte_timeout_sec,
@@ -3904,11 +3923,15 @@ def main() -> None:
                 args.variant_total_timeout_sec is not None
                 or args.variant_total_model_call_budget is not None
                 or args.variant_total_model_router_attempt_budget is not None
+                or args.variant_total_model_router_sec_budget is not None
             ),
             "total_timeout_sec": args.variant_total_timeout_sec,
             "total_model_call_budget": args.variant_total_model_call_budget,
             "total_model_router_attempt_budget": (
                 args.variant_total_model_router_attempt_budget
+            ),
+            "total_model_router_sec_budget": (
+                args.variant_total_model_router_sec_budget
             ),
             "raw_content_persisted": False,
         },

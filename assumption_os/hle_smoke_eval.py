@@ -233,6 +233,32 @@ def _variant_watchdog_model_router_attempt_budget_from_env() -> int | None:
         return None
 
 
+def _variant_watchdog_model_router_sec_budget_from_env() -> float | None:
+    raw = (
+        os.environ.get("HLE_VARIANT_TOTAL_MODEL_ROUTER_SEC_BUDGET")
+        or os.environ.get("HLE_VARIANT_TOTAL_MODEL_ROUTER_ACTIVE_SEC_BUDGET")
+        or os.environ.get("HLE_PER_VARIANT_TOTAL_MODEL_ROUTER_SEC_BUDGET")
+        or os.environ.get("HLE_QUESTION_VARIANT_MODEL_ROUTER_SEC_BUDGET")
+        or os.environ.get("HLE_VARIANT_MODEL_ROUTER_WALLCLOCK_BUDGET_SEC")
+        or os.environ.get("HLE_VARIANT_MODEL_ROUTER_SEC_BUDGET")
+        or ""
+    ).strip()
+    if not raw or raw.lower() in {
+        "0",
+        "none",
+        "null",
+        "off",
+        "false",
+        "no",
+        "unlimited",
+    }:
+        return None
+    try:
+        return max(0.1, float(raw))
+    except ValueError:
+        return None
+
+
 def _variant_watchdog_min_remaining_before_model_call_sec() -> float | None:
     if os.environ.get(
         "HLE_DISABLE_VARIANT_MODEL_CALL_MIN_REMAINING_GATE",
@@ -581,6 +607,7 @@ def _variant_execution_watchdog(
     model_router_attempt_budget = (
         _variant_watchdog_model_router_attempt_budget_from_env()
     )
+    model_router_sec_budget = _variant_watchdog_model_router_sec_budget_from_env()
     recursive_selection_reserved_budget = (
         _variant_watchdog_recursive_selection_reserved_budget_from_env(model_call_budget)
         if model_call_budget is not None
@@ -618,6 +645,7 @@ def _variant_execution_watchdog(
             timeout_sec is not None
             or model_call_budget is not None
             or model_router_attempt_budget is not None
+            or model_router_sec_budget is not None
         ),
         "eval_id": eval_id,
         "call_id": call_id,
@@ -629,6 +657,9 @@ def _variant_execution_watchdog(
         "deadline_monotonic": None if timeout_sec is None else started + timeout_sec,
         "model_call_budget": model_call_budget,
         "model_router_attempt_budget": model_router_attempt_budget,
+        "model_router_sec_budget": model_router_sec_budget,
+        "model_router_elapsed_sec": 0.0,
+        "_model_router_attempt_started_monotonic_by_index": {},
         "recursive_selection_reserved_model_call_budget": recursive_selection_reserved_budget,
         "source_verifier_reserved_model_call_budget": source_verifier_reserved_budget,
         "directness_reserved_model_call_budget": directness_reserved_budget,
@@ -696,6 +727,35 @@ def _variant_watchdog_effective_deadline(state: dict[str, Any]) -> float | None:
     return float(deadline) if isinstance(deadline, (int, float)) else None
 
 
+def _variant_watchdog_model_router_elapsed_sec(
+    state: dict[str, Any],
+    *,
+    now: float | None = None,
+) -> float:
+    now = time.monotonic() if now is None else now
+    elapsed = float(state.get("model_router_elapsed_sec") or 0.0)
+    active = state.get("_model_router_attempt_started_monotonic_by_index")
+    if isinstance(active, dict):
+        for started in active.values():
+            if isinstance(started, (int, float)):
+                elapsed += max(0.0, now - float(started))
+    return max(0.0, elapsed)
+
+
+def _variant_watchdog_model_router_remaining_sec(
+    state: dict[str, Any],
+    *,
+    now: float | None = None,
+) -> float | None:
+    budget = state.get("model_router_sec_budget")
+    if not isinstance(budget, (int, float)):
+        return None
+    return float(budget) - _variant_watchdog_model_router_elapsed_sec(
+        state,
+        now=now,
+    )
+
+
 def _variant_watchdog_router_metadata() -> dict[str, Any]:
     state = _active_variant_watchdog()
     if not state or not state.get("enabled"):
@@ -712,6 +772,15 @@ def _variant_watchdog_router_metadata() -> dict[str, Any]:
         ),
         "variant_watchdog_model_router_attempt_budget": summary.get(
             "model_router_attempt_budget"
+        ),
+        "variant_watchdog_model_router_elapsed_sec": summary.get(
+            "model_router_elapsed_sec"
+        ),
+        "variant_watchdog_model_router_sec_budget": summary.get(
+            "model_router_sec_budget"
+        ),
+        "variant_watchdog_model_router_remaining_sec": summary.get(
+            "model_router_remaining_sec"
         ),
         "variant_watchdog_remaining_sec": summary.get("remaining_sec"),
     }
@@ -744,6 +813,12 @@ def _variant_watchdog_summary(state: dict[str, Any] | None = None) -> dict[str, 
         float(state.get("external_wait_excluded_sec") or 0.0)
         + external_wait_active_sec
     )
+    model_router_elapsed_sec = _variant_watchdog_model_router_elapsed_sec(state)
+    model_router_remaining_sec = _variant_watchdog_model_router_remaining_sec(state)
+    active_router_attempts = state.get("_model_router_attempt_started_monotonic_by_index")
+    active_router_attempt_count = (
+        len(active_router_attempts) if isinstance(active_router_attempts, dict) else 0
+    )
     return {
         "enabled": enabled,
         "status": state.get("status") or ("disabled" if not enabled else "unknown"),
@@ -757,6 +832,13 @@ def _variant_watchdog_summary(state: dict[str, Any] | None = None) -> dict[str, 
         "elapsed_sec": elapsed,
         "model_call_budget": state.get("model_call_budget"),
         "model_router_attempt_budget": state.get("model_router_attempt_budget"),
+        "model_router_sec_budget": state.get("model_router_sec_budget"),
+        "model_router_elapsed_sec": round(model_router_elapsed_sec, 4),
+        "model_router_remaining_sec": (
+            round(model_router_remaining_sec, 4)
+            if isinstance(model_router_remaining_sec, (int, float))
+            else None
+        ),
         "recursive_selection_reserved_model_call_budget": int(
             state.get("recursive_selection_reserved_model_call_budget") or 0
         ),
@@ -774,6 +856,7 @@ def _variant_watchdog_summary(state: dict[str, Any] | None = None) -> dict[str, 
         "model_call_success_count": int(state.get("model_call_success_count") or 0),
         "model_call_error_count": int(state.get("model_call_error_count") or 0),
         "model_router_attempt_count": int(state.get("model_router_attempt_count") or 0),
+        "model_router_attempt_active_count": active_router_attempt_count,
         "model_router_attempt_success_count": int(
             state.get("model_router_attempt_success_count") or 0
         ),
@@ -1195,6 +1278,24 @@ def _variant_watchdog_before_model_router_attempt(
                 "variant_total_timeout_exceeded",
                 extra,
             )
+        router_sec_budget = state.get("model_router_sec_budget")
+        router_elapsed_sec = _variant_watchdog_model_router_elapsed_sec(
+            state,
+            now=now,
+        )
+        if (
+            isinstance(router_sec_budget, (int, float))
+            and router_elapsed_sec >= float(router_sec_budget)
+        ):
+            _variant_watchdog_violate(
+                state,
+                "variant_total_model_router_sec_budget_exceeded",
+                {
+                    **extra,
+                    "model_router_elapsed_sec": round(router_elapsed_sec, 4),
+                    "model_router_sec_budget": float(router_sec_budget),
+                },
+            )
         default_min_remaining = _variant_watchdog_min_remaining_before_model_call_sec()
         min_remaining = _variant_watchdog_protected_stage_min_remaining_before_model_call_sec(
             default_min_remaining
@@ -1226,12 +1327,19 @@ def _variant_watchdog_before_model_router_attempt(
             )
         count = int(state.get("model_router_attempt_count") or 0) + 1
         state["model_router_attempt_count"] = count
+        active = state.get("_model_router_attempt_started_monotonic_by_index")
+        if not isinstance(active, dict):
+            active = {}
+            state["_model_router_attempt_started_monotonic_by_index"] = active
+        active[str(count)] = now
     _variant_watchdog_log(
         state,
         "variant_watchdog_model_router_attempt_admitted",
         {
             **extra,
             "model_router_attempt_index": count,
+            "model_router_elapsed_sec_before": round(router_elapsed_sec, 4),
+            "model_router_sec_budget": state.get("model_router_sec_budget"),
         },
     )
     return count
@@ -1250,7 +1358,20 @@ def _variant_watchdog_after_model_router_attempt(
     lock = state.get("_lock")
     if not hasattr(lock, "__enter__"):
         lock = None
+    now = time.monotonic()
+    attempt_latency_sec = max(0.0, float(latency_sec))
+    cumulative_router_elapsed_sec = None
     with (lock if lock is not None else contextlib.nullcontext()):
+        active = state.get("_model_router_attempt_started_monotonic_by_index")
+        if isinstance(active, dict):
+            started = active.pop(str(attempt_index), None)
+            if isinstance(started, (int, float)):
+                attempt_latency_sec = max(0.0, now - float(started))
+        cumulative_router_elapsed_sec = (
+            float(state.get("model_router_elapsed_sec") or 0.0)
+            + attempt_latency_sec
+        )
+        state["model_router_elapsed_sec"] = cumulative_router_elapsed_sec
         if status == "success":
             state["model_router_attempt_success_count"] = (
                 int(state.get("model_router_attempt_success_count") or 0) + 1
@@ -1265,7 +1386,21 @@ def _variant_watchdog_after_model_router_attempt(
         {
             "model_router_attempt_index": attempt_index,
             "model_router_attempt_status": status,
-            "model_router_attempt_latency_sec": round(float(latency_sec), 4),
+            "model_router_attempt_latency_sec": round(attempt_latency_sec, 4),
+            "model_router_elapsed_sec": round(
+                float(cumulative_router_elapsed_sec or 0.0),
+                4,
+            ),
+            "model_router_sec_budget": state.get("model_router_sec_budget"),
+            "model_router_remaining_sec": (
+                round(
+                    float(state.get("model_router_sec_budget"))
+                    - float(cumulative_router_elapsed_sec or 0.0),
+                    4,
+                )
+                if isinstance(state.get("model_router_sec_budget"), (int, float))
+                else None
+            ),
             "error_label": error_label,
             **_model_router_scope_metadata(),
         },
@@ -1342,6 +1477,41 @@ def _variant_watchdog_blocked_summary(
                     state,
                     "variant_total_timeout_exceeded",
                     {"stage_name": stage_name} if stage_name else {},
+                )
+            elif (
+                isinstance(state.get("model_router_sec_budget"), (int, float))
+                and _variant_watchdog_model_router_elapsed_sec(state, now=now)
+                >= float(state.get("model_router_sec_budget"))
+            ):
+                _variant_watchdog_mark_blocked(
+                    state,
+                    "variant_total_model_router_sec_budget_exceeded",
+                    {
+                        "stage_name": stage_name,
+                        "model_router_elapsed_sec": round(
+                            _variant_watchdog_model_router_elapsed_sec(
+                                state,
+                                now=now,
+                            ),
+                            4,
+                        ),
+                        "model_router_sec_budget": float(
+                            state.get("model_router_sec_budget")
+                        ),
+                    }
+                    if stage_name
+                    else {
+                        "model_router_elapsed_sec": round(
+                            _variant_watchdog_model_router_elapsed_sec(
+                                state,
+                                now=now,
+                            ),
+                            4,
+                        ),
+                        "model_router_sec_budget": float(
+                            state.get("model_router_sec_budget")
+                        ),
+                    },
                 )
             else:
                 budget = state.get("model_call_budget")
@@ -1699,6 +1869,12 @@ def build_hle_text_smoke_eval_payload(
             variant_total_model_call_budget = max(1, int(variant_total_model_call_budget))
         except (TypeError, ValueError):
             variant_total_model_call_budget = None
+    variant_total_model_router_attempt_budget = (
+        _variant_watchdog_model_router_attempt_budget_from_env()
+    )
+    variant_total_model_router_sec_budget = (
+        _variant_watchdog_model_router_sec_budget_from_env()
+    )
     api_summary = {
         "execute_live_requested": execute_live,
         "planned_live_model_calls": len(sample_rows) * len(models) * len(variants) if execute_live else 0,
@@ -1719,8 +1895,15 @@ def build_hle_text_smoke_eval_payload(
         "underlying_model_calls_executed": 0,
         "variant_total_timeout_sec": variant_total_timeout_sec,
         "variant_total_model_call_budget": variant_total_model_call_budget,
+        "variant_total_model_router_attempt_budget": (
+            variant_total_model_router_attempt_budget
+        ),
+        "variant_total_model_router_sec_budget": variant_total_model_router_sec_budget,
         "variant_watchdog_enabled": bool(
-            variant_total_timeout_sec is not None or variant_total_model_call_budget is not None
+            variant_total_timeout_sec is not None
+            or variant_total_model_call_budget is not None
+            or variant_total_model_router_attempt_budget is not None
+            or variant_total_model_router_sec_budget is not None
         ),
     }
     router_log_env_key = ""
@@ -116403,6 +116586,7 @@ def main() -> None:
     parser.add_argument("--call-timeout", type=float, default=None)
     parser.add_argument("--variant-total-timeout-sec", type=float, default=None)
     parser.add_argument("--variant-total-model-call-budget", type=int, default=None)
+    parser.add_argument("--variant-total-model-router-sec-budget", type=float, default=None)
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--log-out", default=str(DEFAULT_LOG_OUT))
     parser.add_argument("--graph-dir", default=str(DEFAULT_GRAPH_DIR))
@@ -116478,6 +116662,10 @@ def main() -> None:
         os.environ["HLE_ENABLE_OPERATOR_POLICY_GATE"] = "1"
     if getattr(args, "disable_domain_rule_verifier", False):
         os.environ["HLE_DISABLE_DOMAIN_RULE_VERIFIER"] = "1"
+    if args.variant_total_model_router_sec_budget is not None:
+        os.environ["HLE_VARIANT_TOTAL_MODEL_ROUTER_SEC_BUDGET"] = str(
+            max(0.1, float(args.variant_total_model_router_sec_budget))
+        )
     if getattr(args, "disable_option_claim_contrastive_adjudicator", False):
         os.environ["HLE_DISABLE_OPTION_CLAIM_CONTRASTIVE_ADJUDICATOR"] = "1"
     elif getattr(args, "enable_option_claim_contrastive_adjudicator", False):
