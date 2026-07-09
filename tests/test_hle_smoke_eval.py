@@ -16134,6 +16134,32 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(subprocess_call.call_count, 2)
         sleep_retry.assert_called_once()
 
+    def test_call_model_treats_subprocess_wrapped_read_timeout_as_transient(self):
+        transient = RuntimeError("TimeoutError: The read operation timed out")
+        with patch.dict(
+            os.environ,
+            {
+                "GPT5_API_KEY": "test-key",
+                "MODEL_ROUTER_SUBPROCESS_CALLS": "1",
+                "MODEL_ROUTER_ATTEMPTS": "1",
+                "MODEL_ROUTER_TRANSIENT_EXTRA_ATTEMPTS": "1",
+                "MODEL_ROUTER_BACKOFF_BASE_SEC": "0",
+                "MODEL_ROUTER_BACKOFF_JITTER_SEC": "0",
+            },
+            clear=True,
+        ):
+            self.assertTrue(_is_transient_model_error(transient))
+            with patch(
+                "assumption_os.hle_smoke_eval._single_model_subprocess_call",
+                side_effect=[transient, '{"answer":"B"}'],
+            ) as subprocess_call:
+                with patch("assumption_os.hle_smoke_eval._sleep_before_model_retry") as sleep_retry:
+                    text = _call_model(model="gpt-5.4-mini", prompt="Q", timeout=None, max_tokens=8)
+
+        self.assertEqual(text, '{"answer":"B"}')
+        self.assertEqual(subprocess_call.call_count, 2)
+        sleep_retry.assert_called_once()
+
     def test_call_model_recursive_child_remote_disconnect_uses_default_transient_error_cap(self):
         transient = RuntimeError(
             "http.client.RemoteDisconnected: Remote end closed connection without response"
@@ -69804,6 +69830,29 @@ class HleSmokeEvalTest(unittest.TestCase):
             )
 
             hashes = _collect_existing_hle_problem_hashes(root=root, artifact_glob="hle_text_smoke*.json*")
+
+        self.assertEqual(hashes, {"p1", "p2"})
+
+    def test_collect_existing_hle_problem_hashes_accepts_comma_separated_globs(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "hle_baseline12_a.json").write_text(
+                __import__("json").dumps({"rows": [{"problem_id_hash": "p1"}]}),
+                encoding="utf-8",
+            )
+            (root / "hle_holdout_b.json").write_text(
+                __import__("json").dumps({"rows": [{"problem_id_hash": "p2"}]}),
+                encoding="utf-8",
+            )
+            (root / "hle_unmatched.json").write_text(
+                __import__("json").dumps({"rows": [{"problem_id_hash": "p3"}]}),
+                encoding="utf-8",
+            )
+
+            hashes = _collect_existing_hle_problem_hashes(
+                root=root,
+                artifact_glob="hle*baseline12*.json*, hle*holdout*.json*",
+            )
 
         self.assertEqual(hashes, {"p1", "p2"})
 

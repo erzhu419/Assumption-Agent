@@ -1226,12 +1226,17 @@ def run_live_model_preflight(
     timeout_sec: float = 60.0,
     probe_count: int = 1,
     max_error_rate: float = 0.0,
+    prompt_chars: int = 0,
+    max_tokens: int = 16,
 ) -> dict[str, Any]:
     """Probe live model access before launching expensive shards."""
     model_names = [item.strip() for item in str(models or "").split(",") if item.strip()]
     rows: list[dict[str, Any]] = []
     probe_count = max(1, int(probe_count or 1))
     max_error_rate = min(1.0, max(0.0, float(max_error_rate or 0.0)))
+    prompt_chars = max(0, int(prompt_chars or 0))
+    max_tokens = max(1, int(max_tokens or 16))
+    prompt = _live_model_preflight_prompt(prompt_chars=prompt_chars)
     if not model_router_primary_key_present(env):
         rows = [
             {
@@ -1249,6 +1254,8 @@ def run_live_model_preflight(
             "models": model_names,
             "probe_count": probe_count,
             "max_error_rate": max_error_rate,
+            "prompt_char_count": len(prompt),
+            "max_tokens": max_tokens,
             "rows": rows,
             "summary": _live_model_preflight_summary(rows=rows, max_error_rate=max_error_rate),
             "raw_content_persisted": False,
@@ -1271,14 +1278,19 @@ def run_live_model_preflight(
                 "import json, sys\n"
                 "from assumption_os.hle_smoke_eval import _call_model\n"
                 "cfg = json.loads(sys.stdin.read())\n"
-                "text = _call_model(model=cfg['model'], prompt='Return exactly {\"answer\":\"A\"}.', "
-                "timeout=cfg['timeout'], max_tokens=16)\n"
+                "text = _call_model(model=cfg['model'], prompt=cfg['prompt'], "
+                "timeout=cfg['timeout'], max_tokens=cfg['max_tokens'])\n"
                 "print('ok' if text.strip() else 'empty')\n"
             )
             try:
                 completed = subprocess.run(
                     [sys.executable, "-c", script],
-                    input=json.dumps({"model": model, "timeout": per_attempt_timeout}),
+                    input=json.dumps({
+                        "model": model,
+                        "timeout": per_attempt_timeout,
+                        "prompt": prompt,
+                        "max_tokens": max_tokens,
+                    }),
                     text=True,
                     capture_output=True,
                     cwd=str(Path.cwd()),
@@ -1307,6 +1319,8 @@ def run_live_model_preflight(
                 "probe_index": probe_index,
                 "ok": ok,
                 "returncode": int(completed.returncode),
+                "prompt_char_count": len(prompt),
+                "max_tokens": max_tokens,
                 "stdout_hash": "" if not stdout else _stable_text_hash(stdout),
                 "error_type": "" if ok else "RuntimeError",
                 "error_label": error_label,
@@ -1319,10 +1333,29 @@ def run_live_model_preflight(
         "models": model_names,
         "probe_count": probe_count,
         "max_error_rate": max_error_rate,
+        "prompt_char_count": len(prompt),
+        "max_tokens": max_tokens,
         "rows": rows,
         "summary": summary,
         "raw_content_persisted": False,
     }
+
+
+def _live_model_preflight_prompt(*, prompt_chars: int) -> str:
+    base = (
+        'Return exactly {"answer":"A"}. This is a synthetic endpoint health probe; '
+        "ignore repeated filler and do not add explanation."
+    )
+    if prompt_chars <= len(base):
+        return base
+    filler = (
+        " Synthetic HLE-style multiple-choice context with relation terms, candidate options, "
+        "and retrieval snippets. The correct probe answer remains A."
+    )
+    chunks: list[str] = [base]
+    while sum(len(chunk) for chunk in chunks) < prompt_chars:
+        chunks.append(filler)
+    return "".join(chunks)[:prompt_chars]
 
 
 def _live_model_preflight_summary(*, rows: list[dict[str, Any]], max_error_rate: float) -> dict[str, Any]:
@@ -4392,6 +4425,8 @@ def main() -> None:
     parser.add_argument("--live-model-preflight-timeout-sec", type=float, default=60.0)
     parser.add_argument("--live-model-preflight-probe-count", type=int, default=1)
     parser.add_argument("--live-model-preflight-max-error-rate", type=float, default=0.0)
+    parser.add_argument("--live-model-preflight-prompt-chars", type=int, default=0)
+    parser.add_argument("--live-model-preflight-max-tokens", type=int, default=16)
     args = parser.parse_args()
     private_env_status = load_private_env()
     if bool(args.model_router_subprocess_calls) and bool(args.disable_model_router_subprocess_calls):
@@ -4437,6 +4472,8 @@ def main() -> None:
                 "timeout_sec": args.live_model_preflight_timeout_sec,
                 "probe_count": args.live_model_preflight_probe_count,
                 "max_error_rate": args.live_model_preflight_max_error_rate,
+                "prompt_chars": args.live_model_preflight_prompt_chars,
+                "max_tokens": args.live_model_preflight_max_tokens,
                 "raw_content_persisted": False,
             },
             "soft_timeout_sec": args.soft_timeout_sec,
@@ -4814,6 +4851,8 @@ def main() -> None:
             timeout_sec=0.0,
             probe_count=args.live_model_preflight_probe_count,
             max_error_rate=args.live_model_preflight_max_error_rate,
+            prompt_chars=args.live_model_preflight_prompt_chars,
+            max_tokens=args.live_model_preflight_max_tokens,
         )
         log_event(
             logger,
@@ -4848,6 +4887,8 @@ def main() -> None:
             timeout_sec=float(args.live_model_preflight_timeout_sec or 0.0),
             probe_count=args.live_model_preflight_probe_count,
             max_error_rate=args.live_model_preflight_max_error_rate,
+            prompt_chars=args.live_model_preflight_prompt_chars,
+            max_tokens=args.live_model_preflight_max_tokens,
         )
         if not model_preflight.get("passed"):
             log_event(

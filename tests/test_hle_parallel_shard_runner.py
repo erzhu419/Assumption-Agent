@@ -1736,6 +1736,34 @@ class TestHleParallelShardRunner(unittest.TestCase):
             )
         self.assertFalse(strict_payload["passed"])
 
+    def test_live_model_preflight_can_probe_with_long_prompt(self) -> None:
+        success = subprocess.CompletedProcess(
+            args=["python"],
+            returncode=0,
+            stdout="ok\n",
+            stderr="",
+        )
+        with patch(
+            "assumption_os.hle_parallel_shard_runner.subprocess.run",
+            return_value=success,
+        ) as run:
+            payload = run_live_model_preflight(
+                models="gpt-5.4-mini",
+                env={"RUOLI_GPT_KEY": "secret"},
+                timeout_sec=5,
+                prompt_chars=2048,
+                max_tokens=32,
+            )
+
+        self.assertTrue(payload["passed"])
+        self.assertEqual(payload["prompt_char_count"], 2048)
+        self.assertEqual(payload["max_tokens"], 32)
+        stdin_payload = json.loads(run.call_args.kwargs["input"])
+        self.assertEqual(len(stdin_payload["prompt"]), 2048)
+        self.assertEqual(stdin_payload["max_tokens"], 32)
+        self.assertFalse(payload["raw_content_persisted"])
+        self.assertNotIn("Synthetic HLE-style", json.dumps(payload))
+
     def test_runner_env_defaults_to_local_hle_and_cache_only_sources_when_present(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

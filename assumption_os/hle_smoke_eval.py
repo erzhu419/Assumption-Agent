@@ -2630,11 +2630,7 @@ def _collect_existing_hle_problem_hashes(*, root: Path, artifact_glob: str) -> s
         if cached is not None:
             return cached
     hashes: set[str] = set()
-    for path in root.glob(artifact_glob):
-        if not path.is_file():
-            continue
-        if _is_existing_hle_hash_cache_artifact(path):
-            continue
+    for path in _iter_existing_hle_artifact_paths(root=root, artifact_glob=artifact_glob):
         if path.suffix == ".jsonl":
             _collect_problem_hashes_from_jsonl(path, hashes)
         elif path.suffix == ".json":
@@ -2649,6 +2645,23 @@ def _collect_existing_hle_problem_hashes(*, root: Path, artifact_glob: str) -> s
     return hashes
 
 
+def _iter_existing_hle_artifact_paths(*, root: Path, artifact_glob: str) -> list[Path]:
+    paths: dict[str, Path] = {}
+    for glob_text in _split_artifact_globs(artifact_glob):
+        for path in root.glob(glob_text):
+            if not path.is_file():
+                continue
+            if _is_existing_hle_hash_cache_artifact(path):
+                continue
+            paths[str(path)] = path
+    return [paths[key] for key in sorted(paths)]
+
+
+def _split_artifact_globs(artifact_glob: str) -> list[str]:
+    globs = [item.strip() for item in str(artifact_glob or "").split(",") if item.strip()]
+    return globs or [""]
+
+
 def _is_existing_hle_hash_cache_artifact(path: Path) -> bool:
     """Return true for preflight hash-cache files, not scored HLE artifacts."""
     return path.name.endswith(".existing_hash_cache.json")
@@ -2656,11 +2669,7 @@ def _is_existing_hle_hash_cache_artifact(path: Path) -> bool:
 
 def _existing_hle_hash_manifest(*, root: Path, artifact_glob: str) -> list[dict[str, Any]]:
     manifest: list[dict[str, Any]] = []
-    for path in sorted(root.glob(artifact_glob)):
-        if not path.is_file():
-            continue
-        if _is_existing_hle_hash_cache_artifact(path):
-            continue
+    for path in _iter_existing_hle_artifact_paths(root=root, artifact_glob=artifact_glob):
         try:
             stat = path.stat()
         except OSError:
@@ -111897,6 +111906,13 @@ def _transient_model_error_text_label(text: str) -> str | None:
     lowered = str(text or "").lower()
     if "model_subprocess_no_byte_timeout" in lowered or "subprocess.timeoutexpired" in lowered:
         return "SubprocessNoByteTimeout"
+    if (
+        "readtimeout" in lowered
+        or "read timed out" in lowered
+        or "read operation timed out" in lowered
+        or "the read operation timed out" in lowered
+    ):
+        return "ReadTimeout"
     if "remotedisconnected" in lowered or "remote end closed connection" in lowered:
         return "RemoteDisconnected"
     if "connection reset" in lowered:
