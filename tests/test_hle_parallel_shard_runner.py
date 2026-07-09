@@ -1050,6 +1050,68 @@ class TestHleParallelShardRunner(unittest.TestCase):
             ["p2"],
         )
 
+    def test_split_retry_clean_replacement_can_clear_endpoint_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            controls = _payload([
+                _row("p1", "raw", False, error_type="RuntimeError"),
+                _row("p1", "hipporag_baseline", False),
+                _row("p1", "raw_budget_matched", False),
+                _row("p1", "hipporag_budget_matched", False),
+            ])
+            controls.update({
+                "eval_id": "controls",
+                "eval_kind": "hle_parallel_shard_runner",
+                "runtime_policy": {"execute_live": True, "raw_content_persisted": False},
+                "raw_content_persisted": False,
+            })
+            agent = _payload([
+                _row(
+                    "p1",
+                    "assumption_agent_recursive_verify",
+                    True,
+                    component_efficacy=_agent_multi_call_same_model_ce(),
+                )
+            ])
+            agent.update({
+                "eval_id": "agent",
+                "eval_kind": "hle_parallel_shard_runner",
+                "runtime_policy": {"execute_live": True, "raw_content_persisted": False},
+                "raw_content_persisted": False,
+            })
+            retry = _payload([
+                _row("p1", "raw", False),
+            ])
+            retry.update({
+                "eval_id": "raw-retry",
+                "eval_kind": "hle_parallel_shard_runner",
+                "runtime_policy": {"execute_live": True, "raw_content_persisted": False},
+                "raw_content_persisted": False,
+            })
+            controls_path = root / "controls.json"
+            agent_path = root / "agent.json"
+            retry_path = root / "retry.json"
+            controls_path.write_text(json.dumps(controls), encoding="utf-8")
+            agent_path.write_text(json.dumps(agent), encoding="utf-8")
+            retry_path.write_text(json.dumps(retry), encoding="utf-8")
+
+            payload = build_split_fair_controls_payload(
+                eval_id="combined-retry",
+                input_paths=[controls_path, agent_path],
+                retry_input_paths=[retry_path],
+                allow_clean_retry_replacements=True,
+            )
+
+        self.assertTrue(payload["pass"])
+        self.assertTrue(payload["paper_clean_pass"])
+        self.assertEqual(payload["metrics"]["sample_count"], 1)
+        self.assertEqual(payload["split_run_audit"]["retry_input_count"], 1)
+        duplicate_rows = payload["split_run_audit"]["duplicate_rows"]
+        self.assertEqual(duplicate_rows["allowed_clean_retry_replacement_count"], 1)
+        self.assertEqual(duplicate_rows["retry_new_variant_problem_row_count"], 0)
+        self.assertEqual(payload["error_stratification"]["top_level_error_count"], 0)
+        self.assertEqual(payload["split_run_audit"]["failed_gates"], [])
+
     def test_model_budget_fairness_blocks_unfair_strong_child_agent_claim(self) -> None:
         rows = [
             _row("p1", "raw", False, model="gpt-5.4-mini"),

@@ -1829,8 +1829,11 @@ def build_split_fair_controls_payload(
     *,
     eval_id: str,
     input_paths: list[Path],
+    retry_input_paths: list[Path] | None = None,
+    allow_clean_retry_replacements: bool = False,
     diagnostic_log_out: Path | None = None,
     payloads: list[dict[str, Any]] | None = None,
+    retry_payloads: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Combine variant-split parallel reports into one fair-control report.
 
@@ -1840,11 +1843,17 @@ def build_split_fair_controls_payload(
     """
     if not input_paths:
         raise ValueError("at least one split run input is required")
+    retry_input_paths = retry_input_paths or []
+    if retry_input_paths and not allow_clean_retry_replacements:
+        raise ValueError("retry inputs require allow_clean_retry_replacements=True")
     if payloads is not None and len(payloads) != len(input_paths):
         raise ValueError("payloads and input_paths must have the same length")
+    if retry_payloads is not None and len(retry_payloads) != len(retry_input_paths):
+        raise ValueError("retry_payloads and retry_input_paths must have the same length")
 
     split_inputs: list[dict[str, Any]] = []
-    all_rows: list[dict[str, Any]] = []
+    primary_rows: list[dict[str, Any]] = []
+    retry_rows: list[dict[str, Any]] = []
     states: list[ShardRunState] = []
     loaded_shard_payload_count = 0
     planned_live_calls = 0
@@ -1854,11 +1863,27 @@ def build_split_fair_controls_payload(
     execute_live = False
     raw_content_ok = True
 
-    for input_index, input_path in enumerate(input_paths):
+    input_specs: list[tuple[str, int, Path, dict[str, Any] | None]] = [
+        ("primary", input_index, input_path, payloads[input_index] if payloads is not None else None)
+        for input_index, input_path in enumerate(input_paths)
+    ]
+    input_specs.extend(
+        (
+            "retry",
+            retry_index,
+            input_path,
+            retry_payloads[retry_index] if retry_payloads is not None else None,
+        )
+        for retry_index, input_path in enumerate(retry_input_paths)
+    )
+    for overall_index, (input_role, role_index, input_path, preloaded_payload) in enumerate(input_specs):
         path = input_path.resolve()
-        payload = payloads[input_index] if payloads is not None else _load_json_object(path)
+        payload = preloaded_payload if preloaded_payload is not None else _load_json_object(path)
         rows, shard_payloads = _rows_and_shard_payloads_from_split_input(payload=payload, input_path=path)
-        all_rows.extend(rows)
+        if input_role == "retry":
+            retry_rows.extend(rows)
+        else:
+            primary_rows.extend(rows)
         loaded_shard_payload_count += len(shard_payloads) if shard_payloads else 1
         input_problem_hashes = _problem_hashes_for_split_input(
             payload=payload,
@@ -1881,7 +1906,9 @@ def build_split_fair_controls_payload(
         raw_content_ok = raw_content_ok and _payload_family_raw_content_not_persisted(payload, shard_payloads)
         split_inputs.append(
             {
-                "input_index": input_index,
+                "input_index": overall_index,
+                "input_role": input_role,
+                "role_index": role_index,
                 "path": str(path),
                 "eval_id": payload.get("eval_id"),
                 "eval_kind": payload.get("eval_kind"),
@@ -1904,10 +1931,49 @@ def build_split_fair_controls_payload(
             }
         )
 
-    deduped_rows, duplicate_audit = _dedupe_split_rows(all_rows)
+    primary_deduped_rows, primary_duplicate_audit = _dedupe_split_rows(
+        primary_rows,
+        allow_clean_retry_replacements=False,
+    )
+    primary_keys = _row_keys(primary_deduped_rows)
+    retry_keys = _row_keys(retry_rows)
+    primary_problem_hashes = {
+        problem_hash
+        for split_input in split_inputs
+        if split_input.get("input_role") == "primary"
+        for problem_hash in split_input.get("sample_problem_hashes", [])
+    }
+    retry_extra_problem_hashes = sorted({
+        problem_hash
+        for split_input in split_inputs
+        if split_input.get("input_role") == "retry"
+        for problem_hash in split_input.get("sample_problem_hashes", [])
+        if problem_hash not in primary_problem_hashes
+    })
+    retry_new_variant_problem_keys = sorted(retry_keys - primary_keys)
+    deduped_rows, duplicate_audit = _dedupe_split_rows(
+        primary_deduped_rows + retry_rows,
+        allow_clean_retry_replacements=allow_clean_retry_replacements,
+    )
+    duplicate_audit.update(
+        {
+            "primary_duplicate_variant_problem_row_count": primary_duplicate_audit[
+                "duplicate_variant_problem_row_count"
+            ],
+            "primary_disallowed_duplicate_variant_problem_row_count": primary_duplicate_audit[
+                "disallowed_duplicate_variant_problem_row_count"
+            ],
+            "retry_new_variant_problem_row_count": len(retry_new_variant_problem_keys),
+            "retry_new_variant_problem_keys": retry_new_variant_problem_keys[:20],
+            "retry_extra_problem_hash_count": len(retry_extra_problem_hashes),
+            "retry_extra_problem_hashes": retry_extra_problem_hashes[:20],
+            "allow_clean_retry_replacements": allow_clean_retry_replacements,
+        }
+    )
     union_problem_hashes = sorted({
         problem_hash
         for split_input in split_inputs
+        if split_input.get("input_role") == "primary"
         for problem_hash in split_input.get("sample_problem_hashes", [])
     })
     if not union_problem_hashes:
@@ -1951,9 +2017,15 @@ def build_split_fair_controls_payload(
     operator_application = metrics.get("operator_application_summary", {})
     split_audit = _split_run_audit(split_inputs=split_inputs, duplicate_audit=duplicate_audit)
     gates = {
-        "all_split_inputs_loaded": len(split_inputs) == len(input_paths),
+        "all_split_inputs_loaded": len(split_inputs) == len(input_specs),
         "split_inputs_cover_same_problem_set": split_audit["gates"]["split_inputs_cover_same_problem_set"],
         "no_duplicate_variant_problem_rows": split_audit["gates"]["no_duplicate_variant_problem_rows"],
+        "retry_inputs_within_primary_problem_set": split_audit["gates"][
+            "retry_inputs_within_primary_problem_set"
+        ],
+        "retry_rows_replace_existing_variant_problem": split_audit["gates"][
+            "retry_rows_replace_existing_variant_problem"
+        ],
         "all_shards_finished_without_process_failure": all(
             state.status == "completed" for state in states
         ),
@@ -1999,6 +2071,8 @@ def build_split_fair_controls_payload(
             "variants": variants,
             "shard_sample_dedupe": {"enabled": False, "status": "split_combined"},
             "split_run_input_count": len(split_inputs),
+            "split_primary_input_count": len(input_paths),
+            "split_retry_input_count": len(retry_input_paths),
         },
         "runtime_policy": {
             "execute_live": execute_live,
@@ -2012,6 +2086,11 @@ def build_split_fair_controls_payload(
             "feature_flags": _merged_runtime_policy_section(split_inputs, "feature_flags"),
             "source_policy": _merged_runtime_policy_section(split_inputs, "source_policy"),
             "split_input_paths": [item["path"] for item in split_inputs],
+            "split_retry_policy": {
+                "retry_input_count": len(retry_input_paths),
+                "allow_clean_retry_replacements": allow_clean_retry_replacements,
+                "raw_content_persisted": False,
+            },
             "raw_content_persisted": False,
         },
         "diagnostic_log_out": str(diagnostic_log_out) if diagnostic_log_out else None,
@@ -2177,10 +2256,17 @@ def _payload_family_raw_content_not_persisted(
     return True
 
 
-def _dedupe_split_rows(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _dedupe_split_rows(
+    rows: list[dict[str, Any]],
+    *,
+    allow_clean_retry_replacements: bool = False,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
     duplicate_count = 0
     conflicting_duplicate_count = 0
+    disallowed_duplicate_count = 0
+    allowed_clean_retry_replacement_count = 0
+    ignored_retry_error_duplicate_count = 0
     replaced_error_with_clean_count = 0
     for row in rows:
         key = (
@@ -2198,14 +2284,39 @@ def _dedupe_split_rows(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]]
         if _row_signature(existing) != _row_signature(row):
             conflicting_duplicate_count += 1
         if existing.get("error") and not row.get("error"):
-            replaced_error_with_clean_count += 1
-            by_key[key] = row
+            if allow_clean_retry_replacements:
+                allowed_clean_retry_replacement_count += 1
+                replaced_error_with_clean_count += 1
+                by_key[key] = row
+            else:
+                disallowed_duplicate_count += 1
+        elif not existing.get("error") and row.get("error"):
+            if allow_clean_retry_replacements:
+                ignored_retry_error_duplicate_count += 1
+            else:
+                disallowed_duplicate_count += 1
+        else:
+            disallowed_duplicate_count += 1
     return list(by_key.values()), {
         "duplicate_variant_problem_row_count": duplicate_count,
         "conflicting_duplicate_variant_problem_row_count": conflicting_duplicate_count,
+        "disallowed_duplicate_variant_problem_row_count": disallowed_duplicate_count,
+        "allowed_clean_retry_replacement_count": allowed_clean_retry_replacement_count,
+        "ignored_retry_error_duplicate_count": ignored_retry_error_duplicate_count,
         "replaced_error_with_clean_row_count": replaced_error_with_clean_count,
         "raw_content_persisted": False,
     }
+
+
+def _row_keys(rows: list[dict[str, Any]]) -> set[str]:
+    keys: set[str] = set()
+    for row in rows:
+        model = str(row.get("model") or "")
+        variant = str(row.get("variant") or "")
+        problem_hash = str(row.get("problem_id_hash") or "")
+        if model and variant and problem_hash:
+            keys.add(f"{model}::{variant}::{problem_hash}")
+    return keys
 
 
 def _row_signature(row: dict[str, Any]) -> tuple[Any, Any, Any]:
@@ -2218,10 +2329,12 @@ def _split_run_audit(
     split_inputs: list[dict[str, Any]],
     duplicate_audit: dict[str, Any],
 ) -> dict[str, Any]:
-    problem_sets = [set(item.get("sample_problem_hashes") or []) for item in split_inputs]
+    primary_inputs = [item for item in split_inputs if item.get("input_role") != "retry"]
+    retry_inputs = [item for item in split_inputs if item.get("input_role") == "retry"]
+    problem_sets = [set(item.get("sample_problem_hashes") or []) for item in primary_inputs]
     reference = problem_sets[0] if problem_sets else set()
     mismatches: list[dict[str, Any]] = []
-    for item, problem_set in zip(split_inputs, problem_sets):
+    for item, problem_set in zip(primary_inputs, problem_sets):
         missing = sorted(reference - problem_set)
         extra = sorted(problem_set - reference)
         if missing or extra:
@@ -2234,15 +2347,28 @@ def _split_run_audit(
                     "raw_content_persisted": False,
                 }
             )
+    retry_extra_problem_hashes = list(duplicate_audit.get("retry_extra_problem_hashes") or [])
+    retry_new_variant_problem_keys = list(duplicate_audit.get("retry_new_variant_problem_keys") or [])
+    primary_duplicate_count = int(
+        duplicate_audit.get("primary_duplicate_variant_problem_row_count") or 0
+    )
+    disallowed_duplicate_count = int(
+        duplicate_audit.get("disallowed_duplicate_variant_problem_row_count") or 0
+    ) + int(duplicate_audit.get("primary_disallowed_duplicate_variant_problem_row_count") or 0)
     gates = {
         "split_inputs_cover_same_problem_set": bool(problem_sets) and not mismatches,
-        "no_duplicate_variant_problem_rows": int(
-            duplicate_audit.get("duplicate_variant_problem_row_count") or 0
-        ) == 0,
+        "no_duplicate_variant_problem_rows": (
+            primary_duplicate_count == 0
+            and disallowed_duplicate_count == 0
+        ),
+        "retry_inputs_within_primary_problem_set": not retry_extra_problem_hashes,
+        "retry_rows_replace_existing_variant_problem": not retry_new_variant_problem_keys,
     }
     return {
         "audit_kind": "hle_split_fair_controls_audit",
         "input_count": len(split_inputs),
+        "primary_input_count": len(primary_inputs),
+        "retry_input_count": len(retry_inputs),
         "reference_problem_hash_count": len(reference),
         "problem_set_mismatches": mismatches,
         "duplicate_rows": duplicate_audit,
@@ -3580,13 +3706,14 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
             "",
             "## Split Inputs",
             "",
-            "| input | eval id | rows | sample hashes | variants | top errors | paper clean |",
-            "| ---: | --- | ---: | ---: | --- | ---: | --- |",
+            "| input | role | eval id | rows | sample hashes | variants | top errors | paper clean |",
+            "| ---: | --- | --- | ---: | ---: | --- | ---: | --- |",
         ])
         for item in payload.get("split_run_inputs") or []:
             variants = ", ".join(str(value) for value in item.get("variants", []))
             lines.append(
-                f"| `{item.get('input_index')}` | `{item.get('eval_id')}` | "
+                f"| `{item.get('input_index')}` | `{item.get('input_role', 'primary')}` | "
+                f"`{item.get('eval_id')}` | "
                 f"`{item.get('row_count')}` | `{item.get('sample_problem_hash_count')}` | "
                 f"`{variants}` | `{item.get('top_level_error_count')}` | "
                 f"`{item.get('paper_clean_pass')}` |"
@@ -3863,6 +3990,17 @@ def _split_run_input_paths_from_args(args: argparse.Namespace, *, root: Path) ->
     return [_path_arg(value, root=root) for value in raw_values]
 
 
+def _split_retry_input_paths_from_args(args: argparse.Namespace, *, root: Path) -> list[Path]:
+    raw_values: list[str] = []
+    for value in getattr(args, "split_retry_input", []) or []:
+        if str(value).strip():
+            raw_values.append(str(value).strip())
+    for value in str(getattr(args, "split_retry_inputs", "") or "").split(","):
+        if value.strip():
+            raw_values.append(value.strip())
+    return [_path_arg(value, root=root) for value in raw_values]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run HLE smoke eval through parallel shards.")
     parser.add_argument("--root", default=".")
@@ -3885,6 +4023,28 @@ def main() -> None:
         "--split-run-inputs",
         default="",
         help="Comma-separated completed parallel reports to include in --combine-split-runs.",
+    )
+    parser.add_argument(
+        "--split-retry-input",
+        action="append",
+        default=[],
+        help=(
+            "Path to a retry report for --combine-split-runs. Retry rows may only "
+            "replace errored primary rows when --allow-split-retry-clean-replacements is set."
+        ),
+    )
+    parser.add_argument(
+        "--split-retry-inputs",
+        default="",
+        help="Comma-separated retry reports for --combine-split-runs.",
+    )
+    parser.add_argument(
+        "--allow-split-retry-clean-replacements",
+        action="store_true",
+        help=(
+            "Allow retry rows to replace errored rows for the same model/variant/problem. "
+            "Clean-clean conflicts and retry rows outside the primary key set still fail."
+        ),
     )
     parser.add_argument("--total-sample-size", type=int, default=30)
     parser.add_argument("--shard-size", type=int, default=1)
@@ -4125,11 +4285,18 @@ def main() -> None:
     )
     if args.combine_split_runs:
         split_paths = _split_run_input_paths_from_args(args, root=root)
+        retry_paths = _split_retry_input_paths_from_args(args, root=root)
         if not split_paths:
             parser.error("--combine-split-runs requires --split-run-input or --split-run-inputs")
+        if retry_paths and not args.allow_split_retry_clean_replacements:
+            parser.error(
+                "--split-retry-input requires --allow-split-retry-clean-replacements"
+            )
         payload = build_split_fair_controls_payload(
             eval_id=args.eval_id,
             input_paths=split_paths,
+            retry_input_paths=retry_paths,
+            allow_clean_retry_replacements=bool(args.allow_split_retry_clean_replacements),
             diagnostic_log_out=diagnostic_log_out,
         )
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -4142,6 +4309,7 @@ def main() -> None:
                 "event": "hle_parallel_runner_split_fair_controls_combined",
                 "eval_id": args.eval_id,
                 "input_paths": [str(path) for path in split_paths],
+                "retry_input_paths": [str(path) for path in retry_paths],
                 "pass": bool(payload.get("pass")),
                 "paper_clean_pass": bool(payload.get("paper_clean_pass")),
                 "pollution_pass": bool(payload.get("pollution_pass")),
@@ -4180,6 +4348,7 @@ def main() -> None:
             "split_run_audit": {
                 "failed_gates": payload["split_run_audit"]["failed_gates"],
                 "input_count": payload["split_run_audit"]["input_count"],
+                "retry_input_count": payload["split_run_audit"]["retry_input_count"],
                 "reference_problem_hash_count": payload["split_run_audit"]["reference_problem_hash_count"],
             },
             "model_budget_fairness_audit": {
