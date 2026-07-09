@@ -1825,6 +1825,509 @@ def aggregate_parallel_payload(
     }
 
 
+def build_split_fair_controls_payload(
+    *,
+    eval_id: str,
+    input_paths: list[Path],
+    diagnostic_log_out: Path | None = None,
+    payloads: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Combine variant-split parallel reports into one fair-control report.
+
+    This is for runs where controls and the Agent were executed in separate
+    batches on the same problem set.  Problem hashes are counted once, while
+    model-call accounting is summed across all split inputs.
+    """
+    if not input_paths:
+        raise ValueError("at least one split run input is required")
+    if payloads is not None and len(payloads) != len(input_paths):
+        raise ValueError("payloads and input_paths must have the same length")
+
+    split_inputs: list[dict[str, Any]] = []
+    all_rows: list[dict[str, Any]] = []
+    states: list[ShardRunState] = []
+    loaded_shard_payload_count = 0
+    planned_live_calls = 0
+    live_calls = 0
+    underlying_calls = 0
+    resolved_calls = 0
+    execute_live = False
+    raw_content_ok = True
+
+    for input_index, input_path in enumerate(input_paths):
+        path = input_path.resolve()
+        payload = payloads[input_index] if payloads is not None else _load_json_object(path)
+        rows, shard_payloads = _rows_and_shard_payloads_from_split_input(payload=payload, input_path=path)
+        all_rows.extend(rows)
+        loaded_shard_payload_count += len(shard_payloads) if shard_payloads else 1
+        input_problem_hashes = _problem_hashes_for_split_input(
+            payload=payload,
+            shard_payloads=shard_payloads,
+            rows=rows,
+        )
+        input_states = _states_from_split_input(
+            payload=payload,
+            input_path=path,
+            start_index=len(states),
+            fallback_rows=rows,
+        )
+        states.extend(input_states)
+        planned_live_calls += _metric_int_from_input(payload, shard_payloads, "planned_live_model_calls")
+        live_calls += _metric_int_from_input(payload, shard_payloads, "live_model_calls_executed")
+        underlying_calls += _metric_int_from_input(payload, shard_payloads, "underlying_model_calls_executed")
+        resolved_calls += _metric_int_from_input(payload, shard_payloads, "resolved_live_model_calls")
+        runtime_policy = payload.get("runtime_policy") if isinstance(payload.get("runtime_policy"), dict) else {}
+        execute_live = execute_live or bool(runtime_policy.get("execute_live"))
+        raw_content_ok = raw_content_ok and _payload_family_raw_content_not_persisted(payload, shard_payloads)
+        split_inputs.append(
+            {
+                "input_index": input_index,
+                "path": str(path),
+                "eval_id": payload.get("eval_id"),
+                "eval_kind": payload.get("eval_kind"),
+                "pass": payload.get("pass"),
+                "paper_clean_pass": payload.get("paper_clean_pass"),
+                "failed_gates": list(payload.get("failed_gates") or []),
+                "paper_clean_failed_gates": list(payload.get("paper_clean_failed_gates") or []),
+                "model_variants": _model_variant_keys(rows),
+                "models": sorted({str(row.get("model")) for row in rows if row.get("model")}),
+                "variants": sorted({str(row.get("variant")) for row in rows if row.get("variant")}),
+                "row_count": len(rows),
+                "sample_problem_hash_count": len(input_problem_hashes),
+                "sample_problem_hashes": input_problem_hashes,
+                "loaded_shard_payload_count": len(shard_payloads) if shard_payloads else int(bool(rows)),
+                "planned_shard_count": len(payload.get("shards") or []) or int(bool(rows)),
+                "top_level_error_count": (payload.get("error_stratification") or {}).get("top_level_error_count"),
+                "process_timeout_count": (payload.get("error_stratification") or {}).get("process_timeout_count"),
+                "runtime_policy": _runtime_policy_summary(runtime_policy),
+                "raw_content_persisted": False,
+            }
+        )
+
+    deduped_rows, duplicate_audit = _dedupe_split_rows(all_rows)
+    union_problem_hashes = sorted({
+        problem_hash
+        for split_input in split_inputs
+        for problem_hash in split_input.get("sample_problem_hashes", [])
+    })
+    if not union_problem_hashes:
+        union_problem_hashes = sorted({
+            str(row.get("problem_id_hash"))
+            for row in deduped_rows
+            if row.get("problem_id_hash")
+        })
+    synthetic_payload = {
+        "rows": deduped_rows,
+        "sampling": {
+            "sample_problem_hashes": union_problem_hashes,
+        },
+        "metrics": {
+            "sample_count": len(union_problem_hashes),
+            "planned_live_model_calls": planned_live_calls,
+            "live_model_calls_executed": live_calls,
+            "underlying_model_calls_executed": underlying_calls,
+            "resolved_live_model_calls": resolved_calls,
+            "raw_content_persisted": False,
+        },
+    }
+    metrics = _parallel_metrics(run_rows=deduped_rows, shard_payloads=[synthetic_payload])
+    specs = [state.spec for state in states]
+    error_stratification = build_error_stratification(
+        rows=deduped_rows,
+        specs=specs,
+        states=states,
+    )
+    pollution_audit = build_pollution_audit(
+        rows=deduped_rows,
+        shard_payloads=[synthetic_payload],
+        metrics=metrics,
+        error_stratification=error_stratification,
+        execute_live=execute_live,
+    )
+    model_budget_fairness_audit = build_model_budget_fairness_audit(rows=deduped_rows)
+    failure_diagnostics = build_failure_diagnostics(rows=deduped_rows)
+    fair_baseline_gate = _agent_meets_best_control_gate(metrics)
+    operator_activation = metrics.get("operator_activation_summary", {})
+    operator_application = metrics.get("operator_application_summary", {})
+    split_audit = _split_run_audit(split_inputs=split_inputs, duplicate_audit=duplicate_audit)
+    gates = {
+        "all_split_inputs_loaded": len(split_inputs) == len(input_paths),
+        "split_inputs_cover_same_problem_set": split_audit["gates"]["split_inputs_cover_same_problem_set"],
+        "no_duplicate_variant_problem_rows": split_audit["gates"]["no_duplicate_variant_problem_rows"],
+        "all_shards_finished_without_process_failure": all(
+            state.status == "completed" for state in states
+        ),
+        "all_available_payloads_preserve_raw_content": raw_content_ok,
+        "sample_rows_loaded": metrics["sample_count"] >= 1,
+        "requested_sample_rows_loaded": metrics["sample_count"] >= len(union_problem_hashes),
+        "live_rows_resolved_if_requested": (
+            not execute_live
+            or metrics["resolved_live_model_calls"] == metrics["planned_live_model_calls"]
+        ),
+        "agent_not_below_best_same_model_control": fair_baseline_gate["passed"],
+        "assumption_operator_activated_if_selected": bool(operator_activation.get("passed", True)),
+        "operator_application_fidelity_if_verified": (
+            int(operator_application.get("verifier_activated_count") or 0) == 0
+            or bool(operator_application.get("passed", True))
+        ),
+    }
+    paper_clean_gates = dict(gates)
+    paper_clean_gates["zero_top_level_live_errors"] = error_stratification["top_level_error_count"] == 0
+    paper_clean_gates["zero_process_timeouts"] = error_stratification["process_timeout_count"] == 0
+    paper_clean_gates["no_duplicate_sample_problems"] = metrics["duplicate_sample_problem_count"] == 0
+    paper_clean_gates.update(model_budget_fairness_audit["gates"])
+    pollution_gates = pollution_audit["gates"]
+    models = sorted({str(row.get("model")) for row in deduped_rows if row.get("model")})
+    variants = sorted({str(row.get("variant")) for row in deduped_rows if row.get("variant")})
+    return {
+        "eval_id": eval_id,
+        "eval_kind": "hle_split_fair_controls_combined",
+        "dataset": DATASET_NAME,
+        "official_sources": HLE_OFFICIAL_SOURCES,
+        "performance_validation": True,
+        "validation_scope": (
+            "Combines completed variant-split HLE parallel reports into a single "
+            "fair-control artifact. Problem hashes are de-duplicated; model-call "
+            "budgets and process/error states are preserved from the split inputs."
+        ),
+        "sampling": {
+            "requested_total_sample_size": len(union_problem_hashes),
+            "shard_size": None,
+            "planned_shard_count": len(states),
+            "parallel_workers": None,
+            "models": models,
+            "variants": variants,
+            "shard_sample_dedupe": {"enabled": False, "status": "split_combined"},
+            "split_run_input_count": len(split_inputs),
+        },
+        "runtime_policy": {
+            "execute_live": execute_live,
+            "soft_timeout_sec": None,
+            "process_timeout_policy": "preserved_from_split_inputs",
+            "kill_on_soft_timeout": None,
+            "launch_stagger_sec": None,
+            "reuse_completed_shards": {"enabled": False, "status": "split_combined"},
+            "model_router": _merged_runtime_policy_section(split_inputs, "model_router"),
+            "variant_watchdog": _merged_runtime_policy_section(split_inputs, "variant_watchdog"),
+            "feature_flags": _merged_runtime_policy_section(split_inputs, "feature_flags"),
+            "source_policy": _merged_runtime_policy_section(split_inputs, "source_policy"),
+            "split_input_paths": [item["path"] for item in split_inputs],
+            "raw_content_persisted": False,
+        },
+        "diagnostic_log_out": str(diagnostic_log_out) if diagnostic_log_out else None,
+        "logging_policy": {
+            "event_stream": "jsonl",
+            "raw_content_persisted": False,
+            "prediction_text_persisted": False,
+            "gold_answer_persisted": False,
+            "event_granularity": "split-run provenance, shard states, aggregate gates",
+        },
+        "split_run_inputs": split_inputs,
+        "split_run_audit": split_audit,
+        "shards": [_shard_summary(state) for state in states],
+        "loaded_shard_payload_count": loaded_shard_payload_count,
+        "metrics": metrics,
+        "error_stratification": error_stratification,
+        "pollution_audit": pollution_audit,
+        "model_budget_fairness_audit": model_budget_fairness_audit,
+        "fair_baseline_gate": fair_baseline_gate,
+        "failure_diagnostics": failure_diagnostics,
+        "pass": all(gates.values()),
+        "paper_clean_pass": all(paper_clean_gates.values()),
+        "pollution_pass": all(pollution_gates.values()),
+        "failed_gates": [name for name, passed in gates.items() if not passed],
+        "paper_clean_failed_gates": [name for name, passed in paper_clean_gates.items() if not passed],
+        "pollution_failed_gates": [name for name, passed in pollution_gates.items() if not passed],
+        "raw_content_persisted": False,
+    }
+
+
+def _load_json_object(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"failed to load split run input {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"split run input is not a JSON object: {path}")
+    return payload
+
+
+def _rows_and_shard_payloads_from_split_input(
+    *,
+    payload: dict[str, Any],
+    input_path: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    direct_rows = payload.get("rows") or payload.get("run_rows") or []
+    if direct_rows:
+        return [dict(row) for row in direct_rows if isinstance(row, dict)], [payload]
+    rows: list[dict[str, Any]] = []
+    shard_payloads: list[dict[str, Any]] = []
+    for shard in payload.get("shards") or []:
+        if not isinstance(shard, dict):
+            continue
+        out_path = _resolve_split_path(shard.get("out"), base_dir=input_path.parent)
+        shard_payload = _load_existing_shard_payload(out_path)
+        if not shard_payload:
+            continue
+        shard_payloads.append(shard_payload)
+        for row in shard_payload.get("rows", []) or shard_payload.get("run_rows", []) or []:
+            if isinstance(row, dict):
+                rows.append(dict(row))
+    return rows, shard_payloads
+
+
+def _problem_hashes_for_split_input(
+    *,
+    payload: dict[str, Any],
+    shard_payloads: list[dict[str, Any]],
+    rows: list[dict[str, Any]],
+) -> list[str]:
+    hashes = _merged_sample_problem_hashes(shard_payloads)
+    if not hashes:
+        sampling = payload.get("sampling") if isinstance(payload.get("sampling"), dict) else {}
+        hashes = [str(value) for value in sampling.get("sample_problem_hashes", []) or []]
+    if not hashes:
+        hashes = [str(row.get("problem_id_hash")) for row in rows if row.get("problem_id_hash")]
+    return sorted(set(hashes))
+
+
+def _states_from_split_input(
+    *,
+    payload: dict[str, Any],
+    input_path: Path,
+    start_index: int,
+    fallback_rows: list[dict[str, Any]],
+) -> list[ShardRunState]:
+    shard_summaries = [item for item in payload.get("shards") or [] if isinstance(item, dict)]
+    if not shard_summaries:
+        shard_summaries = [
+            {
+                "eval_id": payload.get("eval_id") or input_path.stem,
+                "status": "completed" if fallback_rows else "missing_rows",
+                "returncode": 0 if fallback_rows else None,
+                "sample_size": len({row.get("problem_id_hash") for row in fallback_rows if row.get("problem_id_hash")}),
+                "seed_offset": 0,
+                "out": str(input_path),
+                "log_out": "",
+                "stdout_out": "",
+            }
+        ]
+    states: list[ShardRunState] = []
+    for offset, summary in enumerate(shard_summaries):
+        shard_index = start_index + offset
+        out_path = _resolve_split_path(summary.get("out") or input_path, base_dir=input_path.parent)
+        log_out = _resolve_split_path(summary.get("log_out") or "", base_dir=input_path.parent)
+        stdout_out = _resolve_split_path(summary.get("stdout_out") or "", base_dir=input_path.parent)
+        spec = ShardSpec(
+            shard_index=shard_index,
+            eval_id=str(summary.get("eval_id") or f"{payload.get('eval_id') or input_path.stem}_split_{offset:03d}"),
+            sample_size=_safe_int(summary.get("sample_size"), default=0),
+            seed_offset=_safe_int(summary.get("seed_offset"), default=0),
+            out=out_path,
+            md_out=Path(""),
+            log_out=log_out,
+            stdout_out=stdout_out,
+        )
+        state = ShardRunState(
+            spec=spec,
+            command=[],
+            status=str(summary.get("status") or "unknown"),
+            returncode=_safe_optional_int(summary.get("returncode")),
+        )
+        elapsed = _safe_optional_float(summary.get("elapsed_sec"))
+        if elapsed is not None:
+            state.started_monotonic = 0.0
+            state.finished_monotonic = max(0.0, elapsed)
+        state.soft_timeout_sent = bool(summary.get("soft_timeout_sent"))
+        state.soft_timeout_observed = bool(summary.get("soft_timeout_observed"))
+        state.hard_kill_sent = bool(summary.get("hard_kill_sent"))
+        state.reused_existing_payload = bool(summary.get("reused_existing_payload"))
+        state.process_timeout_policy = str(summary.get("process_timeout_policy") or "unknown")
+        state.error = str(summary.get("error")) if summary.get("error") is not None else None
+        memory = summary.get("last_process_memory")
+        state.last_process_memory = dict(memory) if isinstance(memory, dict) else {}
+        state.peak_rss_kb = _safe_optional_int(summary.get("process_peak_rss_kb"))
+        state.peak_vms_kb = _safe_optional_int(summary.get("process_peak_vms_kb"))
+        states.append(state)
+    return states
+
+
+def _metric_int_from_input(
+    payload: dict[str, Any],
+    shard_payloads: list[dict[str, Any]],
+    key: str,
+) -> int:
+    metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+    if key in metrics:
+        return _safe_int(metrics.get(key), default=0)
+    return sum(_safe_int((shard.get("metrics") or {}).get(key), default=0) for shard in shard_payloads)
+
+
+def _payload_family_raw_content_not_persisted(
+    payload: dict[str, Any],
+    shard_payloads: list[dict[str, Any]],
+) -> bool:
+    candidates = [payload, *shard_payloads]
+    for candidate in candidates:
+        metrics = candidate.get("metrics") if isinstance(candidate.get("metrics"), dict) else {}
+        if metrics.get("raw_content_persisted") is not False:
+            return False
+        if candidate.get("raw_content_persisted") not in (None, False):
+            return False
+    return True
+
+
+def _dedupe_split_rows(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
+    duplicate_count = 0
+    conflicting_duplicate_count = 0
+    replaced_error_with_clean_count = 0
+    for row in rows:
+        key = (
+            str(row.get("model") or ""),
+            str(row.get("variant") or ""),
+            str(row.get("problem_id_hash") or ""),
+        )
+        if not all(key):
+            continue
+        existing = by_key.get(key)
+        if existing is None:
+            by_key[key] = row
+            continue
+        duplicate_count += 1
+        if _row_signature(existing) != _row_signature(row):
+            conflicting_duplicate_count += 1
+        if existing.get("error") and not row.get("error"):
+            replaced_error_with_clean_count += 1
+            by_key[key] = row
+    return list(by_key.values()), {
+        "duplicate_variant_problem_row_count": duplicate_count,
+        "conflicting_duplicate_variant_problem_row_count": conflicting_duplicate_count,
+        "replaced_error_with_clean_row_count": replaced_error_with_clean_count,
+        "raw_content_persisted": False,
+    }
+
+
+def _row_signature(row: dict[str, Any]) -> tuple[Any, Any, Any]:
+    error = row.get("error") if isinstance(row.get("error"), dict) else {}
+    return (bool(row.get("correct")), row.get("prediction_hash"), error.get("type"))
+
+
+def _split_run_audit(
+    *,
+    split_inputs: list[dict[str, Any]],
+    duplicate_audit: dict[str, Any],
+) -> dict[str, Any]:
+    problem_sets = [set(item.get("sample_problem_hashes") or []) for item in split_inputs]
+    reference = problem_sets[0] if problem_sets else set()
+    mismatches: list[dict[str, Any]] = []
+    for item, problem_set in zip(split_inputs, problem_sets):
+        missing = sorted(reference - problem_set)
+        extra = sorted(problem_set - reference)
+        if missing or extra:
+            mismatches.append(
+                {
+                    "input_index": item.get("input_index"),
+                    "path": item.get("path"),
+                    "missing_from_reference": missing,
+                    "extra_vs_reference": extra,
+                    "raw_content_persisted": False,
+                }
+            )
+    gates = {
+        "split_inputs_cover_same_problem_set": bool(problem_sets) and not mismatches,
+        "no_duplicate_variant_problem_rows": int(
+            duplicate_audit.get("duplicate_variant_problem_row_count") or 0
+        ) == 0,
+    }
+    return {
+        "audit_kind": "hle_split_fair_controls_audit",
+        "input_count": len(split_inputs),
+        "reference_problem_hash_count": len(reference),
+        "problem_set_mismatches": mismatches,
+        "duplicate_rows": duplicate_audit,
+        "gates": gates,
+        "failed_gates": [name for name, passed in gates.items() if not passed],
+        "raw_content_persisted": False,
+    }
+
+
+def _model_variant_keys(rows: list[dict[str, Any]]) -> list[str]:
+    return sorted({
+        f"{row.get('model')}::{row.get('variant')}"
+        for row in rows
+        if row.get("model") and row.get("variant")
+    })
+
+
+def _runtime_policy_summary(runtime_policy: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "execute_live": runtime_policy.get("execute_live"),
+        "process_timeout_policy": runtime_policy.get("process_timeout_policy"),
+        "model_router": runtime_policy.get("model_router") if isinstance(runtime_policy.get("model_router"), dict) else {},
+        "variant_watchdog": (
+            runtime_policy.get("variant_watchdog")
+            if isinstance(runtime_policy.get("variant_watchdog"), dict)
+            else {}
+        ),
+        "feature_flags": (
+            runtime_policy.get("feature_flags")
+            if isinstance(runtime_policy.get("feature_flags"), dict)
+            else {}
+        ),
+        "source_policy": (
+            runtime_policy.get("source_policy")
+            if isinstance(runtime_policy.get("source_policy"), dict)
+            else {}
+        ),
+        "raw_content_persisted": False,
+    }
+
+
+def _merged_runtime_policy_section(split_inputs: list[dict[str, Any]], section: str) -> dict[str, Any]:
+    values: list[dict[str, Any]] = []
+    for item in split_inputs:
+        runtime_policy = item.get("runtime_policy") if isinstance(item.get("runtime_policy"), dict) else {}
+        value = runtime_policy.get(section)
+        if isinstance(value, dict) and value not in values:
+            values.append(value)
+    return {
+        "split_input_policy_count": len(values),
+        "policies": values[:5],
+        "raw_content_persisted": False,
+    }
+
+
+def _resolve_split_path(value: Any, *, base_dir: Path) -> Path:
+    if not value:
+        return Path("")
+    path = Path(str(value))
+    if path.is_absolute():
+        return path
+    return (base_dir / path).resolve()
+
+
+def _safe_int(value: Any, *, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_optional_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_optional_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _shard_summary(state: ShardRunState) -> dict[str, Any]:
     return {
         "shard_index": state.spec.shard_index,
@@ -2893,8 +3396,13 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
     sampling = payload.get("sampling") or {}
     shard_dedupe = (payload.get("sampling") or {}).get("shard_sample_dedupe") or {"enabled": False}
     reuse_summary = runtime_policy.get("reuse_completed_shards") or {"enabled": False}
+    title = (
+        "# HLE Split Fair Controls Combined Evaluation"
+        if payload.get("eval_kind") == "hle_split_fair_controls_combined"
+        else "# HLE Parallel Shard Evaluation"
+    )
     lines = [
-        "# HLE Parallel Shard Evaluation",
+        title,
         "",
         f"- pass: `{payload['pass']}`",
         f"- paper clean pass: `{payload['paper_clean_pass']}`",
@@ -2919,6 +3427,7 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
         f"- paper-clean failed gates: `{payload['paper_clean_failed_gates']}`",
         f"- pollution failed gates: `{payload.get('pollution_failed_gates')}`",
         f"- model-budget fairness failed gates: `{model_budget.get('failed_gates')}`",
+        f"- split-run audit failed gates: `{(payload.get('split_run_audit') or {}).get('failed_gates')}`",
         f"- operator selected/activated/blocked rows: "
         f"`{operator_activation.get('selected_row_count', 0)}/"
         f"{operator_activation.get('activated_row_count', 0)}/"
@@ -3066,6 +3575,37 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
     for variant, counts in sorted((diagnostics.get("by_variant_domain") or {}).items()):
         for key, value in sorted(counts.items()):
             lines.append(f"| `by_variant_domain::{variant}` | `{key}` | `{value}` |")
+    if payload.get("split_run_inputs"):
+        lines.extend([
+            "",
+            "## Split Inputs",
+            "",
+            "| input | eval id | rows | sample hashes | variants | top errors | paper clean |",
+            "| ---: | --- | ---: | ---: | --- | ---: | --- |",
+        ])
+        for item in payload.get("split_run_inputs") or []:
+            variants = ", ".join(str(value) for value in item.get("variants", []))
+            lines.append(
+                f"| `{item.get('input_index')}` | `{item.get('eval_id')}` | "
+                f"`{item.get('row_count')}` | `{item.get('sample_problem_hash_count')}` | "
+                f"`{variants}` | `{item.get('top_level_error_count')}` | "
+                f"`{item.get('paper_clean_pass')}` |"
+            )
+        split_audit = payload.get("split_run_audit") or {}
+        duplicate_rows = split_audit.get("duplicate_rows") or {}
+        lines.extend([
+            "",
+            "## Split Audit",
+            "",
+            "| gate | value |",
+            "| --- | --- |",
+        ])
+        for key, value in sorted((split_audit.get("gates") or {}).items()):
+            lines.append(f"| `{key}` | `{value}` |")
+        for key, value in sorted(duplicate_rows.items()):
+            if key == "raw_content_persisted":
+                continue
+            lines.append(f"| `duplicate_rows::{key}` | `{value}` |")
     lines.extend([
         "",
         "## Shards",
@@ -3312,10 +3852,40 @@ def _path_arg(value: str, *, root: Path) -> Path:
     return path if path.is_absolute() else root / path
 
 
+def _split_run_input_paths_from_args(args: argparse.Namespace, *, root: Path) -> list[Path]:
+    raw_values: list[str] = []
+    for value in getattr(args, "split_run_input", []) or []:
+        if str(value).strip():
+            raw_values.append(str(value).strip())
+    for value in str(getattr(args, "split_run_inputs", "") or "").split(","):
+        if value.strip():
+            raw_values.append(value.strip())
+    return [_path_arg(value, root=root) for value in raw_values]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run HLE smoke eval through parallel shards.")
     parser.add_argument("--root", default=".")
     parser.add_argument("--eval-id", default="hle_parallel_shard_eval_20260616")
+    parser.add_argument(
+        "--combine-split-runs",
+        action="store_true",
+        help=(
+            "Do not launch shards. Combine completed variant-split parallel reports "
+            "into one fair-control JSON/Markdown report."
+        ),
+    )
+    parser.add_argument(
+        "--split-run-input",
+        action="append",
+        default=[],
+        help="Path to one completed parallel report to include in --combine-split-runs.",
+    )
+    parser.add_argument(
+        "--split-run-inputs",
+        default="",
+        help="Comma-separated completed parallel reports to include in --combine-split-runs.",
+    )
     parser.add_argument("--total-sample-size", type=int, default=30)
     parser.add_argument("--shard-size", type=int, default=1)
     parser.add_argument("--parallel-workers", type=int, default=3)
@@ -3553,6 +4123,75 @@ def main() -> None:
             ),
         },
     )
+    if args.combine_split_runs:
+        split_paths = _split_run_input_paths_from_args(args, root=root)
+        if not split_paths:
+            parser.error("--combine-split-runs requires --split-run-input or --split-run-inputs")
+        payload = build_split_fair_controls_payload(
+            eval_id=args.eval_id,
+            input_paths=split_paths,
+            diagnostic_log_out=diagnostic_log_out,
+        )
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+        md_out.parent.mkdir(parents=True, exist_ok=True)
+        md_out.write_text(format_parallel_markdown(payload), encoding="utf-8")
+        log_event(
+            logger,
+            {
+                "event": "hle_parallel_runner_split_fair_controls_combined",
+                "eval_id": args.eval_id,
+                "input_paths": [str(path) for path in split_paths],
+                "pass": bool(payload.get("pass")),
+                "paper_clean_pass": bool(payload.get("paper_clean_pass")),
+                "pollution_pass": bool(payload.get("pollution_pass")),
+                "failed_gates": list(payload.get("failed_gates") or []),
+                "paper_clean_failed_gates": list(payload.get("paper_clean_failed_gates") or []),
+                "split_run_audit_failed_gates": list(
+                    (payload.get("split_run_audit") or {}).get("failed_gates") or []
+                ),
+                "metrics": {
+                    "sample_count": payload["metrics"]["sample_count"],
+                    "distinct_sample_problem_count": payload["metrics"]["distinct_sample_problem_count"],
+                    "scored_row_count": payload["metrics"]["scored_row_count"],
+                    "overall_accuracy": payload["metrics"]["overall_accuracy"],
+                },
+            },
+        )
+        print(json.dumps({
+            "eval_id": payload["eval_id"],
+            "eval_kind": payload["eval_kind"],
+            "pass": payload["pass"],
+            "paper_clean_pass": payload["paper_clean_pass"],
+            "pollution_pass": payload["pollution_pass"],
+            "metrics": {
+                "sample_count": payload["metrics"]["sample_count"],
+                "distinct_sample_problem_count": payload["metrics"]["distinct_sample_problem_count"],
+                "duplicate_sample_problem_count": payload["metrics"]["duplicate_sample_problem_count"],
+                "scored_row_count": payload["metrics"]["scored_row_count"],
+                "overall_accuracy": payload["metrics"]["overall_accuracy"],
+                "resolved_live_model_calls": payload["metrics"]["resolved_live_model_calls"],
+                "planned_live_model_calls": payload["metrics"]["planned_live_model_calls"],
+            },
+            "error_stratification": {
+                "top_level_error_count": payload["error_stratification"]["top_level_error_count"],
+                "process_timeout_count": payload["error_stratification"]["process_timeout_count"],
+            },
+            "split_run_audit": {
+                "failed_gates": payload["split_run_audit"]["failed_gates"],
+                "input_count": payload["split_run_audit"]["input_count"],
+                "reference_problem_hash_count": payload["split_run_audit"]["reference_problem_hash_count"],
+            },
+            "model_budget_fairness_audit": {
+                "failed_gates": payload["model_budget_fairness_audit"]["failed_gates"],
+                "multi_call_agent_row_count": payload["model_budget_fairness_audit"]["multi_call_agent_row_count"],
+            },
+            "failed_gates": payload["failed_gates"],
+            "paper_clean_failed_gates": payload["paper_clean_failed_gates"],
+            "out": str(out),
+            "log_out": str(diagnostic_log_out),
+        }, ensure_ascii=False, indent=2, sort_keys=True))
+        return
     hash_cache_path = run_dir / f"{args.eval_id}.existing_hash_cache.json"
     os.environ.setdefault("HLE_EXISTING_HASH_CACHE_PATH", str(hash_cache_path))
     write_preflight_heartbeat(

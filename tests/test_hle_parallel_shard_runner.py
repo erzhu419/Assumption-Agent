@@ -28,6 +28,7 @@ from assumption_os.hle_parallel_shard_runner import (
     build_payload_without_execution,
     build_pollution_audit,
     build_runner_env,
+    build_split_fair_controls_payload,
     build_shard_command,
     build_shard_specs,
     build_shard_specs_for_seed_offsets,
@@ -926,6 +927,128 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertFalse(payload["paper_clean_pass"])
         self.assertIn("requested_sample_rows_loaded", payload["failed_gates"])
         self.assertEqual(payload["metrics"]["sample_count"], 1)
+
+    def test_split_fair_controls_combines_variant_batches_without_double_counting_samples(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            controls = _payload([
+                _row("p1", "raw", False),
+                _row("p1", "hipporag_baseline", False),
+                _row("p1", "raw_budget_matched", False),
+                _row("p1", "hipporag_budget_matched", False),
+                _row("p2", "raw", False),
+                _row("p2", "hipporag_baseline", False),
+                _row("p2", "raw_budget_matched", False),
+                _row("p2", "hipporag_budget_matched", False),
+            ])
+            controls.update({
+                "eval_id": "controls",
+                "eval_kind": "hle_parallel_shard_runner",
+                "pass": True,
+                "paper_clean_pass": True,
+                "runtime_policy": {"execute_live": True, "raw_content_persisted": False},
+                "raw_content_persisted": False,
+            })
+            agent = _payload([
+                _row(
+                    "p1",
+                    "assumption_agent_recursive_verify",
+                    True,
+                    component_efficacy=_agent_multi_call_same_model_ce(),
+                ),
+                _row(
+                    "p2",
+                    "assumption_agent_recursive_verify",
+                    False,
+                    component_efficacy=_agent_multi_call_same_model_ce(),
+                ),
+            ])
+            agent.update({
+                "eval_id": "agent",
+                "eval_kind": "hle_parallel_shard_runner",
+                "pass": True,
+                "paper_clean_pass": False,
+                "runtime_policy": {"execute_live": True, "raw_content_persisted": False},
+                "raw_content_persisted": False,
+            })
+            controls_path = root / "controls.json"
+            agent_path = root / "agent.json"
+            controls_path.write_text(json.dumps(controls), encoding="utf-8")
+            agent_path.write_text(json.dumps(agent), encoding="utf-8")
+
+            payload = build_split_fair_controls_payload(
+                eval_id="combined",
+                input_paths=[controls_path, agent_path],
+                diagnostic_log_out=root / "combined.jsonl",
+            )
+            markdown = format_parallel_markdown(payload)
+
+        self.assertTrue(payload["pass"])
+        self.assertTrue(payload["paper_clean_pass"])
+        self.assertEqual(payload["eval_kind"], "hle_split_fair_controls_combined")
+        self.assertEqual(payload["metrics"]["sample_count"], 2)
+        self.assertEqual(payload["metrics"]["distinct_sample_problem_count"], 2)
+        self.assertEqual(payload["metrics"]["scored_row_count"], 10)
+        self.assertEqual(payload["split_run_audit"]["failed_gates"], [])
+        self.assertEqual(payload["model_budget_fairness_audit"]["failed_gates"], [])
+        self.assertEqual(
+            payload["metrics"]["by_model_variant"]["gpt-5.4-mini::assumption_agent_recursive_verify"]["accuracy"],
+            0.5,
+        )
+        self.assertEqual(payload["metrics"]["by_model_variant"]["gpt-5.4-mini::raw"]["accuracy"], 0.0)
+        self.assertIn("HLE Split Fair Controls Combined Evaluation", markdown)
+        self.assertIn("Split Inputs", markdown)
+
+    def test_split_fair_controls_fails_when_inputs_cover_different_problem_sets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            controls = _payload([
+                _row("p1", "raw", False),
+                _row("p1", "hipporag_baseline", False),
+                _row("p1", "raw_budget_matched", False),
+                _row("p1", "hipporag_budget_matched", False),
+                _row("p2", "raw", False),
+                _row("p2", "hipporag_baseline", False),
+                _row("p2", "raw_budget_matched", False),
+                _row("p2", "hipporag_budget_matched", False),
+            ])
+            controls.update({
+                "eval_id": "controls",
+                "eval_kind": "hle_parallel_shard_runner",
+                "runtime_policy": {"execute_live": False, "raw_content_persisted": False},
+                "raw_content_persisted": False,
+            })
+            agent = _payload([
+                _row(
+                    "p1",
+                    "assumption_agent_recursive_verify",
+                    True,
+                    component_efficacy=_agent_multi_call_same_model_ce(),
+                )
+            ])
+            agent.update({
+                "eval_id": "agent",
+                "eval_kind": "hle_parallel_shard_runner",
+                "runtime_policy": {"execute_live": False, "raw_content_persisted": False},
+                "raw_content_persisted": False,
+            })
+            controls_path = root / "controls.json"
+            agent_path = root / "agent.json"
+            controls_path.write_text(json.dumps(controls), encoding="utf-8")
+            agent_path.write_text(json.dumps(agent), encoding="utf-8")
+
+            payload = build_split_fair_controls_payload(
+                eval_id="combined-mismatch",
+                input_paths=[controls_path, agent_path],
+            )
+
+        self.assertFalse(payload["pass"])
+        self.assertFalse(payload["paper_clean_pass"])
+        self.assertIn("split_inputs_cover_same_problem_set", payload["failed_gates"])
+        self.assertEqual(
+            payload["split_run_audit"]["problem_set_mismatches"][0]["missing_from_reference"],
+            ["p2"],
+        )
 
     def test_model_budget_fairness_blocks_unfair_strong_child_agent_claim(self) -> None:
         rows = [
@@ -2118,6 +2241,28 @@ def _agent_strong_child_ce() -> dict[str, object]:
             "status": "activated",
             "base_model": "gpt-5.4-mini",
             "critic_model": "gpt-5.5",
+        },
+        "selection": {
+            "selection_method": "normalized_majority",
+            "verifier_model_call": True,
+        },
+    }
+
+
+def _agent_multi_call_same_model_ce() -> dict[str, object]:
+    return {
+        "kind": "assumption_agent_recursive_verify",
+        "flags": {
+            "recursive_child_validation_activated": True,
+            "claim_verifier_activated": True,
+        },
+        "recursive": {
+            "status": "activated",
+            "base_model": "gpt-5.4-mini",
+            "child_model": "gpt-5.4-mini",
+            "planned_child_count": 4,
+            "child_count": 4,
+            "answered_child_count": 4,
         },
         "selection": {
             "selection_method": "normalized_majority",
