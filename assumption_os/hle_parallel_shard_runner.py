@@ -62,6 +62,22 @@ ERROR_EVENT_NAMES = {
     "critic_synthesis_child_error",
     "math_tool_child_error",
 }
+ENDPOINT_RETRYABLE_ERROR_NEEDLES = (
+    "RemoteDisconnected",
+    "remote end closed connection",
+    "SubprocessNoByteTimeout",
+    "NoByteTimeout",
+    "ReadTimeout",
+    "read operation timed out",
+    "timed out",
+    "TimeoutError",
+    "ConnectionError",
+    "connection reset",
+    "connection aborted",
+    "EOF occurred",
+    "SSL",
+    "TLS",
+)
 PAPER_CLEAN_STANDARD_CONTROL_VARIANTS = ("raw", "hipporag_baseline")
 PAPER_CLEAN_BUDGET_MATCHED_CONTROL_VARIANTS = ("raw_budget_matched", "hipporag_budget_matched")
 
@@ -1208,14 +1224,19 @@ def run_live_model_preflight(
     models: str,
     env: dict[str, str],
     timeout_sec: float = 60.0,
+    probe_count: int = 1,
+    max_error_rate: float = 0.0,
 ) -> dict[str, Any]:
     """Probe live model access before launching expensive shards."""
     model_names = [item.strip() for item in str(models or "").split(",") if item.strip()]
     rows: list[dict[str, Any]] = []
+    probe_count = max(1, int(probe_count or 1))
+    max_error_rate = min(1.0, max(0.0, float(max_error_rate or 0.0)))
     if not model_router_primary_key_present(env):
         rows = [
             {
                 "model": model,
+                "probe_index": 0,
                 "ok": False,
                 "error_type": "RuntimeError",
                 "error_label": "missing GPT5_API_KEY, RUOLI_GPT_KEY, or OPENAI_API_KEY",
@@ -1226,65 +1247,117 @@ def run_live_model_preflight(
             "preflight_kind": "hle_live_model_preflight",
             "passed": False,
             "models": model_names,
+            "probe_count": probe_count,
+            "max_error_rate": max_error_rate,
             "rows": rows,
+            "summary": _live_model_preflight_summary(rows=rows, max_error_rate=max_error_rate),
             "raw_content_persisted": False,
         }
 
     probe_timeout = None if timeout_sec <= 0 else max(5.0, float(timeout_sec))
     per_attempt_timeout = None if timeout_sec <= 0 else max(1.0, min(float(timeout_sec), 30.0))
     for model in model_names:
-        probe_env = env.copy()
-        probe_env.setdefault("MODEL_ROUTER_SUBPROCESS_CALLS", "1")
-        probe_env["MODEL_ROUTER_ATTEMPTS"] = "1"
-        if per_attempt_timeout is None:
-            probe_env["MODEL_ROUTER_TIMEOUT"] = "0"
-            probe_env["MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"] = "0"
-        else:
-            probe_env["MODEL_ROUTER_TIMEOUT"] = str(per_attempt_timeout)
-            probe_env["MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"] = str(per_attempt_timeout)
-        script = (
-            "import json, sys\n"
-            "from assumption_os.hle_smoke_eval import _call_model\n"
-            "cfg = json.loads(sys.stdin.read())\n"
-            "text = _call_model(model=cfg['model'], prompt='Return exactly {\"answer\":\"A\"}.', "
-            "timeout=cfg['timeout'], max_tokens=16)\n"
-            "print('ok' if text.strip() else 'empty')\n"
-        )
-        try:
-            completed = subprocess.run(
-                [sys.executable, "-c", script],
-                input=json.dumps({"model": model, "timeout": per_attempt_timeout}),
-                text=True,
-                capture_output=True,
-                cwd=str(Path.cwd()),
-                env=probe_env,
-                timeout=None if probe_timeout is None else probe_timeout + 5.0,
-                check=False,
+        for probe_index in range(probe_count):
+            probe_env = env.copy()
+            probe_env.setdefault("MODEL_ROUTER_SUBPROCESS_CALLS", "1")
+            probe_env["MODEL_ROUTER_ATTEMPTS"] = "1"
+            if per_attempt_timeout is None:
+                probe_env["MODEL_ROUTER_TIMEOUT"] = "0"
+                probe_env["MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"] = "0"
+            else:
+                probe_env["MODEL_ROUTER_TIMEOUT"] = str(per_attempt_timeout)
+                probe_env["MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"] = str(per_attempt_timeout)
+            script = (
+                "import json, sys\n"
+                "from assumption_os.hle_smoke_eval import _call_model\n"
+                "cfg = json.loads(sys.stdin.read())\n"
+                "text = _call_model(model=cfg['model'], prompt='Return exactly {\"answer\":\"A\"}.', "
+                "timeout=cfg['timeout'], max_tokens=16)\n"
+                "print('ok' if text.strip() else 'empty')\n"
             )
-        except Exception as exc:
+            try:
+                completed = subprocess.run(
+                    [sys.executable, "-c", script],
+                    input=json.dumps({"model": model, "timeout": per_attempt_timeout}),
+                    text=True,
+                    capture_output=True,
+                    cwd=str(Path.cwd()),
+                    env=probe_env,
+                    timeout=None if probe_timeout is None else probe_timeout + 5.0,
+                    check=False,
+                )
+            except Exception as exc:
+                error_label = _redact_model_preflight_error(str(exc), env)
+                rows.append({
+                    "model": model,
+                    "probe_index": probe_index,
+                    "ok": False,
+                    "returncode": None,
+                    "error_type": type(exc).__name__,
+                    "error_label": error_label,
+                    "endpoint_retryable_error": _is_endpoint_error_label(error_label),
+                })
+                continue
+            stderr = (completed.stderr or "").strip()
+            stdout = (completed.stdout or "").strip()
+            ok = completed.returncode == 0 and bool(stdout)
+            error_label = "" if ok else _redact_model_preflight_error((stderr or stdout or "model_preflight_failed")[-240:], env)
             rows.append({
                 "model": model,
-                "ok": False,
-                "error_type": type(exc).__name__,
-                "error_label": _redact_model_preflight_error(str(exc), env),
+                "probe_index": probe_index,
+                "ok": ok,
+                "returncode": int(completed.returncode),
+                "stdout_hash": "" if not stdout else _stable_text_hash(stdout),
+                "error_type": "" if ok else "RuntimeError",
+                "error_label": error_label,
+                "endpoint_retryable_error": False if ok else _is_endpoint_error_label(error_label),
             })
-            continue
-        stderr = (completed.stderr or "").strip()
-        stdout = (completed.stdout or "").strip()
-        ok = completed.returncode == 0 and bool(stdout)
-        rows.append({
-            "model": model,
-            "ok": ok,
-            "returncode": int(completed.returncode),
-            "stdout_hash": "" if not stdout else _stable_text_hash(stdout),
-            "error_type": "" if ok else "RuntimeError",
-            "error_label": "" if ok else _redact_model_preflight_error((stderr or stdout or "model_preflight_failed")[-240:], env),
-        })
+    summary = _live_model_preflight_summary(rows=rows, max_error_rate=max_error_rate)
     return {
         "preflight_kind": "hle_live_model_preflight",
-        "passed": all(row.get("ok") for row in rows) if rows else True,
+        "passed": bool(summary.get("passed")),
         "models": model_names,
+        "probe_count": probe_count,
+        "max_error_rate": max_error_rate,
         "rows": rows,
+        "summary": summary,
+        "raw_content_persisted": False,
+    }
+
+
+def _live_model_preflight_summary(*, rows: list[dict[str, Any]], max_error_rate: float) -> dict[str, Any]:
+    by_model: dict[str, Counter[str]] = defaultdict(Counter)
+    for row in rows:
+        model = str(row.get("model") or "unknown")
+        by_model[model]["probe_count"] += 1
+        if row.get("ok"):
+            by_model[model]["ok_count"] += 1
+        else:
+            by_model[model]["error_count"] += 1
+        if row.get("endpoint_retryable_error"):
+            by_model[model]["endpoint_retryable_error_count"] += 1
+    model_rows: dict[str, dict[str, Any]] = {}
+    for model, counter in sorted(by_model.items()):
+        probe_total = int(counter.get("probe_count") or 0)
+        error_count = int(counter.get("error_count") or 0)
+        endpoint_error_count = int(counter.get("endpoint_retryable_error_count") or 0)
+        error_rate = round(error_count / probe_total, 4) if probe_total else 0.0
+        endpoint_error_rate = round(endpoint_error_count / probe_total, 4) if probe_total else 0.0
+        model_rows[model] = {
+            "probe_count": probe_total,
+            "ok_count": int(counter.get("ok_count") or 0),
+            "error_count": error_count,
+            "endpoint_retryable_error_count": endpoint_error_count,
+            "error_rate": error_rate,
+            "endpoint_retryable_error_rate": endpoint_error_rate,
+            "passed": probe_total > 0 and error_rate <= max_error_rate,
+            "raw_content_persisted": False,
+        }
+    return {
+        "max_error_rate": max_error_rate,
+        "model_count": len(model_rows),
+        "by_model": model_rows,
+        "passed": all(row.get("passed") for row in model_rows.values()) if model_rows else True,
         "raw_content_persisted": False,
     }
 
@@ -1735,6 +1808,11 @@ def aggregate_parallel_payload(
         error_stratification=error_stratification,
         execute_live=execute_live,
     )
+    endpoint_retry_manifest = build_endpoint_retry_manifest(
+        rows=run_rows,
+        shard_payloads=shard_payloads,
+        states=states,
+    )
     model_budget_fairness_audit = build_model_budget_fairness_audit(rows=run_rows)
     failure_diagnostics = build_failure_diagnostics(rows=run_rows)
     fair_baseline_gate = _agent_meets_best_control_gate(metrics)
@@ -1812,6 +1890,7 @@ def aggregate_parallel_payload(
         "metrics": metrics,
         "error_stratification": error_stratification,
         "pollution_audit": pollution_audit,
+        "endpoint_retry_manifest": endpoint_retry_manifest,
         "model_budget_fairness_audit": model_budget_fairness_audit,
         "fair_baseline_gate": fair_baseline_gate,
         "failure_diagnostics": failure_diagnostics,
@@ -1854,6 +1933,7 @@ def build_split_fair_controls_payload(
     split_inputs: list[dict[str, Any]] = []
     primary_rows: list[dict[str, Any]] = []
     retry_rows: list[dict[str, Any]] = []
+    source_shard_payloads: list[dict[str, Any]] = []
     states: list[ShardRunState] = []
     loaded_shard_payload_count = 0
     planned_live_calls = 0
@@ -1880,6 +1960,7 @@ def build_split_fair_controls_payload(
         path = input_path.resolve()
         payload = preloaded_payload if preloaded_payload is not None else _load_json_object(path)
         rows, shard_payloads = _rows_and_shard_payloads_from_split_input(payload=payload, input_path=path)
+        source_shard_payloads.extend(shard_payloads)
         if input_role == "retry":
             retry_rows.extend(rows)
         else:
@@ -2010,6 +2091,11 @@ def build_split_fair_controls_payload(
         error_stratification=error_stratification,
         execute_live=execute_live,
     )
+    endpoint_retry_manifest = build_endpoint_retry_manifest(
+        rows=deduped_rows,
+        shard_payloads=source_shard_payloads or [synthetic_payload],
+        states=states,
+    )
     model_budget_fairness_audit = build_model_budget_fairness_audit(rows=deduped_rows)
     failure_diagnostics = build_failure_diagnostics(rows=deduped_rows)
     fair_baseline_gate = _agent_meets_best_control_gate(metrics)
@@ -2108,6 +2194,7 @@ def build_split_fair_controls_payload(
         "metrics": metrics,
         "error_stratification": error_stratification,
         "pollution_audit": pollution_audit,
+        "endpoint_retry_manifest": endpoint_retry_manifest,
         "model_budget_fairness_audit": model_budget_fairness_audit,
         "fair_baseline_gate": fair_baseline_gate,
         "failure_diagnostics": failure_diagnostics,
@@ -2575,6 +2662,100 @@ def _clean_shared_subset(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "by_variant": variant_metrics,
         }
     return out
+
+
+def build_endpoint_retry_manifest(
+    *,
+    rows: list[dict[str, Any]],
+    shard_payloads: list[dict[str, Any]],
+    states: list[ShardRunState],
+) -> dict[str, Any]:
+    shard_by_problem = _shard_metadata_by_problem_hash(shard_payloads=shard_payloads, states=states)
+    retry_items: list[dict[str, Any]] = []
+    by_variant: Counter[str] = Counter()
+    by_model: Counter[str] = Counter()
+    by_label: Counter[str] = Counter()
+    for row in rows:
+        error = row.get("error") if isinstance(row.get("error"), dict) else {}
+        if not error or not _is_endpoint_retryable_error(error):
+            continue
+        problem_hash = str(row.get("problem_id_hash") or "")
+        model = str(row.get("model") or "")
+        variant = str(row.get("variant") or "")
+        error_label = _sanitize_error_label(error.get("message") or error.get("type"))
+        shard_metadata = shard_by_problem.get(problem_hash, {})
+        item = {
+            "retry_key": f"{model}::{variant}::{problem_hash}",
+            "problem_id_hash": problem_hash,
+            "model": model,
+            "variant": variant,
+            "seed_offset": shard_metadata.get("seed_offset"),
+            "shard_index": shard_metadata.get("shard_index"),
+            "shard_eval_id": shard_metadata.get("shard_eval_id"),
+            "shard_out": shard_metadata.get("shard_out"),
+            "error_type": str(error.get("type") or "unknown"),
+            "error_label": error_label,
+            "replacement_policy": "clean_retry_same_model_variant_problem_only",
+            "raw_content_persisted": False,
+        }
+        retry_items.append(item)
+        by_variant[variant] += 1
+        by_model[model] += 1
+        by_label[error_label] += 1
+    return {
+        "manifest_kind": "hle_endpoint_retry_manifest",
+        "retryable_endpoint_error_count": len(retry_items),
+        "retry_items": retry_items,
+        "by_variant": dict(sorted(by_variant.items())),
+        "by_model": dict(sorted(by_model.items())),
+        "by_error_label": dict(sorted(by_label.items())),
+        "required_replacement_policy": "clean retry rows may only replace errored rows with the same model/variant/problem hash",
+        "raw_content_persisted": False,
+    }
+
+
+def _shard_metadata_by_problem_hash(
+    *,
+    shard_payloads: list[dict[str, Any]],
+    states: list[ShardRunState],
+) -> dict[str, dict[str, Any]]:
+    state_by_eval_id = {state.spec.eval_id: state for state in states}
+    state_by_out = {str(state.spec.out): state for state in states}
+    out: dict[str, dict[str, Any]] = {}
+    for payload in shard_payloads:
+        sampling = payload.get("sampling") if isinstance(payload.get("sampling"), dict) else {}
+        hashes = [str(value) for value in sampling.get("sample_problem_hashes", []) or []]
+        eval_id = str(payload.get("eval_id") or "")
+        state = state_by_eval_id.get(eval_id)
+        if state is None:
+            payload_out = str(payload.get("out") or "")
+            state = state_by_out.get(payload_out)
+        for row in payload.get("rows", []) or payload.get("run_rows", []) or []:
+            if isinstance(row, dict) and row.get("problem_id_hash"):
+                hashes.append(str(row.get("problem_id_hash")))
+        for problem_hash in sorted(set(hashes)):
+            out.setdefault(
+                problem_hash,
+                {
+                    "seed_offset": sampling.get("seed_offset")
+                    if sampling.get("seed_offset") is not None
+                    else (state.spec.seed_offset if state else None),
+                    "shard_index": state.spec.shard_index if state else None,
+                    "shard_eval_id": state.spec.eval_id if state else eval_id or None,
+                    "shard_out": str(state.spec.out) if state else None,
+                    "raw_content_persisted": False,
+                },
+            )
+    return out
+
+
+def _is_endpoint_retryable_error(error: dict[str, Any]) -> bool:
+    return _is_endpoint_error_label(" ".join(str(error.get(key) or "") for key in ("type", "message")))
+
+
+def _is_endpoint_error_label(text: Any) -> bool:
+    value = str(text or "")
+    return any(needle.lower() in value.lower() for needle in ENDPOINT_RETRYABLE_ERROR_NEEDLES)
 
 
 def build_model_budget_fairness_audit(*, rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -3512,6 +3693,7 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
     metrics = payload["metrics"]
     errors = payload["error_stratification"]
     pollution = payload.get("pollution_audit") or {}
+    endpoint_retry = payload.get("endpoint_retry_manifest") or {}
     model_budget = payload.get("model_budget_fairness_audit") or {}
     diagnostics = payload.get("failure_diagnostics") or {}
     operator_activation = metrics.get("operator_activation_summary") or {}
@@ -3548,6 +3730,7 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
         f"- scored rows: `{metrics['scored_row_count']}`",
         f"- overall accuracy: `{metrics['overall_accuracy']}`",
         f"- top-level live errors: `{errors['top_level_error_count']}`",
+        f"- retryable endpoint errors: `{endpoint_retry.get('retryable_endpoint_error_count', 0)}`",
         f"- process timeouts: `{errors['process_timeout_count']}`",
         f"- failed gates: `{payload['failed_gates']}`",
         f"- paper-clean failed gates: `{payload['paper_clean_failed_gates']}`",
@@ -3630,6 +3813,20 @@ def format_parallel_markdown(payload: dict[str, Any]) -> str:
         "process_status_counts",
     ):
         for key, count in sorted((errors.get(bucket) or {}).items()):
+            lines.append(f"| `{bucket}` | `{key}` | `{count}` |")
+    lines.extend([
+        "",
+        "## Endpoint Retry Manifest",
+        "",
+        "| bucket | key | count |",
+        "| --- | --- | ---: |",
+    ])
+    lines.append(
+        f"| `summary` | `retryable_endpoint_error_count` | "
+        f"`{endpoint_retry.get('retryable_endpoint_error_count', 0)}` |"
+    )
+    for bucket in ("by_variant", "by_model", "by_error_label"):
+        for key, count in sorted((endpoint_retry.get(bucket) or {}).items()):
             lines.append(f"| `{bucket}` | `{key}` | `{count}` |")
     context_summary = (pollution.get("context_pollution") or {}).get("summary") or {}
     lines.extend([
@@ -4193,6 +4390,8 @@ def main() -> None:
     )
     parser.add_argument("--skip-live-model-preflight", action="store_true")
     parser.add_argument("--live-model-preflight-timeout-sec", type=float, default=60.0)
+    parser.add_argument("--live-model-preflight-probe-count", type=int, default=1)
+    parser.add_argument("--live-model-preflight-max-error-rate", type=float, default=0.0)
     args = parser.parse_args()
     private_env_status = load_private_env()
     if bool(args.model_router_subprocess_calls) and bool(args.disable_model_router_subprocess_calls):
@@ -4233,6 +4432,13 @@ def main() -> None:
             "models": [item.strip() for item in str(args.models).split(",") if item.strip()],
             "variants": [item.strip() for item in str(args.variants).split(",") if item.strip()],
             "execute_live": bool(args.execute_live),
+            "live_model_preflight": {
+                "skip": bool(args.skip_live_model_preflight),
+                "timeout_sec": args.live_model_preflight_timeout_sec,
+                "probe_count": args.live_model_preflight_probe_count,
+                "max_error_rate": args.live_model_preflight_max_error_rate,
+                "raw_content_persisted": False,
+            },
             "soft_timeout_sec": args.soft_timeout_sec,
             "kill_on_soft_timeout": bool(args.kill_on_soft_timeout),
             "model_router": {
@@ -4324,6 +4530,12 @@ def main() -> None:
                     "scored_row_count": payload["metrics"]["scored_row_count"],
                     "overall_accuracy": payload["metrics"]["overall_accuracy"],
                 },
+                "endpoint_retry_manifest": {
+                    "retryable_endpoint_error_count": payload["endpoint_retry_manifest"][
+                        "retryable_endpoint_error_count"
+                    ],
+                    "by_variant": payload["endpoint_retry_manifest"]["by_variant"],
+                },
             },
         )
         print(json.dumps({
@@ -4344,6 +4556,12 @@ def main() -> None:
             "error_stratification": {
                 "top_level_error_count": payload["error_stratification"]["top_level_error_count"],
                 "process_timeout_count": payload["error_stratification"]["process_timeout_count"],
+            },
+            "endpoint_retry_manifest": {
+                "retryable_endpoint_error_count": payload["endpoint_retry_manifest"][
+                    "retryable_endpoint_error_count"
+                ],
+                "by_variant": payload["endpoint_retry_manifest"]["by_variant"],
             },
             "split_run_audit": {
                 "failed_gates": payload["split_run_audit"]["failed_gates"],
@@ -4594,6 +4812,8 @@ def main() -> None:
             models=args.models,
             env=env,
             timeout_sec=0.0,
+            probe_count=args.live_model_preflight_probe_count,
+            max_error_rate=args.live_model_preflight_max_error_rate,
         )
         log_event(
             logger,
@@ -4626,6 +4846,8 @@ def main() -> None:
             models=args.models,
             env=env,
             timeout_sec=float(args.live_model_preflight_timeout_sec or 0.0),
+            probe_count=args.live_model_preflight_probe_count,
+            max_error_rate=args.live_model_preflight_max_error_rate,
         )
         if not model_preflight.get("passed"):
             log_event(
@@ -4766,6 +4988,12 @@ def main() -> None:
                 "resolved_live_model_calls": payload["metrics"]["resolved_live_model_calls"],
                 "planned_live_model_calls": payload["metrics"]["planned_live_model_calls"],
             },
+            "endpoint_retry_manifest": {
+                "retryable_endpoint_error_count": payload["endpoint_retry_manifest"][
+                    "retryable_endpoint_error_count"
+                ],
+                "by_variant": payload["endpoint_retry_manifest"]["by_variant"],
+            },
             "model_budget_fairness_failed_gates": payload["model_budget_fairness_audit"]["failed_gates"],
             "failure_diagnostics": {
                 "agent_failure_buckets": payload["failure_diagnostics"]["agent_failure_buckets"],
@@ -4812,6 +5040,12 @@ def main() -> None:
         "error_stratification": {
             "top_level_error_count": payload["error_stratification"]["top_level_error_count"],
             "process_timeout_count": payload["error_stratification"]["process_timeout_count"],
+        },
+        "endpoint_retry_manifest": {
+            "retryable_endpoint_error_count": payload["endpoint_retry_manifest"][
+                "retryable_endpoint_error_count"
+            ],
+            "by_variant": payload["endpoint_retry_manifest"]["by_variant"],
         },
         "pollution_audit": {
             "recommended_hle_claim_scope": payload["pollution_audit"]["claim_guard"]["recommended_hle_claim_scope"],

@@ -22,6 +22,7 @@ from assumption_os.hle_parallel_shard_runner import (
     apply_hle_offline_defaults,
     apply_live_network_defaults,
     build_error_stratification,
+    build_endpoint_retry_manifest,
     build_failure_diagnostics,
     build_heartbeat,
     build_model_budget_fairness_audit,
@@ -788,6 +789,40 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(errors["jsonl_error_events_by_label"], {"model request failed: RemoteDisconnected": 1})
         self.assertEqual(errors["top_level_errors_by_label"], {"synthetic": 1})
         self.assertEqual(errors["process_timeout_count"], 1)
+
+    def test_endpoint_retry_manifest_collects_retryable_top_level_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            spec = build_shard_specs(
+                eval_id="retry",
+                total_sample_size=1,
+                shard_size=1,
+                seed_offset=2225,
+                seed_stride=1,
+                run_dir=root,
+                md_dir=root,
+            )[0]
+            row = _row("p1", "raw", False, error_type="RuntimeError")
+            row["error"]["message"] = (
+                "model request failed: RemoteDisconnected: "
+                "Remote end closed connection without response"
+            )
+            payload = _payload([row])
+            payload["eval_id"] = spec.eval_id
+            payload["sampling"]["seed_offset"] = 2225
+            state = ShardRunState(spec=spec, command=[], status="completed", returncode=0)
+
+            manifest = build_endpoint_retry_manifest(
+                rows=[row],
+                shard_payloads=[payload],
+                states=[state],
+            )
+
+        self.assertEqual(manifest["retryable_endpoint_error_count"], 1)
+        self.assertEqual(manifest["by_variant"], {"raw": 1})
+        self.assertEqual(manifest["retry_items"][0]["seed_offset"], 2225)
+        self.assertEqual(manifest["retry_items"][0]["retry_key"], "gpt-5.4-mini::raw::p1")
+        self.assertFalse(manifest["raw_content_persisted"])
 
     def test_soft_timeout_is_watch_only_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1655,6 +1690,51 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertIn("[redacted]", serialized)
         self.assertNotIn(secret, serialized)
         self.assertFalse(payload["raw_content_persisted"])
+
+    def test_live_model_preflight_supports_multi_probe_error_rate_gate(self) -> None:
+        success = subprocess.CompletedProcess(
+            args=["python"],
+            returncode=0,
+            stdout="ok\n",
+            stderr="",
+        )
+        failure = subprocess.CompletedProcess(
+            args=["python"],
+            returncode=1,
+            stdout="",
+            stderr="RemoteDisconnected: Remote end closed connection without response",
+        )
+        with patch(
+            "assumption_os.hle_parallel_shard_runner.subprocess.run",
+            side_effect=[success, failure, success],
+        ):
+            payload = run_live_model_preflight(
+                models="gpt-5.4-mini",
+                env={"RUOLI_GPT_KEY": "secret"},
+                timeout_sec=5,
+                probe_count=3,
+                max_error_rate=0.34,
+            )
+
+        self.assertTrue(payload["passed"])
+        self.assertEqual(payload["probe_count"], 3)
+        summary = payload["summary"]["by_model"]["gpt-5.4-mini"]
+        self.assertEqual(summary["error_count"], 1)
+        self.assertEqual(summary["endpoint_retryable_error_count"], 1)
+        self.assertEqual(summary["error_rate"], 0.3333)
+
+        with patch(
+            "assumption_os.hle_parallel_shard_runner.subprocess.run",
+            side_effect=[success, failure, success],
+        ):
+            strict_payload = run_live_model_preflight(
+                models="gpt-5.4-mini",
+                env={"RUOLI_GPT_KEY": "secret"},
+                timeout_sec=5,
+                probe_count=3,
+                max_error_rate=0.0,
+            )
+        self.assertFalse(strict_payload["passed"])
 
     def test_runner_env_defaults_to_local_hle_and_cache_only_sources_when_present(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
