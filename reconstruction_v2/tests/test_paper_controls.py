@@ -472,6 +472,9 @@ def _development_report(
             "model": protocol.payload["model"],
             "trial_provider_mode": protocol.payload["trial_provider_mode"],
             "max_steps": protocol.payload["max_steps"],
+            "runner_agent_registry_isolation": protocol.payload["execution"][
+                "runner_agent_registry_isolation"
+            ],
             "development_prewarm_version": protocol.payload["execution"][
                 "development_prewarm"
             ],

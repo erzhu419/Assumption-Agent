@@ -36,6 +36,7 @@ from .prewarm import (
 from .skilllearn_compiler import SKILL_ROUTING_VERSION
 from .skilllearn_lifecycle import (
     PREBUILT_IMAGE_POLICY_VERSION,
+    RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
     SkillLearnBackendPool,
     SkillLearnEvolutionHarness,
     SkillLearnGenerationResult,
@@ -134,6 +135,7 @@ def main() -> None:
         "max_steps": args.max_steps,
         "parallel_workers": args.parallel_workers,
         "prebuilt_image_policy": PREBUILT_IMAGE_POLICY_VERSION,
+        "runner_agent_registry_isolation": RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
         "development_prewarm_version": DEVELOPMENT_PREWARM_VERSION,
         "prewarm_passed": prewarm_receipt_hash is not None,
         "prewarm_receipt_hash": prewarm_receipt_hash,

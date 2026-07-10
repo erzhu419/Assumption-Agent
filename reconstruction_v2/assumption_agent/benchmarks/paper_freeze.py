@@ -346,6 +346,11 @@ def _validate_development_report(
         ),
         "test_content_accessed": False,
     }
+    registry_isolation = protocol.payload["execution"].get(
+        "runner_agent_registry_isolation"
+    )
+    if registry_isolation:
+        expected["runner_agent_registry_isolation"] = registry_isolation
     prewarm_version = protocol.payload["execution"].get("development_prewarm")
     if prewarm_version:
         expected["development_prewarm_version"] = prewarm_version

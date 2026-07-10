@@ -53,6 +53,7 @@ from .skilllearnbench import SkillLearnBenchAdapter
 BASELINE_LANE = "skilllearn_incumbent"
 CANDIDATE_LANE = "skilllearn_challenger"
 VERIFIER_ISOLATION_VERSION = "post_agent_verifier_copy_v1"
+RUNNER_AGENT_REGISTRY_ISOLATION_VERSION = "runner_local_agent_registry_v1"
 PREBUILT_IMAGE_POLICY_VERSION = "per_item_base_shared_agent_runtime_v3"
 SHARED_AGENT_RUNTIME_MOUNT = "/opt/assumption-v2-agent"
 SHARED_AGENT_RUNTIME_BUILDER_IMAGE = (
@@ -671,6 +672,9 @@ class SkillLearnSubprocessBackend:
                     "max_steps": request.max_steps,
                     "provider_mode": self.provider_mode,
                     "verifier_isolation": VERIFIER_ISOLATION_VERSION,
+                    "runner_agent_registry_isolation": (
+                        RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
+                    ),
                     "prebuilt_policy": (
                         PREBUILT_IMAGE_POLICY_VERSION if self.prebuilt_cache else "disabled"
                     ),
@@ -796,6 +800,16 @@ class SkillLearnSubprocessBackend:
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
         spec.loader.exec_module(module)
+        shared_get_agent = module.get_agent
+        shared_list_agents = module.list_agents
+        local_agents = {
+            str(agent_id): copy.deepcopy(shared_get_agent(agent_id))
+            for agent_id in shared_list_agents()
+            if shared_get_agent(agent_id) is not None
+        }
+        module.get_agent = lambda agent_id: local_agents.get(str(agent_id))
+        module.list_agents = lambda: sorted(local_agents)
+        module._assumption_v2_local_agents = local_agents
         self._runner_module = module
         return module
 
@@ -966,6 +980,9 @@ class SkillLearnSubprocessBackend:
             "model": result.get("model"),
             "provider_mode": self.provider_mode,
             "verifier_isolation": VERIFIER_ISOLATION_VERSION,
+            "runner_agent_registry_isolation": (
+                RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
+            ),
             "prebuilt_policy": (
                 PREBUILT_IMAGE_POLICY_VERSION if self.prebuilt_cache else "disabled"
             ),
@@ -2093,6 +2110,9 @@ def _fairness_fingerprint(
             "prebuilt_image_key": prebuilt_image_key,
             "prebuilt_image_id": prebuilt_image_id,
             "verifier_isolation": VERIFIER_ISOLATION_VERSION,
+            "runner_agent_registry_isolation": (
+                RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
+            ),
         }
     )
 
@@ -2106,6 +2126,9 @@ def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
                 "provider_mode": provider_mode,
                 "auth_materialization": "ephemeral_codex_home_bind",
                 "verifier_isolation": VERIFIER_ISOLATION_VERSION,
+                "runner_agent_registry_isolation": (
+                    RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
+                ),
             }
         )
     base_url = (
@@ -2122,6 +2145,9 @@ def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
             "provider_mode": provider_mode,
             "base_url": base_url,
             "verifier_isolation": VERIFIER_ISOLATION_VERSION,
+            "runner_agent_registry_isolation": (
+                RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
+            ),
         }
     )
 

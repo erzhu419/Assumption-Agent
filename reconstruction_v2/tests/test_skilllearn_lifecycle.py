@@ -531,6 +531,62 @@ def test_subscription_trial_auth_is_ephemeral_and_not_passed_as_env(
     assert runner.subprocess is delegate
 
 
+def test_loaded_runners_isolate_agent_registry_across_parallel_backends(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_path = tmp_path / "auth.json"
+    auth_path.write_text('{"tokens":{"access_token":"fake-secret"}}\n', encoding="utf-8")
+    monkeypatch.setenv("ASSUMPTION_V2_CODEX_AUTH_PATH", str(auth_path))
+    first = SkillLearnSubprocessBackend(
+        BENCH_ROOT,
+        provider_mode="codex_subscription",
+        record_upstream=False,
+    )
+    second = SkillLearnSubprocessBackend(
+        BENCH_ROOT,
+        provider_mode="codex_subscription",
+        record_upstream=False,
+    )
+    first_runner = first._load_runner()
+    second_runner = second._load_runner()
+    assert first_runner.get_agent("codex") is not second_runner.get_agent("codex")
+
+    both_entered = threading.Barrier(2)
+    first_exited = threading.Event()
+    errors: list[BaseException] = []
+
+    def run_first() -> None:
+        try:
+            with first._provider_runtime(first_runner):
+                both_entered.wait(timeout=5)
+            first_exited.set()
+        except BaseException as exc:
+            errors.append(exc)
+            first_exited.set()
+
+    def run_second() -> None:
+        try:
+            with second._provider_runtime(second_runner):
+                both_entered.wait(timeout=5)
+                assert first_exited.wait(timeout=5)
+                agent = second_runner.get_agent("codex")
+                assert agent["env"] == []
+                assert agent["setup"] is None
+                assert agent["trajectory_env"]["CODEX_HOME"] == "/root/.codex"
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=run_first), threading.Thread(target=run_second)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert not any(thread.is_alive() for thread in threads)
+    assert errors == []
+
+
 def test_prebuilt_cache_is_keyed_by_exact_non_oracle_environment(tmp_path: Path) -> None:
     benchmark = tmp_path / "benchmark"
     environment = benchmark / "tasks" / "family" / "item-1" / "environment"

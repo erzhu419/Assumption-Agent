@@ -19,6 +19,7 @@ from .skilllearn_compiler import SKILL_ROUTING_VERSION
 from .prewarm import DEVELOPMENT_PREWARM_VERSION
 from .skilllearn_lifecycle import (
     PREBUILT_IMAGE_POLICY_VERSION,
+    RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
     SHARED_AGENT_RUNTIME_BUILDER_IMAGE,
     SHARED_CODEX_CLI_PACKAGE,
     SHARED_CODEX_CLI_VERSION,
@@ -68,6 +69,12 @@ class PaperProtocol:
         else:
             if execution.get("prebuilt_image_policy") != PREBUILT_IMAGE_POLICY_VERSION:
                 issues.append("prebuilt_image_policy_mismatch")
+            if (
+                str(self.payload.get("protocol_version") or "").startswith("2.")
+                and execution.get("runner_agent_registry_isolation")
+                != RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
+            ):
+                issues.append("runner_agent_registry_isolation_mismatch")
             if (
                 str(self.payload.get("protocol_version") or "").startswith("2.")
                 and execution.get("development_prewarm") != DEVELOPMENT_PREWARM_VERSION
