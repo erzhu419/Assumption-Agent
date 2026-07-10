@@ -18,11 +18,14 @@ from .preflight import build_preflight
 from .skilllearn_compiler import SKILL_ROUTING_VERSION
 from .prewarm import DEVELOPMENT_PREWARM_VERSION
 from .skilllearn_lifecycle import (
+    EPHEMERAL_AUTH_CLEANUP_VERSION,
     PREBUILT_IMAGE_POLICY_VERSION,
+    PROVIDER_FAILURE_POLICY_VERSION,
     RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
     SHARED_AGENT_RUNTIME_BUILDER_IMAGE,
     SHARED_CODEX_CLI_PACKAGE,
     SHARED_CODEX_CLI_VERSION,
+    TRAINING_EVIDENCE_POLICY_VERSION,
     TRIAL_TIMEOUT_POLICY_VERSION,
     VERIFIER_ISOLATION_VERSION,
 )
@@ -87,6 +90,24 @@ class PaperProtocol:
                 != TRIAL_TIMEOUT_POLICY_VERSION
             ):
                 issues.append("trial_timeout_policy_mismatch")
+            if (
+                str(self.payload.get("protocol_version") or "").startswith("2.")
+                and execution.get("provider_failure_policy")
+                != PROVIDER_FAILURE_POLICY_VERSION
+            ):
+                issues.append("provider_failure_policy_mismatch")
+            if (
+                str(self.payload.get("protocol_version") or "").startswith("2.")
+                and execution.get("ephemeral_auth_cleanup")
+                != EPHEMERAL_AUTH_CLEANUP_VERSION
+            ):
+                issues.append("ephemeral_auth_cleanup_mismatch")
+            if (
+                str(self.payload.get("protocol_version") or "").startswith("2.")
+                and execution.get("training_evidence_policy")
+                != TRAINING_EVIDENCE_POLICY_VERSION
+            ):
+                issues.append("training_evidence_policy_mismatch")
             if execution.get("agent_runtime_builder") != SHARED_AGENT_RUNTIME_BUILDER_IMAGE:
                 issues.append("agent_runtime_builder_mismatch")
             if execution.get("agent_runtime_package") != SHARED_CODEX_CLI_PACKAGE:

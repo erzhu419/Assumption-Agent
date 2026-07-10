@@ -18,6 +18,7 @@ from .skilllearn_compiler import SKILL_ROUTING_VERSION
 from .skilllearn_lifecycle import (
     SkillLearnBackendPool,
     SkillLearnPrebuiltImageCache,
+    SkillLearnProviderCircuit,
     SkillLearnSubprocessBackend,
     SkillLearnTrialBackend,
     SkillLearnTrialRequest,
@@ -719,6 +720,7 @@ def main() -> None:
         args.benchmark_root,
         event_sink=sink,
     )
+    provider_circuit = SkillLearnProviderCircuit()
     backends = tuple(
         SkillLearnSubprocessBackend(
             args.benchmark_root,
@@ -728,6 +730,7 @@ def main() -> None:
             provider_mode=str(protocol.payload["trial_provider_mode"]),
             trials_dir=args.trials_dir,
             prebuilt_cache=prebuilt_cache,
+            provider_circuit=provider_circuit,
             event_sink=sink,
         )
         for _ in range(parallel_workers)

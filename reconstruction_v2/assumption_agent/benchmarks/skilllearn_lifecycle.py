@@ -55,6 +55,9 @@ CANDIDATE_LANE = "skilllearn_challenger"
 VERIFIER_ISOLATION_VERSION = "post_agent_verifier_copy_v1"
 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION = "runner_local_agent_registry_v1"
 TRIAL_TIMEOUT_POLICY_VERSION = "no_fixed_trial_wall_or_container_timeout_v2"
+PROVIDER_FAILURE_POLICY_VERSION = "codex_jsonl_terminal_error_circuit_v1"
+EPHEMERAL_AUTH_CLEANUP_VERSION = "bounded_ephemeral_auth_cleanup_v1"
+TRAINING_EVIDENCE_POLICY_VERSION = "all_valid_before_proposal_v1"
 PREBUILT_IMAGE_POLICY_VERSION = "per_item_base_shared_agent_runtime_v3"
 SHARED_AGENT_RUNTIME_MOUNT = "/opt/assumption-v2-agent"
 SHARED_AGENT_RUNTIME_BUILDER_IMAGE = (
@@ -64,6 +67,44 @@ SHARED_CODEX_CLI_PACKAGE = "@openai/codex@0.144.1"
 SHARED_CODEX_CLI_VERSION = "codex-cli 0.144.1"
 _InputT = TypeVar("_InputT")
 _OutputT = TypeVar("_OutputT")
+_FATAL_PROVIDER_ERROR_TYPES = frozenset(
+    {
+        "provider_rate_limit",
+        "subscription_authentication_failed",
+        "subscription_model_unavailable",
+        "subscription_usage_limit",
+    }
+)
+
+
+class SkillLearnAgentTerminalError(RuntimeError):
+    def __init__(self, error_type: str) -> None:
+        super().__init__(error_type)
+        self.error_type = error_type
+
+
+class SkillLearnTrainingEvidenceError(RuntimeError):
+    pass
+
+
+class SkillLearnProviderCircuit:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._error_type: str | None = None
+
+    @property
+    def error_type(self) -> str | None:
+        with self._lock:
+            return self._error_type
+
+    def open(self, error_type: str) -> bool:
+        if error_type not in _FATAL_PROVIDER_ERROR_TYPES:
+            return False
+        with self._lock:
+            if self._error_type is not None:
+                return False
+            self._error_type = error_type
+            return True
 
 
 class TrialVariant(str, Enum):
@@ -601,6 +642,7 @@ class SkillLearnSubprocessBackend:
         trials_dir: str | Path | None = None,
         record_upstream: bool = True,
         prebuilt_cache: SkillLearnPrebuiltImageCache | None = None,
+        provider_circuit: SkillLearnProviderCircuit | None = None,
         event_sink: EventSink | None = None,
     ) -> None:
         self.benchmark_root = Path(benchmark_root).expanduser().resolve()
@@ -622,6 +664,7 @@ class SkillLearnSubprocessBackend:
         self.trials_dir = Path(trials_dir).expanduser().resolve() if trials_dir else None
         self.record_upstream = record_upstream
         self.prebuilt_cache = prebuilt_cache
+        self.provider_circuit = provider_circuit or SkillLearnProviderCircuit()
         self.event_sink = event_sink or NullEventSink()
         self._runner_module: ModuleType | None = None
         self._runner_instance_token = stable_hash(
@@ -657,6 +700,24 @@ class SkillLearnSubprocessBackend:
             raise ValueError("trial request does not match the frozen backend model configuration")
         if request.max_steps != self.max_steps:
             raise ValueError("trial request does not match the frozen backend step budget")
+        circuit_error = self.provider_circuit.error_type
+        if circuit_error:
+            self.event_sink.emit(
+                Event(
+                    event="skilllearn_trial_skipped_provider_circuit_open",
+                    stage="benchmark.skilllearn.provider_failure",
+                    trace_id=trace_id,
+                    payload={
+                        "request_hash": request.request_hash,
+                        "provider_error_type": circuit_error,
+                        "policy": PROVIDER_FAILURE_POLICY_VERSION,
+                    },
+                )
+            )
+            return self._local_error(
+                request,
+                f"provider_circuit_open_{circuit_error}",
+            )
         if request.variant is TrialVariant.POLICY_ON and skill_source_dir is None:
             return self._local_error(request, "candidate_skill_source_missing")
 
@@ -677,6 +738,8 @@ class SkillLearnSubprocessBackend:
                         RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
                     ),
                     "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
+                    "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
+                    "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
                     "prebuilt_policy": (
                         PREBUILT_IMAGE_POLICY_VERSION if self.prebuilt_cache else "disabled"
                     ),
@@ -731,6 +794,11 @@ class SkillLearnSubprocessBackend:
                     **kwargs,
                 )
         except Exception as exc:
+            caught_error_type = (
+                exc.error_type
+                if isinstance(exc, SkillLearnAgentTerminalError)
+                else type(exc).__name__
+            )
             self.event_sink.emit(
                 Event(
                     event="skilllearn_trial_infrastructure_failed",
@@ -738,7 +806,7 @@ class SkillLearnSubprocessBackend:
                     trace_id=trace_id,
                     payload={
                         "request_hash": request.request_hash,
-                        "error_type": type(exc).__name__,
+                        "error_type": caught_error_type,
                         "error_message_hash": stable_hash({"message": str(exc)}),
                         "prebuilt_stage": bool(
                             self.prebuilt_cache is not None and prebuilt_image is None
@@ -747,7 +815,7 @@ class SkillLearnSubprocessBackend:
                     },
                 )
             )
-            result = {"error": type(exc).__name__}
+            result = {"error": caught_error_type}
             return_code = 2
         observation = self._sanitize_result(
             request,
@@ -756,6 +824,24 @@ class SkillLearnSubprocessBackend:
             duration_seconds=time.monotonic() - started,
             prebuilt_image=prebuilt_image,
         )
+        if observation.error_type in _FATAL_PROVIDER_ERROR_TYPES:
+            opened = self.provider_circuit.open(observation.error_type)
+            self.event_sink.emit(
+                Event(
+                    event=(
+                        "skilllearn_provider_circuit_opened"
+                        if opened
+                        else "skilllearn_provider_circuit_already_open"
+                    ),
+                    stage="benchmark.skilllearn.provider_failure",
+                    trace_id=trace_id,
+                    payload={
+                        "request_hash": request.request_hash,
+                        "provider_error_type": observation.error_type,
+                        "policy": PROVIDER_FAILURE_POLICY_VERSION,
+                    },
+                )
+            )
         self.event_sink.emit(
             Event(
                 event="skilllearn_trial_completed",
@@ -863,33 +949,48 @@ class SkillLearnSubprocessBackend:
         with self._provider_lock:
             original_agent = copy.deepcopy(agent)
             original_subprocess = runner.subprocess
-            with tempfile.TemporaryDirectory(
-                prefix="assumption-v2-codex-auth-",
-                dir=str(Path(secret_tmp_root).expanduser()) if secret_tmp_root else None,
-            ) as secret_dir:
-                ephemeral_auth = Path(secret_dir) / "auth.json"
-                shutil.copyfile(auth_path, ephemeral_auth)
-                ephemeral_auth.chmod(0o600)
-                agent["env"] = []
-                agent["setup"] = None
-                trajectory_env = dict(agent.get("trajectory_env") or {})
-                trajectory_env["CODEX_HOME"] = "/root/.codex"
-                if agent_runtime_volume:
-                    trajectory_env["PATH"] = f"{SHARED_AGENT_RUNTIME_MOUNT}/bin:$PATH"
-                agent["trajectory_env"] = trajectory_env
-                runner.subprocess = _DockerCodexHomeSubprocessProxy(
-                    original_subprocess,
-                    host_codex_home=Path(secret_dir),
-                    agent_runtime_volume=agent_runtime_volume,
-                    event_sink=self.event_sink,
-                    trace_id=trace_id,
+            secret_dir = Path(
+                tempfile.mkdtemp(
+                    prefix="assumption-v2-codex-auth-",
+                    dir=(
+                        str(Path(secret_tmp_root).expanduser())
+                        if secret_tmp_root
+                        else None
+                    ),
                 )
+            )
+            try:
                 try:
+                    ephemeral_auth = secret_dir / "auth.json"
+                    shutil.copyfile(auth_path, ephemeral_auth)
+                    ephemeral_auth.chmod(0o600)
+                    agent["env"] = []
+                    agent["setup"] = None
+                    trajectory_env = dict(agent.get("trajectory_env") or {})
+                    trajectory_env["CODEX_HOME"] = "/root/.codex"
+                    if agent_runtime_volume:
+                        trajectory_env["PATH"] = (
+                            f"{SHARED_AGENT_RUNTIME_MOUNT}/bin:$PATH"
+                        )
+                    agent["trajectory_env"] = trajectory_env
+                    runner.subprocess = _DockerCodexHomeSubprocessProxy(
+                        original_subprocess,
+                        host_codex_home=secret_dir,
+                        agent_runtime_volume=agent_runtime_volume,
+                        event_sink=self.event_sink,
+                        trace_id=trace_id,
+                    )
                     yield
                 finally:
                     runner.subprocess = original_subprocess
                     agent.clear()
                     agent.update(original_agent)
+            finally:
+                _cleanup_ephemeral_codex_home(
+                    secret_dir,
+                    event_sink=self.event_sink,
+                    trace_id=trace_id,
+                )
 
     @contextmanager
     def _verifier_isolation(
@@ -942,6 +1043,12 @@ class SkillLearnSubprocessBackend:
             )
         steps = _as_nonnegative_int(result.get("steps_used"))
         error_type = _safe_error_label(result.get("error"))
+        terminal_error = _codex_terminal_error_label(
+            result.get("agent_stdout"),
+            result.get("agent_stderr"),
+        )
+        if terminal_error:
+            error_type = error_type or terminal_error
         if result.get("agent_timed_out") is True:
             error_type = error_type or "agent_timeout"
         if str(result.get("verifier_exit")).strip() == "-1":
@@ -990,6 +1097,8 @@ class SkillLearnSubprocessBackend:
                 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
             ),
             "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
+            "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
+            "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
             "prebuilt_policy": (
                 PREBUILT_IMAGE_POLICY_VERSION if self.prebuilt_cache else "disabled"
             ),
@@ -1626,7 +1735,40 @@ class SkillLearnEvolutionHarness:
                 trace_id=trace_id,
             )
 
-        return _ordered_parallel_map(train_ids, run_one, self.parallel_workers)
+        observations = _ordered_parallel_map(train_ids, run_one, self.parallel_workers)
+        invalid = tuple(row for row in observations if not row.valid)
+        if invalid:
+            error_counts = _count_values(
+                row.error_type or "unknown_infrastructure_error" for row in invalid
+            )
+            self.event_sink.emit(
+                Event(
+                    event="skilllearn_training_evidence_blocked",
+                    stage="benchmark.skilllearn.training_evidence",
+                    trace_id=trace_id,
+                    payload={
+                        "policy": TRAINING_EVIDENCE_POLICY_VERSION,
+                        "observation_count": len(observations),
+                        "invalid_observation_count": len(invalid),
+                        "error_type_counts": error_counts,
+                        "invalid_observation_set_hash": stable_hash(
+                            {
+                                "hashes": sorted(
+                                    row.observation_hash for row in invalid
+                                )
+                            }
+                        ),
+                        "proposal_blocked": True,
+                        "test_content_accessed": False,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+            raise SkillLearnTrainingEvidenceError(
+                "training evidence contains invalid observations: "
+                + ",".join(f"{key}={value}" for key, value in error_counts.items())
+            )
+        return observations
 
     def run_generation_from_evidence(
         self,
@@ -1650,6 +1792,10 @@ class SkillLearnEvolutionHarness:
             for row in observations
         ):
             raise PermissionError("shared training observation identity mismatch")
+        if any(not row.valid for row in observations):
+            raise SkillLearnTrainingEvidenceError(
+                "shared training evidence contains invalid observations"
+            )
         if any(row.task_id not in observation_ids or row.split is not SplitName.TRAIN for row in residuals):
             raise PermissionError("shared residual is outside the training observation checkpoint")
         for row in residuals:
@@ -2057,7 +2203,33 @@ class _DockerCodexHomeSubprocessProxy:
                     },
                 )
             )
-        return self.delegate.run(command, *positional, **kwargs)
+        completed = self.delegate.run(command, *positional, **kwargs)
+        if timeout_stage == "agent":
+            terminal_error = _codex_terminal_error_label(
+                getattr(completed, "stdout", None),
+                getattr(completed, "stderr", None),
+            )
+            if terminal_error:
+                self.event_sink.emit(
+                    Event(
+                        event="skilllearn_agent_terminal_error_detected",
+                        stage="benchmark.skilllearn.provider_failure",
+                        trace_id=self.trace_id,
+                        payload={
+                            "error_type": terminal_error,
+                            "policy": PROVIDER_FAILURE_POLICY_VERSION,
+                            "stdout_hash": stable_hash(
+                                {"stdout": str(getattr(completed, "stdout", "") or "")}
+                            ),
+                            "stderr_hash": stable_hash(
+                                {"stderr": str(getattr(completed, "stderr", "") or "")}
+                            ),
+                            "raw_content_persisted": False,
+                        },
+                    )
+                )
+                raise SkillLearnAgentTerminalError(terminal_error)
+        return completed
 
 
 def _directory_content_hash(
@@ -2158,6 +2330,8 @@ def _fairness_fingerprint(
                 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
             ),
             "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
+            "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
+            "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
         }
     )
 
@@ -2175,6 +2349,8 @@ def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
                     RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
                 ),
                 "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
+                "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
+                "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
             }
         )
     base_url = (
@@ -2195,6 +2371,8 @@ def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
                 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
             ),
             "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
+            "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
+            "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
         }
     )
 
@@ -2210,6 +2388,100 @@ def _trial_timeout_stage(command: Any) -> str | None:
     if "codex exec" in command_text:
         return "agent"
     return None
+
+
+def _codex_terminal_error_label(*streams: Any) -> str | None:
+    for stream in streams:
+        if stream is None:
+            continue
+        if isinstance(stream, bytes):
+            text = stream.decode(errors="replace")
+        else:
+            text = str(stream)
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, Mapping):
+                continue
+            event_type = str(row.get("type") or "")
+            if event_type not in {"error", "turn.failed"}:
+                continue
+            nested = row.get("error") if isinstance(row.get("error"), Mapping) else {}
+            message = str(row.get("message") or nested.get("message") or "").lower()
+            if "usage limit" in message or "quota" in message:
+                return "subscription_usage_limit"
+            if "rate limit" in message or "too many requests" in message:
+                return "provider_rate_limit"
+            if any(
+                value in message
+                for value in ("not logged in", "unauthorized", "authentication", "login required")
+            ):
+                return "subscription_authentication_failed"
+            if any(
+                value in message
+                for value in ("model is not available", "model unavailable", "unsupported model")
+            ):
+                return "subscription_model_unavailable"
+            return "codex_turn_failed"
+    return None
+
+
+def _cleanup_ephemeral_codex_home(
+    root: Path,
+    *,
+    event_sink: EventSink,
+    trace_id: str,
+) -> None:
+    maximum_attempts = 5
+    last_error: OSError | None = None
+    for attempt in range(1, maximum_attempts + 1):
+        try:
+            shutil.rmtree(root)
+        except FileNotFoundError:
+            last_error = None
+            break
+        except OSError as exc:
+            last_error = exc
+            if attempt < maximum_attempts:
+                time.sleep(0.05 * attempt)
+                continue
+        else:
+            last_error = None
+            break
+    if last_error is not None:
+        event_sink.emit(
+            Event(
+                event="skilllearn_ephemeral_auth_cleanup_failed",
+                stage="benchmark.skilllearn.provider_failure",
+                trace_id=trace_id,
+                payload={
+                    "policy": EPHEMERAL_AUTH_CLEANUP_VERSION,
+                    "attempt_count": maximum_attempts,
+                    "error_type": type(last_error).__name__,
+                    "error_errno": last_error.errno,
+                    "error_message_hash": stable_hash({"message": str(last_error)}),
+                    "secret_cleanup_complete": False,
+                },
+            )
+        )
+        raise RuntimeError("ephemeral_codex_home_cleanup_failed") from last_error
+    event_sink.emit(
+        Event(
+            event="skilllearn_ephemeral_auth_cleanup_completed",
+            stage="benchmark.skilllearn.provider_failure",
+            trace_id=trace_id,
+            payload={
+                "policy": EPHEMERAL_AUTH_CLEANUP_VERSION,
+                "attempt_count": attempt,
+                "secret_value_persisted": False,
+            },
+        )
+    )
 
 
 def _safe_error_label(value: Any) -> str | None:

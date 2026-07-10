@@ -358,6 +358,14 @@ def _validate_development_report(
     timeout_policy = protocol.payload["execution"].get("trial_timeout_policy")
     if timeout_policy:
         expected["trial_timeout_policy"] = timeout_policy
+    for field in (
+        "provider_failure_policy",
+        "ephemeral_auth_cleanup",
+        "training_evidence_policy",
+    ):
+        value = protocol.payload["execution"].get(field)
+        if value:
+            expected[field] = value
     for key, value in expected.items():
         if plan.get(key) != value:
             raise ValueError(f"development report plan mismatch: {key}")

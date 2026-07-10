@@ -35,13 +35,17 @@ from .prewarm import (
 )
 from .skilllearn_compiler import SKILL_ROUTING_VERSION
 from .skilllearn_lifecycle import (
+    EPHEMERAL_AUTH_CLEANUP_VERSION,
     PREBUILT_IMAGE_POLICY_VERSION,
+    PROVIDER_FAILURE_POLICY_VERSION,
     RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
+    TRAINING_EVIDENCE_POLICY_VERSION,
     TRIAL_TIMEOUT_POLICY_VERSION,
     SkillLearnBackendPool,
     SkillLearnEvolutionHarness,
     SkillLearnGenerationResult,
     SkillLearnPrebuiltImageCache,
+    SkillLearnProviderCircuit,
     SkillLearnSubprocessBackend,
 )
 from .skilllearnbench import SkillLearnBenchAdapter
@@ -138,6 +142,9 @@ def main() -> None:
         "prebuilt_image_policy": PREBUILT_IMAGE_POLICY_VERSION,
         "runner_agent_registry_isolation": RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
         "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
+        "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
+        "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
+        "training_evidence_policy": TRAINING_EVIDENCE_POLICY_VERSION,
         "development_prewarm_version": DEVELOPMENT_PREWARM_VERSION,
         "prewarm_passed": prewarm_receipt_hash is not None,
         "prewarm_receipt_hash": prewarm_receipt_hash,
@@ -243,6 +250,7 @@ def main() -> None:
     archive = PolicyArchive(event_sink=sink)
     guard = SplitAccessGuard(manifest, event_sink=sink)
     prebuilt_cache = SkillLearnPrebuiltImageCache(args.root, event_sink=sink)
+    provider_circuit = SkillLearnProviderCircuit()
     backends = tuple(
         SkillLearnSubprocessBackend(
             args.root,
@@ -252,6 +260,7 @@ def main() -> None:
             provider_mode=trial_provider_mode,
             trials_dir=args.work_dir / "upstream_trials",
             prebuilt_cache=prebuilt_cache,
+            provider_circuit=provider_circuit,
             event_sink=sink,
         )
         for _ in range(args.parallel_workers)

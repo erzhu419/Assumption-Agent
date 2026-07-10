@@ -478,6 +478,15 @@ def _development_report(
             "trial_timeout_policy": protocol.payload["execution"][
                 "trial_timeout_policy"
             ],
+            "provider_failure_policy": protocol.payload["execution"][
+                "provider_failure_policy"
+            ],
+            "ephemeral_auth_cleanup": protocol.payload["execution"][
+                "ephemeral_auth_cleanup"
+            ],
+            "training_evidence_policy": protocol.payload["execution"][
+                "training_evidence_policy"
+            ],
             "development_prewarm_version": protocol.payload["execution"][
                 "development_prewarm"
             ],

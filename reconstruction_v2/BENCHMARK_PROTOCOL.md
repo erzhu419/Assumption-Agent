@@ -84,6 +84,8 @@ Promotion uses same-item policy-off/policy-on validation outcomes under one froz
 
 Every pair must also contain two valid external evaluations. Authentication errors, endpoint failures, Docker failures, and verifier infrastructure failures block the entire candidate promotion; they are never silently scored as task failures.
 
+Training evidence has the stronger all-valid contract: one invalid train observation blocks residual mining, hypothesis proposal, and both recursive-ablation arms. Codex JSONL `error` and `turn.failed` events are classified before verifier execution. Global subscription usage, authentication, rate-limit, and model-availability failures open one shared circuit so queued rows become explicit circuit-open invalid observations without further model calls. Ephemeral subscription homes use bounded cleanup retries and emit completion/failure provenance without serializing auth material.
+
 Before any model call, manifest-scoped preflight enumerates `required_env` declarations from `task.toml`. A selected task with an unavailable variable blocks the run. Reports persist variable names and affected counts only; credential values are never serialized. The credential-independent subset is generated from metadata before split assignment, so no observed model outcome influences exclusion.
 
 SkillLearnBench cannot reveal verifier success to the agent before completion, so no method may perform a post-verifier oracle rollback. On non-activated rows, the baseline is used directly. On activated rows, conservatism is enforced by the frozen harm-rate and lower-bound promotion gates. The `preserve_baseline` program field is therefore a policy contract, not a claim that a failed candidate output was retroactively replaced.

@@ -17,13 +17,17 @@ from assumption_agent.benchmarks import (
     SkillLearnEvolutionHarness,
     SkillLearnPrebuiltImageCache,
     SkillLearnProgramCompiler,
+    SkillLearnProviderCircuit,
     SkillLearnTrialObservation,
     SkillLearnTrialRequest,
     TrialVariant,
 )
 from assumption_agent.evaluation import PromotionGate, PromotionGateSpec
 from assumption_agent.events import MemoryEventSink
-from assumption_agent.benchmarks.skilllearn_lifecycle import SkillLearnSubprocessBackend
+from assumption_agent.benchmarks.skilllearn_lifecycle import (
+    SkillLearnSubprocessBackend,
+    _cleanup_ephemeral_codex_home,
+)
 from assumption_agent.benchmarks.skilllearn_experiment import _run_paired_arms
 from assumption_agent.models import HypothesisProgram, HypothesisStatus, SplitName
 from assumption_agent.proposer import StructuredHypothesisProposer
@@ -67,16 +71,28 @@ class FakeSkillLearnBackend:
     model = "gpt-5.3-codex-spark"
     max_steps = 20
 
-    def __init__(self, *, invalid_candidate_item: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        invalid_candidate_item: str | None = None,
+        invalid_training_item: str | None = None,
+    ) -> None:
         self.invalid_candidate_item = invalid_candidate_item
+        self.invalid_training_item = invalid_training_item
         self.calls: list[tuple[str, str, bool]] = []
 
     def run(self, request, *, skill_source_dir, trace_id):
         has_skill = skill_source_dir is not None and skill_source_dir.is_dir()
         self.calls.append((request.item_id, request.variant.value, has_skill))
         invalid = (
-            request.variant is TrialVariant.POLICY_ON
-            and request.item_id == self.invalid_candidate_item
+            (
+                request.variant is TrialVariant.POLICY_ON
+                and request.item_id == self.invalid_candidate_item
+            )
+            or (
+                request.split is SplitName.TRAIN
+                and request.item_id == self.invalid_training_item
+            )
         )
         success = has_skill and not invalid
         return SkillLearnTrialObservation(
@@ -102,11 +118,14 @@ class RecordingSubprocess:
     def __init__(self) -> None:
         self.commands: list[list[str]] = []
         self.kwargs: list[dict[str, Any]] = []
+        self.agent_stdout = ""
 
     def run(self, args, *positional, **kwargs):
-        self.commands.append(list(args))
+        command = list(args)
+        self.commands.append(command)
         self.kwargs.append(dict(kwargs))
-        return object()
+        stdout = self.agent_stdout if "codex exec" in " ".join(command) else ""
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
 
 
 class FakeDockerSubprocess:
@@ -275,6 +294,37 @@ def test_invalid_external_pair_blocks_promotion(tmp_path: Path) -> None:
     assert result.evolution is not None
     assert result.evolution.promoted is False
     assert "invalid_counterfactual_pairs" in result.evolution.promotion_decision.blockers
+
+
+def test_invalid_training_evidence_blocks_proposal(tmp_path: Path) -> None:
+    invalid_item = "organize-messy-files-1"
+    harness, backend, model, _, _, sink = _harness(
+        tmp_path,
+        invalid_training_item=invalid_item,
+    )
+
+    with pytest.raises(RuntimeError, match="training evidence contains invalid"):
+        harness.run_generation(
+            train_item_ids=(
+                invalid_item,
+                "organize-messy-files-2",
+                "offer-letter-generator-1",
+                "offer-letter-generator-2",
+            ),
+            validation_item_ids=(
+                "organize-messy-files-5",
+                "offer-letter-generator-5",
+            ),
+        )
+
+    assert len(backend.calls) == 4
+    assert model.requests == []
+    assert any(
+        row["event"] == "skilllearn_training_evidence_blocked"
+        and row["payload"]["invalid_observation_count"] == 1
+        and row["payload"]["proposal_blocked"] is True
+        for row in sink.events
+    )
 
 
 def test_paired_ablation_shares_first_train_checkpoint_and_root(tmp_path: Path) -> None:
@@ -549,11 +599,31 @@ def test_subscription_trial_auth_is_ephemeral_and_not_passed_as_env(
             row["event"] == "skilllearn_verifier_materialized_post_agent"
             for row in sink.events
         )
+        delegate.agent_stdout = json.dumps(
+            {
+                "type": "turn.failed",
+                "error": {"message": "You've hit your usage limit for the model."},
+            }
+        )
+        with pytest.raises(RuntimeError, match="subscription_usage_limit"):
+            runner.subprocess.run(
+                ["docker", "exec", "trial", "sh", "-c", "codex exec --help"],
+                timeout=1800,
+            )
+        assert any(
+            row["event"] == "skilllearn_agent_terminal_error_detected"
+            and row["payload"]["error_type"] == "subscription_usage_limit"
+            for row in sink.events
+        )
 
     assert not host_home.exists()
     assert agent["env"] == ["OPENAI_API_KEY"]
     assert agent["setup"] == "auth_json"
     assert runner.subprocess is delegate
+    assert any(
+        row["event"] == "skilllearn_ephemeral_auth_cleanup_completed"
+        for row in sink.events
+    )
 
 
 @pytest.mark.parametrize(
@@ -561,6 +631,19 @@ def test_subscription_trial_auth_is_ephemeral_and_not_passed_as_env(
     [
         ({"agent_timed_out": True, "verifier_exit": 0}, "agent_timeout"),
         ({"agent_timed_out": False, "verifier_exit": -1}, "verifier_timeout"),
+        (
+            {
+                "agent_timed_out": False,
+                "verifier_exit": 0,
+                "agent_stdout": json.dumps(
+                    {
+                        "type": "error",
+                        "message": "You've hit your usage limit for the model.",
+                    }
+                ),
+            },
+            "subscription_usage_limit",
+        ),
     ],
 )
 def test_upstream_trial_timeouts_are_invalid_observations(
@@ -592,6 +675,65 @@ def test_upstream_trial_timeouts_are_invalid_observations(
     assert observation.error_type == expected_error
     assert observation.valid is False
     assert observation.metrics["evaluation_valid"] == 0.0
+
+
+def test_open_provider_circuit_skips_model_execution() -> None:
+    circuit = SkillLearnProviderCircuit()
+    assert circuit.open("subscription_usage_limit") is True
+    backend = SkillLearnSubprocessBackend(
+        BENCH_ROOT,
+        record_upstream=False,
+        provider_circuit=circuit,
+    )
+    request = SkillLearnTrialRequest(
+        item_id="item",
+        family="family",
+        split=SplitName.TRAIN,
+        variant=TrialVariant.POLICY_OFF,
+        evaluator_epoch="epoch",
+        pair_id="pair",
+        repeat=0,
+        agent_id="codex",
+        model="gpt-5.3-codex-spark",
+        max_steps=100,
+        manifest_hash="manifest",
+    )
+
+    observation = backend.run(request, skill_source_dir=None, trace_id="circuit-open")
+
+    assert observation.valid is False
+    assert observation.error_type == "provider_circuit_open_subscription_usage_limit"
+
+
+def test_ephemeral_auth_cleanup_retries_transient_oserror(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret_home = tmp_path / "secret-home"
+    secret_home.mkdir()
+    (secret_home / "auth.json").write_text("secret", encoding="utf-8")
+    real_rmtree = shutil.rmtree
+    attempts = 0
+
+    def flaky_rmtree(path):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError(39, "Directory not empty")
+        return real_rmtree(path)
+
+    monkeypatch.setattr(shutil, "rmtree", flaky_rmtree)
+    sink = MemoryEventSink()
+
+    _cleanup_ephemeral_codex_home(
+        secret_home,
+        event_sink=sink,
+        trace_id="cleanup-retry",
+    )
+
+    assert attempts == 2
+    assert not secret_home.exists()
+    assert sink.events[-1]["payload"]["attempt_count"] == 2
 
 
 def test_loaded_runners_isolate_agent_registry_across_parallel_backends(
@@ -767,6 +909,7 @@ def _harness(
     tmp_path: Path,
     *,
     invalid_candidate_item: str | None = None,
+    invalid_training_item: str | None = None,
     backend_override=None,
     parallel_workers: int = 1,
     proposal_rows: list[dict[str, Any]] | None = None,
@@ -796,7 +939,8 @@ def _harness(
         event_sink=sink,
     )
     backend = backend_override or FakeSkillLearnBackend(
-        invalid_candidate_item=invalid_candidate_item
+        invalid_candidate_item=invalid_candidate_item,
+        invalid_training_item=invalid_training_item,
     )
     archive = PolicyArchive(event_sink=sink)
     harness = SkillLearnEvolutionHarness(
