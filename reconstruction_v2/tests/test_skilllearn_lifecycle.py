@@ -478,6 +478,15 @@ def test_subscription_trial_auth_is_ephemeral_and_not_passed_as_env(
         )
         command = delegate.commands[-1]
         assert not any(":/tests" in value for value in command)
+        assert command[-3:] == [
+            "sh",
+            "-c",
+            "trap 'exit 0' TERM INT; while :; do sleep 86400; done",
+        ]
+        assert any(
+            row["event"] == "skilllearn_fixed_container_lifetime_removed"
+            for row in sink.events
+        )
         mounts = [
             command[index + 1]
             for index, value in enumerate(command[:-1])

@@ -54,7 +54,7 @@ BASELINE_LANE = "skilllearn_incumbent"
 CANDIDATE_LANE = "skilllearn_challenger"
 VERIFIER_ISOLATION_VERSION = "post_agent_verifier_copy_v1"
 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION = "runner_local_agent_registry_v1"
-TRIAL_TIMEOUT_POLICY_VERSION = "no_fixed_trial_stage_wall_timeout_v1"
+TRIAL_TIMEOUT_POLICY_VERSION = "no_fixed_trial_wall_or_container_timeout_v2"
 PREBUILT_IMAGE_POLICY_VERSION = "per_item_base_shared_agent_runtime_v3"
 SHARED_AGENT_RUNTIME_MOUNT = "/opt/assumption-v2-agent"
 SHARED_AGENT_RUNTIME_BUILDER_IMAGE = (
@@ -1941,6 +1941,27 @@ class _DockerCodexHomeSubprocessProxy:
             and "--name" in command
         ):
             container_name = str(command[command.index("--name") + 1])
+            if command[-2:] == ["sleep", "3600"]:
+                command[-2:] = [
+                    "sh",
+                    "-c",
+                    "trap 'exit 0' TERM INT; while :; do sleep 86400; done",
+                ]
+                self.event_sink.emit(
+                    Event(
+                        event="skilllearn_fixed_container_lifetime_removed",
+                        stage="benchmark.skilllearn.timeout_policy",
+                        trace_id=self.trace_id,
+                        payload={
+                            "policy": TRIAL_TIMEOUT_POLICY_VERSION,
+                            "container_name_hash": stable_hash(
+                                {"container_name": container_name}
+                            ),
+                            "original_lifetime_seconds": 3600,
+                            "replacement": "signal_terminable_keepalive_loop",
+                        },
+                    )
+                )
             index = 0
             while index < len(command) - 1:
                 if command[index] == "-v" and ":/tests" in str(command[index + 1]):
