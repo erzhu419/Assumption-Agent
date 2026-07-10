@@ -49,13 +49,14 @@ python3 -m pip install --user -e '.[skilllearn]'
 TMPDIR=/tmp TMP=/tmp TEMP=/tmp python3 -m pytest
 python3 -m assumption_agent.benchmarks.preflight \
   --env-file ../.env \
+  --manifest manifests/skilllearnbench_instance_holdout_credential_independent_v1.json \
   --trial-provider-mode codex_subscription \
   --root reference/self_evo_continual_20260707/repos/SkillLearnBench
 
 # Build a no-network, no-test-access execution plan.
 python3 -m assumption_agent.benchmarks.skilllearn_experiment \
   --root reference/self_evo_continual_20260707/repos/SkillLearnBench \
-  --manifest manifests/skilllearnbench_instance_holdout_v1.json \
+  --manifest manifests/skilllearnbench_instance_holdout_credential_independent_v1.json \
   --env-file ../.env \
   --out artifacts/skilllearn_plan.json \
   --events artifacts/skilllearn.events.jsonl \
@@ -66,12 +67,13 @@ python3 -m assumption_agent.benchmarks.skilllearn_experiment \
   --parallel-workers 4 \
   --trial-provider-mode codex_subscription
 
-# Publication pipeline. This intentionally stops before sealed test.
+# Publication pipeline. This runs preflight, lock, train/validation image
+# prewarm, smoke, development, freeze, and validation. It stops before sealed test.
 ./scripts/run_paper_pipeline.sh all-development
 
 # Family-out development and validation use an independent archive/run root.
-MANIFEST=manifests/skilllearnbench_family_out_v1.json \
-RUN_ROOT=artifacts/paper_family_out_v1 \
+MANIFEST=manifests/skilllearnbench_family_out_credential_independent_v1.json \
+RUN_ROOT=artifacts/paper_family_out_v2 \
 ./scripts/run_paper_pipeline.sh all-development
 
 # Run only after reviewing the frozen validation report.
@@ -84,11 +86,11 @@ The local WSL environment now has Docker Engine 29.1.3 running under systemd. `s
 
 The external runner fixes the agent, `gpt-5.3-codex-spark`, step budget, provider fingerprint, verifier-isolation version, and split manifest for both sides of each pair. In `codex_subscription` mode, each trial gets a temporary copy of the local Codex auth state bind-mounted as its container-only `CODEX_HOME`; no API endpoint is injected, the copy is outside trial artifacts, and it is deleted as the runner context exits. The upstream `/tests` mount is removed before container start and verifier files are copied in only after the agent process exits. Infrastructure errors, provider changes, budget mismatches, or isolation mismatches invalidate evidence instead of counting as wrong answers.
 
-Docker execution uses content-addressed per-item base images with oracle skill directories excluded. A single read-only agent runtime is shared across those images and is locked to `node@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0` plus `@openai/codex@0.144.1`. Its runtime key, exact CLI version, base image ID, cache key, and reuse state are logged for every trial and enter the fairness audit. V2 skills use a hashed per-item route, so a trigger match never spills across a whole family. Different benchmark items may run concurrently; all controls for one item, and policy-off/policy-on within one counterfactual pair, remain sequential in a deterministically balanced order.
+Docker execution uses content-addressed per-item base images with oracle skill directories excluded. Before any development model call, every train/validation image must pass a three-attempt prewarm gate whose receipt binds the manifest, item set, image IDs, and shared runtime. A single read-only agent runtime is shared across those images and is locked to `node@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0` plus `@openai/codex@0.144.1`. Its runtime key, exact CLI version, base image ID, cache key, and reuse state are logged for every trial and enter the fairness audit. V2 skills use a hashed per-item route, so a trigger match never spills across a whole family. Different benchmark items may run concurrently; all controls for one item, and policy-off/policy-on within one counterfactual pair, remain sequential in a deterministically balanced order.
 
-The committed manifests are `manifests/skilllearnbench_instance_holdout_v1.json` and `manifests/skilllearnbench_family_out_v1.json`.
+The paper manifests are `manifests/skilllearnbench_instance_holdout_credential_independent_v1.json` and `manifests/skilllearnbench_family_out_credential_independent_v1.json`. They freeze a 95-item subset and exclude the complete five-item `github-repo-analytics` family because its upstream `task.toml` requires a personal `GH_TOKEN`. This exclusion is metadata-only, precedes all model calls, and keeps the benchmark independent of private credentials. Manifest-scoped preflight blocks before execution if any selected task still has an unavailable `required_env`.
 
-`manifests/skilllearn_paper_protocol_v1.json` freezes the paper model, agent runtime, three-generation search budget, recursive/no-recursive ablation, train-only candidate selection, six final controls, repeats, invalid-row policy, paired statistics, and instance/family-out sample counts. The two evolution arms share the exact first-generation train observations, residuals, and proposed roots; recursive repair is the only intended difference at that checkpoint. Every proposed root is checked against the runtime feature vocabulary and train residual support. Only one statically accepted candidate, chosen by frozen train-only support and complexity ordering, may consume validation outcomes in a generation. `paper_freeze` compiles content-hashed validation/test control directories from the two selected archives. A sealed journal binds the test record file and permits only same-key infrastructure retries.
+`manifests/skilllearn_paper_protocol_v2.json` freezes the paper model, credential-independent subset, agent runtime, three-generation search budget, recursive/no-recursive ablation, train-only candidate selection, six final controls, repeats, invalid-row policy, paired statistics, and instance/family-out sample counts. The two evolution arms share the exact first-generation train observations, residuals, and proposed roots; recursive repair is the only intended difference at that checkpoint. Every proposed root is checked against the runtime feature vocabulary and train residual support. Only one statically accepted candidate, chosen by frozen train-only support and complexity ordering, may consume validation outcomes in a generation. `paper_freeze` compiles content-hashed validation/test control directories from the two selected archives. A sealed journal binds the test record file and permits only same-key infrastructure retries.
 
 ## Proposal Providers
 

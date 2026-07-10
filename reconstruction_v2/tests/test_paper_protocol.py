@@ -12,7 +12,7 @@ from assumption_agent.models import stable_hash
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROTOCOL = ROOT / "manifests" / "skilllearn_paper_protocol_v1.json"
+PROTOCOL = ROOT / "manifests" / "skilllearn_paper_protocol_v2.json"
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
 
@@ -21,9 +21,16 @@ def test_paper_protocol_freezes_primary_design() -> None:
 
     assert protocol.validate_structure() == []
     assert protocol.payload["expected_primary_counts"] == {
-        "train": 44,
-        "validation": 19,
-        "test": 37,
+        "train": 42,
+        "validation": 18,
+        "test": 35,
+    }
+    assert protocol.payload["benchmark_subset"] == {
+        "policy": "exclude_external_credentials_by_family_v1",
+        "eligible_instance_count": 95,
+        "excluded_instance_count": 5,
+        "excluded_families": ["github-repo-analytics"],
+        "excluded_required_env_names": ["GH_TOKEN"],
     }
     assert protocol.payload["phases"]["sealed_test"]["repeats"] == 3
     assert protocol.payload["statistics"]["analysis_unit"] == "benchmark_item"
@@ -43,7 +50,7 @@ def test_paper_report_uses_item_clustered_pairs_and_exact_mcnemar() -> None:
 
     primary = report["comparisons_vs_raw"]["promoted_v2"]
     assert report["primary_claim_eligible"] is True
-    assert primary["complete_paired_item_count"] == 37
+    assert primary["complete_paired_item_count"] == 35
     assert primary["majority_gain_count"] == 10
     assert primary["majority_harm_count"] == 0
     assert primary["mean_paired_success_delta"] > 0
@@ -128,7 +135,7 @@ def _records(protocol: PaperProtocol) -> tuple[PaperTrialRecord, ...]:
         "human_authored": 25,
     }
     rows: list[PaperTrialRecord] = []
-    for item_index in range(37):
+    for item_index in range(35):
         item_hash = stable_hash({"item": item_index})
         for control in controls:
             for repeat in range(1, 4):
@@ -136,7 +143,7 @@ def _records(protocol: PaperProtocol) -> tuple[PaperTrialRecord, ...]:
                 rows.append(
                     PaperTrialRecord(
                         item_id_hash=item_hash,
-                        family_hash=stable_hash({"family": item_index % 20}),
+                        family_hash=stable_hash({"family": item_index % 19}),
                         split="test",
                         control_id=control,
                         protocol_hash=protocol.protocol_hash,

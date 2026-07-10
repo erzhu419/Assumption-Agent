@@ -4,7 +4,7 @@
 
 HLE is primarily a one-shot, broad-knowledge exam. It can test external transfer, but it gives the system little repeated feedback from which to learn reusable assumptions.
 
-SkillLearnBench is the primary environment because it has 20 skill-dependent task families, 100 verified instances, executable task verifiers, skill-quality metrics, and trajectory keypoints. These correspond directly to:
+SkillLearnBench is the primary environment because it has executable task verifiers, skill-quality metrics, and trajectory keypoints. The upstream inventory has 20 task families and 100 verified instances. The frozen paper subset has 19 families and 95 instances: it excludes the complete `github-repo-analytics` family because all five tasks declare the private external credential `GH_TOKEN`. These correspond directly to:
 
 - hypothesis quality;
 - hypothesis application fidelity;
@@ -14,9 +14,9 @@ SkillLearnBench is the primary environment because it has 20 skill-dependent tas
 
 Purpose: test whether a hypothesis learned from earlier instances of one task family improves unseen instances of that family.
 
-- Train: 44 instances.
-- Validation: 19 instances.
-- Sealed test: 37 instances.
+- Train: 42 instances.
+- Validation: 18 instances.
+- Sealed test: 35 instances.
 - Test instructions are inaccessible until the archive is frozen.
 - Hypothesis generation and recursive repair use train only.
 - Policy and evaluator selection use validation only.
@@ -27,9 +27,9 @@ This is the main test of executable assumption learning.
 
 Purpose: test whether policy and evaluator hypotheses generalize beyond task families used for evolution.
 
-- Train: 12 families, 54 instances.
-- Validation: 4 families, 23 instances.
-- Sealed test: 4 families, 23 instances.
+- Train: 11 families, 54 instances.
+- Validation: 3 families, 14 instances.
+- Sealed test: 5 families, 27 instances.
 
 Task-specific hypotheses are not expected to transfer here. Policy hypotheses, evaluator hypotheses, and the proposal procedure are.
 
@@ -58,7 +58,7 @@ Reports separate aggregate static-tree recursion across every proposed root from
 
 Policy-off and policy-on trials use one fairness fingerprint derived from backend, provider, agent, model, step budget, verifier isolation, image-cache policy, and the actual shared agent-runtime key. Their order is deterministically balanced by pair ID. A provider, budget, or runtime mismatch invalidates the pair.
 
-Execution caches only the exact non-oracle task environment. Oracle `skills/` content is excluded from the environment hash and build context. Node is pinned by image digest, Codex CLI is pinned to `0.144.1`, and one read-only runtime volume is shared by all item images. Parallelism is across benchmark items only. Every variant for one item runs sequentially in a protocol-derived balanced order, so raw and candidate do not contend against each other inside one pair.
+Execution caches only the exact non-oracle task environment. Oracle `skills/` content is excluded from the environment hash and build context. Before development, all train/validation images must pass a bounded prewarm gate without invoking the model; the signed receipt becomes part of the development report and archive-freeze checks. Node is pinned by image digest, Codex CLI is pinned to `0.144.1`, and one read-only runtime volume is shared by all item images. Parallelism is across benchmark items only. Every variant for one item runs sequentially in a protocol-derived balanced order, so raw and candidate do not contend against each other inside one pair.
 
 Compiled hypotheses use a content-hashed per-item routing manifest. A skill is injected only when that exact item's structured features satisfy its trigger; sharing a task family with a matched item is insufficient. Missing routes are explicit abstentions. Upstream human and B1 controls retain their native family-level layout because they do not declare V2 triggers.
 
@@ -81,6 +81,8 @@ Promotion uses same-item policy-off/policy-on validation outcomes under one froz
 - clear a one-sided paired-effect lower confidence bound.
 
 Every pair must also contain two valid external evaluations. Authentication errors, endpoint failures, Docker failures, and verifier infrastructure failures block the entire candidate promotion; they are never silently scored as task failures.
+
+Before any model call, manifest-scoped preflight enumerates `required_env` declarations from `task.toml`. A selected task with an unavailable variable blocks the run. Reports persist variable names and affected counts only; credential values are never serialized. The credential-independent subset is generated from metadata before split assignment, so no observed model outcome influences exclusion.
 
 SkillLearnBench cannot reveal verifier success to the agent before completion, so no method may perform a post-verifier oracle rollback. On non-activated rows, the baseline is used directly. On activated rows, conservatism is enforced by the frozen harm-rate and lower-bound promotion gates. The `preserve_baseline` program field is therefore a policy contract, not a claim that a failed candidate output was retroactively replaced.
 

@@ -627,6 +627,23 @@ class SkillLearnSubprocessBackend:
         )[:12]
         self._provider_lock = threading.RLock()
 
+    def prewarm_environment(
+        self,
+        *,
+        family: str,
+        item_id: str,
+        trace_id: str,
+    ) -> SkillLearnPrebuiltImage:
+        if self.prebuilt_cache is None:
+            raise RuntimeError("environment prewarm requires the prebuilt image cache")
+        return self.prebuilt_cache.ensure(
+            family=family,
+            item_id=item_id,
+            agent_id=self.agent_id,
+            runner=self._load_runner(),
+            trace_id=trace_id,
+        )
+
     def run(
         self,
         request: SkillLearnTrialRequest,

@@ -16,6 +16,7 @@ from ..secure_env import configured_model, configured_skilllearn_provider_mode, 
 from ..splits import SplitManifest
 from .preflight import build_preflight
 from .skilllearn_compiler import SKILL_ROUTING_VERSION
+from .prewarm import DEVELOPMENT_PREWARM_VERSION
 from .skilllearn_lifecycle import (
     PREBUILT_IMAGE_POLICY_VERSION,
     SHARED_AGENT_RUNTIME_BUILDER_IMAGE,
@@ -67,6 +68,11 @@ class PaperProtocol:
         else:
             if execution.get("prebuilt_image_policy") != PREBUILT_IMAGE_POLICY_VERSION:
                 issues.append("prebuilt_image_policy_mismatch")
+            if (
+                str(self.payload.get("protocol_version") or "").startswith("2.")
+                and execution.get("development_prewarm") != DEVELOPMENT_PREWARM_VERSION
+            ):
+                issues.append("development_prewarm_mismatch")
             if execution.get("agent_runtime_builder") != SHARED_AGENT_RUNTIME_BUILDER_IMAGE:
                 issues.append("agent_runtime_builder_mismatch")
             if execution.get("agent_runtime_package") != SHARED_CODEX_CLI_PACKAGE:
@@ -129,6 +135,15 @@ class PaperProtocol:
             issues.append("statistics_missing")
         elif statistics.get("analysis_unit") != "benchmark_item":
             issues.append("analysis_unit_not_item")
+        subset = self.payload.get("benchmark_subset")
+        if subset is not None:
+            if not isinstance(subset, Mapping):
+                issues.append("benchmark_subset_invalid")
+            elif subset.get("policy") not in {
+                "full_inventory_v1",
+                "exclude_external_credentials_by_family_v1",
+            }:
+                issues.append("benchmark_subset_policy_invalid")
         return sorted(set(issues))
 
 
@@ -144,15 +159,39 @@ def build_protocol_lock(
     secondary_path = project / str(protocol.payload["secondary_manifest"])
     primary = SplitManifest.read(primary_path)
     secondary = SplitManifest.read(secondary_path)
-    inventory = SkillLearnBenchAdapter(benchmark).discover()
-    inventory_ids = {row.id for row in inventory}
+    adapter = SkillLearnBenchAdapter(benchmark)
+    inventory = adapter.discover()
+    subset_policy = dict(protocol.payload.get("benchmark_subset") or {})
+    if subset_policy.get("policy") == "exclude_external_credentials_by_family_v1":
+        eligible_inventory = adapter.credential_independent_items()
+        subset_summary = adapter.credential_independent_summary()
+    else:
+        eligible_inventory = inventory
+        subset_summary = {
+            "policy": "full_inventory_v1",
+            "eligible_instance_count": len(inventory),
+            "excluded_instance_count": 0,
+            "excluded_families": [],
+            "excluded_required_env_names": [],
+            "secret_value_persisted": False,
+        }
+    eligible_ids = {row.id for row in eligible_inventory}
     primary_ids = {*primary.train_ids, *primary.validation_ids, *primary.test_ids}
     secondary_ids = {*secondary.train_ids, *secondary.validation_ids, *secondary.test_ids}
     issues: list[str] = []
-    if primary_ids != inventory_ids:
+    if primary_ids != eligible_ids:
         issues.append("primary_manifest_inventory_mismatch")
-    if secondary_ids != inventory_ids:
+    if secondary_ids != eligible_ids:
         issues.append("secondary_manifest_inventory_mismatch")
+    for key in (
+        "policy",
+        "eligible_instance_count",
+        "excluded_instance_count",
+        "excluded_families",
+        "excluded_required_env_names",
+    ):
+        if key in subset_policy and subset_policy.get(key) != subset_summary.get(key):
+            issues.append(f"benchmark_subset_mismatch:{key}")
     if _counts(primary) != dict(protocol.payload["expected_primary_counts"]):
         issues.append("primary_count_mismatch")
     if _counts(secondary) != dict(protocol.payload["expected_secondary_counts"]):
@@ -178,6 +217,7 @@ def build_protocol_lock(
     preflight = build_preflight(
         benchmark,
         trial_provider_mode=trial_provider_mode,
+        item_ids=eligible_ids,
     )
     provider_status = proposal_provider_status()
     claim_eligible = not issues and not git_state["scoped_dirty"] and not preflight["blockers"]
@@ -193,6 +233,11 @@ def build_protocol_lock(
         "inventory_hash": stable_hash(
             {"item_hashes": sorted(row.id_hash for row in inventory)}
         ),
+        "eligible_inventory_count": len(eligible_inventory),
+        "eligible_inventory_hash": stable_hash(
+            {"item_hashes": sorted(row.id_hash for row in eligible_inventory)}
+        ),
+        "benchmark_subset": subset_summary,
         "model": configured_model(),
         "proposal_provider_chain": list(configured_provider_chain()),
         "trial_provider_mode": trial_provider_mode,

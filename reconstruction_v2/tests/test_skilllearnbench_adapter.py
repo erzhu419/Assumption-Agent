@@ -73,6 +73,25 @@ def test_skilllearnbench_family_out_manifest_has_disjoint_families() -> None:
     assert validation_families.isdisjoint(test_families)
 
 
+def test_credential_independent_subset_excludes_complete_required_env_family() -> None:
+    adapter = SkillLearnBenchAdapter(BENCH_ROOT)
+    items = adapter.credential_independent_items()
+    summary = adapter.credential_independent_summary()
+
+    assert len(items) == 95
+    assert {item.family for item in items} == {
+        item.family for item in adapter.discover()
+    } - {"github-repo-analytics"}
+    assert summary == {
+        "policy": "exclude_external_credentials_by_family_v1",
+        "eligible_instance_count": 95,
+        "excluded_instance_count": 5,
+        "excluded_families": ["github-repo-analytics"],
+        "excluded_required_env_names": ["GH_TOKEN"],
+        "secret_value_persisted": False,
+    }
+
+
 def test_promoted_task_hypothesis_compiles_to_skilllearn_skill(tmp_path: Path) -> None:
     adapter = SkillLearnBenchAdapter(BENCH_ROOT)
     items = adapter.discover()

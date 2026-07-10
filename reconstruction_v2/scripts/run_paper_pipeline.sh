@@ -6,11 +6,12 @@ cd "${PROJECT_ROOT}"
 
 BENCHMARK_ROOT="${BENCHMARK_ROOT:-reference/self_evo_continual_20260707/repos/SkillLearnBench}"
 ENV_FILE="${ENV_FILE:-../.env}"
-PROTOCOL="${PROTOCOL:-manifests/skilllearn_paper_protocol_v1.json}"
-MANIFEST="${MANIFEST:-manifests/skilllearnbench_instance_holdout_v1.json}"
-RUN_ROOT="${RUN_ROOT:-artifacts/paper_primary_v1}"
+PROTOCOL="${PROTOCOL:-manifests/skilllearn_paper_protocol_v2.json}"
+MANIFEST="${MANIFEST:-manifests/skilllearnbench_instance_holdout_credential_independent_v1.json}"
+RUN_ROOT="${RUN_ROOT:-artifacts/paper_primary_v2}"
 LOCK="${RUN_ROOT}/protocol_lock.json"
 RECEIPT="${RUN_ROOT}/freeze_receipt.json"
+PREWARM_RECEIPT="${RUN_ROOT}/development_prewarm.json"
 PARALLEL_WORKERS="${PARALLEL_WORKERS:-4}"
 
 run_docker_group() {
@@ -26,6 +27,7 @@ run_docker_group() {
 preflight() {
   run_docker_group python3 -m assumption_agent.benchmarks.preflight \
     --env-file "${ENV_FILE}" \
+    --manifest "${MANIFEST}" \
     --trial-provider-mode codex_subscription \
     --root "${BENCHMARK_ROOT}"
 }
@@ -41,6 +43,19 @@ lock_protocol() {
     --require-claim-eligible
 }
 
+prewarm() {
+  mkdir -p "${RUN_ROOT}"
+  run_docker_group python3 -m assumption_agent.benchmarks.prewarm \
+    --root "${BENCHMARK_ROOT}" \
+    --manifest "${MANIFEST}" \
+    --env-file "${ENV_FILE}" \
+    --events "${RUN_ROOT}/development_prewarm.events.jsonl" \
+    --out "${PREWARM_RECEIPT}" \
+    --parallel-workers "${PARALLEL_WORKERS}" \
+    --attempts 3 \
+    --require-passed
+}
+
 run_generation() {
   local name="$1"
   shift
@@ -52,6 +67,7 @@ run_generation() {
     --events "${RUN_ROOT}/${name}.events.jsonl" \
     --work-dir "${RUN_ROOT}/${name}" \
     --archive-out "${RUN_ROOT}/${name}.archive.json" \
+    --prewarm-receipt "${PREWARM_RECEIPT}" \
     --minimum-trigger-support 2 \
     --trial-provider-mode codex_subscription \
     --model gpt-5.3-codex-spark \
@@ -132,6 +148,7 @@ report() {
 case "${1:-}" in
   preflight) preflight ;;
   lock) lock_protocol ;;
+  prewarm) prewarm ;;
   smoke) smoke ;;
   develop) develop ;;
   freeze) freeze ;;
@@ -140,6 +157,7 @@ case "${1:-}" in
   all-development)
     preflight
     lock_protocol
+    prewarm
     smoke
     develop
     freeze
@@ -147,7 +165,7 @@ case "${1:-}" in
     report validation
     ;;
   *)
-    echo "Usage: $0 {preflight|lock|smoke|develop|freeze|validation-controls|sealed-test|all-development}" >&2
+    echo "Usage: $0 {preflight|lock|prewarm|smoke|develop|freeze|validation-controls|sealed-test|all-development}" >&2
     exit 2
     ;;
 esac

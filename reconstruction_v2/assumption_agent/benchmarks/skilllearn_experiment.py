@@ -29,6 +29,10 @@ from ..validation import (
     TriggerVocabularyCheck,
 )
 from .preflight import build_preflight
+from .prewarm import (
+    DEVELOPMENT_PREWARM_VERSION,
+    validate_development_prewarm_receipt,
+)
 from .skilllearn_compiler import SKILL_ROUTING_VERSION
 from .skilllearn_lifecycle import (
     PREBUILT_IMAGE_POLICY_VERSION,
@@ -54,6 +58,7 @@ def main() -> None:
     parser.add_argument("--archive-out", type=Path)
     parser.add_argument("--paired-no-recursive-out", type=Path)
     parser.add_argument("--paired-no-recursive-archive-out", type=Path)
+    parser.add_argument("--prewarm-receipt", type=Path)
     parser.add_argument("--train-id", action="append", default=[])
     parser.add_argument("--validation-id", action="append", default=[])
     parser.add_argument("--train-limit", type=int)
@@ -83,12 +88,21 @@ def main() -> None:
     provider_status = proposal_provider_status()
     trial_provider_mode = args.trial_provider_mode or configured_skilllearn_provider_mode()
     manifest = SplitManifest.read(args.manifest)
+    prewarm_receipt_hash: str | None = None
+    if args.prewarm_receipt:
+        prewarm_payload = json.loads(args.prewarm_receipt.read_text(encoding="utf-8"))
+        if not isinstance(prewarm_payload, Mapping):
+            raise ValueError("development prewarm receipt must contain one JSON object")
+        prewarm_receipt_hash = validate_development_prewarm_receipt(
+            prewarm_payload,
+            manifest=manifest,
+        )
     adapter = SkillLearnBenchAdapter(args.root)
     items = adapter.discover()
     inventory_ids = {item.id for item in items}
     manifest_ids = {*manifest.train_ids, *manifest.validation_ids, *manifest.test_ids}
-    if inventory_ids != manifest_ids:
-        raise ValueError("manifest and local SkillLearnBench inventory contain different item IDs")
+    if not manifest_ids <= inventory_ids:
+        raise ValueError("manifest contains IDs absent from the local SkillLearnBench inventory")
 
     train_ids = _select_ids(args.train_id, manifest.train_ids, args.train_limit)
     validation_ids = _select_ids(
@@ -120,6 +134,9 @@ def main() -> None:
         "max_steps": args.max_steps,
         "parallel_workers": args.parallel_workers,
         "prebuilt_image_policy": PREBUILT_IMAGE_POLICY_VERSION,
+        "development_prewarm_version": DEVELOPMENT_PREWARM_VERSION,
+        "prewarm_passed": prewarm_receipt_hash is not None,
+        "prewarm_receipt_hash": prewarm_receipt_hash,
         "proposal_candidate_selection": TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
         "runtime_candidate_kinds": ["task", "policy"],
         "evaluator_hypothesis_mode": (
@@ -151,6 +168,8 @@ def main() -> None:
         blockers.append("proposal_candidates_per_generation_must_be_positive")
     if args.parallel_workers <= 0:
         blockers.append("parallel_workers_must_be_positive")
+    if args.execute and prewarm_receipt_hash is None:
+        blockers.append("execute_requires_passed_development_prewarm")
     if bool(args.paired_no_recursive_out) != bool(args.paired_no_recursive_archive_out):
         blockers.append("paired_ablation_requires_both_output_paths")
     if paired_ablation and args.disable_recursive_repair:
@@ -173,6 +192,7 @@ def main() -> None:
             "preflight": build_preflight(
                 args.root,
                 trial_provider_mode=trial_provider_mode,
+                item_ids=(*manifest.train_ids, *manifest.validation_ids, *manifest.test_ids),
             ),
             "executed": False,
             "secret_value_persisted": False,
@@ -186,6 +206,7 @@ def main() -> None:
     preflight = build_preflight(
         args.root,
         trial_provider_mode=trial_provider_mode,
+        item_ids=(*manifest.train_ids, *manifest.validation_ids, *manifest.test_ids),
     )
     if preflight["blockers"]:
         raise RuntimeError(f"SkillLearnBench execution preflight failed: {preflight['blockers']}")

@@ -35,8 +35,10 @@ BENCH_ROOT = (
     / "repos"
     / "SkillLearnBench"
 )
-PROTOCOL_PATH = ROOT / "manifests" / "skilllearn_paper_protocol_v1.json"
-MANIFEST_PATH = ROOT / "manifests" / "skilllearnbench_instance_holdout_v1.json"
+PROTOCOL_PATH = ROOT / "manifests" / "skilllearn_paper_protocol_v2.json"
+MANIFEST_PATH = (
+    ROOT / "manifests" / "skilllearnbench_instance_holdout_credential_independent_v1.json"
+)
 
 
 class FakePaperBackend:
@@ -470,6 +472,11 @@ def _development_report(
             "model": protocol.payload["model"],
             "trial_provider_mode": protocol.payload["trial_provider_mode"],
             "max_steps": protocol.payload["max_steps"],
+            "development_prewarm_version": protocol.payload["execution"][
+                "development_prewarm"
+            ],
+            "prewarm_passed": True,
+            "prewarm_receipt_hash": stable_hash({"prewarm": manifest.manifest_hash}),
             "recursive_validation_enabled": recursive,
             "max_generations": protocol.payload["evolution"]["max_generations"],
             "max_consecutive_non_promotions": protocol.payload["evolution"][

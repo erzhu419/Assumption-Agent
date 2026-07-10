@@ -346,9 +346,15 @@ def _validate_development_report(
         ),
         "test_content_accessed": False,
     }
+    prewarm_version = protocol.payload["execution"].get("development_prewarm")
+    if prewarm_version:
+        expected["development_prewarm_version"] = prewarm_version
+        expected["prewarm_passed"] = True
     for key, value in expected.items():
         if plan.get(key) != value:
             raise ValueError(f"development report plan mismatch: {key}")
+    if prewarm_version and not str(plan.get("prewarm_receipt_hash") or ""):
+        raise ValueError("development report has no prewarm receipt provenance")
     generation = report.get("generation")
     generations = report.get("generations")
     if not isinstance(generation, Mapping) or not isinstance(generations, list) or not generations:
