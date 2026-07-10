@@ -8,7 +8,11 @@ from typing import Any, Mapping, Sequence
 from ..archive import PolicyArchive
 from ..evaluation import PromotionGate, PromotionGateSpec
 from ..events import Event, JsonlEventSink
-from ..evolution import TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
+from ..evolution import (
+    COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+    TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+    CounterfactualEvidenceReplayCache,
+)
 from ..models import stable_hash
 from ..provider_chain import build_proposal_model, proposal_provider_status
 from ..proposer import StructuredHypothesisProposer
@@ -148,6 +152,7 @@ def main() -> None:
         "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
         "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
         "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
+        "counterfactual_replay_policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
         "openai_compatible_codex_config": (
             OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION
             if trial_provider_mode == "openai_compatible"
@@ -451,6 +456,9 @@ def _run_paired_arms(
     max_consecutive_non_promotions: int,
 ) -> dict[str, Any]:
     shared_trace = f"skilllearn-paired-{manifest_hash[:12]}-g1"
+    replay_cache = CounterfactualEvidenceReplayCache(
+        event_sink=recursive_harness.event_sink
+    )
     observations = recursive_harness.collect_training_observations(
         train_item_ids=train_ids,
         trace_id=f"{shared_trace}:shared-train",
@@ -505,6 +513,7 @@ def _run_paired_arms(
             residuals=residuals,
             validation_item_ids=validation_ids,
             proposal_candidates=proposals,
+            counterfactual_replay_cache=replay_cache,
             trace_id=f"{shared_trace}:recursive",
         )
     ]
@@ -514,6 +523,7 @@ def _run_paired_arms(
             residuals=residuals,
             validation_item_ids=validation_ids,
             proposal_candidates=proposals,
+            counterfactual_replay_cache=replay_cache,
             trace_id=f"{shared_trace}:no-recursive",
         )
     ]
@@ -532,6 +542,7 @@ def _run_paired_arms(
             generation = recursive_harness.run_generation(
                 train_item_ids=train_ids,
                 validation_item_ids=validation_ids,
+                counterfactual_replay_cache=replay_cache,
                 trace_id=(
                     f"skilllearn-paired-{manifest_hash[:12]}-recursive-g{generation_index}"
                 ),
@@ -546,6 +557,7 @@ def _run_paired_arms(
             generation = no_recursive_harness.run_generation(
                 train_item_ids=train_ids,
                 validation_item_ids=validation_ids,
+                counterfactual_replay_cache=replay_cache,
                 trace_id=(
                     f"skilllearn-paired-{manifest_hash[:12]}-no-recursive-g{generation_index}"
                 ),

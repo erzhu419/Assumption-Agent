@@ -26,7 +26,11 @@ from urllib.parse import urlsplit, urlunsplit
 from ..archive import PolicyArchive
 from ..evaluation import PromotionGate
 from ..events import Event, EventSink, NullEventSink
-from ..evolution import EvolutionKernel, EvolutionRunResult
+from ..evolution import (
+    CounterfactualEvidenceReplayCache,
+    EvolutionKernel,
+    EvolutionRunResult,
+)
 from ..models import (
     CounterfactualPair,
     ExternalOutcome,
@@ -1817,6 +1821,7 @@ class SkillLearnEvolutionHarness:
         *,
         train_item_ids: Sequence[str] | None = None,
         validation_item_ids: Sequence[str] | None = None,
+        counterfactual_replay_cache: CounterfactualEvidenceReplayCache | None = None,
         trace_id: str = "skilllearn_evolution_generation",
     ) -> SkillLearnGenerationResult:
         train_ids = tuple(train_item_ids or self.manifest.train_ids)
@@ -1832,6 +1837,7 @@ class SkillLearnEvolutionHarness:
             observations=observations,
             residuals=residuals,
             validation_item_ids=validation_ids,
+            counterfactual_replay_cache=counterfactual_replay_cache,
             trace_id=trace_id,
         )
 
@@ -1902,6 +1908,7 @@ class SkillLearnEvolutionHarness:
         residuals: Sequence[ResidualExample],
         validation_item_ids: Sequence[str] | None = None,
         proposal_candidates: Sequence[HypothesisProgram] | None = None,
+        counterfactual_replay_cache: CounterfactualEvidenceReplayCache | None = None,
         trace_id: str = "skilllearn_evolution_from_evidence",
     ) -> SkillLearnGenerationResult:
         observations = tuple(observations)
@@ -1946,6 +1953,7 @@ class SkillLearnEvolutionHarness:
             validation_tasks=validation_tasks,
             validation_context=validation_context,
             proposal_candidates=proposal_candidates,
+            counterfactual_replay_cache=counterfactual_replay_cache,
             trace_id=trace_id,
         )
         result = SkillLearnGenerationResult(

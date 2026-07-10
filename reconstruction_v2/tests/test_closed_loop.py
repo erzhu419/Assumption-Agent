@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+import pytest
+
 from assumption_agent.archive import (
     AnchorScore,
     EvaluatorEpoch,
@@ -16,7 +18,10 @@ from assumption_agent.evaluation import (
     PromotionGateSpec,
 )
 from assumption_agent.events import MemoryEventSink
-from assumption_agent.evolution import EvolutionKernel
+from assumption_agent.evolution import (
+    CounterfactualEvidenceReplayCache,
+    EvolutionKernel,
+)
 from assumption_agent.models import (
     ExternalOutcome,
     HypothesisProgram,
@@ -154,6 +159,74 @@ def test_paired_counterfactual_gain_promotes_program() -> None:
     assert decision.summary.candidate_success_count == 20
     assert decision.summary.activation_count == 20
     assert decision.effect_lower_bound == 1.0
+
+
+def test_counterfactual_replay_requires_identical_executable_behavior() -> None:
+    sink = MemoryEventSink()
+    runner = CounterfactualRunner(
+        runtime=_runtime(sink),
+        evaluator=TruthEvaluator(),
+        event_sink=sink,
+    )
+    cache = CounterfactualEvidenceReplayCache(event_sink=sink)
+    tasks = (_task("validation-1"), _task("validation-2"))
+    program = HypothesisProgram.from_dict(_program_dict())
+    same_behavior = HypothesisProgram.from_dict(
+        _program_dict(hypothesis_id="same-behavior-new-id")
+    )
+    different_payload = _program_dict(hypothesis_id="different-behavior")
+    different_payload["trigger"]["all_of"][0]["value"] = "other"
+    different_behavior = HypothesisProgram.from_dict(different_payload)
+
+    recorded = cache.run_or_replay(
+        runner=runner,
+        tasks=tasks,
+        program=program,
+        baseline_programs=(),
+        split=SplitName.VALIDATION,
+        trace_id="replay-source",
+    )
+    replayed = cache.run_or_replay(
+        runner=runner,
+        tasks=tasks,
+        program=same_behavior,
+        baseline_programs=(),
+        split=SplitName.VALIDATION,
+        trace_id="replay-target",
+    )
+    cache.run_or_replay(
+        runner=runner,
+        tasks=tasks,
+        program=different_behavior,
+        baseline_programs=(),
+        split=SplitName.VALIDATION,
+        trace_id="replay-miss",
+    )
+
+    assert replayed == recorded
+    assert sum(
+        row["event"] == "counterfactual_pair_completed" for row in sink.events
+    ) == 4
+    assert sum(
+        row["event"] == "counterfactual_evidence_recorded" for row in sink.events
+    ) == 2
+    replay_event = next(
+        row
+        for row in sink.events
+        if row["event"] == "counterfactual_evidence_replayed"
+    )
+    assert replay_event["payload"]["behavior_identical"] is True
+    assert replay_event["payload"]["new_counterfactual_executions"] == 0
+    assert replay_event["payload"]["sealed_test_accessed"] is False
+    with pytest.raises(PermissionError, match="unsealed validation"):
+        cache.run_or_replay(
+            runner=runner,
+            tasks=tasks,
+            program=program,
+            baseline_programs=(),
+            split=SplitName.TEST,
+            trace_id="sealed-replay-forbidden",
+        )
 
 
 def test_evaluator_replacement_invalidates_only_dependent_epoch_scores() -> None:

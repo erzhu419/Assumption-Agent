@@ -27,6 +27,8 @@ The external SkillLearn task agent supports both a historical `codex_subscriptio
 
 Task containers are built from an exact non-oracle environment hash. The environment image never contains benchmark-provided skills. A single read-only Node/Codex runtime volume, pinned by builder digest and package version, is mounted into every variant. Image ID, runtime key, CLI version, and cache reuse are trial provenance. Different items may execute concurrently, but variants of one item are sequential to prevent within-pair provider contention.
 
+The recursive/no-recursive experiment shares one run-scoped counterfactual evidence cache. Its key includes candidate and incumbent executable-behavior hashes, validation task-feature hashes, evaluator epoch, split, and runtime version. Identical arm behavior reuses the exact recorded pairs and emits explicit record/replay events; no second model sample is allowed to masquerade as an ablation effect. A repaired or otherwise behaviorally different candidate misses the cache and runs its own external validation. Replay is forbidden for sealed-test evidence.
+
 V2-compiled skills are routed by hashed item ID after evaluating triggers against that item's structured features. The compiler never promotes a family-level match from one item to all sibling items. A missing route means abstain and execute the raw path.
 
 ## Benchmark Boundary

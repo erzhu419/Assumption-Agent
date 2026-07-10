@@ -55,6 +55,9 @@ def test_v3_protocol_freezes_ruoli_for_every_arm() -> None:
     assert protocol.payload["execution"]["openai_compatible_codex_config"] == (
         "codex_custom_responses_provider_v1"
     )
+    assert protocol.payload["execution"]["counterfactual_replay_policy"] == (
+        "behavior_identical_validation_replay_v1"
+    )
 
 
 def test_v3_protocol_rejects_route_drift() -> None:
@@ -84,6 +87,13 @@ def test_v3_protocol_rejects_route_drift() -> None:
     payload = copy.deepcopy(protocol.payload)
     del payload["execution"]["openai_compatible_codex_config"]
     assert "openai_compatible_codex_config_mismatch" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+    payload = copy.deepcopy(protocol.payload)
+    del payload["execution"]["counterfactual_replay_policy"]
+    assert "counterfactual_replay_policy_mismatch" in PaperProtocol(
         protocol.path,
         payload,
     ).validate_structure()

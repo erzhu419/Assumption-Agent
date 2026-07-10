@@ -10,7 +10,10 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from ..models import HypothesisProgram, stable_hash
-from ..evolution import TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
+from ..evolution import (
+    COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+    TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+)
 from ..provider_chain import configured_provider_chain, proposal_provider_status
 from ..secure_env import (
     configured_api_origin,
@@ -189,6 +192,13 @@ class PaperProtocol:
                 != OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION
             ):
                 issues.append("openai_compatible_codex_config_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("counterfactual_replay_policy")
+                != COUNTERFACTUAL_REPLAY_POLICY_VERSION
+            ):
+                issues.append("counterfactual_replay_policy_mismatch")
         evolution = self.payload.get("evolution")
         if not isinstance(evolution, Mapping):
             issues.append("evolution_budget_missing")

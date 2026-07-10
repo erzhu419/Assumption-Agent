@@ -7,6 +7,7 @@ from .archive import ArchiveNode, PolicyArchive
 from .evaluation import CounterfactualRunner, PairSummary, PromotionDecision, PromotionGate
 from .events import Event, EventSink, NullEventSink
 from .models import (
+    CounterfactualPair,
     HypothesisProgram,
     HypothesisStatus,
     ResidualExample,
@@ -20,6 +21,9 @@ from .validation import RecursiveValidationEngine, ValidationContext, Validation
 
 
 TRAIN_ONLY_CANDIDATE_SELECTION_VERSION = "train_static_support_then_complexity_v1"
+COUNTERFACTUAL_REPLAY_POLICY_VERSION = (
+    "behavior_identical_validation_replay_v1"
+)
 
 
 @dataclass(frozen=True)
@@ -45,6 +49,125 @@ class _StaticCandidateAudit:
     tree: ValidationTree
     accepted: HypothesisProgram | None
     training_score: tuple[int, int, int, int, str]
+
+
+@dataclass(frozen=True)
+class _CounterfactualEvidenceRecord:
+    pairs: tuple[CounterfactualPair, ...]
+    source_trace_id: str
+    pair_set_hash: str
+
+
+class CounterfactualEvidenceReplayCache:
+    """Reuse validation evidence only when both executable policies are identical."""
+
+    def __init__(self, *, event_sink: EventSink | None = None) -> None:
+        self.event_sink = event_sink or NullEventSink()
+        self._records: dict[str, _CounterfactualEvidenceRecord] = {}
+
+    def run_or_replay(
+        self,
+        *,
+        runner: CounterfactualRunner,
+        tasks: Sequence[TaskInput],
+        program: HypothesisProgram,
+        baseline_programs: Sequence[HypothesisProgram],
+        split: SplitName,
+        trace_id: str,
+    ) -> tuple[CounterfactualPair, ...]:
+        if split is not SplitName.VALIDATION:
+            raise PermissionError(
+                "counterfactual replay is restricted to unsealed validation evidence"
+            )
+        descriptor = _counterfactual_replay_descriptor(
+            runner=runner,
+            tasks=tasks,
+            program=program,
+            baseline_programs=baseline_programs,
+            split=split,
+        )
+        replay_key = stable_hash(descriptor)
+        record = self._records.get(replay_key)
+        if record is not None:
+            _validate_replayed_pairs(
+                record.pairs,
+                tasks=tasks,
+                split=split,
+                evaluator_epoch=str(descriptor["evaluator_epoch"]),
+            )
+            self.event_sink.emit(
+                Event(
+                    event="counterfactual_evidence_replayed",
+                    stage="evolution.counterfactual_replay",
+                    trace_id=trace_id,
+                    payload={
+                        "policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+                        "replay_key": replay_key,
+                        "source_trace_id": record.source_trace_id,
+                        "target_trace_id": trace_id,
+                        "pair_set_hash": record.pair_set_hash,
+                        "pair_count": len(record.pairs),
+                        "candidate_behavior_hash": descriptor[
+                            "candidate_behavior_hash"
+                        ],
+                        "baseline_behavior_set_hash": descriptor[
+                            "baseline_behavior_set_hash"
+                        ],
+                        "task_set_hash": descriptor["task_set_hash"],
+                        "behavior_identical": True,
+                        "new_counterfactual_executions": 0,
+                        "sealed_test_accessed": False,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+            return record.pairs
+
+        pairs = tuple(
+            runner.run(
+                tasks,
+                program=program,
+                baseline_programs=baseline_programs,
+                split=split,
+                trace_id=trace_id,
+            )
+        )
+        _validate_replayed_pairs(
+            pairs,
+            tasks=tasks,
+            split=split,
+            evaluator_epoch=str(descriptor["evaluator_epoch"]),
+        )
+        pair_set_hash = _counterfactual_pair_set_hash(pairs)
+        self._records[replay_key] = _CounterfactualEvidenceRecord(
+            pairs=pairs,
+            source_trace_id=trace_id,
+            pair_set_hash=pair_set_hash,
+        )
+        self.event_sink.emit(
+            Event(
+                event="counterfactual_evidence_recorded",
+                stage="evolution.counterfactual_replay",
+                trace_id=trace_id,
+                payload={
+                    "policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+                    "replay_key": replay_key,
+                    "source_trace_id": trace_id,
+                    "pair_set_hash": pair_set_hash,
+                    "pair_count": len(pairs),
+                    "candidate_behavior_hash": descriptor[
+                        "candidate_behavior_hash"
+                    ],
+                    "baseline_behavior_set_hash": descriptor[
+                        "baseline_behavior_set_hash"
+                    ],
+                    "task_set_hash": descriptor["task_set_hash"],
+                    "sealed_test_accessed": False,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        return pairs
 
 
 class EvolutionKernel:
@@ -81,6 +204,7 @@ class EvolutionKernel:
         validation_tasks: Sequence[TaskInput],
         validation_context: ValidationContext,
         proposal_candidates: Sequence[HypothesisProgram] | None = None,
+        counterfactual_replay_cache: CounterfactualEvidenceReplayCache | None = None,
         trace_id: str = "evolution_generation",
     ) -> EvolutionRunResult:
         if validation_context.evaluator_epoch != self.counterfactual_runner.evaluator.epoch:
@@ -255,13 +379,23 @@ class EvolutionKernel:
             parent_id=parent.id if parent else None,
             trace_id=trace_id,
         )
-        pairs = self.counterfactual_runner.run(
-            validation_tasks,
-            program=accepted,
-            baseline_programs=baseline_programs,
-            split=SplitName.VALIDATION,
-            trace_id=trace_id,
-        )
+        if counterfactual_replay_cache is None:
+            pairs = self.counterfactual_runner.run(
+                validation_tasks,
+                program=accepted,
+                baseline_programs=baseline_programs,
+                split=SplitName.VALIDATION,
+                trace_id=trace_id,
+            )
+        else:
+            pairs = counterfactual_replay_cache.run_or_replay(
+                runner=self.counterfactual_runner,
+                tasks=validation_tasks,
+                program=accepted,
+                baseline_programs=baseline_programs,
+                split=SplitName.VALIDATION,
+                trace_id=trace_id,
+            )
         decision = self.promotion_gate.evaluate(
             accepted,
             pairs,
@@ -434,6 +568,85 @@ def _behavior_hash(program: HypothesisProgram) -> str:
     ):
         payload.pop(key, None)
     return stable_hash(payload)
+
+
+def _counterfactual_replay_descriptor(
+    *,
+    runner: CounterfactualRunner,
+    tasks: Sequence[TaskInput],
+    program: HypothesisProgram,
+    baseline_programs: Sequence[HypothesisProgram],
+    split: SplitName,
+) -> dict[str, object]:
+    evaluator_epoch = str(getattr(runner.evaluator, "epoch", ""))
+    runtime_version = str(getattr(runner.runtime, "runtime_version", ""))
+    if not evaluator_epoch or not runtime_version:
+        raise ValueError("counterfactual replay requires frozen evaluator and runtime versions")
+    task_rows = [
+        {
+            "task_id": task.id,
+            "family": task.family,
+            "feature_hash": stable_hash(dict(task.features)),
+        }
+        for task in tasks
+    ]
+    baseline_behavior_hashes = sorted(
+        _behavior_hash(row) for row in baseline_programs
+    )
+    return {
+        "policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+        "split": split.value,
+        "evaluator_epoch": evaluator_epoch,
+        "runtime_version": runtime_version,
+        "candidate_behavior_hash": _behavior_hash(program),
+        "baseline_behavior_set_hash": stable_hash(baseline_behavior_hashes),
+        "task_set_hash": stable_hash(task_rows),
+    }
+
+
+def _validate_replayed_pairs(
+    pairs: Sequence[CounterfactualPair],
+    *,
+    tasks: Sequence[TaskInput],
+    split: SplitName,
+    evaluator_epoch: str,
+) -> None:
+    if tuple(row.task_id for row in pairs) != tuple(row.id for row in tasks):
+        raise PermissionError("counterfactual replay task identity mismatch")
+    if any(
+        row.split is not split or row.evaluator_epoch != evaluator_epoch
+        for row in pairs
+    ):
+        raise PermissionError("counterfactual replay crossed split or evaluator epoch")
+
+
+def _counterfactual_pair_set_hash(
+    pairs: Sequence[CounterfactualPair],
+) -> str:
+    return stable_hash(
+        [
+            {
+                "task_id": row.task_id,
+                "split": row.split.value,
+                "evaluator_epoch": row.evaluator_epoch,
+                "baseline_plan_hash": row.baseline.plan_hash,
+                "candidate_plan_hash": row.candidate.plan_hash,
+                "baseline_success": row.baseline_outcome.success,
+                "candidate_success": row.candidate_outcome.success,
+                "baseline_score": row.baseline_outcome.score,
+                "candidate_score": row.candidate_outcome.score,
+                "baseline_cost": row.baseline.total_cost,
+                "candidate_cost": row.candidate.total_cost,
+                "baseline_observation_hash": row.baseline.selected_result.metadata.get(
+                    "observation_hash"
+                ),
+                "candidate_observation_hash": row.candidate.selected_result.metadata.get(
+                    "observation_hash"
+                ),
+            }
+            for row in pairs
+        ]
+    )
 
 
 def _training_candidate_score(

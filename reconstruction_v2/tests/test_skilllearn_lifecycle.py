@@ -329,7 +329,7 @@ def test_invalid_training_evidence_blocks_proposal(tmp_path: Path) -> None:
 
 
 def test_paired_ablation_shares_first_train_checkpoint_and_root(tmp_path: Path) -> None:
-    recursive, recursive_backend, recursive_model, _, _, _ = _harness(
+    recursive, recursive_backend, recursive_model, _, _, recursive_sink = _harness(
         tmp_path / "recursive"
     )
     no_recursive, no_recursive_backend, no_recursive_model, _, _, _ = _harness(
@@ -362,7 +362,18 @@ def test_paired_ablation_shares_first_train_checkpoint_and_root(tmp_path: Path) 
     assert len(recursive_model.requests) == 1
     assert len(no_recursive_model.requests) == 0
     assert len(recursive_backend.calls) == 8
-    assert len(no_recursive_backend.calls) == 4
+    assert len(no_recursive_backend.calls) == 0
+    assert (
+        recursive_first.evolution.promotion_decision.summary
+        == no_recursive_first.evolution.promotion_decision.summary
+    )
+    replay_event = next(
+        row
+        for row in recursive_sink.events
+        if row["event"] == "counterfactual_evidence_replayed"
+    )
+    assert replay_event["payload"]["pair_count"] == len(validation_ids)
+    assert replay_event["payload"]["new_counterfactual_executions"] == 0
 
 
 def test_train_only_candidate_selection_checks_all_roots_and_trigger_vocabulary(
