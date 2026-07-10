@@ -52,9 +52,15 @@ The two arms branch from one immutable first-generation checkpoint: identical ra
 
 All proposed roots receive train-only schema, runtime-feature-vocabulary, trigger-support, executable-action, and evaluator-epoch checks. Instruction text may inform the action graph but is forbidden as a trigger key because it is not a runtime feature. If more than one root passes, one candidate is selected before any validation run by maximum residual support, then minimum anti-support, predicate count, action count, and finally payload hash. Other valid roots remain shadow hypotheses. Validation outcomes never choose among same-generation proposals.
 
+This primary runtime experiment admits only task and policy hypotheses. An evaluator hypothesis cannot be compiled into an agent skill, because that would relabel agent guidance as evaluator evolution. Evaluator changes require the separate fixed-anchor epoch-challenger protocol and are outside the primary performance claim until that path is run.
+
+Reports separate aggregate static-tree recursion across every proposed root from recursion depth in the ultimately selected tree. This prevents a repaired but non-selected candidate from disappearing from the recursive/no-recursive mechanism audit.
+
 Policy-off and policy-on trials use one fairness fingerprint derived from backend, provider, agent, model, step budget, verifier isolation, image-cache policy, and the actual shared agent-runtime key. Their order is deterministically balanced by pair ID. A provider, budget, or runtime mismatch invalidates the pair.
 
 Execution caches only the exact non-oracle task environment. Oracle `skills/` content is excluded from the environment hash and build context. Node is pinned by image digest, Codex CLI is pinned to `0.144.1`, and one read-only runtime volume is shared by all item images. Parallelism is across benchmark items only. Every variant for one item runs sequentially in a protocol-derived balanced order, so raw and candidate do not contend against each other inside one pair.
+
+Compiled hypotheses use a content-hashed per-item routing manifest. A skill is injected only when that exact item's structured features satisfy its trigger; sharing a task family with a matched item is insufficient. Missing routes are explicit abstentions. Upstream human and B1 controls retain their native family-level layout because they do not declare V2 triggers.
 
 Proposal-provider failover is allowed only before a candidate program is fixed, under the run's declared provider chain. The selected provider and chain hash become part of candidate provenance. Trial-side policy-off/policy-on pairs still require identical providers; one variant cannot receive a healthier endpoint or a different subscription route.
 

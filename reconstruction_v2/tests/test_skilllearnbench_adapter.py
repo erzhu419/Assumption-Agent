@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -139,10 +140,50 @@ def test_promoted_task_hypothesis_compiles_to_skilllearn_skill(tmp_path: Path) -
         output_root=tmp_path,
     )
 
+    matching_ids = tuple(
+        item_id
+        for item_id in manifest.train_ids
+        if manifest.family_by_id[item_id] == "organize-messy-files"
+    )
     assert result.family_count == 1
-    assert len(result.skill_paths) == 1
+    assert len(result.skill_paths) == len(matching_ids)
+    assert all(result.source_for(item_id) is not None for item_id in matching_ids)
     skill_text = result.skill_paths[0].read_text(encoding="utf-8")
-    assert result.skill_paths[0].parts[-3] == "organize-messy-files"
+    assert "items" in result.skill_paths[0].parts
     assert "execute_step `inventory_sources`" in skill_text
     assert "all_sources_accounted_for" in skill_text
     assert "Preserve the baseline workflow" in skill_text
+
+    routed_payload = program.to_dict()
+    routed_payload["id"] = "hyp-item-routed-workflow"
+    routed_payload["trigger"] = {
+        "all_of": [
+            {"key": "family", "op": "eq", "value": "organize-messy-files"},
+            {"key": "route_variant", "op": "eq", "value": "selected"},
+        ],
+        "any_of": [],
+        "none_of": [],
+    }
+    routed_program = HypothesisProgram.from_dict(routed_payload)
+    routed_items = tuple(
+        replace(
+            item,
+            features={
+                **dict(item.features),
+                "route_variant": (
+                    "selected" if item.id == matching_ids[0] else "not-selected"
+                ),
+            },
+        )
+        for item in items
+    )
+    routed = SkillLearnProgramCompiler().compile(
+        programs=(routed_program,),
+        items=routed_items,
+        split_manifest=manifest,
+        output_root=tmp_path,
+        method_name="item-routed",
+    )
+
+    assert routed.source_for(matching_ids[0]) is not None
+    assert all(routed.source_for(item_id) is None for item_id in matching_ids[1:])

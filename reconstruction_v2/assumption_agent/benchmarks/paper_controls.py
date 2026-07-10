@@ -11,9 +11,10 @@ from typing import Any, Mapping, Sequence
 from ..events import Event, EventSink, JsonlEventSink, NullEventSink
 from ..models import SplitName, stable_hash
 from ..secure_env import load_dotenv, map_legacy_model_env
-from ..splits import AccessPhase, SplitAccessGuard, SplitManifest
+from ..splits import AccessPhase, BenchmarkItem, SplitAccessGuard, SplitManifest
 from .paper_protocol import PaperProtocol
 from .paper_report import PaperTrialRecord, read_records
+from .skilllearn_compiler import SKILL_ROUTING_VERSION
 from .skilllearn_lifecycle import (
     SkillLearnBackendPool,
     SkillLearnPrebuiltImageCache,
@@ -105,6 +106,8 @@ class PaperControlRunner:
         self.evaluator_epoch = evaluator_epoch
         self.event_sink = event_sink or NullEventSink()
         self.items = {row.id: row for row in adapter.discover()}
+        self._routing_manifests: dict[Path, Mapping[str, Any] | None] = {}
+        self._routing_lock = threading.Lock()
         expected_controls = {str(row["id"]) for row in protocol.payload["controls"]}
         supplied_controls = {row.id for row in self.controls}
         if supplied_controls != expected_controls:
@@ -243,7 +246,7 @@ class PaperControlRunner:
     ) -> PaperTrialRecord:
         item = self.items[item_id]
         item_id_hash = stable_hash({"item_id": item_id})
-        source = self._source_for(control, item.family)
+        source = self._source_for(control, item)
         variant = TrialVariant.POLICY_OFF if source is None else TrialVariant.POLICY_ON
         request = SkillLearnTrialRequest(
             item_id=item_id,
@@ -338,13 +341,44 @@ class PaperControlRunner:
         ) % len(controls)
         return tuple(controls[offset:] + controls[:offset])
 
-    def _source_for(self, control: ControlSource, family: str) -> Path | None:
+    def _source_for(self, control: ControlSource, item: BenchmarkItem) -> Path | None:
         if control.root is None:
             return None
-        family_source = control.root / family
+        routing = self._routing_manifest(control.root)
+        if routing is not None:
+            routes = routing.get("item_routes")
+            if not isinstance(routes, Mapping):
+                raise ValueError("compiled control routing manifest has no item routes")
+            relative = routes.get(stable_hash({"item_id": item.id}))
+            if relative is None:
+                return None
+            source = (control.root / str(relative)).resolve()
+            if control.root.resolve() not in source.parents:
+                raise PermissionError("compiled control item route escaped its root")
+            if not source.is_dir():
+                raise FileNotFoundError("compiled control item route is missing")
+            return source
+        family_source = control.root / item.family
         if family_source.is_dir():
             return family_source
         return None
+
+    def _routing_manifest(self, root: Path) -> Mapping[str, Any] | None:
+        resolved = root.resolve()
+        with self._routing_lock:
+            if resolved in self._routing_manifests:
+                return self._routing_manifests[resolved]
+            path = resolved / "compile_manifest.json"
+            if not path.is_file():
+                self._routing_manifests[resolved] = None
+                return None
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(loaded, Mapping):
+                raise ValueError("compiled control routing manifest must be an object")
+            if loaded.get("routing_version") != SKILL_ROUTING_VERSION:
+                raise ValueError("compiled control routing version mismatch")
+            self._routing_manifests[resolved] = loaded
+            return loaded
 
     def _emit_skip(self, record: PaperTrialRecord, trace_id: str) -> None:
         self.event_sink.emit(

@@ -32,6 +32,7 @@ from assumption_agent.splits import SplitAccessGuard, SplitManifest
 from assumption_agent.validation import (
     EvaluatorEpochCheck,
     RecursiveValidationEngine,
+    RuntimeCandidateKindCheck,
     RuntimeActionCheck,
     SchemaCheck,
     TrainingSupportCheck,
@@ -351,6 +352,7 @@ def _validator(proposer: StructuredHypothesisProposer, sink: MemoryEventSink) ->
     return RecursiveValidationEngine(
         [
             SchemaCheck(),
+            RuntimeCandidateKindCheck(),
             TriggerVocabularyCheck(),
             TrainingSupportCheck(min_support=2),
             RuntimeActionCheck(),

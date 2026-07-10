@@ -22,12 +22,14 @@ from ..splits import SplitAccessGuard, SplitManifest
 from ..validation import (
     EvaluatorEpochCheck,
     RecursiveValidationEngine,
+    RuntimeCandidateKindCheck,
     RuntimeActionCheck,
     SchemaCheck,
     TrainingSupportCheck,
     TriggerVocabularyCheck,
 )
 from .preflight import build_preflight
+from .skilllearn_compiler import SKILL_ROUTING_VERSION
 from .skilllearn_lifecycle import (
     PREBUILT_IMAGE_POLICY_VERSION,
     SkillLearnBackendPool,
@@ -119,6 +121,11 @@ def main() -> None:
         "parallel_workers": args.parallel_workers,
         "prebuilt_image_policy": PREBUILT_IMAGE_POLICY_VERSION,
         "proposal_candidate_selection": TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+        "runtime_candidate_kinds": ["task", "policy"],
+        "evaluator_hypothesis_mode": (
+            "separate_epoch_challenger_not_in_primary_runtime"
+        ),
+        "skill_routing": SKILL_ROUTING_VERSION,
         "proposal_api_present": bool(
             model_presence["base_url_present"] and model_presence["api_key_present"]
         ),
@@ -199,6 +206,7 @@ def main() -> None:
     validator = RecursiveValidationEngine(
         [
             SchemaCheck(),
+            RuntimeCandidateKindCheck(),
             TriggerVocabularyCheck(),
             TrainingSupportCheck(min_support=args.minimum_trigger_support),
             RuntimeActionCheck(),
@@ -260,6 +268,7 @@ def main() -> None:
             validator=RecursiveValidationEngine(
                 [
                     SchemaCheck(),
+                    RuntimeCandidateKindCheck(),
                     TriggerVocabularyCheck(),
                     TrainingSupportCheck(min_support=args.minimum_trigger_support),
                     RuntimeActionCheck(),

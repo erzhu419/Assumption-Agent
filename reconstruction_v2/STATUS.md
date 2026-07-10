@@ -33,6 +33,9 @@
 - Shared first-generation evidence and root checkpoint for the recursive versus no-recursive causal ablation.
 - Hard runtime trigger vocabulary with context-only instruction fields rejected programmatically.
 - Train-only evaluation of every proposed root and deterministic support/complexity selection of the sole validation candidate.
+- Separate aggregate and selected-candidate recursion counts, depths, and repair-candidate provenance.
+- Runtime-kind guard: evaluator hypotheses cannot masquerade as compiled agent skills and require a separate anchored epoch challenger.
+- Per-item compiled skill routing, preventing a trigger match on one item from leaking to sibling items in the same family.
 - Trial provenance for base image key/ID, runtime key/version, cache reuse, withheld verifier mount, and post-agent verifier materialization.
 - Per-attempt model audit events; non-retryable HTTP authentication errors stop after one request.
 - Structured in-memory or JSONL events for proposal, validation, runtime, counterfactual, promotion, archive, evaluator transition, and benchmark compilation.

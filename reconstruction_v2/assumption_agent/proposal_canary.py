@@ -5,13 +5,14 @@ import json
 from pathlib import Path
 
 from .events import JsonlEventSink
-from .models import ResidualExample, SplitName
+from .models import HypothesisKind, ResidualExample, SplitName
 from .provider_chain import build_proposal_model
 from .proposer import StructuredHypothesisProposer
 from .secure_env import load_dotenv, map_legacy_model_env
 from .validation import (
     EvaluatorEpochCheck,
     RecursiveValidationEngine,
+    RuntimeCandidateKindCheck,
     RuntimeActionCheck,
     SchemaCheck,
     TrainingSupportCheck,
@@ -79,6 +80,7 @@ def main() -> None:
     validator = RecursiveValidationEngine(
         [
             SchemaCheck(),
+            RuntimeCandidateKindCheck(),
             TriggerVocabularyCheck(),
             TrainingSupportCheck(min_support=2),
             RuntimeActionCheck(),
@@ -94,6 +96,9 @@ def main() -> None:
             residuals=residuals,
             available_lanes=frozenset({"raw", "relation_solver"}),
             baseline_lane="raw",
+            allowed_runtime_kinds=frozenset(
+                {HypothesisKind.TASK, HypothesisKind.POLICY}
+            ),
             trigger_feature_catalog=build_trigger_feature_catalog(residuals),
         ),
         trace_id="live-proposal-canary",

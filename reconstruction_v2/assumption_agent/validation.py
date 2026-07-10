@@ -4,7 +4,13 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol, Sequence
 
 from .events import Event, EventSink, NullEventSink
-from .models import HypothesisProgram, ResidualExample, SplitName, stable_hash
+from .models import (
+    HypothesisKind,
+    HypothesisProgram,
+    ResidualExample,
+    SplitName,
+    stable_hash,
+)
 from .proposer import StructuredHypothesisProposer
 
 
@@ -16,6 +22,9 @@ class ValidationContext:
     baseline_lane: str
     trigger_feature_catalog: Mapping[str, Mapping[str, Any]] = field(
         default_factory=dict
+    )
+    allowed_runtime_kinds: frozenset[HypothesisKind] = field(
+        default_factory=lambda: frozenset(HypothesisKind)
     )
 
 
@@ -108,6 +117,28 @@ class TriggerVocabularyCheck:
                     {"scope": scope, "key": key, "op": op}
                     for scope, key, op in invalid_operators
                 ],
+            },
+        )
+
+
+class RuntimeCandidateKindCheck:
+    name = "runtime_candidate_kind"
+
+    def evaluate(self, program: HypothesisProgram, context: ValidationContext) -> CheckResult:
+        passed = program.kind in context.allowed_runtime_kinds
+        return CheckResult(
+            check=self.name,
+            passed=passed,
+            reason=(
+                "hypothesis_kind_can_control_runtime"
+                if passed
+                else "evaluator_hypothesis_requires_epoch_challenger"
+            ),
+            evidence={
+                "program_kind": program.kind.value,
+                "allowed_runtime_kinds": sorted(
+                    kind.value for kind in context.allowed_runtime_kinds
+                ),
             },
         )
 
@@ -400,6 +431,10 @@ class RecursiveValidationEngine:
                     ],
                     "context_is_for_action_design_only": True,
                 },
+                "runtime_candidate_kinds": sorted(
+                    kind.value for kind in context.allowed_runtime_kinds
+                ),
+                "evaluator_hypotheses_require_separate_epoch_challenger": True,
             },
             trace_id=trace_id,
         )

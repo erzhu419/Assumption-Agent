@@ -27,6 +27,8 @@ The external SkillLearn task agent uses a distinct `codex_subscription` boundary
 
 Task containers are built from an exact non-oracle environment hash. The environment image never contains benchmark-provided skills. A single read-only Node/Codex runtime volume, pinned by builder digest and package version, is mounted into every variant. Image ID, runtime key, CLI version, and cache reuse are trial provenance. Different items may execute concurrently, but variants of one item are sequential to prevent within-pair provider contention.
 
+V2-compiled skills are routed by hashed item ID after evaluating triggers against that item's structured features. The compiler never promotes a family-level match from one item to all sibling items. A missing route means abstain and execute the raw path.
+
 ## Benchmark Boundary
 
 SkillLearnBench is connected through an explicit external-trial boundary rather than imported into the policy runtime:
@@ -45,6 +47,8 @@ frozen train IDs
 Instruction text is available only as ephemeral train proposal context. It is not a trigger feature and is not persisted in JSONL. Validation instructions are consumed only inside the external trial runner. Test execution is rejected before archive freeze.
 
 The proposer receives an explicit catalog built from frozen train-split runtime features. Both trigger and anti-trigger predicates are rejected if they use keys outside that catalog. All roots are recursively checked on train evidence; a frozen support/anti-support/complexity ordering selects exactly one candidate before validation, preventing held-out outcomes from acting as a same-generation proposal router.
+
+Task and policy hypotheses may control the primary agent runtime. Evaluator hypotheses may not pass through the SkillLearn skill compiler; they require the evaluator-epoch controller, fixed anchor, and dependency invalidation path. Until that separate experiment is executed, no primary result is described as evaluator co-evolution.
 
 An external trial has a stable request hash, pair ID, split, variant, model, step budget, manifest hash, provider fingerprint, fairness fingerprint, metrics, cost, latency, and sanitized error type. Endpoint or container failure is invalid evidence, not a negative task outcome.
 

@@ -4,11 +4,14 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from ..events import Event, EventSink, NullEventSink
 from ..models import ActionNode, HypothesisProgram, HypothesisStatus, stable_hash
 from ..splits import BenchmarkItem, SplitManifest
+
+
+SKILL_ROUTING_VERSION = "per_item_trigger_routing_v1"
 
 
 @dataclass(frozen=True)
@@ -18,6 +21,10 @@ class SkillCompileResult:
     family_count: int
     hypothesis_ids: tuple[str, ...]
     manifest_hash: str
+    item_sources: Mapping[str, Path]
+
+    def source_for(self, item_id: str) -> Path | None:
+        return self.item_sources.get(stable_hash({"item_id": item_id}))
 
 
 class SkillLearnProgramCompiler:
@@ -64,27 +71,32 @@ class SkillLearnProgramCompiler:
         skill_paths: list[Path] = []
         used_hypotheses: set[str] = set()
         families: set[str] = set()
+        item_sources: dict[str, Path] = {}
         for program in sorted(programs, key=lambda row: row.id):
             if program.status not in allowed:
                 continue
             if program.validate():
                 continue
-            matched_families = sorted(
-                {
-                    item.family
+            matched_items = sorted(
+                (
+                    item
                     for item in target_items
                     if program.matches({**dict(item.features), "family": item.family})
-                }
+                ),
+                key=lambda item: item.id_hash,
             )
-            for family in matched_families:
+            for item in matched_items:
+                item_hash = item.id_hash
                 skill_name = _slug(program.id)
-                skill_dir = destination / family / skill_name
+                item_source = destination / "items" / item_hash
+                skill_dir = item_source / skill_name
                 skill_dir.mkdir(parents=True, exist_ok=True)
                 skill_path = skill_dir / "SKILL.md"
                 skill_path.write_text(_render_skill(program, skill_name), encoding="utf-8")
                 skill_paths.append(skill_path)
+                item_sources[item_hash] = item_source
                 used_hypotheses.add(program.id)
-                families.add(family)
+                families.add(item.family)
                 self.event_sink.emit(
                     Event(
                         event="skilllearn_skill_compiled",
@@ -93,7 +105,8 @@ class SkillLearnProgramCompiler:
                         payload={
                             "hypothesis_id": program.id,
                             "hypothesis_hash": program.payload_hash,
-                            "family_hash": stable_hash({"family": family}),
+                            "item_id_hash": item_hash,
+                            "family_hash": stable_hash({"family": item.family}),
                             "skill_path_hash": stable_hash({"path": str(skill_path)}),
                             "split_manifest_hash": split_manifest.manifest_hash,
                             "source_split": "train",
@@ -103,7 +116,16 @@ class SkillLearnProgramCompiler:
                 )
         compile_manifest = {
             "method_name": method_name,
+            "routing_version": SKILL_ROUTING_VERSION,
             "skill_paths": [str(path.relative_to(destination)) for path in skill_paths],
+            "item_routes": {
+                item.id_hash: (
+                    str(item_sources[item.id_hash].relative_to(destination))
+                    if item.id_hash in item_sources
+                    else None
+                )
+                for item in sorted(target_items, key=lambda row: row.id_hash)
+            },
             "family_count": len(families),
             "hypothesis_ids": sorted(used_hypotheses),
             "split_manifest_hash": split_manifest.manifest_hash,
@@ -123,6 +145,7 @@ class SkillLearnProgramCompiler:
             family_count=len(families),
             hypothesis_ids=tuple(sorted(used_hypotheses)),
             manifest_hash=stable_hash(compile_manifest),
+            item_sources=dict(item_sources),
         )
 
 

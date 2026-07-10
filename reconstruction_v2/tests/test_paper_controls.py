@@ -185,6 +185,51 @@ def test_missing_family_skill_is_a_logged_policy_abstention(tmp_path: Path) -> N
     assert record.valid is True
 
 
+def test_compiled_control_uses_per_item_routes(tmp_path: Path) -> None:
+    protocol = PaperProtocol.read(PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    item_ids = manifest.validation_ids[:2]
+    families = {manifest.family_by_id[item_id] for item_id in item_ids}
+    controls = _controls(tmp_path, protocol, families=families)
+    promoted = next(row for row in controls if row.id == "promoted_v2")
+    assert promoted.root is not None
+    route = promoted.root / "items" / stable_hash({"item_id": item_ids[0]})
+    skill = route / "routed-skill"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("# routed\n", encoding="utf-8")
+    (promoted.root / "compile_manifest.json").write_text(
+        json.dumps(
+            {
+                "routing_version": "per_item_trigger_routing_v1",
+                "item_routes": {
+                    stable_hash({"item_id": item_ids[0]}): str(
+                        route.relative_to(promoted.root)
+                    ),
+                    stable_hash({"item_id": item_ids[1]}): None,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    backend = FakePaperBackend()
+    runner = PaperControlRunner(
+        adapter=SkillLearnBenchAdapter(BENCH_ROOT),
+        manifest=manifest,
+        guard=SplitAccessGuard(manifest),
+        backend=backend,
+        protocol=protocol,
+        controls=controls,
+        record_store=PaperRecordStore(tmp_path / "per-item.records.jsonl"),
+        evaluator_epoch="skilllearn-eval-test",
+    )
+
+    runner.run(item_ids, split=SplitName.VALIDATION, repeats=1, parallel_workers=2)
+
+    promoted_calls = [row for row in backend.calls if row[1] == "promoted_v2"]
+    assert (item_ids[0], "promoted_v2", "policy_on") in promoted_calls
+    assert (item_ids[1], "promoted_v2", "policy_off") in promoted_calls
+
+
 def test_sealed_receipt_and_journal_are_content_bound(tmp_path: Path) -> None:
     protocol = PaperProtocol.read(PROTOCOL_PATH)
     manifest = SplitManifest.read(MANIFEST_PATH)

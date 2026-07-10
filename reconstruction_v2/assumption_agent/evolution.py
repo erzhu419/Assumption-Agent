@@ -34,6 +34,9 @@ class EvolutionRunResult:
     reason: str
     proposal_candidate_count: int = 1
     static_accepted_candidate_count: int = 0
+    static_validation_node_count: int = 0
+    static_validation_max_recursion_depth: int = 0
+    repaired_candidate_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -126,6 +129,9 @@ class EvolutionKernel:
                 reason="duplicate_hypothesis_behavior",
                 proposal_candidate_count=len(proposals),
                 static_accepted_candidate_count=0,
+                static_validation_node_count=0,
+                static_validation_max_recursion_depth=0,
+                repaired_candidate_count=0,
             )
         audits: list[_StaticCandidateAudit] = []
         for index, root in enumerate(novel_roots):
@@ -168,6 +174,14 @@ class EvolutionKernel:
             (audit for audit in audits if audit.accepted is not None),
             key=lambda audit: audit.training_score,
         )
+        static_node_count = sum(len(audit.tree.nodes) for audit in audits)
+        static_max_depth = max(
+            (audit.tree.recursion_depth for audit in audits),
+            default=0,
+        )
+        repaired_candidate_count = sum(
+            audit.tree.recursion_depth > 0 for audit in audits
+        )
         self.event_sink.emit(
             Event(
                 event="hypothesis_training_candidate_selection_completed",
@@ -177,6 +191,9 @@ class EvolutionKernel:
                     "proposal_candidate_count": len(proposals),
                     "novel_candidate_count": len(audits),
                     "static_accepted_candidate_count": len(eligible),
+                    "static_validation_node_count": static_node_count,
+                    "static_validation_max_recursion_depth": static_max_depth,
+                    "repaired_candidate_count": repaired_candidate_count,
                     "candidates": [
                         {
                             "root_id": audit.root.id,
@@ -207,6 +224,9 @@ class EvolutionKernel:
                 reason="recursive_validation_rejected",
                 proposal_candidate_count=len(proposals),
                 static_accepted_candidate_count=0,
+                static_validation_node_count=static_node_count,
+                static_validation_max_recursion_depth=static_max_depth,
+                repaired_candidate_count=repaired_candidate_count,
             )
         selected = eligible[0]
         root = selected.root
@@ -282,6 +302,9 @@ class EvolutionKernel:
             reason="promoted" if decision.allowed else "promotion_gate_rejected",
             proposal_candidate_count=len(proposals),
             static_accepted_candidate_count=len(eligible),
+            static_validation_node_count=static_node_count,
+            static_validation_max_recursion_depth=static_max_depth,
+            repaired_candidate_count=repaired_candidate_count,
         )
 
     def propose_candidates(
@@ -309,6 +332,10 @@ class EvolutionKernel:
                     ],
                     "context_is_for_action_design_only": True,
                 },
+                "runtime_candidate_kinds": sorted(
+                    kind.value for kind in validation_context.allowed_runtime_kinds
+                ),
+                "evaluator_hypotheses_require_separate_epoch_challenger": True,
                 "prior_hypotheses": self._prior_hypothesis_context(),
                 "prior_promotion_feedback": list(self._promotion_feedback),
                 "novel_hypothesis_required": True,
@@ -342,6 +369,9 @@ class EvolutionKernel:
         reason: str,
         proposal_candidate_count: int = 1,
         static_accepted_candidate_count: int = 0,
+        static_validation_node_count: int = 0,
+        static_validation_max_recursion_depth: int = 0,
+        repaired_candidate_count: int = 0,
     ) -> EvolutionRunResult:
         result = EvolutionRunResult(
             trace_id=trace_id,
@@ -354,6 +384,9 @@ class EvolutionKernel:
             reason=reason,
             proposal_candidate_count=proposal_candidate_count,
             static_accepted_candidate_count=static_accepted_candidate_count,
+            static_validation_node_count=static_validation_node_count,
+            static_validation_max_recursion_depth=static_validation_max_recursion_depth,
+            repaired_candidate_count=repaired_candidate_count,
         )
         self.event_sink.emit(
             Event(
@@ -371,6 +404,11 @@ class EvolutionKernel:
                     "reason": reason,
                     "proposal_candidate_count": proposal_candidate_count,
                     "static_accepted_candidate_count": static_accepted_candidate_count,
+                    "static_validation_node_count": static_validation_node_count,
+                    "static_validation_max_recursion_depth": (
+                        static_validation_max_recursion_depth
+                    ),
+                    "repaired_candidate_count": repaired_candidate_count,
                     "generation_hash": stable_hash(
                         {
                             "root": root.payload_hash,

@@ -34,6 +34,7 @@ from assumption_agent.splits import (
 from assumption_agent.validation import (
     EvaluatorEpochCheck,
     RecursiveValidationEngine,
+    RuntimeCandidateKindCheck,
     RuntimeActionCheck,
     SchemaCheck,
     TrainingSupportCheck,
@@ -315,6 +316,7 @@ def test_train_only_candidate_selection_checks_all_roots_and_trigger_vocabulary(
 ) -> None:
     invalid = _program_dict()
     invalid["id"] = "invalid-context-trigger"
+    invalid["kind"] = "evaluator"
     invalid["trigger"] = {
         "all_of": [
             {"key": "task_instruction", "op": "contains", "value": "secret context"}
@@ -354,6 +356,9 @@ def test_train_only_candidate_selection_checks_all_roots_and_trigger_vocabulary(
     assert result.evolution.root_hypothesis_id == "selected-runtime-trigger"
     assert result.evolution.proposal_candidate_count == 3
     assert result.evolution.static_accepted_candidate_count == 2
+    assert result.evolution.static_validation_node_count == 3
+    assert result.evolution.static_validation_max_recursion_depth == 0
+    assert result.evolution.repaired_candidate_count == 0
     assert archive.hypotheses["invalid-context-trigger"].status is HypothesisStatus.REJECTED
     assert archive.hypotheses["more-complex-runtime-trigger"].status is HypothesisStatus.SHADOW
     assert len(backend.calls) == 8
@@ -367,6 +372,13 @@ def test_train_only_candidate_selection_checks_all_roots_and_trigger_vocabulary(
     assert any(
         any(
             check["check"] == "trigger_vocabulary" and not check["passed"]
+            for check in row["payload"]["check_results"]
+        )
+        for row in validation_events
+    )
+    assert any(
+        any(
+            check["check"] == "runtime_candidate_kind" and not check["passed"]
             for check in row["payload"]["check_results"]
         )
         for row in validation_events
@@ -403,7 +415,9 @@ def test_family_out_compiler_targets_unseen_validation_families(tmp_path: Path) 
     )
 
     assert compiled.family_count == len(validation_by_family)
-    assert {path.parts[-3] for path in compiled.skill_paths} == set(validation_by_family)
+    assert len(compiled.skill_paths) == len(target_ids)
+    assert all(compiled.source_for(item_id) is not None for item_id in target_ids)
+    assert all("items" in path.parts for path in compiled.skill_paths)
 
 
 def test_subscription_trial_auth_is_ephemeral_and_not_passed_as_env(
@@ -653,6 +667,7 @@ def _harness(
     validator = RecursiveValidationEngine(
         [
             SchemaCheck(),
+            RuntimeCandidateKindCheck(),
             TriggerVocabularyCheck(),
             TrainingSupportCheck(min_support=2),
             RuntimeActionCheck(),

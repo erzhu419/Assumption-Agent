@@ -15,6 +15,7 @@ from ..provider_chain import configured_provider_chain, proposal_provider_status
 from ..secure_env import configured_model, configured_skilllearn_provider_mode, load_dotenv, map_legacy_model_env
 from ..splits import SplitManifest
 from .preflight import build_preflight
+from .skilllearn_compiler import SKILL_ROUTING_VERSION
 from .skilllearn_lifecycle import (
     PREBUILT_IMAGE_POLICY_VERSION,
     SHARED_AGENT_RUNTIME_BUILDER_IMAGE,
@@ -77,6 +78,15 @@ class PaperProtocol:
                 != TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
             ):
                 issues.append("proposal_candidate_selection_mismatch")
+            if execution.get("runtime_candidate_kinds") != ["task", "policy"]:
+                issues.append("runtime_candidate_kinds_mismatch")
+            if (
+                execution.get("evaluator_hypothesis_mode")
+                != "separate_epoch_challenger_not_in_primary_runtime"
+            ):
+                issues.append("evaluator_hypothesis_mode_mismatch")
+            if execution.get("skill_routing") != SKILL_ROUTING_VERSION:
+                issues.append("skill_routing_mismatch")
             if execution.get("verifier_isolation") != VERIFIER_ISOLATION_VERSION:
                 issues.append("verifier_isolation_mismatch")
             if execution.get("parallel_unit") != "benchmark_item":

@@ -28,6 +28,7 @@ from ..evolution import EvolutionKernel, EvolutionRunResult
 from ..models import (
     CounterfactualPair,
     ExternalOutcome,
+    HypothesisKind,
     HypothesisProgram,
     HypothesisStatus,
     LaneResult,
@@ -1279,16 +1280,17 @@ class SkillLearnCounterfactualRunner:
         on_request = self._request(task, split, TrialVariant.POLICY_ON, pair_id, program.id)
         activated = program.matches(task.features)
         baseline_skill_source = (
-            baseline_compile_result.output_root / task.family
+            baseline_compile_result.source_for(task.id)
             if baseline_compile_result
-            and (baseline_compile_result.output_root / task.family).is_dir()
             else None
         )
         candidate_skill_source = (
-            candidate_compile_result.output_root / task.family if activated else None
+            candidate_compile_result.source_for(task.id) if activated else None
         )
         run_on_first = False
-        if activated and not candidate_skill_source.is_dir():
+        if activated and (
+            candidate_skill_source is None or not candidate_skill_source.is_dir()
+        ):
             baseline_observation = self.backend.run(
                 off_request,
                 skill_source_dir=baseline_skill_source,
@@ -1443,9 +1445,20 @@ class SkillLearnGenerationResult:
                 self.evolution.static_accepted_candidate_count if self.evolution else 0
             ),
             "recursive_node_count": (
-                len(self.evolution.validation_tree.nodes) if self.evolution else 0
+                self.evolution.static_validation_node_count if self.evolution else 0
             ),
             "recursive_depth": (
+                self.evolution.static_validation_max_recursion_depth
+                if self.evolution
+                else 0
+            ),
+            "repaired_candidate_count": (
+                self.evolution.repaired_candidate_count if self.evolution else 0
+            ),
+            "selected_candidate_node_count": (
+                len(self.evolution.validation_tree.nodes) if self.evolution else 0
+            ),
+            "selected_candidate_recursion_depth": (
                 self.evolution.validation_tree.recursion_depth if self.evolution else 0
             ),
             "promotion_blockers": list(decision.blockers) if decision else [],
@@ -1565,9 +1578,8 @@ class SkillLearnEvolutionHarness:
             return self._run_training_baseline(
                 item_id,
                 skill_source_dir=(
-                    incumbent_compile.output_root / self.items[item_id].family
+                    incumbent_compile.source_for(item_id)
                     if incumbent_compile
-                    and (incumbent_compile.output_root / self.items[item_id].family).is_dir()
                     else None
                 ),
                 trace_id=trace_id,
@@ -1655,6 +1667,9 @@ class SkillLearnEvolutionHarness:
             residuals=tuple(residuals),
             available_lanes=frozenset({BASELINE_LANE, CANDIDATE_LANE}),
             baseline_lane=BASELINE_LANE,
+            allowed_runtime_kinds=frozenset(
+                {HypothesisKind.TASK, HypothesisKind.POLICY}
+            ),
             trigger_feature_catalog=build_runtime_feature_catalog(
                 [
                     {
