@@ -19,6 +19,9 @@ from .splits import AccessPhase, SplitAccessGuard
 from .validation import RecursiveValidationEngine, ValidationContext, ValidationTree
 
 
+TRAIN_ONLY_CANDIDATE_SELECTION_VERSION = "train_static_support_then_complexity_v1"
+
+
 @dataclass(frozen=True)
 class EvolutionRunResult:
     trace_id: str
@@ -29,6 +32,16 @@ class EvolutionRunResult:
     archive_node: ArchiveNode | None
     promoted: bool
     reason: str
+    proposal_candidate_count: int = 1
+    static_accepted_candidate_count: int = 0
+
+
+@dataclass(frozen=True)
+class _StaticCandidateAudit:
+    root: HypothesisProgram
+    tree: ValidationTree
+    accepted: HypothesisProgram | None
+    training_score: tuple[int, int, int, int, str]
 
 
 class EvolutionKernel:
@@ -83,11 +96,20 @@ class EvolutionKernel:
         known_behaviors = {
             _behavior_hash(program) for program in self.archive.hypotheses.values()
         }
-        root = next(
-            (program for program in proposals if _behavior_hash(program) not in known_behaviors),
-            None,
-        )
-        if root is None:
+        novel_roots: list[HypothesisProgram] = []
+        generation_behaviors: set[str] = set()
+        known_ids = set(self.archive.hypotheses)
+        for proposal in proposals:
+            behavior = _behavior_hash(proposal)
+            if behavior in known_behaviors or behavior in generation_behaviors:
+                continue
+            root = proposal
+            if root.id in known_ids:
+                root = replace(root, id=f"{root.id}-{root.payload_hash[:10]}")
+            known_ids.add(root.id)
+            generation_behaviors.add(behavior)
+            novel_roots.append(root)
+        if not novel_roots:
             duplicate = proposals[0]
             tree = ValidationTree(
                 root_id=duplicate.id,
@@ -102,34 +124,101 @@ class EvolutionKernel:
                 decision=None,
                 archive_node=None,
                 reason="duplicate_hypothesis_behavior",
+                proposal_candidate_count=len(proposals),
+                static_accepted_candidate_count=0,
             )
-        if root.id in self.archive.hypotheses:
-            root = replace(root, id=f"{root.id}-{root.payload_hash[:10]}")
-        tree = self.validator.validate(root, validation_context, trace_id=trace_id)
-        for node in tree.nodes:
-            self.archive.register_hypothesis(node.program, trace_id=trace_id)
-        accepted = tree.accepted_program
-        if accepted is None:
+        audits: list[_StaticCandidateAudit] = []
+        for index, root in enumerate(novel_roots):
+            candidate_trace = f"{trace_id}:static-{index + 1}"
+            tree = self.validator.validate(
+                root,
+                validation_context,
+                trace_id=candidate_trace,
+            )
             for node in tree.nodes:
-                self.archive.set_hypothesis_status(
-                    node.program.id,
-                    HypothesisStatus.REJECTED,
-                    trace_id=trace_id,
+                self.archive.register_hypothesis(node.program, trace_id=candidate_trace)
+            accepted = tree.accepted_program
+            if accepted is None:
+                for node in tree.nodes:
+                    self.archive.set_hypothesis_status(
+                        node.program.id,
+                        HypothesisStatus.REJECTED,
+                        trace_id=candidate_trace,
+                    )
+            else:
+                for node in tree.nodes:
+                    if node.program.id != accepted.id:
+                        self.archive.set_hypothesis_status(
+                            node.program.id,
+                            HypothesisStatus.REJECTED,
+                            trace_id=candidate_trace,
+                        )
+            audits.append(
+                _StaticCandidateAudit(
+                    root=root,
+                    tree=tree,
+                    accepted=accepted,
+                    training_score=_training_candidate_score(
+                        accepted,
+                        validation_context.residuals,
+                    ),
                 )
+            )
+        eligible = sorted(
+            (audit for audit in audits if audit.accepted is not None),
+            key=lambda audit: audit.training_score,
+        )
+        self.event_sink.emit(
+            Event(
+                event="hypothesis_training_candidate_selection_completed",
+                stage="evolution.train_selection",
+                trace_id=trace_id,
+                payload={
+                    "proposal_candidate_count": len(proposals),
+                    "novel_candidate_count": len(audits),
+                    "static_accepted_candidate_count": len(eligible),
+                    "candidates": [
+                        {
+                            "root_id": audit.root.id,
+                            "root_hash": audit.root.payload_hash,
+                            "accepted_id": audit.accepted.id if audit.accepted else None,
+                            "accepted_hash": (
+                                audit.accepted.payload_hash if audit.accepted else None
+                            ),
+                            "training_score": list(audit.training_score[:-1]),
+                            "selected": bool(eligible and audit is eligible[0]),
+                        }
+                        for audit in audits
+                    ],
+                    "selection_uses_validation_outcomes": False,
+                    "selection_policy": TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+                },
+            )
+        )
+        if not eligible:
+            rejected = audits[0]
             return self._result(
                 trace_id=trace_id,
-                root=root,
+                root=rejected.root,
                 accepted=None,
-                tree=tree,
+                tree=rejected.tree,
                 decision=None,
                 archive_node=None,
                 reason="recursive_validation_rejected",
+                proposal_candidate_count=len(proposals),
+                static_accepted_candidate_count=0,
             )
-        for node in tree.nodes:
-            if node.program.id != accepted.id:
+        selected = eligible[0]
+        root = selected.root
+        tree = selected.tree
+        accepted = selected.accepted
+        assert accepted is not None
+        for audit in eligible[1:]:
+            assert audit.accepted is not None
+            if audit.accepted.id != accepted.id:
                 self.archive.set_hypothesis_status(
-                    node.program.id,
-                    HypothesisStatus.REJECTED,
+                    audit.accepted.id,
+                    HypothesisStatus.SHADOW,
                     trace_id=trace_id,
                 )
 
@@ -191,6 +280,8 @@ class EvolutionKernel:
             decision=decision,
             archive_node=candidate_node,
             reason="promoted" if decision.allowed else "promotion_gate_rejected",
+            proposal_candidate_count=len(proposals),
+            static_accepted_candidate_count=len(eligible),
         )
 
     def propose_candidates(
@@ -207,6 +298,17 @@ class EvolutionKernel:
             capabilities={
                 "available_lanes": sorted(validation_context.available_lanes),
                 "baseline_lane": validation_context.baseline_lane,
+                "runtime_trigger_contract": {
+                    "allowed_feature_catalog": dict(
+                        validation_context.trigger_feature_catalog
+                    ),
+                    "forbidden_context_only_keys": [
+                        "task_instruction",
+                        "observed_metrics",
+                        "execution_signals",
+                    ],
+                    "context_is_for_action_design_only": True,
+                },
                 "prior_hypotheses": self._prior_hypothesis_context(),
                 "prior_promotion_feedback": list(self._promotion_feedback),
                 "novel_hypothesis_required": True,
@@ -238,6 +340,8 @@ class EvolutionKernel:
         decision: PromotionDecision | None,
         archive_node: ArchiveNode | None,
         reason: str,
+        proposal_candidate_count: int = 1,
+        static_accepted_candidate_count: int = 0,
     ) -> EvolutionRunResult:
         result = EvolutionRunResult(
             trace_id=trace_id,
@@ -248,6 +352,8 @@ class EvolutionKernel:
             archive_node=archive_node,
             promoted=bool(decision and decision.allowed),
             reason=reason,
+            proposal_candidate_count=proposal_candidate_count,
+            static_accepted_candidate_count=static_accepted_candidate_count,
         )
         self.event_sink.emit(
             Event(
@@ -263,6 +369,8 @@ class EvolutionKernel:
                     "promotion_blockers": list(decision.blockers) if decision else [],
                     "archive_node_id": archive_node.id if archive_node else None,
                     "reason": reason,
+                    "proposal_candidate_count": proposal_candidate_count,
+                    "static_accepted_candidate_count": static_accepted_candidate_count,
                     "generation_hash": stable_hash(
                         {
                             "root": root.payload_hash,
@@ -288,3 +396,36 @@ def _behavior_hash(program: HypothesisProgram) -> str:
     ):
         payload.pop(key, None)
     return stable_hash(payload)
+
+
+def _training_candidate_score(
+    program: HypothesisProgram | None,
+    residuals: Sequence[ResidualExample],
+) -> tuple[int, int, int, int, str]:
+    if program is None:
+        return (0, 10**9, 10**9, 10**9, "f" * 64)
+    train_rows = [row for row in residuals if row.split is SplitName.TRAIN]
+    support = sum(program.matches(row.features) for row in train_rows)
+    anti_support = sum(
+        not program.anti_trigger.is_empty
+        and program.anti_trigger.matches(row.features)
+        for row in train_rows
+    )
+    predicate_count = sum(
+        len(group)
+        for group in (
+            program.trigger.all_of,
+            program.trigger.any_of,
+            program.trigger.none_of,
+            program.anti_trigger.all_of,
+            program.anti_trigger.any_of,
+            program.anti_trigger.none_of,
+        )
+    )
+    return (
+        -support,
+        anti_support,
+        predicate_count,
+        len(program.action_graph),
+        program.payload_hash,
+    )

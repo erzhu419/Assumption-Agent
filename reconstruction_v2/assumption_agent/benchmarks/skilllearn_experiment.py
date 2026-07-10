@@ -8,6 +8,7 @@ from typing import Any, Mapping, Sequence
 from ..archive import PolicyArchive
 from ..evaluation import PromotionGate, PromotionGateSpec
 from ..events import Event, JsonlEventSink
+from ..evolution import TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
 from ..models import stable_hash
 from ..provider_chain import build_proposal_model, proposal_provider_status
 from ..proposer import StructuredHypothesisProposer
@@ -24,6 +25,7 @@ from ..validation import (
     RuntimeActionCheck,
     SchemaCheck,
     TrainingSupportCheck,
+    TriggerVocabularyCheck,
 )
 from .preflight import build_preflight
 from .skilllearn_lifecycle import (
@@ -116,6 +118,7 @@ def main() -> None:
         "max_steps": args.max_steps,
         "parallel_workers": args.parallel_workers,
         "prebuilt_image_policy": PREBUILT_IMAGE_POLICY_VERSION,
+        "proposal_candidate_selection": TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
         "proposal_api_present": bool(
             model_presence["base_url_present"] and model_presence["api_key_present"]
         ),
@@ -196,6 +199,7 @@ def main() -> None:
     validator = RecursiveValidationEngine(
         [
             SchemaCheck(),
+            TriggerVocabularyCheck(),
             TrainingSupportCheck(min_support=args.minimum_trigger_support),
             RuntimeActionCheck(),
             EvaluatorEpochCheck(),
@@ -256,6 +260,7 @@ def main() -> None:
             validator=RecursiveValidationEngine(
                 [
                     SchemaCheck(),
+                    TriggerVocabularyCheck(),
                     TrainingSupportCheck(min_support=args.minimum_trigger_support),
                     RuntimeActionCheck(),
                     EvaluatorEpochCheck(),

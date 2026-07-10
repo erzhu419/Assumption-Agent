@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from ..models import HypothesisProgram, stable_hash
+from ..evolution import TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
 from ..provider_chain import configured_provider_chain, proposal_provider_status
 from ..secure_env import configured_model, configured_skilllearn_provider_mode, load_dotenv, map_legacy_model_env
 from ..splits import SplitManifest
@@ -71,6 +72,11 @@ class PaperProtocol:
                 issues.append("agent_runtime_package_mismatch")
             if execution.get("agent_runtime_version") != SHARED_CODEX_CLI_VERSION:
                 issues.append("agent_runtime_version_mismatch")
+            if (
+                execution.get("proposal_candidate_selection")
+                != TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
+            ):
+                issues.append("proposal_candidate_selection_mismatch")
             if execution.get("verifier_isolation") != VERIFIER_ISOLATION_VERSION:
                 issues.append("verifier_isolation_mismatch")
             if execution.get("parallel_unit") != "benchmark_item":

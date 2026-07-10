@@ -178,6 +178,8 @@ def _proposal_constraints() -> dict[str, Any]:
         "allowed_kinds": ["task", "policy", "evaluator"],
         "fallback_must_equal": "preserve_baseline",
         "trigger_must_use_structured_features": True,
+        "trigger_keys_must_come_from_capabilities_runtime_trigger_contract": True,
+        "residual_context_may_shape_actions_but_must_not_be_used_in_trigger_or_anti_trigger": True,
         "action_graph_must_change_runtime": True,
         "gold_answer_fields_forbidden": True,
         "required_verifier_anchor": True,

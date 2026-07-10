@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol, Sequence
 
 from .events import Event, EventSink, NullEventSink
@@ -14,6 +14,9 @@ class ValidationContext:
     residuals: tuple[ResidualExample, ...]
     available_lanes: frozenset[str]
     baseline_lane: str
+    trigger_feature_catalog: Mapping[str, Mapping[str, Any]] = field(
+        default_factory=dict
+    )
 
 
 @dataclass(frozen=True)
@@ -48,6 +51,64 @@ class SchemaCheck:
             passed=not issues,
             reason="valid_hypothesis_program" if not issues else "hypothesis_contract_failed",
             evidence={"issues": issues, "hypothesis_hash": program.payload_hash},
+        )
+
+
+class TriggerVocabularyCheck:
+    name = "trigger_vocabulary"
+
+    def evaluate(self, program: HypothesisProgram, context: ValidationContext) -> CheckResult:
+        allowed = frozenset(context.trigger_feature_catalog)
+        predicates = (
+            *(('trigger', row) for row in program.trigger.all_of),
+            *(('trigger', row) for row in program.trigger.any_of),
+            *(('trigger', row) for row in program.trigger.none_of),
+            *(('anti_trigger', row) for row in program.anti_trigger.all_of),
+            *(('anti_trigger', row) for row in program.anti_trigger.any_of),
+            *(('anti_trigger', row) for row in program.anti_trigger.none_of),
+        )
+        unknown = sorted(
+            {
+                (scope, predicate.key, predicate.op)
+                for scope, predicate in predicates
+                if predicate.key not in allowed
+            }
+        )
+        invalid_operators = sorted(
+            {
+                (scope, predicate.key, predicate.op)
+                for scope, predicate in predicates
+                if predicate.key in context.trigger_feature_catalog
+                and predicate.op
+                not in context.trigger_feature_catalog[predicate.key].get(
+                    "allowed_operators", ()
+                )
+            }
+        )
+        passed = not unknown and not invalid_operators
+        return CheckResult(
+            check=self.name,
+            passed=passed,
+            reason=(
+                "trigger_uses_runtime_feature_vocabulary"
+                if passed
+                else "trigger_uses_non_runtime_features"
+            ),
+            evidence={
+                "allowed_feature_keys": sorted(allowed),
+                "feature_catalog_present": bool(allowed),
+                "allowed_feature_catalog_hash": stable_hash(
+                    context.trigger_feature_catalog
+                ),
+                "unknown_predicates": [
+                    {"scope": scope, "key": key, "op": op}
+                    for scope, key, op in unknown
+                ],
+                "invalid_operator_predicates": [
+                    {"scope": scope, "key": key, "op": op}
+                    for scope, key, op in invalid_operators
+                ],
+            },
         )
 
 
@@ -143,6 +204,71 @@ class EvaluatorEpochCheck:
                 "active_epoch": context.evaluator_epoch,
             },
         )
+
+
+def build_trigger_feature_catalog(
+    residuals: Sequence[ResidualExample],
+    *,
+    maximum_values_per_feature: int = 24,
+) -> dict[str, dict[str, Any]]:
+    return build_runtime_feature_catalog(
+        [residual.features for residual in residuals],
+        maximum_values_per_feature=maximum_values_per_feature,
+    )
+
+
+def build_runtime_feature_catalog(
+    feature_rows: Sequence[Mapping[str, Any]],
+    *,
+    maximum_values_per_feature: int = 24,
+) -> dict[str, dict[str, Any]]:
+    if maximum_values_per_feature <= 0:
+        raise ValueError("trigger feature catalog value limit must be positive")
+    by_key: dict[str, list[Any]] = {}
+    for features in feature_rows:
+        for key, value in features.items():
+            by_key.setdefault(str(key), []).append(value)
+    catalog: dict[str, dict[str, Any]] = {}
+    for key, values in sorted(by_key.items()):
+        scalar_values: dict[str, Any] = {}
+        member_values: dict[str, Any] = {}
+        observed_types: set[str] = set()
+        collection = False
+        for value in values:
+            observed_types.add(type(value).__name__)
+            if isinstance(value, (list, tuple, set, frozenset)):
+                collection = True
+                for member in value:
+                    member_values.setdefault(stable_hash(member), member)
+            else:
+                scalar_values.setdefault(stable_hash(value), value)
+        if collection:
+            observed = [
+                member_values[value_hash]
+                for value_hash in sorted(member_values)[:maximum_values_per_feature]
+            ]
+            operators = ["contains", "exists"]
+            value_field = "observed_members"
+        else:
+            observed = [
+                scalar_values[value_hash]
+                for value_hash in sorted(scalar_values)[:maximum_values_per_feature]
+            ]
+            numeric = all(
+                isinstance(value, (int, float)) and not isinstance(value, bool)
+                for value in values
+            )
+            operators = ["eq", "ne", "in", "exists"]
+            if numeric:
+                operators.extend(["gte", "lte"])
+            value_field = "observed_values"
+        catalog[key] = {
+            "observed_types": sorted(observed_types),
+            value_field: observed,
+            "allowed_operators": operators,
+            "training_row_count": len(values),
+        }
+    return catalog
 
 
 @dataclass(frozen=True)
@@ -263,6 +389,17 @@ class RecursiveValidationEngine:
             capabilities={
                 "available_lanes": sorted(context.available_lanes),
                 "baseline_lane": context.baseline_lane,
+                "runtime_trigger_contract": {
+                    "allowed_feature_catalog": dict(
+                        context.trigger_feature_catalog
+                    ),
+                    "forbidden_context_only_keys": [
+                        "task_instruction",
+                        "observed_metrics",
+                        "execution_signals",
+                    ],
+                    "context_is_for_action_design_only": True,
+                },
             },
             trace_id=trace_id,
         )

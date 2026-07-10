@@ -40,7 +40,11 @@ from ..models import (
 from ..proposer import StructuredHypothesisProposer
 from ..secure_env import configured_skilllearn_provider_mode, resolve_codex_auth_path
 from ..splits import AccessPhase, BenchmarkItem, SplitAccessGuard, SplitManifest
-from ..validation import RecursiveValidationEngine, ValidationContext
+from ..validation import (
+    RecursiveValidationEngine,
+    ValidationContext,
+    build_runtime_feature_catalog,
+)
 from .skilllearn_compiler import SkillLearnProgramCompiler
 from .skilllearnbench import SkillLearnBenchAdapter
 
@@ -1432,6 +1436,12 @@ class SkillLearnGenerationResult:
             "evolution_trace_id": self.evolution.trace_id if self.evolution else None,
             "promoted": bool(self.evolution and self.evolution.promoted),
             "accepted_hypothesis_id": self.evolution.accepted_hypothesis_id if self.evolution else None,
+            "proposal_candidate_count": (
+                self.evolution.proposal_candidate_count if self.evolution else 0
+            ),
+            "static_accepted_candidate_count": (
+                self.evolution.static_accepted_candidate_count if self.evolution else 0
+            ),
             "recursive_node_count": (
                 len(self.evolution.validation_tree.nodes) if self.evolution else 0
             ),
@@ -1645,6 +1655,15 @@ class SkillLearnEvolutionHarness:
             residuals=tuple(residuals),
             available_lanes=frozenset({BASELINE_LANE, CANDIDATE_LANE}),
             baseline_lane=BASELINE_LANE,
+            trigger_feature_catalog=build_runtime_feature_catalog(
+                [
+                    {
+                        **dict(self.items[item_id].features),
+                        "family": self.items[item_id].family,
+                    }
+                    for item_id in self.manifest.train_ids
+                ]
+            ),
         )
 
     def run_sealed_test(

@@ -44,6 +44,8 @@ frozen train IDs
 
 Instruction text is available only as ephemeral train proposal context. It is not a trigger feature and is not persisted in JSONL. Validation instructions are consumed only inside the external trial runner. Test execution is rejected before archive freeze.
 
+The proposer receives an explicit catalog built from frozen train-split runtime features. Both trigger and anti-trigger predicates are rejected if they use keys outside that catalog. All roots are recursively checked on train evidence; a frozen support/anti-support/complexity ordering selects exactly one candidate before validation, preventing held-out outcomes from acting as a same-generation proposal router.
+
 An external trial has a stable request hash, pair ID, split, variant, model, step budget, manifest hash, provider fingerprint, fairness fingerprint, metrics, cost, latency, and sanitized error type. Endpoint or container failure is invalid evidence, not a negative task outcome.
 
 The verifier is a delayed capability. Its bind mount is removed before `docker run`; the proxy records that withholding event, waits for the agent command to exit, copies a content-hashed verifier tree into `/tests`, records materialization, and only then invokes the test script. A trace without this event order is not admissible evidence.

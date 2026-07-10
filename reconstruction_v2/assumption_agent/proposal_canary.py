@@ -15,7 +15,9 @@ from .validation import (
     RuntimeActionCheck,
     SchemaCheck,
     TrainingSupportCheck,
+    TriggerVocabularyCheck,
     ValidationContext,
+    build_trigger_feature_catalog,
 )
 
 
@@ -61,6 +63,11 @@ def main() -> None:
             "prioritize_lane",
             "require_verifier",
         ],
+        "runtime_trigger_contract": {
+            "allowed_feature_catalog": build_trigger_feature_catalog(residuals),
+            "forbidden_context_only_keys": ["task_instruction"],
+            "context_is_for_action_design_only": True,
+        },
     }
     root = proposer.propose(
         residuals,
@@ -70,7 +77,13 @@ def main() -> None:
         trace_id="live-proposal-canary",
     )[0]
     validator = RecursiveValidationEngine(
-        [SchemaCheck(), TrainingSupportCheck(min_support=2), RuntimeActionCheck(), EvaluatorEpochCheck()],
+        [
+            SchemaCheck(),
+            TriggerVocabularyCheck(),
+            TrainingSupportCheck(min_support=2),
+            RuntimeActionCheck(),
+            EvaluatorEpochCheck(),
+        ],
         proposer=proposer,
         event_sink=sink,
     )
@@ -81,6 +94,7 @@ def main() -> None:
             residuals=residuals,
             available_lanes=frozenset({"raw", "relation_solver"}),
             baseline_lane="raw",
+            trigger_feature_catalog=build_trigger_feature_catalog(residuals),
         ),
         trace_id="live-proposal-canary",
     )

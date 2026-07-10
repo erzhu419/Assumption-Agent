@@ -31,13 +31,15 @@
 - Content-addressed per-item base images with oracle skills excluded, plus one digest-pinned, read-only `codex-cli 0.144.1` runtime volume.
 - Bounded four-worker train/counterfactual/control execution across items, with every same-item variant sequence kept serial.
 - Shared first-generation evidence and root checkpoint for the recursive versus no-recursive causal ablation.
+- Hard runtime trigger vocabulary with context-only instruction fields rejected programmatically.
+- Train-only evaluation of every proposed root and deterministic support/complexity selection of the sole validation candidate.
 - Trial provenance for base image key/ID, runtime key/version, cache reuse, withheld verifier mount, and post-agent verifier materialization.
 - Per-attempt model audit events; non-retryable HTTP authentication errors stop after one request.
 - Structured in-memory or JSONL events for proposal, validation, runtime, counterfactual, promotion, archive, evaluator transition, and benchmark compilation.
 
 ## Evidence Scope
 
-The 36 offline tests prove that the learning loop is connected, that a promoted hypothesis changes future runtime behavior, and that the same lifecycle works against SkillLearnBench's real 100-item manifest with a fake external trial backend. They also cover invalid-pair blocking, split isolation, provider failover, strict Codex schemas, runtime tool rejection, ephemeral subscription auth, post-agent verifier injection, content-addressed environment caching, shared-checkpoint ablation, ordered item parallelism, runtime mismatch blocking, content-bound freeze receipts, invalid-only retries, and paper statistics. They do not prove real benchmark improvement.
+The 37 offline tests prove that the learning loop is connected, that a promoted hypothesis changes future runtime behavior, and that the same lifecycle works against SkillLearnBench's real 100-item manifest with a fake external trial backend. They also cover invalid-pair blocking, split isolation, provider failover, strict Codex schemas, runtime tool rejection, trigger-vocabulary isolation, all-root train-only selection, ephemeral subscription auth, post-agent verifier injection, content-addressed environment caching, shared-checkpoint ablation, ordered item parallelism, runtime mismatch blocking, content-bound freeze receipts, invalid-only retries, and paper statistics. They do not prove real benchmark improvement.
 
 Docker Engine 29.1.3 is installed and the real upstream runner, ChatGPT subscription auth, Spark model canary, and container canary now pass. The pinned shared-runtime raw canary completed in 43.7 seconds with `agent_exit=0`, `verifier_exit=0`, no timeout, and matching Spark/runtime/image provenance. Its ordered audit events prove that the verifier mount was withheld during agent execution and materialized only afterward. The task result was wrong, so this is infrastructure evidence only. Dataclaw is absent but optional for task-success execution; it is needed only for parts of the separate trajectory/skill post-processing pipeline.
 

@@ -35,7 +35,9 @@ from assumption_agent.validation import (
     RuntimeActionCheck,
     SchemaCheck,
     TrainingSupportCheck,
+    TriggerVocabularyCheck,
     ValidationContext,
+    build_trigger_feature_catalog,
 )
 
 
@@ -322,7 +324,11 @@ def _residuals() -> tuple[ResidualExample, ...]:
             task_id=f"train-{index}",
             family="relation",
             split=SplitName.TRAIN,
-            features={"relation_type": "controlled_comparison", "self_contained": True},
+            features={
+                "relation_type": "controlled_comparison",
+                "self_contained": True,
+                "requires_live_source": False,
+            },
             failure_type="baseline_missed_explicit_relation",
             evaluator_feedback=("compare the controlled relation before selecting",),
             baseline_success=False,
@@ -337,12 +343,19 @@ def _validation_context(residuals: tuple[ResidualExample, ...]) -> ValidationCon
         residuals=residuals,
         available_lanes=frozenset({"raw", "relation_solver"}),
         baseline_lane="raw",
+        trigger_feature_catalog=build_trigger_feature_catalog(residuals),
     )
 
 
 def _validator(proposer: StructuredHypothesisProposer, sink: MemoryEventSink) -> RecursiveValidationEngine:
     return RecursiveValidationEngine(
-        [SchemaCheck(), TrainingSupportCheck(min_support=2), RuntimeActionCheck(), EvaluatorEpochCheck()],
+        [
+            SchemaCheck(),
+            TriggerVocabularyCheck(),
+            TrainingSupportCheck(min_support=2),
+            RuntimeActionCheck(),
+            EvaluatorEpochCheck(),
+        ],
         proposer=proposer,
         event_sink=sink,
     )

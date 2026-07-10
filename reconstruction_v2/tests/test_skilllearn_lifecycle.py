@@ -37,6 +37,7 @@ from assumption_agent.validation import (
     RuntimeActionCheck,
     SchemaCheck,
     TrainingSupportCheck,
+    TriggerVocabularyCheck,
 )
 
 
@@ -309,6 +310,75 @@ def test_paired_ablation_shares_first_train_checkpoint_and_root(tmp_path: Path) 
     assert len(no_recursive_backend.calls) == 4
 
 
+def test_train_only_candidate_selection_checks_all_roots_and_trigger_vocabulary(
+    tmp_path: Path,
+) -> None:
+    invalid = _program_dict()
+    invalid["id"] = "invalid-context-trigger"
+    invalid["trigger"] = {
+        "all_of": [
+            {"key": "task_instruction", "op": "contains", "value": "secret context"}
+        ],
+        "any_of": [],
+        "none_of": [],
+    }
+    invalid["verifier"]["repair_on_failure"] = False
+    selected = _program_dict()
+    selected["id"] = "selected-runtime-trigger"
+    broader = _program_dict()
+    broader["id"] = "more-complex-runtime-trigger"
+    broader["trigger"]["all_of"].append(
+        {"key": "family", "op": "in", "value": [
+            "organize-messy-files",
+            "offer-letter-generator",
+        ]}
+    )
+    harness, backend, model, archive, _, sink = _harness(
+        tmp_path,
+        proposal_rows=[invalid, selected, broader],
+    )
+    harness.validator.proposer = None
+
+    result = harness.run_generation(
+        train_item_ids=(
+            "organize-messy-files-1",
+            "organize-messy-files-2",
+            "offer-letter-generator-1",
+            "offer-letter-generator-2",
+        ),
+        validation_item_ids=("organize-messy-files-5", "offer-letter-generator-5"),
+        trace_id="train-only-root-selection",
+    )
+
+    assert result.evolution is not None
+    assert result.evolution.root_hypothesis_id == "selected-runtime-trigger"
+    assert result.evolution.proposal_candidate_count == 3
+    assert result.evolution.static_accepted_candidate_count == 2
+    assert archive.hypotheses["invalid-context-trigger"].status is HypothesisStatus.REJECTED
+    assert archive.hypotheses["more-complex-runtime-trigger"].status is HypothesisStatus.SHADOW
+    assert len(backend.calls) == 8
+    assert len(model.requests) == 1
+    trigger_contract = model.requests[0]["capabilities"]["runtime_trigger_contract"]
+    assert "benchmark" in trigger_contract["allowed_feature_catalog"]
+    assert "task_instruction" in trigger_contract["forbidden_context_only_keys"]
+    validation_events = [
+        row for row in sink.events if row["event"] == "hypothesis_validation_node_evaluated"
+    ]
+    assert any(
+        any(
+            check["check"] == "trigger_vocabulary" and not check["passed"]
+            for check in row["payload"]["check_results"]
+        )
+        for row in validation_events
+    )
+    selection = next(
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_training_candidate_selection_completed"
+    )
+    assert selection["payload"]["selection_uses_validation_outcomes"] is False
+
+
 def test_family_out_compiler_targets_unseen_validation_families(tmp_path: Path) -> None:
     adapter = SkillLearnBenchAdapter(BENCH_ROOT)
     items = adapter.discover()
@@ -566,6 +636,7 @@ def _harness(
     invalid_candidate_item: str | None = None,
     backend_override=None,
     parallel_workers: int = 1,
+    proposal_rows: list[dict[str, Any]] | None = None,
 ):
     sink = MemoryEventSink()
     adapter = SkillLearnBenchAdapter(BENCH_ROOT)
@@ -575,11 +646,14 @@ def _harness(
         seed="skilllearnbench-v2-instance-holdout",
     )
     guard = SplitAccessGuard(manifest, event_sink=sink)
-    model = QueueProposalModel([{"hypotheses": [_program_dict()]}])
+    model = QueueProposalModel(
+        [{"hypotheses": proposal_rows or [_program_dict()]}]
+    )
     proposer = StructuredHypothesisProposer(model, event_sink=sink)
     validator = RecursiveValidationEngine(
         [
             SchemaCheck(),
+            TriggerVocabularyCheck(),
             TrainingSupportCheck(min_support=2),
             RuntimeActionCheck(),
             EvaluatorEpochCheck(),
@@ -627,7 +701,13 @@ def _program_dict(*, status: str = "candidate") -> dict[str, Any]:
             ]
         },
         "anti_trigger": {
-            "any_of": [{"key": "read_only", "op": "eq", "value": True}]
+            "any_of": [
+                {
+                    "key": "has_container_environment",
+                    "op": "eq",
+                    "value": False,
+                }
+            ]
         },
         "action_graph": [
             {
