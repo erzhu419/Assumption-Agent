@@ -15,7 +15,11 @@ from ..evolution import (
 )
 from ..models import stable_hash
 from ..provider_chain import build_proposal_model, proposal_provider_status
-from ..proposer import HypothesisProposalCallError, StructuredHypothesisProposer
+from ..proposer import (
+    ROOT_PROPOSAL_REPLAY_POLICY_VERSION,
+    HypothesisProposalCallError,
+    StructuredHypothesisProposer,
+)
 from ..secure_env import (
     alternate_model_allowed,
     configured_model,
@@ -164,6 +168,7 @@ def main() -> None:
         "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
         "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
         "counterfactual_replay_policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+        "root_proposal_replay_policy": ROOT_PROPOSAL_REPLAY_POLICY_VERSION,
         "training_evidence_replay_policy": (
             TRAINING_EVIDENCE_REPLAY_POLICY_VERSION
         ),

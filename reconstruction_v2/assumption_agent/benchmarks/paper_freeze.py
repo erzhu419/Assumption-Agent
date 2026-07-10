@@ -362,6 +362,7 @@ def _validate_development_report(
         "provider_failure_policy",
         "provider_route_policy",
         "counterfactual_replay_policy",
+        "root_proposal_replay_policy",
         "training_evidence_replay_policy",
         "invalid_trial_retry_policy",
         "invalid_trial_max_attempts",

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import threading
 from dataclasses import replace
 from typing import Any, Mapping, Protocol, Sequence
 
 from .events import Event, EventSink, NullEventSink
 from .models import HypothesisProgram, ResidualExample, SplitName, stable_hash
+
+
+ROOT_PROPOSAL_REPLAY_POLICY_VERSION = "request_identical_root_proposal_replay_v1"
 
 
 class ProposalModel(Protocol):
@@ -33,6 +37,11 @@ class StructuredHypothesisProposer:
     def __init__(self, model: ProposalModel, *, event_sink: EventSink | None = None) -> None:
         self.model = model
         self.event_sink = event_sink or NullEventSink()
+        self._root_replay_lock = threading.Lock()
+        self._root_replay_records: dict[
+            str,
+            tuple[tuple[HypothesisProgram, ...], str, str],
+        ] = {}
 
     def propose(
         self,
@@ -59,6 +68,32 @@ class StructuredHypothesisProposer:
             "max_hypotheses": max_hypotheses,
         }
         self._emit_model_event("hypothesis_proposal_requested", trace_id, payload)
+        request_hash = stable_hash(payload)
+        with self._root_replay_lock:
+            replay = self._root_replay_records.get(request_hash)
+        if replay is not None:
+            programs, source_trace_id, program_set_hash = replay
+            self.event_sink.emit(
+                Event(
+                    event="root_proposal_evidence_replayed",
+                    stage="proposal.replay",
+                    trace_id=trace_id,
+                    payload={
+                        "policy": ROOT_PROPOSAL_REPLAY_POLICY_VERSION,
+                        "request_hash": request_hash,
+                        "source_trace_id": source_trace_id,
+                        "target_trace_id": trace_id,
+                        "program_count": len(programs),
+                        "program_set_hash": program_set_hash,
+                        "request_identical": True,
+                        "new_proposal_model_executions": 0,
+                        "evaluator_epoch": evaluator_epoch,
+                        "sealed_test_accessed": False,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+            return programs
         response = self._complete(payload, trace_id=trace_id)
         rows = response.get("hypotheses", [])
         if not isinstance(rows, list):
@@ -94,7 +129,34 @@ class StructuredHypothesisProposer:
             )
         if not programs:
             raise ValueError("proposal model returned no hypothesis programs")
-        return tuple(programs)
+        result = tuple(programs)
+        program_set_hash = stable_hash(
+            {"program_hashes": [program.payload_hash for program in result]}
+        )
+        with self._root_replay_lock:
+            self._root_replay_records.setdefault(
+                request_hash,
+                (result, trace_id, program_set_hash),
+            )
+        self.event_sink.emit(
+            Event(
+                event="root_proposal_evidence_recorded",
+                stage="proposal.replay",
+                trace_id=trace_id,
+                payload={
+                    "policy": ROOT_PROPOSAL_REPLAY_POLICY_VERSION,
+                    "request_hash": request_hash,
+                    "source_trace_id": trace_id,
+                    "program_count": len(result),
+                    "program_set_hash": program_set_hash,
+                    "new_proposal_model_executions": 1,
+                    "evaluator_epoch": evaluator_epoch,
+                    "sealed_test_accessed": False,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        return result
 
     def revise(
         self,

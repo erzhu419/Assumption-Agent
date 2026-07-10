@@ -36,6 +36,8 @@ Transient invalid trials use a protocol-bounded retry queue. A replacement is ad
 
 Proposal transport failures are isolated from experiment persistence. A failed root proposal terminates that generation with a sanitized request hash and a non-claim-eligible report. A failed recursive repair terminates only that candidate branch so the remaining roots can still be audited, but any repair failure blocks validation execution and archive promotion for the generation. Earlier valid train or counterfactual evidence is retained; no model error is silently converted into a rejected scientific hypothesis.
 
+Root proposal evidence is cached only by the complete structured request hash. This binds train residuals, evaluator epoch, runtime capabilities, feature catalog, prior hypotheses, and prior promotion feedback. Paired arms with identical state therefore receive the exact same roots with zero new proposal-model executions; any state change forces a cache miss. Recursive repair responses are not conflated with root proposals.
+
 V2-compiled skills are routed by hashed item ID after evaluating triggers against that item's structured features. The compiler never promotes a family-level match from one item to all sibling items. A missing route means abstain and execute the raw path.
 
 ## Benchmark Boundary

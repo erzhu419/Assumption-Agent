@@ -5,6 +5,7 @@ import os
 import shutil
 import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any, Mapping
@@ -125,6 +126,23 @@ class FakeSkillLearnBackend:
             fairness_fingerprint="budget-fixed",
             error_type="endpoint_error" if invalid else None,
             upstream_result_hash=f"result-{request.request_hash}",
+        )
+
+
+class AlwaysFailSkillLearnBackend(FakeSkillLearnBackend):
+    def run(self, request, *, skill_source_dir, trace_id):
+        observation = super().run(
+            request,
+            skill_source_dir=skill_source_dir,
+            trace_id=trace_id,
+        )
+        metrics = dict(observation.metrics)
+        metrics["task_success"] = 0.0
+        return replace(
+            observation,
+            success=False,
+            score=0.0,
+            metrics=metrics,
         )
 
 
@@ -607,6 +625,76 @@ def test_paired_ablation_shares_first_train_checkpoint_and_root(tmp_path: Path) 
     )
     assert replay_event["payload"]["pair_count"] == len(validation_ids)
     assert replay_event["payload"]["new_counterfactual_executions"] == 0
+
+
+def test_paired_ablation_replays_later_root_when_arm_state_is_identical(
+    tmp_path: Path,
+) -> None:
+    first = _program_dict()
+    first["id"] = "generation-one-root"
+    second = _program_dict()
+    second["id"] = "generation-two-root"
+    second["action_graph"][1]["value"] += " Then verify the final artifact exists."
+    recursive_backend = AlwaysFailSkillLearnBackend()
+    no_recursive_backend = AlwaysFailSkillLearnBackend()
+    recursive, _, recursive_model, _, _, recursive_sink = _harness(
+        tmp_path / "recursive",
+        backend_override=recursive_backend,
+        proposal_rows=[first],
+    )
+    no_recursive, _, no_recursive_model, _, _, _ = _harness(
+        tmp_path / "no-recursive",
+        backend_override=no_recursive_backend,
+    )
+    recursive_model.responses.append({"hypotheses": [second]})
+    no_recursive.proposer = recursive.proposer
+    no_recursive.kernel.proposer = recursive.proposer
+    no_recursive.validator.proposer = None
+    train_ids = (
+        "organize-messy-files-1",
+        "organize-messy-files-2",
+        "offer-letter-generator-1",
+        "offer-letter-generator-2",
+    )
+    validation_ids = ("organize-messy-files-5", "offer-letter-generator-5")
+
+    paired = _run_paired_arms(
+        recursive_harness=recursive,
+        no_recursive_harness=no_recursive,
+        train_ids=train_ids,
+        validation_ids=validation_ids,
+        manifest_hash=recursive.manifest.manifest_hash,
+        max_generations=2,
+        max_consecutive_non_promotions=2,
+    )
+
+    recursive_second = paired["recursive_generations"][1]
+    no_recursive_second = paired["no_recursive_generations"][1]
+    assert recursive_second.evolution.root_hypothesis_id == "generation-two-root"
+    assert (
+        no_recursive_second.evolution.root_hypothesis_id
+        == recursive_second.evolution.root_hypothesis_id
+    )
+    assert len(recursive_model.requests) == 2
+    assert len(no_recursive_model.requests) == 0
+    assert len(recursive_backend.calls) == 12
+    assert len(no_recursive_backend.calls) == 0
+    proposal_replay = next(
+        row
+        for row in recursive_sink.events
+        if row["event"] == "root_proposal_evidence_replayed"
+        and row["payload"]["target_trace_id"].endswith("no-recursive-g2")
+    )
+    assert proposal_replay["payload"]["new_proposal_model_executions"] == 0
+    assert proposal_replay["payload"]["request_identical"] is True
+    assert sum(
+        row["event"] == "training_evidence_replayed"
+        for row in recursive_sink.events
+    ) == 2
+    assert sum(
+        row["event"] == "counterfactual_evidence_replayed"
+        for row in recursive_sink.events
+    ) == 2
 
 
 def test_train_only_candidate_selection_checks_all_roots_and_trigger_vocabulary(

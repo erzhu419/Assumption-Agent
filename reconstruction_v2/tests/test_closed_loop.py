@@ -172,6 +172,53 @@ def test_repair_model_failure_rejects_only_that_candidate_branch() -> None:
     )
 
 
+def test_root_proposal_replay_requires_the_exact_request_state() -> None:
+    sink = MemoryEventSink()
+    first_payload = _program_dict(hypothesis_id="root-first")
+    changed_payload = _program_dict(hypothesis_id="root-state-changed")
+    model = QueueProposalModel(
+        [
+            {"hypotheses": [first_payload]},
+            {"hypotheses": [changed_payload]},
+        ]
+    )
+    proposer = StructuredHypothesisProposer(model, event_sink=sink)
+    residuals = _residuals()
+
+    first = proposer.propose(
+        residuals,
+        evaluator_epoch="epoch-0",
+        capabilities={"prior_state": "same"},
+        trace_id="root-replay-source",
+    )
+    replayed = proposer.propose(
+        residuals,
+        evaluator_epoch="epoch-0",
+        capabilities={"prior_state": "same"},
+        trace_id="root-replay-target",
+    )
+    changed = proposer.propose(
+        residuals,
+        evaluator_epoch="epoch-0",
+        capabilities={"prior_state": "changed"},
+        trace_id="root-replay-state-miss",
+    )
+
+    assert replayed == first
+    assert changed[0].id == "root-state-changed"
+    assert len(model.requests) == 2
+    replay = next(
+        row for row in sink.events if row["event"] == "root_proposal_evidence_replayed"
+    )
+    assert replay["payload"]["source_trace_id"] == "root-replay-source"
+    assert replay["payload"]["target_trace_id"] == "root-replay-target"
+    assert replay["payload"]["request_identical"] is True
+    assert replay["payload"]["new_proposal_model_executions"] == 0
+    assert sum(
+        row["event"] == "root_proposal_evidence_recorded" for row in sink.events
+    ) == 2
+
+
 def test_paired_counterfactual_gain_promotes_program() -> None:
     sink = MemoryEventSink()
     runtime = _runtime(sink)

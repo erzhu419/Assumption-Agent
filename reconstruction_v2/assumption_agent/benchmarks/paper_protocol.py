@@ -15,6 +15,7 @@ from ..evolution import (
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
 )
 from ..provider_chain import configured_provider_chain, proposal_provider_status
+from ..proposer import ROOT_PROPOSAL_REPLAY_POLICY_VERSION
 from ..secure_env import (
     configured_api_origin,
     configured_model,
@@ -204,6 +205,13 @@ class PaperProtocol:
                 != COUNTERFACTUAL_REPLAY_POLICY_VERSION
             ):
                 issues.append("counterfactual_replay_policy_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("root_proposal_replay_policy")
+                != ROOT_PROPOSAL_REPLAY_POLICY_VERSION
+            ):
+                issues.append("root_proposal_replay_policy_mismatch")
             if (
                 major is not None
                 and major >= 3
