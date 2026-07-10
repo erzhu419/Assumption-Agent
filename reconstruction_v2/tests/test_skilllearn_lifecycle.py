@@ -21,9 +21,11 @@ from assumption_agent.benchmarks import (
     SkillLearnProviderCircuit,
     SkillLearnTrialObservation,
     SkillLearnTrialRequest,
+    TrainingEvidenceReplayCache,
     TrialVariant,
 )
 from assumption_agent.evaluation import PromotionGate, PromotionGateSpec
+from assumption_agent.evolution import CounterfactualEvidenceReplayCache
 from assumption_agent.events import MemoryEventSink
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
     SkillLearnSubprocessBackend,
@@ -77,24 +79,35 @@ class FakeSkillLearnBackend:
         *,
         invalid_candidate_item: str | None = None,
         invalid_training_item: str | None = None,
+        invalid_candidate_once: bool = False,
+        invalid_training_once: bool = False,
     ) -> None:
         self.invalid_candidate_item = invalid_candidate_item
         self.invalid_training_item = invalid_training_item
+        self.invalid_candidate_once = invalid_candidate_once
+        self.invalid_training_once = invalid_training_once
+        self._invalidated_candidate = False
+        self._invalidated_training = False
         self.calls: list[tuple[str, str, bool]] = []
+        self.request_hashes: list[str] = []
 
     def run(self, request, *, skill_source_dir, trace_id):
         has_skill = skill_source_dir is not None and skill_source_dir.is_dir()
         self.calls.append((request.item_id, request.variant.value, has_skill))
-        invalid = (
-            (
-                request.variant is TrialVariant.POLICY_ON
-                and request.item_id == self.invalid_candidate_item
-            )
-            or (
-                request.split is SplitName.TRAIN
-                and request.item_id == self.invalid_training_item
-            )
+        self.request_hashes.append(request.request_hash)
+        invalid_candidate = (
+            request.variant is TrialVariant.POLICY_ON
+            and request.item_id == self.invalid_candidate_item
+            and (not self.invalid_candidate_once or not self._invalidated_candidate)
         )
+        invalid_training = (
+            request.split is SplitName.TRAIN
+            and request.item_id == self.invalid_training_item
+            and (not self.invalid_training_once or not self._invalidated_training)
+        )
+        invalid = invalid_candidate or invalid_training
+        self._invalidated_candidate = self._invalidated_candidate or invalid_candidate
+        self._invalidated_training = self._invalidated_training or invalid_training
         success = has_skill and not invalid
         return SkillLearnTrialObservation(
             request=request,
@@ -276,6 +289,83 @@ def test_real_manifest_lifecycle_promotes_and_seals_test(tmp_path: Path) -> None
     assert all(pair.candidate_outcome.success for pair in pairs)
 
 
+def test_root_proposal_failure_preserves_a_terminal_generation_report(
+    tmp_path: Path,
+) -> None:
+    harness, backend, model, _, guard, sink = _harness(tmp_path)
+    model.responses.clear()
+
+    result = harness.run_generation(
+        train_item_ids=(
+            "organize-messy-files-1",
+            "offer-letter-generator-1",
+        ),
+        validation_item_ids=(
+            "organize-messy-files-5",
+            "offer-letter-generator-5",
+        ),
+        trace_id="root-proposal-model-failure",
+    )
+
+    assert result.evolution is None
+    assert result.reason == "proposal_model_failed"
+    assert result.to_dict()["proposal_model_failure_count"] == 1
+    assert len(backend.calls) == 2
+    assert guard.test_accessed is False
+    assert any(
+        row["event"] == "skilllearn_generation_stopped_after_proposal_model_failure"
+        and row["payload"]["performance_claim_eligible"] is False
+        for row in sink.events
+    )
+    assert any(
+        row["event"] == "skilllearn_evolution_generation_completed"
+        and row["payload"]["reason"] == "proposal_model_failed"
+        for row in sink.events
+    )
+
+
+def test_repair_model_failure_blocks_generation_promotion(
+    tmp_path: Path,
+) -> None:
+    bad = _program_dict()
+    bad["id"] = "hyp-needs-repair"
+    for action in bad["action_graph"]:
+        if action.get("target") == "skilllearn_challenger":
+            action["target"] = "missing_lane"
+    good = _program_dict()
+    good["id"] = "hyp-statically-valid"
+    harness, backend, _, archive, guard, sink = _harness(
+        tmp_path,
+        proposal_rows=[bad, good],
+    )
+
+    result = harness.run_generation(
+        train_item_ids=(
+            "organize-messy-files-1",
+            "offer-letter-generator-1",
+        ),
+        validation_item_ids=(
+            "organize-messy-files-5",
+            "offer-letter-generator-5",
+        ),
+        trace_id="repair-failure-blocks-generation",
+    )
+
+    assert result.evolution is not None
+    assert result.reason == "proposal_model_failed"
+    assert result.evolution.repair_model_failure_count == 1
+    assert result.evolution.promotion_decision is None
+    assert result.to_dict()["proposal_model_failure_count"] == 1
+    assert archive.incumbent_id is None
+    assert len(backend.calls) == 2
+    assert guard.test_accessed is False
+    assert any(
+        row["event"] == "evolution_generation_blocked_by_repair_model_failure"
+        and row["payload"]["counterfactual_validation_executed"] is False
+        for row in sink.events
+    )
+
+
 def test_invalid_external_pair_blocks_promotion(tmp_path: Path) -> None:
     harness, _, _, _, _, _ = _harness(
         tmp_path,
@@ -295,6 +385,86 @@ def test_invalid_external_pair_blocks_promotion(tmp_path: Path) -> None:
     assert result.evolution is not None
     assert result.evolution.promoted is False
     assert "invalid_counterfactual_pairs" in result.evolution.promotion_decision.blockers
+
+
+def test_invalid_counterfactual_bundle_does_not_enter_replay_cache(
+    tmp_path: Path,
+) -> None:
+    target = "offer-letter-generator-5"
+    harness, backend, _, _, _, sink = _harness(
+        tmp_path,
+        invalid_candidate_item=target,
+    )
+    cache = CounterfactualEvidenceReplayCache(event_sink=sink)
+    program = HypothesisProgram.from_dict(_program_dict())
+    tasks = harness.tasks((target,))
+
+    first = cache.run_or_replay(
+        runner=harness.counterfactual_runner,
+        tasks=tasks,
+        program=program,
+        baseline_programs=(),
+        split=SplitName.VALIDATION,
+        trace_id="invalid-cache-source",
+    )
+    second = cache.run_or_replay(
+        runner=harness.counterfactual_runner,
+        tasks=tasks,
+        program=program,
+        baseline_programs=(),
+        split=SplitName.VALIDATION,
+        trace_id="invalid-cache-target",
+    )
+
+    assert first[0].candidate_outcome.metrics["evaluation_valid"] == 0.0
+    assert second[0].candidate_outcome.metrics["evaluation_valid"] == 0.0
+    assert len(backend.calls) == 4
+    assert not any(
+        row["event"] == "counterfactual_evidence_replayed"
+        for row in sink.events
+    )
+    assert sum(
+        row["event"] == "counterfactual_evidence_not_recorded_invalid"
+        for row in sink.events
+    ) == 2
+
+
+def test_invalid_counterfactual_arm_is_cleanly_retried_before_promotion(
+    tmp_path: Path,
+) -> None:
+    backend = FakeSkillLearnBackend(
+        invalid_candidate_item="offer-letter-generator-5",
+        invalid_candidate_once=True,
+    )
+    harness, _, _, _, _, sink = _harness(
+        tmp_path,
+        backend_override=backend,
+        invalid_trial_max_attempts=2,
+    )
+
+    result = harness.run_generation(
+        train_item_ids=(
+            "organize-messy-files-1",
+            "organize-messy-files-2",
+            "offer-letter-generator-1",
+            "offer-letter-generator-2",
+        ),
+        validation_item_ids=(
+            "organize-messy-files-5",
+            "offer-letter-generator-5",
+        ),
+        trace_id="counterfactual-clean-retry",
+    )
+
+    assert result.evolution is not None
+    assert result.evolution.promoted is True
+    assert result.evolution.promotion_decision.summary.invalid_pair_count == 0
+    assert len(backend.calls) == 9
+    assert any(
+        row["event"] == "skilllearn_invalid_trial_clean_replacement"
+        and row["payload"]["same_request_key"] is True
+        for row in sink.events
+    )
 
 
 def test_invalid_training_evidence_blocks_proposal(tmp_path: Path) -> None:
@@ -326,6 +496,69 @@ def test_invalid_training_evidence_blocks_proposal(tmp_path: Path) -> None:
         and row["payload"]["proposal_blocked"] is True
         for row in sink.events
     )
+
+
+def test_invalid_training_trial_is_cleanly_retried_with_same_request_key(
+    tmp_path: Path,
+) -> None:
+    invalid_item = "organize-messy-files-1"
+    backend = FakeSkillLearnBackend(
+        invalid_training_item=invalid_item,
+        invalid_training_once=True,
+    )
+    harness, _, _, _, _, sink = _harness(
+        tmp_path,
+        backend_override=backend,
+        invalid_trial_max_attempts=2,
+    )
+
+    observations = harness.collect_training_observations(
+        train_item_ids=(invalid_item, "organize-messy-files-2"),
+        trace_id="training-clean-retry",
+    )
+
+    assert all(row.valid for row in observations)
+    assert len(backend.calls) == 3
+    assert backend.request_hashes[0] == backend.request_hashes[1]
+    replacement = next(
+        row
+        for row in sink.events
+        if row["event"] == "skilllearn_invalid_trial_clean_replacement"
+    )
+    assert replacement["payload"]["same_request_key"] is True
+    assert replacement["payload"]["attempt"] == 2
+
+
+def test_training_evidence_replay_avoids_identical_generation_resampling(
+    tmp_path: Path,
+) -> None:
+    harness, backend, _, _, _, sink = _harness(tmp_path)
+    cache = TrainingEvidenceReplayCache(event_sink=sink)
+    train_ids = (
+        "organize-messy-files-1",
+        "organize-messy-files-2",
+        "offer-letter-generator-1",
+        "offer-letter-generator-2",
+    )
+
+    first = harness.collect_training_observations(
+        train_item_ids=train_ids,
+        training_replay_cache=cache,
+        trace_id="training-replay-source",
+    )
+    second = harness.collect_training_observations(
+        train_item_ids=train_ids,
+        training_replay_cache=cache,
+        trace_id="training-replay-target",
+    )
+
+    assert second == first
+    assert len(backend.calls) == len(train_ids)
+    replay = next(
+        row for row in sink.events if row["event"] == "training_evidence_replayed"
+    )
+    assert replay["payload"]["behavior_identical"] is True
+    assert replay["payload"]["new_training_executions"] == 0
 
 
 def test_paired_ablation_shares_first_train_checkpoint_and_root(tmp_path: Path) -> None:
@@ -1049,6 +1282,7 @@ def _harness(
     invalid_training_item: str | None = None,
     backend_override=None,
     parallel_workers: int = 1,
+    invalid_trial_max_attempts: int = 1,
     proposal_rows: list[dict[str, Any]] | None = None,
 ):
     sink = MemoryEventSink()
@@ -1100,6 +1334,7 @@ def _harness(
         evaluator_epoch="skilllearn-eval-epoch-0",
         output_root=tmp_path / "compiled",
         parallel_workers=parallel_workers,
+        invalid_trial_max_attempts=invalid_trial_max_attempts,
         event_sink=sink,
     )
     return harness, backend, model, archive, guard, sink

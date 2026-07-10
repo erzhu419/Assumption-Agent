@@ -41,6 +41,7 @@ class EvolutionRunResult:
     static_validation_node_count: int = 0
     static_validation_max_recursion_depth: int = 0
     repaired_candidate_count: int = 0
+    repair_model_failure_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -139,6 +140,33 @@ class CounterfactualEvidenceReplayCache:
             evaluator_epoch=str(descriptor["evaluator_epoch"]),
         )
         pair_set_hash = _counterfactual_pair_set_hash(pairs)
+        invalid_pair_count = sum(not _counterfactual_pair_valid(row) for row in pairs)
+        if invalid_pair_count:
+            self.event_sink.emit(
+                Event(
+                    event="counterfactual_evidence_not_recorded_invalid",
+                    stage="evolution.counterfactual_replay",
+                    trace_id=trace_id,
+                    payload={
+                        "policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+                        "replay_key": replay_key,
+                        "source_trace_id": trace_id,
+                        "pair_set_hash": pair_set_hash,
+                        "pair_count": len(pairs),
+                        "invalid_pair_count": invalid_pair_count,
+                        "candidate_behavior_hash": descriptor[
+                            "candidate_behavior_hash"
+                        ],
+                        "baseline_behavior_set_hash": descriptor[
+                            "baseline_behavior_set_hash"
+                        ],
+                        "task_set_hash": descriptor["task_set_hash"],
+                        "sealed_test_accessed": False,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+            return pairs
         self._records[replay_key] = _CounterfactualEvidenceRecord(
             pairs=pairs,
             source_trace_id=trace_id,
@@ -306,6 +334,9 @@ class EvolutionKernel:
         repaired_candidate_count = sum(
             audit.tree.recursion_depth > 0 for audit in audits
         )
+        repair_model_failure_count = sum(
+            audit.tree.repair_model_failure_count for audit in audits
+        )
         self.event_sink.emit(
             Event(
                 event="hypothesis_training_candidate_selection_completed",
@@ -318,6 +349,7 @@ class EvolutionKernel:
                     "static_validation_node_count": static_node_count,
                     "static_validation_max_recursion_depth": static_max_depth,
                     "repaired_candidate_count": repaired_candidate_count,
+                    "repair_model_failure_count": repair_model_failure_count,
                     "candidates": [
                         {
                             "root_id": audit.root.id,
@@ -336,6 +368,45 @@ class EvolutionKernel:
                 },
             )
         )
+        if repair_model_failure_count:
+            selected_audit = eligible[0] if eligible else audits[0]
+            for audit in eligible:
+                assert audit.accepted is not None
+                self.archive.set_hypothesis_status(
+                    audit.accepted.id,
+                    HypothesisStatus.SHADOW,
+                    trace_id=trace_id,
+                )
+            self.event_sink.emit(
+                Event(
+                    event="evolution_generation_blocked_by_repair_model_failure",
+                    stage="evolution.train_selection",
+                    trace_id=trace_id,
+                    payload={
+                        "repair_model_failure_count": repair_model_failure_count,
+                        "proposal_candidate_count": len(proposals),
+                        "static_accepted_candidate_count": len(eligible),
+                        "counterfactual_validation_executed": False,
+                        "archive_promotion_allowed": False,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+            return self._result(
+                trace_id=trace_id,
+                root=selected_audit.root,
+                accepted=None,
+                tree=selected_audit.tree,
+                decision=None,
+                archive_node=None,
+                reason="proposal_model_failed",
+                proposal_candidate_count=len(proposals),
+                static_accepted_candidate_count=len(eligible),
+                static_validation_node_count=static_node_count,
+                static_validation_max_recursion_depth=static_max_depth,
+                repaired_candidate_count=repaired_candidate_count,
+                repair_model_failure_count=repair_model_failure_count,
+            )
         if not eligible:
             rejected = audits[0]
             return self._result(
@@ -351,6 +422,7 @@ class EvolutionKernel:
                 static_validation_node_count=static_node_count,
                 static_validation_max_recursion_depth=static_max_depth,
                 repaired_candidate_count=repaired_candidate_count,
+                repair_model_failure_count=repair_model_failure_count,
             )
         selected = eligible[0]
         root = selected.root
@@ -439,6 +511,7 @@ class EvolutionKernel:
             static_validation_node_count=static_node_count,
             static_validation_max_recursion_depth=static_max_depth,
             repaired_candidate_count=repaired_candidate_count,
+            repair_model_failure_count=repair_model_failure_count,
         )
 
     def propose_candidates(
@@ -506,6 +579,7 @@ class EvolutionKernel:
         static_validation_node_count: int = 0,
         static_validation_max_recursion_depth: int = 0,
         repaired_candidate_count: int = 0,
+        repair_model_failure_count: int = 0,
     ) -> EvolutionRunResult:
         result = EvolutionRunResult(
             trace_id=trace_id,
@@ -521,6 +595,7 @@ class EvolutionKernel:
             static_validation_node_count=static_validation_node_count,
             static_validation_max_recursion_depth=static_validation_max_recursion_depth,
             repaired_candidate_count=repaired_candidate_count,
+            repair_model_failure_count=repair_model_failure_count,
         )
         self.event_sink.emit(
             Event(
@@ -543,6 +618,7 @@ class EvolutionKernel:
                         static_validation_max_recursion_depth
                     ),
                     "repaired_candidate_count": repaired_candidate_count,
+                    "repair_model_failure_count": repair_model_failure_count,
                     "generation_hash": stable_hash(
                         {
                             "root": root.payload_hash,
@@ -646,6 +722,12 @@ def _counterfactual_pair_set_hash(
             }
             for row in pairs
         ]
+    )
+
+
+def _counterfactual_pair_valid(pair: CounterfactualPair) -> bool:
+    return bool(pair.baseline_outcome.metrics.get("evaluation_valid", 1.0)) and bool(
+        pair.candidate_outcome.metrics.get("evaluation_valid", 1.0)
     )
 
 

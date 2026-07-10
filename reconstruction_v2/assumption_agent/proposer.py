@@ -13,6 +13,22 @@ class ProposalModel(Protocol):
     def complete(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: ...
 
 
+class HypothesisProposalCallError(RuntimeError):
+    """Sanitized failure from one proposal or repair model request."""
+
+    def __init__(
+        self,
+        *,
+        request_kind: str,
+        request_hash: str,
+        error_type: str,
+    ) -> None:
+        super().__init__(f"{request_kind} model call failed ({error_type})")
+        self.request_kind = request_kind
+        self.request_hash = request_hash
+        self.error_type = error_type
+
+
 class StructuredHypothesisProposer:
     def __init__(self, model: ProposalModel, *, event_sink: EventSink | None = None) -> None:
         self.model = model
@@ -154,10 +170,38 @@ class StructuredHypothesisProposer:
         )
 
     def _complete(self, payload: Mapping[str, Any], *, trace_id: str) -> Mapping[str, Any]:
-        traced = getattr(self.model, "complete_with_trace", None)
-        if callable(traced):
-            return traced(payload, trace_id=trace_id)
-        return self.model.complete(payload)
+        request_kind = str(payload.get("request_kind") or "hypothesis_proposal")
+        request_hash = stable_hash(payload)
+        try:
+            traced = getattr(self.model, "complete_with_trace", None)
+            if callable(traced):
+                return traced(payload, trace_id=trace_id)
+            return self.model.complete(payload)
+        except HypothesisProposalCallError:
+            raise
+        except Exception as exc:
+            self.event_sink.emit(
+                Event(
+                    event="hypothesis_proposal_model_call_failed",
+                    stage="proposal.model",
+                    trace_id=trace_id,
+                    payload={
+                        "request_kind": request_kind,
+                        "request_hash": request_hash,
+                        "error_type": type(exc).__name__,
+                        "candidate_local_failure": (
+                            request_kind == "repair_hypothesis_program"
+                        ),
+                        "raw_error_persisted": False,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+            raise HypothesisProposalCallError(
+                request_kind=request_kind,
+                request_hash=request_hash,
+                error_type=type(exc).__name__,
+            ) from exc
 
 
 def _residual_payload(residual: ResidualExample) -> dict[str, Any]:

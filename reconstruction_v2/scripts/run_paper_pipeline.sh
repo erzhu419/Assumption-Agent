@@ -16,6 +16,9 @@ PARALLEL_WORKERS="${PARALLEL_WORKERS:-4}"
 MODEL="${MODEL:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model"])' "${PROTOCOL}")}"
 TRIAL_PROVIDER_MODE="${TRIAL_PROVIDER_MODE:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["trial_provider_mode"])' "${PROTOCOL}")}"
 PROPOSAL_PROVIDER_CHAIN="${PROPOSAL_PROVIDER_CHAIN:-$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1], encoding="utf-8"))["proposal_provider_chain"]))' "${PROTOCOL}")}"
+INVALID_TRIAL_MAX_ATTEMPTS="${INVALID_TRIAL_MAX_ATTEMPTS:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["invalid_trial_max_attempts"])' "${PROTOCOL}")}"
+INVALID_TRIAL_RETRY_BACKOFF_SECONDS="${INVALID_TRIAL_RETRY_BACKOFF_SECONDS:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["invalid_trial_retry_backoff_seconds"])' "${PROTOCOL}")}"
+INVALID_TRIAL_RETRY_WORKERS="${INVALID_TRIAL_RETRY_WORKERS:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["invalid_trial_retry_workers"])' "${PROTOCOL}")}"
 export ASSUMPTION_V2_MODEL="${MODEL}"
 export ASSUMPTION_V2_SKILLLEARN_PROVIDER_MODE="${TRIAL_PROVIDER_MODE}"
 export ASSUMPTION_V2_PROVIDER_CHAIN="${PROPOSAL_PROVIDER_CHAIN}"
@@ -80,6 +83,9 @@ run_generation() {
     --model "${MODEL}" \
     --max-steps 100 \
     --parallel-workers "${PARALLEL_WORKERS}" \
+    --invalid-trial-max-attempts "${INVALID_TRIAL_MAX_ATTEMPTS}" \
+    --invalid-trial-retry-backoff-seconds "${INVALID_TRIAL_RETRY_BACKOFF_SECONDS}" \
+    --invalid-trial-retry-workers "${INVALID_TRIAL_RETRY_WORKERS}" \
     --proposal-candidates-per-generation 3 \
     --execute \
     "$@"

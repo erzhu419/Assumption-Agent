@@ -10,6 +10,7 @@ __all__ = [
     "SkillLearnSubprocessBackend",
     "SkillLearnTrialObservation",
     "SkillLearnTrialRequest",
+    "TrainingEvidenceReplayCache",
     "TrialVariant",
 ]
 
@@ -33,6 +34,7 @@ def __getattr__(name: str):
         "SkillLearnSubprocessBackend",
         "SkillLearnTrialObservation",
         "SkillLearnTrialRequest",
+        "TrainingEvidenceReplayCache",
         "TrialVariant",
     }:
         from . import skilllearn_lifecycle

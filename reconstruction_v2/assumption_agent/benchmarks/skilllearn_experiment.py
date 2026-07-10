@@ -15,7 +15,7 @@ from ..evolution import (
 )
 from ..models import stable_hash
 from ..provider_chain import build_proposal_model, proposal_provider_status
-from ..proposer import StructuredHypothesisProposer
+from ..proposer import HypothesisProposalCallError, StructuredHypothesisProposer
 from ..secure_env import (
     alternate_model_allowed,
     configured_model,
@@ -47,7 +47,12 @@ from .skilllearn_lifecycle import (
     PROVIDER_FAILURE_POLICY_VERSION,
     PROVIDER_ROUTE_POLICY_VERSION,
     RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
+    INVALID_TRIAL_RETRY_POLICY_VERSION,
+    LOCAL_EVIDENCE_TRANSPORT_VERSION,
+    NETWORK_SCOPE_AUDIT_VERSION,
+    PROPOSAL_FAILURE_ISOLATION_POLICY_VERSION,
     TRAINING_EVIDENCE_POLICY_VERSION,
+    TRAINING_EVIDENCE_REPLAY_POLICY_VERSION,
     TRIAL_TIMEOUT_POLICY_VERSION,
     SkillLearnBackendPool,
     SkillLearnEvolutionHarness,
@@ -55,6 +60,7 @@ from .skilllearn_lifecycle import (
     SkillLearnPrebuiltImageCache,
     SkillLearnProviderCircuit,
     SkillLearnSubprocessBackend,
+    TrainingEvidenceReplayCache,
 )
 from .skilllearnbench import SkillLearnBenchAdapter
 
@@ -90,6 +96,11 @@ def main() -> None:
     parser.add_argument("--max-consecutive-non-promotions", type=int, default=1)
     parser.add_argument("--proposal-candidates-per-generation", type=int, default=3)
     parser.add_argument("--parallel-workers", type=int, default=1)
+    parser.add_argument("--invalid-trial-max-attempts", type=int, default=1)
+    parser.add_argument(
+        "--invalid-trial-retry-backoff-seconds", type=float, default=0.0
+    )
+    parser.add_argument("--invalid-trial-retry-workers", type=int, default=1)
     parser.add_argument("--disable-recursive-repair", action="store_true")
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()
@@ -153,6 +164,20 @@ def main() -> None:
         "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
         "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
         "counterfactual_replay_policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+        "training_evidence_replay_policy": (
+            TRAINING_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
+        "invalid_trial_retry_policy": INVALID_TRIAL_RETRY_POLICY_VERSION,
+        "invalid_trial_max_attempts": args.invalid_trial_max_attempts,
+        "invalid_trial_retry_backoff_seconds": (
+            args.invalid_trial_retry_backoff_seconds
+        ),
+        "invalid_trial_retry_workers": args.invalid_trial_retry_workers,
+        "local_evidence_transport": LOCAL_EVIDENCE_TRANSPORT_VERSION,
+        "network_scope_audit": NETWORK_SCOPE_AUDIT_VERSION,
+        "proposal_failure_isolation_policy": (
+            PROPOSAL_FAILURE_ISOLATION_POLICY_VERSION
+        ),
         "openai_compatible_codex_config": (
             OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION
             if trial_provider_mode == "openai_compatible"
@@ -194,6 +219,12 @@ def main() -> None:
         blockers.append("proposal_candidates_per_generation_must_be_positive")
     if args.parallel_workers <= 0:
         blockers.append("parallel_workers_must_be_positive")
+    if args.invalid_trial_max_attempts <= 0:
+        blockers.append("invalid_trial_max_attempts_must_be_positive")
+    if args.invalid_trial_retry_backoff_seconds < 0:
+        blockers.append("invalid_trial_retry_backoff_must_be_nonnegative")
+    if args.invalid_trial_retry_workers <= 0:
+        blockers.append("invalid_trial_retry_workers_must_be_positive")
     if args.execute and prewarm_receipt_hash is None:
         blockers.append("execute_requires_passed_development_prewarm")
     if bool(args.paired_no_recursive_out) != bool(args.paired_no_recursive_archive_out):
@@ -302,6 +333,11 @@ def main() -> None:
         output_root=args.work_dir / "compiled_skills",
         proposal_candidates_per_generation=args.proposal_candidates_per_generation,
         parallel_workers=args.parallel_workers,
+        invalid_trial_max_attempts=args.invalid_trial_max_attempts,
+        invalid_trial_retry_backoff_seconds=(
+            args.invalid_trial_retry_backoff_seconds
+        ),
+        invalid_trial_retry_workers=args.invalid_trial_retry_workers,
         event_sink=sink,
     )
     archive_path = args.archive_out or args.work_dir / "archive.json"
@@ -340,6 +376,11 @@ def main() -> None:
             output_root=args.work_dir / "compiled_skills_no_recursive",
             proposal_candidates_per_generation=args.proposal_candidates_per_generation,
             parallel_workers=args.parallel_workers,
+            invalid_trial_max_attempts=args.invalid_trial_max_attempts,
+            invalid_trial_retry_backoff_seconds=(
+                args.invalid_trial_retry_backoff_seconds
+            ),
+            invalid_trial_retry_workers=args.invalid_trial_retry_workers,
             event_sink=sink,
         )
         paired = _run_paired_arms(
@@ -425,12 +466,20 @@ def _run_single_arm(
     max_consecutive_non_promotions: int,
 ) -> tuple[list[SkillLearnGenerationResult], str]:
     generations: list[SkillLearnGenerationResult] = []
+    training_replay_cache = TrainingEvidenceReplayCache(
+        event_sink=harness.event_sink
+    )
+    counterfactual_replay_cache = CounterfactualEvidenceReplayCache(
+        event_sink=harness.event_sink
+    )
     consecutive = 0
     stop_reason = "max_generations_reached"
     for generation_index in range(1, max_generations + 1):
         generation = harness.run_generation(
             train_item_ids=train_ids,
             validation_item_ids=validation_ids,
+            training_replay_cache=training_replay_cache,
+            counterfactual_replay_cache=counterfactual_replay_cache,
             trace_id=f"skilllearn-generation-{manifest_hash[:12]}-g{generation_index}",
         )
         generations.append(generation)
@@ -459,22 +508,31 @@ def _run_paired_arms(
     replay_cache = CounterfactualEvidenceReplayCache(
         event_sink=recursive_harness.event_sink
     )
+    training_replay_cache = TrainingEvidenceReplayCache(
+        event_sink=recursive_harness.event_sink
+    )
     observations = recursive_harness.collect_training_observations(
         train_item_ids=train_ids,
+        training_replay_cache=training_replay_cache,
         trace_id=f"{shared_trace}:shared-train",
     )
     residuals = recursive_harness.residual_miner.mine(
         observations,
         trace_id=f"{shared_trace}:shared-residuals",
     )
-    proposals = (
-        recursive_harness.propose_candidates(
-            residuals,
-            trace_id=f"{shared_trace}:shared-root",
+    proposal_error: HypothesisProposalCallError | None = None
+    try:
+        proposals = (
+            recursive_harness.propose_candidates(
+                residuals,
+                trace_id=f"{shared_trace}:shared-root",
+            )
+            if residuals
+            else ()
         )
-        if residuals
-        else ()
-    )
+    except HypothesisProposalCallError as exc:
+        proposal_error = exc
+        proposals = ()
     checkpoint_hash = stable_hash(
         {
             "observation_hashes": [row.observation_hash for row in observations],
@@ -507,6 +565,26 @@ def _run_paired_arms(
             },
         )
     )
+    if proposal_error is not None:
+        recursive_generation = recursive_harness.record_proposal_failure(
+            observations=observations,
+            residuals=residuals,
+            error=proposal_error,
+            trace_id=f"{shared_trace}:recursive",
+        )
+        no_recursive_generation = no_recursive_harness.record_proposal_failure(
+            observations=observations,
+            residuals=residuals,
+            error=proposal_error,
+            trace_id=f"{shared_trace}:no-recursive",
+        )
+        return {
+            "checkpoint_hash": checkpoint_hash,
+            "recursive_generations": [recursive_generation],
+            "recursive_stop_reason": "proposal_model_failure",
+            "no_recursive_generations": [no_recursive_generation],
+            "no_recursive_stop_reason": "proposal_model_failure",
+        }
     recursive_generations = [
         recursive_harness.run_generation_from_evidence(
             observations=observations,
@@ -542,6 +620,7 @@ def _run_paired_arms(
             generation = recursive_harness.run_generation(
                 train_item_ids=train_ids,
                 validation_item_ids=validation_ids,
+                training_replay_cache=training_replay_cache,
                 counterfactual_replay_cache=replay_cache,
                 trace_id=(
                     f"skilllearn-paired-{manifest_hash[:12]}-recursive-g{generation_index}"
@@ -557,6 +636,7 @@ def _run_paired_arms(
             generation = no_recursive_harness.run_generation(
                 train_item_ids=train_ids,
                 validation_item_ids=validation_ids,
+                training_replay_cache=training_replay_cache,
                 counterfactual_replay_cache=replay_cache,
                 trace_id=(
                     f"skilllearn-paired-{manifest_hash[:12]}-no-recursive-g{generation_index}"
@@ -589,6 +669,8 @@ def _advance_arm(
     consecutive_non_promotions: int,
     maximum: int,
 ) -> tuple[bool, int, str]:
+    if generation.to_dict()["proposal_model_failure_count"]:
+        return False, consecutive_non_promotions, "proposal_model_failure"
     if generation.reason in {
         "no_valid_failed_training_rows",
         "duplicate_hypothesis_behavior",
@@ -616,6 +698,10 @@ def _execution_report(
 ) -> dict[str, Any]:
     if not generations:
         raise ValueError("execution report requires at least one generation")
+    proposal_model_failure_count = sum(
+        int(row.to_dict()["proposal_model_failure_count"])
+        for row in generations
+    )
     return {
         "mode": "execute",
         "plan": dict(plan),
@@ -624,6 +710,8 @@ def _execution_report(
         "generations": [row.to_dict() for row in generations],
         "generation_count": len(generations),
         "evolution_stop_reason": stop_reason,
+        "proposal_model_failure_count": proposal_model_failure_count,
+        "proposal_model_failures_present": bool(proposal_model_failure_count),
         "archive_hash": archive.to_dict()["archive_hash"],
         "archive_path_hash": _path_hash(archive_path),
         "executed": True,

@@ -44,7 +44,7 @@ from ..models import (
     TaskInput,
     stable_hash,
 )
-from ..proposer import StructuredHypothesisProposer
+from ..proposer import HypothesisProposalCallError, StructuredHypothesisProposer
 from ..secure_env import configured_skilllearn_provider_mode, resolve_codex_auth_path
 from ..splits import AccessPhase, BenchmarkItem, SplitAccessGuard, SplitManifest
 from ..validation import (
@@ -64,6 +64,19 @@ TRIAL_TIMEOUT_POLICY_VERSION = "no_fixed_trial_wall_or_container_timeout_v2"
 PROVIDER_FAILURE_POLICY_VERSION = "codex_jsonl_terminal_error_circuit_v1"
 EPHEMERAL_AUTH_CLEANUP_VERSION = "bounded_ephemeral_auth_cleanup_v1"
 TRAINING_EVIDENCE_POLICY_VERSION = "all_valid_before_proposal_v1"
+TRAINING_EVIDENCE_REPLAY_POLICY_VERSION = (
+    "behavior_identical_training_replay_v1"
+)
+INVALID_TRIAL_RETRY_POLICY_VERSION = (
+    "same_request_invalid_only_clean_replacement_v1"
+)
+LOCAL_EVIDENCE_TRANSPORT_VERSION = (
+    "local_content_addressed_task_and_post_agent_verifier_v1"
+)
+NETWORK_SCOPE_AUDIT_VERSION = "declared_model_endpoint_and_local_evidence_v1"
+PROPOSAL_FAILURE_ISOLATION_POLICY_VERSION = (
+    "candidate_local_repair_and_generation_terminal_root_failure_v1"
+)
 PROVIDER_ROUTE_POLICY_VERSION = "single_model_single_provider_all_arms_v1"
 OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION = "codex_custom_responses_provider_v1"
 OPENAI_COMPATIBLE_CODEX_PROVIDER_ID = "assumption_v2_openai_compatible"
@@ -224,6 +237,123 @@ class SkillLearnTrialObservation:
             "agent_runtime_version": self.agent_runtime_version,
             "secret_value_persisted": False,
         }
+
+
+@dataclass(frozen=True)
+class _TrainingEvidenceRecord:
+    observations: tuple[SkillLearnTrialObservation, ...]
+    source_trace_id: str
+    observation_set_hash: str
+
+
+class TrainingEvidenceReplayCache:
+    """Reuse train outcomes only while the executable incumbent is unchanged."""
+
+    def __init__(self, *, event_sink: EventSink | None = None) -> None:
+        self.event_sink = event_sink or NullEventSink()
+        self._records: dict[str, _TrainingEvidenceRecord] = {}
+
+    def run_or_replay(
+        self,
+        *,
+        descriptor: Mapping[str, Any],
+        train_item_ids: Sequence[str],
+        producer: Callable[[], tuple[SkillLearnTrialObservation, ...]],
+        trace_id: str,
+    ) -> tuple[SkillLearnTrialObservation, ...]:
+        if descriptor.get("split") != SplitName.TRAIN.value:
+            raise PermissionError("training replay is restricted to train evidence")
+        if descriptor.get("policy") != TRAINING_EVIDENCE_REPLAY_POLICY_VERSION:
+            raise ValueError("training replay descriptor policy mismatch")
+        replay_key = stable_hash(dict(descriptor))
+        record = self._records.get(replay_key)
+        if record is not None:
+            _validate_training_observations(
+                record.observations,
+                train_item_ids=train_item_ids,
+                descriptor=descriptor,
+            )
+            self.event_sink.emit(
+                Event(
+                    event="training_evidence_replayed",
+                    stage="benchmark.skilllearn.training_replay",
+                    trace_id=trace_id,
+                    payload={
+                        "policy": TRAINING_EVIDENCE_REPLAY_POLICY_VERSION,
+                        "replay_key": replay_key,
+                        "source_trace_id": record.source_trace_id,
+                        "target_trace_id": trace_id,
+                        "observation_set_hash": record.observation_set_hash,
+                        "observation_count": len(record.observations),
+                        "incumbent_behavior_set_hash": descriptor[
+                            "incumbent_behavior_set_hash"
+                        ],
+                        "task_set_hash": descriptor["task_set_hash"],
+                        "behavior_identical": True,
+                        "new_training_executions": 0,
+                        "sealed_test_accessed": False,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+            return record.observations
+
+        observations = tuple(producer())
+        if any(not row.valid for row in observations):
+            self.event_sink.emit(
+                Event(
+                    event="training_evidence_not_recorded_invalid",
+                    stage="benchmark.skilllearn.training_replay",
+                    trace_id=trace_id,
+                    payload={
+                        "policy": TRAINING_EVIDENCE_REPLAY_POLICY_VERSION,
+                        "replay_key": replay_key,
+                        "observation_count": len(observations),
+                        "invalid_observation_count": sum(
+                            not row.valid for row in observations
+                        ),
+                        "new_training_executions": len(observations),
+                        "sealed_test_accessed": False,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+            return observations
+        _validate_training_observations(
+            observations,
+            train_item_ids=train_item_ids,
+            descriptor=descriptor,
+        )
+        observation_set_hash = stable_hash(
+            {"hashes": [row.observation_hash for row in observations]}
+        )
+        self._records[replay_key] = _TrainingEvidenceRecord(
+            observations=observations,
+            source_trace_id=trace_id,
+            observation_set_hash=observation_set_hash,
+        )
+        self.event_sink.emit(
+            Event(
+                event="training_evidence_recorded",
+                stage="benchmark.skilllearn.training_replay",
+                trace_id=trace_id,
+                payload={
+                    "policy": TRAINING_EVIDENCE_REPLAY_POLICY_VERSION,
+                    "replay_key": replay_key,
+                    "source_trace_id": trace_id,
+                    "observation_set_hash": observation_set_hash,
+                    "observation_count": len(observations),
+                    "incumbent_behavior_set_hash": descriptor[
+                        "incumbent_behavior_set_hash"
+                    ],
+                    "task_set_hash": descriptor["task_set_hash"],
+                    "new_training_executions": len(observations),
+                    "sealed_test_accessed": False,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        return observations
 
 
 class SkillLearnTrialBackend(Protocol):
@@ -778,6 +908,45 @@ class SkillLearnSubprocessBackend:
                     runner=runner,
                     trace_id=f"{trace_id}:prebuild",
                 )
+            self.event_sink.emit(
+                Event(
+                    event="skilllearn_local_evidence_and_network_scope_declared",
+                    stage="benchmark.skilllearn.evidence_transport",
+                    trace_id=trace_id,
+                    payload={
+                        "local_evidence_policy": LOCAL_EVIDENCE_TRANSPORT_VERSION,
+                        "network_audit_policy": NETWORK_SCOPE_AUDIT_VERSION,
+                        "benchmark_task_transport": (
+                            "local_content_addressed_prebuilt_image"
+                            if prebuilt_image is not None
+                            else "local_task_directory"
+                        ),
+                        "task_environment_hash": (
+                            prebuilt_image.environment_hash if prebuilt_image else None
+                        ),
+                        "prebuilt_image_id": (
+                            prebuilt_image.image_id if prebuilt_image else None
+                        ),
+                        "verifier_transport": "local_docker_copy_after_agent_exit",
+                        "model_transport": (
+                            "online_openai_compatible_responses"
+                            if self.provider_mode == "openai_compatible"
+                            else "online_codex_subscription"
+                        ),
+                        "model_endpoint_origin": (
+                            _configured_openai_compatible_origin()
+                            if self.provider_mode == "openai_compatible"
+                            else None
+                        ),
+                        "huggingface_dataset_access_required": False,
+                        "online_benchmark_dataset_access_required": False,
+                        "container_egress_isolation_enforced": False,
+                        "dependency_cache_only_enforced": False,
+                        "secret_value_persisted": False,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
             if skill_source_dir is None:
                 skill_config = "no_skill"
             elif request.variant is TrialVariant.POLICY_OFF:
@@ -1447,10 +1616,19 @@ class SkillLearnCounterfactualRunner:
         compiler: SkillLearnProgramCompiler,
         output_root: str | Path,
         parallel_workers: int = 1,
+        invalid_trial_max_attempts: int = 1,
+        invalid_trial_retry_backoff_seconds: float = 0.0,
+        invalid_trial_retry_workers: int = 1,
         event_sink: EventSink | None = None,
     ) -> None:
         if parallel_workers <= 0:
             raise ValueError("counterfactual worker count must be positive")
+        if invalid_trial_max_attempts <= 0:
+            raise ValueError("invalid trial maximum attempts must be positive")
+        if invalid_trial_retry_backoff_seconds < 0:
+            raise ValueError("invalid trial retry backoff cannot be negative")
+        if invalid_trial_retry_workers <= 0:
+            raise ValueError("invalid trial retry worker count must be positive")
         self.adapter = adapter
         self.manifest = manifest
         self.guard = guard
@@ -1459,6 +1637,13 @@ class SkillLearnCounterfactualRunner:
         self.compiler = compiler
         self.output_root = Path(output_root)
         self.parallel_workers = parallel_workers
+        self.invalid_trial_max_attempts = invalid_trial_max_attempts
+        self.invalid_trial_retry_backoff_seconds = (
+            invalid_trial_retry_backoff_seconds
+        )
+        self._invalid_retry_semaphore = threading.Semaphore(
+            invalid_trial_retry_workers
+        )
         self.event_sink = event_sink or NullEventSink()
         self.items = {item.id: item for item in adapter.discover()}
         self.runtime = _ExternalRuntimeDescriptor()
@@ -1566,14 +1751,35 @@ class SkillLearnCounterfactualRunner:
         candidate_skill_source = (
             candidate_compile_result.source_for(task.id) if activated else None
         )
+        def run_trial(
+            request: SkillLearnTrialRequest,
+            *,
+            skill_source_dir: Path | None,
+            arm: str,
+        ) -> SkillLearnTrialObservation:
+            return _run_invalid_only_trial(
+                request=request,
+                run_once=lambda attempt: self.backend.run(
+                    request,
+                    skill_source_dir=skill_source_dir,
+                    trace_id=(
+                        f"{trace_id}:{pair_id}:{arm}:attempt-{attempt}"
+                    ),
+                ),
+                maximum_attempts=self.invalid_trial_max_attempts,
+                backoff_seconds=self.invalid_trial_retry_backoff_seconds,
+                retry_semaphore=self._invalid_retry_semaphore,
+                event_sink=self.event_sink,
+                trace_id=f"{trace_id}:{pair_id}:{arm}",
+            )
         run_on_first = False
         if activated and (
             candidate_skill_source is None or not candidate_skill_source.is_dir()
         ):
-            baseline_observation = self.backend.run(
+            baseline_observation = run_trial(
                 off_request,
                 skill_source_dir=baseline_skill_source,
-                trace_id=f"{trace_id}:{pair_id}:off",
+                arm="off",
             )
             candidate_observation = _invalid_observation_like(
                 on_request,
@@ -1581,10 +1787,10 @@ class SkillLearnCounterfactualRunner:
                 "compiled_candidate_skill_missing",
             )
         elif not activated:
-            baseline_observation = self.backend.run(
+            baseline_observation = run_trial(
                 off_request,
                 skill_source_dir=baseline_skill_source,
-                trace_id=f"{trace_id}:{pair_id}:off",
+                arm="off",
             )
             candidate_observation = baseline_observation.as_variant(on_request)
         else:
@@ -1592,26 +1798,26 @@ class SkillLearnCounterfactualRunner:
                 int(stable_hash({"pair_id": pair_id, "order": "balanced"})[:8], 16) % 2 == 1
             )
             if run_on_first:
-                candidate_observation = self.backend.run(
+                candidate_observation = run_trial(
                     on_request,
                     skill_source_dir=candidate_skill_source,
-                    trace_id=f"{trace_id}:{pair_id}:on",
+                    arm="on",
                 )
-                baseline_observation = self.backend.run(
+                baseline_observation = run_trial(
                     off_request,
                     skill_source_dir=baseline_skill_source,
-                    trace_id=f"{trace_id}:{pair_id}:off",
+                    arm="off",
                 )
             else:
-                baseline_observation = self.backend.run(
+                baseline_observation = run_trial(
                     off_request,
                     skill_source_dir=baseline_skill_source,
-                    trace_id=f"{trace_id}:{pair_id}:off",
+                    arm="off",
                 )
-                candidate_observation = self.backend.run(
+                candidate_observation = run_trial(
                     on_request,
                     skill_source_dir=candidate_skill_source,
-                    trace_id=f"{trace_id}:{pair_id}:on",
+                    arm="on",
                 )
 
         baseline_execution = _execution_from_observation(
@@ -1706,6 +1912,7 @@ class SkillLearnGenerationResult:
     evolution: EvolutionRunResult | None
     reason: str
     baseline_hypothesis_ids: tuple[str, ...] = ()
+    proposal_model_failure_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         decision = self.evolution.promotion_decision if self.evolution else None
@@ -1733,6 +1940,17 @@ class SkillLearnGenerationResult:
             ),
             "repaired_candidate_count": (
                 self.evolution.repaired_candidate_count if self.evolution else 0
+            ),
+            "repair_model_failure_count": (
+                self.evolution.repair_model_failure_count if self.evolution else 0
+            ),
+            "proposal_model_failure_count": (
+                self.proposal_model_failure_count
+                + (
+                    self.evolution.repair_model_failure_count
+                    if self.evolution
+                    else 0
+                )
             ),
             "selected_candidate_node_count": (
                 len(self.evolution.validation_tree.nodes) if self.evolution else 0
@@ -1770,10 +1988,19 @@ class SkillLearnEvolutionHarness:
         output_root: str | Path,
         proposal_candidates_per_generation: int = 3,
         parallel_workers: int = 1,
+        invalid_trial_max_attempts: int = 1,
+        invalid_trial_retry_backoff_seconds: float = 0.0,
+        invalid_trial_retry_workers: int = 1,
         event_sink: EventSink | None = None,
     ) -> None:
         if parallel_workers <= 0:
             raise ValueError("evolution worker count must be positive")
+        if invalid_trial_max_attempts <= 0:
+            raise ValueError("invalid trial maximum attempts must be positive")
+        if invalid_trial_retry_backoff_seconds < 0:
+            raise ValueError("invalid trial retry backoff cannot be negative")
+        if invalid_trial_retry_workers <= 0:
+            raise ValueError("invalid trial retry worker count must be positive")
         self.adapter = adapter
         self.manifest = manifest
         self.guard = guard
@@ -1785,6 +2012,13 @@ class SkillLearnEvolutionHarness:
         self.evaluator_epoch = evaluator_epoch
         self.output_root = Path(output_root)
         self.parallel_workers = parallel_workers
+        self.invalid_trial_max_attempts = invalid_trial_max_attempts
+        self.invalid_trial_retry_backoff_seconds = (
+            invalid_trial_retry_backoff_seconds
+        )
+        self._invalid_retry_semaphore = threading.Semaphore(
+            invalid_trial_retry_workers
+        )
         self.event_sink = event_sink or NullEventSink()
         self.items = {item.id: item for item in adapter.discover()}
         self.residual_miner = SkillLearnResidualMiner(
@@ -1803,6 +2037,11 @@ class SkillLearnEvolutionHarness:
             compiler=self.compiler,
             output_root=self.output_root,
             parallel_workers=parallel_workers,
+            invalid_trial_max_attempts=invalid_trial_max_attempts,
+            invalid_trial_retry_backoff_seconds=(
+                invalid_trial_retry_backoff_seconds
+            ),
+            invalid_trial_retry_workers=invalid_trial_retry_workers,
             event_sink=self.event_sink,
         )
         self.kernel = EvolutionKernel(
@@ -1821,6 +2060,7 @@ class SkillLearnEvolutionHarness:
         *,
         train_item_ids: Sequence[str] | None = None,
         validation_item_ids: Sequence[str] | None = None,
+        training_replay_cache: TrainingEvidenceReplayCache | None = None,
         counterfactual_replay_cache: CounterfactualEvidenceReplayCache | None = None,
         trace_id: str = "skilllearn_evolution_generation",
     ) -> SkillLearnGenerationResult:
@@ -1830,6 +2070,7 @@ class SkillLearnEvolutionHarness:
         _require_subset(validation_ids, self.manifest.validation_ids, "validation")
         observations = self.collect_training_observations(
             train_item_ids=train_ids,
+            training_replay_cache=training_replay_cache,
             trace_id=trace_id,
         )
         residuals = self.residual_miner.mine(observations, trace_id=trace_id)
@@ -1845,6 +2086,7 @@ class SkillLearnEvolutionHarness:
         self,
         *,
         train_item_ids: Sequence[str] | None = None,
+        training_replay_cache: TrainingEvidenceReplayCache | None = None,
         trace_id: str = "skilllearn_training_observations",
     ) -> tuple[SkillLearnTrialObservation, ...]:
         train_ids = tuple(train_item_ids or self.manifest.train_ids)
@@ -1866,7 +2108,23 @@ class SkillLearnEvolutionHarness:
                 trace_id=trace_id,
             )
 
-        observations = _ordered_parallel_map(train_ids, run_one, self.parallel_workers)
+        def produce() -> tuple[SkillLearnTrialObservation, ...]:
+            return _ordered_parallel_map(train_ids, run_one, self.parallel_workers)
+
+        descriptor = self._training_replay_descriptor(
+            train_ids=train_ids,
+            incumbent_programs=incumbent_programs,
+        )
+        observations = (
+            training_replay_cache.run_or_replay(
+                descriptor=descriptor,
+                train_item_ids=train_ids,
+                producer=produce,
+                trace_id=trace_id,
+            )
+            if training_replay_cache is not None
+            else produce()
+        )
         invalid = tuple(row for row in observations if not row.valid)
         if invalid:
             error_counts = _count_values(
@@ -1948,20 +2206,66 @@ class SkillLearnEvolutionHarness:
             return result
         validation_tasks = self.tasks(validation_ids)
         validation_context = self.validation_context(residuals)
-        evolution = self.kernel.evolve_once(
-            residuals=residuals,
-            validation_tasks=validation_tasks,
-            validation_context=validation_context,
-            proposal_candidates=proposal_candidates,
-            counterfactual_replay_cache=counterfactual_replay_cache,
-            trace_id=trace_id,
-        )
+        try:
+            evolution = self.kernel.evolve_once(
+                residuals=residuals,
+                validation_tasks=validation_tasks,
+                validation_context=validation_context,
+                proposal_candidates=proposal_candidates,
+                counterfactual_replay_cache=counterfactual_replay_cache,
+                trace_id=trace_id,
+            )
+        except HypothesisProposalCallError as exc:
+            return self.record_proposal_failure(
+                observations=observations,
+                residuals=residuals,
+                error=exc,
+                trace_id=trace_id,
+            )
         result = SkillLearnGenerationResult(
             train_observations=observations,
             residuals=residuals,
             evolution=evolution,
             reason=evolution.reason,
             baseline_hypothesis_ids=tuple(row.id for row in incumbent_programs),
+        )
+        self._emit_generation_result(result, trace_id)
+        return result
+
+    def record_proposal_failure(
+        self,
+        *,
+        observations: Sequence[SkillLearnTrialObservation],
+        residuals: Sequence[ResidualExample],
+        error: HypothesisProposalCallError,
+        trace_id: str,
+    ) -> SkillLearnGenerationResult:
+        incumbent_programs = self.incumbent_programs()
+        self.event_sink.emit(
+            Event(
+                event="skilllearn_generation_stopped_after_proposal_model_failure",
+                stage="benchmark.skilllearn.evolution",
+                trace_id=trace_id,
+                payload={
+                    "policy": PROPOSAL_FAILURE_ISOLATION_POLICY_VERSION,
+                    "request_kind": error.request_kind,
+                    "request_hash": error.request_hash,
+                    "error_type": error.error_type,
+                    "generation_terminal": True,
+                    "report_preserved": True,
+                    "performance_claim_eligible": False,
+                    "raw_error_persisted": False,
+                    "sealed_test_accessed": False,
+                },
+            )
+        )
+        result = SkillLearnGenerationResult(
+            train_observations=tuple(observations),
+            residuals=tuple(residuals),
+            evolution=None,
+            reason="proposal_model_failed",
+            baseline_hypothesis_ids=tuple(row.id for row in incumbent_programs),
+            proposal_model_failure_count=1,
         )
         self._emit_generation_result(result, trace_id)
         return result
@@ -2084,11 +2388,59 @@ class SkillLearnEvolutionHarness:
             max_steps=self.backend.max_steps,
             manifest_hash=self.manifest.manifest_hash,
         )
-        return self.backend.run(
-            request,
-            skill_source_dir=skill_source_dir,
+        return _run_invalid_only_trial(
+            request=request,
+            run_once=lambda attempt: self.backend.run(
+                request,
+                skill_source_dir=skill_source_dir,
+                trace_id=(
+                    f"{trace_id}:{pair_id}:train:attempt-{attempt}"
+                ),
+            ),
+            maximum_attempts=self.invalid_trial_max_attempts,
+            backoff_seconds=self.invalid_trial_retry_backoff_seconds,
+            retry_semaphore=self._invalid_retry_semaphore,
+            event_sink=self.event_sink,
             trace_id=f"{trace_id}:{pair_id}:train",
         )
+
+    def _training_replay_descriptor(
+        self,
+        *,
+        train_ids: Sequence[str],
+        incumbent_programs: Sequence[HypothesisProgram],
+    ) -> dict[str, Any]:
+        task_rows = [
+            {
+                "task_id": item_id,
+                "family": self.items[item_id].family,
+                "feature_hash": stable_hash(
+                    {
+                        **dict(self.items[item_id].features),
+                        "family": self.items[item_id].family,
+                    }
+                ),
+            }
+            for item_id in train_ids
+        ]
+        incumbent_behavior_hashes = sorted(
+            _program_behavior_hash(row) for row in incumbent_programs
+        )
+        return {
+            "policy": TRAINING_EVIDENCE_REPLAY_POLICY_VERSION,
+            "split": SplitName.TRAIN.value,
+            "manifest_hash": self.manifest.manifest_hash,
+            "evaluator_epoch": self.evaluator_epoch,
+            "runtime_version": self.counterfactual_runner.runtime.runtime_version,
+            "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
+            "agent_id": self.backend.agent_id,
+            "model": self.backend.model,
+            "max_steps": self.backend.max_steps,
+            "incumbent_behavior_set_hash": stable_hash(
+                incumbent_behavior_hashes
+            ),
+            "task_set_hash": stable_hash(task_rows),
+        }
 
     def _emit_generation_result(self, result: SkillLearnGenerationResult, trace_id: str) -> None:
         self.event_sink.emit(
@@ -2544,6 +2896,19 @@ def _normalize_openai_compatible_codex_base_url(base_url: str) -> str:
     return urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
 
 
+def _configured_openai_compatible_origin() -> str | None:
+    base_url = (
+        os.environ.get("ASSUMPTION_V2_API_BASE")
+        or os.environ.get("OPENAI_BASE_URL")
+        or os.environ.get("GPT5_BASE_URL")
+        or os.environ.get("RUOLI_BASE_URL")
+    )
+    if not base_url:
+        return None
+    parsed = urlsplit(_normalize_openai_compatible_codex_base_url(base_url))
+    return urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+
+
 def _provider_scoped_terminal_error(
     error_type: str | None,
     provider_mode: str,
@@ -2684,6 +3049,132 @@ def _as_nonnegative_int(value: Any) -> int:
         return max(0, int(value or 0))
     except (TypeError, ValueError):
         return 0
+
+
+def _run_invalid_only_trial(
+    *,
+    request: SkillLearnTrialRequest,
+    run_once: Callable[[int], SkillLearnTrialObservation],
+    maximum_attempts: int,
+    backoff_seconds: float,
+    retry_semaphore: threading.Semaphore,
+    event_sink: EventSink,
+    trace_id: str,
+) -> SkillLearnTrialObservation:
+    if maximum_attempts <= 0:
+        raise ValueError("invalid trial maximum attempts must be positive")
+    if backoff_seconds < 0:
+        raise ValueError("invalid trial retry backoff cannot be negative")
+    observation = run_once(1)
+    if observation.request.request_hash != request.request_hash:
+        raise PermissionError("trial execution changed the frozen request key")
+    for attempt in range(2, maximum_attempts + 1):
+        if observation.valid or not _retryable_invalid_observation(observation):
+            break
+        previous = observation
+        delay = backoff_seconds * (attempt - 1)
+        event_sink.emit(
+            Event(
+                event="skilllearn_invalid_trial_retry_scheduled",
+                stage="benchmark.skilllearn.invalid_retry",
+                trace_id=trace_id,
+                payload={
+                    "policy": INVALID_TRIAL_RETRY_POLICY_VERSION,
+                    "request_hash": request.request_hash,
+                    "attempt": attempt,
+                    "maximum_attempts": maximum_attempts,
+                    "backoff_seconds": delay,
+                    "previous_error_type": previous.error_type,
+                    "previous_observation_hash": previous.observation_hash,
+                    "same_request_key_required": True,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        if delay:
+            time.sleep(delay)
+        with retry_semaphore:
+            replacement = run_once(attempt)
+        if replacement.request.request_hash != request.request_hash:
+            raise PermissionError("invalid retry changed the frozen request key")
+        observation = replacement
+        event_sink.emit(
+            Event(
+                event=(
+                    "skilllearn_invalid_trial_clean_replacement"
+                    if replacement.valid
+                    else "skilllearn_invalid_trial_retry_failed"
+                ),
+                stage="benchmark.skilllearn.invalid_retry",
+                trace_id=trace_id,
+                payload={
+                    "policy": INVALID_TRIAL_RETRY_POLICY_VERSION,
+                    "request_hash": request.request_hash,
+                    "attempt": attempt,
+                    "maximum_attempts": maximum_attempts,
+                    "previous_error_type": previous.error_type,
+                    "replacement_error_type": replacement.error_type,
+                    "previous_observation_hash": previous.observation_hash,
+                    "replacement_observation_hash": replacement.observation_hash,
+                    "replacement_valid": replacement.valid,
+                    "same_request_key": True,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+    return observation
+
+
+def _retryable_invalid_observation(
+    observation: SkillLearnTrialObservation,
+) -> bool:
+    error_type = observation.error_type or ""
+    if not error_type or error_type in _FATAL_PROVIDER_ERROR_TYPES:
+        return False
+    if error_type.startswith("provider_circuit_open_"):
+        return False
+    return error_type not in {
+        "candidate_skill_source_missing",
+        "compiled_candidate_skill_missing",
+        "runner_configuration_error",
+    }
+
+
+def _program_behavior_hash(program: HypothesisProgram) -> str:
+    payload = program.to_dict()
+    for key in (
+        "id",
+        "status",
+        "parent_id",
+        "lineage",
+        "created_from_transition_ids",
+    ):
+        payload.pop(key, None)
+    return stable_hash(payload)
+
+
+def _validate_training_observations(
+    observations: Sequence[SkillLearnTrialObservation],
+    *,
+    train_item_ids: Sequence[str],
+    descriptor: Mapping[str, Any],
+) -> None:
+    if tuple(row.request.item_id for row in observations) != tuple(train_item_ids):
+        raise PermissionError("training replay task identity mismatch")
+    if any(not row.valid for row in observations):
+        raise SkillLearnTrainingEvidenceError(
+            "invalid training evidence may not enter the replay cache"
+        )
+    if any(
+        row.request.split is not SplitName.TRAIN
+        or row.request.manifest_hash != descriptor.get("manifest_hash")
+        or row.request.evaluator_epoch != descriptor.get("evaluator_epoch")
+        or row.request.agent_id != descriptor.get("agent_id")
+        or row.request.model != descriptor.get("model")
+        or row.request.max_steps != descriptor.get("max_steps")
+        for row in observations
+    ):
+        raise PermissionError("training replay crossed a frozen execution boundary")
 
 
 def _ordered_parallel_map(

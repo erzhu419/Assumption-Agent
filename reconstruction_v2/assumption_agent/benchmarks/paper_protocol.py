@@ -28,8 +28,12 @@ from .skilllearn_compiler import SKILL_ROUTING_VERSION
 from .prewarm import DEVELOPMENT_PREWARM_VERSION
 from .skilllearn_lifecycle import (
     EPHEMERAL_AUTH_CLEANUP_VERSION,
+    INVALID_TRIAL_RETRY_POLICY_VERSION,
+    LOCAL_EVIDENCE_TRANSPORT_VERSION,
+    NETWORK_SCOPE_AUDIT_VERSION,
     OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION,
     PREBUILT_IMAGE_POLICY_VERSION,
+    PROPOSAL_FAILURE_ISOLATION_POLICY_VERSION,
     PROVIDER_ROUTE_POLICY_VERSION,
     PROVIDER_FAILURE_POLICY_VERSION,
     RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
@@ -37,6 +41,7 @@ from .skilllearn_lifecycle import (
     SHARED_CODEX_CLI_PACKAGE,
     SHARED_CODEX_CLI_VERSION,
     TRAINING_EVIDENCE_POLICY_VERSION,
+    TRAINING_EVIDENCE_REPLAY_POLICY_VERSION,
     TRIAL_TIMEOUT_POLICY_VERSION,
     VERIFIER_ISOLATION_VERSION,
 )
@@ -199,6 +204,61 @@ class PaperProtocol:
                 != COUNTERFACTUAL_REPLAY_POLICY_VERSION
             ):
                 issues.append("counterfactual_replay_policy_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("training_evidence_replay_policy")
+                != TRAINING_EVIDENCE_REPLAY_POLICY_VERSION
+            ):
+                issues.append("training_evidence_replay_policy_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("invalid_trial_retry_policy")
+                != INVALID_TRIAL_RETRY_POLICY_VERSION
+            ):
+                issues.append("invalid_trial_retry_policy_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and not 1 <= int(execution.get("invalid_trial_max_attempts") or 0) <= 5
+            ):
+                issues.append("invalid_trial_max_attempts_invalid")
+            if (
+                major is not None
+                and major >= 3
+                and not _is_nonnegative_number(
+                    execution.get("invalid_trial_retry_backoff_seconds")
+                )
+            ):
+                issues.append("invalid_trial_retry_backoff_invalid")
+            if (
+                major is not None
+                and major >= 3
+                and not 1 <= int(execution.get("invalid_trial_retry_workers") or 0) <= 4
+            ):
+                issues.append("invalid_trial_retry_workers_invalid")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("local_evidence_transport")
+                != LOCAL_EVIDENCE_TRANSPORT_VERSION
+            ):
+                issues.append("local_evidence_transport_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("network_scope_audit")
+                != NETWORK_SCOPE_AUDIT_VERSION
+            ):
+                issues.append("network_scope_audit_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("proposal_failure_isolation_policy")
+                != PROPOSAL_FAILURE_ISOLATION_POLICY_VERSION
+            ):
+                issues.append("proposal_failure_isolation_policy_mismatch")
         evolution = self.payload.get("evolution")
         if not isinstance(evolution, Mapping):
             issues.append("evolution_budget_missing")
@@ -252,6 +312,13 @@ def _protocol_major(value: Any) -> int | None:
         return int(str(value).split(".", 1)[0])
     except (TypeError, ValueError):
         return None
+
+
+def _is_nonnegative_number(value: Any) -> bool:
+    try:
+        return float(value) >= 0
+    except (TypeError, ValueError):
+        return False
 
 
 def build_protocol_lock(

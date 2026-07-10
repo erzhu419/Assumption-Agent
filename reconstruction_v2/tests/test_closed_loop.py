@@ -140,6 +140,38 @@ def test_failed_hypothesis_is_repaired_and_recursively_revalidated() -> None:
     assert any(row["event"] == "hypothesis_repair_proposed" for row in sink.events)
 
 
+def test_repair_model_failure_rejects_only_that_candidate_branch() -> None:
+    sink = MemoryEventSink()
+    bad = _program_dict(lane="missing_lane")
+    model = QueueProposalModel([{"hypotheses": [bad]}])
+    proposer = StructuredHypothesisProposer(model, event_sink=sink)
+    residuals = _residuals()
+    root = proposer.propose(
+        residuals,
+        evaluator_epoch="epoch-0",
+        max_hypotheses=1,
+    )[0]
+
+    tree = _validator(proposer, sink).validate(
+        root,
+        _validation_context(residuals),
+        trace_id="repair-model-failure",
+    )
+
+    assert tree.accepted_program is None
+    assert tree.repair_model_failure_count == 1
+    assert tree.nodes[0].terminal_reason == "repair_model_failed"
+    assert any(
+        row["event"] == "hypothesis_proposal_model_call_failed"
+        for row in sink.events
+    )
+    assert any(
+        row["event"] == "hypothesis_repair_abandoned_after_model_failure"
+        and row["payload"]["candidate_local_failure"] is True
+        for row in sink.events
+    )
+
+
 def test_paired_counterfactual_gain_promotes_program() -> None:
     sink = MemoryEventSink()
     runtime = _runtime(sink)

@@ -13,6 +13,7 @@
 - Every proposal, validation check, runtime action, evaluation, and promotion decision emits a structured event.
 - One protocol-frozen provider route and one model ID serve every proposal, raw, ablation, and agent call in a run.
 - Raw, ablations, and the evolving agent use the same digest-pinned container runtime, model, provider policy, and step budget.
+- Benchmark task payloads and verifier trees come from the frozen local inventory; online model transport is logged separately from local evaluation evidence.
 - Subscription-backed proposal turns may not use tools. Any tool item or server runtime request invalidates the model response.
 
 ## Proposal Boundary
@@ -27,7 +28,13 @@ The external SkillLearn task agent supports both a historical `codex_subscriptio
 
 Task containers are built from an exact non-oracle environment hash. The environment image never contains benchmark-provided skills. A single read-only Node/Codex runtime volume, pinned by builder digest and package version, is mounted into every variant. Image ID, runtime key, CLI version, and cache reuse are trial provenance. Different items may execute concurrently, but variants of one item are sequential to prevent within-pair provider contention.
 
-The recursive/no-recursive experiment shares one run-scoped counterfactual evidence cache. Its key includes candidate and incumbent executable-behavior hashes, validation task-feature hashes, evaluator epoch, split, and runtime version. Identical arm behavior reuses the exact recorded pairs and emits explicit record/replay events; no second model sample is allowed to masquerade as an ablation effect. A repaired or otherwise behaviorally different candidate misses the cache and runs its own external validation. Replay is forbidden for sealed-test evidence.
+SkillLearn task data and verifier code are local: task payloads enter through a content-addressed image and the verifier enters through a post-agent `docker cp`. The model call remains online. Every attempt declares the public model endpoint origin and explicitly records that container-wide egress isolation and dependency-cache-only execution are not yet enforced. This distinguishes local benchmark evaluation from online inference without making a false fully-offline claim.
+
+The experiment shares two run-scoped evidence caches. Training evidence is keyed by incumbent executable behavior, train task features, manifest, evaluator epoch, model, and runtime; an unchanged incumbent receives the exact prior observations with zero new task calls. Counterfactual evidence is keyed by candidate and incumbent behavior plus validation task features, evaluator epoch, split, and runtime. Identical behavior reuses exact evidence, while changed behavior misses the cache. Invalid train observations and invalid pair bundles are never cached. Replay is forbidden for sealed-test evidence.
+
+Transient invalid trials use a protocol-bounded retry queue. A replacement is admissible only when split, item, variant, model, provider policy, pair ID, and request hash are unchanged. Valid rows are never rerun by this mechanism; exhausted retries remain invalid and block proposal or promotion.
+
+Proposal transport failures are isolated from experiment persistence. A failed root proposal terminates that generation with a sanitized request hash and a non-claim-eligible report. A failed recursive repair terminates only that candidate branch so the remaining roots can still be audited, but any repair failure blocks validation execution and archive promotion for the generation. Earlier valid train or counterfactual evidence is retained; no model error is silently converted into a rejected scientific hypothesis.
 
 V2-compiled skills are routed by hashed item ID after evaluating triggers against that item's structured features. The compiler never promotes a family-level match from one item to all sibling items. A missing route means abstain and execute the raw path.
 

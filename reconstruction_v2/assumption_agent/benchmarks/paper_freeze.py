@@ -360,7 +360,16 @@ def _validate_development_report(
         expected["trial_timeout_policy"] = timeout_policy
     for field in (
         "provider_failure_policy",
+        "provider_route_policy",
         "counterfactual_replay_policy",
+        "training_evidence_replay_policy",
+        "invalid_trial_retry_policy",
+        "invalid_trial_max_attempts",
+        "invalid_trial_retry_backoff_seconds",
+        "invalid_trial_retry_workers",
+        "local_evidence_transport",
+        "network_scope_audit",
+        "proposal_failure_isolation_policy",
         "openai_compatible_codex_config",
         "ephemeral_auth_cleanup",
         "training_evidence_policy",

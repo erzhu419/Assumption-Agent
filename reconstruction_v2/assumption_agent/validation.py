@@ -11,7 +11,7 @@ from .models import (
     SplitName,
     stable_hash,
 )
-from .proposer import StructuredHypothesisProposer
+from .proposer import HypothesisProposalCallError, StructuredHypothesisProposer
 
 
 @dataclass(frozen=True)
@@ -308,6 +308,7 @@ class ValidationNode:
     depth: int
     checks: tuple[CheckResult, ...]
     child_id: str | None
+    terminal_reason: str
 
     @property
     def passed(self) -> bool:
@@ -323,6 +324,12 @@ class ValidationTree:
     @property
     def recursion_depth(self) -> int:
         return max((node.depth for node in self.nodes), default=0)
+
+    @property
+    def repair_model_failure_count(self) -> int:
+        return sum(
+            node.terminal_reason == "repair_model_failed" for node in self.nodes
+        )
 
 
 class RecursiveValidationEngine:
@@ -359,6 +366,7 @@ class RecursiveValidationEngine:
                     "recursion_depth": tree.recursion_depth,
                     "accepted_hypothesis_id": accepted.id if accepted else None,
                     "accepted": accepted is not None,
+                    "repair_model_failure_count": tree.repair_model_failure_count,
                     "tree_hash": stable_hash(
                         [
                             {
@@ -366,6 +374,7 @@ class RecursiveValidationEngine:
                                 "depth": node.depth,
                                 "passed": node.passed,
                                 "child_id": node.child_id,
+                                "terminal_reason": node.terminal_reason,
                             }
                             for node in nodes
                         ]
@@ -401,7 +410,15 @@ class RecursiveValidationEngine:
             )
         )
         if not failed:
-            nodes.append(ValidationNode(program=program, depth=depth, checks=results, child_id=None))
+            nodes.append(
+                ValidationNode(
+                    program=program,
+                    depth=depth,
+                    checks=results,
+                    child_id=None,
+                    terminal_reason="accepted",
+                )
+            )
             return program
         max_depth = program.verifier.max_repair_depth
         can_repair = (
@@ -410,33 +427,78 @@ class RecursiveValidationEngine:
             and depth < max_depth
         )
         if not can_repair:
-            nodes.append(ValidationNode(program=program, depth=depth, checks=results, child_id=None))
+            nodes.append(
+                ValidationNode(
+                    program=program,
+                    depth=depth,
+                    checks=results,
+                    child_id=None,
+                    terminal_reason="static_rejected",
+                )
+            )
             return None
-        child = self.proposer.revise(
-            program,
-            failed_checks=[result.to_dict() for result in failed],
-            residuals=context.residuals,
-            depth=depth + 1,
-            capabilities={
-                "available_lanes": sorted(context.available_lanes),
-                "baseline_lane": context.baseline_lane,
-                "runtime_trigger_contract": {
-                    "allowed_feature_catalog": dict(
-                        context.trigger_feature_catalog
+        try:
+            child = self.proposer.revise(
+                program,
+                failed_checks=[result.to_dict() for result in failed],
+                residuals=context.residuals,
+                depth=depth + 1,
+                capabilities={
+                    "available_lanes": sorted(context.available_lanes),
+                    "baseline_lane": context.baseline_lane,
+                    "runtime_trigger_contract": {
+                        "allowed_feature_catalog": dict(
+                            context.trigger_feature_catalog
+                        ),
+                        "forbidden_context_only_keys": [
+                            "task_instruction",
+                            "observed_metrics",
+                            "execution_signals",
+                        ],
+                        "context_is_for_action_design_only": True,
+                    },
+                    "runtime_candidate_kinds": sorted(
+                        kind.value for kind in context.allowed_runtime_kinds
                     ),
-                    "forbidden_context_only_keys": [
-                        "task_instruction",
-                        "observed_metrics",
-                        "execution_signals",
-                    ],
-                    "context_is_for_action_design_only": True,
+                    "evaluator_hypotheses_require_separate_epoch_challenger": True,
                 },
-                "runtime_candidate_kinds": sorted(
-                    kind.value for kind in context.allowed_runtime_kinds
-                ),
-                "evaluator_hypotheses_require_separate_epoch_challenger": True,
-            },
-            trace_id=trace_id,
+                trace_id=trace_id,
+            )
+        except HypothesisProposalCallError as exc:
+            self.event_sink.emit(
+                Event(
+                    event="hypothesis_repair_abandoned_after_model_failure",
+                    stage="validation.repair",
+                    trace_id=trace_id,
+                    payload={
+                        "parent_id": program.id,
+                        "parent_hash": program.payload_hash,
+                        "repair_depth": depth + 1,
+                        "request_kind": exc.request_kind,
+                        "request_hash": exc.request_hash,
+                        "error_type": exc.error_type,
+                        "candidate_local_failure": True,
+                        "raw_error_persisted": False,
+                    },
+                )
+            )
+            nodes.append(
+                ValidationNode(
+                    program=program,
+                    depth=depth,
+                    checks=results,
+                    child_id=None,
+                    terminal_reason="repair_model_failed",
+                )
+            )
+            return None
+        nodes.append(
+            ValidationNode(
+                program=program,
+                depth=depth,
+                checks=results,
+                child_id=child.id,
+                terminal_reason="repair_proposed",
+            )
         )
-        nodes.append(ValidationNode(program=program, depth=depth, checks=results, child_id=child.id))
         return self._validate_recursive(child, context, depth=depth + 1, nodes=nodes, trace_id=trace_id)
