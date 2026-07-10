@@ -72,6 +72,8 @@ def build_retry_command(
     model_router_attempts: int,
     model_router_transient_extra_attempts: int,
     model_router_per_attempt_timeout: float,
+    model_router_reasoning_effort: str,
+    max_tokens: int,
     model_router_no_byte_timeout_sec: float,
     model_router_global_concurrency: int,
     live_model_preflight_probe_count: int,
@@ -80,7 +82,7 @@ def build_retry_command(
     live_model_preflight_prompt_chars: int,
     live_model_preflight_max_tokens: int,
 ) -> list[str]:
-    return [
+    command = [
         sys.executable,
         "-m",
         "assumption_os.hle_parallel_shard_runner",
@@ -103,6 +105,8 @@ def build_retry_command(
         "--variants",
         group.variant,
         "--execute-live",
+        "--max-tokens",
+        str(max_tokens),
         "--model-router-attempts",
         str(model_router_attempts),
         "--model-router-transient-extra-attempts",
@@ -133,6 +137,11 @@ def build_retry_command(
         "--md-dir",
         str(md_dir),
     ]
+    if str(model_router_reasoning_effort or "").strip():
+        command.extend(
+            ["--model-router-reasoning-effort", str(model_router_reasoning_effort).strip()]
+        )
+    return command
 
 
 def build_combine_command(
@@ -214,6 +223,8 @@ def run_retry_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 model_router_attempts=args.model_router_attempts,
                 model_router_transient_extra_attempts=args.model_router_transient_extra_attempts,
                 model_router_per_attempt_timeout=args.model_router_per_attempt_timeout,
+                model_router_reasoning_effort=args.model_router_reasoning_effort,
+                max_tokens=args.max_tokens,
                 model_router_no_byte_timeout_sec=args.model_router_no_byte_timeout_sec,
                 model_router_global_concurrency=args.model_router_global_concurrency,
                 live_model_preflight_probe_count=args.live_model_preflight_probe_count,
@@ -289,6 +300,8 @@ def main() -> None:
     parser.add_argument("--model-router-attempts", type=int, default=2)
     parser.add_argument("--model-router-transient-extra-attempts", type=int, default=0)
     parser.add_argument("--model-router-per-attempt-timeout", type=float, default=0.0)
+    parser.add_argument("--model-router-reasoning-effort", default="")
+    parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--model-router-no-byte-timeout-sec", type=float, default=600.0)
     parser.add_argument("--model-router-global-concurrency", type=int, default=1)
     parser.add_argument("--live-model-preflight-probe-count", type=int, default=1)

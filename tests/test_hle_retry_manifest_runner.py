@@ -65,6 +65,8 @@ class TestHleRetryManifestRunner(unittest.TestCase):
             model_router_attempts=2,
             model_router_transient_extra_attempts=0,
             model_router_per_attempt_timeout=0,
+            model_router_reasoning_effort="low",
+            max_tokens=128,
             model_router_no_byte_timeout_sec=600,
             model_router_global_concurrency=1,
             live_model_preflight_probe_count=1,
@@ -78,6 +80,11 @@ class TestHleRetryManifestRunner(unittest.TestCase):
         self.assertEqual(command[command.index("--seed-offsets") + 1], "44,52")
         self.assertEqual(command[command.index("--variants") + 1], "raw")
         self.assertEqual(command[command.index("--models") + 1], "gpt-5.4-mini")
+        self.assertEqual(
+            command[command.index("--model-router-reasoning-effort") + 1],
+            "low",
+        )
+        self.assertEqual(command[command.index("--max-tokens") + 1], "128")
 
 
 if __name__ == "__main__":

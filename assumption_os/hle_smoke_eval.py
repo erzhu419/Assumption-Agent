@@ -111263,12 +111263,14 @@ def _model_router_payload_trace_metadata(payload: dict[str, Any]) -> dict[str, A
                 "model": payload.get("model"),
                 "temperature": payload.get("temperature"),
                 "max_tokens": payload.get("max_tokens"),
+                "reasoning_effort": payload.get("reasoning_effort"),
                 "prompt_hash": prompt_hash,
             }
         }),
         "payload_model": str(payload.get("model") or ""),
         "payload_temperature": payload.get("temperature"),
         "payload_max_tokens": payload.get("max_tokens"),
+        "payload_reasoning_effort": str(payload.get("reasoning_effort") or ""),
         "raw_content_persisted": False,
     }
 

@@ -125,6 +125,7 @@ from assumption_os.hle_smoke_eval import (
     _module_trace,
     _model_router_per_attempt_timeout,
     _model_router_extra_body,
+    _model_router_payload_trace_metadata,
     _model_router_subprocess_process_timeout,
     _no_gold_decision_guarded,
     _no_gold_decision_phase,
@@ -16868,6 +16869,22 @@ class HleSmokeEvalTest(unittest.TestCase):
         self.assertEqual(body["top_p"], 0.9)
         self.assertNotIn("model", body)
         self.assertNotIn("messages", body)
+
+    def test_model_router_payload_trace_audits_reasoning_effort(self):
+        base_payload = {
+            "model": "gpt-5.4-mini",
+            "messages": [{"role": "user", "content": "Q"}],
+            "temperature": 0,
+            "max_tokens": 8,
+        }
+        default_trace = _model_router_payload_trace_metadata(base_payload)
+        low_trace = _model_router_payload_trace_metadata(
+            {**base_payload, "reasoning_effort": "low"}
+        )
+
+        self.assertEqual(default_trace["payload_reasoning_effort"], "")
+        self.assertEqual(low_trace["payload_reasoning_effort"], "low")
+        self.assertNotEqual(default_trace["payload_hash"], low_trace["payload_hash"])
 
     def test_model_subprocess_call_does_not_put_api_key_in_command_args(self):
         with patch.dict(os.environ, {"MODEL_ROUTER_SUBPROCESS_CALLS": "1"}, clear=False):

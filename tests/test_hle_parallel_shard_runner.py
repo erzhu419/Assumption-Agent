@@ -1147,6 +1147,57 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(payload["error_stratification"]["top_level_error_count"], 0)
         self.assertEqual(payload["split_run_audit"]["failed_gates"], [])
 
+    def test_split_retry_rejects_changed_inference_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            controls = _payload([_row("p1", "raw", False, error_type="RuntimeError")])
+            controls.update({
+                "eval_id": "controls",
+                "eval_kind": "hle_parallel_shard_runner",
+                "runtime_policy": {
+                    "execute_live": True,
+                    "model_router": {"max_tokens": 512, "reasoning_effort": ""},
+                    "raw_content_persisted": False,
+                },
+                "raw_content_persisted": False,
+            })
+            retry = _payload([_row("p1", "raw", False)])
+            retry.update({
+                "eval_id": "raw-retry",
+                "eval_kind": "hle_parallel_shard_runner",
+                "runtime_policy": {
+                    "execute_live": True,
+                    "model_router": {"max_tokens": 128, "reasoning_effort": "low"},
+                    "raw_content_persisted": False,
+                },
+                "raw_content_persisted": False,
+            })
+            controls_path = root / "controls.json"
+            retry_path = root / "retry.json"
+            controls_path.write_text(json.dumps(controls), encoding="utf-8")
+            retry_path.write_text(json.dumps(retry), encoding="utf-8")
+
+            payload = build_split_fair_controls_payload(
+                eval_id="combined-policy-mismatch",
+                input_paths=[controls_path],
+                retry_input_paths=[retry_path],
+                allow_clean_retry_replacements=True,
+            )
+
+        self.assertFalse(payload["pass"])
+        self.assertFalse(payload["paper_clean_pass"])
+        self.assertIn(
+            "split_inputs_share_inference_policy",
+            payload["split_run_audit"]["failed_gates"],
+        )
+        self.assertEqual(
+            payload["split_run_audit"]["inference_policies"],
+            [
+                {"max_tokens": 512, "reasoning_effort": ""},
+                {"max_tokens": 128, "reasoning_effort": "low"},
+            ],
+        )
+
     def test_model_budget_fairness_blocks_unfair_strong_child_agent_claim(self) -> None:
         rows = [
             _row("p1", "raw", False, model="gpt-5.4-mini"),
@@ -1403,6 +1454,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
             enable_option_claim_relation_query_planner=True,
             parallel_workers=4,
             model_router_per_attempt_timeout=90,
+            model_router_reasoning_effort="low",
             model_router_subprocess_calls=True,
             model_router_no_byte_timeout_sec=120,
             model_router_backoff_base_sec=1.25,
@@ -1433,6 +1485,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertNotIn("HLE_DISABLE_OPTION_CLAIM_RELATION_QUERY_PLANNER", env)
         self.assertEqual(env["MODEL_ROUTER_TIMEOUT"], "7200")
         self.assertEqual(env["MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"], "90")
+        self.assertEqual(env["MODEL_ROUTER_REASONING_EFFORT"], "low")
         self.assertEqual(env["MODEL_ROUTER_SUBPROCESS_CALLS"], "1")
         self.assertEqual(env["MODEL_ROUTER_SUBPROCESS_NO_BYTE_TIMEOUT_SEC"], "120")
         self.assertEqual(env["HLE_PARALLEL_SHARD_WORKERS"], "4")
@@ -1445,6 +1498,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
         self.assertEqual(env["HLE_RECURSIVE_SELECTION_WALLCLOCK_BUDGET_SEC"], "180.0")
         policy = model_router_policy_from_env(env)
         self.assertEqual(policy["subprocess_calls"], "1")
+        self.assertEqual(policy["reasoning_effort"], "low")
         self.assertEqual(policy["subprocess_no_byte_timeout_sec"], "120")
         self.assertEqual(policy["recursive_child_attempts"], "1")
         self.assertEqual(policy["recursive_child_transient_extra_attempts"], "0")
@@ -1477,6 +1531,7 @@ class TestHleParallelShardRunner(unittest.TestCase):
                 "HLE_VARIANT_TOTAL_MODEL_ROUTER_SEC_BUDGET",
                 "MODEL_ROUTER_TIMEOUT",
                 "MODEL_ROUTER_PER_ATTEMPT_TIMEOUT",
+                "MODEL_ROUTER_REASONING_EFFORT",
                 "MODEL_ROUTER_SUBPROCESS_CALLS",
                 "MODEL_ROUTER_SUBPROCESS_NO_BYTE_TIMEOUT_SEC",
                 "HLE_PARALLEL_SHARD_WORKERS",

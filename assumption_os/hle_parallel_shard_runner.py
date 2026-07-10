@@ -728,6 +728,7 @@ def build_runner_env(
     disable_option_claim_source_verifier_structured_context: bool | None = None,
     parallel_workers: int | None = None,
     model_router_per_attempt_timeout: float | None = None,
+    model_router_reasoning_effort: str | None = None,
     model_router_subprocess_calls: bool | None = None,
     model_router_no_byte_timeout_sec: float | None = None,
     model_router_backoff_base_sec: float | None = None,
@@ -900,6 +901,12 @@ def build_runner_env(
         env["MODEL_ROUTER_TIMEOUT"] = str(model_router_timeout)
     if model_router_per_attempt_timeout is not None:
         env["MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"] = str(model_router_per_attempt_timeout)
+    if model_router_reasoning_effort is not None:
+        effort = str(model_router_reasoning_effort).strip()
+        if effort:
+            env["MODEL_ROUTER_REASONING_EFFORT"] = effort
+        else:
+            env.pop("MODEL_ROUTER_REASONING_EFFORT", None)
     if model_router_subprocess_calls is not None:
         env["MODEL_ROUTER_SUBPROCESS_CALLS"] = "1" if model_router_subprocess_calls else "0"
     if model_router_no_byte_timeout_sec is not None:
@@ -934,6 +941,7 @@ def model_router_policy_from_env(env: dict[str, str]) -> dict[str, Any]:
         ),
         "timeout_sec": env.get("MODEL_ROUTER_TIMEOUT"),
         "per_attempt_timeout_sec": env.get("MODEL_ROUTER_PER_ATTEMPT_TIMEOUT"),
+        "reasoning_effort": env.get("MODEL_ROUTER_REASONING_EFFORT"),
         "subprocess_calls": env.get("MODEL_ROUTER_SUBPROCESS_CALLS"),
         "subprocess_no_byte_timeout_sec": env.get("MODEL_ROUTER_SUBPROCESS_NO_BYTE_TIMEOUT_SEC")
         or env.get("MODEL_ROUTER_NO_BYTE_TIMEOUT_SEC"),
@@ -2145,6 +2153,9 @@ def build_split_fair_controls_payload(
         "retry_rows_replace_existing_variant_problem": split_audit["gates"][
             "retry_rows_replace_existing_variant_problem"
         ],
+        "split_inputs_share_inference_policy": split_audit["gates"][
+            "split_inputs_share_inference_policy"
+        ],
         "all_shards_finished_without_process_failure": all(
             state.status == "completed" for state in states
         ),
@@ -2475,6 +2486,18 @@ def _split_run_audit(
     disallowed_duplicate_count = int(
         duplicate_audit.get("disallowed_duplicate_variant_problem_row_count") or 0
     ) + int(duplicate_audit.get("primary_disallowed_duplicate_variant_problem_row_count") or 0)
+    inference_policies = []
+    for item in split_inputs:
+        runtime_policy = item.get("runtime_policy")
+        runtime_policy = runtime_policy if isinstance(runtime_policy, dict) else {}
+        model_router = runtime_policy.get("model_router")
+        model_router = model_router if isinstance(model_router, dict) else {}
+        policy = {
+            "max_tokens": int(model_router.get("max_tokens") or 512),
+            "reasoning_effort": str(model_router.get("reasoning_effort") or ""),
+        }
+        if policy not in inference_policies:
+            inference_policies.append(policy)
     gates = {
         "split_inputs_cover_same_problem_set": bool(problem_sets) and not mismatches,
         "no_duplicate_variant_problem_rows": (
@@ -2483,6 +2506,7 @@ def _split_run_audit(
         ),
         "retry_inputs_within_primary_problem_set": not retry_extra_problem_hashes,
         "retry_rows_replace_existing_variant_problem": not retry_new_variant_problem_keys,
+        "split_inputs_share_inference_policy": len(inference_policies) <= 1,
     }
     return {
         "audit_kind": "hle_split_fair_controls_audit",
@@ -2491,6 +2515,7 @@ def _split_run_audit(
         "retry_input_count": len(retry_inputs),
         "reference_problem_hash_count": len(reference),
         "problem_set_mismatches": mismatches,
+        "inference_policies": inference_policies,
         "duplicate_rows": duplicate_audit,
         "gates": gates,
         "failed_gates": [name for name, passed in gates.items() if not passed],
@@ -4395,6 +4420,7 @@ def main() -> None:
     parser.add_argument("--model-router-transient-extra-attempts", type=int, default=None)
     parser.add_argument("--model-router-timeout", type=float, default=None)
     parser.add_argument("--model-router-per-attempt-timeout", type=float, default=None)
+    parser.add_argument("--model-router-reasoning-effort", default=None)
     parser.add_argument("--model-router-subprocess-calls", action="store_true", default=None)
     parser.add_argument("--disable-model-router-subprocess-calls", action="store_true")
     parser.add_argument("--model-router-no-byte-timeout-sec", type=float, default=None)
@@ -4481,8 +4507,10 @@ def main() -> None:
             "model_router": {
                 "attempts": args.model_router_attempts,
                 "transient_extra_attempts": args.model_router_transient_extra_attempts,
+                "max_tokens": int(args.max_tokens),
                 "timeout_sec": args.model_router_timeout,
                 "per_attempt_timeout_sec": args.model_router_per_attempt_timeout,
+                "reasoning_effort": args.model_router_reasoning_effort,
                 "subprocess_calls": bool(args.model_router_subprocess_calls),
                 "subprocess_no_byte_timeout_sec": args.model_router_no_byte_timeout_sec,
                 "global_concurrency": args.model_router_global_concurrency,
@@ -4821,6 +4849,7 @@ def main() -> None:
             args.variant_total_model_router_sec_budget
         ),
         model_router_per_attempt_timeout=args.model_router_per_attempt_timeout,
+        model_router_reasoning_effort=args.model_router_reasoning_effort,
         model_router_subprocess_calls=args.model_router_subprocess_calls,
         model_router_no_byte_timeout_sec=args.model_router_no_byte_timeout_sec,
         model_router_backoff_base_sec=args.model_router_backoff_base_sec,
@@ -4832,6 +4861,8 @@ def main() -> None:
         recursive_selection_wallclock_budget_sec=args.recursive_selection_wallclock_budget_sec,
     )
     runner_source_policy = source_policy_from_env(env)
+    runner_model_router_policy = model_router_policy_from_env(env)
+    runner_model_router_policy["max_tokens"] = int(args.max_tokens)
     log_event(
         logger,
         {
@@ -4839,7 +4870,7 @@ def main() -> None:
             "eval_id": args.eval_id,
             "feature_flags": runner_feature_flags,
             "source_policy": runner_source_policy,
-            "model_router": model_router_policy_from_env(env),
+            "model_router": runner_model_router_policy,
             "private_env": private_env_status,
             "raw_content_persisted": False,
         },
@@ -4988,7 +5019,7 @@ def main() -> None:
         reuse_completed_shards=reuse_summary,
         launch_stagger_sec=max(0.0, float(args.launch_stagger_sec or 0.0)),
         diagnostic_log_out=diagnostic_log_out,
-        model_router_policy=model_router_policy_from_env(env),
+        model_router_policy=runner_model_router_policy,
         variant_watchdog_policy={
             "enabled": bool(
                 args.variant_total_timeout_sec is not None
