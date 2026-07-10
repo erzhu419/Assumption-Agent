@@ -23,6 +23,7 @@ from .skilllearn_lifecycle import (
     SHARED_AGENT_RUNTIME_BUILDER_IMAGE,
     SHARED_CODEX_CLI_PACKAGE,
     SHARED_CODEX_CLI_VERSION,
+    TRIAL_TIMEOUT_POLICY_VERSION,
     VERIFIER_ISOLATION_VERSION,
 )
 from .skilllearnbench import SkillLearnBenchAdapter
@@ -80,6 +81,12 @@ class PaperProtocol:
                 and execution.get("development_prewarm") != DEVELOPMENT_PREWARM_VERSION
             ):
                 issues.append("development_prewarm_mismatch")
+            if (
+                str(self.payload.get("protocol_version") or "").startswith("2.")
+                and execution.get("trial_timeout_policy")
+                != TRIAL_TIMEOUT_POLICY_VERSION
+            ):
+                issues.append("trial_timeout_policy_mismatch")
             if execution.get("agent_runtime_builder") != SHARED_AGENT_RUNTIME_BUILDER_IMAGE:
                 issues.append("agent_runtime_builder_mismatch")
             if execution.get("agent_runtime_package") != SHARED_CODEX_CLI_PACKAGE:

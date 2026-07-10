@@ -56,7 +56,7 @@ This primary runtime experiment admits only task and policy hypotheses. An evalu
 
 Reports separate aggregate static-tree recursion across every proposed root from recursion depth in the ultimately selected tree. This prevents a repaired but non-selected candidate from disappearing from the recursive/no-recursive mechanism audit.
 
-Policy-off and policy-on trials use one fairness fingerprint derived from backend, provider, agent, model, step budget, verifier isolation, runner-local agent-registry isolation, image-cache policy, and the actual shared agent-runtime key. Their order is deterministically balanced by pair ID. A provider, budget, or runtime mismatch invalidates the pair. Parallel backends receive deep-copied upstream agent registries so one subscription context cannot clear or restore another backend's agent definition.
+Policy-off and policy-on trials use one fairness fingerprint derived from backend, provider, agent, model, step budget, verifier isolation, runner-local agent-registry isolation, trial-timeout policy, image-cache policy, and the actual shared agent-runtime key. Their order is deterministically balanced by pair ID. A provider, budget, or runtime mismatch invalidates the pair. Parallel backends receive deep-copied upstream agent registries so one subscription context cannot clear or restore another backend's agent definition.
 
 Execution caches only the exact non-oracle task environment. Oracle `skills/` content is excluded from the environment hash and build context. Before development, all train/validation images must pass a bounded prewarm gate without invoking the model; the signed receipt becomes part of the development report and archive-freeze checks. Node is pinned by image digest, Codex CLI is pinned to `0.144.1`, and one read-only runtime volume is shared by all item images. Parallelism is across benchmark items only. Every variant for one item runs sequentially in a protocol-derived balanced order, so raw and candidate do not contend against each other inside one pair.
 
@@ -67,6 +67,8 @@ Proposal-provider failover is allowed only before a candidate program is fixed, 
 For Codex subscription trials, both variants mount independently materialized copies of the same local auth source under the same provider policy. Tokens are never serialized into requests, reports, or trial artifacts. Auth materialization failure invalidates the pair before task scoring.
 
 Verifier code is not visible to the agent. The v2 subprocess proxy removes the upstream `/tests` bind from `docker run`; after the agent exits, it creates `/tests`, copies the frozen verifier files, and then invokes `test.sh`. The isolation version is part of provider and fairness fingerprints. Any trial produced by the earlier visible-verifier path is explicitly invalid.
+
+The upstream runner's fixed 1800-second wall timeout is removed from the agent and verifier subprocesses. Long but active tasks therefore run to completion; image construction, dependency installation, and prewarm still use bounded retry and timeout policies. Legacy rows with `agent_timed_out=true` or `verifier_exit=-1` are infrastructure-invalid and cannot enter promotion or performance statistics.
 
 Task success is the primary externally executable outcome. Skill-quality and trajectory-quality scores are separate upstream post-processing analyses, not fields returned by `eval_runner.py`; they are reported as secondary metrics only when their frozen post-processor completes successfully.
 

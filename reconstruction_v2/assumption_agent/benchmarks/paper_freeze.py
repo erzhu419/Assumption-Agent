@@ -355,6 +355,9 @@ def _validate_development_report(
     if prewarm_version:
         expected["development_prewarm_version"] = prewarm_version
         expected["prewarm_passed"] = True
+    timeout_policy = protocol.payload["execution"].get("trial_timeout_policy")
+    if timeout_policy:
+        expected["trial_timeout_policy"] = timeout_policy
     for key, value in expected.items():
         if plan.get(key) != value:
             raise ValueError(f"development report plan mismatch: {key}")

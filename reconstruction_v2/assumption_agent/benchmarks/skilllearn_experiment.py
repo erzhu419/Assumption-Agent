@@ -37,6 +37,7 @@ from .skilllearn_compiler import SKILL_ROUTING_VERSION
 from .skilllearn_lifecycle import (
     PREBUILT_IMAGE_POLICY_VERSION,
     RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
+    TRIAL_TIMEOUT_POLICY_VERSION,
     SkillLearnBackendPool,
     SkillLearnEvolutionHarness,
     SkillLearnGenerationResult,
@@ -136,6 +137,7 @@ def main() -> None:
         "parallel_workers": args.parallel_workers,
         "prebuilt_image_policy": PREBUILT_IMAGE_POLICY_VERSION,
         "runner_agent_registry_isolation": RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
+        "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
         "development_prewarm_version": DEVELOPMENT_PREWARM_VERSION,
         "prewarm_passed": prewarm_receipt_hash is not None,
         "prewarm_receipt_hash": prewarm_receipt_hash,

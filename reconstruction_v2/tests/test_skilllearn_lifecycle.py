@@ -18,13 +18,14 @@ from assumption_agent.benchmarks import (
     SkillLearnPrebuiltImageCache,
     SkillLearnProgramCompiler,
     SkillLearnTrialObservation,
+    SkillLearnTrialRequest,
     TrialVariant,
 )
 from assumption_agent.evaluation import PromotionGate, PromotionGateSpec
 from assumption_agent.events import MemoryEventSink
 from assumption_agent.benchmarks.skilllearn_lifecycle import SkillLearnSubprocessBackend
 from assumption_agent.benchmarks.skilllearn_experiment import _run_paired_arms
-from assumption_agent.models import HypothesisProgram, HypothesisStatus
+from assumption_agent.models import HypothesisProgram, HypothesisStatus, SplitName
 from assumption_agent.proposer import StructuredHypothesisProposer
 from assumption_agent.splits import (
     SplitAccessGuard,
@@ -100,9 +101,11 @@ class FakeSkillLearnBackend:
 class RecordingSubprocess:
     def __init__(self) -> None:
         self.commands: list[list[str]] = []
+        self.kwargs: list[dict[str, Any]] = []
 
     def run(self, args, *positional, **kwargs):
         self.commands.append(list(args))
+        self.kwargs.append(dict(kwargs))
         return object()
 
 
@@ -489,11 +492,19 @@ def test_subscription_trial_auth_is_ephemeral_and_not_passed_as_env(
         assert "fake-secret" not in repr(command)
         assert "api-key-must-not-enter-subscription-agent" not in repr(command)
         runner.subprocess.run(
-            ["docker", "exec", "trial", "sh", "-c", "test ! -e /tests/test.sh"]
+            ["docker", "exec", "trial", "sh", "-c", "npm install"],
+            timeout=300,
         )
+        assert delegate.kwargs[-1]["timeout"] == 300
+        runner.subprocess.run(
+            ["docker", "exec", "trial", "sh", "-c", "codex exec --help"],
+            timeout=1800,
+        )
+        assert "timeout" not in delegate.kwargs[-1]
         assert not any(command[:2] == ["docker", "cp"] for command in delegate.commands)
         runner.subprocess.run(
-            ["docker", "exec", "trial", "bash", "/tests/test.sh"]
+            ["docker", "exec", "trial", "bash", "/tests/test.sh"],
+            timeout=1800,
         )
         assert delegate.commands[-3] == [
             "docker",
@@ -516,6 +527,11 @@ def test_subscription_trial_auth_is_ephemeral_and_not_passed_as_env(
             "bash",
             "/tests/test.sh",
         ]
+        assert "timeout" not in delegate.kwargs[-1]
+        assert sum(
+            row["event"] == "skilllearn_fixed_wall_timeout_removed"
+            for row in sink.events
+        ) == 2
         assert any(
             row["event"] == "skilllearn_verifier_mount_withheld"
             for row in sink.events
@@ -529,6 +545,44 @@ def test_subscription_trial_auth_is_ephemeral_and_not_passed_as_env(
     assert agent["env"] == ["OPENAI_API_KEY"]
     assert agent["setup"] == "auth_json"
     assert runner.subprocess is delegate
+
+
+@pytest.mark.parametrize(
+    ("result", "expected_error"),
+    [
+        ({"agent_timed_out": True, "verifier_exit": 0}, "agent_timeout"),
+        ({"agent_timed_out": False, "verifier_exit": -1}, "verifier_timeout"),
+    ],
+)
+def test_upstream_trial_timeouts_are_invalid_observations(
+    result: Mapping[str, Any],
+    expected_error: str,
+) -> None:
+    backend = SkillLearnSubprocessBackend(BENCH_ROOT, record_upstream=False)
+    request = SkillLearnTrialRequest(
+        item_id="item",
+        family="family",
+        split=SplitName.VALIDATION,
+        variant=TrialVariant.POLICY_OFF,
+        evaluator_epoch="epoch",
+        pair_id="pair",
+        repeat=0,
+        agent_id="codex",
+        model="gpt-5.3-codex-spark",
+        max_steps=100,
+        manifest_hash="manifest",
+    )
+
+    observation = backend._sanitize_result(
+        request,
+        result={"passed": False, "reward": 0.0, **result},
+        return_code=0,
+        duration_seconds=1800.0,
+    )
+
+    assert observation.error_type == expected_error
+    assert observation.valid is False
+    assert observation.metrics["evaluation_valid"] == 0.0
 
 
 def test_loaded_runners_isolate_agent_registry_across_parallel_backends(

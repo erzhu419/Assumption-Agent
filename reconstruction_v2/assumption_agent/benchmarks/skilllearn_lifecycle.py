@@ -54,6 +54,7 @@ BASELINE_LANE = "skilllearn_incumbent"
 CANDIDATE_LANE = "skilllearn_challenger"
 VERIFIER_ISOLATION_VERSION = "post_agent_verifier_copy_v1"
 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION = "runner_local_agent_registry_v1"
+TRIAL_TIMEOUT_POLICY_VERSION = "no_fixed_trial_stage_wall_timeout_v1"
 PREBUILT_IMAGE_POLICY_VERSION = "per_item_base_shared_agent_runtime_v3"
 SHARED_AGENT_RUNTIME_MOUNT = "/opt/assumption-v2-agent"
 SHARED_AGENT_RUNTIME_BUILDER_IMAGE = (
@@ -675,6 +676,7 @@ class SkillLearnSubprocessBackend:
                     "runner_agent_registry_isolation": (
                         RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
                     ),
+                    "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
                     "prebuilt_policy": (
                         PREBUILT_IMAGE_POLICY_VERSION if self.prebuilt_cache else "disabled"
                     ),
@@ -940,6 +942,10 @@ class SkillLearnSubprocessBackend:
             )
         steps = _as_nonnegative_int(result.get("steps_used"))
         error_type = _safe_error_label(result.get("error"))
+        if result.get("agent_timed_out") is True:
+            error_type = error_type or "agent_timeout"
+        if str(result.get("verifier_exit")).strip() == "-1":
+            error_type = error_type or "verifier_timeout"
         if return_code not in {0, 1} and not error_type:
             error_type = f"upstream_return_code_{return_code}"
         success = bool(result.get("passed") is True) and error_type is None
@@ -983,6 +989,7 @@ class SkillLearnSubprocessBackend:
             "runner_agent_registry_isolation": (
                 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
             ),
+            "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
             "prebuilt_policy": (
                 PREBUILT_IMAGE_POLICY_VERSION if self.prebuilt_cache else "disabled"
             ),
@@ -2013,6 +2020,22 @@ class _DockerCodexHomeSubprocessProxy:
                     },
                 )
             )
+        timeout_stage = _trial_timeout_stage(command)
+        if timeout_stage and "timeout" in kwargs:
+            kwargs = dict(kwargs)
+            kwargs.pop("timeout", None)
+            self.event_sink.emit(
+                Event(
+                    event="skilllearn_fixed_wall_timeout_removed",
+                    stage="benchmark.skilllearn.timeout_policy",
+                    trace_id=self.trace_id,
+                    payload={
+                        "policy": TRIAL_TIMEOUT_POLICY_VERSION,
+                        "trial_stage": timeout_stage,
+                        "timeout_argument_removed": True,
+                    },
+                )
+            )
         return self.delegate.run(command, *positional, **kwargs)
 
 
@@ -2113,6 +2136,7 @@ def _fairness_fingerprint(
             "runner_agent_registry_isolation": (
                 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
             ),
+            "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
         }
     )
 
@@ -2129,6 +2153,7 @@ def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
                 "runner_agent_registry_isolation": (
                     RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
                 ),
+                "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
             }
         )
     base_url = (
@@ -2148,8 +2173,22 @@ def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
             "runner_agent_registry_isolation": (
                 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
             ),
+            "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
         }
     )
+
+
+def _trial_timeout_stage(command: Any) -> str | None:
+    if not isinstance(command, list) or len(command) < 4:
+        return None
+    if command[:2] != ["docker", "exec"]:
+        return None
+    command_text = " ".join(str(value) for value in command[3:])
+    if "/tests/test.sh" in command_text:
+        return "verifier"
+    if "codex exec" in command_text:
+        return "agent"
+    return None
 
 
 def _safe_error_label(value: Any) -> str | None:

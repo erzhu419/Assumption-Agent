@@ -475,6 +475,9 @@ def _development_report(
             "runner_agent_registry_isolation": protocol.payload["execution"][
                 "runner_agent_registry_isolation"
             ],
+            "trial_timeout_policy": protocol.payload["execution"][
+                "trial_timeout_policy"
+            ],
             "development_prewarm_version": protocol.payload["execution"][
                 "development_prewarm"
             ],
