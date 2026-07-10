@@ -1,0 +1,71 @@
+{
+  "id": "static-generic-v2-requirement-audit",
+  "kind": "policy",
+  "statement": "Multi-step skill tasks benefit from an explicit requirement-to-action plan and a final completion audit.",
+  "trigger": {
+    "all_of": [
+      {
+        "key": "benchmark",
+        "op": "eq",
+        "value": "skilllearnbench"
+      }
+    ],
+    "any_of": [],
+    "none_of": []
+  },
+  "anti_trigger": {
+    "all_of": [],
+    "any_of": [],
+    "none_of": []
+  },
+  "action_graph": [
+    {
+      "id": "map-requirements",
+      "operation": "execute_step",
+      "target": "task_requirement_map",
+      "value": "Translate every explicit deliverable and constraint into an ordered execution checklist.",
+      "depends_on": []
+    },
+    {
+      "id": "execute-checklist",
+      "operation": "execute_step",
+      "target": "task_execution",
+      "value": "Execute the checklist while preserving requested formats, paths, and constraints.",
+      "depends_on": [
+        "map-requirements"
+      ]
+    },
+    {
+      "id": "completion-audit",
+      "operation": "check_condition",
+      "target": "all_explicit_requirements_satisfied",
+      "value": "Before completion, verify every requested artifact and constraint against the original checklist.",
+      "depends_on": [
+        "execute-checklist"
+      ]
+    }
+  ],
+  "expected_effect": {
+    "metric": "task_success",
+    "minimum_delta": 0.0,
+    "maximum_harm_rate": 0.05,
+    "maximum_cost_ratio": 1.5
+  },
+  "verifier": {
+    "checks": [
+      "schema",
+      "runtime_action",
+      "external_task_verifier"
+    ],
+    "required_evidence": [
+      "paired_policy_off_outcome",
+      "paired_policy_on_outcome"
+    ],
+    "anchor_id": "skilllearn_external_task_verifier",
+    "repair_on_failure": false,
+    "max_repair_depth": 0
+  },
+  "evaluator_epoch": "skilllearn-eval-272c24273bf3",
+  "fallback": "preserve_baseline",
+  "status": "promoted"
+}

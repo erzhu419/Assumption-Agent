@@ -1,0 +1,680 @@
+from __future__ import annotations
+
+import json
+import shutil
+import threading
+import time
+from pathlib import Path
+from types import ModuleType, SimpleNamespace
+from typing import Any, Mapping
+
+import pytest
+
+from assumption_agent.archive import PolicyArchive
+from assumption_agent.benchmarks import (
+    SkillLearnBenchAdapter,
+    SkillLearnBackendPool,
+    SkillLearnEvolutionHarness,
+    SkillLearnPrebuiltImageCache,
+    SkillLearnProgramCompiler,
+    SkillLearnTrialObservation,
+    TrialVariant,
+)
+from assumption_agent.evaluation import PromotionGate, PromotionGateSpec
+from assumption_agent.events import MemoryEventSink
+from assumption_agent.benchmarks.skilllearn_lifecycle import SkillLearnSubprocessBackend
+from assumption_agent.benchmarks.skilllearn_experiment import _run_paired_arms
+from assumption_agent.models import HypothesisProgram, HypothesisStatus
+from assumption_agent.proposer import StructuredHypothesisProposer
+from assumption_agent.splits import (
+    SplitAccessGuard,
+    build_family_out_manifest,
+    build_instance_holdout_manifest,
+)
+from assumption_agent.validation import (
+    EvaluatorEpochCheck,
+    RecursiveValidationEngine,
+    RuntimeActionCheck,
+    SchemaCheck,
+    TrainingSupportCheck,
+)
+
+
+BENCH_ROOT = (
+    Path(__file__).resolve().parents[1]
+    / "reference"
+    / "self_evo_continual_20260707"
+    / "repos"
+    / "SkillLearnBench"
+)
+
+
+class QueueProposalModel:
+    def __init__(self, responses: list[dict[str, Any]]) -> None:
+        self.responses = list(responses)
+        self.requests: list[Mapping[str, Any]] = []
+
+    def complete(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+        self.requests.append(payload)
+        return self.responses.pop(0)
+
+
+class FakeSkillLearnBackend:
+    agent_id = "codex"
+    model = "gpt-5.3-codex-spark"
+    max_steps = 20
+
+    def __init__(self, *, invalid_candidate_item: str | None = None) -> None:
+        self.invalid_candidate_item = invalid_candidate_item
+        self.calls: list[tuple[str, str, bool]] = []
+
+    def run(self, request, *, skill_source_dir, trace_id):
+        has_skill = skill_source_dir is not None and skill_source_dir.is_dir()
+        self.calls.append((request.item_id, request.variant.value, has_skill))
+        invalid = (
+            request.variant is TrialVariant.POLICY_ON
+            and request.item_id == self.invalid_candidate_item
+        )
+        success = has_skill and not invalid
+        return SkillLearnTrialObservation(
+            request=request,
+            success=success,
+            score=float(success),
+            metrics={
+                "task_success": float(success),
+                "trajectory_key_point_recall": 0.2 if not success else 1.0,
+                "evaluation_valid": float(not invalid),
+            },
+            total_tokens=100,
+            steps=10,
+            duration_seconds=0.1,
+            provider_fingerprint="provider-fixed",
+            fairness_fingerprint="budget-fixed",
+            error_type="endpoint_error" if invalid else None,
+            upstream_result_hash=f"result-{request.request_hash}",
+        )
+
+
+class RecordingSubprocess:
+    def __init__(self) -> None:
+        self.commands: list[list[str]] = []
+
+    def run(self, args, *positional, **kwargs):
+        self.commands.append(list(args))
+        return object()
+
+
+class FakeDockerSubprocess:
+    def __init__(self) -> None:
+        self.images: dict[str, dict[str, Any]] = {}
+        self.volumes: dict[str, dict[str, Any]] = {}
+        self.commands: list[list[str]] = []
+        self.base_contexts: list[Path] = []
+        self.skill_stubs_present: list[bool] = []
+
+    def run(self, args, *positional, **kwargs):
+        command = list(args)
+        self.commands.append(command)
+        if command[:3] == ["docker", "image", "inspect"]:
+            tag = command[3]
+            image = self.images.get(tag)
+            if image is None:
+                return SimpleNamespace(returncode=1, stdout="", stderr="not found")
+            return SimpleNamespace(returncode=0, stdout=json.dumps([image]), stderr="")
+        if command[:3] == ["docker", "volume", "inspect"]:
+            volume = self.volumes.get(command[3])
+            if volume is None:
+                return SimpleNamespace(returncode=1, stdout="", stderr="not found")
+            return SimpleNamespace(returncode=0, stdout=json.dumps([volume]), stderr="")
+        if command[:3] == ["docker", "volume", "create"]:
+            name = command[-1]
+            key_label = command[command.index("--label") + 1]
+            self.volumes[name] = {
+                "Name": name,
+                "Labels": {key_label.split("=", 1)[0]: key_label.split("=", 1)[1]},
+            }
+            return SimpleNamespace(returncode=0, stdout=name, stderr="")
+        if command[:3] == ["docker", "volume", "rm"]:
+            self.volumes.pop(command[-1], None)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        if command[:2] == ["docker", "run"]:
+            stdout = "codex-cli 0.144.1\n" if command[-1] == "codex --version" else ""
+            return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
+        if command[:2] == ["docker", "build"] and command[-1] != "-":
+            self.base_contexts.append(Path(command[-1]))
+            self.skill_stubs_present.append(
+                (Path(command[-1]) / "skills" / "tool").is_dir()
+            )
+            tag = command[command.index("-t") + 1]
+            key_label = next(
+                command[index + 1]
+                for index, value in enumerate(command)
+                if value == "--label"
+                and command[index + 1].startswith("org.assumption-agent.prebuild.key=")
+            )
+            cache_key = key_label.split("=", 1)[1]
+            self.images[tag] = {
+                "Id": f"sha256:{cache_key}",
+                "Config": {
+                    "Labels": {"org.assumption-agent.prebuild.key": cache_key}
+                },
+            }
+            return SimpleNamespace(returncode=0, stdout="base built", stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+
+class ConcurrentFakeBackend(FakeSkillLearnBackend):
+    def __init__(self) -> None:
+        super().__init__()
+        self._lock = threading.Lock()
+        self.active = 0
+        self.maximum_active = 0
+
+    def run(self, request, *, skill_source_dir, trace_id):
+        with self._lock:
+            self.active += 1
+            self.maximum_active = max(self.maximum_active, self.active)
+        try:
+            time.sleep(0.02)
+            return super().run(
+                request,
+                skill_source_dir=skill_source_dir,
+                trace_id=trace_id,
+            )
+        finally:
+            with self._lock:
+                self.active -= 1
+
+
+def test_real_manifest_lifecycle_promotes_and_seals_test(tmp_path: Path) -> None:
+    harness, backend, model, archive, guard, sink = _harness(tmp_path)
+    train_ids = (
+        "organize-messy-files-1",
+        "organize-messy-files-2",
+        "offer-letter-generator-1",
+        "offer-letter-generator-2",
+    )
+    validation_ids = ("organize-messy-files-5", "offer-letter-generator-5")
+
+    result = harness.run_generation(
+        train_item_ids=train_ids,
+        validation_item_ids=validation_ids,
+        trace_id="real-manifest-generation",
+    )
+
+    assert result.evolution is not None
+    assert result.evolution.promoted is True
+    assert len(result.residuals) == 4
+    assert all(row.context["task_instruction"] for row in result.residuals)
+    assert all(row.split.value == "train" for row in result.residuals)
+    assert guard.test_accessed is False
+    assert len(backend.calls) == 8
+    assert archive.incumbent_id == result.evolution.archive_node.id
+    promoted = archive.hypotheses[result.evolution.accepted_hypothesis_id]
+    assert promoted.status is HypothesisStatus.PROMOTED
+    assert any(row["event"] == "skilllearn_counterfactual_pair_completed" for row in sink.events)
+
+    serialized_requests = json.dumps(model.requests, sort_keys=True)
+    for test_id in guard.manifest.test_ids:
+        assert test_id not in serialized_requests
+    assert "task_instruction" in serialized_requests
+    assert "correct_answer" not in serialized_requests
+    assert not _contains_forbidden_answer_key(model.requests)
+
+    second = harness.run_generation(
+        train_item_ids=train_ids,
+        validation_item_ids=validation_ids,
+        trace_id="incumbent-training-replay",
+    )
+    assert second.evolution is None
+    assert second.reason == "no_valid_failed_training_rows"
+    assert second.baseline_hypothesis_ids == (promoted.id,)
+    assert len(model.requests) == 1
+    assert all(variant == "policy_off" and has_skill for _, variant, has_skill in backend.calls[-4:])
+
+    calls_before_test = len(backend.calls)
+    with pytest.raises(PermissionError, match="archive must be frozen"):
+        harness.run_sealed_test(
+            promoted,
+            test_item_ids=("organize-messy-files-4",),
+        )
+    assert len(backend.calls) == calls_before_test
+    assert guard.test_accessed is False
+
+    guard.freeze_archive()
+    pairs = harness.run_sealed_test(
+        promoted,
+        test_item_ids=("organize-messy-files-4", "offer-letter-generator-3"),
+    )
+    assert len(pairs) == 2
+    assert guard.test_accessed is True
+    assert all(pair.candidate_outcome.success for pair in pairs)
+
+
+def test_invalid_external_pair_blocks_promotion(tmp_path: Path) -> None:
+    harness, _, _, _, _, _ = _harness(
+        tmp_path,
+        invalid_candidate_item="offer-letter-generator-5",
+    )
+
+    result = harness.run_generation(
+        train_item_ids=(
+            "organize-messy-files-1",
+            "organize-messy-files-2",
+            "offer-letter-generator-1",
+            "offer-letter-generator-2",
+        ),
+        validation_item_ids=("organize-messy-files-5", "offer-letter-generator-5"),
+    )
+
+    assert result.evolution is not None
+    assert result.evolution.promoted is False
+    assert "invalid_counterfactual_pairs" in result.evolution.promotion_decision.blockers
+
+
+def test_paired_ablation_shares_first_train_checkpoint_and_root(tmp_path: Path) -> None:
+    recursive, recursive_backend, recursive_model, _, _, _ = _harness(
+        tmp_path / "recursive"
+    )
+    no_recursive, no_recursive_backend, no_recursive_model, _, _, _ = _harness(
+        tmp_path / "no-recursive"
+    )
+    no_recursive.validator.proposer = None
+    train_ids = (
+        "organize-messy-files-1",
+        "organize-messy-files-2",
+        "offer-letter-generator-1",
+        "offer-letter-generator-2",
+    )
+    validation_ids = ("organize-messy-files-5", "offer-letter-generator-5")
+
+    paired = _run_paired_arms(
+        recursive_harness=recursive,
+        no_recursive_harness=no_recursive,
+        train_ids=train_ids,
+        validation_ids=validation_ids,
+        manifest_hash=recursive.manifest.manifest_hash,
+        max_generations=1,
+        max_consecutive_non_promotions=1,
+    )
+
+    recursive_first = paired["recursive_generations"][0]
+    no_recursive_first = paired["no_recursive_generations"][0]
+    assert len(paired["checkpoint_hash"]) == 64
+    assert recursive_first.evolution.root_hypothesis_id == no_recursive_first.evolution.root_hypothesis_id
+    assert recursive_first.train_observations == no_recursive_first.train_observations
+    assert len(recursive_model.requests) == 1
+    assert len(no_recursive_model.requests) == 0
+    assert len(recursive_backend.calls) == 8
+    assert len(no_recursive_backend.calls) == 4
+
+
+def test_family_out_compiler_targets_unseen_validation_families(tmp_path: Path) -> None:
+    adapter = SkillLearnBenchAdapter(BENCH_ROOT)
+    items = adapter.discover()
+    manifest = build_family_out_manifest(
+        items,
+        benchmark="skilllearnbench",
+        seed="skilllearnbench-v2-family-out",
+    )
+    validation_by_family: dict[str, str] = {}
+    for item_id in manifest.validation_ids:
+        validation_by_family.setdefault(manifest.family_by_id[item_id], item_id)
+    target_ids = tuple(validation_by_family.values())
+    program = HypothesisProgram.from_dict(_program_dict(status="promoted"))
+
+    compiled = SkillLearnProgramCompiler().compile(
+        programs=(program,),
+        items=items,
+        split_manifest=manifest,
+        output_root=tmp_path,
+        target_item_ids=target_ids,
+        target_split="validation",
+    )
+
+    assert compiled.family_count == len(validation_by_family)
+    assert {path.parts[-3] for path in compiled.skill_paths} == set(validation_by_family)
+
+
+def test_subscription_trial_auth_is_ephemeral_and_not_passed_as_env(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    auth_path = tmp_path / "auth.json"
+    auth_path.write_text('{"tokens":{"access_token":"fake-secret"}}\n', encoding="utf-8")
+    monkeypatch.setenv("ASSUMPTION_V2_CODEX_AUTH_PATH", str(auth_path))
+    monkeypatch.setenv("OPENAI_API_KEY", "api-key-must-not-enter-subscription-agent")
+    agent = {
+        "env": ["OPENAI_API_KEY"],
+        "setup": "auth_json",
+        "trajectory_env": {"CODEX_HOME": "/logs/agent"},
+    }
+    delegate = RecordingSubprocess()
+    runner = ModuleType("fake_skilllearn_runner")
+    runner.subprocess = delegate
+    runner.get_agent = lambda agent_id: agent
+    sink = MemoryEventSink()
+    backend = SkillLearnSubprocessBackend(
+        BENCH_ROOT,
+        provider_mode="codex_subscription",
+        record_upstream=False,
+        event_sink=sink,
+    )
+
+    with backend._provider_runtime(
+        runner,
+        agent_runtime_volume="assumption-v2-agent-test",
+        trace_id="subscription-isolation-test",
+    ):
+        assert agent["env"] == []
+        assert agent["setup"] is None
+        assert agent["trajectory_env"]["CODEX_HOME"] == "/root/.codex"
+        assert agent["trajectory_env"]["PATH"].startswith(
+            "/opt/assumption-v2-agent/bin:"
+        )
+        tests_dir = tmp_path / "verifier-tests"
+        tests_dir.mkdir()
+        (tests_dir / "test.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+        runner.subprocess.run(
+            [
+                "docker",
+                "run",
+                "-d",
+                "--name",
+                "trial",
+                "-v",
+                f"{tests_dir}:/tests:ro",
+                "image",
+                "sleep",
+                "3600",
+            ]
+        )
+        command = delegate.commands[-1]
+        assert not any(":/tests" in value for value in command)
+        mounts = [
+            command[index + 1]
+            for index, value in enumerate(command[:-1])
+            if value == "-v"
+        ]
+        mount = next(value for value in mounts if value.endswith(":/root/.codex"))
+        host_home = Path(mount.split(":", 1)[0])
+        assert (
+            "assumption-v2-agent-test:/opt/assumption-v2-agent:ro" in mounts
+        )
+        assert (host_home / "auth.json").is_file()
+        assert "fake-secret" not in repr(command)
+        assert "api-key-must-not-enter-subscription-agent" not in repr(command)
+        runner.subprocess.run(
+            ["docker", "exec", "trial", "sh", "-c", "test ! -e /tests/test.sh"]
+        )
+        assert not any(command[:2] == ["docker", "cp"] for command in delegate.commands)
+        runner.subprocess.run(
+            ["docker", "exec", "trial", "bash", "/tests/test.sh"]
+        )
+        assert delegate.commands[-3] == [
+            "docker",
+            "exec",
+            "trial",
+            "mkdir",
+            "-p",
+            "/tests",
+        ]
+        assert delegate.commands[-2] == [
+            "docker",
+            "cp",
+            f"{tests_dir.resolve()}/.",
+            "trial:/tests",
+        ]
+        assert delegate.commands[-1] == [
+            "docker",
+            "exec",
+            "trial",
+            "bash",
+            "/tests/test.sh",
+        ]
+        assert any(
+            row["event"] == "skilllearn_verifier_mount_withheld"
+            for row in sink.events
+        )
+        assert any(
+            row["event"] == "skilllearn_verifier_materialized_post_agent"
+            for row in sink.events
+        )
+
+    assert not host_home.exists()
+    assert agent["env"] == ["OPENAI_API_KEY"]
+    assert agent["setup"] == "auth_json"
+    assert runner.subprocess is delegate
+
+
+def test_prebuilt_cache_is_keyed_by_exact_non_oracle_environment(tmp_path: Path) -> None:
+    benchmark = tmp_path / "benchmark"
+    environment = benchmark / "tasks" / "family" / "item-1" / "environment"
+    (benchmark / "core").mkdir(parents=True)
+    (benchmark / "core" / "eval_runner.py").write_text("# frozen runner\n", encoding="utf-8")
+    (environment / "skills" / "oracle").mkdir(parents=True)
+    (environment / "Dockerfile").write_text(
+        "FROM scratch\nCOPY skills/tool /root/tool\n",
+        encoding="utf-8",
+    )
+    (environment / "payload.txt").write_text("version-one\n", encoding="utf-8")
+    (environment / "skills" / "oracle" / "SKILL.md").write_text(
+        "oracle secret\n",
+        encoding="utf-8",
+    )
+    docker = FakeDockerSubprocess()
+    runner = ModuleType("prebuilt_runner")
+    runner.subprocess = docker
+    runner.get_agent = lambda agent_id: {
+        "runtime_deps": "RUN-DEPS",
+        "install": "npm install -g @openai/codex",
+    }
+    build_index = 0
+
+    def prepare(source: Path, skill_mode: str, skill_source_dir) -> Path:
+        nonlocal build_index
+        assert skill_mode == "no_skill"
+        assert skill_source_dir is None
+        build_index += 1
+        build_root = tmp_path / f"build-{build_index}"
+        build_env = build_root / "environment"
+        shutil.copytree(source, build_env, ignore=shutil.ignore_patterns("skills"))
+        (build_env / "skills").mkdir()
+        return build_env
+
+    runner._prepare_build_env = prepare
+    runner._parse_skill_copies = lambda dockerfile: [
+        ("skills/tool", "/root/tool")
+    ]
+    sink = MemoryEventSink()
+    cache = SkillLearnPrebuiltImageCache(benchmark, event_sink=sink)
+
+    first = cache.ensure(
+        family="family",
+        item_id="item-1",
+        agent_id="codex",
+        runner=runner,
+        trace_id="prebuild-first",
+    )
+    second = cache.ensure(
+        family="family",
+        item_id="item-1",
+        agent_id="codex",
+        runner=runner,
+        trace_id="prebuild-second",
+    )
+
+    assert first.reused is False
+    assert second.reused is True
+    assert first.cache_key == second.cache_key
+    assert docker.skill_stubs_present == [True]
+    assert sum(command[:2] == ["docker", "build"] for command in docker.commands) == 1
+
+    (environment / "skills" / "oracle" / "SKILL.md").write_text(
+        "changed oracle content\n",
+        encoding="utf-8",
+    )
+    oracle_changed = SkillLearnPrebuiltImageCache(benchmark).ensure(
+        family="family",
+        item_id="item-1",
+        agent_id="codex",
+        runner=runner,
+        trace_id="prebuild-oracle-change",
+    )
+    assert oracle_changed.cache_key == first.cache_key
+    assert oracle_changed.reused is True
+
+    (environment / "payload.txt").write_text("version-two\n", encoding="utf-8")
+    payload_changed = SkillLearnPrebuiltImageCache(benchmark).ensure(
+        family="family",
+        item_id="item-1",
+        agent_id="codex",
+        runner=runner,
+        trace_id="prebuild-payload-change",
+    )
+    assert payload_changed.cache_key != first.cache_key
+    assert payload_changed.reused is False
+    assert any(row["event"] == "skilllearn_prebuilt_image_built" for row in sink.events)
+
+
+def test_training_parallelism_preserves_manifest_order(tmp_path: Path) -> None:
+    backend = ConcurrentFakeBackend()
+    harness, _, _, _, _, _ = _harness(
+        tmp_path,
+        backend_override=backend,
+        parallel_workers=2,
+    )
+    train_ids = (
+        "organize-messy-files-1",
+        "organize-messy-files-2",
+        "offer-letter-generator-1",
+        "offer-letter-generator-2",
+    )
+
+    observations = harness.collect_training_observations(
+        train_item_ids=train_ids,
+        trace_id="parallel-training",
+    )
+
+    assert tuple(row.request.item_id for row in observations) == train_ids
+    assert backend.maximum_active == 2
+
+
+def _harness(
+    tmp_path: Path,
+    *,
+    invalid_candidate_item: str | None = None,
+    backend_override=None,
+    parallel_workers: int = 1,
+):
+    sink = MemoryEventSink()
+    adapter = SkillLearnBenchAdapter(BENCH_ROOT)
+    manifest = build_instance_holdout_manifest(
+        adapter.discover(),
+        benchmark="skilllearnbench",
+        seed="skilllearnbench-v2-instance-holdout",
+    )
+    guard = SplitAccessGuard(manifest, event_sink=sink)
+    model = QueueProposalModel([{"hypotheses": [_program_dict()]}])
+    proposer = StructuredHypothesisProposer(model, event_sink=sink)
+    validator = RecursiveValidationEngine(
+        [
+            SchemaCheck(),
+            TrainingSupportCheck(min_support=2),
+            RuntimeActionCheck(),
+            EvaluatorEpochCheck(),
+        ],
+        proposer=proposer,
+        event_sink=sink,
+    )
+    backend = backend_override or FakeSkillLearnBackend(
+        invalid_candidate_item=invalid_candidate_item
+    )
+    archive = PolicyArchive(event_sink=sink)
+    harness = SkillLearnEvolutionHarness(
+        adapter=adapter,
+        manifest=manifest,
+        guard=guard,
+        backend=backend,
+        proposer=proposer,
+        validator=validator,
+        promotion_gate=PromotionGate(
+            PromotionGateSpec(
+                minimum_pairs=2,
+                confidence=0.9,
+                minimum_net_gain_count=1,
+                minimum_activation_rate=1.0,
+            ),
+            event_sink=sink,
+        ),
+        archive=archive,
+        evaluator_epoch="skilllearn-eval-epoch-0",
+        output_root=tmp_path / "compiled",
+        parallel_workers=parallel_workers,
+        event_sink=sink,
+    )
+    return harness, backend, model, archive, guard, sink
+
+
+def _program_dict(*, status: str = "candidate") -> dict[str, Any]:
+    return {
+        "id": "hyp-skilllearn-explicit-completion",
+        "kind": "policy",
+        "statement": "Skill-dependent tasks benefit from an explicit procedure and completion audit.",
+        "trigger": {
+            "all_of": [
+                {"key": "benchmark", "op": "eq", "value": "skilllearnbench"},
+            ]
+        },
+        "anti_trigger": {
+            "any_of": [{"key": "read_only", "op": "eq", "value": True}]
+        },
+        "action_graph": [
+            {
+                "id": "enable-skill",
+                "operation": "enable_lane",
+                "target": "skilllearn_challenger",
+            },
+            {
+                "id": "execute",
+                "operation": "execute_step",
+                "target": "task_procedure",
+                "value": "Translate every explicit task requirement into an ordered execution checklist.",
+                "depends_on": ["enable-skill"],
+            },
+            {
+                "id": "audit",
+                "operation": "check_condition",
+                "target": "all_explicit_requirements_satisfied",
+                "value": "Audit every requested output and constraint before completion.",
+                "depends_on": ["execute"],
+            },
+        ],
+        "expected_effect": {
+            "metric": "task_success",
+            "minimum_delta": 0.1,
+            "maximum_harm_rate": 0.0,
+            "maximum_cost_ratio": 1.1,
+        },
+        "verifier": {
+            "checks": ["schema", "training_support", "runtime_action", "paired_validation"],
+            "required_evidence": ["policy_off_outcome", "policy_on_outcome"],
+            "anchor_id": "skilllearn_external_task_verifier",
+            "repair_on_failure": True,
+            "max_repair_depth": 2,
+        },
+        "evaluator_epoch": "skilllearn-eval-epoch-0",
+        "fallback": "preserve_baseline",
+        "status": status,
+    }
+
+
+def _contains_forbidden_answer_key(value: Any) -> bool:
+    forbidden = {"gold", "gold_label", "correct_answer", "_answer"}
+    if isinstance(value, Mapping):
+        return bool(forbidden & set(value)) or any(
+            _contains_forbidden_answer_key(child) for child in value.values()
+        )
+    if isinstance(value, (list, tuple)):
+        return any(_contains_forbidden_answer_key(child) for child in value)
+    return False

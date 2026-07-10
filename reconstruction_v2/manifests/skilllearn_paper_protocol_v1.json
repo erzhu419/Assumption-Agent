@@ -1,0 +1,157 @@
+{
+  "protocol_id": "assumption-agent-v2-skilllearn-paper-v1",
+  "protocol_version": "1.0.0",
+  "benchmark": "skilllearnbench",
+  "primary_manifest": "manifests/skilllearnbench_instance_holdout_v1.json",
+  "secondary_manifest": "manifests/skilllearnbench_family_out_v1.json",
+  "expected_primary_counts": {
+    "train": 44,
+    "validation": 19,
+    "test": 37
+  },
+  "expected_secondary_counts": {
+    "train": 54,
+    "validation": 23,
+    "test": 23
+  },
+  "agent_id": "codex",
+  "model": "gpt-5.3-codex-spark",
+  "proposal_provider_chain": [
+    "codex_app_server",
+    "openai_compatible"
+  ],
+  "trial_provider_mode": "codex_subscription",
+  "max_steps": 100,
+  "execution": {
+    "prebuilt_image_policy": "per_item_base_shared_agent_runtime_v3",
+    "agent_runtime_builder": "node@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0",
+    "agent_runtime_package": "@openai/codex@0.144.1",
+    "agent_runtime_version": "codex-cli 0.144.1",
+    "verifier_isolation": "post_agent_verifier_copy_v1",
+    "parallel_unit": "benchmark_item",
+    "within_pair_execution": "sequential_balanced_order"
+  },
+  "evolution": {
+    "max_generations": 3,
+    "max_consecutive_non_promotions": 2,
+    "proposal_candidates_per_generation": 3,
+    "stop_on_no_residuals": true,
+    "stop_on_duplicate_behavior": true
+  },
+  "phases": {
+    "smoke": {
+      "train_count": 4,
+      "validation_count": 2,
+      "repeats": 1,
+      "claim_eligible": false
+    },
+    "development": {
+      "train_count": 44,
+      "validation_count": 19,
+      "repeats": 1,
+      "parallel_workers": 4,
+      "claim_eligible": false
+    },
+    "family_out_development": {
+      "train_count": 54,
+      "validation_count": 23,
+      "repeats": 1,
+      "parallel_workers": 4,
+      "claim_eligible": false
+    },
+    "sealed_test": {
+      "test_count": 37,
+      "repeats": 3,
+      "parallel_workers": 4,
+      "single_access": true,
+      "claim_eligible": true
+    },
+    "family_out_transfer": {
+      "test_count": 23,
+      "repeats": 3,
+      "parallel_workers": 4,
+      "single_access": true,
+      "claim_eligible": true
+    }
+  },
+  "controls": [
+    {
+      "id": "raw_no_skill",
+      "source": "none",
+      "claim_role": "primary_baseline",
+      "budget_matched": true
+    },
+    {
+      "id": "static_generic_v2",
+      "source": "baselines/static_generic_program.json",
+      "claim_role": "no_learning_ablation",
+      "budget_matched": true
+    },
+    {
+      "id": "v2_no_recursive_repair",
+      "source": "no_recursive_archive_incumbent",
+      "claim_role": "recursive_validation_ablation",
+      "budget_matched": true
+    },
+    {
+      "id": "promoted_v2",
+      "source": "frozen_archive_incumbent",
+      "claim_role": "primary_candidate",
+      "budget_matched": true
+    },
+    {
+      "id": "skilllearn_b1_sonnet",
+      "source": "reference/self_evo_continual_20260707/repos/SkillLearnBench/skills/b1-one-shot-claude-sonnet-4-6",
+      "claim_role": "external_static_reference",
+      "budget_matched": false
+    },
+    {
+      "id": "human_authored",
+      "source": "reference/self_evo_continual_20260707/repos/SkillLearnBench/skills/human_authored",
+      "claim_role": "upper_reference",
+      "budget_matched": false
+    }
+  ],
+  "promotion": {
+    "confidence": 0.9,
+    "minimum_pairs": 10,
+    "minimum_net_gain_count": 1,
+    "minimum_activation_rate": 0.1,
+    "maximum_harm_rate": 0.05,
+    "baseline_fallback": "preserve_baseline"
+  },
+  "statistics": {
+    "primary_metric": "task_success",
+    "secondary_metrics": [
+      "trajectory_key_point_recall",
+      "skill_coverage",
+      "skill_executability",
+      "skill_safety",
+      "total_tokens",
+      "duration_seconds",
+      "infrastructure_error_rate"
+    ],
+    "analysis_unit": "benchmark_item",
+    "repeat_aggregation": "majority_vote",
+    "confidence": 0.95,
+    "success_interval": "wilson",
+    "paired_interval": "clustered_item_bootstrap",
+    "bootstrap_samples": 10000,
+    "bootstrap_seed": 20260710,
+    "paired_binary_test": "exact_mcnemar",
+    "multiplicity": "holm",
+    "primary_comparison": [
+      "raw_no_skill",
+      "promoted_v2"
+    ]
+  },
+  "invalid_evidence_policy": {
+    "top_level_error": "invalidate_row",
+    "provider_mismatch": "invalidate_pair",
+    "budget_mismatch": "invalidate_pair",
+    "missing_repeat": "invalidate_item",
+    "sealed_test_rerun": "same_key_infrastructure_retry_only"
+  },
+  "sealed_test_content_accessed": false,
+  "raw_content_persisted": false
+}
