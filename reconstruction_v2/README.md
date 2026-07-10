@@ -69,6 +69,11 @@ python3 -m assumption_agent.benchmarks.skilllearn_experiment \
 # Publication pipeline. This intentionally stops before sealed test.
 ./scripts/run_paper_pipeline.sh all-development
 
+# Family-out development and validation use an independent archive/run root.
+MANIFEST=manifests/skilllearnbench_family_out_v1.json \
+RUN_ROOT=artifacts/paper_family_out_v1 \
+./scripts/run_paper_pipeline.sh all-development
+
 # Run only after reviewing the frozen validation report.
 ./scripts/run_paper_pipeline.sh sealed-test
 ```
