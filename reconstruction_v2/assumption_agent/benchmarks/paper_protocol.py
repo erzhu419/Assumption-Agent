@@ -12,7 +12,13 @@ from typing import Any, Mapping
 from ..models import HypothesisProgram, stable_hash
 from ..evolution import TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
 from ..provider_chain import configured_provider_chain, proposal_provider_status
-from ..secure_env import configured_model, configured_skilllearn_provider_mode, load_dotenv, map_legacy_model_env
+from ..secure_env import (
+    configured_api_origin,
+    configured_model,
+    configured_skilllearn_provider_mode,
+    load_dotenv,
+    map_legacy_model_env,
+)
 from ..splits import SplitManifest
 from .preflight import build_preflight
 from .skilllearn_compiler import SKILL_ROUTING_VERSION
@@ -20,6 +26,7 @@ from .prewarm import DEVELOPMENT_PREWARM_VERSION
 from .skilllearn_lifecycle import (
     EPHEMERAL_AUTH_CLEANUP_VERSION,
     PREBUILT_IMAGE_POLICY_VERSION,
+    PROVIDER_ROUTE_POLICY_VERSION,
     PROVIDER_FAILURE_POLICY_VERSION,
     RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
     SHARED_AGENT_RUNTIME_BUILDER_IMAGE,
@@ -30,6 +37,26 @@ from .skilllearn_lifecycle import (
     VERIFIER_ISOLATION_VERSION,
 )
 from .skilllearnbench import SkillLearnBenchAdapter
+
+
+PAPER_ROUTES_BY_MAJOR: dict[int, dict[str, Any]] = {
+    1: {
+        "model": "gpt-5.3-codex-spark",
+        "proposal_provider_chain": ["codex_app_server", "openai_compatible"],
+        "trial_provider_mode": "codex_subscription",
+    },
+    2: {
+        "model": "gpt-5.3-codex-spark",
+        "proposal_provider_chain": ["codex_app_server", "openai_compatible"],
+        "trial_provider_mode": "codex_subscription",
+    },
+    3: {
+        "model": "gpt-5.4-mini",
+        "proposal_provider_chain": ["openai_compatible"],
+        "trial_provider_mode": "openai_compatible",
+        "provider_endpoint_origin": "https://ruoli.dev",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -59,14 +86,27 @@ class PaperProtocol:
 
     def validate_structure(self) -> list[str]:
         issues: list[str] = []
+        major = _protocol_major(self.payload.get("protocol_version"))
         if not self.id:
             issues.append("protocol_id_missing")
         if self.payload.get("benchmark") != "skilllearnbench":
             issues.append("benchmark_mismatch")
-        if self.payload.get("model") != "gpt-5.3-codex-spark":
-            issues.append("paper_model_lock_missing")
-        if self.payload.get("trial_provider_mode") != "codex_subscription":
-            issues.append("trial_provider_not_subscription")
+        route = PAPER_ROUTES_BY_MAJOR.get(major)
+        if route is None:
+            issues.append("unsupported_protocol_version")
+        else:
+            if self.payload.get("model") != route["model"]:
+                issues.append("paper_model_route_mismatch")
+            if list(self.payload.get("proposal_provider_chain") or []) != route[
+                "proposal_provider_chain"
+            ]:
+                issues.append("proposal_provider_route_mismatch")
+            if self.payload.get("trial_provider_mode") != route["trial_provider_mode"]:
+                issues.append("trial_provider_route_mismatch")
+            if route.get("provider_endpoint_origin") and self.payload.get(
+                "provider_endpoint_origin"
+            ) != route["provider_endpoint_origin"]:
+                issues.append("provider_endpoint_route_mismatch")
         execution = self.payload.get("execution")
         if not isinstance(execution, Mapping):
             issues.append("execution_policy_missing")
@@ -74,36 +114,36 @@ class PaperProtocol:
             if execution.get("prebuilt_image_policy") != PREBUILT_IMAGE_POLICY_VERSION:
                 issues.append("prebuilt_image_policy_mismatch")
             if (
-                str(self.payload.get("protocol_version") or "").startswith("2.")
+                major is not None and major >= 2
                 and execution.get("runner_agent_registry_isolation")
                 != RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
             ):
                 issues.append("runner_agent_registry_isolation_mismatch")
             if (
-                str(self.payload.get("protocol_version") or "").startswith("2.")
+                major is not None and major >= 2
                 and execution.get("development_prewarm") != DEVELOPMENT_PREWARM_VERSION
             ):
                 issues.append("development_prewarm_mismatch")
             if (
-                str(self.payload.get("protocol_version") or "").startswith("2.")
+                major is not None and major >= 2
                 and execution.get("trial_timeout_policy")
                 != TRIAL_TIMEOUT_POLICY_VERSION
             ):
                 issues.append("trial_timeout_policy_mismatch")
             if (
-                str(self.payload.get("protocol_version") or "").startswith("2.")
+                major is not None and major >= 2
                 and execution.get("provider_failure_policy")
                 != PROVIDER_FAILURE_POLICY_VERSION
             ):
                 issues.append("provider_failure_policy_mismatch")
             if (
-                str(self.payload.get("protocol_version") or "").startswith("2.")
+                major is not None and major >= 2
                 and execution.get("ephemeral_auth_cleanup")
                 != EPHEMERAL_AUTH_CLEANUP_VERSION
             ):
                 issues.append("ephemeral_auth_cleanup_mismatch")
             if (
-                str(self.payload.get("protocol_version") or "").startswith("2.")
+                major is not None and major >= 2
                 and execution.get("training_evidence_policy")
                 != TRAINING_EVIDENCE_POLICY_VERSION
             ):
@@ -134,6 +174,13 @@ class PaperProtocol:
                 issues.append("parallel_unit_invalid")
             if execution.get("within_pair_execution") != "sequential_balanced_order":
                 issues.append("within_pair_execution_invalid")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("provider_route_policy")
+                != PROVIDER_ROUTE_POLICY_VERSION
+            ):
+                issues.append("provider_route_policy_mismatch")
         evolution = self.payload.get("evolution")
         if not isinstance(evolution, Mapping):
             issues.append("evolution_budget_missing")
@@ -180,6 +227,13 @@ class PaperProtocol:
             }:
                 issues.append("benchmark_subset_policy_invalid")
         return sorted(set(issues))
+
+
+def _protocol_major(value: Any) -> int | None:
+    try:
+        return int(str(value).split(".", 1)[0])
+    except (TypeError, ValueError):
+        return None
 
 
 def build_protocol_lock(
@@ -238,6 +292,10 @@ def build_protocol_lock(
     trial_provider_mode = configured_skilllearn_provider_mode()
     if trial_provider_mode != protocol.payload["trial_provider_mode"]:
         issues.append("trial_provider_mode_mismatch")
+    api_origin = configured_api_origin()
+    expected_api_origin = str(protocol.payload.get("provider_endpoint_origin") or "")
+    if expected_api_origin and api_origin != expected_api_origin:
+        issues.append("configured_provider_endpoint_origin_mismatch")
     static_program_path = project / "baselines" / "static_generic_program.json"
     static_program = HypothesisProgram.from_dict(
         json.loads(static_program_path.read_text(encoding="utf-8"))
@@ -257,7 +315,9 @@ def build_protocol_lock(
     provider_status = proposal_provider_status()
     claim_eligible = not issues and not git_state["scoped_dirty"] and not preflight["blockers"]
     lock = {
-        "lock_version": "paper_protocol_lock_v1",
+        "lock_version": (
+            "paper_protocol_lock_v2" if expected_api_origin else "paper_protocol_lock_v1"
+        ),
         "protocol_id": protocol.id,
         "protocol_hash": protocol.protocol_hash,
         "primary_manifest_hash": primary.manifest_hash,
@@ -276,6 +336,7 @@ def build_protocol_lock(
         "model": configured_model(),
         "proposal_provider_chain": list(configured_provider_chain()),
         "trial_provider_mode": trial_provider_mode,
+        "provider_endpoint_origin": api_origin or None,
         "provider_status": provider_status,
         "max_steps": int(protocol.payload["max_steps"]),
         "execution": dict(protocol.payload["execution"]),

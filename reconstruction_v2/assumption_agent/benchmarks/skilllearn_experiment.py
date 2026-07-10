@@ -13,10 +13,12 @@ from ..models import stable_hash
 from ..provider_chain import build_proposal_model, proposal_provider_status
 from ..proposer import StructuredHypothesisProposer
 from ..secure_env import (
+    alternate_model_allowed,
     configured_model,
     configured_skilllearn_provider_mode,
     load_dotenv,
     map_legacy_model_env,
+    paper_model_allowed,
 )
 from ..splits import SplitAccessGuard, SplitManifest
 from ..validation import (
@@ -38,6 +40,7 @@ from .skilllearn_lifecycle import (
     EPHEMERAL_AUTH_CLEANUP_VERSION,
     PREBUILT_IMAGE_POLICY_VERSION,
     PROVIDER_FAILURE_POLICY_VERSION,
+    PROVIDER_ROUTE_POLICY_VERSION,
     RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
     TRAINING_EVIDENCE_POLICY_VERSION,
     TRIAL_TIMEOUT_POLICY_VERSION,
@@ -143,6 +146,7 @@ def main() -> None:
         "runner_agent_registry_isolation": RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
         "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
         "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
+        "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
         "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
         "training_evidence_policy": TRAINING_EVIDENCE_POLICY_VERSION,
         "development_prewarm_version": DEVELOPMENT_PREWARM_VERSION,
@@ -165,8 +169,8 @@ def main() -> None:
         "paired_first_generation_ablation": paired_ablation,
     }
     blockers: list[str] = []
-    if args.model != "gpt-5.3-codex-spark":
-        blockers.append("v2_execution_requires_gpt_5_3_codex_spark")
+    if not paper_model_allowed(args.model) and not alternate_model_allowed():
+        blockers.append("execution_model_not_protocol_approved")
     if len(validation_ids) < args.minimum_pairs:
         blockers.append("minimum_pairs_exceeds_validation_selection")
     if len(train_ids) < args.minimum_trigger_support:

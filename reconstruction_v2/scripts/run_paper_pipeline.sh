@@ -6,13 +6,19 @@ cd "${PROJECT_ROOT}"
 
 BENCHMARK_ROOT="${BENCHMARK_ROOT:-reference/self_evo_continual_20260707/repos/SkillLearnBench}"
 ENV_FILE="${ENV_FILE:-../.env}"
-PROTOCOL="${PROTOCOL:-manifests/skilllearn_paper_protocol_v2.json}"
+PROTOCOL="${PROTOCOL:-manifests/skilllearn_paper_protocol_v3_ruoli_gpt54mini.json}"
 MANIFEST="${MANIFEST:-manifests/skilllearnbench_instance_holdout_credential_independent_v1.json}"
-RUN_ROOT="${RUN_ROOT:-artifacts/paper_primary_v2}"
+RUN_ROOT="${RUN_ROOT:-artifacts/paper_primary_v3_ruoli_gpt54mini}"
 LOCK="${RUN_ROOT}/protocol_lock.json"
 RECEIPT="${RUN_ROOT}/freeze_receipt.json"
 PREWARM_RECEIPT="${RUN_ROOT}/development_prewarm.json"
 PARALLEL_WORKERS="${PARALLEL_WORKERS:-4}"
+MODEL="${MODEL:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model"])' "${PROTOCOL}")}"
+TRIAL_PROVIDER_MODE="${TRIAL_PROVIDER_MODE:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["trial_provider_mode"])' "${PROTOCOL}")}"
+PROPOSAL_PROVIDER_CHAIN="${PROPOSAL_PROVIDER_CHAIN:-$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1], encoding="utf-8"))["proposal_provider_chain"]))' "${PROTOCOL}")}"
+export ASSUMPTION_V2_MODEL="${MODEL}"
+export ASSUMPTION_V2_SKILLLEARN_PROVIDER_MODE="${TRIAL_PROVIDER_MODE}"
+export ASSUMPTION_V2_PROVIDER_CHAIN="${PROPOSAL_PROVIDER_CHAIN}"
 
 run_docker_group() {
   if docker info >/dev/null 2>&1; then
@@ -28,7 +34,7 @@ preflight() {
   run_docker_group python3 -m assumption_agent.benchmarks.preflight \
     --env-file "${ENV_FILE}" \
     --manifest "${MANIFEST}" \
-    --trial-provider-mode codex_subscription \
+    --trial-provider-mode "${TRIAL_PROVIDER_MODE}" \
     --root "${BENCHMARK_ROOT}"
 }
 
@@ -53,6 +59,7 @@ prewarm() {
     --out "${PREWARM_RECEIPT}" \
     --parallel-workers "${PARALLEL_WORKERS}" \
     --attempts 3 \
+    --trial-provider-mode "${TRIAL_PROVIDER_MODE}" \
     --require-passed
 }
 
@@ -69,8 +76,8 @@ run_generation() {
     --archive-out "${RUN_ROOT}/${name}.archive.json" \
     --prewarm-receipt "${PREWARM_RECEIPT}" \
     --minimum-trigger-support 2 \
-    --trial-provider-mode codex_subscription \
-    --model gpt-5.3-codex-spark \
+    --trial-provider-mode "${TRIAL_PROVIDER_MODE}" \
+    --model "${MODEL}" \
     --max-steps 100 \
     --parallel-workers "${PARALLEL_WORKERS}" \
     --proposal-candidates-per-generation 3 \

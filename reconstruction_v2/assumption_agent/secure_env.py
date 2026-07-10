@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 LOCKED_MODEL = "gpt-5.3-codex-spark"
+RUOLI_FALLBACK_MODEL = "gpt-5.4-mini"
+APPROVED_PAPER_MODELS = frozenset({LOCKED_MODEL, RUOLI_FALLBACK_MODEL})
 
 
 def alternate_model_allowed() -> bool:
@@ -16,11 +19,15 @@ def alternate_model_allowed() -> bool:
     }
 
 
+def paper_model_allowed(model: str) -> bool:
+    return model.strip() in APPROVED_PAPER_MODELS
+
+
 def configured_model(*, enforce_policy: bool = True) -> str:
     model = os.environ.get("ASSUMPTION_V2_MODEL", LOCKED_MODEL).strip() or LOCKED_MODEL
-    if enforce_policy and model != LOCKED_MODEL and not alternate_model_allowed():
+    if enforce_policy and not paper_model_allowed(model) and not alternate_model_allowed():
         raise RuntimeError(
-            f"reconstruction v2 is locked to {LOCKED_MODEL} until "
+            "reconstruction v2 only permits a protocol-approved paper model until "
             "ASSUMPTION_V2_ALLOW_ALTERNATE_MODEL=1"
         )
     return model
@@ -34,6 +41,17 @@ def configured_skilllearn_provider_mode() -> str:
     if mode not in {"codex_subscription", "openai_compatible"}:
         raise ValueError("unsupported SkillLearn trial provider mode")
     return mode
+
+
+def configured_api_origin() -> str:
+    base_url = os.environ.get("ASSUMPTION_V2_API_BASE", "").strip()
+    if not base_url:
+        return ""
+    parsed = urlsplit(base_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("ASSUMPTION_V2_API_BASE must be an HTTP(S) URL")
+    port = f":{parsed.port}" if parsed.port is not None else ""
+    return f"{parsed.scheme}://{parsed.hostname}{port}"
 
 
 def resolve_codex_auth_path() -> Path | None:
@@ -95,7 +113,7 @@ def map_legacy_model_env(*, override: bool = False) -> dict[str, bool | str]:
         "base_url_present": bool(os.environ.get("ASSUMPTION_V2_API_BASE", "").strip()),
         "api_key_present": bool(os.environ.get("ASSUMPTION_V2_API_KEY", "").strip()),
         "model": model,
-        "model_policy_passed": model == LOCKED_MODEL or allow_alternate,
+        "model_policy_passed": paper_model_allowed(model) or allow_alternate,
         "alternate_model_allowed": allow_alternate,
         "secret_value_persisted": False,
     }

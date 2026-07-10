@@ -8,7 +8,11 @@ import pytest
 
 from assumption_agent.events import MemoryEventSink
 from assumption_agent.model_client import OpenAICompatibleConfig, OpenAICompatibleProposalModel
-from assumption_agent.secure_env import map_legacy_model_env
+from assumption_agent.secure_env import (
+    configured_api_origin,
+    configured_model,
+    map_legacy_model_env,
+)
 
 
 class FakeTransport:
@@ -137,3 +141,16 @@ def test_legacy_env_mapping_prefers_ruoli_aliases(monkeypatch) -> None:
     assert presence["model"] == "gpt-5.3-codex-spark"
     assert os.environ["ASSUMPTION_V2_API_BASE"] == "https://ruoli.example"
     assert os.environ["ASSUMPTION_V2_API_KEY"] == "ruoli-key"
+
+
+def test_ruoli_fallback_model_is_protocol_approved(monkeypatch) -> None:
+    monkeypatch.setenv("ASSUMPTION_V2_MODEL", "gpt-5.4-mini")
+    monkeypatch.delenv("ASSUMPTION_V2_ALLOW_ALTERNATE_MODEL", raising=False)
+
+    assert configured_model() == "gpt-5.4-mini"
+
+
+def test_configured_api_origin_discards_route_path(monkeypatch) -> None:
+    monkeypatch.setenv("ASSUMPTION_V2_API_BASE", "https://ruoli.dev/v1")
+
+    assert configured_api_origin() == "https://ruoli.dev"

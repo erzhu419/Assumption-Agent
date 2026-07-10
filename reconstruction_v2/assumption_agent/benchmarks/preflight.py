@@ -14,11 +14,11 @@ from .skilllearnbench import SkillLearnBenchAdapter
 from .skilllearn_lifecycle import VERIFIER_ISOLATION_VERSION
 from ..provider_chain import proposal_provider_status
 from ..secure_env import (
-    LOCKED_MODEL,
     alternate_model_allowed,
     configured_skilllearn_provider_mode,
     load_dotenv,
     map_legacy_model_env,
+    paper_model_allowed,
     resolve_codex_auth_path,
 )
 from ..splits import SplitManifest
@@ -117,7 +117,7 @@ def build_preflight(
     provider_status = proposal_provider_status()
     model = provider_status["model"]
     allow_alternate = alternate_model_allowed()
-    model_policy_passed = model == LOCKED_MODEL or allow_alternate
+    model_policy_passed = paper_model_allowed(model) or allow_alternate
     checks["proposal_model_config"] = {
         **provider_status,
         "passed": bool(provider_status["passed"] and model_policy_passed),

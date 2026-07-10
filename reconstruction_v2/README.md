@@ -50,7 +50,7 @@ TMPDIR=/tmp TMP=/tmp TEMP=/tmp python3 -m pytest
 python3 -m assumption_agent.benchmarks.preflight \
   --env-file ../.env \
   --manifest manifests/skilllearnbench_instance_holdout_credential_independent_v1.json \
-  --trial-provider-mode codex_subscription \
+  --trial-provider-mode openai_compatible \
   --root reference/self_evo_continual_20260707/repos/SkillLearnBench
 
 # Build a no-network, no-test-access execution plan.
@@ -65,7 +65,8 @@ python3 -m assumption_agent.benchmarks.skilllearn_experiment \
   --validation-limit 2 \
   --minimum-pairs 2 \
   --parallel-workers 4 \
-  --trial-provider-mode codex_subscription
+  --trial-provider-mode openai_compatible \
+  --model gpt-5.4-mini
 
 # Publication pipeline. This runs preflight, lock, train/validation image
 # prewarm, smoke, development, freeze, and validation. It stops before sealed test.
@@ -73,7 +74,7 @@ python3 -m assumption_agent.benchmarks.skilllearn_experiment \
 
 # Family-out development and validation use an independent archive/run root.
 MANIFEST=manifests/skilllearnbench_family_out_credential_independent_v1.json \
-RUN_ROOT=artifacts/paper_family_out_v2 \
+RUN_ROOT=artifacts/paper_family_out_v3_ruoli_gpt54mini \
 ./scripts/run_paper_pipeline.sh all-development
 
 # Run only after reviewing the frozen validation report.
@@ -84,7 +85,7 @@ Add `--execute` only after preflight has no blockers and the model health probe 
 
 The local WSL environment now has Docker Engine 29.1.3 running under systemd. `scripts/bootstrap_docker_wsl.sh` remains available for a fresh machine. If the invoking process predates docker-group membership, the paper pipeline automatically uses `sg docker` for that command.
 
-The external runner fixes the agent, `gpt-5.3-codex-spark`, step budget, provider fingerprint, verifier-isolation version, and split manifest for both sides of each pair. In `codex_subscription` mode, each trial gets a temporary copy of the local Codex auth state bind-mounted as its container-only `CODEX_HOME`; no API endpoint is injected, the copy is outside trial artifacts, and it is deleted as the runner context exits. The upstream `/tests` mount is removed before container start and verifier files are copied in only after the agent process exits. Infrastructure errors, provider changes, budget mismatches, or isolation mismatches invalidate evidence instead of counting as wrong answers.
+The active v3 paper runner fixes the agent, `gpt-5.4-mini`, the `ruoli.dev` OpenAI-compatible route, step budget, provider fingerprint, verifier-isolation version, and split manifest for every raw and agent arm. The historical v2 protocol remains fixed to Spark plus ChatGPT subscription auth and is not mixed into v3 evidence. The upstream `/tests` mount is removed before container start and verifier files are copied in only after the agent process exits. Infrastructure errors, provider changes, budget mismatches, or isolation mismatches invalidate evidence instead of counting as wrong answers.
 
 Codex JSONL terminal events are parsed directly, so a `turn.failed` usage-limit, authentication, rate-limit, or model-availability error cannot be hidden by the upstream `codex | tee` pipeline's zero exit code. The first global provider failure opens a run-scoped circuit and suppresses queued model calls. Any invalid train observation blocks residual mining and proposal generation; the experiment must be resumed under the same frozen protocol only after provider health returns.
 
@@ -92,21 +93,21 @@ Docker execution uses content-addressed per-item base images with oracle skill d
 
 The paper manifests are `manifests/skilllearnbench_instance_holdout_credential_independent_v1.json` and `manifests/skilllearnbench_family_out_credential_independent_v1.json`. They freeze a 95-item subset and exclude the complete five-item `github-repo-analytics` family because its upstream `task.toml` requires a personal `GH_TOKEN`. This exclusion is metadata-only, precedes all model calls, and keeps the benchmark independent of private credentials. Manifest-scoped preflight blocks before execution if any selected task still has an unavailable `required_env`.
 
-`manifests/skilllearn_paper_protocol_v2.json` freezes the paper model, credential-independent subset, agent runtime, three-generation search budget, recursive/no-recursive ablation, train-only candidate selection, six final controls, repeats, invalid-row policy, paired statistics, and instance/family-out sample counts. The two evolution arms share the exact first-generation train observations, residuals, and proposed roots; recursive repair is the only intended difference at that checkpoint. Every proposed root is checked against the runtime feature vocabulary and train residual support. Only one statically accepted candidate, chosen by frozen train-only support and complexity ordering, may consume validation outcomes in a generation. `paper_freeze` compiles content-hashed validation/test control directories from the two selected archives. A sealed journal binds the test record file and permits only same-key infrastructure retries.
+`manifests/skilllearn_paper_protocol_v3_ruoli_gpt54mini.json` freezes the active paper model and single-provider route, credential-independent subset, agent runtime, three-generation search budget, recursive/no-recursive ablation, train-only candidate selection, six final controls, repeats, invalid-row policy, paired statistics, and instance/family-out sample counts. `manifests/skilllearn_paper_protocol_v2.json` is retained as the historical Spark protocol. The two evolution arms share the exact first-generation train observations, residuals, and proposed roots; recursive repair is the only intended difference at that checkpoint. Every proposed root is checked against the runtime feature vocabulary and train residual support. Only one statically accepted candidate, chosen by frozen train-only support and complexity ordering, may consume validation outcomes in a generation. `paper_freeze` compiles content-hashed validation/test control directories from the two selected archives. A sealed journal binds the test record file and permits only same-key infrastructure retries.
 
 ## Proposal Providers
 
-Proposal and recursive-repair calls use one fixed provider chain for an entire run. The default is:
+Proposal and recursive-repair calls use one fixed provider chain for an entire run. The active v3 protocol is:
 
 ```text
-codex_app_server -> openai_compatible
+openai_compatible (ruoli.dev) / gpt-5.4-mini
 ```
 
-The first provider uses the local `codex app-server`, which reuses `codex login` / ChatGPT subscription authentication. The configured OpenAI-compatible endpoint remains a fallback. If a provider fails, its circuit opens for the rest of that run and the same `gpt-5.3-codex-spark` request moves to the next provider. Provider choice, failover, response hash, elapsed time, and tool-use rejection are logged without endpoint credentials or response text.
+Raw, static controls, recursive ablations, and the evolving agent all use this same route. A provider failure opens the run-scoped circuit; it does not switch only one arm to a healthier backend. Provider choice, route hash, response hash, elapsed time, and tool-use rejection are logged without endpoint credentials or response text. Because ruoli is a third-party OpenAI-compatible service, the protocol identifies it as the provider and does not describe the result as an OpenAI-direct run.
 
 The Codex proposal turn is ephemeral and runs in an empty temporary working directory with read-only sandboxing, no dynamic tools, no environment capabilities, and no approval path. Any observed tool item or server-side runtime request invalidates the response. The child process receives only the minimal Codex/auth/runtime environment; API keys are deliberately excluded.
 
-Set `ASSUMPTION_V2_PROVIDER_CHAIN=codex_app_server` to disable API fallback entirely, or explicitly reverse the list when testing a repaired endpoint. Use `codex login status` to verify the local subscription session. The Spark model lock still applies independently of provider choice.
+The pipeline reads model, trial-provider mode, and proposal-provider chain from the protocol and exports them before loading `.env`, so local defaults cannot silently change an arm. The legacy v2 Spark protocol can still be selected explicitly with `PROTOCOL=manifests/skilllearn_paper_protocol_v2.json` after its subscription quota is healthy.
 
 ## Local References
 

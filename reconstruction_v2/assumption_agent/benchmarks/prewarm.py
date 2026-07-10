@@ -10,7 +10,11 @@ from typing import Any, Mapping
 
 from ..events import Event, JsonlEventSink
 from ..models import stable_hash
-from ..secure_env import load_dotenv, map_legacy_model_env
+from ..secure_env import (
+    configured_skilllearn_provider_mode,
+    load_dotenv,
+    map_legacy_model_env,
+)
 from ..splits import SplitManifest
 from .preflight import build_preflight
 from .skilllearn_lifecycle import (
@@ -29,6 +33,7 @@ def prewarm_development_images(
     events_path: str | Path,
     parallel_workers: int = 4,
     attempts: int = 3,
+    trial_provider_mode: str = "codex_subscription",
 ) -> dict[str, Any]:
     if parallel_workers <= 0:
         raise ValueError("parallel_workers must be positive")
@@ -38,7 +43,7 @@ def prewarm_development_images(
     all_manifest_ids = (*selected_ids, *manifest.test_ids)
     preflight = build_preflight(
         benchmark_root,
-        trial_provider_mode="codex_subscription",
+        trial_provider_mode=trial_provider_mode,
         item_ids=all_manifest_ids,
     )
     if preflight["blockers"]:
@@ -51,7 +56,7 @@ def prewarm_development_images(
         backends.put(
             SkillLearnSubprocessBackend(
                 benchmark_root,
-                provider_mode="codex_subscription",
+                provider_mode=trial_provider_mode,
                 record_upstream=False,
                 prebuilt_cache=cache,
                 event_sink=sink,
@@ -231,6 +236,10 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--parallel-workers", type=int, default=4)
     parser.add_argument("--attempts", type=int, default=3)
+    parser.add_argument(
+        "--trial-provider-mode",
+        choices=("codex_subscription", "openai_compatible"),
+    )
     parser.add_argument("--require-passed", action="store_true")
     args = parser.parse_args()
     load_dotenv(args.env_file)
@@ -242,6 +251,9 @@ def main() -> None:
         events_path=args.events,
         parallel_workers=args.parallel_workers,
         attempts=args.attempts,
+        trial_provider_mode=(
+            args.trial_provider_mode or configured_skilllearn_provider_mode()
+        ),
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(

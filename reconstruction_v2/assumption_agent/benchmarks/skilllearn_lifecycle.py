@@ -58,6 +58,7 @@ TRIAL_TIMEOUT_POLICY_VERSION = "no_fixed_trial_wall_or_container_timeout_v2"
 PROVIDER_FAILURE_POLICY_VERSION = "codex_jsonl_terminal_error_circuit_v1"
 EPHEMERAL_AUTH_CLEANUP_VERSION = "bounded_ephemeral_auth_cleanup_v1"
 TRAINING_EVIDENCE_POLICY_VERSION = "all_valid_before_proposal_v1"
+PROVIDER_ROUTE_POLICY_VERSION = "single_model_single_provider_all_arms_v1"
 PREBUILT_IMAGE_POLICY_VERSION = "per_item_base_shared_agent_runtime_v3"
 SHARED_AGENT_RUNTIME_MOUNT = "/opt/assumption-v2-agent"
 SHARED_AGENT_RUNTIME_BUILDER_IMAGE = (
@@ -2332,6 +2333,7 @@ def _fairness_fingerprint(
             "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
             "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
             "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
+            "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
         }
     )
 
@@ -2351,6 +2353,7 @@ def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
                 "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
                 "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
                 "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
+                "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
             }
         )
     base_url = (
@@ -2373,6 +2376,7 @@ def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
             "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
             "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
             "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
+            "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
         }
     )
 

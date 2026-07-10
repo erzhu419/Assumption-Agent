@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 
 from assumption_agent.benchmarks.paper_protocol import PaperProtocol
@@ -13,6 +14,9 @@ from assumption_agent.models import stable_hash
 
 ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL = ROOT / "manifests" / "skilllearn_paper_protocol_v2.json"
+RUOLI_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_ruoli_gpt54mini.json"
+)
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
 
@@ -34,6 +38,45 @@ def test_paper_protocol_freezes_primary_design() -> None:
     }
     assert protocol.payload["phases"]["sealed_test"]["repeats"] == 3
     assert protocol.payload["statistics"]["analysis_unit"] == "benchmark_item"
+
+
+def test_v3_protocol_freezes_ruoli_for_every_arm() -> None:
+    protocol = PaperProtocol.read(RUOLI_PROTOCOL)
+
+    assert protocol.validate_structure() == []
+    assert protocol.payload["model"] == "gpt-5.4-mini"
+    assert protocol.payload["proposal_provider_chain"] == ["openai_compatible"]
+    assert protocol.payload["trial_provider_mode"] == "openai_compatible"
+    assert protocol.payload["provider_endpoint_origin"] == "https://ruoli.dev"
+    assert (
+        protocol.payload["execution"]["provider_route_policy"]
+        == "single_model_single_provider_all_arms_v1"
+    )
+
+
+def test_v3_protocol_rejects_route_drift() -> None:
+    protocol = PaperProtocol.read(RUOLI_PROTOCOL)
+    mutations = (
+        ("model", "gpt-5.3-codex-spark", "paper_model_route_mismatch"),
+        ("proposal_provider_chain", ["codex_app_server"], "proposal_provider_route_mismatch"),
+        ("trial_provider_mode", "codex_subscription", "trial_provider_route_mismatch"),
+        (
+            "provider_endpoint_origin",
+            "https://other.example",
+            "provider_endpoint_route_mismatch",
+        ),
+    )
+    for key, value, expected_issue in mutations:
+        payload = copy.deepcopy(protocol.payload)
+        payload[key] = value
+        assert expected_issue in PaperProtocol(protocol.path, payload).validate_structure()
+
+    payload = copy.deepcopy(protocol.payload)
+    del payload["execution"]["provider_route_policy"]
+    assert "provider_route_policy_mismatch" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
 
 
 def test_paper_report_uses_item_clustered_pairs_and_exact_mcnemar() -> None:

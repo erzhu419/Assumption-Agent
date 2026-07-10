@@ -46,6 +46,8 @@ Every reported comparison must include:
 
 Model, tool access, trial count, retries, and inference budget must be matched. Report task success, skill quality, trajectory quality, model calls, wall time, and failure rate.
 
+The active protocol fixes every primary arm to `gpt-5.4-mini` through the same ruoli OpenAI-compatible route. Proposal, raw, static controls, recursive ablations, and promoted-agent trials may not mix Spark, subscription auth, or a second provider into that run. Model, provider mode, endpoint identity, and the single-route policy enter the protocol and fairness fingerprints. Historical Spark results belong to protocol v2 and are not pooled with v3.
+
 The full and no-recursive evolution arms each have a predeclared maximum of three generations and stop after two consecutive non-promotions, no residuals, or duplicate behavior. Later proposals may receive only aggregate prior hypothesis status and promotion summaries; validation instructions and per-item outcomes are not returned to the proposal model.
 
 The two arms branch from one immutable first-generation checkpoint: identical raw train observations, identical mined residuals, and identical proposed root programs. Training is not rerun for the no-recursive arm. After that branch, each arm evolves only from its own archive and aggregate feedback. This makes recursive repair, rather than model-sampling drift or a different training replay, the causal ablation.
@@ -56,7 +58,7 @@ This primary runtime experiment admits only task and policy hypotheses. An evalu
 
 Reports separate aggregate static-tree recursion across every proposed root from recursion depth in the ultimately selected tree. This prevents a repaired but non-selected candidate from disappearing from the recursive/no-recursive mechanism audit.
 
-Policy-off and policy-on trials use one fairness fingerprint derived from backend, provider, agent, model, step budget, verifier isolation, runner-local agent-registry isolation, trial-timeout policy, image-cache policy, and the actual shared agent-runtime key. Their order is deterministically balanced by pair ID. A provider, budget, or runtime mismatch invalidates the pair. Parallel backends receive deep-copied upstream agent registries so one subscription context cannot clear or restore another backend's agent definition.
+Policy-off and policy-on trials use one fairness fingerprint derived from backend, provider, agent, model, step budget, verifier isolation, runner-local agent-registry isolation, trial-timeout policy, provider-route policy, image-cache policy, and the actual shared agent-runtime key. Their order is deterministically balanced by pair ID. A provider, budget, or runtime mismatch invalidates the pair. Parallel backends receive deep-copied upstream agent registries so one provider context cannot clear or restore another backend's agent definition.
 
 Execution caches only the exact non-oracle task environment. Oracle `skills/` content is excluded from the environment hash and build context. Before development, all train/validation images must pass a bounded prewarm gate without invoking the model; the signed receipt becomes part of the development report and archive-freeze checks. Node is pinned by image digest, Codex CLI is pinned to `0.144.1`, and one read-only runtime volume is shared by all item images. Parallelism is across benchmark items only. Every variant for one item runs sequentially in a protocol-derived balanced order, so raw and candidate do not contend against each other inside one pair.
 
