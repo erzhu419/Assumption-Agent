@@ -46,7 +46,7 @@ Every reported comparison must include:
 
 Model, tool access, trial count, retries, and inference budget must be matched. Report task success, skill quality, trajectory quality, model calls, wall time, and failure rate.
 
-The active protocol fixes every primary arm to `gpt-5.4-mini` through the same ruoli OpenAI-compatible route. Proposal, raw, static controls, recursive ablations, and promoted-agent trials may not mix Spark, subscription auth, or a second provider into that run. Model, provider mode, endpoint identity, and the single-route policy enter the protocol and fairness fingerprints. Historical Spark results belong to protocol v2 and are not pooled with v3.
+The active protocol fixes every primary arm to `gpt-5.4-mini` through the same ruoli OpenAI-compatible route. Proposal, raw, static controls, recursive ablations, and promoted-agent trials may not mix Spark, subscription auth, or a second provider into that run. Trial Codex commands must use the frozen `codex_custom_responses_provider_v1` configuration, including `/v1` normalization, Responses wire API, disabled WebSockets, disabled OpenAI-login requirements, ignored user config, and ephemeral execution. Model, provider mode, endpoint identity, custom-provider version, and the single-route policy enter the protocol and fairness fingerprints. Historical Spark results belong to protocol v2 and are not pooled with v3.
 
 The full and no-recursive evolution arms each have a predeclared maximum of three generations and stop after two consecutive non-promotions, no residuals, or duplicate behavior. Later proposals may receive only aggregate prior hypothesis status and promotion summaries; validation instructions and per-item outcomes are not returned to the proposal model.
 

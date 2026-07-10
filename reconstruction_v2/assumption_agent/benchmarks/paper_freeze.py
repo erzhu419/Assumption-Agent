@@ -360,6 +360,7 @@ def _validate_development_report(
         expected["trial_timeout_policy"] = timeout_policy
     for field in (
         "provider_failure_policy",
+        "openai_compatible_codex_config",
         "ephemeral_auth_cleanup",
         "training_evidence_policy",
     ):

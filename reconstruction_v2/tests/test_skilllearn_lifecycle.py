@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import threading
 import time
@@ -624,6 +625,131 @@ def test_subscription_trial_auth_is_ephemeral_and_not_passed_as_env(
         row["event"] == "skilllearn_ephemeral_auth_cleanup_completed"
         for row in sink.events
     )
+
+
+def test_openai_compatible_trial_compiles_sanitized_codex_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "provider-secret-must-not-enter-command-or-events"
+    monkeypatch.setenv("ASSUMPTION_V2_API_KEY", secret)
+    monkeypatch.setenv("ASSUMPTION_V2_API_BASE", "https://ruoli.dev")
+    monkeypatch.setenv("OPENAI_API_KEY", "ambient-key-must-be-replaced")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    agent = {
+        "env": ["OPENAI_API_KEY"],
+        "setup": "auth_json",
+        "run": (
+            "codex exec --dangerously-bypass-approvals-and-sandbox "
+            "--skip-git-repo-check --json --model {model} -- "
+            '"$(cat {instruction_file})"'
+        ),
+        "trajectory_env": {"CODEX_HOME": "/logs/agent"},
+    }
+    original_agent = dict(agent)
+    original_agent["env"] = list(agent["env"])
+    original_agent["trajectory_env"] = dict(agent["trajectory_env"])
+    delegate = RecordingSubprocess()
+    runner = ModuleType("fake_openai_compatible_runner")
+    runner.subprocess = delegate
+    runner.get_agent = lambda agent_id: agent
+    sink = MemoryEventSink()
+    backend = SkillLearnSubprocessBackend(
+        BENCH_ROOT,
+        model="gpt-5.4-mini",
+        provider_mode="openai_compatible",
+        record_upstream=False,
+        event_sink=sink,
+    )
+
+    with backend._provider_runtime(runner, trace_id="openai-provider-test"):
+        assert agent["setup"] is None
+        assert agent["env"] == ["OPENAI_API_KEY", "OPENAI_BASE_URL"]
+        assert os.environ["OPENAI_API_KEY"] == secret
+        assert os.environ["OPENAI_BASE_URL"] == "https://ruoli.dev/v1"
+        run_template = agent["run"]
+        assert "--ignore-user-config" in run_template
+        assert "--ephemeral" in run_template
+        assert 'model_provider="assumption_v2_openai_compatible"' in run_template
+        assert "https://ruoli.dev/v1" in run_template
+        assert "wire_api" in run_template and "responses" in run_template
+        assert "supports_websockets=false" in run_template
+        assert "requires_openai_auth=false" in run_template
+        assert "api.openai.com" not in run_template
+        assert secret not in run_template
+        prepared = next(
+            row
+            for row in sink.events
+            if row["event"] == "skilllearn_openai_compatible_provider_prepared"
+        )
+        assert prepared["payload"]["config_version"] == (
+            "codex_custom_responses_provider_v1"
+        )
+        assert prepared["payload"]["endpoint_origin"] == "https://ruoli.dev"
+        assert prepared["payload"]["wire_api"] == "responses"
+        assert prepared["payload"]["secret_value_persisted"] is False
+        assert secret not in repr(prepared)
+        delegate.agent_stdout = json.dumps(
+            {
+                "type": "turn.failed",
+                "error": {"message": "You've hit your usage limit for the model."},
+            }
+        )
+        with pytest.raises(RuntimeError, match="provider_usage_limit"):
+            runner.subprocess.run(
+                ["docker", "exec", "trial", "sh", "-c", "codex exec --help"],
+                timeout=1800,
+            )
+        assert any(
+            row["event"] == "skilllearn_agent_terminal_error_detected"
+            and row["payload"]["error_type"] == "provider_usage_limit"
+            for row in sink.events
+        )
+
+    assert agent == original_agent
+    assert runner.subprocess is delegate
+
+
+def test_openai_compatible_terminal_errors_use_provider_labels() -> None:
+    backend = SkillLearnSubprocessBackend(
+        BENCH_ROOT,
+        model="gpt-5.4-mini",
+        provider_mode="openai_compatible",
+        record_upstream=False,
+    )
+    request = SkillLearnTrialRequest(
+        item_id="item",
+        family="family",
+        split=SplitName.VALIDATION,
+        variant=TrialVariant.POLICY_OFF,
+        evaluator_epoch="epoch",
+        pair_id="pair",
+        repeat=0,
+        agent_id="codex",
+        model="gpt-5.4-mini",
+        max_steps=100,
+        manifest_hash="manifest",
+    )
+    result = {
+        "passed": False,
+        "reward": 0.0,
+        "agent_stdout": json.dumps(
+            {
+                "type": "turn.failed",
+                "error": {"message": "Incorrect API key provided"},
+            }
+        ),
+    }
+
+    observation = backend._sanitize_result(
+        request,
+        result=result,
+        return_code=1,
+        duration_seconds=1.0,
+    )
+
+    assert observation.error_type == "provider_authentication_failed"
+    assert observation.valid is False
+    assert backend.provider_circuit.open(observation.error_type) is True
 
 
 @pytest.mark.parametrize(

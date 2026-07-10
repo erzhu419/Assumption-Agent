@@ -9,6 +9,7 @@ import math
 import os
 import queue
 import re
+import shlex
 import shutil
 import sys
 import tempfile
@@ -20,6 +21,7 @@ from enum import Enum
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Callable, Iterable, Iterator, Mapping, Protocol, Sequence, TypeVar
+from urllib.parse import urlsplit, urlunsplit
 
 from ..archive import PolicyArchive
 from ..evaluation import PromotionGate
@@ -59,6 +61,8 @@ PROVIDER_FAILURE_POLICY_VERSION = "codex_jsonl_terminal_error_circuit_v1"
 EPHEMERAL_AUTH_CLEANUP_VERSION = "bounded_ephemeral_auth_cleanup_v1"
 TRAINING_EVIDENCE_POLICY_VERSION = "all_valid_before_proposal_v1"
 PROVIDER_ROUTE_POLICY_VERSION = "single_model_single_provider_all_arms_v1"
+OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION = "codex_custom_responses_provider_v1"
+OPENAI_COMPATIBLE_CODEX_PROVIDER_ID = "assumption_v2_openai_compatible"
 PREBUILT_IMAGE_POLICY_VERSION = "per_item_base_shared_agent_runtime_v3"
 SHARED_AGENT_RUNTIME_MOUNT = "/opt/assumption-v2-agent"
 SHARED_AGENT_RUNTIME_BUILDER_IMAGE = (
@@ -71,6 +75,9 @@ _OutputT = TypeVar("_OutputT")
 _FATAL_PROVIDER_ERROR_TYPES = frozenset(
     {
         "provider_rate_limit",
+        "provider_authentication_failed",
+        "provider_model_unavailable",
+        "provider_usage_limit",
         "subscription_authentication_failed",
         "subscription_model_unavailable",
         "subscription_usage_limit",
@@ -740,6 +747,11 @@ class SkillLearnSubprocessBackend:
                     ),
                     "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
                     "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
+                    "openai_compatible_codex_config": (
+                        OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION
+                        if self.provider_mode == "openai_compatible"
+                        else None
+                    ),
                     "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
                     "prebuilt_policy": (
                         PREBUILT_IMAGE_POLICY_VERSION if self.prebuilt_cache else "disabled"
@@ -922,7 +934,10 @@ class SkillLearnSubprocessBackend:
             agent = runner.get_agent(self.agent_id)
             original_agent = copy.deepcopy(agent) if isinstance(agent, dict) else None
             try:
-                self._prepare_openai_compatible_provider(runner)
+                self._prepare_openai_compatible_provider(
+                    runner,
+                    trace_id=trace_id,
+                )
                 if isinstance(agent, dict) and agent_runtime_volume:
                     trajectory_env = dict(agent.get("trajectory_env") or {})
                     trajectory_env["PATH"] = f"{SHARED_AGENT_RUNTIME_MOUNT}/bin:$PATH"
@@ -1006,6 +1021,7 @@ class SkillLearnSubprocessBackend:
             original_subprocess,
             host_codex_home=None,
             agent_runtime_volume=agent_runtime_volume,
+            provider_mode=self.provider_mode,
             event_sink=self.event_sink,
             trace_id=trace_id,
         )
@@ -1014,18 +1030,115 @@ class SkillLearnSubprocessBackend:
         finally:
             runner.subprocess = original_subprocess
 
-    def _prepare_openai_compatible_provider(self, runner: ModuleType) -> None:
-        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("ASSUMPTION_V2_API_KEY")
-        base_url = os.environ.get("OPENAI_BASE_URL") or os.environ.get("ASSUMPTION_V2_API_BASE")
-        if api_key:
-            os.environ.setdefault("OPENAI_API_KEY", api_key)
-        if base_url:
-            os.environ.setdefault("OPENAI_BASE_URL", base_url.rstrip("/"))
+    def _prepare_openai_compatible_provider(
+        self,
+        runner: ModuleType,
+        *,
+        trace_id: str,
+    ) -> None:
+        api_key = (
+            os.environ.get("ASSUMPTION_V2_API_KEY")
+            or os.environ.get("OPENAI_API_KEY")
+            or ""
+        ).strip()
+        base_url = (
+            os.environ.get("ASSUMPTION_V2_API_BASE")
+            or os.environ.get("OPENAI_BASE_URL")
+            or ""
+        ).strip()
+        if not api_key:
+            raise RuntimeError("openai-compatible provider API key is required")
+        if not base_url:
+            raise RuntimeError("openai-compatible provider base URL is required")
+        codex_base_url = _normalize_openai_compatible_codex_base_url(base_url)
+        os.environ["OPENAI_API_KEY"] = api_key
+        os.environ["OPENAI_BASE_URL"] = codex_base_url
         agent = runner.get_agent(self.agent_id)
-        if isinstance(agent, dict) and os.environ.get("OPENAI_BASE_URL"):
-            env_names = list(agent.get("env") or [])
-            if "OPENAI_BASE_URL" not in env_names:
-                agent["env"] = [*env_names, "OPENAI_BASE_URL"]
+        if not isinstance(agent, dict):
+            raise RuntimeError("SkillLearnBench codex agent definition is unavailable")
+        env_names = list(agent.get("env") or [])
+        for env_name in ("OPENAI_API_KEY", "OPENAI_BASE_URL"):
+            if env_name not in env_names:
+                env_names.append(env_name)
+        run_template = str(agent.get("run") or "")
+        if "codex exec" not in run_template:
+            raise RuntimeError("SkillLearnBench codex run template is unavailable")
+        config_values = (
+            "--ignore-user-config",
+            "--ephemeral",
+            "--config",
+            f"model_provider={json.dumps(OPENAI_COMPATIBLE_CODEX_PROVIDER_ID)}",
+            "--config",
+            (
+                f'model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}.name='
+                f'{json.dumps("OpenAI-compatible paper route")}'
+            ),
+            "--config",
+            (
+                f'model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}.base_url='
+                f"{json.dumps(codex_base_url)}"
+            ),
+            "--config",
+            (
+                f'model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}.env_key='
+                f'{json.dumps("OPENAI_API_KEY")}'
+            ),
+            "--config",
+            (
+                f'model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}.wire_api='
+                f'{json.dumps("responses")}'
+            ),
+            "--config",
+            (
+                f"model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}."
+                "supports_websockets=false"
+            ),
+            "--config",
+            (
+                f"model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}."
+                "requires_openai_auth=false"
+            ),
+        )
+        codex_config = " ".join(shlex.quote(value) for value in config_values)
+        agent["env"] = env_names
+        agent["setup"] = None
+        agent["run"] = run_template.replace(
+            "codex exec",
+            f"codex exec {codex_config}",
+            1,
+        )
+        endpoint = urlsplit(codex_base_url)
+        endpoint_origin = f"{endpoint.scheme}://{endpoint.hostname}"
+        if endpoint.port is not None:
+            endpoint_origin = f"{endpoint_origin}:{endpoint.port}"
+        self.event_sink.emit(
+            Event(
+                event="skilllearn_openai_compatible_provider_prepared",
+                stage="benchmark.skilllearn.provider_config",
+                trace_id=trace_id,
+                payload={
+                    "config_version": OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION,
+                    "model": self.model,
+                    "provider_mode": self.provider_mode,
+                    "provider_id": OPENAI_COMPATIBLE_CODEX_PROVIDER_ID,
+                    "endpoint_origin": endpoint_origin,
+                    "endpoint_base_hash": stable_hash(
+                        {"base_url": codex_base_url}
+                    ),
+                    "api_key_env_name": "OPENAI_API_KEY",
+                    "wire_api": "responses",
+                    "supports_websockets": False,
+                    "requires_openai_auth": False,
+                    "ignore_user_config": True,
+                    "ephemeral": True,
+                    "agent_setup": None,
+                    "run_template_hash": stable_hash(
+                        {"run_template": agent["run"]}
+                    ),
+                    "secret_value_persisted": False,
+                },
+            )
+        )
 
     def _sanitize_result(
         self,
@@ -1047,6 +1160,10 @@ class SkillLearnSubprocessBackend:
         terminal_error = _codex_terminal_error_label(
             result.get("agent_stdout"),
             result.get("agent_stderr"),
+        )
+        terminal_error = _provider_scoped_terminal_error(
+            terminal_error,
+            self.provider_mode,
         )
         if terminal_error:
             error_type = error_type or terminal_error
@@ -1078,6 +1195,7 @@ class SkillLearnSubprocessBackend:
         fairness_fingerprint = _fairness_fingerprint(
             agent_id=self.agent_id,
             model=self.model,
+            provider_mode=self.provider_mode,
             max_steps=self.max_steps,
             provider_fingerprint=provider_fingerprint,
             prebuilt_enabled=self.prebuilt_cache is not None,
@@ -1099,6 +1217,11 @@ class SkillLearnSubprocessBackend:
             ),
             "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
             "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
+            "openai_compatible_codex_config": (
+                OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION
+                if self.provider_mode == "openai_compatible"
+                else None
+            ),
             "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
             "prebuilt_policy": (
                 PREBUILT_IMAGE_POLICY_VERSION if self.prebuilt_cache else "disabled"
@@ -1151,6 +1274,7 @@ class SkillLearnSubprocessBackend:
         fairness = _fairness_fingerprint(
             agent_id=self.agent_id,
             model=self.model,
+            provider_mode=self.provider_mode,
             max_steps=self.max_steps,
             provider_fingerprint=provider,
             prebuilt_enabled=self.prebuilt_cache is not None,
@@ -2065,12 +2189,14 @@ class _DockerCodexHomeSubprocessProxy:
         *,
         host_codex_home: Path | None,
         agent_runtime_volume: str | None = None,
+        provider_mode: str = "codex_subscription",
         event_sink: EventSink | None = None,
         trace_id: str = "skilllearn-docker-isolation",
     ) -> None:
         self.delegate = delegate
         self.host_codex_home = host_codex_home.resolve() if host_codex_home else None
         self.agent_runtime_volume = agent_runtime_volume
+        self.provider_mode = provider_mode
         self.event_sink = event_sink or NullEventSink()
         self.trace_id = trace_id
         self._verifier_sources: dict[str, Path] = {}
@@ -2210,6 +2336,10 @@ class _DockerCodexHomeSubprocessProxy:
                 getattr(completed, "stdout", None),
                 getattr(completed, "stderr", None),
             )
+            terminal_error = _provider_scoped_terminal_error(
+                terminal_error,
+                self.provider_mode,
+            )
             if terminal_error:
                 self.event_sink.emit(
                     Event(
@@ -2306,6 +2436,7 @@ def _fairness_fingerprint(
     *,
     agent_id: str,
     model: str,
+    provider_mode: str,
     max_steps: int,
     provider_fingerprint: str,
     prebuilt_enabled: bool,
@@ -2334,6 +2465,11 @@ def _fairness_fingerprint(
             "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
             "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
             "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
+            "openai_compatible_codex_config": (
+                OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION
+                if agent_id == "codex" and provider_mode == "openai_compatible"
+                else None
+            ),
         }
     )
 
@@ -2357,12 +2493,14 @@ def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
             }
         )
     base_url = (
-        os.environ.get("OPENAI_BASE_URL")
-        or os.environ.get("ASSUMPTION_V2_API_BASE")
+        os.environ.get("ASSUMPTION_V2_API_BASE")
+        or os.environ.get("OPENAI_BASE_URL")
         or os.environ.get("GPT5_BASE_URL")
         or os.environ.get("RUOLI_BASE_URL")
         or "provider-default"
     )
+    if base_url != "provider-default":
+        base_url = _normalize_openai_compatible_codex_base_url(base_url)
     return stable_hash(
         {
             "agent_id": agent_id,
@@ -2377,8 +2515,38 @@ def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
             "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
             "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
             "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
+            "openai_compatible_codex_config": (
+                OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION
+                if agent_id == "codex"
+                else None
+            ),
         }
     )
+
+
+def _normalize_openai_compatible_codex_base_url(base_url: str) -> str:
+    parsed = urlsplit(base_url.strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("openai-compatible provider base URL must be HTTP(S)")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("openai-compatible provider base URL contains unsupported components")
+    path = parsed.path.rstrip("/")
+    if not path.endswith("/v1"):
+        path = f"{path}/v1" if path else "/v1"
+    return urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
+
+
+def _provider_scoped_terminal_error(
+    error_type: str | None,
+    provider_mode: str,
+) -> str | None:
+    if provider_mode != "openai_compatible":
+        return error_type
+    return {
+        "subscription_authentication_failed": "provider_authentication_failed",
+        "subscription_model_unavailable": "provider_model_unavailable",
+        "subscription_usage_limit": "provider_usage_limit",
+    }.get(error_type, error_type)
 
 
 def _trial_timeout_stage(command: Any) -> str | None:
@@ -2423,7 +2591,14 @@ def _codex_terminal_error_label(*streams: Any) -> str | None:
                 return "provider_rate_limit"
             if any(
                 value in message
-                for value in ("not logged in", "unauthorized", "authentication", "login required")
+                for value in (
+                    "not logged in",
+                    "unauthorized",
+                    "authentication",
+                    "login required",
+                    "api key",
+                    "invalid key",
+                )
             ):
                 return "subscription_authentication_failed"
             if any(

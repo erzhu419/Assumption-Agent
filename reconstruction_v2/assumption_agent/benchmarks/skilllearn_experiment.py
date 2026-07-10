@@ -38,6 +38,7 @@ from .prewarm import (
 from .skilllearn_compiler import SKILL_ROUTING_VERSION
 from .skilllearn_lifecycle import (
     EPHEMERAL_AUTH_CLEANUP_VERSION,
+    OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION,
     PREBUILT_IMAGE_POLICY_VERSION,
     PROVIDER_FAILURE_POLICY_VERSION,
     PROVIDER_ROUTE_POLICY_VERSION,
@@ -147,6 +148,11 @@ def main() -> None:
         "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
         "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
         "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
+        "openai_compatible_codex_config": (
+            OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION
+            if trial_provider_mode == "openai_compatible"
+            else None
+        ),
         "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
         "training_evidence_policy": TRAINING_EVIDENCE_POLICY_VERSION,
         "development_prewarm_version": DEVELOPMENT_PREWARM_VERSION,

@@ -25,6 +25,7 @@ from .skilllearn_compiler import SKILL_ROUTING_VERSION
 from .prewarm import DEVELOPMENT_PREWARM_VERSION
 from .skilllearn_lifecycle import (
     EPHEMERAL_AUTH_CLEANUP_VERSION,
+    OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION,
     PREBUILT_IMAGE_POLICY_VERSION,
     PROVIDER_ROUTE_POLICY_VERSION,
     PROVIDER_FAILURE_POLICY_VERSION,
@@ -181,6 +182,13 @@ class PaperProtocol:
                 != PROVIDER_ROUTE_POLICY_VERSION
             ):
                 issues.append("provider_route_policy_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("openai_compatible_codex_config")
+                != OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION
+            ):
+                issues.append("openai_compatible_codex_config_mismatch")
         evolution = self.payload.get("evolution")
         if not isinstance(evolution, Mapping):
             issues.append("evolution_budget_missing")
