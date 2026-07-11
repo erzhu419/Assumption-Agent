@@ -429,6 +429,27 @@ def test_verifier_receipt_binds_the_executed_offline_profile(tmp_path: Path) -> 
         encoding="utf-8",
     )
     (verifier_dir / "reward.txt").write_text("0\n", encoding="utf-8")
+    result = {"verifier_exit": 0, "reward": 0}
+
+    missing = _inspect_verifier_execution_receipt(
+        test_script=test_script,
+        verifier_dir=verifier_dir,
+        result=result,
+        offline_verifier_profile=COMMON_PY38_VERIFIER_PROFILE,
+    )
+    assert missing.valid is False
+    assert missing.error_type == "verifier_execution_ctrf_missing"
+
+    (verifier_dir / "ctrf.json").write_text("{", encoding="utf-8")
+    malformed = _inspect_verifier_execution_receipt(
+        test_script=test_script,
+        verifier_dir=verifier_dir,
+        result=result,
+        offline_verifier_profile=COMMON_PY38_VERIFIER_PROFILE,
+    )
+    assert malformed.valid is False
+    assert malformed.error_type == "verifier_execution_ctrf_malformed"
+
     (verifier_dir / "ctrf.json").write_text(
         json.dumps(
             {
@@ -450,7 +471,6 @@ def test_verifier_receipt_binds_the_executed_offline_profile(tmp_path: Path) -> 
         ),
         encoding="utf-8",
     )
-    result = {"verifier_exit": 0, "reward": 0}
 
     receipt = _inspect_verifier_execution_receipt(
         test_script=test_script,
@@ -458,23 +478,116 @@ def test_verifier_receipt_binds_the_executed_offline_profile(tmp_path: Path) -> 
         result=result,
         offline_verifier_profile=COMMON_PY38_VERIFIER_PROFILE,
     )
-    renamed_profile = replace(
+    changed_command_profile = replace(
         COMMON_PY38_VERIFIER_PROFILE,
-        profile_id="common-pytest-ctrf-py38-test-v1",
+        artifact_command="printf audited > /logs/verifier/audited.txt",
     )
-    renamed_receipt = _inspect_verifier_execution_receipt(
+    changed_command_receipt = _inspect_verifier_execution_receipt(
         test_script=test_script,
         verifier_dir=verifier_dir,
         result=result,
-        offline_verifier_profile=renamed_profile,
+        offline_verifier_profile=changed_command_profile,
     )
 
     assert receipt.valid is True
     assert receipt.evidence_kind == "pytest_ctrf"
     assert receipt.reward == 0
     assert receipt.test_count == 2
-    assert renamed_receipt.valid is True
-    assert renamed_receipt.receipt_hash != receipt.receipt_hash
+    assert changed_command_profile.verifier_command != (
+        COMMON_PY38_VERIFIER_PROFILE.verifier_command
+    )
+    assert changed_command_receipt.valid is True
+    assert changed_command_receipt.receipt_hash != receipt.receipt_hash
+
+
+def test_trial_audit_binds_the_runtime_profile_not_a_catalog_lookup(
+    tmp_path: Path,
+) -> None:
+    family = "temperature-simulation"
+    item_id = "temperature-simulation-3"
+    benchmark_root = tmp_path / "benchmark"
+    trials_dir = tmp_path / "trials"
+    test_script = (
+        benchmark_root / "tasks" / family / item_id / "tests" / "test.sh"
+    )
+    test_script.parent.mkdir(parents=True)
+    test_script.write_text("python3 /tests/test_outputs.py\n", encoding="utf-8")
+    request = SkillLearnTrialRequest(
+        item_id=item_id,
+        family=family,
+        split=SplitName.TRAIN,
+        variant=TrialVariant.POLICY_OFF,
+        evaluator_epoch="epoch-offline",
+        pair_id="runtime-profile",
+        repeat=0,
+        agent_id="codex",
+        model="gpt-5.4-mini",
+        max_steps=100,
+        manifest_hash="manifest-offline",
+    )
+    trial_dir = (
+        trials_dir / "no_skill" / family / item_id / request.trial_id
+    )
+    verifier_dir = trial_dir / "verifier"
+    verifier_dir.mkdir(parents=True)
+    (trial_dir / "agent").mkdir()
+    (trial_dir / "agent" / "codex.txt").write_text("", encoding="utf-8")
+    (verifier_dir / "reward.txt").write_text("0\n", encoding="utf-8")
+    (verifier_dir / "ctrf.json").write_text(
+        json.dumps(
+            {
+                "results": {
+                    "summary": {
+                        "tests": 1,
+                        "passed": 0,
+                        "failed": 1,
+                        "skipped": 0,
+                        "pending": 0,
+                        "other": 0,
+                    },
+                    "tests": [{"name": "test_failure", "status": "failed"}],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = {"verifier_exit": 0, "reward": 0}
+    runtime_profile = replace(
+        COMMON_PY38_VERIFIER_PROFILE,
+        profile_id="runtime-injected-py38-v1",
+    )
+    backend = SkillLearnSubprocessBackend(
+        benchmark_root,
+        trials_dir=trials_dir,
+        provider_mode="openai_compatible",
+        event_sink=MemoryEventSink(),
+    )
+
+    audited = backend._audit_trial_artifacts(
+        runner=SimpleNamespace(TRIALS_DIR=str(trials_dir)),
+        request=request,
+        skill_config="no_skill",
+        result=result,
+        offline_verifier_profile=runtime_profile,
+        trace_id="runtime-profile-audit",
+    )
+    runtime_receipt = _inspect_verifier_execution_receipt(
+        test_script=test_script,
+        verifier_dir=verifier_dir,
+        result=result,
+        offline_verifier_profile=runtime_profile,
+    )
+    catalog_receipt = _inspect_verifier_execution_receipt(
+        test_script=test_script,
+        verifier_dir=verifier_dir,
+        result=result,
+        offline_verifier_profile=COMMON_PY38_VERIFIER_PROFILE,
+    )
+
+    assert audited["verifier_receipt_valid"] is True
+    assert audited["verifier_receipt_test_count"] == 1
+    assert audited["verifier_receipt_hash"] == runtime_receipt.receipt_hash
+    assert audited["verifier_receipt_hash"] != catalog_receipt.receipt_hash
 
 
 def test_verifier_receipt_structurally_binds_semantic_prelude(tmp_path: Path) -> None:

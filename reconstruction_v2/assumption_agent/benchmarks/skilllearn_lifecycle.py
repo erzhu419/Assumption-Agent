@@ -1295,6 +1295,11 @@ class SkillLearnSubprocessBackend:
                     request=request,
                     skill_config=skill_config,
                     result=result,
+                    offline_verifier_profile=(
+                        offline_verifier_runtime.profile
+                        if offline_verifier_runtime is not None
+                        else None
+                    ),
                     trace_id=trace_id,
                 )
         except Exception as exc:
@@ -1643,6 +1648,7 @@ class SkillLearnSubprocessBackend:
         request: SkillLearnTrialRequest,
         skill_config: str,
         result: Mapping[str, Any],
+        offline_verifier_profile: OfflineVerifierProfile | None,
         trace_id: str,
     ) -> Mapping[str, Any]:
         trials_root = self.trials_dir or Path(runner.TRIALS_DIR).expanduser().resolve()
@@ -1665,9 +1671,7 @@ class SkillLearnSubprocessBackend:
             test_script=test_script,
             verifier_dir=trial_path / "verifier",
             result=result,
-            offline_verifier_profile=offline_verifier_profile_for_family(
-                request.family
-            ),
+            offline_verifier_profile=offline_verifier_profile,
         )
         tool_audit = _inspect_codex_tool_policy(trial_path / "agent" / "codex.txt")
         audited = dict(result)
