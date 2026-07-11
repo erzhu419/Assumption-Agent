@@ -530,7 +530,7 @@ README、benchmark protocol、offline-verifier matrix 和 status 摘要，并把
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
 | 完成 | 冻结 offline-ready 范围 | 86-item manifests 保留旧 split；readiness matrix/static preflight 均 `blockers=[]`，无模型调用 |
 | 完成（本地预验） | 全 manifest runtime prewarm | cache-only 86/86、47 images、7 verifier runtimes；无 agent、无 sealed scoring |
-| 唯一 P0 操作前提 | 提交并重建 current-protocol lock/receipt | 本次代码与 3 个新 manifest/receipt 进入同一 commit；lock、代码、benchmark、环境和 Git 完全一致 |
+| 完成 | 提交并重建 current-protocol lock/receipt | scoped Git clean；claim-eligible lock 无 validation issue；post-commit prewarm 86/86 |
 | P1 | 完整 current-protocol development | recursive/no-recursive 两份 report/archive 全部落盘；0 invalid、0 provider/budget/runtime mismatch；sealed access=false |
 | P1 | 递归因果归因 | 两臂共享 train evidence 和 roots，唯一差异是 repair；behavior-identical 时 effect 报 N/A，不重采样 |
 | P1 | contrastive trigger learning | train successes 进入 anti-trigger/precision；candidate selection 不只最大化 failure support；报告 activation precision、harm、abstention |
@@ -540,9 +540,9 @@ README、benchmark protocol、offline-verifier matrix 和 status 摘要，并把
 
 近期顺序应是：
 
-1. 审阅并提交本次 protocol/action/subset 改动以及 3 个新 manifest/receipt 文件；
-2. 在该 clean commit 上重建 claim-eligible protocol lock，并重新生成 86-item content-hashed prewarm receipt；
-3. 跑完一次 clean recursive/no-recursive development；
+1. 已完成：审阅并提交 protocol/action/subset 改动以及 3 个新 manifest/receipt 文件；
+2. 已完成：在 clean scoped commit 上重建 claim-eligible lock 和 86-item content-hashed prewarm receipt；
+3. 下一步：跑完一次 clean recursive/no-recursive development；
 4. 只有 lock/prewarm 给出具体缺失依赖时才修该 blocker；否则不再新增基础设施 gate；
 5. 若没有 promotion，直接转 contrastive trigger learning，不先扩 family-out、multi-clade 或 evaluator mutation；
 6. 有 retained validation gain 后再做 family-out，最后才增加多 clade 与 evaluator mutation。
@@ -649,9 +649,9 @@ guard、archive 和 evaluator epoch 做成了清晰的小型系统。这使研�
 
 本次已经关闭三个会让任何后续结果先天不可解释的 P0：candidate 不能再控制 promotion
 及格线；外部 backend 不再把 prompt/verifier/fallback 声明伪装成 typed/observed 事实；
-86-item offline-ready manifests 已通过 readiness audit，且 all-manifest cache-only runtime
-prewarm 已本地达到 86/86。**在这些文件进入同一 commit、current lock 与 prewarm receipt
-重建成功后**，下一步就应停止“不断补 gate”，转入真正检验学习机制的 clean development。
+86-item offline-ready manifests 已通过 readiness audit，all-manifest cache-only runtime
+prewarm 已达到 86/86，且 clean scoped commit 上的 current lock 已 claim eligible。下一步
+就应停止“不断补 gate”，转入真正检验学习机制的 clean development。
 
 但重构仍不能写成“已证明有效”。available mixed-protocol artifacts 中尚无 incumbent 或
 promotion，也没有 current-protocol clean development、family-out 或 sealed result。当前

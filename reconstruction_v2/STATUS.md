@@ -58,6 +58,8 @@ The 133 offline tests prove that the learning loop is connected, that a promoted
 
 The active paper path has one execution contract. Before any development, freeze, validation-control, or sealed-control model work, it revalidates the lock content, protocol/evolution/promotion mappings, readiness receipt, model/provider/origin, egress and network budget, provider readiness, benchmark payload fingerprint, code fingerprint, clean scoped Git state, and locked commit. Agent ID, step budget, workers, retries, trigger support, generation budget, and candidate count come only from the protocol.
 
+The current scoped commit has passed claim-lock construction with `claim_eligible=true`, `validation_issues=[]`, and preflight `blockers=[]`. Its post-lock cache-only all-manifest prewarm is 86/86, and the smoke dry plan has `plan_blockers=[]`. No model was invoked by those checks.
+
 Docker Engine 29.1.3 is installed and the real upstream runner and container canaries have passed. Historical Spark/subscription canaries are retained only as diagnostic evidence and have no active protocol manifest in this tree. Dataclaw is absent but optional for task-success execution; it is needed only for parts of the separate trajectory/skill post-processing pipeline.
 
 The ruoli credential passed sanitized `gpt-5.4-mini` transport probes on 2026-07-10, and the current preflight reports the single OpenAI-compatible provider ready. This proves endpoint/transport availability, not benchmark quality or independent verification of the provider's internal model mapping.

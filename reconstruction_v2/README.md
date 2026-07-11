@@ -54,6 +54,15 @@ python3 -m assumption_agent.benchmarks.preflight \
   --root reference/self_evo_continual_20260707/repos/SkillLearnBench
 
 # Build a no-network, no-test-access execution plan.
+# The pipeline normally exports these public route controls; a direct CLI call
+# must do the same. The API key is still loaded from the local env file.
+export ASSUMPTION_V2_MODEL=gpt-5.4-mini
+export ASSUMPTION_V2_SKILLLEARN_PROVIDER_MODE=openai_compatible
+export ASSUMPTION_V2_PROVIDER_CHAIN=openai_compatible
+export ASSUMPTION_V2_API_BASE=https://ruoli.dev
+export ASSUMPTION_V2_API_ALLOWED_IPV4S=45.78.76.197
+export ASSUMPTION_V2_SKILLLEARN_CACHE_ONLY=1
+export ASSUMPTION_V2_TRIAL_NETWORK_BYTE_LIMIT=33554432
 python3 -m assumption_agent.benchmarks.skilllearn_experiment \
   --root reference/self_evo_continual_20260707/repos/SkillLearnBench \
   --protocol manifests/skilllearn_paper_protocol_v3_ruoli_gpt54mini.json \
