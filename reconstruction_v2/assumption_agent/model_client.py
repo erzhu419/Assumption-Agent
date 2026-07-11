@@ -18,7 +18,9 @@ PROPOSAL_SYSTEM_PROMPT = (
     "Return one JSON object matching the supplied contract. Do not include markdown. "
     "Never infer or request hidden test answers. Never use tools, files, shell commands, "
     "network search, or external context. Every hypothesis needs structured triggers, "
-    "an executable action graph, an external-anchor verifier, and preserve_baseline fallback."
+    "an action graph whose semantics match the supplied backend capabilities, an "
+    "external-anchor verifier used only by the evaluator unless explicitly declared "
+    "agent-local, and the supplied prospective fallback contract."
 )
 
 

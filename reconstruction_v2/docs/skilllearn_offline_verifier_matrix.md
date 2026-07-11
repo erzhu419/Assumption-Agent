@@ -50,6 +50,19 @@ blocked tasks are one incomplete upstream GDP verifier, three Druid tasks,
 three NLP tasks, and two Scala tasks. This is an infrastructure coverage
 figure, not an accuracy result.
 
+The paper protocol now freezes exactly those 86 ready items before any new
+model call. It filters the earlier credential-independent manifests without
+reassigning any item to another split:
+
+- instance holdout: 38 train / 16 validation / 32 sealed test;
+- family out: 48 train / 11 validation / 27 sealed test;
+- 16 eligible families; the family-out split contains 9/2/5 train/validation/test
+  families.
+
+This is a preregistered infrastructure subset, not an outcome-based exclusion.
+The nine blocked items remain a separate coverage-extension workstream and are
+not evaluated by an online substitute.
+
 ## Validation Evidence
 
 The 2026-07-11 v4 matrix used only train-split representatives. It made no model
@@ -67,22 +80,36 @@ on the matching item-3 image completed with solution exit 0, prelude exit 0,
 reward 1, and 27/27 original tests passing under Docker `--network none`.
 Provider credentials are removed before every verifier or child service starts.
 
-The active capability matrix is 7/7 profiles and 15/15 families. Its overall
-`passed` field remains false by design: the selected train manifest has one
-incomplete GDP verifier payload, one task backed only by an inactive profile,
-and two tasks with no local profile. The v4 report records all three blocker
-classes and does not substitute another instance's assertions.
+The original 95-item capability matrix is 7/7 profiles and 15/15 active
+families, but its overall `passed` field remains false because the selected
+train manifest contains all three blocker classes. The new offline-ready matrix
+at `artifacts/offline_verifier_matrix_offline86_20260711_v1/matrix.json` uses
+manifest hash `9c7eb39a...` and reports 7/7 profiles, 15/15 train-family probes,
+`blockers=[]`, `manifest_execution_ready=true`, and `passed=true`. It made no
+model call and did not access sealed-test content. A full manifest-scoped
+preflight also passed all required checks for 86 selected items.
+The compact, version-controlled summary is
+[`skilllearn_offline_readiness_receipt_v1.json`](../manifests/skilllearn_offline_readiness_receipt_v1.json);
+the paper protocol and execution lock bind its content hash rather than relying
+on an ignored local artifact path.
 
-The Druid diagnostic is deliberately not active. With a local hostname repair,
-the immutable image can start Druid and collect all four security tests without
-network access. However, the upstream reference solution's Maven build fails
-because the image-local `.m2` cache lacks plugin dependencies. The semantic
-receipt records `deployed_jar_count=0`, yet the original verifier still reports
-4/4 passing against the base service plus source-tree patch. That is a verifier
-false-positive path, not proof that the patched binary was built and deployed.
-Offline Maven probes also fail on missing clean/checkstyle plugin dependencies.
-The catalog therefore retains the diagnostic profile but the active profile
-lookup returns no Druid runtime and rejects the task before model execution.
+This readiness receipt is not a claim that all 86 task verifiers were executed.
+It combines the 7/7 profile contracts and 15/15 train-family dynamic probes with
+an all-selected-item static preflight. Runtime availability is checked
+separately: after a bounded cache-preparation pass built 14 missing images, the
+cache-only all-manifest prewarm passed 86/86 items, covering 47 unique images and
+seven offline-verifier runtimes without an agent call or sealed scoring.
+
+The Druid diagnostic is deliberately not active. A newer zero-download
+direct-`javac` reference probe compiled four changed classes against
+`/opt/druid/lib/*`, overlaid them into one indexing-service JAR, deployed that
+JAR, started Druid offline, and passed the original 4/4 tests. This proves a
+complete Maven corpus is not the only possible build route. It is still not an
+activation proof: the upstream behavior check accepts any exploit response
+`>=400`, the legitimate path need not return 2xx, a source-only/no-deploy run
+has also produced 4/4, no vulnerable negative control is established, and only
+one reference patch/module path was tested. Direct `javac` is therefore the
+preferred future route; Maven prefetch is only a fallback.
 
 This proves dependency availability, Python ABI compatibility, wrapper reward
 semantics, and original-test executability. It does not prove task accuracy or
@@ -93,11 +120,15 @@ valid CTRF/reward receipt and are scored by the unchanged original assertions.
 
 1. Obtain an authoritative verifier for `weighted-gdp-calculation-2` from the
    benchmark maintainers or a pinned upstream release; do not synthesize it.
-2. Build and hash a complete Druid Maven corpus from an explicitly approved
-   mirror, then require a non-zero deployed-JAR receipt and a negative vulnerable
-   control before removing `druid_maven_cache_incomplete`.
-3. Keep Scala and NLP blocked until their larger toolchains are deliberately
-   prefetched, hashed, and justified for the selected experiment.
+2. Turn the Druid direct-`javac` route into a general candidate-build adapter,
+   and require a vulnerable negative control, legitimate 2xx path, deployed-JAR
+   hash, and source-only/no-deploy failure before activation.
+3. For Scala, pin a compatible SBT/compiler-bridge and Circe/ScalaTest closure
+   (estimated 100--300 MB) and add a CLI verifier adapter; downloading JARs alone
+   is insufficient because the upstream verifier is not pytest-shaped.
+4. Treat NLP last: it needs a Python 3.10 runtime shared by agent and verifier
+   plus a minimal CPU-only Torch/Transformers/TRL stack (estimated 0.5--1.2 GB
+   compressed). Do not pull a default CUDA closure merely to raise coverage.
 
 Every new profile must pass the same pass/fail contract and original-family
 execution matrix before it enters a benchmark manifest.

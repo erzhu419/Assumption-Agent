@@ -42,6 +42,7 @@ class EvolutionRunResult:
     static_validation_max_recursion_depth: int = 0
     repaired_candidate_count: int = 0
     repair_model_failure_count: int = 0
+    evaluated_candidate_behavior_hash: str | None = None
 
 
 @dataclass(frozen=True)
@@ -239,23 +240,30 @@ class EvolutionKernel:
             raise ValueError("validation context and counterfactual evaluator epoch differ")
         for task in validation_tasks:
             self.split_guard.authorize(task.id, AccessPhase.PROMOTION)
-        proposals = tuple(proposal_candidates or self.propose_candidates(
-            residuals,
-            validation_context=validation_context,
-            trace_id=trace_id,
-        ))
+        proposals = tuple(
+            _with_primary_metric(program, self.promotion_gate.spec.metric)
+            for program in (
+                proposal_candidates
+                or self.propose_candidates(
+                    residuals,
+                    validation_context=validation_context,
+                    trace_id=trace_id,
+                )
+            )
+        )
         if not proposals:
             raise ValueError("evolution requires at least one proposal candidate")
         if any(row.evaluator_epoch != validation_context.evaluator_epoch for row in proposals):
             raise ValueError("shared proposal candidate crossed evaluator epochs")
         known_behaviors = {
-            _behavior_hash(program) for program in self.archive.hypotheses.values()
+            _runner_behavior_hash(self.counterfactual_runner, program)
+            for program in self.archive.hypotheses.values()
         }
         novel_roots: list[HypothesisProgram] = []
         generation_behaviors: set[str] = set()
         known_ids = set(self.archive.hypotheses)
         for proposal in proposals:
-            behavior = _behavior_hash(proposal)
+            behavior = _runner_behavior_hash(self.counterfactual_runner, proposal)
             if behavior in known_behaviors or behavior in generation_behaviors:
                 continue
             root = proposal
@@ -481,6 +489,7 @@ class EvolutionKernel:
                 "allowed": decision.allowed,
                 "blockers": list(decision.blockers),
                 "pair_summary": decision.summary.to_dict(confidence=decision.confidence),
+                "metric": self.promotion_gate.spec.metric,
             }
         )
         summary = decision.summary
@@ -488,7 +497,7 @@ class EvolutionKernel:
             archive_node_id=candidate_node.id,
             split=SplitName.VALIDATION.value,
             evaluator_epoch_id=accepted.evaluator_epoch,
-            metric=accepted.expected_effect.metric,
+            metric=self.promotion_gate.spec.metric,
             successes=summary.candidate_success_count,
             total=summary.pair_count,
             item_ids=tuple(pair.task_id for pair in pairs),
@@ -512,6 +521,10 @@ class EvolutionKernel:
             static_validation_max_recursion_depth=static_max_depth,
             repaired_candidate_count=repaired_candidate_count,
             repair_model_failure_count=repair_model_failure_count,
+            evaluated_candidate_behavior_hash=_runner_behavior_hash(
+                self.counterfactual_runner,
+                accepted,
+            ),
         )
 
     def propose_candidates(
@@ -542,6 +555,16 @@ class EvolutionKernel:
                 "runtime_candidate_kinds": sorted(
                     kind.value for kind in validation_context.allowed_runtime_kinds
                 ),
+                "action_contract": {
+                    "allowed_action_operations": sorted(
+                        validation_context.allowed_action_operations
+                    ),
+                    "semantics": validation_context.action_semantics,
+                    "external_evidence_is_hidden": (
+                        validation_context.external_evidence_is_hidden
+                    ),
+                },
+                "primary_metric": self.promotion_gate.spec.metric,
                 "evaluator_hypotheses_require_separate_epoch_challenger": True,
                 "prior_hypotheses": self._prior_hypothesis_context(),
                 "prior_promotion_feedback": list(self._promotion_feedback),
@@ -554,7 +577,10 @@ class EvolutionKernel:
         return [
             {
                 "hypothesis_id": program.id,
-                "behavior_hash": _behavior_hash(program),
+                "behavior_hash": _runner_behavior_hash(
+                    self.counterfactual_runner,
+                    program,
+                ),
                 "status": program.status.value,
                 "statement": program.statement,
                 "trigger": program.to_dict()["trigger"],
@@ -580,6 +606,7 @@ class EvolutionKernel:
         static_validation_max_recursion_depth: int = 0,
         repaired_candidate_count: int = 0,
         repair_model_failure_count: int = 0,
+        evaluated_candidate_behavior_hash: str | None = None,
     ) -> EvolutionRunResult:
         result = EvolutionRunResult(
             trace_id=trace_id,
@@ -596,6 +623,7 @@ class EvolutionKernel:
             static_validation_max_recursion_depth=static_validation_max_recursion_depth,
             repaired_candidate_count=repaired_candidate_count,
             repair_model_failure_count=repair_model_failure_count,
+            evaluated_candidate_behavior_hash=evaluated_candidate_behavior_hash,
         )
         self.event_sink.emit(
             Event(
@@ -619,12 +647,18 @@ class EvolutionKernel:
                     ),
                     "repaired_candidate_count": repaired_candidate_count,
                     "repair_model_failure_count": repair_model_failure_count,
+                    "evaluated_candidate_behavior_hash": (
+                        evaluated_candidate_behavior_hash
+                    ),
                     "generation_hash": stable_hash(
                         {
                             "root": root.payload_hash,
                             "accepted": accepted.payload_hash if accepted else None,
                             "decision": decision.to_dict() if decision else None,
                             "archive_node": archive_node.payload_hash if archive_node else None,
+                            "evaluated_candidate_behavior_hash": (
+                                evaluated_candidate_behavior_hash
+                            ),
                         }
                     ),
                 },
@@ -644,6 +678,21 @@ def _behavior_hash(program: HypothesisProgram) -> str:
     ):
         payload.pop(key, None)
     return stable_hash(payload)
+
+
+def _runner_behavior_hash(
+    runner: CounterfactualRunner,
+    program: HypothesisProgram,
+) -> str:
+    backend_hash = getattr(runner, "behavior_hash", None)
+    if callable(backend_hash):
+        try:
+            value = str(backend_hash(program)).strip()
+        except ValueError:
+            value = ""
+        if value:
+            return value
+    return _behavior_hash(program)
 
 
 def _counterfactual_replay_descriptor(
@@ -667,14 +716,14 @@ def _counterfactual_replay_descriptor(
         for task in tasks
     ]
     baseline_behavior_hashes = sorted(
-        _behavior_hash(row) for row in baseline_programs
+        _runner_behavior_hash(runner, row) for row in baseline_programs
     )
     return {
         "policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
         "split": split.value,
         "evaluator_epoch": evaluator_epoch,
         "runtime_version": runtime_version,
-        "candidate_behavior_hash": _behavior_hash(program),
+        "candidate_behavior_hash": _runner_behavior_hash(runner, program),
         "baseline_behavior_set_hash": stable_hash(baseline_behavior_hashes),
         "task_set_hash": stable_hash(task_rows),
     }
@@ -694,6 +743,18 @@ def _validate_replayed_pairs(
         for row in pairs
     ):
         raise PermissionError("counterfactual replay crossed split or evaluator epoch")
+
+
+def _with_primary_metric(
+    program: HypothesisProgram,
+    primary_metric: str,
+) -> HypothesisProgram:
+    if program.expected_effect.metric == primary_metric:
+        return program
+    return replace(
+        program,
+        expected_effect=replace(program.expected_effect, metric=primary_metric),
+    )
 
 
 def _counterfactual_pair_set_hash(

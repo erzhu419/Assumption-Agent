@@ -29,7 +29,7 @@ from .offline_verifier import (
 )
 
 
-DEVELOPMENT_PREWARM_VERSION = "train_validation_images_and_offline_verifiers_v2"
+DEVELOPMENT_PREWARM_VERSION = "all_manifest_images_and_offline_verifiers_v3"
 
 
 def prewarm_development_images(
@@ -45,12 +45,15 @@ def prewarm_development_images(
         raise ValueError("parallel_workers must be positive")
     if attempts <= 0:
         raise ValueError("attempts must be positive")
-    selected_ids = (*manifest.train_ids, *manifest.validation_ids)
-    all_manifest_ids = (*selected_ids, *manifest.test_ids)
+    selected_ids = (
+        *manifest.train_ids,
+        *manifest.validation_ids,
+        *manifest.test_ids,
+    )
     preflight = build_preflight(
         benchmark_root,
         trial_provider_mode=trial_provider_mode,
-        item_ids=all_manifest_ids,
+        item_ids=selected_ids,
     )
     if preflight["blockers"]:
         raise RuntimeError(f"development prewarm preflight failed: {preflight['blockers']}")
@@ -209,7 +212,7 @@ def prewarm_development_images(
     payload: dict[str, Any] = {
         "prewarm_version": DEVELOPMENT_PREWARM_VERSION,
         "manifest_hash": manifest.manifest_hash,
-        "split_names": ["train", "validation"],
+        "split_names": ["train", "validation", "test"],
         "selected_item_set_hash": _selected_item_set_hash(manifest),
         "selected_item_count": len(selected_ids),
         "completed_item_count": len(rows),
@@ -288,10 +291,18 @@ def validate_development_prewarm_receipt(
     expected = {
         "prewarm_version": DEVELOPMENT_PREWARM_VERSION,
         "manifest_hash": manifest.manifest_hash,
-        "split_names": ["train", "validation"],
+        "split_names": ["train", "validation", "test"],
         "selected_item_set_hash": _selected_item_set_hash(manifest),
-        "selected_item_count": len(manifest.train_ids) + len(manifest.validation_ids),
-        "completed_item_count": len(manifest.train_ids) + len(manifest.validation_ids),
+        "selected_item_count": (
+            len(manifest.train_ids)
+            + len(manifest.validation_ids)
+            + len(manifest.test_ids)
+        ),
+        "completed_item_count": (
+            len(manifest.train_ids)
+            + len(manifest.validation_ids)
+            + len(manifest.test_ids)
+        ),
         "failed_item_count": 0,
         "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
         "dependency_cache_only_enforced": True,
@@ -312,13 +323,21 @@ def validate_development_prewarm_receipt(
         raise ValueError("development prewarm item rows are incomplete")
     expected_item_hashes = {
         stable_hash({"item_id": item_id})
-        for item_id in (*manifest.train_ids, *manifest.validation_ids)
+        for item_id in (
+            *manifest.train_ids,
+            *manifest.validation_ids,
+            *manifest.test_ids,
+        )
     }
     expected_profile_by_item_hash = {
         stable_hash({"item_id": item_id}): offline_verifier_profile_for_family(
             manifest.family_by_id[item_id]
         )
-        for item_id in (*manifest.train_ids, *manifest.validation_ids)
+        for item_id in (
+            *manifest.train_ids,
+            *manifest.validation_ids,
+            *manifest.test_ids,
+        )
     }
     observed_item_hashes: set[str] = set()
     for row in rows:
@@ -418,13 +437,16 @@ def _selected_item_set_hash(manifest: SplitManifest) -> str:
             "validation_item_hashes": sorted(
                 stable_hash({"item_id": item_id}) for item_id in manifest.validation_ids
             ),
+            "test_item_hashes": sorted(
+                stable_hash({"item_id": item_id}) for item_id in manifest.test_ids
+            ),
         }
     )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Prebuild every train/validation image before model execution."
+        description="Prebuild every manifest image before model execution."
     )
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)

@@ -53,7 +53,16 @@ from ..validation import (
     ValidationContext,
     build_runtime_feature_catalog,
 )
-from .skilllearn_compiler import SkillLearnProgramCompiler
+from .skilllearn_compiler import (
+    NO_SKILL_TREATMENT_HASH,
+    SKILL_ACTION_LOWERING_VERSION,
+    SKILL_FALLBACK_SEMANTICS_VERSION,
+    SKILL_ROUTING_VERSION,
+    SKILLLEARN_ALLOWED_ACTION_OPERATIONS,
+    SkillLearnProgramCompiler,
+    skilllearn_program_set_treatment_hash,
+    skilllearn_program_treatment_hash,
+)
 from .skilllearnbench import SkillLearnBenchAdapter
 from .docker_egress import (
     DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
@@ -241,6 +250,8 @@ class SkillLearnTrialRequest:
     max_steps: int
     manifest_hash: str
     program_id: str | None = None
+    program_set_hash: str = ""
+    treatment_hash: str = ""
 
     @property
     def request_hash(self) -> str:
@@ -264,6 +275,8 @@ class SkillLearnTrialRequest:
             "max_steps": self.max_steps,
             "manifest_hash": self.manifest_hash,
             "program_id": self.program_id,
+            "program_set_hash": self.program_set_hash,
+            "treatment_hash": self.treatment_hash,
         }
 
 
@@ -2133,7 +2146,7 @@ class SkillLearnExternalEvaluator:
 
 @dataclass(frozen=True)
 class _ExternalRuntimeDescriptor:
-    runtime_version: str = "skilllearn_external_runtime_v1"
+    runtime_version: str = "skilllearn_external_runtime_v2"
 
 
 class SkillLearnCounterfactualRunner:
@@ -2186,6 +2199,10 @@ class SkillLearnCounterfactualRunner:
             str, tuple[SkillLearnTrialObservation, str]
         ] = {}
 
+    @staticmethod
+    def behavior_hash(program: HypothesisProgram) -> str:
+        return skilllearn_program_treatment_hash(program)
+
     def run(
         self,
         tasks: Sequence[TaskInput],
@@ -2211,8 +2228,8 @@ class SkillLearnCounterfactualRunner:
         target_hash = stable_hash({"item_ids": sorted(target_ids)})[:10]
         baseline_compile_result = None
         if baseline_programs:
-            baseline_hash = stable_hash(
-                {"program_hashes": [row.payload_hash for row in baseline_programs]}
+            baseline_hash = skilllearn_program_set_treatment_hash(
+                baseline_programs
             )[:12]
             baseline_compile_result = self.compiler.compile(
                 programs=baseline_programs,
@@ -2228,12 +2245,15 @@ class SkillLearnCounterfactualRunner:
         candidate_programs = tuple(
             {row.id: row for row in (*baseline_programs, program)}.values()
         )
+        candidate_program_set_hash = skilllearn_program_set_treatment_hash(
+            candidate_programs
+        )
         candidate_compile_result = self.compiler.compile(
             programs=candidate_programs,
             items=tuple(self.items.values()),
             split_manifest=self.manifest,
             output_root=self.output_root,
-            method_name=f"assumption-agent-v2-challenger-{program.payload_hash[:12]}-{split.value}-{target_hash}",
+            method_name=f"assumption-agent-v2-challenger-{candidate_program_set_hash[:12]}-{split.value}-{target_hash}",
             allowed_statuses={
                 HypothesisStatus.CANDIDATE,
                 HypothesisStatus.SHADOW,
@@ -2270,24 +2290,60 @@ class SkillLearnCounterfactualRunner:
         split: SplitName,
         trace_id: str,
     ) -> CounterfactualPair:
+        challenger_treatment_hash = self.behavior_hash(program)
         pair_id = stable_hash(
             {
                 "trace_id": trace_id,
                 "task_id": task.id,
-                "program_id": program.id,
+                "challenger_treatment_hash": challenger_treatment_hash,
                 "split": split.value,
             }
         )[:20]
-        off_request = self._request(task, split, TrialVariant.POLICY_OFF, pair_id, None)
-        on_request = self._request(task, split, TrialVariant.POLICY_ON, pair_id, program.id)
-        activated = program.matches(task.features)
+        task_features = {**dict(task.features), "family": task.family}
+        trigger_matched = program.matches(task_features)
+        active_baseline_programs = tuple(
+            row for row in baseline_programs if row.matches(task_features)
+        )
+        active_candidate_programs = tuple(
+            row for row in candidate_programs if row.matches(task_features)
+        )
         baseline_skill_source = (
             baseline_compile_result.source_for(task.id)
             if baseline_compile_result
             else None
         )
         candidate_skill_source = (
-            candidate_compile_result.source_for(task.id) if activated else None
+            candidate_compile_result.source_for(task.id)
+            if trigger_matched
+            else None
+        )
+        baseline_program_set_hash = (
+            baseline_compile_result.program_set_hash
+            if baseline_compile_result
+            else skilllearn_program_set_treatment_hash(())
+        )
+        baseline_treatment_hash = (
+            baseline_compile_result.treatment_hash_for(task.id)
+            if baseline_compile_result
+            else NO_SKILL_TREATMENT_HASH
+        )
+        off_request = self._request(
+            task,
+            split,
+            TrialVariant.POLICY_OFF,
+            pair_id,
+            None,
+            program_set_hash=baseline_program_set_hash,
+            treatment_hash=baseline_treatment_hash,
+        )
+        on_request = self._request(
+            task,
+            split,
+            TrialVariant.POLICY_ON,
+            pair_id,
+            program.id,
+            program_set_hash=candidate_compile_result.program_set_hash,
+            treatment_hash=candidate_compile_result.treatment_hash_for(task.id),
         )
         def run_trial(
             request: SkillLearnTrialRequest,
@@ -2385,7 +2441,8 @@ class SkillLearnCounterfactualRunner:
             return observation
 
         run_on_first = False
-        if activated and (
+        treatment_applied = False
+        if trigger_matched and (
             candidate_skill_source is None or not candidate_skill_source.is_dir()
         ):
             baseline_observation = run_baseline_trial()
@@ -2394,10 +2451,11 @@ class SkillLearnCounterfactualRunner:
                 baseline_observation,
                 "compiled_candidate_skill_missing",
             )
-        elif not activated:
+        elif not trigger_matched:
             baseline_observation = run_baseline_trial()
             candidate_observation = baseline_observation.as_variant(on_request)
         else:
+            treatment_applied = True
             run_on_first = (
                 int(stable_hash({"pair_id": pair_id, "order": "balanced"})[:8], 16) % 2 == 1
             )
@@ -2416,17 +2474,35 @@ class SkillLearnCounterfactualRunner:
                     arm="on",
                 )
 
+        baseline_treatment_applied = bool(
+            active_baseline_programs
+            and baseline_skill_source is not None
+            and baseline_skill_source.is_dir()
+        )
         baseline_execution = _execution_from_observation(
             baseline_observation,
             lane=BASELINE_LANE,
-            active_programs=baseline_programs,
-            action_activated=False,
+            active_programs=(
+                active_baseline_programs if baseline_treatment_applied else ()
+            ),
+            action_activated=baseline_treatment_applied,
+            baseline_preserved=True,
+        )
+        candidate_active_programs = (
+            active_candidate_programs
+            if treatment_applied
+            else (
+                active_baseline_programs
+                if not trigger_matched and baseline_treatment_applied
+                else ()
+            )
         )
         candidate_execution = _execution_from_observation(
             candidate_observation,
-            lane=CANDIDATE_LANE if activated else BASELINE_LANE,
-            active_programs=candidate_programs if activated else baseline_programs,
-            action_activated=activated,
+            lane=CANDIDATE_LANE if trigger_matched else BASELINE_LANE,
+            active_programs=candidate_active_programs,
+            action_activated=treatment_applied,
+            baseline_preserved=not trigger_matched,
         )
         pair = CounterfactualPair(
             task_id=task.id,
@@ -2447,11 +2523,33 @@ class SkillLearnCounterfactualRunner:
                     "task_id_hash": stable_hash({"task_id": task.id}),
                     "split": split.value,
                     "hypothesis_id": program.id,
-                    "baseline_hypothesis_ids": [row.id for row in baseline_programs],
-                    "candidate_hypothesis_ids": [
-                        row.id for row in (candidate_programs if activated else baseline_programs)
+                    "baseline_hypothesis_ids": [
+                        row.id
+                        for row in (
+                            active_baseline_programs
+                            if baseline_treatment_applied
+                            else ()
+                        )
                     ],
-                    "action_activated": activated,
+                    "candidate_hypothesis_ids": [
+                        row.id for row in candidate_active_programs
+                    ],
+                    "trigger_matched": trigger_matched,
+                    "action_activated": treatment_applied,
+                    "treatment_applied": treatment_applied,
+                    "candidate_trial_executed": treatment_applied,
+                    "fine_grained_action_receipt_available": False,
+                    "skill_routing_version": SKILL_ROUTING_VERSION,
+                    "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
+                    "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
+                    "baseline_program_set_hash": baseline_program_set_hash,
+                    "candidate_program_set_hash": (
+                        candidate_compile_result.program_set_hash
+                    ),
+                    "baseline_treatment_hash": baseline_treatment_hash,
+                    "candidate_treatment_hash": (
+                        candidate_compile_result.treatment_hash_for(task.id)
+                    ),
                     "baseline_success": pair.baseline_outcome.success,
                     "candidate_success": pair.candidate_outcome.success,
                     "baseline_score": pair.baseline_outcome.score,
@@ -2470,7 +2568,11 @@ class SkillLearnCounterfactualRunner:
                         baseline_observation.fairness_fingerprint
                         == candidate_observation.fairness_fingerprint
                     ),
-                    "run_order": "on_off" if activated and run_on_first else "off_on",
+                    "run_order": (
+                        "on_off"
+                        if treatment_applied and run_on_first
+                        else "off_on"
+                    ),
                     "parallel_workers": self.parallel_workers,
                 },
             )
@@ -2503,14 +2605,13 @@ class SkillLearnCounterfactualRunner:
                     self.backend.model,
                     provider_mode,
                 ),
-                "baseline_behavior_set_hash": stable_hash(
-                    {
-                        "program_hashes": sorted(
-                            row.payload_hash for row in baseline_programs
-                        )
-                    }
+                "baseline_behavior_set_hash": (
+                    skilllearn_program_set_treatment_hash(baseline_programs)
                 ),
                 "runtime_version": self.runtime.runtime_version,
+                "skill_routing_version": SKILL_ROUTING_VERSION,
+                "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
+                "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
                 "agent_runtime_version": SHARED_CODEX_CLI_VERSION,
                 "verifier_isolation": VERIFIER_ISOLATION_VERSION,
                 "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
@@ -2527,6 +2628,9 @@ class SkillLearnCounterfactualRunner:
         variant: TrialVariant,
         pair_id: str,
         program_id: str | None,
+        *,
+        program_set_hash: str,
+        treatment_hash: str,
     ) -> SkillLearnTrialRequest:
         return SkillLearnTrialRequest(
             item_id=task.id,
@@ -2541,6 +2645,8 @@ class SkillLearnCounterfactualRunner:
             max_steps=self.backend.max_steps,
             manifest_hash=self.manifest.manifest_hash,
             program_id=program_id,
+            program_set_hash=program_set_hash,
+            treatment_hash=treatment_hash,
         )
 
 
@@ -2599,6 +2705,12 @@ class SkillLearnGenerationResult:
             ),
             "promotion_blockers": list(decision.blockers) if decision else [],
             "promotion_summary": decision.summary.to_dict(confidence=decision.confidence) if decision else None,
+            "promotion_decision": decision.to_dict() if decision else None,
+            "evaluated_candidate_treatment_hash": (
+                self.evolution.evaluated_candidate_behavior_hash
+                if self.evolution and decision
+                else None
+            ),
             "archive_node_hash": (
                 self.evolution.archive_node.payload_hash
                 if self.evolution and self.evolution.archive_node
@@ -2743,6 +2855,16 @@ class SkillLearnEvolutionHarness:
                     incumbent_compile.source_for(item_id)
                     if incumbent_compile
                     else None
+                ),
+                program_set_hash=(
+                    incumbent_compile.program_set_hash
+                    if incumbent_compile
+                    else skilllearn_program_set_treatment_hash(())
+                ),
+                treatment_hash=(
+                    incumbent_compile.treatment_hash_for(item_id)
+                    if incumbent_compile
+                    else NO_SKILL_TREATMENT_HASH
                 ),
                 trace_id=trace_id,
             )
@@ -2933,6 +3055,9 @@ class SkillLearnEvolutionHarness:
             allowed_runtime_kinds=frozenset(
                 {HypothesisKind.TASK, HypothesisKind.POLICY}
             ),
+            allowed_action_operations=SKILLLEARN_ALLOWED_ACTION_OPERATIONS,
+            action_semantics=SKILL_ACTION_LOWERING_VERSION,
+            external_evidence_is_hidden=True,
             trigger_feature_catalog=build_runtime_feature_catalog(
                 [
                     {
@@ -2991,7 +3116,7 @@ class SkillLearnEvolutionHarness:
             self.guard.authorize(item_id, AccessPhase.PROPOSAL)
         if not programs:
             return None
-        incumbent_hash = stable_hash({"program_hashes": [row.payload_hash for row in programs]})[:12]
+        incumbent_hash = skilllearn_program_set_treatment_hash(programs)[:12]
         return self.compiler.compile(
             programs=programs,
             items=tuple(self.items.values()),
@@ -3009,11 +3134,21 @@ class SkillLearnEvolutionHarness:
         item_id: str,
         *,
         skill_source_dir: Path | None,
+        program_set_hash: str,
+        treatment_hash: str,
         trace_id: str,
     ) -> SkillLearnTrialObservation:
         self.guard.authorize(item_id, AccessPhase.PROPOSAL)
         item = self.items[item_id]
-        pair_id = stable_hash({"trace_id": trace_id, "item_id": item_id, "stage": "training_baseline"})[:20]
+        pair_id = stable_hash(
+            {
+                "trace_id": trace_id,
+                "item_id": item_id,
+                "stage": "training_baseline",
+                "program_set_hash": program_set_hash,
+                "treatment_hash": treatment_hash,
+            }
+        )[:20]
         request = SkillLearnTrialRequest(
             item_id=item_id,
             family=item.family,
@@ -3026,6 +3161,8 @@ class SkillLearnEvolutionHarness:
             model=self.backend.model,
             max_steps=self.backend.max_steps,
             manifest_hash=self.manifest.manifest_hash,
+            program_set_hash=program_set_hash,
+            treatment_hash=treatment_hash,
         )
         return _run_invalid_only_trial(
             request=request,
@@ -3063,7 +3200,7 @@ class SkillLearnEvolutionHarness:
             for item_id in train_ids
         ]
         incumbent_behavior_hashes = sorted(
-            _program_behavior_hash(row) for row in incumbent_programs
+            skilllearn_program_treatment_hash(row) for row in incumbent_programs
         )
         return {
             "policy": TRAINING_EVIDENCE_REPLAY_POLICY_VERSION,
@@ -3071,6 +3208,9 @@ class SkillLearnEvolutionHarness:
             "manifest_hash": self.manifest.manifest_hash,
             "evaluator_epoch": self.evaluator_epoch,
             "runtime_version": self.counterfactual_runner.runtime.runtime_version,
+            "skill_routing_version": SKILL_ROUTING_VERSION,
+            "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
+            "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
             "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
             "agent_id": self.backend.agent_id,
             "model": self.backend.model,
@@ -3098,6 +3238,7 @@ def _execution_from_observation(
     lane: str,
     active_programs: Sequence[HypothesisProgram],
     action_activated: bool,
+    baseline_preserved: bool,
 ) -> RuntimeExecution:
     metadata = {
         "success": observation.success,
@@ -3135,7 +3276,7 @@ def _execution_from_observation(
             }
         ),
         action_activated=action_activated,
-        baseline_preserved=all(row.fallback == "preserve_baseline" for row in active_programs),
+        baseline_preserved=baseline_preserved,
     )
 
 
@@ -4249,19 +4390,6 @@ def _invalid_retry_suppression_reason(
     }:
         return "nontransient_configuration_error"
     return None
-
-
-def _program_behavior_hash(program: HypothesisProgram) -> str:
-    payload = program.to_dict()
-    for key in (
-        "id",
-        "status",
-        "parent_id",
-        "lineage",
-        "created_from_transition_ids",
-    ):
-        payload.pop(key, None)
-    return stable_hash(payload)
 
 
 def _validate_training_observations(

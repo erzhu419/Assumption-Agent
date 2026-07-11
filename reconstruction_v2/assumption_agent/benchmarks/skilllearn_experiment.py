@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from ..archive import PolicyArchive
-from ..evaluation import PromotionGate, PromotionGateSpec
+from ..evaluation import PromotionGate
 from ..events import Event, JsonlEventSink
 from ..evolution import (
     COUNTERFACTUAL_REPLAY_POLICY_VERSION,
@@ -21,12 +21,9 @@ from ..proposer import (
     StructuredHypothesisProposer,
 )
 from ..secure_env import (
-    alternate_model_allowed,
     configured_model,
-    configured_skilllearn_provider_mode,
     load_dotenv,
     map_legacy_model_env,
-    paper_model_allowed,
 )
 from ..splits import SplitAccessGuard, SplitManifest
 from ..validation import (
@@ -43,9 +40,16 @@ from .prewarm import (
     DEVELOPMENT_PREWARM_VERSION,
     validate_development_prewarm_receipt,
 )
-from .skilllearn_compiler import SKILL_ROUTING_VERSION
+from .paper_protocol import (
+    PaperProtocol,
+    validate_protocol_lock_for_execution,
+)
+from .skilllearn_compiler import (
+    SKILL_ACTION_LOWERING_VERSION,
+    SKILL_FALLBACK_SEMANTICS_VERSION,
+    SKILL_ROUTING_VERSION,
+)
 from .docker_egress import (
-    DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
     DEPENDENCY_CACHE_POLICY_VERSION,
     DOCKER_EGRESS_POLICY_VERSION,
     PROVIDER_DNS_POLICY_VERSION,
@@ -85,6 +89,8 @@ def main() -> None:
         description="Plan or execute one guarded SkillLearnBench self-evolution generation."
     )
     parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--protocol", type=Path, required=True)
+    parser.add_argument("--protocol-lock", type=Path)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--env-file", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
@@ -98,24 +104,6 @@ def main() -> None:
     parser.add_argument("--validation-id", action="append", default=[])
     parser.add_argument("--train-limit", type=int)
     parser.add_argument("--validation-limit", type=int)
-    parser.add_argument("--agent-id", default="codex")
-    parser.add_argument("--model", default="gpt-5.4-mini")
-    parser.add_argument(
-        "--trial-provider-mode",
-        choices=("openai_compatible",),
-    )
-    parser.add_argument("--max-steps", type=int, default=100)
-    parser.add_argument("--minimum-pairs", type=int, default=10)
-    parser.add_argument("--minimum-trigger-support", type=int, default=2)
-    parser.add_argument("--max-generations", type=int, default=1)
-    parser.add_argument("--max-consecutive-non-promotions", type=int, default=1)
-    parser.add_argument("--proposal-candidates-per-generation", type=int, default=3)
-    parser.add_argument("--parallel-workers", type=int, default=1)
-    parser.add_argument("--invalid-trial-max-attempts", type=int, default=1)
-    parser.add_argument(
-        "--invalid-trial-retry-backoff-seconds", type=float, default=0.0
-    )
-    parser.add_argument("--invalid-trial-retry-workers", type=int, default=1)
     parser.add_argument("--disable-recursive-repair", action="store_true")
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()
@@ -126,8 +114,50 @@ def main() -> None:
     load_dotenv(args.env_file)
     model_presence = map_legacy_model_env()
     provider_status = proposal_provider_status()
-    trial_provider_mode = args.trial_provider_mode or configured_skilllearn_provider_mode()
+    paper_protocol = PaperProtocol.read(args.protocol)
+    promotion_spec = paper_protocol.promotion_gate_spec
+    execution_contract = paper_protocol.payload["execution"]
+    evolution_contract = paper_protocol.payload["evolution"]
+    agent_id = str(paper_protocol.payload["agent_id"])
+    model = str(paper_protocol.payload["model"])
+    trial_provider_mode = str(paper_protocol.payload["trial_provider_mode"])
+    max_steps = int(paper_protocol.payload["max_steps"])
+    minimum_trigger_support = int(evolution_contract["minimum_trigger_support"])
+    invalid_trial_max_attempts = int(
+        execution_contract["invalid_trial_max_attempts"]
+    )
+    invalid_trial_retry_backoff_seconds = float(
+        execution_contract["invalid_trial_retry_backoff_seconds"]
+    )
+    invalid_trial_retry_workers = int(
+        execution_contract["invalid_trial_retry_workers"]
+    )
     manifest = SplitManifest.read(args.manifest)
+    protocol_root = paper_protocol.path.parent.parent
+    allowed_manifest_paths = {
+        (protocol_root / str(paper_protocol.payload[key])).resolve()
+        for key in ("primary_manifest", "secondary_manifest")
+    }
+    if args.manifest.expanduser().resolve() not in allowed_manifest_paths:
+        raise ValueError("experiment manifest is not owned by the frozen paper protocol")
+    protocol_lock_hash: str | None = None
+    protocol_lock_error: str | None = None
+    if args.protocol_lock:
+        protocol_lock_payload = json.loads(
+            args.protocol_lock.read_text(encoding="utf-8")
+        )
+        if not isinstance(protocol_lock_payload, Mapping):
+            raise ValueError("protocol lock must contain one JSON object")
+        try:
+            protocol_lock_hash = validate_protocol_lock_for_execution(
+                paper_protocol,
+                protocol_lock_payload,
+                manifest,
+                protocol_root,
+                args.root,
+            )
+        except PermissionError as exc:
+            protocol_lock_error = str(exc)
     prewarm_receipt_hash: str | None = None
     if args.prewarm_receipt:
         prewarm_payload = json.loads(args.prewarm_receipt.read_text(encoding="utf-8"))
@@ -150,6 +180,31 @@ def main() -> None:
         manifest.validation_ids,
         args.validation_limit,
     )
+    experiment_phase = _experiment_phase_name(
+        paper_protocol,
+        manifest=manifest,
+        train_ids=train_ids,
+        validation_ids=validation_ids,
+    )
+    parallel_workers = (
+        int(paper_protocol.payload["phases"][experiment_phase]["parallel_workers"])
+        if experiment_phase is not None
+        else 0
+    )
+    if experiment_phase == "smoke":
+        phase_contract = paper_protocol.payload["phases"]["smoke"]
+        max_generations = int(phase_contract["max_generations"])
+        max_consecutive_non_promotions = int(
+            phase_contract["max_consecutive_non_promotions"]
+        )
+    else:
+        max_generations = int(evolution_contract["max_generations"])
+        max_consecutive_non_promotions = int(
+            evolution_contract["max_consecutive_non_promotions"]
+        )
+    proposal_candidates_per_generation = int(
+        evolution_contract["proposal_candidates_per_generation"]
+    )
     plan = {
         "protocol": manifest.protocol,
         "manifest_hash": manifest.manifest_hash,
@@ -162,17 +217,22 @@ def main() -> None:
         "validation_family_count": len(
             {manifest.family_by_id[item_id] for item_id in validation_ids}
         ),
-        "minimum_pairs": args.minimum_pairs,
-        "minimum_trigger_support": args.minimum_trigger_support,
+        "paper_protocol_id": paper_protocol.id,
+        "paper_protocol_hash": paper_protocol.protocol_hash,
+        "promotion_contract": promotion_spec.to_dict(),
+        "protocol_lock_hash": protocol_lock_hash,
+        "experiment_phase": experiment_phase,
+        "minimum_pairs": promotion_spec.minimum_pairs,
+        "minimum_trigger_support": minimum_trigger_support,
         "recursive_validation_enabled": not args.disable_recursive_repair,
-        "max_generations": args.max_generations,
-        "max_consecutive_non_promotions": args.max_consecutive_non_promotions,
-        "proposal_candidates_per_generation": args.proposal_candidates_per_generation,
-        "agent_id": args.agent_id,
-        "model": args.model,
+        "max_generations": max_generations,
+        "max_consecutive_non_promotions": max_consecutive_non_promotions,
+        "proposal_candidates_per_generation": proposal_candidates_per_generation,
+        "agent_id": agent_id,
+        "model": model,
         "trial_provider_mode": trial_provider_mode,
-        "max_steps": args.max_steps,
-        "parallel_workers": args.parallel_workers,
+        "max_steps": max_steps,
+        "parallel_workers": parallel_workers,
         "prebuilt_image_policy": PREBUILT_IMAGE_POLICY_VERSION,
         "runner_agent_registry_isolation": RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
         "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
@@ -187,11 +247,9 @@ def main() -> None:
             TRAINING_EVIDENCE_REPLAY_POLICY_VERSION
         ),
         "invalid_trial_retry_policy": INVALID_TRIAL_RETRY_POLICY_VERSION,
-        "invalid_trial_max_attempts": args.invalid_trial_max_attempts,
-        "invalid_trial_retry_backoff_seconds": (
-            args.invalid_trial_retry_backoff_seconds
-        ),
-        "invalid_trial_retry_workers": args.invalid_trial_retry_workers,
+        "invalid_trial_max_attempts": invalid_trial_max_attempts,
+        "invalid_trial_retry_backoff_seconds": invalid_trial_retry_backoff_seconds,
+        "invalid_trial_retry_workers": invalid_trial_retry_workers,
         "local_evidence_transport": LOCAL_EVIDENCE_TRANSPORT_VERSION,
         "network_scope_audit": NETWORK_SCOPE_AUDIT_VERSION,
         "proposal_failure_isolation_policy": (
@@ -212,7 +270,9 @@ def main() -> None:
         "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
         "provider_dns_policy": PROVIDER_DNS_POLICY_VERSION,
         "trial_network_budget_policy": TRIAL_NETWORK_BUDGET_POLICY_VERSION,
-        "trial_network_byte_limit": DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
+        "trial_network_byte_limit": int(
+            execution_contract["trial_network_byte_limit"]
+        ),
         "training_evidence_policy": TRAINING_EVIDENCE_POLICY_VERSION,
         "development_prewarm_version": DEVELOPMENT_PREWARM_VERSION,
         "prewarm_passed": prewarm_receipt_hash is not None,
@@ -223,6 +283,8 @@ def main() -> None:
             "separate_epoch_challenger_not_in_primary_runtime"
         ),
         "skill_routing": SKILL_ROUTING_VERSION,
+        "skill_action_lowering": SKILL_ACTION_LOWERING_VERSION,
+        "skill_fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
         "proposal_api_present": bool(
             model_presence["base_url_present"] and model_presence["api_key_present"]
         ),
@@ -234,26 +296,18 @@ def main() -> None:
         "paired_first_generation_ablation": paired_ablation,
     }
     blockers: list[str] = []
-    if not paper_model_allowed(args.model) and not alternate_model_allowed():
-        blockers.append("execution_model_not_protocol_approved")
-    if len(validation_ids) < args.minimum_pairs:
-        blockers.append("minimum_pairs_exceeds_validation_selection")
-    if len(train_ids) < args.minimum_trigger_support:
+    if args.execute and args.protocol_lock is None:
+        blockers.append("execute_requires_protocol_lock")
+    if args.protocol_lock is not None and protocol_lock_error is not None:
+        blockers.append("protocol_lock_validation_failed")
+    plan["protocol_lock_validation_error"] = protocol_lock_error
+    if experiment_phase is None:
+        blockers.append("selection_does_not_match_frozen_experiment_phase")
+    plan["promotion_evidence_underpowered"] = (
+        len(validation_ids) < promotion_spec.minimum_pairs
+    )
+    if len(train_ids) < minimum_trigger_support:
         blockers.append("minimum_trigger_support_exceeds_training_selection")
-    if args.max_generations <= 0:
-        blockers.append("max_generations_must_be_positive")
-    if args.max_consecutive_non_promotions <= 0:
-        blockers.append("max_consecutive_non_promotions_must_be_positive")
-    if args.proposal_candidates_per_generation <= 0:
-        blockers.append("proposal_candidates_per_generation_must_be_positive")
-    if args.parallel_workers <= 0:
-        blockers.append("parallel_workers_must_be_positive")
-    if args.invalid_trial_max_attempts <= 0:
-        blockers.append("invalid_trial_max_attempts_must_be_positive")
-    if args.invalid_trial_retry_backoff_seconds < 0:
-        blockers.append("invalid_trial_retry_backoff_must_be_nonnegative")
-    if args.invalid_trial_retry_workers <= 0:
-        blockers.append("invalid_trial_retry_workers_must_be_positive")
     if args.execute and prewarm_receipt_hash is None:
         blockers.append("execute_requires_passed_development_prewarm")
     if bool(args.paired_no_recursive_out) != bool(args.paired_no_recursive_archive_out):
@@ -297,7 +351,7 @@ def main() -> None:
     if preflight["blockers"]:
         raise RuntimeError(f"SkillLearnBench execution preflight failed: {preflight['blockers']}")
 
-    if configured_model() != args.model:
+    if configured_model() != model:
         raise RuntimeError("proposal model and benchmark model must match")
     proposal_model = build_proposal_model(event_sink=sink)
     proposal_model.complete_with_trace(
@@ -315,7 +369,7 @@ def main() -> None:
             SchemaCheck(),
             RuntimeCandidateKindCheck(),
             TriggerVocabularyCheck(),
-            TrainingSupportCheck(min_support=args.minimum_trigger_support),
+            TrainingSupportCheck(min_support=minimum_trigger_support),
             RuntimeActionCheck(),
             EvaluatorEpochCheck(),
         ],
@@ -329,16 +383,16 @@ def main() -> None:
     backends = tuple(
         SkillLearnSubprocessBackend(
             args.root,
-            agent_id=args.agent_id,
-            model=args.model,
-            max_steps=args.max_steps,
+            agent_id=agent_id,
+            model=model,
+            max_steps=max_steps,
             provider_mode=trial_provider_mode,
             trials_dir=args.work_dir / "upstream_trials",
             prebuilt_cache=prebuilt_cache,
             provider_circuit=provider_circuit,
             event_sink=sink,
         )
-        for _ in range(args.parallel_workers)
+        for _ in range(parallel_workers)
     )
     backend = backends[0] if len(backends) == 1 else SkillLearnBackendPool(backends)
     harness = SkillLearnEvolutionHarness(
@@ -349,24 +403,17 @@ def main() -> None:
         proposer=proposer,
         validator=validator,
         promotion_gate=PromotionGate(
-            PromotionGateSpec(
-                minimum_pairs=args.minimum_pairs,
-                confidence=0.9,
-                minimum_net_gain_count=1,
-                minimum_activation_rate=0.1,
-            ),
+            promotion_spec,
             event_sink=sink,
         ),
         archive=archive,
         evaluator_epoch=f"skilllearn-eval-{manifest.manifest_hash[:12]}",
         output_root=args.work_dir / "compiled_skills",
-        proposal_candidates_per_generation=args.proposal_candidates_per_generation,
-        parallel_workers=args.parallel_workers,
-        invalid_trial_max_attempts=args.invalid_trial_max_attempts,
-        invalid_trial_retry_backoff_seconds=(
-            args.invalid_trial_retry_backoff_seconds
-        ),
-        invalid_trial_retry_workers=args.invalid_trial_retry_workers,
+        proposal_candidates_per_generation=proposal_candidates_per_generation,
+        parallel_workers=parallel_workers,
+        invalid_trial_max_attempts=invalid_trial_max_attempts,
+        invalid_trial_retry_backoff_seconds=invalid_trial_retry_backoff_seconds,
+        invalid_trial_retry_workers=invalid_trial_retry_workers,
         event_sink=sink,
     )
     archive_path = args.archive_out or args.work_dir / "archive.json"
@@ -384,7 +431,7 @@ def main() -> None:
                     SchemaCheck(),
                     RuntimeCandidateKindCheck(),
                     TriggerVocabularyCheck(),
-                    TrainingSupportCheck(min_support=args.minimum_trigger_support),
+                    TrainingSupportCheck(min_support=minimum_trigger_support),
                     RuntimeActionCheck(),
                     EvaluatorEpochCheck(),
                 ],
@@ -392,24 +439,17 @@ def main() -> None:
                 event_sink=sink,
             ),
             promotion_gate=PromotionGate(
-                PromotionGateSpec(
-                    minimum_pairs=args.minimum_pairs,
-                    confidence=0.9,
-                    minimum_net_gain_count=1,
-                    minimum_activation_rate=0.1,
-                ),
+                promotion_spec,
                 event_sink=sink,
             ),
             archive=no_recursive_archive,
             evaluator_epoch=f"skilllearn-eval-{manifest.manifest_hash[:12]}",
             output_root=args.work_dir / "compiled_skills_no_recursive",
-            proposal_candidates_per_generation=args.proposal_candidates_per_generation,
-            parallel_workers=args.parallel_workers,
-            invalid_trial_max_attempts=args.invalid_trial_max_attempts,
-            invalid_trial_retry_backoff_seconds=(
-                args.invalid_trial_retry_backoff_seconds
-            ),
-            invalid_trial_retry_workers=args.invalid_trial_retry_workers,
+            proposal_candidates_per_generation=proposal_candidates_per_generation,
+            parallel_workers=parallel_workers,
+            invalid_trial_max_attempts=invalid_trial_max_attempts,
+            invalid_trial_retry_backoff_seconds=invalid_trial_retry_backoff_seconds,
+            invalid_trial_retry_workers=invalid_trial_retry_workers,
             event_sink=sink,
         )
         paired = _run_paired_arms(
@@ -418,8 +458,8 @@ def main() -> None:
             train_ids=train_ids,
             validation_ids=validation_ids,
             manifest_hash=manifest.manifest_hash,
-            max_generations=args.max_generations,
-            max_consecutive_non_promotions=args.max_consecutive_non_promotions,
+            max_generations=max_generations,
+            max_consecutive_non_promotions=max_consecutive_non_promotions,
         )
         plan["shared_first_generation_checkpoint_hash"] = paired["checkpoint_hash"]
         no_recursive_plan = {
@@ -468,8 +508,8 @@ def main() -> None:
         train_ids=train_ids,
         validation_ids=validation_ids,
         manifest_hash=manifest.manifest_hash,
-        max_generations=args.max_generations,
-        max_consecutive_non_promotions=args.max_consecutive_non_promotions,
+        max_generations=max_generations,
+        max_consecutive_non_promotions=max_consecutive_non_promotions,
     )
     archive.write(archive_path)
     report = _execution_report(
@@ -747,6 +787,38 @@ def _execution_report(
         "test_content_accessed": guard.test_accessed,
         "secret_value_persisted": False,
     }
+
+
+def _experiment_phase_name(
+    protocol: PaperProtocol,
+    *,
+    manifest: SplitManifest,
+    train_ids: Sequence[str],
+    validation_ids: Sequence[str],
+) -> str | None:
+    full_phase = (
+        "family_out_development"
+        if manifest.protocol == "family_out"
+        else "development"
+    )
+    full = protocol.payload["phases"][full_phase]
+    if (
+        tuple(train_ids) == manifest.train_ids
+        and tuple(validation_ids) == manifest.validation_ids
+        and len(train_ids) == int(full["train_count"])
+        and len(validation_ids) == int(full["validation_count"])
+    ):
+        return full_phase
+    smoke = protocol.payload["phases"]["smoke"]
+    smoke_train_count = int(smoke["train_count"])
+    smoke_validation_count = int(smoke["validation_count"])
+    if (
+        tuple(train_ids) == manifest.train_ids[:smoke_train_count]
+        and tuple(validation_ids)
+        == manifest.validation_ids[:smoke_validation_count]
+    ):
+        return "smoke"
+    return None
 
 
 def _select_ids(selected: Sequence[str], allowed: Sequence[str], limit: int | None) -> tuple[str, ...]:

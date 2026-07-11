@@ -20,6 +20,19 @@ from ..splits import (
 )
 
 
+OFFLINE_BLOCKED_FAMILIES = frozenset(
+    {
+        "fix-security-bug",
+        "nlp-paper-reproduction",
+        "python-scala-translation",
+    }
+)
+OFFLINE_BLOCKED_ITEM_IDS = frozenset({"weighted-gdp-calculation-2"})
+OFFLINE_READY_SUBSET_POLICY = (
+    "exclude_external_credentials_and_offline_blockers_v1"
+)
+
+
 class SkillLearnBenchAdapter:
     """Inventory SkillLearnBench without exposing verifier or solution content."""
 
@@ -123,6 +136,81 @@ class SkillLearnBenchAdapter:
             "secret_value_persisted": False,
         }
 
+    def offline_ready_items(self) -> list[BenchmarkItem]:
+        """Return the preregistered subset with an offline verifier runtime."""
+
+        return [
+            item
+            for item in self.credential_independent_items()
+            if item.family not in OFFLINE_BLOCKED_FAMILIES
+            and item.id not in OFFLINE_BLOCKED_ITEM_IDS
+        ]
+
+    def offline_ready_summary(self) -> dict[str, Any]:
+        items = self.discover()
+        ready = self.offline_ready_items()
+        credential_summary = self.credential_independent_summary()
+        excluded_families = sorted(
+            {
+                *credential_summary["excluded_families"],
+                *OFFLINE_BLOCKED_FAMILIES,
+            }
+        )
+        return {
+            "policy": OFFLINE_READY_SUBSET_POLICY,
+            "eligible_instance_count": len(ready),
+            "eligible_family_count": len({item.family for item in ready}),
+            "excluded_instance_count": len(items) - len(ready),
+            "excluded_families": excluded_families,
+            "excluded_item_ids": sorted(OFFLINE_BLOCKED_ITEM_IDS),
+            "excluded_required_env_names": credential_summary[
+                "excluded_required_env_names"
+            ],
+            "offline_blocked_families": sorted(OFFLINE_BLOCKED_FAMILIES),
+            "offline_blocked_item_ids": sorted(OFFLINE_BLOCKED_ITEM_IDS),
+            "secret_value_persisted": False,
+        }
+
+    def selected_payload_fingerprint(
+        self,
+        item_ids: Any,
+    ) -> dict[str, Any]:
+        """Hash selected task/runtime/verifier bytes without exposing content."""
+
+        items = {item.id: item for item in self.discover()}
+        selected = tuple(sorted(str(item_id) for item_id in item_ids))
+        unknown = sorted(set(selected) - set(items))
+        if unknown:
+            raise ValueError("benchmark fingerprint contains unknown item IDs")
+        file_rows: list[dict[str, str]] = []
+        for item_id in selected:
+            instance = self.root / items[item_id].content_ref
+            instance = instance.parent
+            paths = [instance / "task.toml", instance / "instruction.md"]
+            for directory_name in ("environment", "tests"):
+                directory = instance / directory_name
+                if directory.is_dir():
+                    paths.extend(path for path in directory.rglob("*") if path.is_file())
+            for path in sorted(set(paths)):
+                if not path.is_file():
+                    raise FileNotFoundError(
+                        f"selected benchmark payload is missing for {item_id}"
+                    )
+                file_rows.append(
+                    {
+                        "item_id_hash": stable_hash({"item_id": item_id}),
+                        "path": str(path.relative_to(instance)),
+                        "content_hash": stable_hash({"bytes": path.read_bytes().hex()}),
+                    }
+                )
+        return {
+            "policy": "selected_task_environment_verifier_bytes_v1",
+            "selected_item_count": len(selected),
+            "file_count": len(file_rows),
+            "tree_hash": stable_hash(file_rows),
+            "raw_content_persisted": False,
+        }
+
     def load_instruction(self, item_id: str, *, phase: AccessPhase, guard: SplitAccessGuard) -> str:
         guard.authorize(item_id, phase)
         items = self._items or {item.id: item for item in self.discover()}
@@ -157,14 +245,23 @@ def main() -> None:
         action="store_true",
         help="Exclude every family containing a task that declares required_env.",
     )
+    parser.add_argument(
+        "--offline-ready",
+        action="store_true",
+        help="Use the preregistered credential-free subset with offline verifiers.",
+    )
     args = parser.parse_args()
 
     adapter = SkillLearnBenchAdapter(args.root)
-    items = (
-        adapter.credential_independent_items()
-        if args.credential_independent
-        else adapter.discover()
-    )
+    if args.offline_ready:
+        items = adapter.offline_ready_items()
+        subset_summary = adapter.offline_ready_summary()
+    elif args.credential_independent:
+        items = adapter.credential_independent_items()
+        subset_summary = adapter.credential_independent_summary()
+    else:
+        items = adapter.discover()
+        subset_summary = {"policy": "full_inventory_v1"}
     if args.protocol == "family_out":
         manifest = build_family_out_manifest(items, benchmark="skilllearnbench", seed=args.seed)
     else:
@@ -174,11 +271,7 @@ def main() -> None:
         json.dumps(
             {
                 "inventory": adapter.inventory_summary(),
-                "benchmark_subset": (
-                    adapter.credential_independent_summary()
-                    if args.credential_independent
-                    else {"policy": "full_inventory_v1"}
-                ),
+                "benchmark_subset": subset_summary,
                 "manifest": manifest.to_dict(),
             },
             indent=2,

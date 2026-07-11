@@ -95,20 +95,21 @@ The train-only verifier matrix is also offline and model-free:
 sg docker -c 'env PYTHONPATH=. python3 -m \
   assumption_agent.benchmarks.offline_verifier_matrix \
   --root reference/self_evo_continual_20260707/repos/SkillLearnBench \
-  --manifest manifests/skilllearnbench_instance_holdout_credential_independent_v1.json \
+  --manifest manifests/skilllearnbench_instance_holdout_offline_ready_v1.json \
   --output-root artifacts/offline_verifier_matrix \
   --events artifacts/offline_verifier_matrix/events.jsonl'
 ```
 
-With the current upstream checkout this command intentionally exits 2 even
-though all 7 active profiles and 15 family representatives pass. The v4 receipt
-separately records an incomplete GDP verifier payload, an inactive Druid train
-item, and two train items with no local profile. This is the fail-closed
-manifest-completeness and activation contract.
+For the frozen offline-ready manifest this command exits 0: all 7 active
+profiles and 15 train-family representatives pass, `blockers=[]`, and
+`manifest_execution_ready=true`. Running the same matrix against the earlier
+95-item credential-independent manifest still exits 2 and records the GDP,
+Druid, Scala, and NLP blocker classes without substituting another oracle.
 
 See `docs/skilllearn_offline_verifier_matrix.md` for family coverage. A full
-95-task paper run remains blocked on 9 tasks until every selected family is
-either localized or excluded by a preregistered infrastructure rule.
+95-task coverage extension remains blocked on 9 tasks. The active paper path is
+the preregistered 86-item offline-ready subset; no online evaluator substitutes
+for the excluded verifier payloads or runtimes.
 
 The 2026-07-11 local probe resolved the host to `101.6.15.130` and downloaded the
 11,053-byte `six==1.16.0` wheel entirely from the same host. Router policy should

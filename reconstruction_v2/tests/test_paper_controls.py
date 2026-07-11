@@ -17,9 +17,16 @@ from assumption_agent.benchmarks.paper_controls import (
     open_sealed_journal,
     validate_freeze_receipt,
 )
+from assumption_agent.benchmarks import paper_controls as paper_controls_module
 from assumption_agent.benchmarks import paper_freeze
 from assumption_agent.benchmarks.paper_protocol import PaperProtocol
 from assumption_agent.benchmarks.paper_report import PaperTrialRecord
+from assumption_agent.benchmarks.skilllearn_compiler import (
+    SKILL_ACTION_LOWERING_VERSION,
+    SKILL_FALLBACK_SEMANTICS_VERSION,
+    SKILL_ROUTING_VERSION,
+    skilllearn_program_treatment_hash,
+)
 from assumption_agent.benchmarks.skilllearn_lifecycle import SkillLearnTrialObservation
 from assumption_agent.benchmarks.skilllearnbench import SkillLearnBenchAdapter
 from assumption_agent.models import SplitName, stable_hash
@@ -37,7 +44,7 @@ BENCH_ROOT = (
 )
 PROTOCOL_PATH = ROOT / "manifests" / "skilllearn_paper_protocol_v3_ruoli_gpt54mini.json"
 MANIFEST_PATH = (
-    ROOT / "manifests" / "skilllearnbench_instance_holdout_credential_independent_v1.json"
+    ROOT / "manifests" / "skilllearnbench_instance_holdout_offline_ready_v1.json"
 )
 
 
@@ -102,6 +109,84 @@ def test_paper_controls_resume_without_repeating_valid_trials(tmp_path: Path) ->
             row.pair_id for row in first if row.item_id_hash == item_hash
         }
         assert len(pair_ids) == 1
+
+
+def test_paper_controls_reject_stale_records_after_control_content_changes(
+    tmp_path: Path,
+) -> None:
+    runner, _, manifest = _runner(tmp_path)
+    item_id = manifest.validation_ids[0]
+    runner.run((item_id,), split=SplitName.VALIDATION, repeats=1)
+    changed = next(row for row in runner.controls if row.root is not None)
+    assert changed.root is not None
+    skill = next(changed.root.rglob("SKILL.md"))
+    skill.write_text("# changed control treatment\n", encoding="utf-8")
+    backend = FakePaperBackend()
+    resumed = PaperControlRunner(
+        adapter=SkillLearnBenchAdapter(BENCH_ROOT),
+        manifest=manifest,
+        guard=SplitAccessGuard(manifest),
+        backend=backend,
+        protocol=runner.protocol,
+        controls=runner.controls,
+        record_store=PaperRecordStore(tmp_path / "records.jsonl"),
+        evaluator_epoch="skilllearn-eval-test",
+    )
+
+    with pytest.raises(PermissionError, match="control configuration changed"):
+        resumed.run((item_id,), split=SplitName.VALIDATION, repeats=1)
+    assert backend.calls == []
+
+
+def test_paper_controls_validate_lock_before_model_work(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lock_path = tmp_path / "lock.json"
+    lock_path.write_text("{}\n", encoding="utf-8")
+    env_path = tmp_path / ".env"
+    env_path.write_text("\n", encoding="utf-8")
+    called: list[bool] = []
+
+    def reject_before_model(*args, **kwargs):
+        called.append(True)
+        raise PermissionError("lock rejected before model work")
+
+    monkeypatch.setattr(
+        paper_controls_module,
+        "validate_protocol_lock_for_execution",
+        reject_before_model,
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "paper_controls",
+            "--project-root",
+            str(ROOT),
+            "--benchmark-root",
+            str(BENCH_ROOT),
+            "--manifest",
+            str(MANIFEST_PATH),
+            "--protocol",
+            str(PROTOCOL_PATH),
+            "--protocol-lock",
+            str(lock_path),
+            "--env-file",
+            str(env_path),
+            "--events",
+            str(tmp_path / "events.jsonl"),
+            "--records",
+            str(tmp_path / "records.jsonl"),
+            "--trials-dir",
+            str(tmp_path / "trials"),
+            "--split",
+            "validation",
+        ],
+    )
+
+    with pytest.raises(PermissionError, match="before model work"):
+        paper_controls_module.main()
+    assert called == [True]
 
 
 def test_paper_controls_retry_only_invalid_same_key(tmp_path: Path) -> None:
@@ -201,8 +286,11 @@ def test_compiled_control_uses_per_item_routes(tmp_path: Path) -> None:
     (skill / "SKILL.md").write_text("# routed\n", encoding="utf-8")
     (promoted.root / "compile_manifest.json").write_text(
         json.dumps(
-            {
-                "routing_version": "per_item_trigger_routing_v1",
+                {
+                    "routing_version": SKILL_ROUTING_VERSION,
+                    "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
+                    "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
+                    "external_verifier_exposed_to_agent": False,
                 "item_routes": {
                     stable_hash({"item_id": item_ids[0]}): str(
                         route.relative_to(promoted.root)
@@ -235,13 +323,19 @@ def test_compiled_control_uses_per_item_routes(tmp_path: Path) -> None:
 def test_sealed_receipt_and_journal_are_content_bound(tmp_path: Path) -> None:
     protocol = PaperProtocol.read(PROTOCOL_PATH)
     manifest = SplitManifest.read(MANIFEST_PATH)
-    lock = {"lock_hash": stable_hash({"lock": 1})}
+    lock = {
+        "lock_hash": stable_hash({"lock": 1}),
+        "code_fingerprint": {"tree_hash": "locked-code"},
+        "git": {"commit": "locked-commit"},
+    }
     receipt = {
         "frozen": True,
         "protocol_hash": protocol.protocol_hash,
         "protocol_lock_hash": lock["lock_hash"],
         "manifest_hash": manifest.manifest_hash,
         "evaluator_epoch": "skilllearn-eval-test",
+        "code_fingerprint": lock["code_fingerprint"],
+        "git_commit": lock["git"]["commit"],
     }
     receipt["receipt_hash"] = stable_hash(receipt)
     assert validate_freeze_receipt(
@@ -250,6 +344,17 @@ def test_sealed_receipt_and_journal_are_content_bound(tmp_path: Path) -> None:
         protocol_lock=lock,
         manifest=manifest,
     ) == "skilllearn-eval-test"
+    drifted = {**receipt, "git_commit": "other-commit"}
+    drifted["receipt_hash"] = stable_hash(
+        {key: value for key, value in drifted.items() if key != "receipt_hash"}
+    )
+    with pytest.raises(PermissionError, match="git commit mismatch"):
+        validate_freeze_receipt(
+            drifted,
+            protocol=protocol,
+            protocol_lock=lock,
+            manifest=manifest,
+        )
     controls = _controls(tmp_path, protocol, families={manifest.family_by_id[manifest.test_ids[0]]})
     journal_path = tmp_path / "sealed.json"
     record_path = tmp_path / "records.jsonl"
@@ -288,6 +393,7 @@ def test_freeze_compiles_content_bound_validation_and_test_controls(
     no_recursive_archive_path = tmp_path / "no-recursive.archive.json"
     recursive_archive = _archive_payload("recursive-policy", evaluator_epoch)
     no_recursive_archive = _archive_payload("no-recursive-policy", evaluator_epoch)
+    protocol_lock_hash = stable_hash({"lock": "paper"})
     recursive_archive_path.write_text(
         json.dumps(recursive_archive),
         encoding="utf-8",
@@ -305,6 +411,8 @@ def test_freeze_compiles_content_bound_validation_and_test_controls(
                 manifest,
                 archive_hash=recursive_archive["archive_hash"],
                 recursive=True,
+                hypothesis_id="recursive-policy",
+                protocol_lock_hash=protocol_lock_hash,
             )
         ),
         encoding="utf-8",
@@ -316,13 +424,15 @@ def test_freeze_compiles_content_bound_validation_and_test_controls(
                 manifest,
                 archive_hash=no_recursive_archive["archive_hash"],
                 recursive=False,
+                hypothesis_id="no-recursive-policy",
+                protocol_lock_hash=protocol_lock_hash,
             )
         ),
         encoding="utf-8",
     )
     monkeypatch.setattr(paper_freeze, "_validate_protocol_lock", lambda *args: None)
     lock = {
-        "lock_hash": stable_hash({"lock": "paper"}),
+        "lock_hash": protocol_lock_hash,
         "code_fingerprint": {"tree_hash": "frozen"},
         "git": {"commit": "commit"},
         "primary_manifest_hash": manifest.manifest_hash,
@@ -357,6 +467,280 @@ def test_freeze_compiles_content_bound_validation_and_test_controls(
         )
 
 
+def test_freeze_rejects_promotion_contract_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    protocol = PaperProtocol.read(PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    report["plan"]["promotion_contract"]["maximum_harm_rate"] = 1.0
+
+    with pytest.raises(
+        ValueError,
+        match="development report plan mismatch: promotion_contract",
+    ):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
+
+    lock = {
+        "promotion": {
+            **protocol.promotion_gate_spec.to_dict(),
+            "maximum_harm_rate": 1.0,
+        }
+    }
+
+    def reject_promotion_drift(*args, **kwargs):
+        assert lock["promotion"] != protocol.promotion_gate_spec.to_dict()
+        raise PermissionError("execution promotion contract lock mismatch")
+
+    monkeypatch.setattr(
+        paper_freeze,
+        "validate_protocol_lock_for_execution",
+        reject_promotion_drift,
+    )
+    with pytest.raises(
+        PermissionError,
+        match="promotion contract lock mismatch",
+    ):
+        paper_freeze._validate_protocol_lock(
+            protocol,
+            lock,
+            manifest,
+            ROOT,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_error"),
+    (
+        ("extra_key", "promotion decision schema mismatch"),
+        ("decision_contract", "promotion decision contract mismatch"),
+        ("allowed", "promotion decision status mismatch"),
+        ("candidate", "effective promotion thresholds mismatch"),
+        ("effective", "effective promotion thresholds mismatch"),
+        ("accepted", "promotion decision has no accepted hypothesis"),
+    ),
+)
+def test_freeze_rejects_tampered_generation_promotion_decision(
+    mutation: str,
+    expected_error: str,
+) -> None:
+    protocol = PaperProtocol.read(PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    row = report["generations"][0]
+    decision = row["promotion_decision"]
+    if mutation == "extra_key":
+        decision["unexpected"] = True
+    elif mutation == "decision_contract":
+        decision["promotion_contract"]["maximum_harm_rate"] = 1.0
+    elif mutation == "allowed":
+        decision["allowed"] = False
+    elif mutation == "candidate":
+        decision["candidate_thresholds"]["minimum_effect_lower_bound"] = 0.5
+    elif mutation == "effective":
+        decision["effective_thresholds"]["maximum_harm_rate"] = 1.0
+    else:
+        row["accepted_hypothesis_id"] = None
+
+    with pytest.raises(ValueError, match=expected_error):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
+
+
+def test_freeze_recomputes_blockers_from_promotion_summary() -> None:
+    protocol = PaperProtocol.read(PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    decision = report["generations"][0]["promotion_decision"]
+    decision["summary"].update(
+        {
+            "pair_count": 10,
+            "baseline_success_count": 10,
+            "candidate_success_count": 0,
+            "gain_count": 0,
+            "harm_count": 10,
+            "tie_count": 0,
+            "activation_count": 10,
+            "selection_change_count": 10,
+            "baseline_preserved_count": 0,
+            "invalid_pair_count": 0,
+            "provider_mismatch_count": 0,
+            "budget_mismatch_count": 0,
+            "baseline_mean_cost": 1.0,
+            "candidate_mean_cost": 1.0,
+            "cost_ratio": 1.0,
+            "mean_effect": -1.0,
+            "effect_standard_error": 0.0,
+            "effect_lower_bound": -1.0,
+            "harm_rate": 1.0,
+            "activation_rate": 1.0,
+        }
+    )
+    decision["effect_lower_bound"] = -1.0
+
+    with pytest.raises(
+        ValueError,
+        match="development promotion summary blockers mismatch",
+    ):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
+
+
+def test_frozen_archive_rejects_candidate_treatment_substitution(
+    tmp_path: Path,
+) -> None:
+    protocol = PaperProtocol.read(PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    evaluator_epoch = f"skilllearn-eval-{manifest.manifest_hash[:12]}"
+    hypothesis_id = "recursive-policy"
+    archive = _archive_payload(hypothesis_id, evaluator_epoch)
+    original = HypothesisProgram.from_dict(archive["hypotheses"][hypothesis_id])
+    archive["hypotheses"][hypothesis_id]["action_graph"][0]["value"] = (
+        "A materially different lowered directive that was never evaluated."
+    )
+    substituted = HypothesisProgram.from_dict(archive["hypotheses"][hypothesis_id])
+    assert skilllearn_program_treatment_hash(original) != (
+        skilllearn_program_treatment_hash(substituted)
+    )
+    incumbent_id = str(archive["incumbent_id"])
+    archive["archive_hash"] = stable_hash(
+        {
+            "hypotheses": {hypothesis_id: substituted.payload_hash},
+            "nodes": {
+                incumbent_id: stable_hash(archive["nodes"][incumbent_id]),
+            },
+            "scores": {},
+            "incumbent_id": incumbent_id,
+        }
+    )
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash=archive["archive_hash"],
+        recursive=True,
+        hypothesis_id=hypothesis_id,
+    )
+    paper_freeze._validate_development_report(
+        report,
+        protocol=protocol,
+        manifest=manifest,
+        recursive_validation_enabled=True,
+    )
+    archive_path = tmp_path / "substituted-archive.json"
+    archive_path.write_text(json.dumps(archive), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="archive candidate treatment and development evidence differ",
+    ):
+        paper_freeze.read_frozen_archive(
+            archive_path,
+            expected_evaluator_epoch=evaluator_epoch,
+            expected_report=report,
+            promotion_spec=protocol.promotion_gate_spec,
+        )
+
+
+def test_frozen_archive_cross_checks_candidate_decision_thresholds(
+    tmp_path: Path,
+) -> None:
+    protocol = PaperProtocol.read(PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    evaluator_epoch = f"skilllearn-eval-{manifest.manifest_hash[:12]}"
+    archive = _archive_payload("recursive-policy", evaluator_epoch)
+    archive_path = tmp_path / "archive.json"
+    archive_path.write_text(json.dumps(archive), encoding="utf-8")
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash=archive["archive_hash"],
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    decision = report["generations"][0]["promotion_decision"]
+    decision["candidate_thresholds"]["minimum_effect_lower_bound"] = 0.2
+    decision["effective_thresholds"]["minimum_effect_lower_bound"] = 0.2
+    paper_freeze._validate_development_report(
+        report,
+        protocol=protocol,
+        manifest=manifest,
+        recursive_validation_enabled=True,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="archive candidate thresholds and decision differ",
+    ):
+        paper_freeze.read_frozen_archive(
+            archive_path,
+            expected_evaluator_epoch=evaluator_epoch,
+            expected_report=report,
+            promotion_spec=protocol.promotion_gate_spec,
+        )
+
+    unknown_report = _development_report(
+        protocol,
+        manifest,
+        archive_hash=archive["archive_hash"],
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    unknown_report["generations"][0]["accepted_hypothesis_id"] = "unknown-policy"
+    with pytest.raises(
+        ValueError,
+        match="development decision references an unknown hypothesis",
+    ):
+        paper_freeze.read_frozen_archive(
+            archive_path,
+            expected_evaluator_epoch=evaluator_epoch,
+            expected_report=unknown_report,
+            promotion_spec=protocol.promotion_gate_spec,
+        )
+
+    malformed_archive = json.loads(json.dumps(archive))
+    malformed_archive["hypotheses"]["recursive-policy"]["expected_effect"][
+        "maximum_cost_ratio"
+    ] = "not-a-number"
+    malformed_path = tmp_path / "malformed-archive.json"
+    malformed_path.write_text(json.dumps(malformed_archive), encoding="utf-8")
+    with pytest.raises(ValueError, match="archive hypothesis payload is malformed"):
+        paper_freeze.read_frozen_archive(
+            malformed_path,
+            expected_evaluator_epoch=evaluator_epoch,
+            expected_report=unknown_report,
+            promotion_spec=protocol.promotion_gate_spec,
+        )
 def test_completed_sealed_journal_rejects_missing_or_changed_records(tmp_path: Path) -> None:
     protocol = PaperProtocol.read(PROTOCOL_PATH)
     manifest = SplitManifest.read(MANIFEST_PATH)
@@ -458,20 +842,53 @@ def _development_report(
     *,
     archive_hash: object,
     recursive: bool,
+    hypothesis_id: str,
+    protocol_lock_hash: str | None = None,
 ) -> dict[str, object]:
     phase = protocol.payload["phases"]["development"]
+    evaluator_epoch = f"skilllearn-eval-{manifest.manifest_hash[:12]}"
+    payload = json.loads(
+        (ROOT / "baselines" / "static_generic_program.json").read_text()
+    )
+    payload["id"] = hypothesis_id
+    payload["evaluator_epoch"] = evaluator_epoch
+    payload["status"] = "promoted"
+    program = HypothesisProgram.from_dict(payload)
+    generation = {
+        "promoted": True,
+        "recursive_depth": 0,
+        "accepted_hypothesis_id": hypothesis_id,
+        "evaluated_candidate_treatment_hash": (
+            skilllearn_program_treatment_hash(program)
+        ),
+        "promotion_decision": _promotion_decision(
+            protocol,
+            program,
+            evaluator_epoch=evaluator_epoch,
+        ),
+    }
     return {
         "mode": "execute",
         "executed": True,
         "test_content_accessed": False,
         "preflight": {"blockers": []},
         "plan": {
+            "paper_protocol_id": protocol.id,
+            "paper_protocol_hash": protocol.protocol_hash,
+            "promotion_contract": protocol.promotion_gate_spec.to_dict(),
+            "protocol_lock_hash": protocol_lock_hash,
             "manifest_hash": manifest.manifest_hash,
+            "experiment_phase": "development",
             "train_count": phase["train_count"],
             "validation_count": phase["validation_count"],
+            "agent_id": protocol.payload["agent_id"],
             "model": protocol.payload["model"],
             "trial_provider_mode": protocol.payload["trial_provider_mode"],
             "max_steps": protocol.payload["max_steps"],
+            "parallel_workers": phase["parallel_workers"],
+            "minimum_trigger_support": protocol.payload["evolution"][
+                "minimum_trigger_support"
+            ],
             "runner_agent_registry_isolation": protocol.payload["execution"][
                 "runner_agent_registry_isolation"
             ],
@@ -512,6 +929,9 @@ def _development_report(
                     "offline_verifier_policy",
                     "trial_network_budget_policy",
                     "trial_network_byte_limit",
+                    "skill_routing",
+                    "skill_action_lowering",
+                    "skill_fallback_semantics",
                 )
             },
             "training_evidence_policy": protocol.payload["execution"][
@@ -532,10 +952,58 @@ def _development_report(
             ],
             "test_content_accessed": False,
         },
-        "generation": {"promoted": True, "recursive_depth": 0},
-        "generations": [{"promoted": True, "recursive_depth": 0}],
+        "generation": dict(generation),
+        "generations": [generation],
         "generation_count": 1,
         "archive_hash": archive_hash,
+    }
+
+
+def _promotion_decision(
+    protocol: PaperProtocol,
+    program: HypothesisProgram,
+    *,
+    evaluator_epoch: str,
+) -> dict[str, object]:
+    spec = protocol.promotion_gate_spec
+    candidate = {
+        "minimum_effect_lower_bound": program.expected_effect.minimum_delta,
+        "maximum_harm_rate": program.expected_effect.maximum_harm_rate,
+        "maximum_cost_ratio": program.expected_effect.maximum_cost_ratio,
+    }
+    summary = {
+        "pair_count": 10,
+        "baseline_success_count": 0,
+        "candidate_success_count": 10,
+        "gain_count": 10,
+        "harm_count": 0,
+        "tie_count": 0,
+        "activation_count": 10,
+        "selection_change_count": 10,
+        "baseline_preserved_count": 0,
+        "invalid_pair_count": 0,
+        "provider_mismatch_count": 0,
+        "budget_mismatch_count": 0,
+        "baseline_mean_cost": 1.0,
+        "candidate_mean_cost": 1.0,
+        "cost_ratio": 1.0,
+        "mean_effect": 1.0,
+        "effect_standard_error": 0.0,
+        "effect_lower_bound": 1.0,
+        "harm_rate": 0.0,
+        "activation_rate": 1.0,
+    }
+    return {
+        "allowed": True,
+        "blockers": [],
+        "summary": summary,
+        "effect_lower_bound": 1.0,
+        "evaluator_epoch": evaluator_epoch,
+        "promotion_contract": spec.to_dict(),
+        "candidate_metric": program.expected_effect.metric,
+        "candidate_thresholds": candidate,
+        "effective_thresholds": spec.effective_thresholds(program),
+        "policy": "evaluator_owned_paired_validation_v2",
     }
 
 

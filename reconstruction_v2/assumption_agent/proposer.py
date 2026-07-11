@@ -57,13 +57,21 @@ class StructuredHypothesisProposer:
         issues = [issue for residual in residuals for issue in residual.validate()]
         if issues:
             raise PermissionError(f"proposal data isolation failed: {sorted(set(issues))}")
+        capability_payload = dict(capabilities or {})
+        primary_metric = str(
+            capability_payload.get("primary_metric") or "task_success"
+        ).strip()
+        if not primary_metric:
+            raise ValueError("proposal primary metric is missing")
         payload = {
             "request_kind": "propose_hypothesis_programs",
             "contract_version": "hypothesis_program_v1",
             "evaluator_epoch": evaluator_epoch,
-            "constraints": _proposal_constraints(),
-            "output_schema": {"hypotheses": [_program_schema()]},
-            "capabilities": dict(capabilities or {}),
+            "constraints": _proposal_constraints(capability_payload),
+            "output_schema": {
+                "hypotheses": [_program_schema(capability_payload)]
+            },
+            "capabilities": capability_payload,
             "residuals": [_residual_payload(residual) for residual in residuals],
             "max_hypotheses": max_hypotheses,
         }
@@ -104,6 +112,7 @@ class StructuredHypothesisProposer:
             if not isinstance(row, Mapping):
                 continue
             normalized = dict(row)
+            _normalize_expected_effect_metric(normalized, primary_metric)
             normalized["evaluator_epoch"] = evaluator_epoch
             normalized["created_from_transition_ids"] = list(transition_ids)
             normalized.setdefault(
@@ -170,13 +179,16 @@ class StructuredHypothesisProposer:
     ) -> HypothesisProgram:
         if any(residual.split is not SplitName.TRAIN for residual in residuals):
             raise PermissionError("recursive repair may use training residuals only")
+        capability_payload = dict(capabilities or {})
         payload = {
             "request_kind": "repair_hypothesis_program",
             "contract_version": "hypothesis_program_v1",
             "evaluator_epoch": parent.evaluator_epoch,
-            "constraints": _proposal_constraints(),
-            "output_schema": {"hypothesis": _program_schema()},
-            "capabilities": dict(capabilities or {}),
+            "constraints": _proposal_constraints(capability_payload),
+            "output_schema": {
+                "hypothesis": _program_schema(capability_payload)
+            },
+            "capabilities": capability_payload,
             "parent": parent.to_dict(),
             "failed_checks": [dict(row) for row in failed_checks],
             "residuals": [_residual_payload(residual) for residual in residuals],
@@ -188,6 +200,10 @@ class StructuredHypothesisProposer:
         if not isinstance(row, Mapping):
             raise ValueError("repair model must return one hypothesis object")
         normalized = dict(row)
+        _normalize_expected_effect_metric(
+            normalized,
+            parent.expected_effect.metric,
+        )
         normalized["evaluator_epoch"] = parent.evaluator_epoch
         normalized["parent_id"] = parent.id
         normalized["lineage"] = [*parent.lineage, parent.id]
@@ -266,6 +282,20 @@ class StructuredHypothesisProposer:
             ) from exc
 
 
+def _normalize_expected_effect_metric(
+    payload: dict[str, Any],
+    primary_metric: str,
+) -> None:
+    """Replace the model's metric label with the evaluator-owned metric."""
+
+    expected_effect = payload.get("expected_effect")
+    normalized_effect = (
+        dict(expected_effect) if isinstance(expected_effect, Mapping) else {}
+    )
+    normalized_effect["metric"] = primary_metric
+    payload["expected_effect"] = normalized_effect
+
+
 def _residual_payload(residual: ResidualExample) -> dict[str, Any]:
     return {
         "transition_id": residual.transition_id,
@@ -279,18 +309,42 @@ def _residual_payload(residual: ResidualExample) -> dict[str, Any]:
     }
 
 
-def _proposal_constraints() -> dict[str, Any]:
+def _proposal_constraints(
+    capabilities: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    action_contract = (capabilities or {}).get("action_contract")
+    backend_operations = None
+    if isinstance(action_contract, Mapping):
+        operations = action_contract.get("allowed_action_operations")
+        if isinstance(operations, (list, tuple)):
+            backend_operations = [str(value) for value in operations]
+    action_semantics = (
+        str(action_contract.get("semantics"))
+        if isinstance(action_contract, Mapping)
+        else "typed_runtime_action_v1"
+    )
+    prompt_directive_backend = "prompt_directive" in action_semantics
+    external_evidence_is_hidden = bool(
+        action_contract.get("external_evidence_is_hidden", False)
+        if isinstance(action_contract, Mapping)
+        else False
+    )
     return {
         "allowed_kinds": ["task", "policy", "evaluator"],
         "fallback_must_equal": "preserve_baseline",
         "trigger_must_use_structured_features": True,
         "trigger_keys_must_come_from_capabilities_runtime_trigger_contract": True,
         "residual_context_may_shape_actions_but_must_not_be_used_in_trigger_or_anti_trigger": True,
-        "action_graph_must_change_runtime": True,
+        "action_graph_must_change_runtime": not prompt_directive_backend,
+        "action_graph_must_change_backend_treatment": True,
+        "fine_grained_action_execution_receipt_expected": (
+            not prompt_directive_backend
+        ),
         "gold_answer_fields_forbidden": True,
         "required_verifier_anchor": True,
         "required_expected_effect": ["metric", "minimum_delta", "maximum_harm_rate", "maximum_cost_ratio"],
-        "allowed_action_operations": [
+        "allowed_action_operations": backend_operations
+        or [
             "enable_lane",
             "disable_lane",
             "prioritize_lane",
@@ -302,10 +356,30 @@ def _proposal_constraints() -> dict[str, Any]:
             "produce_artifact",
             "request_evidence",
         ],
+        "action_semantics": action_semantics,
+        "external_verifier_is_agent_callable": not external_evidence_is_hidden,
+        "forbidden_action_references": (
+            [
+                "external verifier anchor",
+                "hidden benchmark verifier",
+                "policy_off outcome",
+                "policy_on outcome",
+            ]
+            if external_evidence_is_hidden
+            else []
+        ),
     }
 
 
-def _program_schema() -> dict[str, Any]:
+def _program_schema(
+    capabilities: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    action_contract = (capabilities or {}).get("action_contract")
+    external_evidence_is_hidden = bool(
+        action_contract.get("external_evidence_is_hidden", False)
+        if isinstance(action_contract, Mapping)
+        else False
+    )
     predicate = {"key": "feature name", "op": "eq|ne|in|contains|exists|gte|lte", "value": "JSON value"}
     return {
         "id": "stable descriptive ID",
@@ -317,7 +391,11 @@ def _program_schema() -> dict[str, Any]:
             {
                 "id": "action ID",
                 "operation": "one allowed action operation",
-                "target": "declared capability, step, verifier, or artifact",
+                "target": (
+                    "task-local step, condition, evidence, or artifact; never the external verifier or policy-off/on outcome"
+                    if external_evidence_is_hidden
+                    else "declared capability, step, verifier, or artifact"
+                ),
                 "value": "JSON value",
                 "depends_on": [],
             }

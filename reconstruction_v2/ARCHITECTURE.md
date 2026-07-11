@@ -28,7 +28,7 @@ The external SkillLearn task agent supports both a historical `codex_subscriptio
 
 Task containers are built from an exact non-oracle environment hash. The environment image never contains benchmark-provided skills. A single read-only Node/Codex runtime volume, pinned by builder digest and package version, is mounted into every variant. Image ID, runtime key, CLI version, and cache reuse are trial provenance. Different items may execute concurrently, but variants of one item are sequential to prevent within-pair provider contention.
 
-SkillLearn task data and verifier code are local: task payloads enter through a content-addressed image and the verifier enters through a post-agent `docker cp`. The model call remains online. Every attempt declares the public model endpoint origin and explicitly records that container-wide egress isolation and dependency-cache-only execution are not yet enforced. This distinguishes local benchmark evaluation from online inference without making a false fully-offline claim.
+SkillLearn task data and verifier code are local: task payloads enter through a content-addressed image and the verifier enters through a post-agent `docker cp`. The model call remains online. Trial containers enforce a provider-only endpoint allowlist, pinned host mapping without external DNS, fail-closed prebuilt dependency caches, and a 32 MiB network fuse; verifier/runtime preparation uses `--network none`. This distinguishes offline benchmark evaluation from online model inference without making a false fully-offline-inference claim.
 
 The experiment shares two run-scoped evidence caches. Training evidence is keyed by incumbent executable behavior, train task features, manifest, evaluator epoch, model, and runtime; an unchanged incumbent receives the exact prior observations with zero new task calls. Counterfactual evidence is keyed by candidate and incumbent behavior plus validation task features, evaluator epoch, split, and runtime. Identical behavior reuses exact evidence, while changed behavior misses the cache. Invalid train observations and invalid pair bundles are never cached. Replay is forbidden for sealed-test evidence.
 
@@ -66,6 +66,8 @@ An external trial has a stable request hash, pair ID, split, variant, model, ste
 The verifier is a delayed capability. Its bind mount is removed before `docker run`; the proxy records that withholding event, waits for the agent command to exit, copies a content-hashed verifier tree into `/tests`, records materialization, and only then invokes the test script. A trace without this event order is not admissible evidence.
 
 External task fallback is prospective, not oracle-assisted. A policy may abstain before execution and leave the raw route unchanged. Once a candidate acts, its output is judged as produced; the system cannot inspect verifier success and retroactively substitute raw. Candidate harm is controlled by paired validation and promotion thresholds.
+
+For the SkillLearn backend, the prospective abstention is the frozen trigger itself: a trigger miss aliases the baseline and is recorded as observed baseline preservation. A trigger hit injects an independent candidate skill and records no same-arm baseline preservation. The compiler exposes only prompt directives and agent-local self-checks; typed lane mutations and the post-agent external verifier are not claimed as lowered actions.
 
 ## Archive Unit
 

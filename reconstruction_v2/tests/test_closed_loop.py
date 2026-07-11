@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Mapping
 
 import pytest
@@ -13,9 +13,11 @@ from assumption_agent.archive import (
     PolicyArchive,
 )
 from assumption_agent.evaluation import (
+    CANDIDATE_MAY_ONLY_TIGHTEN,
     CounterfactualRunner,
     PromotionGate,
     PromotionGateSpec,
+    RUNTIME_BASELINE_PRESERVATION,
 )
 from assumption_agent.events import MemoryEventSink
 from assumption_agent.evolution import (
@@ -82,6 +84,25 @@ class TruthEvaluator:
         )
 
 
+def _promotion_spec(
+    *,
+    minimum_pairs: int = 10,
+    minimum_net_gain_count: int = 2,
+) -> PromotionGateSpec:
+    return PromotionGateSpec(
+        metric="task_success",
+        minimum_pairs=minimum_pairs,
+        confidence=0.9,
+        minimum_net_gain_count=minimum_net_gain_count,
+        minimum_activation_rate=0.1,
+        minimum_effect_lower_bound=0.0,
+        maximum_harm_rate=0.05,
+        maximum_cost_ratio=3.0,
+        baseline_safety_policy=RUNTIME_BASELINE_PRESERVATION,
+        candidate_threshold_policy=CANDIDATE_MAY_ONLY_TIGHTEN,
+    )
+
+
 class QueueProposalModel:
     def __init__(self, responses: list[dict[str, Any]]) -> None:
         self.responses = list(responses)
@@ -118,7 +139,9 @@ def test_policy_program_changes_runtime_and_preserves_baseline() -> None:
 def test_failed_hypothesis_is_repaired_and_recursively_revalidated() -> None:
     sink = MemoryEventSink()
     bad = _program_dict(lane="missing_lane")
+    bad["expected_effect"]["metric"] = "root_self_reported_metric"
     repaired = _program_dict(hypothesis_id="hyp-repaired")
+    repaired["expected_effect"]["metric"] = "repair_self_reported_metric"
     model = QueueProposalModel([
         {"hypotheses": [bad]},
         {"hypothesis": repaired},
@@ -136,6 +159,8 @@ def test_failed_hypothesis_is_repaired_and_recursively_revalidated() -> None:
     assert tree.accepted_program.id == "hyp-repaired"
     assert tree.accepted_program.parent_id == root.id
     assert tree.accepted_program.lineage == (root.id,)
+    assert root.expected_effect.metric == "task_success"
+    assert tree.accepted_program.expected_effect.metric == "task_success"
     assert all(not _contains_forbidden_answer_key(request) for request in model.requests)
     assert any(row["event"] == "hypothesis_repair_proposed" for row in sink.events)
 
@@ -227,7 +252,7 @@ def test_paired_counterfactual_gain_promotes_program() -> None:
     tasks = tuple(_task(f"validation-{index}") for index in range(20))
     pairs = runner.run(tasks, program=program, split=SplitName.VALIDATION)
     gate = PromotionGate(
-        PromotionGateSpec(minimum_pairs=10, confidence=0.9, minimum_net_gain_count=2),
+        _promotion_spec(),
         event_sink=sink,
     )
 
@@ -238,6 +263,111 @@ def test_paired_counterfactual_gain_promotes_program() -> None:
     assert decision.summary.candidate_success_count == 20
     assert decision.summary.activation_count == 20
     assert decision.effect_lower_bound == 1.0
+
+
+def test_candidate_cannot_relax_protocol_effect_lower_bound() -> None:
+    sink = MemoryEventSink()
+    payload = _program_dict()
+    payload["expected_effect"] = {
+        "metric": "task_success",
+        "minimum_delta": -1.0,
+        "maximum_harm_rate": 1.0,
+        "maximum_cost_ratio": 99.0,
+    }
+    program = HypothesisProgram.from_dict(payload)
+    runner = CounterfactualRunner(
+        runtime=_runtime(sink), evaluator=TruthEvaluator(), event_sink=sink
+    )
+    pairs = list(
+        runner.run(
+            tuple(_task(f"validation-{index}") for index in range(20)),
+            program=program,
+            split=SplitName.VALIDATION,
+        )
+    )
+    for index in range(1, len(pairs)):
+        pair = pairs[index]
+        pairs[index] = replace(
+            pair,
+            candidate_outcome=replace(
+                pair.candidate_outcome,
+                success=False,
+                score=0.0,
+            ),
+        )
+
+    decision = PromotionGate(
+        _promotion_spec(minimum_net_gain_count=1)
+    ).evaluate(program, pairs, sealed_test_accessed=False)
+
+    assert "paired_effect_lower_bound_below_target" in decision.blockers
+    assert decision.candidate_thresholds["minimum_effect_lower_bound"] == -1.0
+    assert decision.effective_thresholds["minimum_effect_lower_bound"] == 0.0
+
+
+def test_candidate_cannot_relax_protocol_harm_or_cost_limits() -> None:
+    sink = MemoryEventSink()
+    payload = _program_dict()
+    payload["expected_effect"] = {
+        "metric": "task_success",
+        "minimum_delta": -1.0,
+        "maximum_harm_rate": 1.0,
+        "maximum_cost_ratio": 99.0,
+    }
+    program = HypothesisProgram.from_dict(payload)
+    runner = CounterfactualRunner(
+        runtime=_runtime(sink), evaluator=TruthEvaluator(), event_sink=sink
+    )
+    pairs = list(
+        runner.run(
+            tuple(_task(f"validation-{index}") for index in range(20)),
+            program=program,
+            split=SplitName.VALIDATION,
+        )
+    )
+    for index in range(2):
+        pair = pairs[index]
+        pairs[index] = replace(
+            pair,
+            baseline_outcome=replace(
+                pair.baseline_outcome,
+                success=True,
+                score=1.0,
+            ),
+            candidate_outcome=replace(
+                pair.candidate_outcome,
+                success=False,
+                score=0.0,
+            ),
+        )
+
+    harm_decision = PromotionGate(_promotion_spec()).evaluate(
+        program, pairs, sealed_test_accessed=False
+    )
+    cost_decision = PromotionGate(
+        replace(_promotion_spec(), maximum_harm_rate=1.0, maximum_cost_ratio=1.5)
+    ).evaluate(program, pairs[2:], sealed_test_accessed=False)
+
+    assert "harm_rate_exceeded" in harm_decision.blockers
+    assert harm_decision.effective_thresholds["maximum_harm_rate"] == 0.05
+    assert "cost_ratio_exceeded" in cost_decision.blockers
+    assert cost_decision.effective_thresholds["maximum_cost_ratio"] == 1.5
+
+
+def test_candidate_stricter_thresholds_remain_effective() -> None:
+    program = HypothesisProgram.from_dict(_program_dict())
+    protocol_spec = replace(
+        _promotion_spec(),
+        minimum_effect_lower_bound=0.0,
+        maximum_harm_rate=0.2,
+        maximum_cost_ratio=5.0,
+    )
+
+    assert protocol_spec.effective_thresholds(program) == {
+        "minimum_effect_lower_bound": 0.1,
+        "maximum_harm_rate": 0.05,
+        "maximum_cost_ratio": 3.0,
+    }
 
 
 def test_counterfactual_replay_requires_identical_executable_behavior() -> None:
@@ -360,13 +490,15 @@ def test_evaluator_replacement_invalidates_only_dependent_epoch_scores() -> None
 
 def test_evolution_kernel_closes_proposal_validation_promotion_runtime_loop() -> None:
     sink = MemoryEventSink()
-    model = QueueProposalModel([{"hypotheses": [_program_dict()]}])
+    proposal = _program_dict()
+    proposal["expected_effect"]["metric"] = "candidate_self_reported_metric"
+    model = QueueProposalModel([{"hypotheses": [proposal]}])
     proposer = StructuredHypothesisProposer(model, event_sink=sink)
     validator = _validator(proposer, sink)
     runtime = _runtime(sink)
     runner = CounterfactualRunner(runtime=runtime, evaluator=TruthEvaluator(), event_sink=sink)
     gate = PromotionGate(
-        PromotionGateSpec(minimum_pairs=10, confidence=0.9, minimum_net_gain_count=2),
+        _promotion_spec(),
         event_sink=sink,
     )
     archive = PolicyArchive(event_sink=sink)
@@ -407,7 +539,13 @@ def test_evolution_kernel_closes_proposal_validation_promotion_runtime_loop() ->
     assert result.accepted_hypothesis_id is not None
     promoted = archive.hypotheses[result.accepted_hypothesis_id]
     assert promoted.status is HypothesisStatus.PROMOTED
+    assert promoted.expected_effect.metric == "task_success"
+    assert result.promotion_decision.candidate_metric == "task_success"
+    assert model.requests[0]["capabilities"]["primary_metric"] == "task_success"
     assert archive.incumbent_id == result.archive_node.id
+    assert {row.metric for row in archive.score_records.values()} == {
+        "task_success"
+    }
     future = runtime.execute(_task("future-unseen"), (promoted,))
     assert future.selected_result.lane == "relation_solver"
     assert any(row["event"] == "evolution_generation_completed" for row in sink.events)

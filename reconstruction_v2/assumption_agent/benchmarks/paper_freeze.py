@@ -2,16 +2,99 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from ..evaluation import PairSummary, PromotionGateSpec, promotion_summary_blockers
 from ..models import HypothesisProgram, HypothesisStatus, SplitName, stable_hash
 from ..splits import SplitManifest
 from .paper_controls import ControlSource, control_config_hash, source_tree_hash
-from .paper_protocol import PaperProtocol, _code_fingerprint, _git_state
-from .skilllearn_compiler import SkillLearnProgramCompiler
+from .paper_protocol import (
+    PaperProtocol,
+    _code_fingerprint,
+    _git_state,
+    validate_protocol_lock_for_execution,
+)
+from .skilllearn_compiler import (
+    SkillLearnProgramCompiler,
+    skilllearn_program_treatment_hash,
+)
 from .skilllearnbench import SkillLearnBenchAdapter
+
+
+_PROMOTION_DECISION_POLICY = "evaluator_owned_paired_validation_v2"
+_PROMOTION_THRESHOLD_KEYS = frozenset(
+    {
+        "minimum_effect_lower_bound",
+        "maximum_harm_rate",
+        "maximum_cost_ratio",
+    }
+)
+_PROMOTION_DECISION_KEYS = frozenset(
+    {
+        "allowed",
+        "blockers",
+        "summary",
+        "effect_lower_bound",
+        "evaluator_epoch",
+        "promotion_contract",
+        "candidate_metric",
+        "candidate_thresholds",
+        "effective_thresholds",
+        "policy",
+    }
+)
+_PROMOTION_SUMMARY_KEYS = frozenset(
+    {
+        "pair_count",
+        "baseline_success_count",
+        "candidate_success_count",
+        "gain_count",
+        "harm_count",
+        "tie_count",
+        "activation_count",
+        "selection_change_count",
+        "baseline_preserved_count",
+        "invalid_pair_count",
+        "provider_mismatch_count",
+        "budget_mismatch_count",
+        "baseline_mean_cost",
+        "candidate_mean_cost",
+        "cost_ratio",
+        "mean_effect",
+        "effect_standard_error",
+        "effect_lower_bound",
+        "harm_rate",
+        "activation_rate",
+    }
+)
+_PROMOTION_SUMMARY_COUNT_KEYS = frozenset(
+    {
+        "pair_count",
+        "baseline_success_count",
+        "candidate_success_count",
+        "gain_count",
+        "harm_count",
+        "tie_count",
+        "activation_count",
+        "selection_change_count",
+        "baseline_preserved_count",
+        "invalid_pair_count",
+        "provider_mismatch_count",
+        "budget_mismatch_count",
+    }
+)
+_PROMOTION_SUMMARY_BASE_FLOAT_KEYS = frozenset(
+    {
+        "baseline_mean_cost",
+        "candidate_mean_cost",
+        "cost_ratio",
+        "mean_effect",
+        "effect_standard_error",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -48,7 +131,13 @@ def freeze_paper_workspace(
 ) -> dict[str, Any]:
     project = Path(project_root).resolve()
     benchmark = Path(benchmark_root).resolve()
-    _validate_protocol_lock(protocol, protocol_lock, manifest, project)
+    _validate_protocol_lock(
+        protocol,
+        protocol_lock,
+        manifest,
+        project,
+        benchmark,
+    )
     recursive_report = _read_mapping(recursive_report_path, "recursive development report")
     no_recursive_report = _read_mapping(
         no_recursive_report_path,
@@ -60,22 +149,26 @@ def freeze_paper_workspace(
         protocol=protocol,
         manifest=manifest,
         recursive_validation_enabled=True,
+        protocol_lock_hash=str(protocol_lock.get("lock_hash") or ""),
     )
     _validate_development_report(
         no_recursive_report,
         protocol=protocol,
         manifest=manifest,
         recursive_validation_enabled=False,
+        protocol_lock_hash=str(protocol_lock.get("lock_hash") or ""),
     )
     recursive_archive = read_frozen_archive(
         recursive_archive_path,
         expected_evaluator_epoch=evaluator_epoch,
         expected_report=recursive_report,
+        promotion_spec=protocol.promotion_gate_spec,
     )
     no_recursive_archive = read_frozen_archive(
         no_recursive_archive_path,
         expected_evaluator_epoch=evaluator_epoch,
         expected_report=no_recursive_report,
+        promotion_spec=protocol.promotion_gate_spec,
     )
     controls_root = Path(controls_output_root).resolve()
     if controls_root.exists():
@@ -148,6 +241,7 @@ def read_frozen_archive(
     *,
     expected_evaluator_epoch: str,
     expected_report: Mapping[str, Any],
+    promotion_spec: PromotionGateSpec,
 ) -> FrozenArchive:
     source = Path(path)
     payload = _read_mapping(source, "policy archive")
@@ -164,7 +258,10 @@ def read_frozen_archive(
     for key, row in hypotheses_payload.items():
         if not isinstance(row, Mapping):
             raise ValueError("archive hypothesis row is malformed")
-        program = HypothesisProgram.from_dict(row)
+        try:
+            program = HypothesisProgram.from_dict(row)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("archive hypothesis payload is malformed") from exc
         if program.id != key or program.validate():
             raise ValueError("archive hypothesis identity or contract is invalid")
         if program.evaluator_epoch != expected_evaluator_epoch:
@@ -221,13 +318,56 @@ def read_frozen_archive(
         raise ValueError("archive content hash mismatch")
     if expected_report.get("archive_hash") != calculated_hash:
         raise ValueError("development report and archive hash differ")
-    generation = expected_report.get("generation")
     generations = expected_report.get("generations")
-    generation_rows = (
-        [row for row in generations if isinstance(row, Mapping)]
-        if isinstance(generations, list)
-        else ([generation] if isinstance(generation, Mapping) else [])
-    )
+    if not isinstance(generations, list) or not generations or any(
+        not isinstance(row, Mapping) for row in generations
+    ):
+        raise ValueError("development report generation history is malformed")
+    generation_rows = tuple(generations)
+    for row in generation_rows:
+        decision = row.get("promotion_decision")
+        accepted_id = str(row.get("accepted_hypothesis_id") or "")
+        if decision is None:
+            if accepted_id:
+                raise ValueError(
+                    "development accepted hypothesis has no promotion decision"
+                )
+            continue
+        if not isinstance(decision, Mapping) or not accepted_id:
+            raise ValueError("development promotion decision identity is malformed")
+        program = hypotheses.get(accepted_id)
+        if program is None:
+            raise ValueError("development decision references an unknown hypothesis")
+        if program.expected_effect.metric != promotion_spec.metric:
+            raise ValueError("archive candidate metric is not protocol-owned")
+        expected_candidate = {
+            "minimum_effect_lower_bound": program.expected_effect.minimum_delta,
+            "maximum_harm_rate": program.expected_effect.maximum_harm_rate,
+            "maximum_cost_ratio": program.expected_effect.maximum_cost_ratio,
+        }
+        if decision.get("candidate_metric") != program.expected_effect.metric:
+            raise ValueError("archive candidate metric and decision differ")
+        if decision.get("candidate_thresholds") != expected_candidate:
+            raise ValueError("archive candidate thresholds and decision differ")
+        if decision.get("effective_thresholds") != promotion_spec.effective_thresholds(
+            program
+        ):
+            raise ValueError("archive effective thresholds and decision differ")
+        try:
+            archive_treatment_hash = skilllearn_program_treatment_hash(program)
+        except ValueError as exc:
+            raise ValueError("archive candidate treatment cannot be lowered") from exc
+        if row.get("evaluated_candidate_treatment_hash") != archive_treatment_hash:
+            raise ValueError(
+                "archive candidate treatment and development evidence differ"
+            )
+        expected_status = (
+            HypothesisStatus.PROMOTED
+            if decision.get("allowed") is True
+            else HypothesisStatus.REJECTED
+        )
+        if program.status is not expected_status:
+            raise ValueError("archive candidate status and promotion decision differ")
     any_promoted = any(bool(row.get("promoted")) for row in generation_rows)
     if any_promoted != bool(active_programs):
         raise ValueError("development promotion history and archive incumbent differ")
@@ -291,22 +431,15 @@ def _validate_protocol_lock(
     lock: Mapping[str, Any],
     manifest: SplitManifest,
     project_root: Path,
+    benchmark_root: Path | None = None,
 ) -> None:
-    if lock.get("claim_eligible") is not True:
-        raise PermissionError("paper freeze requires a claim-eligible protocol lock")
-    if lock.get("protocol_hash") != protocol.protocol_hash:
-        raise PermissionError("paper freeze protocol lock mismatch")
-    if manifest.manifest_hash not in {
-        lock.get("primary_manifest_hash"),
-        lock.get("secondary_manifest_hash"),
-    }:
-        raise PermissionError("paper freeze manifest mismatch")
-    if lock.get("code_fingerprint") != _code_fingerprint(project_root):
-        raise PermissionError("paper code changed after protocol lock")
-    git_state = _git_state(project_root)
-    locked_git = dict(lock.get("git") or {})
-    if git_state.get("scoped_dirty") or git_state.get("commit") != locked_git.get("commit"):
-        raise PermissionError("paper source tree changed after protocol lock")
+    validate_protocol_lock_for_execution(
+        protocol,
+        lock,
+        manifest,
+        project_root,
+        benchmark_root,
+    )
 
 
 def _validate_development_report(
@@ -315,6 +448,7 @@ def _validate_development_report(
     protocol: PaperProtocol,
     manifest: SplitManifest,
     recursive_validation_enabled: bool,
+    protocol_lock_hash: str | None = None,
 ) -> None:
     if report.get("mode") != "execute" or report.get("executed") is not True:
         raise ValueError("paper freeze requires an executed development report")
@@ -330,12 +464,22 @@ def _validate_development_report(
     phase_name = "family_out_development" if secondary else "development"
     development = protocol.payload["phases"][phase_name]
     expected = {
+        "paper_protocol_id": protocol.id,
+        "paper_protocol_hash": protocol.protocol_hash,
+        "promotion_contract": protocol.promotion_gate_spec.to_dict(),
+        "protocol_lock_hash": protocol_lock_hash,
         "manifest_hash": manifest.manifest_hash,
+        "experiment_phase": phase_name,
         "train_count": int(development["train_count"]),
         "validation_count": int(development["validation_count"]),
+        "agent_id": protocol.payload["agent_id"],
         "model": protocol.payload["model"],
         "trial_provider_mode": protocol.payload["trial_provider_mode"],
         "max_steps": int(protocol.payload["max_steps"]),
+        "parallel_workers": int(development["parallel_workers"]),
+        "minimum_trigger_support": int(
+            protocol.payload["evolution"]["minimum_trigger_support"]
+        ),
         "recursive_validation_enabled": recursive_validation_enabled,
         "max_generations": int(protocol.payload["evolution"]["max_generations"]),
         "max_consecutive_non_promotions": int(
@@ -383,6 +527,9 @@ def _validate_development_report(
         "trial_network_byte_limit",
         "baseline_arm_evidence_replay_policy",
         "training_evidence_policy",
+        "skill_routing",
+        "skill_action_lowering",
+        "skill_fallback_semantics",
     ):
         value = protocol.payload["execution"].get(field)
         if value:
@@ -400,12 +547,208 @@ def _validate_development_report(
         raise ValueError("development generation count mismatch")
     if len(generations) > int(protocol.payload["evolution"]["max_generations"]):
         raise ValueError("development exceeded the frozen generation budget")
+    promotion_spec = protocol.promotion_gate_spec
+    for row in generations:
+        if not isinstance(row, Mapping):
+            raise ValueError("development generation row is malformed")
+        _validate_generation_promotion_decision(
+            row,
+            promotion_spec=promotion_spec,
+            expected_evaluator_epoch=f"skilllearn-eval-{manifest.manifest_hash[:12]}",
+        )
     if not recursive_validation_enabled and any(
         int(row.get("recursive_depth") or 0) != 0
         for row in generations
         if isinstance(row, Mapping)
     ):
         raise ValueError("no-recursive control unexpectedly used recursive repair")
+
+
+def _validate_generation_promotion_decision(
+    row: Mapping[str, Any],
+    *,
+    promotion_spec: PromotionGateSpec,
+    expected_evaluator_epoch: str,
+) -> None:
+    promoted = row.get("promoted")
+    if not isinstance(promoted, bool):
+        raise ValueError("development generation promotion status is malformed")
+    accepted_id = str(row.get("accepted_hypothesis_id") or "")
+    decision = row.get("promotion_decision")
+    treatment_hash = row.get("evaluated_candidate_treatment_hash")
+    if decision is None:
+        if promoted or accepted_id or treatment_hash is not None:
+            raise ValueError("accepted or promoted generation has no promotion decision")
+        return
+    if not isinstance(decision, Mapping):
+        raise ValueError("development promotion decision is malformed")
+    if set(decision) != _PROMOTION_DECISION_KEYS:
+        raise ValueError("development promotion decision schema mismatch")
+    if not accepted_id:
+        raise ValueError("development promotion decision has no accepted hypothesis")
+    if (
+        not isinstance(treatment_hash, str)
+        or len(treatment_hash) != 64
+        or treatment_hash != treatment_hash.lower()
+        or any(character not in "0123456789abcdef" for character in treatment_hash)
+    ):
+        raise ValueError("development evaluated candidate treatment hash is malformed")
+    allowed = decision.get("allowed")
+    if not isinstance(allowed, bool) or allowed != promoted:
+        raise ValueError("development promotion decision status mismatch")
+    blockers = decision.get("blockers")
+    if not isinstance(blockers, list) or any(
+        not isinstance(blocker, str) for blocker in blockers
+    ):
+        raise ValueError("development promotion blockers are malformed")
+    if allowed == bool(blockers):
+        raise ValueError("development promotion blockers contradict decision status")
+    if decision.get("promotion_contract") != promotion_spec.to_dict():
+        raise ValueError("development promotion decision contract mismatch")
+    if decision.get("candidate_metric") != promotion_spec.metric:
+        raise ValueError("development candidate metric mismatch")
+    if decision.get("evaluator_epoch") != expected_evaluator_epoch:
+        raise ValueError("development promotion evaluator epoch mismatch")
+    if decision.get("policy") != _PROMOTION_DECISION_POLICY:
+        raise ValueError("development promotion decision policy mismatch")
+
+    summary = _pair_summary_from_mapping(
+        decision.get("summary"),
+        confidence=promotion_spec.confidence,
+    )
+    effect_lower_bound = decision.get("effect_lower_bound")
+    expected_lower_bound = summary.effect_lower_bound(promotion_spec.confidence)
+    if (
+        isinstance(effect_lower_bound, bool)
+        or not isinstance(effect_lower_bound, (int, float))
+        or not math.isfinite(effect_lower_bound)
+        or not math.isclose(
+            float(effect_lower_bound),
+            expected_lower_bound,
+            rel_tol=1e-12,
+            abs_tol=1e-12,
+        )
+    ):
+        raise ValueError("development promotion effect lower bound is malformed")
+
+    candidate = _promotion_threshold_mapping(
+        decision.get("candidate_thresholds"),
+        label="candidate",
+    )
+    effective = _promotion_threshold_mapping(
+        decision.get("effective_thresholds"),
+        label="effective",
+    )
+    expected_effective = promotion_spec.effective_thresholds_from_candidate(candidate)
+    if effective != expected_effective:
+        raise ValueError("development effective promotion thresholds mismatch")
+    expected_blockers = promotion_summary_blockers(
+        promotion_spec,
+        summary,
+        effective_thresholds=effective,
+    )
+    if tuple(blockers) != expected_blockers:
+        raise ValueError("development promotion summary blockers mismatch")
+    if allowed is not (not expected_blockers):
+        raise ValueError("development promotion summary decision mismatch")
+
+
+def _pair_summary_from_mapping(
+    payload: Any,
+    *,
+    confidence: float,
+) -> PairSummary:
+    if not isinstance(payload, Mapping) or set(payload) != _PROMOTION_SUMMARY_KEYS:
+        raise ValueError("development promotion summary schema mismatch")
+    counts: dict[str, int] = {}
+    for key in _PROMOTION_SUMMARY_COUNT_KEYS:
+        value = payload[key]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError("development promotion summary count is malformed")
+        counts[key] = value
+    pair_count = counts["pair_count"]
+    if any(value > pair_count for value in counts.values()):
+        raise ValueError("development promotion summary count exceeds pair count")
+    if counts["gain_count"] + counts["harm_count"] + counts["tie_count"] != pair_count:
+        raise ValueError("development promotion summary outcomes are inconsistent")
+    if (
+        counts["candidate_success_count"] - counts["baseline_success_count"]
+        != counts["gain_count"] - counts["harm_count"]
+    ):
+        raise ValueError("development promotion summary successes are inconsistent")
+
+    numeric: dict[str, float] = {}
+    for key in _PROMOTION_SUMMARY_BASE_FLOAT_KEYS:
+        value = payload[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("development promotion summary value is malformed")
+        normalized = float(value)
+        if math.isnan(normalized) or (
+            key != "cost_ratio" and not math.isfinite(normalized)
+        ):
+            raise ValueError("development promotion summary value is malformed")
+        numeric[key] = normalized
+    if (
+        numeric["baseline_mean_cost"] < 0.0
+        or numeric["candidate_mean_cost"] < 0.0
+        or numeric["cost_ratio"] < 0.0
+        or numeric["effect_standard_error"] < 0.0
+        or not -1.0 <= numeric["mean_effect"] <= 1.0
+    ):
+        raise ValueError("development promotion summary value is out of range")
+    expected_mean_effect = (
+        (counts["gain_count"] - counts["harm_count"]) / pair_count
+        if pair_count
+        else 0.0
+    )
+    if not math.isclose(
+        numeric["mean_effect"],
+        expected_mean_effect,
+        rel_tol=1e-12,
+        abs_tol=1e-12,
+    ):
+        raise ValueError("development promotion summary mean effect is inconsistent")
+
+    summary = PairSummary(
+        **counts,
+        **numeric,
+    )
+    expected_derived = summary.to_dict(confidence=confidence)
+    for key in ("effect_lower_bound", "harm_rate", "activation_rate"):
+        value = payload[key]
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or not math.isclose(
+                float(value),
+                float(expected_derived[key]),
+                rel_tol=1e-12,
+                abs_tol=1e-12,
+            )
+        ):
+            raise ValueError("development promotion summary derived value is inconsistent")
+    return summary
+
+
+def _promotion_threshold_mapping(
+    payload: Any,
+    *,
+    label: str,
+) -> dict[str, float]:
+    if not isinstance(payload, Mapping) or set(payload) != _PROMOTION_THRESHOLD_KEYS:
+        raise ValueError(f"development {label} promotion threshold schema mismatch")
+    normalized: dict[str, float] = {}
+    for key in _PROMOTION_THRESHOLD_KEYS:
+        value = payload[key]
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+        ):
+            raise ValueError(f"development {label} promotion threshold is malformed")
+        normalized[key] = float(value)
+    return normalized
 
 
 def _manifest_role(lock: Mapping[str, Any], manifest: SplitManifest) -> str:

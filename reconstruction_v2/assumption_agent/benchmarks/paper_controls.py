@@ -12,9 +12,15 @@ from ..events import Event, EventSink, JsonlEventSink, NullEventSink
 from ..models import SplitName, stable_hash
 from ..secure_env import load_dotenv, map_legacy_model_env
 from ..splits import AccessPhase, BenchmarkItem, SplitAccessGuard, SplitManifest
-from .paper_protocol import PaperProtocol
+from .paper_protocol import PaperProtocol, validate_protocol_lock_for_execution
 from .paper_report import PaperTrialRecord, read_records
-from .skilllearn_compiler import SKILL_ROUTING_VERSION
+from .skilllearn_compiler import (
+    NO_SKILL_TREATMENT_HASH,
+    SKILL_ACTION_LOWERING_VERSION,
+    SKILL_FALLBACK_SEMANTICS_VERSION,
+    SKILL_ROUTING_VERSION,
+    skilllearn_program_set_treatment_hash,
+)
 from .skilllearn_lifecycle import (
     SkillLearnBackendPool,
     SkillLearnPrebuiltImageCache,
@@ -103,6 +109,11 @@ class PaperControlRunner:
         self.backend = backend
         self.protocol = protocol
         self.controls = tuple(controls)
+        self.control_config_hash = control_config_hash(self.controls)
+        self._control_source_hashes = {
+            row.id: source_tree_hash(row.root) if row.root else None
+            for row in self.controls
+        }
         self.record_store = record_store
         self.evaluator_epoch = evaluator_epoch
         self.event_sink = event_sink or NullEventSink()
@@ -189,6 +200,7 @@ class PaperControlRunner:
                 "item_id": item_id,
                 "repeat": repeat,
                 "split": split.value,
+                "control_config_hash": self.control_config_hash,
             }
         )[:20]
         rows: list[PaperTrialRecord] = []
@@ -215,6 +227,10 @@ class PaperControlRunner:
                 repeat=repeat,
                 split=split.value,
             )
+            if incumbent is not None and incumbent.pair_id != pair_id:
+                raise PermissionError(
+                    "paper record control configuration changed for an existing key"
+                )
             if incumbent is not None and (incumbent.valid or not retry_invalid):
                 rows.append(incumbent)
                 self._emit_skip(incumbent, trace_id)
@@ -249,6 +265,30 @@ class PaperControlRunner:
         item_id_hash = stable_hash({"item_id": item_id})
         source = self._source_for(control, item)
         variant = TrialVariant.POLICY_OFF if source is None else TrialVariant.POLICY_ON
+        source_hash = self._control_source_hashes[control.id]
+        program_set_hash = (
+            stable_hash(
+                {
+                    "control_id": control.id,
+                    "control_config_hash": self.control_config_hash,
+                    "source_hash": source_hash,
+                }
+            )
+            if control.root is not None
+            else skilllearn_program_set_treatment_hash(())
+        )
+        treatment_hash = (
+            stable_hash(
+                {
+                    "control_source_hash": source_hash,
+                    "selected_source": source.resolve().relative_to(
+                        control.root.resolve()
+                    ).as_posix(),
+                }
+            )
+            if source is not None
+            else NO_SKILL_TREATMENT_HASH
+        )
         request = SkillLearnTrialRequest(
             item_id=item_id,
             family=item.family,
@@ -262,6 +302,8 @@ class PaperControlRunner:
             max_steps=self.backend.max_steps,
             manifest_hash=self.manifest.manifest_hash,
             program_id=None if control.root is None else control.id,
+            program_set_hash=program_set_hash,
+            treatment_hash=treatment_hash,
         )
         observation = self.backend.run(
             request,
@@ -378,6 +420,12 @@ class PaperControlRunner:
                 raise ValueError("compiled control routing manifest must be an object")
             if loaded.get("routing_version") != SKILL_ROUTING_VERSION:
                 raise ValueError("compiled control routing version mismatch")
+            if loaded.get("action_lowering_version") != SKILL_ACTION_LOWERING_VERSION:
+                raise ValueError("compiled control action lowering version mismatch")
+            if loaded.get("fallback_semantics") != SKILL_FALLBACK_SEMANTICS_VERSION:
+                raise ValueError("compiled control fallback semantics mismatch")
+            if loaded.get("external_verifier_exposed_to_agent") is not False:
+                raise ValueError("compiled control exposes the external verifier")
             self._routing_manifests[resolved] = loaded
             return loaded
 
@@ -419,6 +467,11 @@ def validate_freeze_receipt(
         raise PermissionError("freeze receipt protocol lock mismatch")
     if receipt.get("manifest_hash") != manifest.manifest_hash:
         raise PermissionError("freeze receipt manifest mismatch")
+    if receipt.get("code_fingerprint") != protocol_lock.get("code_fingerprint"):
+        raise PermissionError("freeze receipt code fingerprint mismatch")
+    locked_commit = dict(protocol_lock.get("git") or {}).get("commit")
+    if receipt.get("git_commit") != locked_commit:
+        raise PermissionError("freeze receipt git commit mismatch")
     evaluator_epoch = str(receipt.get("evaluator_epoch") or "")
     if not evaluator_epoch:
         raise PermissionError("freeze receipt evaluator epoch missing")
@@ -646,12 +699,6 @@ def main() -> None:
     parser.add_argument("--freeze-receipt", type=Path)
     parser.add_argument("--sealed-journal", type=Path)
     parser.add_argument("--limit", type=int)
-    parser.add_argument("--parallel-workers", type=int)
-    parser.add_argument(
-        "--retry-invalid",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-    )
     args = parser.parse_args()
     project_root = args.project_root.expanduser().resolve()
     load_dotenv(args.env_file)
@@ -661,14 +708,28 @@ def main() -> None:
     if not isinstance(lock, Mapping):
         raise ValueError("protocol lock must contain one JSON object")
     manifest = SplitManifest.read(args.manifest)
+    validate_protocol_lock_for_execution(
+        protocol,
+        lock,
+        manifest,
+        project_root,
+        args.benchmark_root,
+    )
     split = SplitName(args.split)
     receipt: Mapping[str, Any] | None = None
+    receipt_evaluator_epoch: str | None = None
     if args.freeze_receipt is not None:
         loaded_receipt = json.loads(args.freeze_receipt.read_text(encoding="utf-8"))
         if not isinstance(loaded_receipt, Mapping):
             raise ValueError("freeze receipt must contain one JSON object")
         receipt = loaded_receipt
     if receipt is not None:
+        receipt_evaluator_epoch = validate_freeze_receipt(
+            receipt,
+            protocol=protocol,
+            protocol_lock=lock,
+            manifest=manifest,
+        )
         if args.control:
             raise ValueError("use either --freeze-receipt controls or explicit --control values")
         controls = controls_from_freeze_receipt(receipt, split=split.value)
@@ -683,12 +744,8 @@ def main() -> None:
         if args.freeze_receipt is None or args.sealed_journal is None:
             raise PermissionError("sealed test requires --freeze-receipt and --sealed-journal")
         assert receipt is not None
-        evaluator_epoch = validate_freeze_receipt(
-            receipt,
-            protocol=protocol,
-            protocol_lock=lock,
-            manifest=manifest,
-        )
+        assert receipt_evaluator_epoch is not None
+        evaluator_epoch = receipt_evaluator_epoch
         open_sealed_journal(
             args.sealed_journal,
             protocol=protocol,
@@ -699,7 +756,9 @@ def main() -> None:
         )
         guard.freeze_archive()
     else:
-        evaluator_epoch = f"skilllearn-eval-{manifest.manifest_hash[:12]}"
+        evaluator_epoch = receipt_evaluator_epoch or (
+            f"skilllearn-eval-{manifest.manifest_hash[:12]}"
+        )
     item_ids = manifest.ids_for(split)
     if args.limit is not None:
         if args.limit <= 0:
@@ -712,9 +771,7 @@ def main() -> None:
         phase_name = "family_out_development" if secondary else "development"
     phase = protocol.payload["phases"][phase_name]
     repeats = int(phase["repeats"])
-    parallel_workers = args.parallel_workers or int(phase.get("parallel_workers") or 1)
-    if parallel_workers <= 0:
-        raise ValueError("parallel worker count must be positive")
+    parallel_workers = int(phase["parallel_workers"])
     sink = JsonlEventSink(args.events)
     prebuilt_cache = SkillLearnPrebuiltImageCache(
         args.benchmark_root,
@@ -754,7 +811,7 @@ def main() -> None:
         item_ids,
         split=split,
         repeats=repeats,
-        retry_invalid=args.retry_invalid,
+        retry_invalid=True,
         parallel_workers=parallel_workers,
         trace_id=f"paper-controls-{split.value}-{protocol.protocol_hash[:12]}",
     )

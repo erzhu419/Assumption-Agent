@@ -1,24 +1,38 @@
 {
-  "protocol_id": "assumption-agent-v2-skilllearn-paper-v3-ruoli-gpt54mini",
-  "protocol_version": "3.0.0",
+  "protocol_id": "assumption-agent-v2-skilllearn-paper-v3.1-offline86-ruoli-gpt54mini",
+  "protocol_version": "3.1.0",
   "benchmark": "skilllearnbench",
   "benchmark_subset": {
-    "policy": "exclude_external_credentials_by_family_v1",
-    "eligible_instance_count": 95,
-    "excluded_instance_count": 5,
-    "excluded_families": ["github-repo-analytics"],
-    "excluded_required_env_names": ["GH_TOKEN"]
+    "policy": "exclude_external_credentials_and_offline_blockers_v1",
+    "eligible_instance_count": 86,
+    "eligible_family_count": 16,
+    "excluded_instance_count": 14,
+    "excluded_families": [
+      "fix-security-bug",
+      "github-repo-analytics",
+      "nlp-paper-reproduction",
+      "python-scala-translation"
+    ],
+    "excluded_item_ids": ["weighted-gdp-calculation-2"],
+    "excluded_required_env_names": ["GH_TOKEN"],
+    "offline_blocked_families": [
+      "fix-security-bug",
+      "nlp-paper-reproduction",
+      "python-scala-translation"
+    ],
+    "offline_blocked_item_ids": ["weighted-gdp-calculation-2"]
   },
-  "primary_manifest": "manifests/skilllearnbench_instance_holdout_credential_independent_v1.json",
-  "secondary_manifest": "manifests/skilllearnbench_family_out_credential_independent_v1.json",
+  "primary_manifest": "manifests/skilllearnbench_instance_holdout_offline_ready_v1.json",
+  "secondary_manifest": "manifests/skilllearnbench_family_out_offline_ready_v1.json",
+  "offline_readiness_receipt": "manifests/skilllearn_offline_readiness_receipt_v1.json",
   "expected_primary_counts": {
-    "train": 42,
-    "validation": 18,
-    "test": 35
+    "train": 38,
+    "validation": 16,
+    "test": 32
   },
   "expected_secondary_counts": {
-    "train": 54,
-    "validation": 14,
+    "train": 48,
+    "validation": 11,
     "test": 27
   },
   "agent_id": "codex",
@@ -52,7 +66,7 @@
     "trial_network_budget_policy": "docker_stats_hard_byte_cap_v1",
     "trial_network_byte_limit": 33554432,
     "prebuilt_image_policy": "per_item_base_shared_agent_runtime_v3",
-    "development_prewarm": "train_validation_images_and_offline_verifiers_v2",
+    "development_prewarm": "all_manifest_images_and_offline_verifiers_v3",
     "runner_agent_registry_isolation": "runner_local_agent_registry_v1",
     "trial_timeout_policy": "no_fixed_trial_wall_or_container_timeout_v2",
     "provider_failure_policy": "codex_jsonl_terminal_error_circuit_v1",
@@ -63,7 +77,9 @@
     "proposal_candidate_selection": "train_static_support_then_complexity_v1",
     "runtime_candidate_kinds": ["task", "policy"],
     "evaluator_hypothesis_mode": "separate_epoch_challenger_not_in_primary_runtime",
-    "skill_routing": "per_item_trigger_routing_v1",
+    "skill_routing": "per_item_trigger_routing_v2",
+    "skill_action_lowering": "skilllearn_prompt_directive_lowering_v1",
+    "skill_fallback_semantics": "baseline_on_nonactivation_only_v1",
     "verifier_isolation": "post_agent_verifier_copy_v1",
     "verifier_execution_receipt_policy": "pytest_ctrf_reward_and_semantic_prelude_receipt_v2",
     "offline_verifier_policy": "family_profile_readonly_volume_v3",
@@ -71,6 +87,7 @@
     "within_pair_execution": "sequential_balanced_order"
   },
   "evolution": {
+    "minimum_trigger_support": 2,
     "max_generations": 3,
     "max_consecutive_non_promotions": 2,
     "proposal_candidates_per_generation": 3,
@@ -82,24 +99,27 @@
       "train_count": 4,
       "validation_count": 2,
       "repeats": 1,
+      "parallel_workers": 4,
+      "max_generations": 1,
+      "max_consecutive_non_promotions": 1,
       "claim_eligible": false
     },
     "development": {
-      "train_count": 42,
-      "validation_count": 18,
+      "train_count": 38,
+      "validation_count": 16,
       "repeats": 1,
       "parallel_workers": 4,
       "claim_eligible": false
     },
     "family_out_development": {
-      "train_count": 54,
-      "validation_count": 14,
+      "train_count": 48,
+      "validation_count": 11,
       "repeats": 1,
       "parallel_workers": 4,
       "claim_eligible": false
     },
     "sealed_test": {
-      "test_count": 35,
+      "test_count": 32,
       "repeats": 3,
       "parallel_workers": 4,
       "single_access": true,
@@ -152,12 +172,16 @@
     }
   ],
   "promotion": {
+    "metric": "task_success",
     "confidence": 0.9,
     "minimum_pairs": 10,
     "minimum_net_gain_count": 1,
     "minimum_activation_rate": 0.1,
+    "minimum_effect_lower_bound": 0.0,
     "maximum_harm_rate": 0.05,
-    "baseline_fallback": "preserve_baseline"
+    "maximum_cost_ratio": 1.5,
+    "baseline_safety_policy": "prospective_abstention_with_paired_guard_v1",
+    "candidate_threshold_policy": "candidate_may_only_tighten_v1"
   },
   "statistics": {
     "primary_metric": "task_success",

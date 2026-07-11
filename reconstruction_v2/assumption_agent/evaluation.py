@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import statistics
 from dataclasses import dataclass
-from typing import Protocol, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 
 from .events import Event, EventSink, NullEventSink
 from .models import (
@@ -228,12 +228,165 @@ def summarize_pairs(pairs: Sequence[CounterfactualPair]) -> PairSummary:
     )
 
 
+RUNTIME_BASELINE_PRESERVATION = "runtime_baseline_preservation_v1"
+PROSPECTIVE_ABSTENTION_PAIRED_GUARD = (
+    "prospective_abstention_with_paired_guard_v1"
+)
+CANDIDATE_MAY_ONLY_TIGHTEN = "candidate_may_only_tighten_v1"
+
+
 @dataclass(frozen=True)
 class PromotionGateSpec:
-    minimum_pairs: int = 20
-    confidence: float = 0.9
-    minimum_net_gain_count: int = 1
-    minimum_activation_rate: float = 0.1
+    """Evaluator-owned promotion contract.
+
+    A hypothesis may request stricter effect, harm, or cost limits, but it may
+    never relax the frozen evaluator limits represented by this spec.
+    """
+
+    metric: str
+    minimum_pairs: int
+    confidence: float
+    minimum_net_gain_count: int
+    minimum_activation_rate: float
+    minimum_effect_lower_bound: float
+    maximum_harm_rate: float
+    maximum_cost_ratio: float
+    baseline_safety_policy: str
+    candidate_threshold_policy: str
+
+    def __post_init__(self) -> None:
+        if not self.metric.strip():
+            raise ValueError("promotion metric is missing")
+        numeric_values = (
+            self.confidence,
+            self.minimum_activation_rate,
+            self.minimum_effect_lower_bound,
+            self.maximum_harm_rate,
+            self.maximum_cost_ratio,
+        )
+        if not all(math.isfinite(value) for value in numeric_values):
+            raise ValueError("promotion numeric thresholds must be finite")
+        if self.minimum_pairs <= 0:
+            raise ValueError("promotion minimum pairs must be positive")
+        if not 0.5 < self.confidence < 1.0:
+            raise ValueError("promotion confidence must be between 0.5 and 1.0")
+        if self.minimum_net_gain_count < 0:
+            raise ValueError("promotion minimum net gain cannot be negative")
+        if not 0.0 <= self.minimum_activation_rate <= 1.0:
+            raise ValueError("promotion activation rate must be between zero and one")
+        if not -1.0 <= self.minimum_effect_lower_bound <= 1.0:
+            raise ValueError("promotion effect lower bound must be between -1 and 1")
+        if not 0.0 <= self.maximum_harm_rate <= 1.0:
+            raise ValueError("promotion harm rate must be between zero and one")
+        if self.maximum_cost_ratio < 1.0:
+            raise ValueError("promotion cost ratio cannot be below one")
+        if self.baseline_safety_policy not in {
+            RUNTIME_BASELINE_PRESERVATION,
+            PROSPECTIVE_ABSTENTION_PAIRED_GUARD,
+        }:
+            raise ValueError("unknown promotion baseline safety policy")
+        if self.candidate_threshold_policy != CANDIDATE_MAY_ONLY_TIGHTEN:
+            raise ValueError("unknown candidate threshold policy")
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, Any]) -> "PromotionGateSpec":
+        return cls(
+            metric=str(payload["metric"]),
+            minimum_pairs=int(payload["minimum_pairs"]),
+            confidence=float(payload["confidence"]),
+            minimum_net_gain_count=int(payload["minimum_net_gain_count"]),
+            minimum_activation_rate=float(payload["minimum_activation_rate"]),
+            minimum_effect_lower_bound=float(
+                payload["minimum_effect_lower_bound"]
+            ),
+            maximum_harm_rate=float(payload["maximum_harm_rate"]),
+            maximum_cost_ratio=float(payload["maximum_cost_ratio"]),
+            baseline_safety_policy=str(payload["baseline_safety_policy"]),
+            candidate_threshold_policy=str(payload["candidate_threshold_policy"]),
+        )
+
+    def to_dict(self) -> dict[str, float | int | str]:
+        return {
+            "metric": self.metric,
+            "minimum_pairs": self.minimum_pairs,
+            "confidence": self.confidence,
+            "minimum_net_gain_count": self.minimum_net_gain_count,
+            "minimum_activation_rate": self.minimum_activation_rate,
+            "minimum_effect_lower_bound": self.minimum_effect_lower_bound,
+            "maximum_harm_rate": self.maximum_harm_rate,
+            "maximum_cost_ratio": self.maximum_cost_ratio,
+            "baseline_safety_policy": self.baseline_safety_policy,
+            "candidate_threshold_policy": self.candidate_threshold_policy,
+        }
+
+    def effective_thresholds(
+        self,
+        program: HypothesisProgram,
+    ) -> dict[str, float]:
+        return self.effective_thresholds_from_candidate(
+            {
+                "minimum_effect_lower_bound": program.expected_effect.minimum_delta,
+                "maximum_harm_rate": program.expected_effect.maximum_harm_rate,
+                "maximum_cost_ratio": program.expected_effect.maximum_cost_ratio,
+            }
+        )
+
+    def effective_thresholds_from_candidate(
+        self,
+        candidate_thresholds: Mapping[str, float],
+    ) -> dict[str, float]:
+        return {
+            "minimum_effect_lower_bound": max(
+                self.minimum_effect_lower_bound,
+                candidate_thresholds["minimum_effect_lower_bound"],
+            ),
+            "maximum_harm_rate": min(
+                self.maximum_harm_rate,
+                candidate_thresholds["maximum_harm_rate"],
+            ),
+            "maximum_cost_ratio": min(
+                self.maximum_cost_ratio,
+                candidate_thresholds["maximum_cost_ratio"],
+            ),
+        }
+
+
+def promotion_summary_blockers(
+    spec: PromotionGateSpec,
+    summary: PairSummary,
+    *,
+    effective_thresholds: Mapping[str, float],
+) -> tuple[str, ...]:
+    """Return the evaluator-owned blockers derivable from a pair summary."""
+
+    blockers: list[str] = []
+    if summary.pair_count < spec.minimum_pairs:
+        blockers.append("insufficient_paired_validation_rows")
+    if summary.gain_count - summary.harm_count < spec.minimum_net_gain_count:
+        blockers.append("insufficient_net_gain_count")
+    if summary.activation_rate < spec.minimum_activation_rate:
+        blockers.append("insufficient_runtime_activation")
+    if (
+        spec.baseline_safety_policy == RUNTIME_BASELINE_PRESERVATION
+        and summary.baseline_preserved_count != summary.pair_count
+    ):
+        blockers.append("slow_baseline_not_preserved")
+    if summary.invalid_pair_count:
+        blockers.append("invalid_counterfactual_pairs")
+    if summary.provider_mismatch_count:
+        blockers.append("counterfactual_provider_mismatch")
+    if summary.budget_mismatch_count:
+        blockers.append("counterfactual_budget_mismatch")
+    if summary.harm_rate > effective_thresholds["maximum_harm_rate"]:
+        blockers.append("harm_rate_exceeded")
+    if summary.cost_ratio > effective_thresholds["maximum_cost_ratio"]:
+        blockers.append("cost_ratio_exceeded")
+    if (
+        summary.effect_lower_bound(spec.confidence)
+        < effective_thresholds["minimum_effect_lower_bound"]
+    ):
+        blockers.append("paired_effect_lower_bound_below_target")
+    return tuple(blockers)
 
 
 @dataclass(frozen=True)
@@ -244,7 +397,11 @@ class PromotionDecision:
     effect_lower_bound: float
     evaluator_epoch: str
     confidence: float
-    policy: str = "paired_validation_lower_bound_v1"
+    promotion_contract: Mapping[str, float | int | str]
+    candidate_metric: str
+    candidate_thresholds: Mapping[str, float]
+    effective_thresholds: Mapping[str, float]
+    policy: str = "evaluator_owned_paired_validation_v2"
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -253,13 +410,17 @@ class PromotionDecision:
             "summary": self.summary.to_dict(confidence=self.confidence),
             "effect_lower_bound": self.effect_lower_bound,
             "evaluator_epoch": self.evaluator_epoch,
+            "promotion_contract": dict(self.promotion_contract),
+            "candidate_metric": self.candidate_metric,
+            "candidate_thresholds": dict(self.candidate_thresholds),
+            "effective_thresholds": dict(self.effective_thresholds),
             "policy": self.policy,
         }
 
 
 class PromotionGate:
-    def __init__(self, spec: PromotionGateSpec | None = None, *, event_sink: EventSink | None = None) -> None:
-        self.spec = spec or PromotionGateSpec()
+    def __init__(self, spec: PromotionGateSpec, *, event_sink: EventSink | None = None) -> None:
+        self.spec = spec
         self.event_sink = event_sink or NullEventSink()
 
     def evaluate(
@@ -272,6 +433,12 @@ class PromotionGate:
     ) -> PromotionDecision:
         summary = summarize_pairs(pairs)
         lower_bound = summary.effect_lower_bound(self.spec.confidence)
+        candidate_thresholds = {
+            "minimum_effect_lower_bound": program.expected_effect.minimum_delta,
+            "maximum_harm_rate": program.expected_effect.maximum_harm_rate,
+            "maximum_cost_ratio": program.expected_effect.maximum_cost_ratio,
+        }
+        effective = self.spec.effective_thresholds(program)
         blockers: list[str] = []
         if not pairs or any(pair.split is not SplitName.VALIDATION for pair in pairs):
             blockers.append("promotion_requires_validation_pairs_only")
@@ -279,26 +446,13 @@ class PromotionGate:
             blockers.append("mixed_or_wrong_evaluator_epoch")
         if sealed_test_accessed:
             blockers.append("sealed_test_accessed_before_promotion")
-        if summary.pair_count < self.spec.minimum_pairs:
-            blockers.append("insufficient_paired_validation_rows")
-        if summary.gain_count - summary.harm_count < self.spec.minimum_net_gain_count:
-            blockers.append("insufficient_net_gain_count")
-        if summary.activation_rate < self.spec.minimum_activation_rate:
-            blockers.append("insufficient_runtime_activation")
-        if summary.baseline_preserved_count != summary.pair_count:
-            blockers.append("slow_baseline_not_preserved")
-        if summary.invalid_pair_count:
-            blockers.append("invalid_counterfactual_pairs")
-        if summary.provider_mismatch_count:
-            blockers.append("counterfactual_provider_mismatch")
-        if summary.budget_mismatch_count:
-            blockers.append("counterfactual_budget_mismatch")
-        if summary.harm_rate > program.expected_effect.maximum_harm_rate:
-            blockers.append("harm_rate_exceeded")
-        if summary.cost_ratio > program.expected_effect.maximum_cost_ratio:
-            blockers.append("cost_ratio_exceeded")
-        if lower_bound < program.expected_effect.minimum_delta:
-            blockers.append("paired_effect_lower_bound_below_target")
+        blockers.extend(
+            promotion_summary_blockers(
+                self.spec,
+                summary,
+                effective_thresholds=effective,
+            )
+        )
         decision = PromotionDecision(
             allowed=not blockers,
             blockers=tuple(blockers),
@@ -306,6 +460,10 @@ class PromotionGate:
             effect_lower_bound=lower_bound,
             evaluator_epoch=program.evaluator_epoch,
             confidence=self.spec.confidence,
+            promotion_contract=self.spec.to_dict(),
+            candidate_metric=program.expected_effect.metric,
+            candidate_thresholds=candidate_thresholds,
+            effective_thresholds=effective,
         )
         self.event_sink.emit(
             Event(
@@ -318,6 +476,10 @@ class PromotionGate:
                     "allowed": decision.allowed,
                     "blockers": list(decision.blockers),
                     "pair_summary": summary.to_dict(confidence=self.spec.confidence),
+                    "promotion_contract": self.spec.to_dict(),
+                    "candidate_metric": program.expected_effect.metric,
+                    "candidate_thresholds": candidate_thresholds,
+                    "effective_thresholds": effective,
                     "evaluator_epoch": program.evaluator_epoch,
                     "sealed_test_accessed": sealed_test_accessed,
                 },

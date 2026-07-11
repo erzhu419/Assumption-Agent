@@ -6,22 +6,21 @@
 - Structured `HypothesisProgram` with trigger, anti-trigger, action DAG, expected effect, verifier, fallback, lineage, and evaluator epoch.
 - Runtime actions that actually enable, disable, and prioritize lanes or inject executable operator steps.
 - Baseline preservation in the internal lane runtime; external SkillLearn trials use pre-execution abstention plus a paired harm gate rather than post-verifier rollback.
-- JSON-only model proposal adapters with protocol-approved Spark and `gpt-5.4-mini` routes.
+- JSON-only model proposal and repair requests on the protocol-owned `gpt-5.4-mini` route.
 - Active v3 single-provider routing through ruoli `gpt-5.4-mini`, with a per-run circuit breaker and provider provenance.
 - A route policy embedded in experiment plans, provider fingerprints, and fairness fingerprints so every raw/agent arm uses one model and provider mode.
 - Protocol-bound Codex custom Responses-provider commands for v3, with `/v1` normalization, ignored user config, ephemeral turns, and no credential in command/event provenance.
-- ChatGPT subscription reuse through the local official Codex app-server transport; legacy direct OAuth is not used.
-- Isolated ephemeral proposal turns with strict JSON Schemas, empty workspace roots, no accepted tools, and a child-environment secret allowlist.
-- SkillLearn Codex trials use a separate subscription-auth mode: an ephemeral Codex home is mounted into the task container, API endpoint variables are omitted, and the upstream runner is restored after every call.
+- Direct schema-constrained proposal requests through `OpenAICompatibleProposalModel`; the API key is read from environment for the Authorization header and is never persisted.
+- SkillLearn task trials use the protocol-bound Codex custom provider inside the task container; proposal transport and trial execution remain distinct.
 - Recursive validation that asks the proposal model for a child repair after failed checks.
 - Same-task policy-off/policy-on counterfactual execution.
-- Promotion from paired validation effect, harm, activation, and cost rather than failure frequency.
+- Protocol-owned promotion from paired validation effect, harm, activation, and cost rather than failure frequency; candidate-declared limits may only tighten the frozen contract.
 - Archive nodes representing complete active-program configurations.
 - Frozen evaluator epochs, anchor lower-bound challenger comparison, and selective score invalidation.
 - Train/validation/sealed-test access guard.
 - SkillLearnBench inventory, instance-holdout and family-out manifests.
-- Credential-independent 95-item paper subset plus manifest-scoped `required_env` hard preflight.
-- Compiler from promoted hypothesis programs to SkillLearnBench-compatible `SKILL.md` files.
+- Offline-ready 86-item paper subset preserving the earlier split assignment, plus manifest-scoped credential, verifier-payload, and offline-profile hard preflight.
+- Backend-specific compiler from promoted hypothesis programs to SkillLearnBench-compatible `SKILL.md` files: four prompt/self-check operations lower explicitly and six unsupported typed operations fail closed.
 - SkillLearnBench trial contracts and a sanitized adapter around the upstream Docker verifier runner.
 - Failed train-only trials converted into semantic residuals with task instructions available to proposal but absent from persistent logs and runtime triggers.
 - Validation and sealed-test compiler targeting, including family-out transfer to unseen validation families.
@@ -32,12 +31,11 @@
 - Paper protocol lock, recursive/no-recursive archive freeze, content-hashed compiled controls, resumable matched controls, sealed-access journal, and item-clustered paper statistics.
 - Post-agent verifier injection: `/tests` is absent while the model acts and copied into the container only after agent exit.
 - Content-addressed per-item base images with oracle skills excluded, plus one digest-pinned, read-only `codex-cli 0.144.1` runtime volume.
-- Zero-model-cost train/validation image prewarm with bounded retries and a manifest-bound provenance receipt.
+- Zero-model-cost all-manifest image/offline-verifier prewarm with bounded retries and a manifest-bound provenance receipt; sealed scoring and agent execution remain disabled.
 - Bounded four-worker train/counterfactual/control execution across items, with every same-item variant sequence kept serial.
-- Runner-local deep copies of the upstream agent registry, eliminating parallel subscription setup/restore races.
+- Runner-local deep copies of the upstream agent registry, eliminating parallel provider setup/restore races.
 - No-fixed-timeout policy for active agent/verifier stages and the trial-container lifetime, with legacy timeout results classified as invalid evidence.
 - Structured Codex terminal-error detection, a shared provider-failure circuit, and all-valid training evidence before proposal.
-- Bounded, audited cleanup retries for ephemeral subscription-auth homes.
 - Shared first-generation evidence and root checkpoint for the recursive versus no-recursive causal ablation.
 - Behavior-identical validation replay across paired ablation arms, preventing model resampling variance from appearing as a recursive-repair effect.
 - Exact-request root proposal replay across generations and arms, so identical search state cannot produce different roots through model resampling.
@@ -49,22 +47,24 @@
 - Runtime-kind guard: evaluator hypotheses cannot masquerade as compiled agent skills and require a separate anchored epoch challenger.
 - Per-item compiled skill routing, preventing a trigger match on one item from leaking to sibling items in the same family.
 - Trial provenance for base image key/ID, runtime key/version, cache reuse, withheld verifier mount, and post-agent verifier materialization.
-- Explicit local-evidence/network-scope provenance: task and verifier data are local, the model endpoint is online, and unenforced egress/dependency-cache limits are logged honestly.
+- Provider-only container egress, pinned endpoint host mapping without external DNS, fail-closed prebuilt dependency caches, a 32 MiB network fuse, and `--network none` verifier/runtime preparation.
 - Per-attempt model audit events; non-retryable HTTP authentication errors stop after one request.
 - Candidate-local recursive-repair failure isolation and terminal root-proposal failure reports; any such failure blocks that generation's validation and promotion claim.
 - Structured in-memory or JSONL events for proposal, validation, runtime, counterfactual, promotion, archive, evaluator transition, and benchmark compilation.
 
 ## Evidence Scope
 
-The 64 offline tests prove that the learning loop is connected, that a promoted hypothesis changes future runtime behavior, and that the same lifecycle works against SkillLearnBench's real inventory with a fake external trial backend. They also cover invalid-pair blocking, all-valid training evidence before proposal, behavior-identical train replay, exact-request root proposal replay and state-change misses, same-request train/validation clean replacement, invalid-bundle cache rejection, candidate-local repair failure, root-proposal terminal reporting, failure-contaminated promotion blocking, provider circuit breaking, structured Codex terminal errors, split isolation, provider failover, strict Codex schemas, runtime tool rejection, trigger-vocabulary isolation, all-root train-only selection, credential-independent manifests, required-env blocking, prewarm receipt binding, ephemeral subscription auth and cleanup retry, runner-local registry isolation, post-agent verifier injection, active-stage timeout removal, timeout-row invalidation, content-addressed environment caching, shared-checkpoint ablation, behavior-identical validation replay and behavior-different cache misses, ordered item parallelism, per-item skill routing, runtime mismatch blocking, content-bound freeze receipts, invalid-only retries, paper statistics, the ruoli model route, endpoint-origin normalization, custom-provider command sanitization, provider-scoped error labels, and route/config drift rejection. They do not prove real benchmark improvement.
+The 133 offline tests prove that the learning loop is connected, that a promoted hypothesis changes future internal runtime behavior, and that the same lifecycle works against SkillLearnBench's real inventory with a fake external trial backend. They additionally cover evaluator-owned threshold composition, strict paper-protocol and freeze provenance, backend-specific action lowering, hidden-verifier non-exposure, lowered-treatment replay identity, observed versus declared fallback semantics, and stable filtering of the offline-ready manifests without re-splitting. The model-free readiness audit passes 7/7 active profiles, 15/15 train-family probes, and an all-selected-item static preflight with `blockers=[]`. A separate cache-only runtime prewarm now passes 86/86 selected images/runtimes with 47 unique images and seven offline verifier runtimes. These checks do not prove real benchmark improvement.
 
-Docker Engine 29.1.3 is installed and the real upstream runner, historical ChatGPT subscription auth, Spark model canary, and container canary have passed. The pinned shared-runtime raw canary completed in 43.7 seconds with `agent_exit=0`, `verifier_exit=0`, no timeout, and matching Spark/runtime/image provenance. Its ordered audit events prove that the verifier mount was withheld during agent execution and materialized only afterward. The task result was wrong, so this is infrastructure evidence only. Dataclaw is absent but optional for task-success execution; it is needed only for parts of the separate trajectory/skill post-processing pipeline.
+The active paper path has one execution contract. Before any development, freeze, validation-control, or sealed-control model work, it revalidates the lock content, protocol/evolution/promotion mappings, readiness receipt, model/provider/origin, egress and network budget, provider readiness, benchmark payload fingerprint, code fingerprint, clean scoped Git state, and locked commit. Agent ID, step budget, workers, retries, trigger support, generation budget, and candidate count come only from the protocol.
 
-A prior Spark subscription canary returned successfully through local Codex login, but the subscription is currently quota-exhausted. The replaced ruoli credential passed sanitized `gpt-5.4-mini` probes against both chat-completions and Responses on 2026-07-10. A host Codex custom-provider canary then completed over the Responses route with user config ignored, WebSockets disabled, and no OpenAI login. These checks prove endpoint and Codex transport compatibility, not benchmark quality or independent verification of the provider's internal model mapping.
+Docker Engine 29.1.3 is installed and the real upstream runner and container canaries have passed. Historical Spark/subscription canaries are retained only as diagnostic evidence and have no active protocol manifest in this tree. Dataclaw is absent but optional for task-success execution; it is needed only for parts of the separate trajectory/skill post-processing pipeline.
 
-A real exhausted-quota canary now returns `subscription_usage_limit`, opens the shared circuit, skips verifier materialization, completes ephemeral-auth cleanup, and records the container-lifetime rewrite. This is failure-semantics evidence only; the canary is not a benchmark row and makes no performance claim.
+The ruoli credential passed sanitized `gpt-5.4-mini` transport probes on 2026-07-10, and the current preflight reports the single OpenAI-compatible provider ready. This proves endpoint/transport availability, not benchmark quality or independent verification of the provider's internal model mapping.
 
-The v2 proposal API can be injected directly with `ASSUMPTION_V2_*` variables. For local continuity, `--env-file ../.env` also maps the existing `GPT5_*` / `RUOLI_*` aliases into `ASSUMPTION_V2_API_BASE` and `ASSUMPTION_V2_API_KEY` without persisting secrets. `ASSUMPTION_V2_PROVIDER_CHAIN` controls the fixed provider order, and `ASSUMPTION_V2_CODEX_PATH` optionally selects the local Codex binary. The active v3 protocol locks `gpt-5.4-mini` to `openai_compatible`; the retained v2 protocol locks Spark to subscription mode. Other models require the explicit diagnostic-only override.
+Historical exhausted-quota and authentication canaries remain failure-semantics diagnostics only; they are not benchmark rows and make no performance claim.
+
+The proposal API uses `ASSUMPTION_V2_*` variables. For local continuity, `--env-file ../.env` maps the existing `GPT5_*` / `RUOLI_*` aliases into `ASSUMPTION_V2_API_BASE` and `ASSUMPTION_V2_API_KEY` without persisting secrets. The active v3 protocol locks `gpt-5.4-mini` to one `openai_compatible` route; no alternate active provider or model is allowed.
 
 No accuracy or superiority claim exists yet. Five historical Spark development attempts exposed credential, image-build, registry-race, fixed-timeout, container-lifetime, and quota/error-classification defects; all are invalid diagnostics and sealed test remained untouched. The first v3 smoke also produced four invalid train rows because Codex ignored a bare `OPENAI_BASE_URL` and contacted the official OpenAI endpoint with the third-party credential. It generated no proposal and touched no sealed item; its sanitized artifacts are retained under `artifacts/paper_primary_v3_ruoli_gpt54mini/diagnostics/f2a7a9b0_pre_custom_codex_provider`, with the four upstream `auth.json` credential files deleted. A full literal scan of tracked V2 files and the v3 artifact tree reports zero remaining configured-key values. V3 now injects an explicit custom provider instead of relying on that environment variable.
 

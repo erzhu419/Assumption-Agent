@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import Any, Mapping, Protocol, Sequence
 
 from .events import Event, EventSink, NullEventSink
@@ -14,6 +15,22 @@ from .models import (
 from .proposer import HypothesisProposalCallError, StructuredHypothesisProposer
 
 
+ALL_ACTION_OPERATIONS = frozenset(
+    {
+        "enable_lane",
+        "disable_lane",
+        "prioritize_lane",
+        "set_parameter",
+        "require_verifier",
+        "abstain",
+        "execute_step",
+        "check_condition",
+        "produce_artifact",
+        "request_evidence",
+    }
+)
+
+
 @dataclass(frozen=True)
 class ValidationContext:
     evaluator_epoch: str
@@ -25,6 +42,104 @@ class ValidationContext:
     )
     allowed_runtime_kinds: frozenset[HypothesisKind] = field(
         default_factory=lambda: frozenset(HypothesisKind)
+    )
+    allowed_action_operations: frozenset[str] = field(
+        default_factory=lambda: ALL_ACTION_OPERATIONS
+    )
+    action_semantics: str = "typed_runtime_action_v1"
+    external_evidence_is_hidden: bool = False
+
+
+def backend_action_contract_issues(
+    program: HypothesisProgram,
+    *,
+    allowed_operations: frozenset[str],
+    external_evidence_is_hidden: bool,
+) -> tuple[str, ...]:
+    """Return structural backend-lowering issues for one action graph.
+
+    SkillLearn's external verifier and paired policy-off/on outcomes are not
+    available while the task agent is running.  This check deliberately uses
+    structured action fields rather than trusting a trailing prose warning in
+    the compiled skill.
+    """
+
+    issues: list[str] = []
+    external_anchor = _canonical_action_reference(program.verifier.anchor_id)
+    external_evidence_references = tuple(
+        reference
+        for value in program.verifier.required_evidence
+        if (reference := _canonical_action_reference(value))
+    )
+    for action in program.action_graph:
+        if action.operation not in allowed_operations:
+            issues.append(f"unsupported_action_operation:{action.operation}")
+        if not external_evidence_is_hidden:
+            continue
+        references = (
+            action.target,
+            *_nested_action_reference_strings(action.value),
+        )
+        if any(
+            _is_hidden_external_reference(
+                value,
+                external_anchor=external_anchor,
+                external_evidence_references=external_evidence_references,
+            )
+            for value in references
+        ):
+            issues.append(f"hidden_external_evidence_reference:{action.id}")
+    return tuple(sorted(set(issues)))
+
+
+def _nested_action_reference_strings(value: Any) -> tuple[str, ...]:
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, Mapping):
+        return tuple(
+            child
+            for key, item in value.items()
+            for child in (
+                *_nested_action_reference_strings(key),
+                *_nested_action_reference_strings(item),
+            )
+        )
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return tuple(
+            child
+            for item in value
+            for child in _nested_action_reference_strings(item)
+        )
+    return ()
+
+
+def _canonical_action_reference(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(value).lower()).strip("_")
+
+
+def _is_hidden_external_reference(
+    value: str,
+    *,
+    external_anchor: str,
+    external_evidence_references: tuple[str, ...],
+) -> bool:
+    normalized = _canonical_action_reference(value)
+    if not normalized:
+        return False
+    if external_anchor and external_anchor in normalized:
+        return True
+    if any(reference in normalized for reference in external_evidence_references):
+        return True
+    compact = normalized.replace("_", "")
+    return any(
+        marker in normalized or marker.replace("_", "") in compact
+        for marker in (
+            "policy_off",
+            "policy_on",
+            "benchmark_verifier",
+            "hidden_verifier",
+            "external_task_verifier",
+        )
     )
 
 
@@ -175,6 +290,21 @@ class RuntimeActionCheck:
     name = "runtime_action"
 
     def evaluate(self, program: HypothesisProgram, context: ValidationContext) -> CheckResult:
+        contract_issues = backend_action_contract_issues(
+            program,
+            allowed_operations=context.allowed_action_operations,
+            external_evidence_is_hidden=context.external_evidence_is_hidden,
+        )
+        unsupported_operations = sorted(
+            issue.split(":", 1)[1]
+            for issue in contract_issues
+            if issue.startswith("unsupported_action_operation:")
+        )
+        hidden_external_reference_action_ids = sorted(
+            issue.split(":", 1)[1]
+            for issue in contract_issues
+            if issue.startswith("hidden_external_evidence_reference:")
+        )
         lane_actions = [
             action
             for action in program.action_graph
@@ -191,29 +321,39 @@ class RuntimeActionCheck:
             action.operation == "disable_lane" and action.target == context.baseline_lane
             for action in lane_actions
         )
-        runtime_mutations = [
+        lowerable_actions = [
             action
             for action in program.action_graph
-            if action.operation in {
-                "enable_lane",
-                "disable_lane",
-                "prioritize_lane",
-                "set_parameter",
-                "require_verifier",
-                "abstain",
-                "execute_step",
-                "check_condition",
-                "produce_artifact",
-                "request_evidence",
-            }
+            if action.operation in context.allowed_action_operations
         ]
-        passed = bool(runtime_mutations) and not unknown_lanes and not disables_baseline
+        passed = (
+            bool(lowerable_actions)
+            and not contract_issues
+            and not unknown_lanes
+            and not disables_baseline
+        )
         return CheckResult(
             check=self.name,
             passed=passed,
-            reason="runtime_action_is_executable" if passed else "runtime_action_not_executable",
+            reason=(
+                "action_graph_lowerable_for_backend"
+                if passed
+                else "action_graph_not_lowerable_for_backend"
+            ),
             evidence={
-                "runtime_mutation_count": len(runtime_mutations),
+                "lowerable_action_count": len(lowerable_actions),
+                "unsupported_operations": unsupported_operations,
+                "hidden_external_reference_action_ids": (
+                    hidden_external_reference_action_ids
+                ),
+                "action_contract_issues": list(contract_issues),
+                "allowed_action_operations": sorted(
+                    context.allowed_action_operations
+                ),
+                "action_semantics": context.action_semantics,
+                "external_evidence_is_hidden": (
+                    context.external_evidence_is_hidden
+                ),
                 "unknown_lanes": unknown_lanes,
                 "disables_baseline": disables_baseline,
                 "baseline_lane": context.baseline_lane,
@@ -460,6 +600,15 @@ class RecursiveValidationEngine:
                     "runtime_candidate_kinds": sorted(
                         kind.value for kind in context.allowed_runtime_kinds
                     ),
+                    "action_contract": {
+                        "allowed_action_operations": sorted(
+                            context.allowed_action_operations
+                        ),
+                        "semantics": context.action_semantics,
+                        "external_evidence_is_hidden": (
+                            context.external_evidence_is_hidden
+                        ),
+                    },
                     "evaluator_hypotheses_require_separate_epoch_challenger": True,
                 },
                 trace_id=trace_id,

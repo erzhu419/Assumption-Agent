@@ -25,7 +25,12 @@ from assumption_agent.benchmarks import (
     TrainingEvidenceReplayCache,
     TrialVariant,
 )
-from assumption_agent.evaluation import PromotionGate, PromotionGateSpec
+from assumption_agent.evaluation import (
+    CANDIDATE_MAY_ONLY_TIGHTEN,
+    PROSPECTIVE_ABSTENTION_PAIRED_GUARD,
+    PromotionGate,
+    PromotionGateSpec,
+)
 from assumption_agent.evolution import CounterfactualEvidenceReplayCache
 from assumption_agent.events import MemoryEventSink
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
@@ -47,6 +52,9 @@ from assumption_agent.benchmarks.offline_verifier import (
     OfflineVerifierRuntime,
 )
 from assumption_agent.benchmarks.skilllearn_experiment import _run_paired_arms
+from assumption_agent.benchmarks.skilllearn_compiler import (
+    skilllearn_program_treatment_hash,
+)
 from assumption_agent.models import HypothesisProgram, HypothesisStatus, SplitName
 from assumption_agent.proposer import StructuredHypothesisProposer
 from assumption_agent.splits import (
@@ -753,6 +761,16 @@ def test_real_manifest_lifecycle_promotes_and_seals_test(tmp_path: Path) -> None
 
     assert result.evolution is not None
     assert result.evolution.promoted is True
+    assert result.evolution.promotion_decision.summary.baseline_preserved_count == 0
+    assert (
+        result.evolution.promotion_decision.promotion_contract[
+            "baseline_safety_policy"
+        ]
+        == PROSPECTIVE_ABSTENTION_PAIRED_GUARD
+    )
+    assert result.to_dict()["promotion_decision"] == (
+        result.evolution.promotion_decision.to_dict()
+    )
     assert len(result.residuals) == 4
     assert all(row.context["task_instruction"] for row in result.residuals)
     assert all(row.split.value == "train" for row in result.residuals)
@@ -761,6 +779,9 @@ def test_real_manifest_lifecycle_promotes_and_seals_test(tmp_path: Path) -> None
     assert archive.incumbent_id == result.evolution.archive_node.id
     promoted = archive.hypotheses[result.evolution.accepted_hypothesis_id]
     assert promoted.status is HypothesisStatus.PROMOTED
+    assert result.to_dict()["evaluated_candidate_treatment_hash"] == (
+        skilllearn_program_treatment_hash(promoted)
+    )
     assert any(row["event"] == "skilllearn_counterfactual_pair_completed" for row in sink.events)
 
     serialized_requests = json.dumps(model.requests, sort_keys=True)
@@ -798,6 +819,156 @@ def test_real_manifest_lifecycle_promotes_and_seals_test(tmp_path: Path) -> None
     assert len(pairs) == 2
     assert guard.test_accessed is True
     assert all(pair.candidate_outcome.success for pair in pairs)
+    assert all(pair.candidate.baseline_preserved is False for pair in pairs)
+
+
+def test_skilllearn_nonactivation_aliases_observed_baseline(tmp_path: Path) -> None:
+    harness, backend, _, _, _, _ = _harness(tmp_path)
+    payload = _program_dict()
+    payload["trigger"] = {
+        "all_of": [
+            {"key": "family", "op": "eq", "value": "never-matched-family"}
+        ],
+        "any_of": [],
+        "none_of": [],
+    }
+    program = HypothesisProgram.from_dict(payload)
+
+    pairs = harness.counterfactual_runner.run(
+        harness.tasks(("organize-messy-files-5",)),
+        program=program,
+        split=SplitName.VALIDATION,
+        trace_id="nonactivation-baseline-alias",
+    )
+
+    assert len(backend.calls) == 1
+    assert pairs[0].candidate.action_activated is False
+    assert pairs[0].candidate.baseline_preserved is True
+    assert pairs[0].candidate.selected_result.lane == "skilllearn_incumbent"
+
+
+def test_lowered_equivalent_program_replays_without_resampling(
+    tmp_path: Path,
+) -> None:
+    harness, backend, _, _, _, sink = _harness(tmp_path)
+    first = _program_dict()
+    second = _program_dict()
+    second["action_graph"][0]["id"] = "renamed-execute-action"
+    second["action_graph"][1]["depends_on"] = ["renamed-execute-action"]
+    second["verifier"]["checks"] = ["different_external_metadata"]
+    second["expected_effect"]["maximum_cost_ratio"] = 1.05
+    first_program = HypothesisProgram.from_dict(first)
+    second_program = HypothesisProgram.from_dict(second)
+    cache = CounterfactualEvidenceReplayCache(event_sink=sink)
+    tasks = harness.tasks(("organize-messy-files-5",))
+
+    source = cache.run_or_replay(
+        runner=harness.counterfactual_runner,
+        tasks=tasks,
+        program=first_program,
+        baseline_programs=(),
+        split=SplitName.VALIDATION,
+        trace_id="lowered-replay-source",
+    )
+    replayed = cache.run_or_replay(
+        runner=harness.counterfactual_runner,
+        tasks=tasks,
+        program=second_program,
+        baseline_programs=(),
+        split=SplitName.VALIDATION,
+        trace_id="lowered-replay-target",
+    )
+
+    assert replayed == source
+    assert first_program.payload_hash != second_program.payload_hash
+    assert len(backend.calls) == 2
+    replay_event = next(
+        row
+        for row in sink.events
+        if row["event"] == "counterfactual_evidence_replayed"
+        and row["payload"]["target_trace_id"] == "lowered-replay-target"
+    )
+    assert replay_event["payload"]["new_counterfactual_executions"] == 0
+
+    first_descriptor = harness._training_replay_descriptor(
+        train_ids=("organize-messy-files-1",),
+        incumbent_programs=(replace(first_program, status=HypothesisStatus.PROMOTED),),
+    )
+    second_descriptor = harness._training_replay_descriptor(
+        train_ids=("organize-messy-files-1",),
+        incumbent_programs=(replace(second_program, status=HypothesisStatus.PROMOTED),),
+    )
+    assert (
+        first_descriptor["incumbent_behavior_set_hash"]
+        == second_descriptor["incumbent_behavior_set_hash"]
+    )
+
+
+def test_missing_compiled_candidate_is_not_recorded_as_applied(
+    tmp_path: Path,
+) -> None:
+    harness, backend, _, _, _, sink = _harness(tmp_path)
+    delegate = harness.counterfactual_runner.compiler
+
+    class RemovingCompiler:
+        def compile(self, **kwargs):
+            result = delegate.compile(**kwargs)
+            if "challenger" in str(kwargs.get("method_name")):
+                shutil.rmtree(result.output_root / "items")
+            return result
+
+    harness.counterfactual_runner.compiler = RemovingCompiler()
+    pairs = harness.counterfactual_runner.run(
+        harness.tasks(("organize-messy-files-5",)),
+        program=HypothesisProgram.from_dict(_program_dict()),
+        split=SplitName.VALIDATION,
+        trace_id="missing-compiled-treatment",
+    )
+
+    assert len(backend.calls) == 1
+    assert pairs[0].candidate.action_activated is False
+    assert pairs[0].candidate.activated_hypothesis_ids == ()
+    assert pairs[0].candidate_outcome.metrics["evaluation_valid"] == 0.0
+    event = next(
+        row
+        for row in sink.events
+        if row["event"] == "skilllearn_counterfactual_pair_completed"
+    )
+    assert event["payload"]["trigger_matched"] is True
+    assert event["payload"]["treatment_applied"] is False
+    assert event["payload"]["candidate_trial_executed"] is False
+
+
+def test_external_active_ids_are_filtered_by_item_trigger(tmp_path: Path) -> None:
+    harness, _, _, _, _, _ = _harness(tmp_path)
+    matched_payload = _program_dict(status="promoted")
+    matched_payload["id"] = "matched-incumbent"
+    missed_payload = _program_dict(status="promoted")
+    missed_payload["id"] = "missed-incumbent"
+    missed_payload["trigger"] = {
+        "all_of": [{"key": "family", "op": "eq", "value": "never-match"}],
+        "any_of": [],
+        "none_of": [],
+    }
+    candidate_payload = _program_dict()
+    candidate_payload["id"] = "matched-candidate"
+
+    pairs = harness.counterfactual_runner.run(
+        harness.tasks(("organize-messy-files-5",)),
+        program=HypothesisProgram.from_dict(candidate_payload),
+        baseline_programs=(
+            HypothesisProgram.from_dict(matched_payload),
+            HypothesisProgram.from_dict(missed_payload),
+        ),
+        split=SplitName.VALIDATION,
+        trace_id="per-item-active-ids",
+    )
+
+    assert pairs[0].baseline.activated_hypothesis_ids == ("matched-incumbent",)
+    assert pairs[0].candidate.activated_hypothesis_ids == (
+        "matched-incumbent",
+        "matched-candidate",
+    )
 
 
 def test_root_proposal_failure_preserves_a_terminal_generation_report(
@@ -840,9 +1011,8 @@ def test_repair_model_failure_blocks_generation_promotion(
 ) -> None:
     bad = _program_dict()
     bad["id"] = "hyp-needs-repair"
-    for action in bad["action_graph"]:
-        if action.get("target") == "skilllearn_challenger":
-            action["target"] = "missing_lane"
+    bad["action_graph"][0]["operation"] = "enable_lane"
+    bad["action_graph"][0]["target"] = "missing_lane"
     good = _program_dict()
     good["id"] = "hyp-statically-valid"
     harness, backend, _, archive, guard, sink = _harness(
@@ -1246,6 +1416,16 @@ def test_train_only_candidate_selection_checks_all_roots_and_trigger_vocabulary(
     trigger_contract = model.requests[0]["capabilities"]["runtime_trigger_contract"]
     assert "benchmark" in trigger_contract["allowed_feature_catalog"]
     assert "task_instruction" in trigger_contract["forbidden_context_only_keys"]
+    action_contract = model.requests[0]["capabilities"]["action_contract"]
+    assert action_contract["allowed_action_operations"] == [
+        "check_condition",
+        "execute_step",
+        "produce_artifact",
+        "request_evidence",
+    ]
+    assert model.requests[0]["constraints"]["allowed_action_operations"] == (
+        action_contract["allowed_action_operations"]
+    )
     validation_events = [
         row for row in sink.events if row["event"] == "hypothesis_validation_node_evaluated"
     ]
@@ -1827,10 +2007,16 @@ def _harness(
         validator=validator,
         promotion_gate=PromotionGate(
             PromotionGateSpec(
+                metric="task_success",
                 minimum_pairs=2,
                 confidence=0.9,
                 minimum_net_gain_count=1,
                 minimum_activation_rate=1.0,
+                minimum_effect_lower_bound=0.0,
+                maximum_harm_rate=0.05,
+                maximum_cost_ratio=1.5,
+                baseline_safety_policy=PROSPECTIVE_ABSTENTION_PAIRED_GUARD,
+                candidate_threshold_policy=CANDIDATE_MAY_ONLY_TIGHTEN,
             ),
             event_sink=sink,
         ),
@@ -1865,16 +2051,10 @@ def _program_dict(*, status: str = "candidate") -> dict[str, Any]:
         },
         "action_graph": [
             {
-                "id": "enable-skill",
-                "operation": "enable_lane",
-                "target": "skilllearn_challenger",
-            },
-            {
                 "id": "execute",
                 "operation": "execute_step",
                 "target": "task_procedure",
                 "value": "Translate every explicit task requirement into an ordered execution checklist.",
-                "depends_on": ["enable-skill"],
             },
             {
                 "id": "audit",

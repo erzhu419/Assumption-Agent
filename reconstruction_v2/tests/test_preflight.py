@@ -109,13 +109,17 @@ def test_required_env_preflight_is_bound_to_selected_manifest_items(
     assert poster["checks"]["verifier_payload_completeness"]["passed"] is True
 
 
-def test_development_prewarm_receipt_binds_every_train_validation_item() -> None:
+def test_development_prewarm_receipt_binds_every_manifest_item() -> None:
     manifest = SplitManifest.read(
         ROOT
         / "manifests"
         / "skilllearnbench_instance_holdout_credential_independent_v1.json"
     )
-    selected_ids = (*manifest.train_ids, *manifest.validation_ids)
+    selected_ids = (
+        *manifest.train_ids,
+        *manifest.validation_ids,
+        *manifest.test_ids,
+    )
     rows = []
     for item_id in selected_ids:
         profile = offline_verifier_profile_for_family(
@@ -159,7 +163,7 @@ def test_development_prewarm_receipt_binds_every_train_validation_item() -> None
     receipt = {
         "prewarm_version": DEVELOPMENT_PREWARM_VERSION,
         "manifest_hash": manifest.manifest_hash,
-        "split_names": ["train", "validation"],
+        "split_names": ["train", "validation", "test"],
         "selected_item_set_hash": _selected_item_set_hash(manifest),
         "selected_item_count": len(selected_ids),
         "completed_item_count": len(selected_ids),

@@ -7,21 +7,18 @@ cd "${PROJECT_ROOT}"
 BENCHMARK_ROOT="${BENCHMARK_ROOT:-reference/self_evo_continual_20260707/repos/SkillLearnBench}"
 ENV_FILE="${ENV_FILE:-../.env}"
 PROTOCOL="${PROTOCOL:-manifests/skilllearn_paper_protocol_v3_ruoli_gpt54mini.json}"
-MANIFEST="${MANIFEST:-manifests/skilllearnbench_instance_holdout_credential_independent_v1.json}"
-RUN_ROOT="${RUN_ROOT:-artifacts/paper_primary_v3_ruoli_gpt54mini}"
+MANIFEST="${MANIFEST:-manifests/skilllearnbench_instance_holdout_offline_ready_v1.json}"
+RUN_ROOT="${RUN_ROOT:-artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini}"
 LOCK="${RUN_ROOT}/protocol_lock.json"
 RECEIPT="${RUN_ROOT}/freeze_receipt.json"
 PREWARM_RECEIPT="${RUN_ROOT}/development_prewarm.json"
-PARALLEL_WORKERS="${PARALLEL_WORKERS:-4}"
-MODEL="${MODEL:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model"])' "${PROTOCOL}")}"
-TRIAL_PROVIDER_MODE="${TRIAL_PROVIDER_MODE:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["trial_provider_mode"])' "${PROTOCOL}")}"
-PROPOSAL_PROVIDER_CHAIN="${PROPOSAL_PROVIDER_CHAIN:-$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1], encoding="utf-8"))["proposal_provider_chain"]))' "${PROTOCOL}")}"
-PROVIDER_ENDPOINT_ORIGIN="${PROVIDER_ENDPOINT_ORIGIN:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["provider_endpoint_origin"])' "${PROTOCOL}")}"
-PROVIDER_ENDPOINT_IPV4S="${PROVIDER_ENDPOINT_IPV4S:-$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1], encoding="utf-8"))["provider_endpoint_ipv4s"]))' "${PROTOCOL}")}"
-TRIAL_NETWORK_BYTE_LIMIT="${TRIAL_NETWORK_BYTE_LIMIT:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["trial_network_byte_limit"])' "${PROTOCOL}")}"
-INVALID_TRIAL_MAX_ATTEMPTS="${INVALID_TRIAL_MAX_ATTEMPTS:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["invalid_trial_max_attempts"])' "${PROTOCOL}")}"
-INVALID_TRIAL_RETRY_BACKOFF_SECONDS="${INVALID_TRIAL_RETRY_BACKOFF_SECONDS:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["invalid_trial_retry_backoff_seconds"])' "${PROTOCOL}")}"
-INVALID_TRIAL_RETRY_WORKERS="${INVALID_TRIAL_RETRY_WORKERS:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["invalid_trial_retry_workers"])' "${PROTOCOL}")}"
+PARALLEL_WORKERS="$(python3 -c 'import json,sys; p=json.load(open(sys.argv[1], encoding="utf-8")); m=json.load(open(sys.argv[2], encoding="utf-8")); phase="family_out_development" if m["protocol"] == "family_out" else "development"; print(p["phases"][phase]["parallel_workers"])' "${PROTOCOL}" "${MANIFEST}")"
+MODEL="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model"])' "${PROTOCOL}")"
+TRIAL_PROVIDER_MODE="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["trial_provider_mode"])' "${PROTOCOL}")"
+PROPOSAL_PROVIDER_CHAIN="$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1], encoding="utf-8"))["proposal_provider_chain"]))' "${PROTOCOL}")"
+PROVIDER_ENDPOINT_ORIGIN="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["provider_endpoint_origin"])' "${PROTOCOL}")"
+PROVIDER_ENDPOINT_IPV4S="$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1], encoding="utf-8"))["provider_endpoint_ipv4s"]))' "${PROTOCOL}")"
+TRIAL_NETWORK_BYTE_LIMIT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["trial_network_byte_limit"])' "${PROTOCOL}")"
 export ASSUMPTION_V2_MODEL="${MODEL}"
 export ASSUMPTION_V2_SKILLLEARN_PROVIDER_MODE="${TRIAL_PROVIDER_MODE}"
 export ASSUMPTION_V2_PROVIDER_CHAIN="${PROPOSAL_PROVIDER_CHAIN}"
@@ -80,6 +77,8 @@ run_generation() {
   run_docker_group python3 -m assumption_agent.benchmarks.docker_egress --ensure
   run_docker_group python3 -m assumption_agent.benchmarks.skilllearn_experiment \
     --root "${BENCHMARK_ROOT}" \
+    --protocol "${PROTOCOL}" \
+    --protocol-lock "${LOCK}" \
     --manifest "${MANIFEST}" \
     --env-file "${ENV_FILE}" \
     --out "${RUN_ROOT}/${name}.report.json" \
@@ -87,15 +86,6 @@ run_generation() {
     --work-dir "${RUN_ROOT}/${name}" \
     --archive-out "${RUN_ROOT}/${name}.archive.json" \
     --prewarm-receipt "${PREWARM_RECEIPT}" \
-    --minimum-trigger-support 2 \
-    --trial-provider-mode "${TRIAL_PROVIDER_MODE}" \
-    --model "${MODEL}" \
-    --max-steps 100 \
-    --parallel-workers "${PARALLEL_WORKERS}" \
-    --invalid-trial-max-attempts "${INVALID_TRIAL_MAX_ATTEMPTS}" \
-    --invalid-trial-retry-backoff-seconds "${INVALID_TRIAL_RETRY_BACKOFF_SECONDS}" \
-    --invalid-trial-retry-workers "${INVALID_TRIAL_RETRY_WORKERS}" \
-    --proposal-candidates-per-generation 3 \
     --execute \
     "$@"
 }
@@ -103,8 +93,7 @@ run_generation() {
 smoke() {
   mkdir -p "${RUN_ROOT}"
   run_generation smoke_recursive \
-    --train-limit 4 --validation-limit 2 --minimum-pairs 2 \
-    --max-generations 1 --max-consecutive-non-promotions 1 \
+    --train-limit 4 --validation-limit 2 \
     --paired-no-recursive-out "${RUN_ROOT}/smoke_no_recursive.report.json" \
     --paired-no-recursive-archive-out "${RUN_ROOT}/smoke_no_recursive.archive.json"
 }
@@ -112,8 +101,6 @@ smoke() {
 develop() {
   test -s "${LOCK}" || { echo "Missing claim-eligible protocol lock: ${LOCK}" >&2; exit 2; }
   run_generation development_recursive \
-    --minimum-pairs 10 --max-generations 3 \
-    --max-consecutive-non-promotions 2 \
     --paired-no-recursive-out "${RUN_ROOT}/development_no_recursive.report.json" \
     --paired-no-recursive-archive-out "${RUN_ROOT}/development_no_recursive.archive.json"
 }
