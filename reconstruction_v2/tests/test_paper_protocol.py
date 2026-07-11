@@ -18,6 +18,7 @@ from assumption_agent.benchmarks.paper_protocol import (
 from assumption_agent.benchmarks.codex_execution_policy import (
     LEGACY_CODEX_AGENT_EXECUTION_POLICY,
     LOW_REASONING_LOCAL_COMPACTION_POLICY,
+    MODEL_ONLY_ACTION_BUDGET_POLICY,
 )
 from assumption_agent.benchmarks.skilllearn_experiment import _experiment_phase_name
 from assumption_agent.benchmarks.paper_report import (
@@ -40,7 +41,19 @@ V31_PROTOCOL = (
 V33_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_3_ruoli_gpt54mini.json"
 )
+V34_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_4_ruoli_gpt54mini.json"
+)
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
+
+
+def test_historical_codex_execution_policy_hashes_remain_immutable() -> None:
+    assert LEGACY_CODEX_AGENT_EXECUTION_POLICY.policy_hash == (
+        "11a53dab8f63a0dec666996eb4b5dafed351c6cc278b5a93717b7649fee0e54c"
+    )
+    assert LOW_REASONING_LOCAL_COMPACTION_POLICY.policy_hash == (
+        "44b1744deaa2604df54d4d66cc4ad0cfaccdb99f20adfb1343e24088b73bab9f"
+    )
 
 
 def test_paper_protocol_freezes_primary_design() -> None:
@@ -144,6 +157,47 @@ def test_v33_protocol_freezes_low_reasoning_early_local_compaction() -> None:
         payload.pop("protocol_version")
         payload["execution"].pop("codex_agent_execution_policy", None)
     assert v33 == v32
+
+
+def test_v34_protocol_freezes_model_only_action_budget() -> None:
+    protocol = PaperProtocol.read(V34_PROTOCOL)
+
+    assert protocol.validate_structure() == []
+    assert protocol.payload["protocol_version"] == "3.4.0"
+    assert protocol.payload["max_steps"] == 100
+    assert protocol.payload["execution"]["trial_network_byte_limit"] == 64 * 1024 * 1024
+    assert protocol.codex_agent_execution_policy == MODEL_ONLY_ACTION_BUDGET_POLICY
+    assert protocol.payload["execution"]["codex_network_minimization"] == (
+        "model_only_no_remote_tools_v3"
+    )
+    assert protocol.payload["execution"]["codex_agent_execution_policy"] == (
+        MODEL_ONLY_ACTION_BUDGET_POLICY.to_dict()
+    )
+
+    v33 = copy.deepcopy(PaperProtocol.read(V33_PROTOCOL).payload)
+    v34 = copy.deepcopy(protocol.payload)
+    for payload in (v33, v34):
+        payload.pop("protocol_id")
+        payload.pop("protocol_version")
+        payload["execution"].pop("codex_agent_execution_policy")
+        payload["execution"].pop("codex_network_minimization")
+        payload["execution"].pop("development_prewarm")
+    assert v34 == v33
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    tuple(MODEL_ONLY_ACTION_BUDGET_POLICY.to_dict()),
+)
+def test_v34_protocol_rejects_agent_execution_policy_drift(field_name: str) -> None:
+    protocol = PaperProtocol.read(V34_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    del payload["execution"]["codex_agent_execution_policy"][field_name]
+
+    assert "codex_agent_execution_policy_mismatch" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
 
 
 @pytest.mark.parametrize(
@@ -283,10 +337,12 @@ def test_execution_lock_binds_tracked_offline_readiness_receipt(
         validate_protocol_lock_for_execution(protocol, lock, manifest, ROOT)
 
 
-def test_v33_execution_lock_binds_resolved_agent_policy(
+@pytest.mark.parametrize("protocol_path", (V33_PROTOCOL, V34_PROTOCOL))
+def test_versioned_execution_lock_binds_resolved_agent_policy(
     monkeypatch: pytest.MonkeyPatch,
+    protocol_path: Path,
 ) -> None:
-    protocol = PaperProtocol.read(V33_PROTOCOL)
+    protocol = PaperProtocol.read(protocol_path)
     manifest = SplitManifest.read(ROOT / str(protocol.payload["primary_manifest"]))
     lock = _execution_lock(protocol)
     _patch_execution_environment(monkeypatch, protocol, lock)
@@ -458,6 +514,36 @@ def test_paper_report_blocks_agent_runtime_mismatch() -> None:
     assert "agent_runtime_mismatch" in primary["invalid_reasons"]
 
 
+def test_v34_paper_report_binds_action_budget_and_token_completeness() -> None:
+    protocol = PaperProtocol.read(V34_PROTOCOL)
+    records = list(_records(protocol))
+    lock = {
+        "claim_eligible": True,
+        "lock_hash": "lock-v34",
+        "primary_manifest_hash": MANIFEST_HASH,
+    }
+
+    report = build_paper_report(records, protocol=protocol, protocol_lock=lock)
+
+    assert report["primary_claim_eligible"] is True
+    assert report["step_budget_cost_accounting_policy"] == (
+        "uniform_codex_action_start_cost_v1"
+    )
+    assert report["control_summaries"]["raw_no_skill"][
+        "step_budget_token_usage_complete_count"
+    ] == 96
+
+    target = records[0]
+    records[0] = PaperTrialRecord(
+        **{
+            **target.__dict__,
+            "step_budget_token_usage_complete": False,
+        }
+    )
+    blocked = build_paper_report(records, protocol=protocol, protocol_lock=lock)
+    assert "record_step_budget_receipt_mismatch" in blocked["claim_blockers"]
+
+
 def _execution_lock(protocol: PaperProtocol) -> dict[str, object]:
     primary = SplitManifest.read(ROOT / str(protocol.payload["primary_manifest"]))
     secondary = SplitManifest.read(ROOT / str(protocol.payload["secondary_manifest"]))
@@ -506,7 +592,7 @@ def _execution_lock(protocol: PaperProtocol) -> dict[str, object]:
         "code_fingerprint": {"file_count": 1, "tree_hash": "locked"},
         "git": {"commit": "locked-commit", "scoped_dirty": False},
     }
-    if str(protocol.payload.get("protocol_version") or "") == "3.3.0":
+    if protocol.codex_agent_execution_policy != LEGACY_CODEX_AGENT_EXECUTION_POLICY:
         lock["resolved_codex_agent_execution_policy"] = (
             protocol.codex_agent_execution_policy.to_dict()
         )
@@ -616,6 +702,46 @@ def _records(protocol: PaperProtocol) -> tuple[PaperTrialRecord, ...]:
                         ),
                         agent_runtime_key="a" * 64,
                         agent_runtime_version="codex-cli 0.144.1",
+                        codex_agent_execution_policy_hash=(
+                            protocol.codex_agent_execution_policy.policy_hash
+                            if protocol.codex_agent_execution_policy
+                            != LEGACY_CODEX_AGENT_EXECUTION_POLICY
+                            else ""
+                        ),
+                        step_budget_policy=(
+                            str(
+                                protocol.codex_agent_execution_policy
+                                .action_budget_policy
+                            )
+                            if protocol.codex_agent_execution_policy
+                            .action_budget_enforced
+                            else ""
+                        ),
+                        step_budget_unit=(
+                            str(
+                                protocol.codex_agent_execution_policy
+                                .action_budget_unit
+                            )
+                            if protocol.codex_agent_execution_policy
+                            .action_budget_enforced
+                            else ""
+                        ),
+                        step_budget_limit=(
+                            int(protocol.payload["max_steps"])
+                            if protocol.codex_agent_execution_policy
+                            .action_budget_enforced
+                            else 0
+                        ),
+                        step_budget_token_usage_complete=(
+                            protocol.codex_agent_execution_policy
+                            .action_budget_enforced
+                        ),
+                        step_budget_receipt_hash=(
+                            "c" * 64
+                            if protocol.codex_agent_execution_policy
+                            .action_budget_enforced
+                            else ""
+                        ),
                         observation_hash=stable_hash(
                             {"item": item_index, "control": control, "repeat": repeat}
                         ),

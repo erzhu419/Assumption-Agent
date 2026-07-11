@@ -4,6 +4,13 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from ..models import stable_hash
+from .codex_action_budget import (
+    CODEX_ACTION_BUDGET_COST_ACCOUNTING_POLICY,
+    CODEX_ACTION_BUDGET_OVERFLOW_POLICY,
+    CODEX_ACTION_BUDGET_POLICY_VERSION,
+    CODEX_ACTION_BUDGET_UNIT,
+    CODEX_ACTION_PROCESS_SCOPE_DEDICATED_CONTAINER,
+)
 
 
 CATALOG_DEFAULT = "catalog_default"
@@ -12,6 +19,9 @@ LEGACY_CODEX_AGENT_EXECUTION_POLICY_VERSION = (
 )
 LOW_REASONING_LOCAL_COMPACTION_POLICY_VERSION = (
     "codex_low_reasoning_early_local_compaction_v1"
+)
+MODEL_ONLY_ACTION_BUDGET_POLICY_VERSION = (
+    "codex_low_reasoning_local_compaction_model_only_action_budget_v2"
 )
 
 
@@ -27,6 +37,12 @@ class CodexAgentExecutionPolicy:
     tool_output_token_limit: int | None
     enable_request_compression: bool
     remote_compaction_v2: bool
+    web_search_mode: str | None = None
+    action_budget_policy: str | None = None
+    action_budget_unit: str | None = None
+    action_budget_overflow_policy: str | None = None
+    action_budget_cost_accounting_policy: str | None = None
+    action_budget_process_scope: str | None = None
 
     def __post_init__(self) -> None:
         if not self.version:
@@ -63,9 +79,44 @@ class CodexAgentExecutionPolicy:
             and self.tool_output_token_limit <= 0
         ):
             raise ValueError("invalid Codex tool-output token limit")
+        if self.web_search_mode not in {None, "disabled"}:
+            raise ValueError("invalid Codex web-search mode")
+        action_budget_fields = (
+            self.action_budget_policy,
+            self.action_budget_unit,
+            self.action_budget_overflow_policy,
+            self.action_budget_cost_accounting_policy,
+            self.action_budget_process_scope,
+        )
+        if any(value is None for value in action_budget_fields) and any(
+            value is not None for value in action_budget_fields
+        ):
+            raise ValueError("Codex action-budget policy must be frozen atomically")
+        if self.action_budget_policy not in {
+            None,
+            CODEX_ACTION_BUDGET_POLICY_VERSION,
+        }:
+            raise ValueError("invalid Codex action-budget policy")
+        if self.action_budget_unit not in {None, CODEX_ACTION_BUDGET_UNIT}:
+            raise ValueError("invalid Codex action-budget unit")
+        if self.action_budget_overflow_policy not in {
+            None,
+            CODEX_ACTION_BUDGET_OVERFLOW_POLICY,
+        }:
+            raise ValueError("invalid Codex action-budget overflow policy")
+        if self.action_budget_cost_accounting_policy not in {
+            None,
+            CODEX_ACTION_BUDGET_COST_ACCOUNTING_POLICY,
+        }:
+            raise ValueError("invalid Codex action-budget cost accounting policy")
+        if self.action_budget_process_scope not in {
+            None,
+            CODEX_ACTION_PROCESS_SCOPE_DEDICATED_CONTAINER,
+        }:
+            raise ValueError("invalid Codex action-budget process scope")
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "version": self.version,
             "model_reasoning_effort": self.model_reasoning_effort or CATALOG_DEFAULT,
             "model_verbosity": self.model_verbosity or CATALOG_DEFAULT,
@@ -85,6 +136,25 @@ class CodexAgentExecutionPolicy:
             "enable_request_compression": self.enable_request_compression,
             "remote_compaction_v2": self.remote_compaction_v2,
         }
+        if self.web_search_mode is not None:
+            payload["web_search_mode"] = self.web_search_mode
+        if self.action_budget_policy is not None:
+            payload.update(
+                {
+                    "action_budget_policy": self.action_budget_policy,
+                    "action_budget_unit": self.action_budget_unit,
+                    "action_budget_overflow_policy": (
+                        self.action_budget_overflow_policy
+                    ),
+                    "action_budget_cost_accounting_policy": (
+                        self.action_budget_cost_accounting_policy
+                    ),
+                    "action_budget_process_scope": (
+                        self.action_budget_process_scope
+                    ),
+                }
+            )
+        return payload
 
     @property
     def policy_hash(self) -> str:
@@ -119,7 +189,13 @@ class CodexAgentExecutionPolicy:
                 "remote_compaction_v2",
             )
         )
+        if self.web_search_mode is not None:
+            values.extend(("--config", f'web_search="{self.web_search_mode}"'))
         return tuple(values)
+
+    @property
+    def action_budget_enforced(self) -> bool:
+        return self.action_budget_policy == CODEX_ACTION_BUDGET_POLICY_VERSION
 
 
 LEGACY_CODEX_AGENT_EXECUTION_POLICY = CodexAgentExecutionPolicy(
@@ -144,10 +220,32 @@ LOW_REASONING_LOCAL_COMPACTION_POLICY = CodexAgentExecutionPolicy(
     remote_compaction_v2=False,
 )
 
+MODEL_ONLY_ACTION_BUDGET_POLICY = CodexAgentExecutionPolicy(
+    version=MODEL_ONLY_ACTION_BUDGET_POLICY_VERSION,
+    model_reasoning_effort="low",
+    model_verbosity="low",
+    model_auto_compact_token_limit=32_768,
+    model_auto_compact_token_limit_scope="body_after_prefix",
+    tool_output_token_limit=10_000,
+    enable_request_compression=True,
+    remote_compaction_v2=False,
+    web_search_mode="disabled",
+    action_budget_policy=CODEX_ACTION_BUDGET_POLICY_VERSION,
+    action_budget_unit=CODEX_ACTION_BUDGET_UNIT,
+    action_budget_overflow_policy=CODEX_ACTION_BUDGET_OVERFLOW_POLICY,
+    action_budget_cost_accounting_policy=(
+        CODEX_ACTION_BUDGET_COST_ACCOUNTING_POLICY
+    ),
+    action_budget_process_scope=(
+        CODEX_ACTION_PROCESS_SCOPE_DEDICATED_CONTAINER
+    ),
+)
+
 CODEX_AGENT_EXECUTION_POLICY_BY_PROTOCOL_VERSION = {
     "3.1.0": LEGACY_CODEX_AGENT_EXECUTION_POLICY,
     "3.2.0": LEGACY_CODEX_AGENT_EXECUTION_POLICY,
     "3.3.0": LOW_REASONING_LOCAL_COMPACTION_POLICY,
+    "3.4.0": MODEL_ONLY_ACTION_BUDGET_POLICY,
 }
 
 

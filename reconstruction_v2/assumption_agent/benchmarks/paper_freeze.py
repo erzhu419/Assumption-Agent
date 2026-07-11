@@ -11,6 +11,7 @@ from ..evaluation import PairSummary, PromotionGateSpec, promotion_summary_block
 from ..models import HypothesisProgram, HypothesisStatus, SplitName, stable_hash
 from ..splits import SplitManifest
 from .paper_controls import ControlSource, control_config_hash, source_tree_hash
+from .codex_execution_policy import LEGACY_CODEX_AGENT_EXECUTION_POLICY
 from .paper_protocol import (
     PaperProtocol,
     _code_fingerprint,
@@ -493,7 +494,7 @@ def _validate_development_report(
         ),
         "test_content_accessed": False,
     }
-    if str(protocol.payload.get("protocol_version") or "") == "3.3.0":
+    if protocol.codex_agent_execution_policy != LEGACY_CODEX_AGENT_EXECUTION_POLICY:
         expected["codex_agent_execution_policy"] = (
             protocol.codex_agent_execution_policy.to_dict()
         )

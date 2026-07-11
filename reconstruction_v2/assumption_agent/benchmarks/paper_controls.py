@@ -351,6 +351,14 @@ class PaperControlRunner:
             codex_agent_execution_policy_hash=(
                 codex_agent_execution_policy_for_backend(self.backend).policy_hash
             ),
+            step_budget_policy=observation.step_budget_policy,
+            step_budget_unit=observation.step_budget_unit,
+            step_budget_limit=observation.step_budget_limit,
+            step_budget_truncated=observation.step_budget_truncated,
+            step_budget_token_usage_complete=(
+                observation.step_budget_token_usage_complete
+            ),
+            step_budget_receipt_hash=observation.step_budget_receipt_hash,
         )
         return record
 
@@ -378,6 +386,17 @@ class PaperControlRunner:
                     "agent_runtime_key": record.agent_runtime_key,
                     "agent_runtime_version": record.agent_runtime_version,
                     "observation_hash": record.observation_hash,
+                    "steps": record.steps,
+                    "step_budget_policy": record.step_budget_policy,
+                    "step_budget_unit": record.step_budget_unit,
+                    "step_budget_limit": record.step_budget_limit,
+                    "step_budget_truncated": record.step_budget_truncated,
+                    "step_budget_token_usage_complete": (
+                        record.step_budget_token_usage_complete
+                    ),
+                    "step_budget_receipt_hash": (
+                        record.step_budget_receipt_hash
+                    ),
                     "raw_content_persisted": False,
                 },
             )

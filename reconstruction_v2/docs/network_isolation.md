@@ -17,13 +17,18 @@ Paper evaluation is fail-closed:
 - each task container uses `assumption-v2-restricted`;
 - external DNS is disabled and `ruoli.dev` is pinned in `/etc/hosts`;
 - the host `DOCKER-USER` chain permits only the pinned model endpoint on TCP 443;
-- a Docker network-I/O watchdog stops any active v3.3 trial above 64 MiB total
-  traffic; immutable v3.1/v3.2 diagnostics retain their original execution
+- a Docker network-I/O watchdog stops any active v3.4 trial above 64 MiB total
+  traffic; immutable v3.1-v3.3 diagnostics retain their original execution
   treatments;
 - all other container egress, including PyPI, GitHub, Hugging Face, Maven, and
   Ubuntu repositories, is rejected.
-- Codex web search and image generation are disabled; the full JSONL trace is
-  audited for remote-tool calls and runtime package-install commands.
+- Codex hosted/standalone web search and image generation are disabled; a
+  zero-model wire probe verifies the actual Responses tool projection, and the
+  full JSONL trace is audited for remote-tool calls and runtime package-install
+  commands.
+- the action-budget supervisor owns the current attempt's trace and receipt,
+  binds a random nonce and full trace hash, and removes every live process born
+  after the dedicated trial-container baseline before verifier injection;
 - a trial is valid only when a parseable `reward.txt` and non-empty pytest CTRF
   execution receipt agree that the verifier actually ran;
 - profiles with semantic setup also require a structured prelude receipt; a

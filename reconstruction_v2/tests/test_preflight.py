@@ -7,10 +7,20 @@ import pytest
 from assumption_agent.benchmarks.preflight import build_preflight
 from assumption_agent.benchmarks.prewarm import (
     DEVELOPMENT_PREWARM_VERSION,
+    LEGACY_DEVELOPMENT_PREWARM_VERSION,
     _selected_item_set_hash,
     validate_development_prewarm_receipt,
 )
 from assumption_agent.benchmarks.skilllearnbench import SkillLearnBenchAdapter
+from assumption_agent.benchmarks.skilllearn_lifecycle import (
+    PREBUILT_IMAGE_POLICY_VERSION,
+    SHARED_CODEX_CLI_VERSION,
+    codex_action_supervisor_hash,
+    shared_codex_agent_runtime_key,
+)
+from assumption_agent.benchmarks.codex_action_budget import (
+    CODEX_ACTION_BUDGET_POLICY_VERSION,
+)
 from assumption_agent.benchmarks.docker_egress import DEPENDENCY_CACHE_POLICY_VERSION
 from assumption_agent.benchmarks.offline_verifier import (
     OFFLINE_VERIFIER_POLICY_VERSION,
@@ -136,8 +146,8 @@ def test_development_prewarm_receipt_binds_every_manifest_item() -> None:
                 "prebuilt_image_key": stable_hash({"image": item_id}),
                 "prebuilt_image_id": "sha256:"
                 + stable_hash({"image_id": item_id}),
-                "agent_runtime_key": "a" * 64,
-                "agent_runtime_version": "codex-cli 0.144.1",
+                "agent_runtime_key": shared_codex_agent_runtime_key(),
+                "agent_runtime_version": SHARED_CODEX_CLI_VERSION,
                 "verifier_runtime_mode": (
                     "local_profile" if profile is not None else "native_image"
                 ),
@@ -174,6 +184,13 @@ def test_development_prewarm_receipt_binds_every_manifest_item() -> None:
         "maximum_attempts": 3,
         "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
         "dependency_cache_only_enforced": True,
+        "agent_runtime_policy": PREBUILT_IMAGE_POLICY_VERSION,
+        "agent_runtime_key": shared_codex_agent_runtime_key(),
+        "agent_runtime_version": SHARED_CODEX_CLI_VERSION,
+        "codex_action_supervisor_policy": (
+            CODEX_ACTION_BUDGET_POLICY_VERSION
+        ),
+        "codex_action_supervisor_sha256": codex_action_supervisor_hash(),
         "offline_verifier_policy": OFFLINE_VERIFIER_POLICY_VERSION,
         "offline_verifier_runtime_network": "none",
         "offline_verifier_runtime_network_fallback_allowed": False,
@@ -214,7 +231,9 @@ def test_development_prewarm_receipt_binds_every_manifest_item() -> None:
         "online_build_attempted": False,
         "passed": True,
         "items": rows,
-        "test_content_accessed": False,
+        "test_infrastructure_inspected": True,
+        "sealed_test_scoring_performed": False,
+        "sealed_test_bytes_exposed_to_model": False,
         "secret_value_persisted": False,
         "raw_content_persisted": False,
     }
@@ -231,6 +250,49 @@ def test_development_prewarm_receipt_binds_every_manifest_item() -> None:
     )
     with pytest.raises(ValueError, match="failed_item_count"):
         validate_development_prewarm_receipt(tampered, manifest=manifest)
+
+    stale = {
+        key: value
+        for key, value in receipt.items()
+        if key
+        not in {
+            "receipt_hash",
+            "agent_runtime_policy",
+            "agent_runtime_key",
+            "agent_runtime_version",
+            "codex_action_supervisor_policy",
+            "codex_action_supervisor_sha256",
+            "test_infrastructure_inspected",
+            "sealed_test_scoring_performed",
+            "sealed_test_bytes_exposed_to_model",
+        }
+    }
+    stale["prewarm_version"] = "all_manifest_images_and_offline_verifiers_v3"
+    stale["test_content_accessed"] = False
+    stale["receipt_hash"] = stable_hash(stale)
+    with pytest.raises(ValueError, match="prewarm_version"):
+        validate_development_prewarm_receipt(stale, manifest=manifest)
+    assert validate_development_prewarm_receipt(
+        stale,
+        manifest=manifest,
+        expected_version=LEGACY_DEVELOPMENT_PREWARM_VERSION,
+    ) == stale["receipt_hash"]
+
+    wrong_agent_rows = [dict(row) for row in rows]
+    wrong_agent_rows[0]["agent_runtime_key"] = "b" * 64
+    wrong_agent_runtime = {**receipt, "items": wrong_agent_rows}
+    wrong_agent_runtime["receipt_hash"] = stable_hash(
+        {
+            key: value
+            for key, value in wrong_agent_runtime.items()
+            if key != "receipt_hash"
+        }
+    )
+    with pytest.raises(ValueError, match="active runtime"):
+        validate_development_prewarm_receipt(
+            wrong_agent_runtime,
+            manifest=manifest,
+        )
 
     tampered_rows = [dict(row) for row in rows]
     local_index = next(

@@ -12,6 +12,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from ..models import stable_hash
 from ..splits import SplitManifest
 from .paper_protocol import PaperProtocol
+from .codex_execution_policy import LEGACY_CODEX_AGENT_EXECUTION_POLICY
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,12 @@ class PaperTrialRecord:
     agent_runtime_key: str = ""
     agent_runtime_version: str = ""
     codex_agent_execution_policy_hash: str = ""
+    step_budget_policy: str = ""
+    step_budget_unit: str = ""
+    step_budget_limit: int = 0
+    step_budget_truncated: bool = False
+    step_budget_token_usage_complete: bool = False
+    step_budget_receipt_hash: str = ""
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "PaperTrialRecord":
@@ -79,6 +86,16 @@ class PaperTrialRecord:
             agent_runtime_version=str(data.get("agent_runtime_version") or ""),
             codex_agent_execution_policy_hash=str(
                 data.get("codex_agent_execution_policy_hash") or ""
+            ),
+            step_budget_policy=str(data.get("step_budget_policy") or ""),
+            step_budget_unit=str(data.get("step_budget_unit") or ""),
+            step_budget_limit=max(0, int(data.get("step_budget_limit") or 0)),
+            step_budget_truncated=bool(data.get("step_budget_truncated")),
+            step_budget_token_usage_complete=bool(
+                data.get("step_budget_token_usage_complete")
+            ),
+            step_budget_receipt_hash=str(
+                data.get("step_budget_receipt_hash") or ""
             ),
         )
         issues = record.validate()
@@ -125,6 +142,39 @@ class PaperTrialRecord:
             and len(self.codex_agent_execution_policy_hash) != 64
         ):
             issues.append("codex_agent_execution_policy_hash_invalid")
+        if self.step_budget_policy:
+            if not self.step_budget_unit:
+                issues.append("step_budget_unit_missing")
+            if self.step_budget_limit <= 0:
+                issues.append("step_budget_limit_invalid")
+            if self.valid and self.steps > self.step_budget_limit:
+                issues.append("step_budget_steps_exceeded")
+            if (
+                self.valid
+                and self.step_budget_truncated
+                and self.steps != self.step_budget_limit
+            ):
+                issues.append("step_budget_truncation_limit_mismatch")
+            if (
+                self.valid
+                and not self.step_budget_token_usage_complete
+                and not self.step_budget_truncated
+            ):
+                issues.append("step_budget_incomplete_token_usage_without_truncation")
+            if self.valid and len(self.step_budget_receipt_hash) != 64:
+                issues.append("step_budget_receipt_hash_invalid")
+            elif self.step_budget_receipt_hash and len(
+                self.step_budget_receipt_hash
+            ) != 64:
+                issues.append("step_budget_receipt_hash_invalid")
+        elif (
+            self.step_budget_unit
+            or self.step_budget_limit
+            or self.step_budget_truncated
+            or self.step_budget_token_usage_complete
+            or self.step_budget_receipt_hash
+        ):
+            issues.append("step_budget_policy_missing")
         return issues
 
     def to_dict(self) -> dict[str, Any]:
@@ -200,12 +250,31 @@ def build_paper_report(
         blockers.append("no_records_for_split")
     if any(row.protocol_hash != protocol.protocol_hash for row in selected):
         blockers.append("record_protocol_hash_mismatch")
-    if str(protocol.payload.get("protocol_version") or "") == "3.3.0" and any(
+    if protocol.codex_agent_execution_policy != LEGACY_CODEX_AGENT_EXECUTION_POLICY and any(
         row.codex_agent_execution_policy_hash
         != protocol.codex_agent_execution_policy.policy_hash
         for row in selected
     ):
         blockers.append("record_codex_agent_execution_policy_hash_mismatch")
+    if protocol.codex_agent_execution_policy.action_budget_enforced and any(
+        row.step_budget_policy
+        != protocol.codex_agent_execution_policy.action_budget_policy
+        or row.step_budget_unit
+        != protocol.codex_agent_execution_policy.action_budget_unit
+        or row.step_budget_limit != int(protocol.payload["max_steps"])
+        or row.steps > row.step_budget_limit
+        or (
+            row.step_budget_truncated
+            and row.steps != row.step_budget_limit
+        )
+        or (
+            not row.step_budget_token_usage_complete
+            and not row.step_budget_truncated
+        )
+        or len(row.step_budget_receipt_hash) != 64
+        for row in selected
+    ):
+        blockers.append("record_step_budget_receipt_mismatch")
     if expected_manifest_hash and any(
         row.manifest_hash != expected_manifest_hash for row in selected
     ):
@@ -220,6 +289,21 @@ def build_paper_report(
         "protocol_lock_hash": protocol_lock.get("lock_hash"),
         "codex_agent_execution_policy_hash": (
             protocol.codex_agent_execution_policy.policy_hash
+        ),
+        "step_budget_policy": (
+            protocol.codex_agent_execution_policy.action_budget_policy
+        ),
+        "step_budget_unit": (
+            protocol.codex_agent_execution_policy.action_budget_unit
+        ),
+        "step_budget_limit": (
+            int(protocol.payload["max_steps"])
+            if protocol.codex_agent_execution_policy.action_budget_enforced
+            else None
+        ),
+        "step_budget_cost_accounting_policy": (
+            protocol.codex_agent_execution_policy
+            .action_budget_cost_accounting_policy
         ),
         "manifest_hash": expected_manifest_hash,
         "evaluator_epoch_hash": stable_hash({"epochs": sorted(evaluator_epochs)}),
@@ -267,6 +351,12 @@ def _summarize_control(
     successes = sum(majority)
     lower, upper = _wilson_interval(successes, len(majority), confidence)
     valid_rows = [row for rows in complete.values() for row in rows]
+    token_complete_rows = [
+        row
+        for row in valid_rows
+        if not row.step_budget_policy
+        or row.step_budget_token_usage_complete
+    ]
     metric_names = sorted({key for row in valid_rows for key in row.metrics})
     return {
         "observed_item_count": len(grouped),
@@ -282,7 +372,24 @@ def _summarize_control(
         ),
         "mean_score": statistics.fmean(row.score for row in valid_rows) if valid_rows else 0.0,
         "mean_total_tokens": (
-            statistics.fmean(row.total_tokens for row in valid_rows) if valid_rows else 0.0
+            statistics.fmean(row.total_tokens for row in token_complete_rows)
+            if token_complete_rows
+            else None
+        ),
+        "token_usage_complete_trial_count": len(token_complete_rows),
+        "token_usage_missing_trial_count": (
+            len(valid_rows) - len(token_complete_rows)
+        ),
+        "mean_action_starts": (
+            statistics.fmean(row.steps for row in valid_rows)
+            if valid_rows
+            else 0.0
+        ),
+        "step_budget_truncated_count": sum(
+            row.step_budget_truncated for row in valid_rows
+        ),
+        "step_budget_token_usage_complete_count": sum(
+            row.step_budget_token_usage_complete for row in valid_rows
         ),
         "median_duration_seconds": (
             statistics.median(row.duration_seconds for row in valid_rows) if valid_rows else 0.0
@@ -509,21 +616,27 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         f"Split: `{report['split']}`",
         f"Primary claim eligible: `{str(report['primary_claim_eligible']).lower()}`",
         "",
-        "| Control | Complete items | Success | 95% CI | Invalid items | Mean tokens | Median seconds |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Control | Complete items | Success | 95% CI | Invalid items | Mean tokens (n) | Mean actions | Median seconds |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for control, summary in report["control_summaries"].items():
         interval = summary["wilson_interval"]
         lines.append(
             "| {control} | {items} | {success:.3f} | [{lower:.3f}, {upper:.3f}] | "
-            "{invalid} | {tokens:.1f} | {seconds:.1f} |".format(
+            "{invalid} | {tokens} ({token_n}) | {actions:.1f} | {seconds:.1f} |".format(
                 control=control,
                 items=summary["complete_item_count"],
                 success=summary["majority_success_rate"],
                 lower=interval[0],
                 upper=interval[1],
                 invalid=summary["invalid_item_count"],
-                tokens=summary["mean_total_tokens"],
+                tokens=(
+                    f"{summary['mean_total_tokens']:.1f}"
+                    if summary["mean_total_tokens"] is not None
+                    else "N/A"
+                ),
+                token_n=summary["token_usage_complete_trial_count"],
+                actions=summary["mean_action_starts"],
                 seconds=summary["median_duration_seconds"],
             )
         )

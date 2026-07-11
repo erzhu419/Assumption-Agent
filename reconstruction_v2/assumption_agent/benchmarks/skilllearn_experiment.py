@@ -36,10 +36,7 @@ from ..validation import (
     TriggerVocabularyCheck,
 )
 from .preflight import build_preflight
-from .prewarm import (
-    DEVELOPMENT_PREWARM_VERSION,
-    validate_development_prewarm_receipt,
-)
+from .prewarm import validate_development_prewarm_receipt
 from .paper_protocol import (
     PaperProtocol,
     validate_protocol_lock_for_execution,
@@ -57,7 +54,6 @@ from .docker_egress import (
 )
 from .skilllearn_lifecycle import (
     BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
-    CODEX_NETWORK_MINIMIZATION_VERSION,
     MODEL_ONLY_TOOL_POLICY_VERSION,
     OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION,
     PREBUILT_IMAGE_POLICY_VERSION,
@@ -79,6 +75,7 @@ from .skilllearn_lifecycle import (
     SkillLearnProviderCircuit,
     SkillLearnSubprocessBackend,
     TrainingEvidenceReplayCache,
+    codex_network_minimization_for_policy,
 )
 from .offline_verifier import OFFLINE_VERIFIER_POLICY_VERSION
 from .skilllearnbench import SkillLearnBenchAdapter
@@ -167,6 +164,7 @@ def main() -> None:
         prewarm_receipt_hash = validate_development_prewarm_receipt(
             prewarm_payload,
             manifest=manifest,
+            expected_version=str(execution_contract["development_prewarm"]),
         )
     adapter = SkillLearnBenchAdapter(args.root)
     items = adapter.discover()
@@ -261,7 +259,9 @@ def main() -> None:
             if trial_provider_mode == "openai_compatible"
             else None
         ),
-        "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+        "codex_network_minimization": codex_network_minimization_for_policy(
+            codex_agent_execution_policy
+        ),
         "codex_agent_execution_policy": codex_agent_execution_policy.to_dict(),
         "codex_agent_execution_policy_hash": (
             codex_agent_execution_policy.policy_hash
@@ -279,7 +279,7 @@ def main() -> None:
             execution_contract["trial_network_byte_limit"]
         ),
         "training_evidence_policy": TRAINING_EVIDENCE_POLICY_VERSION,
-        "development_prewarm_version": DEVELOPMENT_PREWARM_VERSION,
+        "development_prewarm_version": execution_contract["development_prewarm"],
         "prewarm_passed": prewarm_receipt_hash is not None,
         "prewarm_receipt_hash": prewarm_receipt_hash,
         "proposal_candidate_selection": TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,

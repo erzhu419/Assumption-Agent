@@ -31,6 +31,7 @@ from ..splits import SplitManifest
 from .preflight import build_preflight
 from .codex_execution_policy import (
     CodexAgentExecutionPolicy,
+    LEGACY_CODEX_AGENT_EXECUTION_POLICY,
     codex_agent_execution_policy_for_protocol_version,
     declared_policy_matches,
 )
@@ -48,7 +49,7 @@ from .skilllearn_compiler import (
     SKILL_FALLBACK_SEMANTICS_VERSION,
     SKILL_ROUTING_VERSION,
 )
-from .prewarm import DEVELOPMENT_PREWARM_VERSION
+from .prewarm import development_prewarm_version_for_protocol
 from .skilllearn_lifecycle import (
     BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
     CODEX_NETWORK_MINIMIZATION_VERSION,
@@ -70,6 +71,7 @@ from .skilllearn_lifecycle import (
     TRIAL_TIMEOUT_POLICY_VERSION,
     VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION,
     VERIFIER_ISOLATION_VERSION,
+    codex_network_minimization_for_policy,
 )
 from .offline_verifier import OFFLINE_VERIFIER_POLICY_VERSION
 from .skilllearnbench import (
@@ -93,6 +95,7 @@ TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION = {
     "3.1.0": DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
     "3.2.0": 64 * 1024 * 1024,
     "3.3.0": 64 * 1024 * 1024,
+    "3.4.0": 64 * 1024 * 1024,
 }
 
 
@@ -187,8 +190,12 @@ class PaperProtocol:
             ):
                 issues.append("runner_agent_registry_isolation_mismatch")
             if (
-                major is not None and major >= 2
-                and execution.get("development_prewarm") != DEVELOPMENT_PREWARM_VERSION
+                major is not None
+                and major >= 2
+                and execution.get("development_prewarm")
+                != development_prewarm_version_for_protocol(
+                    self.payload.get("protocol_version")
+                )
             ):
                 issues.append("development_prewarm_mismatch")
             if (
@@ -349,16 +356,22 @@ class PaperProtocol:
                 != PROPOSAL_FAILURE_ISOLATION_POLICY_VERSION
             ):
                 issues.append("proposal_failure_isolation_policy_mismatch")
+            resolved_codex_policy = codex_agent_execution_policy_for_protocol_version(
+                self.payload.get("protocol_version")
+            )
             if (
                 major is not None
                 and major >= 3
                 and execution.get("codex_network_minimization")
-                != CODEX_NETWORK_MINIMIZATION_VERSION
+                != (
+                    codex_network_minimization_for_policy(
+                        resolved_codex_policy
+                    )
+                    if resolved_codex_policy is not None
+                    else CODEX_NETWORK_MINIMIZATION_VERSION
+                )
             ):
                 issues.append("codex_network_minimization_mismatch")
-            resolved_codex_policy = codex_agent_execution_policy_for_protocol_version(
-                self.payload.get("protocol_version")
-            )
             declared_codex_policy = execution.get("codex_agent_execution_policy")
             if resolved_codex_policy is None:
                 issues.append("codex_agent_execution_policy_protocol_version_unsupported")
@@ -849,10 +862,11 @@ def validate_protocol_lock_for_execution(
             "resolved_codex_agent_execution_policy_hash",
         )
     )
-    if (
-        str(protocol.payload.get("protocol_version") or "") == "3.3.0"
-        or resolved_policy_fields_present
-    ) and (
+    resolved_policy_fields_required = (
+        protocol.codex_agent_execution_policy
+        != LEGACY_CODEX_AGENT_EXECUTION_POLICY
+    )
+    if (resolved_policy_fields_required or resolved_policy_fields_present) and (
         lock.get("resolved_codex_agent_execution_policy")
         != protocol.codex_agent_execution_policy.to_dict()
         or lock.get("resolved_codex_agent_execution_policy_hash")

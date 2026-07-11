@@ -49,6 +49,7 @@ from assumption_agent.benchmarks.skilllearn_lifecycle import (
 from assumption_agent.benchmarks.codex_execution_policy import (
     LEGACY_CODEX_AGENT_EXECUTION_POLICY,
     LOW_REASONING_LOCAL_COMPACTION_POLICY,
+    MODEL_ONLY_ACTION_BUDGET_POLICY,
 )
 from assumption_agent.benchmarks.docker_egress import DockerEgressPolicy
 from assumption_agent.benchmarks.offline_verifier import (
@@ -1697,7 +1698,15 @@ def test_agent_execution_policy_changes_request_and_execution_fingerprints() -> 
             LOW_REASONING_LOCAL_COMPACTION_POLICY.policy_hash
         ),
     )
-    assert request.request_hash != compact_request.request_hash
+    model_only_request = replace(
+        request,
+        codex_agent_execution_policy_hash=(
+            MODEL_ONLY_ACTION_BUDGET_POLICY.policy_hash
+        ),
+    )
+    assert len(
+        {request.request_hash, compact_request.request_hash, model_only_request.request_hash}
+    ) == 3
 
     legacy_provider = _provider_fingerprint(
         "codex",
@@ -1711,7 +1720,13 @@ def test_agent_execution_policy_changes_request_and_execution_fingerprints() -> 
         "openai_compatible",
         LOW_REASONING_LOCAL_COMPACTION_POLICY,
     )
-    assert legacy_provider != compact_provider
+    model_only_provider = _provider_fingerprint(
+        "codex",
+        "gpt-5.4-mini",
+        "openai_compatible",
+        MODEL_ONLY_ACTION_BUDGET_POLICY,
+    )
+    assert len({legacy_provider, compact_provider, model_only_provider}) == 3
     common = {
         "agent_id": "codex",
         "model": "gpt-5.4-mini",
@@ -1729,9 +1744,56 @@ def test_agent_execution_policy_changes_request_and_execution_fingerprints() -> 
         codex_agent_execution_policy=LEGACY_CODEX_AGENT_EXECUTION_POLICY,
     ) != _fairness_fingerprint(
         **common,
-        provider_fingerprint=compact_provider,
-        codex_agent_execution_policy=LOW_REASONING_LOCAL_COMPACTION_POLICY,
+        provider_fingerprint=model_only_provider,
+        codex_agent_execution_policy=MODEL_ONLY_ACTION_BUDGET_POLICY,
     )
+
+
+def test_action_budget_cost_accounting_never_mixes_tokens_and_steps() -> None:
+    request = SkillLearnTrialRequest(
+        item_id="item",
+        family="family",
+        split=SplitName.VALIDATION,
+        variant=TrialVariant.POLICY_OFF,
+        evaluator_epoch="epoch",
+        pair_id="pair",
+        repeat=1,
+        agent_id="codex",
+        model="gpt-5.4-mini",
+        max_steps=100,
+        manifest_hash="manifest",
+        codex_agent_execution_policy_hash=(
+            MODEL_ONLY_ACTION_BUDGET_POLICY.policy_hash
+        ),
+    )
+    complete = SkillLearnTrialObservation(
+        request=request,
+        success=True,
+        score=1.0,
+        metrics={"evaluation_valid": 1.0},
+        total_tokens=250_000,
+        steps=20,
+        duration_seconds=1.0,
+        provider_fingerprint="provider",
+        fairness_fingerprint="fairness",
+        step_budget_policy=str(
+            MODEL_ONLY_ACTION_BUDGET_POLICY.action_budget_policy
+        ),
+        step_budget_unit=str(MODEL_ONLY_ACTION_BUDGET_POLICY.action_budget_unit),
+        step_budget_limit=100,
+        step_budget_token_usage_complete=True,
+        step_budget_receipt_hash="a" * 64,
+    )
+    truncated = replace(
+        complete,
+        total_tokens=0,
+        steps=100,
+        step_budget_truncated=True,
+        step_budget_token_usage_complete=False,
+    )
+
+    assert complete.cost_units == 20.0
+    assert truncated.cost_units == 100.0
 
 
 def test_backend_pool_rejects_mixed_agent_execution_policies() -> None:
@@ -1777,7 +1839,7 @@ def test_openai_compatible_trial_compiles_sanitized_codex_provider(
         model="gpt-5.4-mini",
         provider_mode="openai_compatible",
         record_upstream=False,
-        codex_agent_execution_policy=LOW_REASONING_LOCAL_COMPACTION_POLICY,
+        codex_agent_execution_policy=MODEL_ONLY_ACTION_BUDGET_POLICY,
         event_sink=sink,
     )
 
@@ -1790,7 +1852,14 @@ def test_openai_compatible_trial_compiles_sanitized_codex_provider(
         assert "--ignore-user-config" in run_template
         assert "--ephemeral" in run_template
         assert "--strict-config" in run_template
-        assert "tools.web_search=false" in run_template
+        assert "tools.web_search=false" not in run_template
+        assert 'web_search="disabled"' in run_template
+        assert "codex-action-supervisor.mjs" in run_template
+        assert "--limit 100" in run_template
+        assert "--trace /logs/agent/codex.txt" in run_template
+        assert "--process-scope dedicated_container" in run_template
+        assert "rm -f /logs/agent/codex_action_budget_receipt.json" in run_template
+        assert agent["trajectory_tee"] is None
         assert 'model_reasoning_effort="low"' in run_template
         assert 'model_verbosity="low"' in run_template
         assert "model_auto_compact_token_limit=32768" in run_template
@@ -1838,6 +1907,15 @@ def test_openai_compatible_trial_compiles_sanitized_codex_provider(
         )
         assert prepared["payload"]["endpoint_origin"] == "https://ruoli.dev"
         assert prepared["payload"]["wire_api"] == "responses"
+        assert prepared["payload"]["web_search_mode"] == "disabled"
+        assert prepared["payload"]["web_search_enabled"] is False
+        assert prepared["payload"]["action_budget_limit"] == 100
+        assert prepared["payload"]["action_budget_cost_accounting_policy"] == (
+            "uniform_codex_action_start_cost_v1"
+        )
+        assert prepared["payload"]["action_budget_process_scope"] == (
+            "dedicated_container"
+        )
         assert prepared["payload"]["secret_value_persisted"] is False
         assert secret not in repr(prepared)
         delegate.agent_stdout = json.dumps(
@@ -1972,6 +2050,119 @@ def test_openai_compatible_terminal_errors_use_provider_labels() -> None:
     assert observation.error_type == "provider_authentication_failed"
     assert observation.valid is False
     assert backend.provider_circuit.open(observation.error_type) is True
+
+
+def test_complete_codex_trace_provider_failure_precedes_invalid_action_receipt(
+    tmp_path: Path,
+) -> None:
+    family = "temperature-simulation"
+    item_id = "temperature-simulation-3"
+    benchmark_root = tmp_path / "benchmark"
+    trials_dir = tmp_path / "trials"
+    test_script = (
+        benchmark_root / "tasks" / family / item_id / "tests" / "test.sh"
+    )
+    test_script.parent.mkdir(parents=True)
+    test_script.write_text("python3 /tests/test_outputs.py\n", encoding="utf-8")
+    request = SkillLearnTrialRequest(
+        item_id=item_id,
+        family=family,
+        split=SplitName.TRAIN,
+        variant=TrialVariant.POLICY_OFF,
+        evaluator_epoch="epoch-offline",
+        pair_id="full-trace-provider-error",
+        repeat=0,
+        agent_id="codex",
+        model="gpt-5.4-mini",
+        max_steps=100,
+        manifest_hash="manifest-offline",
+    )
+    trial_dir = trials_dir / "no_skill" / family / item_id / request.trial_id
+    agent_dir = trial_dir / "agent"
+    verifier_dir = trial_dir / "verifier"
+    agent_dir.mkdir(parents=True)
+    verifier_dir.mkdir()
+    terminal_row = json.dumps(
+        {
+            "type": "turn.failed",
+            "error": {
+                "message": "exceeded retry limit, last status: 429 Too Many Requests"
+            },
+        }
+    )
+    generic_error_row = json.dumps(
+        {"type": "error", "message": "stream disconnected"}
+    )
+    (agent_dir / "codex.txt").write_text(
+        ("non-json-prefix" * 256)
+        + "\n"
+        + generic_error_row
+        + "\n"
+        + terminal_row
+        + "\n",
+        encoding="utf-8",
+    )
+    (verifier_dir / "reward.txt").write_text("0\n", encoding="utf-8")
+    (verifier_dir / "ctrf.json").write_text(
+        json.dumps(
+            {
+                "results": {
+                    "summary": {
+                        "tests": 1,
+                        "passed": 0,
+                        "failed": 1,
+                        "skipped": 0,
+                        "pending": 0,
+                        "other": 0,
+                    },
+                    "tests": [{"name": "test_failure", "status": "failed"}],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    sink = MemoryEventSink()
+    backend = SkillLearnSubprocessBackend(
+        benchmark_root,
+        trials_dir=trials_dir,
+        provider_mode="openai_compatible",
+        codex_agent_execution_policy=MODEL_ONLY_ACTION_BUDGET_POLICY,
+        event_sink=sink,
+    )
+    upstream_result = {
+        "passed": False,
+        "reward": 0,
+        "verifier_exit": 0,
+        "agent_stdout": "non-json-prefix" * 128,
+        "agent_stderr": "",
+    }
+
+    audited = backend._audit_trial_artifacts(
+        runner=SimpleNamespace(TRIALS_DIR=str(trials_dir)),
+        request=request,
+        skill_config="no_skill",
+        result=upstream_result,
+        offline_verifier_profile=COMMON_PY38_VERIFIER_PROFILE,
+        trace_id="full-trace-provider-error",
+    )
+    observation = backend._sanitize_result(
+        request,
+        result=audited,
+        return_code=1,
+        duration_seconds=1.0,
+    )
+
+    assert audited["step_budget_receipt_valid"] is False
+    assert audited["error"] == "provider_rate_limit"
+    assert audited["model_terminal_error"] == "provider_rate_limit"
+    assert observation.error_type == "provider_rate_limit"
+    assert backend.provider_circuit.open(observation.error_type) is True
+    assert any(
+        row["event"] == "skilllearn_agent_terminal_error_detected"
+        and row["payload"]["source"] == "complete_codex_trace"
+        and row["payload"]["error_type"] == "provider_rate_limit"
+        for row in sink.events
+    )
 
 
 @pytest.mark.parametrize(

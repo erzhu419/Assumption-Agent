@@ -18,9 +18,14 @@ from ..secure_env import (
 from ..splits import SplitManifest
 from .preflight import build_preflight
 from .skilllearn_lifecycle import (
+    PREBUILT_IMAGE_POLICY_VERSION,
+    SHARED_CODEX_CLI_VERSION,
     SkillLearnPrebuiltImageCache,
     SkillLearnSubprocessBackend,
+    codex_action_supervisor_hash,
+    shared_codex_agent_runtime_key,
 )
+from .codex_action_budget import CODEX_ACTION_BUDGET_POLICY_VERSION
 from .docker_egress import DEPENDENCY_CACHE_POLICY_VERSION
 from .offline_verifier import (
     OFFLINE_VERIFIER_POLICY_VERSION,
@@ -29,7 +34,21 @@ from .offline_verifier import (
 )
 
 
-DEVELOPMENT_PREWARM_VERSION = "all_manifest_images_and_offline_verifiers_v3"
+LEGACY_DEVELOPMENT_PREWARM_VERSION = (
+    "all_manifest_images_and_offline_verifiers_v3"
+)
+DEVELOPMENT_PREWARM_VERSION = "all_manifest_images_and_offline_verifiers_v4"
+
+
+def development_prewarm_version_for_protocol(
+    protocol_version: object,
+) -> str | None:
+    return {
+        "3.1.0": LEGACY_DEVELOPMENT_PREWARM_VERSION,
+        "3.2.0": LEGACY_DEVELOPMENT_PREWARM_VERSION,
+        "3.3.0": LEGACY_DEVELOPMENT_PREWARM_VERSION,
+        "3.4.0": DEVELOPMENT_PREWARM_VERSION,
+    }.get(str(protocol_version or ""))
 
 
 def prewarm_development_images(
@@ -225,6 +244,13 @@ def prewarm_development_images(
         "maximum_attempts": attempts,
         "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
         "dependency_cache_only_enforced": True,
+        "agent_runtime_policy": PREBUILT_IMAGE_POLICY_VERSION,
+        "agent_runtime_key": shared_codex_agent_runtime_key(),
+        "agent_runtime_version": SHARED_CODEX_CLI_VERSION,
+        "codex_action_supervisor_policy": (
+            CODEX_ACTION_BUDGET_POLICY_VERSION
+        ),
+        "codex_action_supervisor_sha256": codex_action_supervisor_hash(),
         "offline_verifier_policy": OFFLINE_VERIFIER_POLICY_VERSION,
         "offline_verifier_runtime_network": "none",
         "offline_verifier_runtime_network_fallback_allowed": False,
@@ -269,7 +295,9 @@ def prewarm_development_images(
         "online_build_attempted": False,
         "passed": passed,
         "items": rows,
-        "test_content_accessed": False,
+        "test_infrastructure_inspected": bool(manifest.test_ids),
+        "sealed_test_scoring_performed": False,
+        "sealed_test_bytes_exposed_to_model": False,
         "secret_value_persisted": False,
         "raw_content_persisted": False,
     }
@@ -281,6 +309,7 @@ def validate_development_prewarm_receipt(
     receipt: Mapping[str, Any],
     *,
     manifest: SplitManifest,
+    expected_version: str = DEVELOPMENT_PREWARM_VERSION,
 ) -> str:
     declared_hash = str(receipt.get("receipt_hash") or "")
     calculated_hash = stable_hash(
@@ -289,7 +318,7 @@ def validate_development_prewarm_receipt(
     if not declared_hash or declared_hash != calculated_hash:
         raise ValueError("development prewarm receipt hash mismatch")
     expected = {
-        "prewarm_version": DEVELOPMENT_PREWARM_VERSION,
+        "prewarm_version": expected_version,
         "manifest_hash": manifest.manifest_hash,
         "split_names": ["train", "validation", "test"],
         "selected_item_set_hash": _selected_item_set_hash(manifest),
@@ -311,10 +340,30 @@ def validate_development_prewarm_receipt(
         "offline_verifier_runtime_network_fallback_allowed": False,
         "online_build_attempted": False,
         "passed": True,
-        "test_content_accessed": False,
         "secret_value_persisted": False,
         "raw_content_persisted": False,
     }
+    if expected_version == DEVELOPMENT_PREWARM_VERSION:
+        expected.update(
+            {
+                "test_infrastructure_inspected": bool(manifest.test_ids),
+                "sealed_test_scoring_performed": False,
+                "sealed_test_bytes_exposed_to_model": False,
+                "agent_runtime_policy": PREBUILT_IMAGE_POLICY_VERSION,
+                "agent_runtime_key": shared_codex_agent_runtime_key(),
+                "agent_runtime_version": SHARED_CODEX_CLI_VERSION,
+                "codex_action_supervisor_policy": (
+                    CODEX_ACTION_BUDGET_POLICY_VERSION
+                ),
+                "codex_action_supervisor_sha256": (
+                    codex_action_supervisor_hash()
+                ),
+            }
+        )
+    elif expected_version == LEGACY_DEVELOPMENT_PREWARM_VERSION:
+        expected["test_content_accessed"] = False
+    else:
+        raise ValueError("development prewarm version is unsupported")
     for key, value in expected.items():
         if receipt.get(key) != value:
             raise ValueError(f"development prewarm receipt mismatch: {key}")
@@ -354,6 +403,13 @@ def validate_development_prewarm_receipt(
         if not item_hash or item_hash in observed_item_hashes:
             raise ValueError("development prewarm item hashes are incomplete")
         observed_item_hashes.add(item_hash)
+        if expected_version == DEVELOPMENT_PREWARM_VERSION and (
+            row.get("agent_runtime_key") != shared_codex_agent_runtime_key()
+            or row.get("agent_runtime_version") != SHARED_CODEX_CLI_VERSION
+        ):
+            raise ValueError(
+                "development prewarm agent runtime does not match the active runtime"
+            )
         mode = row.get("verifier_runtime_mode")
         expected_profile = expected_profile_by_item_hash.get(item_hash)
         if mode == "local_profile":

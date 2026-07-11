@@ -64,6 +64,12 @@ from .skilllearn_compiler import (
     skilllearn_program_treatment_hash,
 )
 from .skilllearnbench import SkillLearnBenchAdapter
+from .codex_action_budget import (
+    CODEX_ACTION_BUDGET_COST_ACCOUNTING_POLICY,
+    CODEX_ACTION_BUDGET_POLICY_VERSION,
+    CODEX_ACTION_BUDGET_UNIT,
+    audit_codex_action_budget,
+)
 from .codex_execution_policy import (
     CodexAgentExecutionPolicy,
     LEGACY_CODEX_AGENT_EXECUTION_POLICY,
@@ -119,7 +125,8 @@ PROPOSAL_FAILURE_ISOLATION_POLICY_VERSION = (
 )
 PROVIDER_ROUTE_POLICY_VERSION = "single_model_single_provider_all_arms_v1"
 OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION = "codex_custom_responses_provider_v1"
-CODEX_NETWORK_MINIMIZATION_VERSION = "model_only_no_remote_tools_v2"
+LEGACY_CODEX_NETWORK_MINIMIZATION_VERSION = "model_only_no_remote_tools_v2"
+CODEX_NETWORK_MINIMIZATION_VERSION = "model_only_no_remote_tools_v3"
 MODEL_ONLY_TOOL_POLICY_VERSION = "no_web_image_or_runtime_install_v1"
 OPENAI_COMPATIBLE_CODEX_PROVIDER_ID = "assumption_v2_openai_compatible"
 PREBUILT_IMAGE_POLICY_VERSION = "per_item_base_shared_agent_runtime_v3"
@@ -129,6 +136,10 @@ SHARED_AGENT_RUNTIME_BUILDER_IMAGE = (
 )
 SHARED_CODEX_CLI_PACKAGE = "@openai/codex@0.144.1"
 SHARED_CODEX_CLI_VERSION = "codex-cli 0.144.1"
+CODEX_ACTION_SUPERVISOR_FILENAME = "codex-action-supervisor.mjs"
+CODEX_ACTION_SUPERVISOR_PATH = Path(__file__).with_name(
+    "codex_action_supervisor.mjs"
+)
 _InputT = TypeVar("_InputT")
 _OutputT = TypeVar("_OutputT")
 _FATAL_PROVIDER_ERROR_TYPES = frozenset(
@@ -311,6 +322,12 @@ class SkillLearnTrialObservation:
     agent_runtime_version: str = ""
     offline_verifier_profile_id: str = ""
     offline_verifier_runtime_key: str = ""
+    step_budget_policy: str = ""
+    step_budget_unit: str = ""
+    step_budget_limit: int = 0
+    step_budget_truncated: bool = False
+    step_budget_token_usage_complete: bool = False
+    step_budget_receipt_hash: str = ""
 
     @property
     def valid(self) -> bool:
@@ -318,6 +335,8 @@ class SkillLearnTrialObservation:
 
     @property
     def cost_units(self) -> float:
+        if self.step_budget_policy == CODEX_ACTION_BUDGET_POLICY_VERSION:
+            return float(max(1, self.steps))
         if self.total_tokens > 0:
             return float(self.total_tokens)
         if self.steps > 0:
@@ -352,6 +371,14 @@ class SkillLearnTrialObservation:
             "agent_runtime_version": self.agent_runtime_version,
             "offline_verifier_profile_id": self.offline_verifier_profile_id,
             "offline_verifier_runtime_key": self.offline_verifier_runtime_key,
+            "step_budget_policy": self.step_budget_policy,
+            "step_budget_unit": self.step_budget_unit,
+            "step_budget_limit": self.step_budget_limit,
+            "step_budget_truncated": self.step_budget_truncated,
+            "step_budget_token_usage_complete": (
+                self.step_budget_token_usage_complete
+            ),
+            "step_budget_receipt_hash": self.step_budget_receipt_hash,
             "secret_value_persisted": False,
         }
 
@@ -500,6 +527,36 @@ def codex_agent_execution_policy_for_backend(
     )
 
 
+def codex_network_minimization_for_policy(
+    policy: CodexAgentExecutionPolicy,
+) -> str:
+    return (
+        CODEX_NETWORK_MINIMIZATION_VERSION
+        if policy.web_search_mode == "disabled"
+        else LEGACY_CODEX_NETWORK_MINIMIZATION_VERSION
+    )
+
+
+def codex_action_supervisor_hash() -> str:
+    return _file_content_hash(CODEX_ACTION_SUPERVISOR_PATH)
+
+
+def shared_codex_agent_runtime_key() -> str:
+    return stable_hash(
+        {
+            "policy": PREBUILT_IMAGE_POLICY_VERSION,
+            "builder_image": SHARED_AGENT_RUNTIME_BUILDER_IMAGE,
+            "codex_cli_package": SHARED_CODEX_CLI_PACKAGE,
+            "codex_action_supervisor_policy": (
+                CODEX_ACTION_BUDGET_POLICY_VERSION
+            ),
+            "codex_action_supervisor_sha256": (
+                codex_action_supervisor_hash()
+            ),
+        }
+    )
+
+
 @dataclass(frozen=True)
 class SkillLearnPrebuiltImage:
     tag: str
@@ -572,7 +629,6 @@ class SkillLearnPrebuiltImageCache:
             runner=runner,
             agent=agent,
             agent_id=agent_id,
-            agent_image_hash=agent_image_hash,
             trace_id=f"{trace_id}:agent-runtime",
         )
         metadata_key = (family, item_id, cache_key)
@@ -716,7 +772,6 @@ class SkillLearnPrebuiltImageCache:
         runner: ModuleType,
         agent: Mapping[str, Any],
         agent_id: str,
-        agent_image_hash: str,
         trace_id: str,
     ) -> tuple[str, str, str]:
         if agent_id != "codex":
@@ -724,14 +779,7 @@ class SkillLearnPrebuiltImageCache:
         install = str(agent.get("install") or "").strip()
         if not install.startswith("npm ") or "@openai/codex" not in install:
             raise ValueError("shared codex runtime requires an npm agent install command")
-        runtime_key = stable_hash(
-            {
-                "policy": PREBUILT_IMAGE_POLICY_VERSION,
-                "builder_image": SHARED_AGENT_RUNTIME_BUILDER_IMAGE,
-                "agent_image_hash": agent_image_hash,
-                "codex_cli_package": SHARED_CODEX_CLI_PACKAGE,
-            }
-        )
+        runtime_key = shared_codex_agent_runtime_key()
         volume = f"assumption-v2-agent-{runtime_key[:24]}"
         with self._runtime_lock:
             cached = self._runtime_metadata.get(runtime_key)
@@ -783,6 +831,9 @@ class SkillLearnPrebuiltImageCache:
                 populate_command = (
                     "set -eu; mkdir -p /runtime/bin; "
                     "cp -L \"$(command -v node)\" /runtime/bin/node; "
+                    f"cp /supervisor/{CODEX_ACTION_SUPERVISOR_FILENAME} "
+                    f"/runtime/{CODEX_ACTION_SUPERVISOR_FILENAME}; "
+                    f"chmod 0444 /runtime/{CODEX_ACTION_SUPERVISOR_FILENAME}; "
                     f"npm_config_prefix=/runtime npm install -g {SHARED_CODEX_CLI_PACKAGE}"
                 )
                 populated = runner.subprocess.run(
@@ -794,6 +845,11 @@ class SkillLearnPrebuiltImageCache:
                         "never",
                         "-v",
                         f"{volume}:/runtime",
+                        "-v",
+                        (
+                            f"{CODEX_ACTION_SUPERVISOR_PATH}:"
+                            f"/supervisor/{CODEX_ACTION_SUPERVISOR_FILENAME}:ro"
+                        ),
                         SHARED_AGENT_RUNTIME_BUILDER_IMAGE,
                         "sh",
                         "-lc",
@@ -823,6 +879,37 @@ class SkillLearnPrebuiltImageCache:
                         )
                 except (IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
                     raise RuntimeError("shared agent runtime metadata is malformed") from exc
+            verified_supervisor = runner.subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "--pull",
+                    "never",
+                    "--network",
+                    "none",
+                    "-e",
+                    f"PATH={SHARED_AGENT_RUNTIME_MOUNT}/bin:/usr/local/bin:/usr/bin:/bin",
+                    "-v",
+                    f"{volume}:{SHARED_AGENT_RUNTIME_MOUNT}:ro",
+                    SHARED_AGENT_RUNTIME_BUILDER_IMAGE,
+                    "sh",
+                    "-lc",
+                    (
+                        "test \"$(sha256sum "
+                        f"{SHARED_AGENT_RUNTIME_MOUNT}/"
+                        f"{CODEX_ACTION_SUPERVISOR_FILENAME} | cut -d' ' -f1)\" "
+                        f"= {codex_action_supervisor_hash()}"
+                    ),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if int(getattr(verified_supervisor, "returncode", 1)) != 0:
+                raise RuntimeError(
+                    "shared_agent_runtime_supervisor_verification_failed:"
+                    + _safe_subprocess_snippet(verified_supervisor)
+                )
             verified = runner.subprocess.run(
                 [
                     "docker",
@@ -869,6 +956,12 @@ class SkillLearnPrebuiltImageCache:
                         "runtime_version": version,
                         "builder_image": SHARED_AGENT_RUNTIME_BUILDER_IMAGE,
                         "codex_cli_package": SHARED_CODEX_CLI_PACKAGE,
+                        "codex_action_supervisor_policy": (
+                            CODEX_ACTION_BUDGET_POLICY_VERSION
+                        ),
+                        "codex_action_supervisor_sha256": (
+                            codex_action_supervisor_hash()
+                        ),
                         "policy": PREBUILT_IMAGE_POLICY_VERSION,
                         "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
                         "cache_only": self.cache_only,
@@ -1209,7 +1302,11 @@ class SkillLearnSubprocessBackend:
                         if self.provider_mode == "openai_compatible"
                         else None
                     ),
-                    "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+                    "codex_network_minimization": (
+                        codex_network_minimization_for_policy(
+                            self.codex_agent_execution_policy
+                        )
+                    ),
                     "codex_agent_execution_policy": (
                         self.codex_agent_execution_policy.to_dict()
                     ),
@@ -1437,6 +1534,18 @@ class SkillLearnSubprocessBackend:
                     "offline_verifier_runtime_key": (
                         observation.offline_verifier_runtime_key
                     ),
+                    "step_budget_policy": observation.step_budget_policy,
+                    "step_budget_unit": observation.step_budget_unit,
+                    "step_budget_limit": observation.step_budget_limit,
+                    "step_budget_truncated": (
+                        observation.step_budget_truncated
+                    ),
+                    "step_budget_token_usage_complete": (
+                        observation.step_budget_token_usage_complete
+                    ),
+                    "step_budget_receipt_hash": (
+                        observation.step_budget_receipt_hash
+                    ),
                 },
             )
         )
@@ -1581,76 +1690,50 @@ class SkillLearnSubprocessBackend:
         run_template = str(agent.get("run") or "")
         if "codex exec" not in run_template:
             raise RuntimeError("SkillLearnBench codex run template is unavailable")
-        config_values = (
-            "--ignore-user-config",
-            "--ephemeral",
-            "--strict-config",
-            "--disable",
-            "image_generation",
-            "--disable",
-            "standalone_web_search",
-            "--config",
-            "analytics.enabled=false",
-            "--config",
-            'otel.exporter="none"',
-            "--config",
-            'otel.metrics_exporter="none"',
-            "--config",
-            'otel.trace_exporter="none"',
-            "--config",
-            "tools.web_search=false",
-            *self.codex_agent_execution_policy.codex_cli_values(),
-            "--config",
-            (
-                "developer_instructions="
-                + json.dumps(
-                    "This evaluation environment is offline except for model inference. "
-                    "Do not use web search, image generation services, package installation, "
-                    "or commands that fetch network content. Use only preinstalled local tools "
-                    "and files."
-                )
-            ),
-            "--config",
-            f"model_provider={json.dumps(OPENAI_COMPATIBLE_CODEX_PROVIDER_ID)}",
-            "--config",
-            (
-                f'model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}.name='
-                f'{json.dumps("OpenAI-compatible paper route")}'
-            ),
-            "--config",
-            (
-                f'model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}.base_url='
-                f"{json.dumps(codex_base_url)}"
-            ),
-            "--config",
-            (
-                f'model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}.env_key='
-                f'{json.dumps("OPENAI_API_KEY")}'
-            ),
-            "--config",
-            (
-                f'model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}.wire_api='
-                f'{json.dumps("responses")}'
-            ),
-            "--config",
-            (
-                f"model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}."
-                "supports_websockets=false"
-            ),
-            "--config",
-            (
-                f"model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}."
-                "requires_openai_auth=false"
-            ),
+        config_values = _openai_compatible_codex_config_values(
+            policy=self.codex_agent_execution_policy,
+            codex_base_url=codex_base_url,
         )
         codex_config = " ".join(shlex.quote(value) for value in config_values)
         agent["env"] = env_names
         agent["setup"] = None
-        agent["run"] = run_template.replace(
-            "codex exec",
-            f"codex exec {codex_config}",
-            1,
-        )
+        codex_command = f"codex exec {codex_config}"
+        if self.codex_agent_execution_policy.action_budget_enforced:
+            trajectory_env = dict(agent.get("trajectory_env") or {})
+            codex_home = str(trajectory_env.get("CODEX_HOME") or "/logs/agent")
+            receipt_path = (
+                f"{codex_home.rstrip('/')}/codex_action_budget_receipt.json"
+            )
+            trace_path = f"{codex_home.rstrip('/')}/codex.txt"
+            codex_command = " ".join(
+                (
+                    "rm",
+                    "-f",
+                    shlex.quote(receipt_path),
+                    shlex.quote(trace_path),
+                    "&&",
+                    "node",
+                    shlex.quote(
+                        f"{SHARED_AGENT_RUNTIME_MOUNT}/"
+                        f"{CODEX_ACTION_SUPERVISOR_FILENAME}"
+                    ),
+                    "--limit",
+                    str(self.max_steps),
+                    "--receipt",
+                    shlex.quote(receipt_path),
+                    "--trace",
+                    shlex.quote(trace_path),
+                    "--process-scope",
+                    str(
+                        self.codex_agent_execution_policy
+                        .action_budget_process_scope
+                    ),
+                    "--",
+                    codex_command,
+                )
+            )
+            agent["trajectory_tee"] = None
+        agent["run"] = run_template.replace("codex exec", codex_command, 1)
         endpoint = urlsplit(codex_base_url)
         endpoint_origin = f"{endpoint.scheme}://{endpoint.hostname}"
         if endpoint.port is not None:
@@ -1680,12 +1763,40 @@ class SkillLearnSubprocessBackend:
                     "otel_metrics_exporter": "none",
                     "otel_trace_exporter": "none",
                     "strict_config": True,
-                    "web_search_enabled": False,
+                    "web_search_mode": (
+                        self.codex_agent_execution_policy.web_search_mode
+                        or "catalog_default"
+                    ),
+                    "web_search_enabled": (
+                        self.codex_agent_execution_policy.web_search_mode
+                        != "disabled"
+                    ),
                     "image_generation_enabled": False,
                     "runtime_package_install_allowed": False,
                     "model_only_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
                     "network_minimization_version": (
-                        CODEX_NETWORK_MINIMIZATION_VERSION
+                        codex_network_minimization_for_policy(
+                            self.codex_agent_execution_policy
+                        )
+                    ),
+                    "action_budget_policy": (
+                        self.codex_agent_execution_policy.action_budget_policy
+                    ),
+                    "action_budget_unit": (
+                        self.codex_agent_execution_policy.action_budget_unit
+                    ),
+                    "action_budget_cost_accounting_policy": (
+                        self.codex_agent_execution_policy
+                        .action_budget_cost_accounting_policy
+                    ),
+                    "action_budget_process_scope": (
+                        self.codex_agent_execution_policy
+                        .action_budget_process_scope
+                    ),
+                    "action_budget_limit": (
+                        self.max_steps
+                        if self.codex_agent_execution_policy.action_budget_enforced
+                        else None
                     ),
                     "codex_agent_execution_policy": (
                         self.codex_agent_execution_policy.to_dict()
@@ -1734,8 +1845,42 @@ class SkillLearnSubprocessBackend:
             result=result,
             offline_verifier_profile=offline_verifier_profile,
         )
-        tool_audit = _inspect_codex_tool_policy(trial_path / "agent" / "codex.txt")
+        codex_trace_path = trial_path / "agent" / "codex.txt"
+        tool_audit = _inspect_codex_tool_policy(codex_trace_path)
+        trace_terminal_error = _provider_scoped_terminal_error(
+            _codex_terminal_error_label(
+                codex_trace_path.read_text(encoding="utf-8", errors="replace")
+                if codex_trace_path.is_file()
+                else None
+            ),
+            self.provider_mode,
+        )
+        action_budget_audit = (
+            audit_codex_action_budget(
+                trace_path=codex_trace_path,
+                receipt_path=(
+                    trial_path / "agent" / "codex_action_budget_receipt.json"
+                ),
+                supervisor_path=CODEX_ACTION_SUPERVISOR_PATH,
+                expected_limit=self.max_steps,
+                expected_process_scope=(
+                    str(
+                        self.codex_agent_execution_policy
+                        .action_budget_process_scope
+                    )
+                ),
+            )
+            if self.codex_agent_execution_policy.action_budget_enforced
+            else None
+        )
         audited = dict(result)
+        if (
+            action_budget_audit is not None
+            and action_budget_audit.valid
+            and action_budget_audit.token_usage_complete
+        ):
+            audited["token_usage"] = dict(action_budget_audit.token_usage)
+            audited["token_usage_source"] = "codex_action_budget_receipt"
         audited.update(
             {
                 "verifier_receipt_policy": (
@@ -1775,12 +1920,65 @@ class SkillLearnSubprocessBackend:
                     tool_audit.runtime_install_command_count
                 ),
                 "model_tool_trace_hash": tool_audit.trace_hash,
+                "model_terminal_error": trace_terminal_error,
+                "model_terminal_trace_hash": (
+                    tool_audit.trace_hash if trace_terminal_error else None
+                ),
+                "steps_used": (
+                    action_budget_audit.observed_steps
+                    if action_budget_audit is not None
+                    else result.get("steps_used")
+                ),
+                "step_budget_policy": (
+                    CODEX_ACTION_BUDGET_POLICY_VERSION
+                    if action_budget_audit is not None
+                    else None
+                ),
+                "step_budget_unit": (
+                    CODEX_ACTION_BUDGET_UNIT
+                    if action_budget_audit is not None
+                    else None
+                ),
+                "step_budget_limit": (
+                    self.max_steps if action_budget_audit is not None else None
+                ),
+                "step_budget_truncated": (
+                    action_budget_audit.budget_truncated
+                    if action_budget_audit is not None
+                    else False
+                ),
+                "step_budget_receipt_valid": (
+                    action_budget_audit.valid
+                    if action_budget_audit is not None
+                    else None
+                ),
+                "step_budget_receipt_hash": (
+                    action_budget_audit.receipt_hash
+                    if action_budget_audit is not None
+                    else None
+                ),
+                "step_budget_action_event_hash": (
+                    action_budget_audit.action_event_hash
+                    if action_budget_audit is not None
+                    else None
+                ),
+                "step_budget_token_usage_complete": (
+                    action_budget_audit.token_usage_complete
+                    if action_budget_audit is not None
+                    else None
+                ),
             }
         )
         existing_error = _safe_error_label(audited.get("error"))
-        if existing_error is None:
-            if not tool_audit.valid:
+        if trace_terminal_error in _FATAL_PROVIDER_ERROR_TYPES:
+            audited["error"] = trace_terminal_error
+        elif existing_error is None:
+            if trace_terminal_error:
+                audited["error"] = trace_terminal_error
+            elif not tool_audit.valid:
                 audited["error"] = tool_audit.error_type
+            elif action_budget_audit is not None and not action_budget_audit.valid:
+                audited["error"] = action_budget_audit.error_type
             elif not verifier_receipt.valid:
                 audited["error"] = verifier_receipt.error_type
         self.event_sink.emit(
@@ -1847,6 +2045,66 @@ class SkillLearnSubprocessBackend:
                 },
             )
         )
+        if trace_terminal_error:
+            self.event_sink.emit(
+                Event(
+                    event="skilllearn_agent_terminal_error_detected",
+                    stage="benchmark.skilllearn.provider_failure",
+                    trace_id=trace_id,
+                    payload={
+                        "error_type": trace_terminal_error,
+                        "policy": PROVIDER_FAILURE_POLICY_VERSION,
+                        "trace_hash": tool_audit.trace_hash,
+                        "source": "complete_codex_trace",
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+        if action_budget_audit is not None:
+            self.event_sink.emit(
+                Event(
+                    event=(
+                        "skilllearn_agent_action_budget_validated"
+                        if action_budget_audit.valid
+                        else "skilllearn_agent_action_budget_invalid"
+                    ),
+                    stage="benchmark.skilllearn.action_budget",
+                    trace_id=trace_id,
+                    payload={
+                        "policy": CODEX_ACTION_BUDGET_POLICY_VERSION,
+                        "unit": CODEX_ACTION_BUDGET_UNIT,
+                        "request_hash": request.request_hash,
+                        "valid": action_budget_audit.valid,
+                        "error_type": action_budget_audit.error_type,
+                        "limit": self.max_steps,
+                        "observed_steps": action_budget_audit.observed_steps,
+                        "budget_reached": action_budget_audit.budget_reached,
+                        "budget_truncated": (
+                            action_budget_audit.budget_truncated
+                        ),
+                        "cost_accounting_policy": (
+                            CODEX_ACTION_BUDGET_COST_ACCOUNTING_POLICY
+                        ),
+                        "token_usage_complete": (
+                            action_budget_audit.token_usage_complete
+                        ),
+                        "turn_completed_observed": (
+                            action_budget_audit.turn_completed_observed
+                        ),
+                        "agent_processes_exit_confirmed": (
+                            action_budget_audit.agent_processes_exit_confirmed
+                        ),
+                        "receipt_hash": action_budget_audit.receipt_hash,
+                        "action_event_hash": action_budget_audit.action_event_hash,
+                        "verifier_started_after_agent_exit": (
+                            action_budget_audit.process_group_exit_confirmed
+                            and action_budget_audit.agent_processes_exit_confirmed
+                            and result.get("verifier_exit") is not None
+                        ),
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
         return audited
 
     def _sanitize_result(
@@ -1879,6 +2137,12 @@ class SkillLearnSubprocessBackend:
             error_type = error_type or terminal_error
         if result.get("agent_timed_out") is True:
             error_type = error_type or "agent_timeout"
+        agent_exit = result.get("agent_exit")
+        if (
+            agent_exit is not None
+            and str(agent_exit).strip() not in {"", "0"}
+        ):
+            error_type = error_type or "codex_agent_exit_nonzero"
         if str(result.get("verifier_exit")).strip() == "-1":
             error_type = error_type or "verifier_timeout"
         if return_code not in {0, 1} and not error_type:
@@ -1942,7 +2206,11 @@ class SkillLearnSubprocessBackend:
                 if self.provider_mode == "openai_compatible"
                 else None
             ),
-            "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+            "codex_network_minimization": (
+                codex_network_minimization_for_policy(
+                    self.codex_agent_execution_policy
+                )
+            ),
             "codex_agent_execution_policy": (
                 self.codex_agent_execution_policy.to_dict()
             ),
@@ -2022,6 +2290,28 @@ class SkillLearnSubprocessBackend:
                 result.get("model_runtime_install_command_count")
             ),
             "model_tool_trace_hash": result.get("model_tool_trace_hash"),
+            "model_terminal_error": result.get("model_terminal_error"),
+            "model_terminal_trace_hash": result.get(
+                "model_terminal_trace_hash"
+            ),
+            "step_budget_policy": result.get("step_budget_policy"),
+            "step_budget_unit": result.get("step_budget_unit"),
+            "step_budget_limit": _as_nonnegative_int(
+                result.get("step_budget_limit")
+            ),
+            "step_budget_truncated": result.get("step_budget_truncated"),
+            "step_budget_token_usage_complete": result.get(
+                "step_budget_token_usage_complete"
+            ),
+            "step_budget_receipt_valid": result.get(
+                "step_budget_receipt_valid"
+            ),
+            "step_budget_receipt_hash": result.get(
+                "step_budget_receipt_hash"
+            ),
+            "step_budget_action_event_hash": result.get(
+                "step_budget_action_event_hash"
+            ),
             "error_type": error_type,
             "token_usage": {str(key): _as_nonnegative_int(value) for key, value in usage.items()},
         }
@@ -2054,6 +2344,18 @@ class SkillLearnSubprocessBackend:
                 offline_verifier_runtime.runtime_key
                 if offline_verifier_runtime
                 else ""
+            ),
+            step_budget_policy=str(result.get("step_budget_policy") or ""),
+            step_budget_unit=str(result.get("step_budget_unit") or ""),
+            step_budget_limit=_as_nonnegative_int(
+                result.get("step_budget_limit")
+            ),
+            step_budget_truncated=bool(result.get("step_budget_truncated")),
+            step_budget_token_usage_complete=bool(
+                result.get("step_budget_token_usage_complete")
+            ),
+            step_budget_receipt_hash=str(
+                result.get("step_budget_receipt_hash") or ""
             ),
         )
 
@@ -4006,7 +4308,9 @@ def _fairness_fingerprint(
             ),
             "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
             "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
-            "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+            "codex_network_minimization": (
+                codex_network_minimization_for_policy(codex_agent_execution_policy)
+            ),
             "codex_agent_execution_policy_hash": (
                 codex_agent_execution_policy.policy_hash
             ),
@@ -4059,7 +4363,9 @@ def _provider_fingerprint(
             ),
             "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
             "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
-            "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+            "codex_network_minimization": (
+                codex_network_minimization_for_policy(codex_agent_execution_policy)
+            ),
             "codex_agent_execution_policy_hash": (
                 codex_agent_execution_policy.policy_hash
             ),
@@ -4081,6 +4387,73 @@ def _provider_fingerprint(
                 else None
             ),
         }
+    )
+
+
+def _openai_compatible_codex_config_values(
+    *,
+    policy: CodexAgentExecutionPolicy,
+    codex_base_url: str,
+) -> tuple[str, ...]:
+    return (
+        "--ignore-user-config",
+        "--ephemeral",
+        "--strict-config",
+        "--disable",
+        "image_generation",
+        "--disable",
+        "standalone_web_search",
+        "--config",
+        "analytics.enabled=false",
+        "--config",
+        'otel.exporter="none"',
+        "--config",
+        'otel.metrics_exporter="none"',
+        "--config",
+        'otel.trace_exporter="none"',
+        *policy.codex_cli_values(),
+        "--config",
+        (
+            "developer_instructions="
+            + json.dumps(
+                "This evaluation environment is offline except for model inference. "
+                "Do not use web search, image generation services, package installation, "
+                "or commands that fetch network content. Use only preinstalled local tools "
+                "and files."
+            )
+        ),
+        "--config",
+        f"model_provider={json.dumps(OPENAI_COMPATIBLE_CODEX_PROVIDER_ID)}",
+        "--config",
+        (
+            f'model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}.name='
+            f'{json.dumps("OpenAI-compatible paper route")}'
+        ),
+        "--config",
+        (
+            f'model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}.base_url='
+            f"{json.dumps(codex_base_url)}"
+        ),
+        "--config",
+        (
+            f'model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}.env_key='
+            f'{json.dumps("OPENAI_API_KEY")}'
+        ),
+        "--config",
+        (
+            f'model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}.wire_api='
+            f'{json.dumps("responses")}'
+        ),
+        "--config",
+        (
+            f"model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}."
+            "supports_websockets=false"
+        ),
+        "--config",
+        (
+            f"model_providers.{OPENAI_COMPATIBLE_CODEX_PROVIDER_ID}."
+            "requires_openai_auth=false"
+        ),
     )
 
 
@@ -4134,6 +4507,7 @@ def _trial_timeout_stage(command: Any) -> str | None:
 
 
 def _codex_terminal_error_label(*streams: Any) -> str | None:
+    generic_failure_observed = False
     for stream in streams:
         if stream is None:
             continue
@@ -4177,8 +4551,8 @@ def _codex_terminal_error_label(*streams: Any) -> str | None:
                 for value in ("model is not available", "model unavailable", "unsupported model")
             ):
                 return "provider_model_unavailable"
-            return "codex_turn_failed"
-    return None
+            generic_failure_observed = True
+    return "codex_turn_failed" if generic_failure_observed else None
 
 
 def _safe_error_label(value: Any) -> str | None:

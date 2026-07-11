@@ -39,6 +39,7 @@ def main() -> None:
     parser.add_argument("--trials-dir", type=Path, required=True)
     parser.add_argument("--events", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--diagnostic-max-steps", type=int)
     args = parser.parse_args()
 
     load_dotenv(args.env_file)
@@ -84,7 +85,16 @@ def main() -> None:
     cache = SkillLearnPrebuiltImageCache(root, cache_only=True, event_sink=sink)
     model = str(protocol.payload["model"])
     provider_mode = str(protocol.payload["trial_provider_mode"])
-    max_steps = int(protocol.payload["max_steps"])
+    protocol_max_steps = int(protocol.payload["max_steps"])
+    max_steps = (
+        protocol_max_steps
+        if args.diagnostic_max_steps is None
+        else args.diagnostic_max_steps
+    )
+    if not 1 <= max_steps <= protocol_max_steps:
+        raise ValueError(
+            "diagnostic max steps must be within the frozen protocol budget"
+        )
     backend = SkillLearnSubprocessBackend(
         root,
         model=model,
@@ -128,9 +138,12 @@ def main() -> None:
         "codex_agent_execution_policy_hash": (
             protocol.codex_agent_execution_policy.policy_hash
         ),
+        "protocol_max_steps": protocol_max_steps,
+        "diagnostic_max_steps": max_steps,
         "claim_eligible": False,
         "learning_enabled": False,
         "retry_enabled": False,
+        "upstream_trial_artifacts_persisted": True,
         "observation": observation.to_dict(),
         "raw_content_persisted": False,
     }
