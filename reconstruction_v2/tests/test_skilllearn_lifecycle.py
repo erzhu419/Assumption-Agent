@@ -2189,6 +2189,24 @@ def test_complete_codex_trace_provider_failure_precedes_invalid_action_receipt(
             },
             "provider_usage_limit",
         ),
+        (
+            {
+                "agent_timed_out": False,
+                "verifier_exit": 0,
+                "agent_stdout": json.dumps(
+                    {
+                        "type": "turn.failed",
+                        "error": {
+                            "message": (
+                                "503 Service Unavailable: model has no available "
+                                "distributor channel"
+                            )
+                        },
+                    }
+                ),
+            },
+            "provider_model_unavailable",
+        ),
     ],
 )
 def test_upstream_trial_timeouts_are_invalid_observations(

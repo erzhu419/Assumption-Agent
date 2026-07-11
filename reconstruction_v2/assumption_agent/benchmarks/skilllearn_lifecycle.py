@@ -4559,7 +4559,14 @@ def _codex_terminal_error_label(*streams: Any) -> str | None:
                 return "provider_authentication_failed"
             if any(
                 value in message
-                for value in ("model is not available", "model unavailable", "unsupported model")
+                for value in (
+                    "model is not available",
+                    "model unavailable",
+                    "unsupported model",
+                    "503 service unavailable",
+                    "distributor",
+                    "无可用渠道",
+                )
             ):
                 return "provider_model_unavailable"
             generic_failure_observed = True
