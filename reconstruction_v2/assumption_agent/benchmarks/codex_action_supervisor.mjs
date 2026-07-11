@@ -3,7 +3,9 @@
 import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import {
+  chmodSync,
   closeSync,
+  fchmodSync,
   openSync,
   readdirSync,
   readFileSync,
@@ -63,7 +65,8 @@ function stableHash(value) {
 function writeReceipt(path, payload) {
   const complete = { ...payload, receipt_hash: stableHash(payload) };
   const temporary = `${path}.tmp-${process.pid}`;
-  writeFileSync(temporary, `${JSON.stringify(complete, null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(temporary, `${JSON.stringify(complete, null, 2)}\n`, { mode: 0o644 });
+  chmodSync(temporary, 0o644);
   renameSync(temporary, path);
 }
 
@@ -172,7 +175,8 @@ const supervisorHash = createHash("sha256")
   .update(readFileSync(new URL(import.meta.url)))
   .digest("hex");
 const runNonce = randomBytes(16).toString("hex");
-const traceFd = openSync(tracePath, "w", 0o600);
+const traceFd = openSync(tracePath, "w", 0o644);
+fchmodSync(traceFd, 0o644);
 const traceHasher = createHash("sha256");
 
 function writeTrace(value) {

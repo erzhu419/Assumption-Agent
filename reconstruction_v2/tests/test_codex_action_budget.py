@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -122,6 +123,8 @@ def test_supervisor_natural_completion_produces_valid_receipt(tmp_path: Path) ->
     )
 
     assert completed.returncode == 0
+    assert stat.S_IMODE(trace.stat().st_mode) == 0o644
+    assert stat.S_IMODE(receipt.stat().st_mode) == 0o644
     audit = audit_codex_action_budget(
         trace_path=trace,
         receipt_path=receipt,
