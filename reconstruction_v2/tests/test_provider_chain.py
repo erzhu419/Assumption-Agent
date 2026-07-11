@@ -35,7 +35,7 @@ def test_provider_chain_fails_over_and_opens_primary_circuit() -> None:
     chain = ProviderChainProposalModel(
         [
             ProviderBinding("openai_compatible", primary),
-            ProviderBinding("codex_app_server", fallback),
+            ProviderBinding("secondary_openai_compatible", fallback),
         ],
         model_name="gpt-5.3-codex-spark",
         event_sink=sink,
@@ -60,7 +60,7 @@ def test_provider_chain_fails_over_and_opens_primary_circuit() -> None:
     assert "private diagnostics" not in repr(sink.events)
 
 
-def test_default_provider_chain_prefers_local_subscription(monkeypatch) -> None:
+def test_default_provider_chain_uses_direct_openai_compatible_route(monkeypatch) -> None:
     monkeypatch.delenv("ASSUMPTION_V2_PROVIDER_CHAIN", raising=False)
 
-    assert configured_provider_chain() == ("codex_app_server", "openai_compatible")
+    assert configured_provider_chain() == ("openai_compatible",)

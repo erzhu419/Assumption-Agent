@@ -44,8 +44,16 @@ from .prewarm import (
     validate_development_prewarm_receipt,
 )
 from .skilllearn_compiler import SKILL_ROUTING_VERSION
+from .docker_egress import (
+    DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
+    DEPENDENCY_CACHE_POLICY_VERSION,
+    DOCKER_EGRESS_POLICY_VERSION,
+    PROVIDER_DNS_POLICY_VERSION,
+    TRIAL_NETWORK_BUDGET_POLICY_VERSION,
+)
 from .skilllearn_lifecycle import (
-    EPHEMERAL_AUTH_CLEANUP_VERSION,
+    BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+    CODEX_NETWORK_MINIMIZATION_VERSION,
     OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION,
     PREBUILT_IMAGE_POLICY_VERSION,
     PROVIDER_FAILURE_POLICY_VERSION,
@@ -88,10 +96,10 @@ def main() -> None:
     parser.add_argument("--train-limit", type=int)
     parser.add_argument("--validation-limit", type=int)
     parser.add_argument("--agent-id", default="codex")
-    parser.add_argument("--model", default="gpt-5.3-codex-spark")
+    parser.add_argument("--model", default="gpt-5.4-mini")
     parser.add_argument(
         "--trial-provider-mode",
-        choices=("codex_subscription", "openai_compatible"),
+        choices=("openai_compatible",),
     )
     parser.add_argument("--max-steps", type=int, default=100)
     parser.add_argument("--minimum-pairs", type=int, default=10)
@@ -168,6 +176,9 @@ def main() -> None:
         "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
         "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
         "counterfactual_replay_policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+        "baseline_arm_evidence_replay_policy": (
+            BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
         "root_proposal_replay_policy": ROOT_PROPOSAL_REPLAY_POLICY_VERSION,
         "training_evidence_replay_policy": (
             TRAINING_EVIDENCE_REPLAY_POLICY_VERSION
@@ -188,7 +199,12 @@ def main() -> None:
             if trial_provider_mode == "openai_compatible"
             else None
         ),
-        "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
+        "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+        "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
+        "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
+        "provider_dns_policy": PROVIDER_DNS_POLICY_VERSION,
+        "trial_network_budget_policy": TRIAL_NETWORK_BUDGET_POLICY_VERSION,
+        "trial_network_byte_limit": DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
         "training_evidence_policy": TRAINING_EVIDENCE_POLICY_VERSION,
         "development_prewarm_version": DEVELOPMENT_PREWARM_VERSION,
         "prewarm_passed": prewarm_receipt_hash is not None,

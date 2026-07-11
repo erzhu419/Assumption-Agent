@@ -35,7 +35,7 @@ BENCH_ROOT = (
     / "repos"
     / "SkillLearnBench"
 )
-PROTOCOL_PATH = ROOT / "manifests" / "skilllearn_paper_protocol_v2.json"
+PROTOCOL_PATH = ROOT / "manifests" / "skilllearn_paper_protocol_v3_ruoli_gpt54mini.json"
 MANIFEST_PATH = (
     ROOT / "manifests" / "skilllearnbench_instance_holdout_credential_independent_v1.json"
 )
@@ -481,9 +481,36 @@ def _development_report(
             "provider_failure_policy": protocol.payload["execution"][
                 "provider_failure_policy"
             ],
-            "ephemeral_auth_cleanup": protocol.payload["execution"][
-                "ephemeral_auth_cleanup"
+            "container_egress_policy": protocol.payload["execution"][
+                "container_egress_policy"
             ],
+            "dependency_cache_policy": protocol.payload["execution"][
+                "dependency_cache_policy"
+            ],
+            "provider_dns_policy": protocol.payload["execution"][
+                "provider_dns_policy"
+            ],
+            **{
+                field: protocol.payload["execution"][field]
+                for field in (
+                    "provider_route_policy",
+                    "counterfactual_replay_policy",
+                    "baseline_arm_evidence_replay_policy",
+                    "root_proposal_replay_policy",
+                    "training_evidence_replay_policy",
+                    "invalid_trial_retry_policy",
+                    "invalid_trial_max_attempts",
+                    "invalid_trial_retry_backoff_seconds",
+                    "invalid_trial_retry_workers",
+                    "local_evidence_transport",
+                    "network_scope_audit",
+                    "proposal_failure_isolation_policy",
+                    "openai_compatible_codex_config",
+                    "codex_network_minimization",
+                    "trial_network_budget_policy",
+                    "trial_network_byte_limit",
+                )
+            },
             "training_evidence_policy": protocol.payload["execution"][
                 "training_evidence_policy"
             ],

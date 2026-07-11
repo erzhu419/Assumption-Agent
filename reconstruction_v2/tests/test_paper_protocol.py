@@ -13,7 +13,7 @@ from assumption_agent.models import stable_hash
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROTOCOL = ROOT / "manifests" / "skilllearn_paper_protocol_v2.json"
+PROTOCOL = ROOT / "manifests" / "skilllearn_paper_protocol_v3_ruoli_gpt54mini.json"
 RUOLI_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_ruoli_gpt54mini.json"
 )
@@ -58,6 +58,7 @@ def test_v3_protocol_freezes_ruoli_for_every_arm() -> None:
     assert protocol.payload["execution"]["counterfactual_replay_policy"] == (
         "behavior_identical_validation_replay_v1"
     )
+    assert protocol.payload["execution"]["trial_network_byte_limit"] == 32 * 1024 * 1024
 
 
 def test_v3_protocol_rejects_route_drift() -> None:
@@ -94,6 +95,13 @@ def test_v3_protocol_rejects_route_drift() -> None:
     payload = copy.deepcopy(protocol.payload)
     del payload["execution"]["counterfactual_replay_policy"]
     assert "counterfactual_replay_policy_mismatch" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+    payload = copy.deepcopy(protocol.payload)
+    payload["execution"]["trial_network_byte_limit"] = 64 * 1024 * 1024
+    assert "trial_network_byte_limit_mismatch" in PaperProtocol(
         protocol.path,
         payload,
     ).validate_structure()

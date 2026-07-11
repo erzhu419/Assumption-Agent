@@ -11,6 +11,7 @@ import queue
 import re
 import shlex
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -45,7 +46,7 @@ from ..models import (
     stable_hash,
 )
 from ..proposer import HypothesisProposalCallError, StructuredHypothesisProposer
-from ..secure_env import configured_skilllearn_provider_mode, resolve_codex_auth_path
+from ..secure_env import configured_skilllearn_provider_mode
 from ..splits import AccessPhase, BenchmarkItem, SplitAccessGuard, SplitManifest
 from ..validation import (
     RecursiveValidationEngine,
@@ -54,6 +55,15 @@ from ..validation import (
 )
 from .skilllearn_compiler import SkillLearnProgramCompiler
 from .skilllearnbench import SkillLearnBenchAdapter
+from .docker_egress import (
+    DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
+    DEPENDENCY_CACHE_POLICY_VERSION,
+    DOCKER_EGRESS_POLICY_VERSION,
+    PROVIDER_DNS_POLICY_VERSION,
+    TRIAL_NETWORK_BUDGET_POLICY_VERSION,
+    DockerEgressPolicy,
+    configured_trial_network_byte_limit,
+)
 
 
 BASELINE_LANE = "skilllearn_incumbent"
@@ -62,10 +72,12 @@ VERIFIER_ISOLATION_VERSION = "post_agent_verifier_copy_v1"
 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION = "runner_local_agent_registry_v1"
 TRIAL_TIMEOUT_POLICY_VERSION = "no_fixed_trial_wall_or_container_timeout_v2"
 PROVIDER_FAILURE_POLICY_VERSION = "codex_jsonl_terminal_error_circuit_v1"
-EPHEMERAL_AUTH_CLEANUP_VERSION = "bounded_ephemeral_auth_cleanup_v1"
 TRAINING_EVIDENCE_POLICY_VERSION = "all_valid_before_proposal_v1"
 TRAINING_EVIDENCE_REPLAY_POLICY_VERSION = (
     "behavior_identical_training_replay_v1"
+)
+BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION = (
+    "behavior_identical_validation_baseline_arm_replay_v1"
 )
 INVALID_TRIAL_RETRY_POLICY_VERSION = (
     "same_request_invalid_only_clean_replacement_v1"
@@ -73,12 +85,13 @@ INVALID_TRIAL_RETRY_POLICY_VERSION = (
 LOCAL_EVIDENCE_TRANSPORT_VERSION = (
     "local_content_addressed_task_and_post_agent_verifier_v1"
 )
-NETWORK_SCOPE_AUDIT_VERSION = "declared_model_endpoint_and_local_evidence_v1"
+NETWORK_SCOPE_AUDIT_VERSION = "provider_only_hard_egress_and_local_evidence_v2"
 PROPOSAL_FAILURE_ISOLATION_POLICY_VERSION = (
     "candidate_local_repair_and_generation_terminal_root_failure_v1"
 )
 PROVIDER_ROUTE_POLICY_VERSION = "single_model_single_provider_all_arms_v1"
 OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION = "codex_custom_responses_provider_v1"
+CODEX_NETWORK_MINIMIZATION_VERSION = "analytics_and_otel_disabled_v1"
 OPENAI_COMPATIBLE_CODEX_PROVIDER_ID = "assumption_v2_openai_compatible"
 PREBUILT_IMAGE_POLICY_VERSION = "per_item_base_shared_agent_runtime_v3"
 SHARED_AGENT_RUNTIME_MOUNT = "/opt/assumption-v2-agent"
@@ -95,9 +108,6 @@ _FATAL_PROVIDER_ERROR_TYPES = frozenset(
         "provider_authentication_failed",
         "provider_model_unavailable",
         "provider_usage_limit",
-        "subscription_authentication_failed",
-        "subscription_model_unavailable",
-        "subscription_usage_limit",
     }
 )
 
@@ -383,15 +393,17 @@ class SkillLearnPrebuiltImage:
 
 
 class SkillLearnPrebuiltImageCache:
-    """Build and reuse agent-ready images for one exact task environment."""
+    """Reuse exact task images; online construction requires an explicit opt-in."""
 
     def __init__(
         self,
         benchmark_root: str | Path,
         *,
+        cache_only: bool = True,
         event_sink: EventSink | None = None,
     ) -> None:
         self.benchmark_root = Path(benchmark_root).expanduser().resolve()
+        self.cache_only = cache_only
         self.event_sink = event_sink or NullEventSink()
         self._metadata: dict[tuple[str, str, str], SkillLearnPrebuiltImage] = {}
         self._locks: dict[str, threading.Lock] = {}
@@ -498,6 +510,23 @@ class SkillLearnPrebuiltImageCache:
             self._emit_image_event("skilllearn_prebuilt_image_reused", image, trace_id)
             return image
 
+        if self.cache_only:
+            self.event_sink.emit(
+                Event(
+                    event="skilllearn_prebuilt_image_missing_cache_only",
+                    stage="benchmark.skilllearn.prebuild",
+                    trace_id=trace_id,
+                    payload={
+                        "cache_key": cache_key,
+                        "environment_hash": environment_hash,
+                        "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
+                        "online_build_attempted": False,
+                        "secret_value_persisted": False,
+                    },
+                )
+            )
+            raise RuntimeError("prebuilt_image_cache_missing_offline")
+
         self.event_sink.emit(
             Event(
                 event="skilllearn_prebuilt_image_build_started",
@@ -594,6 +623,24 @@ class SkillLearnPrebuiltImageCache:
                 text=True,
             )
             if int(getattr(inspected, "returncode", 1)) != 0:
+                if self.cache_only:
+                    self.event_sink.emit(
+                        Event(
+                            event="skilllearn_agent_runtime_missing_cache_only",
+                            stage="benchmark.skilllearn.prebuild",
+                            trace_id=trace_id,
+                            payload={
+                                "runtime_key": runtime_key,
+                                "runtime_volume_hash": stable_hash({"volume": volume}),
+                                "dependency_cache_policy": (
+                                    DEPENDENCY_CACHE_POLICY_VERSION
+                                ),
+                                "online_install_attempted": False,
+                                "secret_value_persisted": False,
+                            },
+                        )
+                    )
+                    raise RuntimeError("shared_agent_runtime_cache_missing_offline")
                 created = runner.subprocess.run(
                     [
                         "docker",
@@ -623,6 +670,8 @@ class SkillLearnPrebuiltImageCache:
                         "docker",
                         "run",
                         "--rm",
+                        "--pull",
+                        "never",
                         "-v",
                         f"{volume}:/runtime",
                         SHARED_AGENT_RUNTIME_BUILDER_IMAGE,
@@ -659,6 +708,10 @@ class SkillLearnPrebuiltImageCache:
                     "docker",
                     "run",
                     "--rm",
+                    "--pull",
+                    "never",
+                    "--network",
+                    "none",
                     "-e",
                     f"PATH={SHARED_AGENT_RUNTIME_MOUNT}/bin:/usr/local/bin:/usr/bin:/bin",
                     "-v",
@@ -697,6 +750,8 @@ class SkillLearnPrebuiltImageCache:
                         "builder_image": SHARED_AGENT_RUNTIME_BUILDER_IMAGE,
                         "codex_cli_package": SHARED_CODEX_CLI_PACKAGE,
                         "policy": PREBUILT_IMAGE_POLICY_VERSION,
+                        "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
+                        "cache_only": self.cache_only,
                     },
                 )
             )
@@ -778,7 +833,7 @@ class SkillLearnSubprocessBackend:
         benchmark_root: str | Path,
         *,
         agent_id: str = "codex",
-        model: str = "gpt-5.3-codex-spark",
+        model: str = "gpt-5.4-mini",
         max_steps: int = 100,
         provider_mode: str | None = None,
         trials_dir: str | Path | None = None,
@@ -799,20 +854,18 @@ class SkillLearnSubprocessBackend:
                 else "openai_compatible"
             )
         )
-        if self.provider_mode not in {"codex_subscription", "openai_compatible"}:
+        if self.provider_mode != "openai_compatible":
             raise ValueError("unsupported SkillLearn trial provider mode")
-        if self.provider_mode == "codex_subscription" and self.agent_id != "codex":
-            raise ValueError("codex_subscription trial mode requires the codex agent")
         self.trials_dir = Path(trials_dir).expanduser().resolve() if trials_dir else None
         self.record_upstream = record_upstream
         self.prebuilt_cache = prebuilt_cache
         self.provider_circuit = provider_circuit or SkillLearnProviderCircuit()
+        self.trial_network_byte_limit = configured_trial_network_byte_limit()
         self.event_sink = event_sink or NullEventSink()
         self._runner_module: ModuleType | None = None
         self._runner_instance_token = stable_hash(
             {"benchmark_root": str(self.benchmark_root), "instance": id(self)}
         )[:12]
-        self._provider_lock = threading.RLock()
 
     def prewarm_environment(
         self,
@@ -886,7 +939,11 @@ class SkillLearnSubprocessBackend:
                         if self.provider_mode == "openai_compatible"
                         else None
                     ),
-                    "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
+                    "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+                    "trial_network_budget_policy": (
+                        TRIAL_NETWORK_BUDGET_POLICY_VERSION
+                    ),
+                    "trial_network_byte_limit": self.trial_network_byte_limit,
                     "prebuilt_policy": (
                         PREBUILT_IMAGE_POLICY_VERSION if self.prebuilt_cache else "disabled"
                     ),
@@ -898,16 +955,23 @@ class SkillLearnSubprocessBackend:
         result: Mapping[str, Any]
         return_code: int
         prebuilt_image: SkillLearnPrebuiltImage | None = None
+        egress_policy: DockerEgressPolicy | None = None
         try:
             runner = self._load_runner()
-            if self.prebuilt_cache is not None:
-                prebuilt_image = self.prebuilt_cache.ensure(
-                    family=request.family,
-                    item_id=request.item_id,
-                    agent_id=self.agent_id,
-                    runner=runner,
-                    trace_id=f"{trace_id}:prebuild",
-                )
+            if self.prebuilt_cache is None or not self.prebuilt_cache.cache_only:
+                raise RuntimeError("skilllearn_trial_requires_cache_only_prebuilt_images")
+            prebuilt_image = self.prebuilt_cache.ensure(
+                family=request.family,
+                item_id=request.item_id,
+                agent_id=self.agent_id,
+                runner=runner,
+                trace_id=f"{trace_id}:prebuild",
+            )
+            egress_policy = DockerEgressPolicy.from_env()
+            egress_policy.ensure(
+                event_sink=self.event_sink,
+                trace_id=f"{trace_id}:egress",
+            )
             self.event_sink.emit(
                 Event(
                     event="skilllearn_local_evidence_and_network_scope_declared",
@@ -928,20 +992,17 @@ class SkillLearnSubprocessBackend:
                             prebuilt_image.image_id if prebuilt_image else None
                         ),
                         "verifier_transport": "local_docker_copy_after_agent_exit",
-                        "model_transport": (
-                            "online_openai_compatible_responses"
-                            if self.provider_mode == "openai_compatible"
-                            else "online_codex_subscription"
-                        ),
-                        "model_endpoint_origin": (
-                            _configured_openai_compatible_origin()
-                            if self.provider_mode == "openai_compatible"
-                            else None
-                        ),
+                        "model_transport": "online_openai_compatible_responses",
+                        "model_endpoint_origin": _configured_openai_compatible_origin(),
                         "huggingface_dataset_access_required": False,
                         "online_benchmark_dataset_access_required": False,
-                        "container_egress_isolation_enforced": False,
-                        "dependency_cache_only_enforced": False,
+                        "container_egress_isolation_enforced": True,
+                        "dependency_cache_only_enforced": True,
+                        "trial_network_budget_policy": (
+                            TRIAL_NETWORK_BUDGET_POLICY_VERSION
+                        ),
+                        "trial_network_byte_limit": self.trial_network_byte_limit,
+                        **egress_policy.provenance(),
                         "secret_value_persisted": False,
                         "raw_content_persisted": False,
                     },
@@ -973,6 +1034,7 @@ class SkillLearnSubprocessBackend:
                 agent_runtime_volume=(
                     prebuilt_image.agent_runtime_volume if prebuilt_image else None
                 ),
+                egress_policy=egress_policy,
                 trace_id=trace_id,
             ):
                 return_code, result = runner.run_task(
@@ -1093,93 +1155,41 @@ class SkillLearnSubprocessBackend:
         runner: ModuleType,
         *,
         agent_runtime_volume: str | None = None,
+        egress_policy: DockerEgressPolicy | None = None,
         trace_id: str = "skilllearn-provider-runtime",
     ) -> Iterator[None]:
+        active_egress_policy = egress_policy or DockerEgressPolicy.from_env()
         if self.agent_id != "codex":
             with self._verifier_isolation(
                 runner,
                 agent_runtime_volume=agent_runtime_volume,
+                egress_policy=active_egress_policy,
                 trace_id=trace_id,
             ):
                 yield
             return
-        if self.provider_mode == "openai_compatible":
-            agent = runner.get_agent(self.agent_id)
-            original_agent = copy.deepcopy(agent) if isinstance(agent, dict) else None
-            try:
-                self._prepare_openai_compatible_provider(
-                    runner,
-                    trace_id=trace_id,
-                )
-                if isinstance(agent, dict) and agent_runtime_volume:
-                    trajectory_env = dict(agent.get("trajectory_env") or {})
-                    trajectory_env["PATH"] = f"{SHARED_AGENT_RUNTIME_MOUNT}/bin:$PATH"
-                    agent["trajectory_env"] = trajectory_env
-                with self._verifier_isolation(
-                    runner,
-                    agent_runtime_volume=agent_runtime_volume,
-                    trace_id=trace_id,
-                ):
-                    yield
-            finally:
-                if isinstance(agent, dict) and original_agent is not None:
-                    agent.clear()
-                    agent.update(original_agent)
-            return
-        auth_path = resolve_codex_auth_path()
-        if auth_path is None:
-            raise RuntimeError("local Codex subscription auth.json is required")
         agent = runner.get_agent(self.agent_id)
-        if not isinstance(agent, dict):
-            raise RuntimeError("SkillLearnBench codex agent definition is unavailable")
-        secret_tmp_root = os.environ.get("ASSUMPTION_V2_SECRET_TMPDIR", "").strip() or None
-        if secret_tmp_root and not Path(secret_tmp_root).expanduser().is_dir():
-            raise RuntimeError("ASSUMPTION_V2_SECRET_TMPDIR is not a directory")
-        with self._provider_lock:
-            original_agent = copy.deepcopy(agent)
-            original_subprocess = runner.subprocess
-            secret_dir = Path(
-                tempfile.mkdtemp(
-                    prefix="assumption-v2-codex-auth-",
-                    dir=(
-                        str(Path(secret_tmp_root).expanduser())
-                        if secret_tmp_root
-                        else None
-                    ),
-                )
+        original_agent = copy.deepcopy(agent) if isinstance(agent, dict) else None
+        try:
+            self._prepare_openai_compatible_provider(
+                runner,
+                trace_id=trace_id,
             )
-            try:
-                try:
-                    ephemeral_auth = secret_dir / "auth.json"
-                    shutil.copyfile(auth_path, ephemeral_auth)
-                    ephemeral_auth.chmod(0o600)
-                    agent["env"] = []
-                    agent["setup"] = None
-                    trajectory_env = dict(agent.get("trajectory_env") or {})
-                    trajectory_env["CODEX_HOME"] = "/root/.codex"
-                    if agent_runtime_volume:
-                        trajectory_env["PATH"] = (
-                            f"{SHARED_AGENT_RUNTIME_MOUNT}/bin:$PATH"
-                        )
-                    agent["trajectory_env"] = trajectory_env
-                    runner.subprocess = _DockerCodexHomeSubprocessProxy(
-                        original_subprocess,
-                        host_codex_home=secret_dir,
-                        agent_runtime_volume=agent_runtime_volume,
-                        event_sink=self.event_sink,
-                        trace_id=trace_id,
-                    )
-                    yield
-                finally:
-                    runner.subprocess = original_subprocess
-                    agent.clear()
-                    agent.update(original_agent)
-            finally:
-                _cleanup_ephemeral_codex_home(
-                    secret_dir,
-                    event_sink=self.event_sink,
-                    trace_id=trace_id,
-                )
+            if isinstance(agent, dict) and agent_runtime_volume:
+                trajectory_env = dict(agent.get("trajectory_env") or {})
+                trajectory_env["PATH"] = f"{SHARED_AGENT_RUNTIME_MOUNT}/bin:$PATH"
+                agent["trajectory_env"] = trajectory_env
+            with self._verifier_isolation(
+                runner,
+                agent_runtime_volume=agent_runtime_volume,
+                egress_policy=active_egress_policy,
+                trace_id=trace_id,
+            ):
+                yield
+        finally:
+            if isinstance(agent, dict) and original_agent is not None:
+                agent.clear()
+                agent.update(original_agent)
 
     @contextmanager
     def _verifier_isolation(
@@ -1187,20 +1197,24 @@ class SkillLearnSubprocessBackend:
         runner: ModuleType,
         *,
         agent_runtime_volume: str | None = None,
+        egress_policy: DockerEgressPolicy,
         trace_id: str = "skilllearn-verifier-isolation",
     ) -> Iterator[None]:
         original_subprocess = runner.subprocess
-        runner.subprocess = _DockerCodexHomeSubprocessProxy(
+        proxy = _DockerVerifierIsolationSubprocessProxy(
             original_subprocess,
-            host_codex_home=None,
             agent_runtime_volume=agent_runtime_volume,
+            egress_policy=egress_policy,
+            network_byte_limit=self.trial_network_byte_limit,
             provider_mode=self.provider_mode,
             event_sink=self.event_sink,
             trace_id=trace_id,
         )
+        runner.subprocess = proxy
         try:
             yield
         finally:
+            proxy.finalize_network_monitors()
             runner.subprocess = original_subprocess
 
     def _prepare_openai_compatible_provider(
@@ -1239,6 +1253,14 @@ class SkillLearnSubprocessBackend:
         config_values = (
             "--ignore-user-config",
             "--ephemeral",
+            "--config",
+            "analytics.enabled=false",
+            "--config",
+            'otel.exporter="none"',
+            "--config",
+            'otel.metrics_exporter="none"',
+            "--config",
+            'otel.trace_exporter="none"',
             "--config",
             f"model_provider={json.dumps(OPENAI_COMPATIBLE_CODEX_PROVIDER_ID)}",
             "--config",
@@ -1304,6 +1326,13 @@ class SkillLearnSubprocessBackend:
                     "requires_openai_auth": False,
                     "ignore_user_config": True,
                     "ephemeral": True,
+                    "analytics_enabled": False,
+                    "otel_exporter": "none",
+                    "otel_metrics_exporter": "none",
+                    "otel_trace_exporter": "none",
+                    "network_minimization_version": (
+                        CODEX_NETWORK_MINIMIZATION_VERSION
+                    ),
                     "agent_setup": None,
                     "run_template_hash": stable_hash(
                         {"run_template": agent["run"]}
@@ -1395,7 +1424,12 @@ class SkillLearnSubprocessBackend:
                 if self.provider_mode == "openai_compatible"
                 else None
             ),
-            "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
+            "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+            "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
+            "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
+            "provider_dns_policy": PROVIDER_DNS_POLICY_VERSION,
+            "trial_network_budget_policy": TRIAL_NETWORK_BUDGET_POLICY_VERSION,
+            "trial_network_byte_limit": self.trial_network_byte_limit,
             "prebuilt_policy": (
                 PREBUILT_IMAGE_POLICY_VERSION if self.prebuilt_cache else "disabled"
             ),
@@ -1647,6 +1681,10 @@ class SkillLearnCounterfactualRunner:
         self.event_sink = event_sink or NullEventSink()
         self.items = {item.id: item for item in adapter.discover()}
         self.runtime = _ExternalRuntimeDescriptor()
+        self._baseline_arm_cache_lock = threading.Lock()
+        self._baseline_arm_cache: dict[
+            str, tuple[SkillLearnTrialObservation, str]
+        ] = {}
 
     def run(
         self,
@@ -1772,26 +1810,92 @@ class SkillLearnCounterfactualRunner:
                 event_sink=self.event_sink,
                 trace_id=f"{trace_id}:{pair_id}:{arm}",
             )
-        run_on_first = False
-        if activated and (
-            candidate_skill_source is None or not candidate_skill_source.is_dir()
-        ):
-            baseline_observation = run_trial(
+
+        def run_baseline_trial() -> SkillLearnTrialObservation:
+            replay_key = self._baseline_arm_replay_key(
+                task,
+                split=split,
+                baseline_programs=baseline_programs,
+            )
+            if split is SplitName.VALIDATION:
+                with self._baseline_arm_cache_lock:
+                    cached = self._baseline_arm_cache.get(replay_key)
+                if cached is not None:
+                    source, source_trace_id = cached
+                    replayed = replace(
+                        source.as_variant(off_request),
+                        raw_trial_artifacts_persisted=False,
+                    )
+                    self.event_sink.emit(
+                        Event(
+                            event="skilllearn_baseline_arm_evidence_replayed",
+                            stage="benchmark.skilllearn.counterfactual",
+                            trace_id=f"{trace_id}:{pair_id}:off",
+                            payload={
+                                "policy": (
+                                    BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+                                ),
+                                "replay_key": replay_key,
+                                "source_trace_id": source_trace_id,
+                                "target_trace_id": f"{trace_id}:{pair_id}:off",
+                                "source_request_hash": source.request.request_hash,
+                                "target_request_hash": off_request.request_hash,
+                                "source_observation_hash": source.observation_hash,
+                                "behavior_identical": True,
+                                "new_baseline_executions": 0,
+                                "sealed_test_accessed": False,
+                                "raw_content_persisted": False,
+                            },
+                        )
+                    )
+                    return replayed
+            observation = run_trial(
                 off_request,
                 skill_source_dir=baseline_skill_source,
                 arm="off",
             )
+            if split is SplitName.VALIDATION and observation.valid:
+                source_trace_id = f"{trace_id}:{pair_id}:off"
+                recorded = False
+                with self._baseline_arm_cache_lock:
+                    if replay_key not in self._baseline_arm_cache:
+                        self._baseline_arm_cache[replay_key] = (
+                            observation,
+                            source_trace_id,
+                        )
+                        recorded = True
+                if recorded:
+                    self.event_sink.emit(
+                        Event(
+                            event="skilllearn_baseline_arm_evidence_recorded",
+                            stage="benchmark.skilllearn.counterfactual",
+                            trace_id=source_trace_id,
+                            payload={
+                                "policy": (
+                                    BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+                                ),
+                                "replay_key": replay_key,
+                                "source_request_hash": off_request.request_hash,
+                                "source_observation_hash": observation.observation_hash,
+                                "sealed_test_accessed": False,
+                                "raw_content_persisted": False,
+                            },
+                        )
+                    )
+            return observation
+
+        run_on_first = False
+        if activated and (
+            candidate_skill_source is None or not candidate_skill_source.is_dir()
+        ):
+            baseline_observation = run_baseline_trial()
             candidate_observation = _invalid_observation_like(
                 on_request,
                 baseline_observation,
                 "compiled_candidate_skill_missing",
             )
         elif not activated:
-            baseline_observation = run_trial(
-                off_request,
-                skill_source_dir=baseline_skill_source,
-                arm="off",
-            )
+            baseline_observation = run_baseline_trial()
             candidate_observation = baseline_observation.as_variant(on_request)
         else:
             run_on_first = (
@@ -1803,17 +1907,9 @@ class SkillLearnCounterfactualRunner:
                     skill_source_dir=candidate_skill_source,
                     arm="on",
                 )
-                baseline_observation = run_trial(
-                    off_request,
-                    skill_source_dir=baseline_skill_source,
-                    arm="off",
-                )
+                baseline_observation = run_baseline_trial()
             else:
-                baseline_observation = run_trial(
-                    off_request,
-                    skill_source_dir=baseline_skill_source,
-                    arm="off",
-                )
+                baseline_observation = run_baseline_trial()
                 candidate_observation = run_trial(
                     on_request,
                     skill_source_dir=candidate_skill_source,
@@ -1880,6 +1976,49 @@ class SkillLearnCounterfactualRunner:
             )
         )
         return pair
+
+    def _baseline_arm_replay_key(
+        self,
+        task: TaskInput,
+        *,
+        split: SplitName,
+        baseline_programs: Sequence[HypothesisProgram],
+    ) -> str:
+        provider_mode = str(
+            getattr(self.backend, "provider_mode", "openai_compatible")
+        )
+        return stable_hash(
+            {
+                "policy": BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+                "task_id": task.id,
+                "family": task.family,
+                "split": split.value,
+                "evaluator_epoch": self.evaluator.epoch,
+                "manifest_hash": self.manifest.manifest_hash,
+                "agent_id": self.backend.agent_id,
+                "model": self.backend.model,
+                "max_steps": self.backend.max_steps,
+                "provider_fingerprint": _provider_fingerprint(
+                    self.backend.agent_id,
+                    self.backend.model,
+                    provider_mode,
+                ),
+                "baseline_behavior_set_hash": stable_hash(
+                    {
+                        "program_hashes": sorted(
+                            row.payload_hash for row in baseline_programs
+                        )
+                    }
+                ),
+                "runtime_version": self.runtime.runtime_version,
+                "agent_runtime_version": SHARED_CODEX_CLI_VERSION,
+                "verifier_isolation": VERIFIER_ISOLATION_VERSION,
+                "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
+                "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
+                "trial_network_budget_policy": TRIAL_NETWORK_BUDGET_POLICY_VERSION,
+                "trial_network_byte_limit": configured_trial_network_byte_limit(),
+            }
+        )
 
     def _request(
         self,
@@ -2540,32 +2679,239 @@ def _classify_training_failure(
     )
 
 
-class _DockerCodexHomeSubprocessProxy:
-    """Hide verifier files until agent exit and optionally bind a Codex home."""
+class _ContainerNetworkBudgetMonitor:
+    def __init__(
+        self,
+        delegate: Any,
+        *,
+        container_name: str,
+        byte_limit: int,
+        event_sink: EventSink,
+        trace_id: str,
+        poll_seconds: float = 2.0,
+    ) -> None:
+        self.delegate = delegate
+        self.container_name = container_name
+        self.byte_limit = byte_limit
+        self.event_sink = event_sink
+        self.trace_id = trace_id
+        self.poll_seconds = poll_seconds
+        self._stop = threading.Event()
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self._rx_bytes = 0
+        self._tx_bytes = 0
+        self._exceeded = False
+        self._finalized = False
+
+    @property
+    def exceeded(self) -> bool:
+        with self._lock:
+            return self._exceeded
+
+    def start(self) -> None:
+        self.event_sink.emit(
+            Event(
+                event="skilllearn_trial_network_budget_monitor_started",
+                stage="benchmark.skilllearn.network_budget",
+                trace_id=self.trace_id,
+                payload={
+                    "policy": TRIAL_NETWORK_BUDGET_POLICY_VERSION,
+                    "container_name_hash": stable_hash(
+                        {"container_name": self.container_name}
+                    ),
+                    "byte_limit": self.byte_limit,
+                    "poll_seconds": self.poll_seconds,
+                },
+            )
+        )
+        self._thread = threading.Thread(
+            target=self._run,
+            name=f"network-budget-{stable_hash({'name': self.container_name})[:10]}",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def finalize(self) -> None:
+        with self._lock:
+            if self._finalized:
+                return
+            self._finalized = True
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=max(6.0, self.poll_seconds + 4.0))
+        self._sample()
+        with self._lock:
+            rx_bytes = self._rx_bytes
+            tx_bytes = self._tx_bytes
+            exceeded = self._exceeded
+        self.event_sink.emit(
+            Event(
+                event="skilllearn_trial_network_usage_finalized",
+                stage="benchmark.skilllearn.network_budget",
+                trace_id=self.trace_id,
+                payload={
+                    "policy": TRIAL_NETWORK_BUDGET_POLICY_VERSION,
+                    "container_name_hash": stable_hash(
+                        {"container_name": self.container_name}
+                    ),
+                    "rx_bytes": rx_bytes,
+                    "tx_bytes": tx_bytes,
+                    "total_bytes": rx_bytes + tx_bytes,
+                    "byte_limit": self.byte_limit,
+                    "limit_exceeded": exceeded,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            self._sample()
+            if self.exceeded:
+                return
+            self._stop.wait(self.poll_seconds)
+
+    def _sample(self) -> None:
+        try:
+            completed = self.delegate.run(
+                [
+                    "docker",
+                    "stats",
+                    "--no-stream",
+                    "--format",
+                    "{{json .}}",
+                    self.container_name,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=4,
+            )
+            if int(getattr(completed, "returncode", 1)) != 0:
+                return
+            rows = [
+                row
+                for row in str(getattr(completed, "stdout", "") or "").splitlines()
+                if row.strip()
+            ]
+            if not rows:
+                return
+            payload = json.loads(rows[-1])
+            rx_bytes, tx_bytes = _parse_docker_net_io(str(payload.get("NetIO") or ""))
+        except (
+            OSError,
+            subprocess.SubprocessError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ):
+            return
+        should_kill = False
+        with self._lock:
+            self._rx_bytes = max(self._rx_bytes, rx_bytes)
+            self._tx_bytes = max(self._tx_bytes, tx_bytes)
+            total_bytes = self._rx_bytes + self._tx_bytes
+            if total_bytes > self.byte_limit and not self._exceeded:
+                self._exceeded = True
+                should_kill = True
+        if not should_kill:
+            return
+        self.delegate.run(
+            ["docker", "kill", self.container_name],
+            capture_output=True,
+            text=True,
+        )
+        self.event_sink.emit(
+            Event(
+                event="skilllearn_trial_network_budget_exceeded",
+                stage="benchmark.skilllearn.network_budget",
+                trace_id=self.trace_id,
+                payload={
+                    "policy": TRIAL_NETWORK_BUDGET_POLICY_VERSION,
+                    "container_name_hash": stable_hash(
+                        {"container_name": self.container_name}
+                    ),
+                    "observed_bytes": total_bytes,
+                    "byte_limit": self.byte_limit,
+                    "container_kill_attempted": True,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+
+
+def _parse_docker_net_io(value: str) -> tuple[int, int]:
+    parts = [part.strip() for part in value.split("/")]
+    if len(parts) != 2:
+        raise ValueError("Docker NetIO must contain received and transmitted values")
+    return _parse_docker_byte_size(parts[0]), _parse_docker_byte_size(parts[1])
+
+
+def _parse_docker_byte_size(value: str) -> int:
+    match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)\s*([kmgt]?i?b)", value.strip(), re.I)
+    if match is None:
+        raise ValueError("unsupported Docker byte size")
+    amount = float(match.group(1))
+    unit = match.group(2).lower()
+    factors = {
+        "b": 1,
+        "kb": 1000,
+        "mb": 1000**2,
+        "gb": 1000**3,
+        "tb": 1000**4,
+        "kib": 1024,
+        "mib": 1024**2,
+        "gib": 1024**3,
+        "tib": 1024**4,
+    }
+    return int(amount * factors[unit])
+
+
+def _docker_removed_container(command: Any) -> str | None:
+    if not isinstance(command, list) or command[:2] != ["docker", "rm"]:
+        return None
+    values = [str(value) for value in command[2:] if not str(value).startswith("-")]
+    return values[-1] if values else None
+
+
+class _DockerVerifierIsolationSubprocessProxy:
+    """Hide verifier files and enforce provider-only container networking."""
 
     def __init__(
         self,
         delegate: Any,
         *,
-        host_codex_home: Path | None,
         agent_runtime_volume: str | None = None,
-        provider_mode: str = "codex_subscription",
+        egress_policy: DockerEgressPolicy,
+        network_byte_limit: int = DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
+        provider_mode: str = "openai_compatible",
         event_sink: EventSink | None = None,
         trace_id: str = "skilllearn-docker-isolation",
     ) -> None:
         self.delegate = delegate
-        self.host_codex_home = host_codex_home.resolve() if host_codex_home else None
         self.agent_runtime_volume = agent_runtime_volume
+        self.egress_policy = egress_policy
+        self.network_byte_limit = network_byte_limit
         self.provider_mode = provider_mode
         self.event_sink = event_sink or NullEventSink()
         self.trace_id = trace_id
         self._verifier_sources: dict[str, Path] = {}
+        self._network_monitors: dict[str, _ContainerNetworkBudgetMonitor] = {}
+
+    def finalize_network_monitors(self) -> None:
+        for container_name, monitor in tuple(self._network_monitors.items()):
+            monitor.finalize()
+            self._network_monitors.pop(container_name, None)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self.delegate, name)
 
     def run(self, args: Any, *positional: Any, **kwargs: Any) -> Any:
         command = list(args) if isinstance(args, (list, tuple)) else args
+        started_container_name: str | None = None
+        removed_container_name = _docker_removed_container(command)
+        if removed_container_name in self._network_monitors:
+            self._network_monitors.pop(removed_container_name).finalize()
         if (
             isinstance(command, list)
             and len(command) >= 3
@@ -2574,6 +2920,7 @@ class _DockerCodexHomeSubprocessProxy:
             and "--name" in command
         ):
             container_name = str(command[command.index("--name") + 1])
+            started_container_name = container_name
             if command[-2:] == ["sleep", "3600"]:
                 command[-2:] = [
                     "sh",
@@ -2604,10 +2951,6 @@ class _DockerCodexHomeSubprocessProxy:
                     del command[index : index + 2]
                     continue
                 index += 1
-            if self.host_codex_home is not None:
-                mount = f"{self.host_codex_home}:/root/.codex"
-                if mount not in command:
-                    command[3:3] = ["-v", mount]
             self.event_sink.emit(
                 Event(
                     event="skilllearn_verifier_mount_withheld",
@@ -2625,7 +2968,7 @@ class _DockerCodexHomeSubprocessProxy:
                             }
                         ),
                         "agent_runtime_mounted": bool(self.agent_runtime_volume),
-                        "codex_home_mounted": self.host_codex_home is not None,
+                        "codex_home_mounted": False,
                         "tests_mount_present_during_agent": False,
                     },
                 )
@@ -2636,6 +2979,27 @@ class _DockerCodexHomeSubprocessProxy:
                 )
                 if mount not in command:
                     command[3:3] = ["-v", mount]
+            network_args = self.egress_policy.docker_run_args()
+            command[2:2] = network_args
+            self.event_sink.emit(
+                Event(
+                    event="skilllearn_trial_container_network_restricted",
+                    stage="benchmark.skilllearn.network_isolation",
+                    trace_id=self.trace_id,
+                    payload={
+                        **self.egress_policy.provenance(),
+                        "container_name_hash": stable_hash(
+                            {"container_name": container_name}
+                        ),
+                        "docker_run_network_args_injected": True,
+                        "trial_network_budget_policy": (
+                            TRIAL_NETWORK_BUDGET_POLICY_VERSION
+                        ),
+                        "trial_network_byte_limit": self.network_byte_limit,
+                        "secret_value_persisted": False,
+                    },
+                )
+            )
         if (
             isinstance(command, list)
             and len(command) >= 4
@@ -2691,7 +3055,33 @@ class _DockerCodexHomeSubprocessProxy:
                 )
             )
         completed = self.delegate.run(command, *positional, **kwargs)
+        if (
+            started_container_name
+            and int(getattr(completed, "returncode", 1)) == 0
+            and re.fullmatch(
+                r"[0-9a-f]{12,64}",
+                str(getattr(completed, "stdout", "") or "").strip().lower(),
+            )
+        ):
+            prior = self._network_monitors.pop(started_container_name, None)
+            if prior is not None:
+                prior.finalize()
+            monitor = _ContainerNetworkBudgetMonitor(
+                self.delegate,
+                container_name=started_container_name,
+                byte_limit=self.network_byte_limit,
+                event_sink=self.event_sink,
+                trace_id=self.trace_id,
+            )
+            self._network_monitors[started_container_name] = monitor
+            monitor.start()
         if timeout_stage == "agent":
+            container_name = str(command[2]) if len(command) > 2 else ""
+            monitor = self._network_monitors.get(container_name)
+            if monitor is not None and monitor.exceeded:
+                raise SkillLearnAgentTerminalError(
+                    "trial_network_byte_limit_exceeded"
+                )
             terminal_error = _codex_terminal_error_label(
                 getattr(completed, "stdout", None),
                 getattr(completed, "stderr", None),
@@ -2823,7 +3213,12 @@ def _fairness_fingerprint(
             ),
             "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
             "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
-            "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
+            "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+            "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
+            "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
+            "provider_dns_policy": PROVIDER_DNS_POLICY_VERSION,
+            "trial_network_budget_policy": TRIAL_NETWORK_BUDGET_POLICY_VERSION,
+            "trial_network_byte_limit": configured_trial_network_byte_limit(),
             "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
             "openai_compatible_codex_config": (
                 OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION
@@ -2835,23 +3230,6 @@ def _fairness_fingerprint(
 
 
 def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
-    if provider_mode == "codex_subscription":
-        return stable_hash(
-            {
-                "agent_id": agent_id,
-                "model": model,
-                "provider_mode": provider_mode,
-                "auth_materialization": "ephemeral_codex_home_bind",
-                "verifier_isolation": VERIFIER_ISOLATION_VERSION,
-                "runner_agent_registry_isolation": (
-                    RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
-                ),
-                "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
-                "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
-                "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
-                "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
-            }
-        )
     base_url = (
         os.environ.get("ASSUMPTION_V2_API_BASE")
         or os.environ.get("OPENAI_BASE_URL")
@@ -2873,7 +3251,17 @@ def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
             ),
             "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
             "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
-            "ephemeral_auth_cleanup": EPHEMERAL_AUTH_CLEANUP_VERSION,
+            "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+            "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
+            "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
+            "provider_dns_policy": PROVIDER_DNS_POLICY_VERSION,
+            "allowed_ipv4s_hash": stable_hash(
+                {
+                    "allowed_ipv4s": os.environ.get(
+                        "ASSUMPTION_V2_API_ALLOWED_IPV4S", ""
+                    )
+                }
+            ),
             "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
             "openai_compatible_codex_config": (
                 OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION
@@ -2913,8 +3301,6 @@ def _provider_scoped_terminal_error(
     error_type: str | None,
     provider_mode: str,
 ) -> str | None:
-    if provider_mode != "openai_compatible":
-        return error_type
     return {
         "subscription_authentication_failed": "provider_authentication_failed",
         "subscription_model_unavailable": "provider_model_unavailable",
@@ -2959,7 +3345,7 @@ def _codex_terminal_error_label(*streams: Any) -> str | None:
             nested = row.get("error") if isinstance(row.get("error"), Mapping) else {}
             message = str(row.get("message") or nested.get("message") or "").lower()
             if "usage limit" in message or "quota" in message:
-                return "subscription_usage_limit"
+                return "provider_usage_limit"
             if "rate limit" in message or "too many requests" in message:
                 return "provider_rate_limit"
             if any(
@@ -2973,67 +3359,14 @@ def _codex_terminal_error_label(*streams: Any) -> str | None:
                     "invalid key",
                 )
             ):
-                return "subscription_authentication_failed"
+                return "provider_authentication_failed"
             if any(
                 value in message
                 for value in ("model is not available", "model unavailable", "unsupported model")
             ):
-                return "subscription_model_unavailable"
+                return "provider_model_unavailable"
             return "codex_turn_failed"
     return None
-
-
-def _cleanup_ephemeral_codex_home(
-    root: Path,
-    *,
-    event_sink: EventSink,
-    trace_id: str,
-) -> None:
-    maximum_attempts = 5
-    last_error: OSError | None = None
-    for attempt in range(1, maximum_attempts + 1):
-        try:
-            shutil.rmtree(root)
-        except FileNotFoundError:
-            last_error = None
-            break
-        except OSError as exc:
-            last_error = exc
-            if attempt < maximum_attempts:
-                time.sleep(0.05 * attempt)
-                continue
-        else:
-            last_error = None
-            break
-    if last_error is not None:
-        event_sink.emit(
-            Event(
-                event="skilllearn_ephemeral_auth_cleanup_failed",
-                stage="benchmark.skilllearn.provider_failure",
-                trace_id=trace_id,
-                payload={
-                    "policy": EPHEMERAL_AUTH_CLEANUP_VERSION,
-                    "attempt_count": maximum_attempts,
-                    "error_type": type(last_error).__name__,
-                    "error_errno": last_error.errno,
-                    "error_message_hash": stable_hash({"message": str(last_error)}),
-                    "secret_cleanup_complete": False,
-                },
-            )
-        )
-        raise RuntimeError("ephemeral_codex_home_cleanup_failed") from last_error
-    event_sink.emit(
-        Event(
-            event="skilllearn_ephemeral_auth_cleanup_completed",
-            stage="benchmark.skilllearn.provider_failure",
-            trace_id=trace_id,
-            payload={
-                "policy": EPHEMERAL_AUTH_CLEANUP_VERSION,
-                "attempt_count": attempt,
-                "secret_value_persisted": False,
-            },
-        )
-    )
 
 
 def _safe_error_label(value: Any) -> str | None:

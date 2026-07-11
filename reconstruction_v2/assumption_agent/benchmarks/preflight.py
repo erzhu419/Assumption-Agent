@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .skilllearnbench import SkillLearnBenchAdapter
+from .docker_egress import (
+    DEPENDENCY_CACHE_POLICY_VERSION,
+    validate_env_policy,
+)
 from .skilllearn_lifecycle import VERIFIER_ISOLATION_VERSION
 from ..provider_chain import proposal_provider_status
 from ..secure_env import (
@@ -19,7 +23,6 @@ from ..secure_env import (
     load_dotenv,
     map_legacy_model_env,
     paper_model_allowed,
-    resolve_codex_auth_path,
 )
 from ..splits import SplitManifest
 
@@ -126,21 +129,9 @@ def build_preflight(
         "secret_value_persisted": False,
     }
     mode = trial_provider_mode or configured_skilllearn_provider_mode()
-    if mode == "codex_subscription":
-        auth_present = resolve_codex_auth_path() is not None
-        trial_auth_passed = bool(
-            auth_present and provider_status["codex_chatgpt_login_present"]
-        )
-        auth_check = {
-            "codex_auth_file_present": auth_present,
-            "codex_chatgpt_login_present": provider_status["codex_chatgpt_login_present"],
-            "api_key_required": False,
-        }
-    elif mode == "openai_compatible":
+    if mode == "openai_compatible":
         trial_auth_passed = bool(provider_status["openai_compatible_config_present"])
         auth_check = {
-            "codex_auth_file_present": False,
-            "codex_chatgpt_login_present": False,
             "api_key_required": True,
         }
     else:
@@ -153,7 +144,6 @@ def build_preflight(
     checks["skilllearn_trial_auth"] = {
         "passed": trial_auth_passed,
         "provider_mode": mode,
-        "ephemeral_codex_home_bind": mode == "codex_subscription",
         "secret_value_persisted": False,
         **auth_check,
     }
@@ -161,6 +151,19 @@ def build_preflight(
         "passed": VERIFIER_ISOLATION_VERSION == "post_agent_verifier_copy_v1",
         "version": VERIFIER_ISOLATION_VERSION,
         "verifier_visible_during_agent": False,
+    }
+    egress = validate_env_policy()
+    checks["container_egress_policy"] = {
+        **egress,
+        "passed": bool(egress.get("valid")),
+        "secret_value_persisted": False,
+    }
+    cache_only = os.environ.get("ASSUMPTION_V2_SKILLLEARN_CACHE_ONLY", "1") == "1"
+    checks["dependency_cache_only"] = {
+        "passed": cache_only,
+        "enabled": cache_only,
+        "policy": DEPENDENCY_CACHE_POLICY_VERSION,
+        "online_build_allowed": False,
     }
     required_checks = (
         "python_supported",
@@ -172,10 +175,12 @@ def build_preflight(
         "skilllearn_runtime_dependencies",
         "skilllearn_trial_auth",
         "verifier_isolation",
+        "container_egress_policy",
+        "dependency_cache_only",
     )
     blockers = [name for name in required_checks if not checks[name].get("passed")]
     return {
-        "preflight_version": "skilllearnbench_preflight_v2",
+        "preflight_version": "skilllearnbench_preflight_v3",
         "checks": checks,
         "blockers": blockers,
         "ready_for_inventory_and_manifest": repository_ok,
@@ -192,7 +197,7 @@ def main() -> None:
     parser.add_argument("--manifest", type=Path)
     parser.add_argument(
         "--trial-provider-mode",
-        choices=("codex_subscription", "openai_compatible"),
+        choices=("openai_compatible",),
     )
     args = parser.parse_args()
     if args.env_file:

@@ -16,12 +16,19 @@ PARALLEL_WORKERS="${PARALLEL_WORKERS:-4}"
 MODEL="${MODEL:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model"])' "${PROTOCOL}")}"
 TRIAL_PROVIDER_MODE="${TRIAL_PROVIDER_MODE:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["trial_provider_mode"])' "${PROTOCOL}")}"
 PROPOSAL_PROVIDER_CHAIN="${PROPOSAL_PROVIDER_CHAIN:-$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1], encoding="utf-8"))["proposal_provider_chain"]))' "${PROTOCOL}")}"
+PROVIDER_ENDPOINT_ORIGIN="${PROVIDER_ENDPOINT_ORIGIN:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["provider_endpoint_origin"])' "${PROTOCOL}")}"
+PROVIDER_ENDPOINT_IPV4S="${PROVIDER_ENDPOINT_IPV4S:-$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1], encoding="utf-8"))["provider_endpoint_ipv4s"]))' "${PROTOCOL}")}"
+TRIAL_NETWORK_BYTE_LIMIT="${TRIAL_NETWORK_BYTE_LIMIT:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["trial_network_byte_limit"])' "${PROTOCOL}")}"
 INVALID_TRIAL_MAX_ATTEMPTS="${INVALID_TRIAL_MAX_ATTEMPTS:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["invalid_trial_max_attempts"])' "${PROTOCOL}")}"
 INVALID_TRIAL_RETRY_BACKOFF_SECONDS="${INVALID_TRIAL_RETRY_BACKOFF_SECONDS:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["invalid_trial_retry_backoff_seconds"])' "${PROTOCOL}")}"
 INVALID_TRIAL_RETRY_WORKERS="${INVALID_TRIAL_RETRY_WORKERS:-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["invalid_trial_retry_workers"])' "${PROTOCOL}")}"
 export ASSUMPTION_V2_MODEL="${MODEL}"
 export ASSUMPTION_V2_SKILLLEARN_PROVIDER_MODE="${TRIAL_PROVIDER_MODE}"
 export ASSUMPTION_V2_PROVIDER_CHAIN="${PROPOSAL_PROVIDER_CHAIN}"
+export ASSUMPTION_V2_API_BASE="${PROVIDER_ENDPOINT_ORIGIN}"
+export ASSUMPTION_V2_API_ALLOWED_IPV4S="${PROVIDER_ENDPOINT_IPV4S}"
+export ASSUMPTION_V2_SKILLLEARN_CACHE_ONLY=1
+export ASSUMPTION_V2_TRIAL_NETWORK_BYTE_LIMIT="${TRIAL_NETWORK_BYTE_LIMIT}"
 
 run_docker_group() {
   if docker info >/dev/null 2>&1; then
@@ -34,6 +41,7 @@ run_docker_group() {
 }
 
 preflight() {
+  run_docker_group python3 -m assumption_agent.benchmarks.docker_egress --ensure
   run_docker_group python3 -m assumption_agent.benchmarks.preflight \
     --env-file "${ENV_FILE}" \
     --manifest "${MANIFEST}" \
@@ -69,6 +77,7 @@ prewarm() {
 run_generation() {
   local name="$1"
   shift
+  run_docker_group python3 -m assumption_agent.benchmarks.docker_egress --ensure
   run_docker_group python3 -m assumption_agent.benchmarks.skilllearn_experiment \
     --root "${BENCHMARK_ROOT}" \
     --manifest "${MANIFEST}" \
@@ -131,6 +140,7 @@ run_controls() {
   if [[ "${split}" == "test" ]]; then
     journal_args=(--sealed-journal "${RUN_ROOT}/sealed_test.journal.json")
   fi
+  run_docker_group python3 -m assumption_agent.benchmarks.docker_egress --ensure
   run_docker_group python3 -m assumption_agent.benchmarks.paper_controls \
     --project-root . \
     --benchmark-root "${BENCHMARK_ROOT}" \

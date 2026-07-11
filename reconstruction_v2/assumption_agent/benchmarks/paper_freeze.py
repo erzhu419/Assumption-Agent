@@ -372,7 +372,13 @@ def _validate_development_report(
         "network_scope_audit",
         "proposal_failure_isolation_policy",
         "openai_compatible_codex_config",
-        "ephemeral_auth_cleanup",
+        "codex_network_minimization",
+        "container_egress_policy",
+        "dependency_cache_policy",
+        "provider_dns_policy",
+        "trial_network_budget_policy",
+        "trial_network_byte_limit",
+        "baseline_arm_evidence_replay_policy",
         "training_evidence_policy",
     ):
         value = protocol.payload["execution"].get(field)

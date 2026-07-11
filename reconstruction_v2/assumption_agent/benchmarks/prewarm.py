@@ -21,6 +21,7 @@ from .skilllearn_lifecycle import (
     SkillLearnPrebuiltImageCache,
     SkillLearnSubprocessBackend,
 )
+from .docker_egress import DEPENDENCY_CACHE_POLICY_VERSION
 
 
 DEVELOPMENT_PREWARM_VERSION = "train_validation_images_v1"
@@ -33,7 +34,7 @@ def prewarm_development_images(
     events_path: str | Path,
     parallel_workers: int = 4,
     attempts: int = 3,
-    trial_provider_mode: str = "codex_subscription",
+    trial_provider_mode: str = "openai_compatible",
 ) -> dict[str, Any]:
     if parallel_workers <= 0:
         raise ValueError("parallel_workers must be positive")
@@ -161,6 +162,9 @@ def prewarm_development_images(
         ),
         "parallel_workers": parallel_workers,
         "maximum_attempts": attempts,
+        "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
+        "dependency_cache_only_enforced": True,
+        "online_build_attempted": False,
         "passed": passed,
         "items": rows,
         "test_content_accessed": False,
@@ -190,6 +194,9 @@ def validate_development_prewarm_receipt(
         "selected_item_count": len(manifest.train_ids) + len(manifest.validation_ids),
         "completed_item_count": len(manifest.train_ids) + len(manifest.validation_ids),
         "failed_item_count": 0,
+        "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
+        "dependency_cache_only_enforced": True,
+        "online_build_attempted": False,
         "passed": True,
         "test_content_accessed": False,
         "secret_value_persisted": False,
@@ -238,7 +245,7 @@ def main() -> None:
     parser.add_argument("--attempts", type=int, default=3)
     parser.add_argument(
         "--trial-provider-mode",
-        choices=("codex_subscription", "openai_compatible"),
+        choices=("openai_compatible",),
     )
     parser.add_argument("--require-passed", action="store_true")
     args = parser.parse_args()

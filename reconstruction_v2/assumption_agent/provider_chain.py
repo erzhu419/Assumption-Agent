@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 import os
-import shutil
-import subprocess
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Mapping, Protocol, Sequence
 
-from .codex_app_server import CodexAppServerConfig, CodexAppServerProposalModel
 from .events import Event, EventSink, NullEventSink
 from .model_client import OpenAICompatibleConfig, OpenAICompatibleProposalModel
 from .models import stable_hash
@@ -15,8 +11,7 @@ from .secure_env import configured_model
 
 
 OPENAI_COMPATIBLE = "openai_compatible"
-CODEX_APP_SERVER = "codex_app_server"
-SUPPORTED_PROVIDERS = (OPENAI_COMPATIBLE, CODEX_APP_SERVER)
+SUPPORTED_PROVIDERS = (OPENAI_COMPATIBLE,)
 
 
 class TracedProposalModel(Protocol):
@@ -155,7 +150,7 @@ class ProviderChainProposalModel:
 def configured_provider_chain() -> tuple[str, ...]:
     raw = os.environ.get(
         "ASSUMPTION_V2_PROVIDER_CHAIN",
-        f"{CODEX_APP_SERVER},{OPENAI_COMPATIBLE}",
+        OPENAI_COMPATIBLE,
     )
     values = tuple(value.strip().lower() for value in raw.split(",") if value.strip())
     if not values:
@@ -188,18 +183,6 @@ def build_proposal_model(*, event_sink: EventSink | None = None) -> ProviderChai
                 )
             )
             continue
-        if provider_id == CODEX_APP_SERVER:
-            try:
-                config = CodexAppServerConfig.from_env()
-            except (RuntimeError, ValueError):
-                unavailable.append(provider_id)
-                continue
-            bindings.append(
-                ProviderBinding(
-                    provider_id=provider_id,
-                    model=CodexAppServerProposalModel(config, event_sink=sink),
-                )
-            )
     if not bindings:
         raise RuntimeError(f"no configured proposal provider is available: {unavailable}")
     model_name = configured_model()
@@ -233,11 +216,8 @@ def proposal_provider_status() -> dict[str, Any]:
     except ValueError:
         requested = ()
         chain_valid = False
-    codex_path = _codex_path()
-    codex_login = _codex_chatgpt_login_present(codex_path) if codex_path else False
     ready = {
         OPENAI_COMPATIBLE: _openai_compatible_config_present(),
-        CODEX_APP_SERVER: bool(codex_path and codex_login),
     }
     active_ready = [provider_id for provider_id in requested if ready.get(provider_id, False)]
     return {
@@ -246,8 +226,6 @@ def proposal_provider_status() -> dict[str, Any]:
         "requested_providers": list(requested),
         "ready_providers": active_ready,
         "openai_compatible_config_present": ready[OPENAI_COMPATIBLE],
-        "codex_cli_present": bool(codex_path),
-        "codex_chatgpt_login_present": codex_login,
         "model": configured_model(enforce_policy=False),
         "secret_value_persisted": False,
     }
@@ -258,31 +236,3 @@ def _openai_compatible_config_present() -> bool:
         os.environ.get("ASSUMPTION_V2_API_BASE", "").strip()
         and os.environ.get("ASSUMPTION_V2_API_KEY", "").strip()
     )
-
-
-def _codex_path() -> str:
-    configured = os.environ.get("ASSUMPTION_V2_CODEX_PATH", "").strip()
-    if configured:
-        return configured if Path(configured).expanduser().is_file() else ""
-    return shutil.which("codex") or ""
-
-
-def _codex_chatgpt_login_present(codex_path: str) -> bool:
-    try:
-        result = subprocess.run(
-            [codex_path, "login", "status"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-            env=_login_status_environment(),
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
-    status = f"{result.stdout}\n{result.stderr}".lower()
-    return result.returncode == 0 and "logged in using chatgpt" in status
-
-
-def _login_status_environment() -> dict[str, str]:
-    allowed = {"CODEX_HOME", "HOME", "USERPROFILE", "PATH", "LANG", "LC_ALL"}
-    return {key: value for key, value in os.environ.items() if key in allowed and value}

@@ -25,10 +25,20 @@ from ..secure_env import (
 )
 from ..splits import SplitManifest
 from .preflight import build_preflight
+from .docker_egress import (
+    DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
+    DEPENDENCY_CACHE_POLICY_VERSION,
+    DOCKER_EGRESS_POLICY_VERSION,
+    PROVIDER_DNS_POLICY_VERSION,
+    TRIAL_NETWORK_BUDGET_POLICY_VERSION,
+    DockerEgressPolicy,
+    configured_trial_network_byte_limit,
+)
 from .skilllearn_compiler import SKILL_ROUTING_VERSION
 from .prewarm import DEVELOPMENT_PREWARM_VERSION
 from .skilllearn_lifecycle import (
-    EPHEMERAL_AUTH_CLEANUP_VERSION,
+    BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+    CODEX_NETWORK_MINIMIZATION_VERSION,
     INVALID_TRIAL_RETRY_POLICY_VERSION,
     LOCAL_EVIDENCE_TRANSPORT_VERSION,
     NETWORK_SCOPE_AUDIT_VERSION,
@@ -50,21 +60,12 @@ from .skilllearnbench import SkillLearnBenchAdapter
 
 
 PAPER_ROUTES_BY_MAJOR: dict[int, dict[str, Any]] = {
-    1: {
-        "model": "gpt-5.3-codex-spark",
-        "proposal_provider_chain": ["codex_app_server", "openai_compatible"],
-        "trial_provider_mode": "codex_subscription",
-    },
-    2: {
-        "model": "gpt-5.3-codex-spark",
-        "proposal_provider_chain": ["codex_app_server", "openai_compatible"],
-        "trial_provider_mode": "codex_subscription",
-    },
     3: {
         "model": "gpt-5.4-mini",
         "proposal_provider_chain": ["openai_compatible"],
         "trial_provider_mode": "openai_compatible",
         "provider_endpoint_origin": "https://ruoli.dev",
+        "provider_endpoint_ipv4s": ["45.78.76.197"],
     },
 }
 
@@ -117,6 +118,10 @@ class PaperProtocol:
                 "provider_endpoint_origin"
             ) != route["provider_endpoint_origin"]:
                 issues.append("provider_endpoint_route_mismatch")
+            if list(self.payload.get("provider_endpoint_ipv4s") or []) != list(
+                route.get("provider_endpoint_ipv4s") or []
+            ):
+                issues.append("provider_endpoint_ipv4_route_mismatch")
         execution = self.payload.get("execution")
         if not isinstance(execution, Mapping):
             issues.append("execution_policy_missing")
@@ -146,12 +151,6 @@ class PaperProtocol:
                 != PROVIDER_FAILURE_POLICY_VERSION
             ):
                 issues.append("provider_failure_policy_mismatch")
-            if (
-                major is not None and major >= 2
-                and execution.get("ephemeral_auth_cleanup")
-                != EPHEMERAL_AUTH_CLEANUP_VERSION
-            ):
-                issues.append("ephemeral_auth_cleanup_mismatch")
             if (
                 major is not None and major >= 2
                 and execution.get("training_evidence_policy")
@@ -267,6 +266,55 @@ class PaperProtocol:
                 != PROPOSAL_FAILURE_ISOLATION_POLICY_VERSION
             ):
                 issues.append("proposal_failure_isolation_policy_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("codex_network_minimization")
+                != CODEX_NETWORK_MINIMIZATION_VERSION
+            ):
+                issues.append("codex_network_minimization_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("baseline_arm_evidence_replay_policy")
+                != BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+            ):
+                issues.append("baseline_arm_evidence_replay_policy_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("container_egress_policy")
+                != DOCKER_EGRESS_POLICY_VERSION
+            ):
+                issues.append("container_egress_policy_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("dependency_cache_policy")
+                != DEPENDENCY_CACHE_POLICY_VERSION
+            ):
+                issues.append("dependency_cache_policy_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("provider_dns_policy")
+                != PROVIDER_DNS_POLICY_VERSION
+            ):
+                issues.append("provider_dns_policy_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("trial_network_budget_policy")
+                != TRIAL_NETWORK_BUDGET_POLICY_VERSION
+            ):
+                issues.append("trial_network_budget_policy_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("trial_network_byte_limit")
+                != DEFAULT_TRIAL_NETWORK_BYTE_LIMIT
+            ):
+                issues.append("trial_network_byte_limit_mismatch")
         evolution = self.payload.get("evolution")
         if not isinstance(evolution, Mapping):
             issues.append("evolution_budget_missing")
@@ -389,6 +437,28 @@ def build_protocol_lock(
     expected_api_origin = str(protocol.payload.get("provider_endpoint_origin") or "")
     if expected_api_origin and api_origin != expected_api_origin:
         issues.append("configured_provider_endpoint_origin_mismatch")
+    expected_api_ipv4s = tuple(
+        sorted(str(value) for value in protocol.payload.get("provider_endpoint_ipv4s") or [])
+    )
+    try:
+        egress_policy = DockerEgressPolicy.from_env()
+    except (TypeError, ValueError):
+        egress_policy = None
+        issues.append("configured_container_egress_policy_invalid")
+    if egress_policy is not None:
+        if egress_policy.endpoint_origin != expected_api_origin:
+            issues.append("configured_egress_endpoint_origin_mismatch")
+        if egress_policy.allowed_ipv4s != expected_api_ipv4s:
+            issues.append("configured_provider_endpoint_ipv4_mismatch")
+    try:
+        trial_network_byte_limit = configured_trial_network_byte_limit()
+    except ValueError:
+        trial_network_byte_limit = None
+        issues.append("configured_trial_network_byte_limit_invalid")
+    if trial_network_byte_limit != protocol.payload["execution"].get(
+        "trial_network_byte_limit"
+    ):
+        issues.append("configured_trial_network_byte_limit_mismatch")
     static_program_path = project / "baselines" / "static_generic_program.json"
     static_program = HypothesisProgram.from_dict(
         json.loads(static_program_path.read_text(encoding="utf-8"))
@@ -430,6 +500,13 @@ def build_protocol_lock(
         "proposal_provider_chain": list(configured_provider_chain()),
         "trial_provider_mode": trial_provider_mode,
         "provider_endpoint_origin": api_origin or None,
+        "container_egress": (
+            egress_policy.provenance() if egress_policy is not None else None
+        ),
+        "trial_network_budget": {
+            "policy": TRIAL_NETWORK_BUDGET_POLICY_VERSION,
+            "byte_limit": trial_network_byte_limit,
+        },
         "provider_status": provider_status,
         "max_steps": int(protocol.payload["max_steps"]),
         "execution": dict(protocol.payload["execution"]),

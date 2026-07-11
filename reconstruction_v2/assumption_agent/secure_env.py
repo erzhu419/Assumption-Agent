@@ -5,9 +5,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 
-LOCKED_MODEL = "gpt-5.3-codex-spark"
-RUOLI_FALLBACK_MODEL = "gpt-5.4-mini"
-APPROVED_PAPER_MODELS = frozenset({LOCKED_MODEL, RUOLI_FALLBACK_MODEL})
+LOCKED_MODEL = "gpt-5.4-mini"
+APPROVED_PAPER_MODELS = frozenset({LOCKED_MODEL})
 
 
 def alternate_model_allowed() -> bool:
@@ -36,9 +35,9 @@ def configured_model(*, enforce_policy: bool = True) -> str:
 def configured_skilllearn_provider_mode() -> str:
     mode = os.environ.get(
         "ASSUMPTION_V2_SKILLLEARN_PROVIDER_MODE",
-        "codex_subscription",
+        "openai_compatible",
     ).strip().lower()
-    if mode not in {"codex_subscription", "openai_compatible"}:
+    if mode != "openai_compatible":
         raise ValueError("unsupported SkillLearn trial provider mode")
     return mode
 
@@ -52,21 +51,6 @@ def configured_api_origin() -> str:
         raise ValueError("ASSUMPTION_V2_API_BASE must be an HTTP(S) URL")
     port = f":{parsed.port}" if parsed.port is not None else ""
     return f"{parsed.scheme}://{parsed.hostname}{port}"
-
-
-def resolve_codex_auth_path() -> Path | None:
-    candidates: list[Path] = []
-    configured = os.environ.get("ASSUMPTION_V2_CODEX_AUTH_PATH", "").strip()
-    if configured:
-        candidates.append(Path(configured).expanduser())
-    codex_home = os.environ.get("CODEX_HOME", "").strip()
-    if codex_home:
-        candidates.append(Path(codex_home).expanduser() / "auth.json")
-    candidates.append(Path.home() / ".codex" / "auth.json")
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate.resolve()
-    return None
 
 
 def load_dotenv(path: str | Path, *, override: bool = False) -> tuple[str, ...]:

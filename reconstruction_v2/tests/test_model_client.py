@@ -138,7 +138,7 @@ def test_legacy_env_mapping_prefers_ruoli_aliases(monkeypatch) -> None:
     assert presence["api_key_present"] is True
     assert presence["base_url_present"] is True
     assert presence["secret_value_persisted"] is False
-    assert presence["model"] == "gpt-5.3-codex-spark"
+    assert presence["model"] == "gpt-5.4-mini"
     assert os.environ["ASSUMPTION_V2_API_BASE"] == "https://ruoli.example"
     assert os.environ["ASSUMPTION_V2_API_KEY"] == "ruoli-key"
 

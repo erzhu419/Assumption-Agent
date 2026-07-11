@@ -11,6 +11,7 @@ from assumption_agent.benchmarks.prewarm import (
     validate_development_prewarm_receipt,
 )
 from assumption_agent.benchmarks.skilllearnbench import SkillLearnBenchAdapter
+from assumption_agent.benchmarks.docker_egress import DEPENDENCY_CACHE_POLICY_VERSION
 from assumption_agent.models import stable_hash
 from assumption_agent.splits import SplitManifest
 
@@ -29,18 +30,22 @@ def test_required_env_preflight_is_bound_to_selected_manifest_items(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.setenv("ASSUMPTION_V2_API_BASE", "https://ruoli.dev")
+    monkeypatch.setenv("ASSUMPTION_V2_API_KEY", "test-key")
+    monkeypatch.setenv("ASSUMPTION_V2_API_ALLOWED_IPV4S", "45.78.76.197")
+    monkeypatch.setenv("ASSUMPTION_V2_SKILLLEARN_CACHE_ONLY", "1")
     adapter = SkillLearnBenchAdapter(BENCH_ROOT)
     full_ids = [item.id for item in adapter.discover()]
     eligible_ids = [item.id for item in adapter.credential_independent_items()]
 
     full = build_preflight(
         BENCH_ROOT,
-        trial_provider_mode="codex_subscription",
+        trial_provider_mode="openai_compatible",
         item_ids=full_ids,
     )
     eligible = build_preflight(
         BENCH_ROOT,
-        trial_provider_mode="codex_subscription",
+        trial_provider_mode="openai_compatible",
         item_ids=eligible_ids,
     )
 
@@ -93,6 +98,9 @@ def test_development_prewarm_receipt_binds_every_train_validation_item() -> None
         "unique_image_count": len(selected_ids),
         "parallel_workers": 4,
         "maximum_attempts": 3,
+        "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
+        "dependency_cache_only_enforced": True,
+        "online_build_attempted": False,
         "passed": True,
         "items": rows,
         "test_content_accessed": False,

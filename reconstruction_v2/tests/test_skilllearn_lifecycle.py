@@ -30,7 +30,9 @@ from assumption_agent.evolution import CounterfactualEvidenceReplayCache
 from assumption_agent.events import MemoryEventSink
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
     SkillLearnSubprocessBackend,
-    _cleanup_ephemeral_codex_home,
+    _ContainerNetworkBudgetMonitor,
+    _parse_docker_byte_size,
+    _parse_docker_net_io,
 )
 from assumption_agent.benchmarks.skilllearn_experiment import _run_paired_arms
 from assumption_agent.models import HypothesisProgram, HypothesisStatus, SplitName
@@ -219,6 +221,23 @@ class FakeDockerSubprocess:
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
 
+class FakeNetworkStatsSubprocess:
+    def __init__(self, net_io: str) -> None:
+        self.net_io = net_io
+        self.commands: list[list[str]] = []
+
+    def run(self, args, *positional, **kwargs):
+        command = list(args)
+        self.commands.append(command)
+        if command[:2] == ["docker", "stats"]:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps({"NetIO": self.net_io}) + "\n",
+                stderr="",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+
 class ConcurrentFakeBackend(FakeSkillLearnBackend):
     def __init__(self) -> None:
         super().__init__()
@@ -240,6 +259,64 @@ class ConcurrentFakeBackend(FakeSkillLearnBackend):
         finally:
             with self._lock:
                 self.active -= 1
+
+
+def test_network_budget_parser_and_monitor_kill_over_limit() -> None:
+    assert _parse_docker_byte_size("1.5MB") == 1_500_000
+    assert _parse_docker_byte_size("2MiB") == 2 * 1024 * 1024
+    assert _parse_docker_net_io("20MiB / 13MiB") == (
+        20 * 1024 * 1024,
+        13 * 1024 * 1024,
+    )
+    delegate = FakeNetworkStatsSubprocess("20MiB / 13MiB")
+    sink = MemoryEventSink()
+    monitor = _ContainerNetworkBudgetMonitor(
+        delegate,
+        container_name="trial",
+        byte_limit=32 * 1024 * 1024,
+        event_sink=sink,
+        trace_id="network-budget",
+    )
+
+    monitor._sample()
+
+    assert monitor.exceeded is True
+    assert ["docker", "kill", "trial"] in delegate.commands
+    exceeded = next(
+        row
+        for row in sink.events
+        if row["event"] == "skilllearn_trial_network_budget_exceeded"
+    )
+    assert exceeded["payload"]["observed_bytes"] == 33 * 1024 * 1024
+
+
+def test_prebuilt_cache_fails_closed_before_any_online_install(tmp_path: Path) -> None:
+    benchmark = tmp_path / "benchmark"
+    environment = benchmark / "tasks" / "family" / "item-1" / "environment"
+    (benchmark / "core").mkdir(parents=True)
+    (benchmark / "core" / "eval_runner.py").write_text("# frozen runner\n")
+    environment.mkdir(parents=True)
+    (environment / "Dockerfile").write_text("FROM scratch\n")
+    docker = FakeDockerSubprocess()
+    runner = ModuleType("cache_only_runner")
+    runner.subprocess = docker
+    runner.get_agent = lambda agent_id: {
+        "runtime_deps": "RUN-DEPS",
+        "install": "npm install -g @openai/codex",
+    }
+
+    with pytest.raises(RuntimeError, match="shared_agent_runtime_cache_missing_offline"):
+        SkillLearnPrebuiltImageCache(benchmark).ensure(
+            family="family",
+            item_id="item-1",
+            agent_id="codex",
+            runner=runner,
+            trace_id="cache-only",
+        )
+
+    assert not any(command[:2] == ["docker", "build"] for command in docker.commands)
+    assert not any(command[:3] == ["docker", "volume", "create"] for command in docker.commands)
+    assert not any(command[:2] == ["docker", "run"] for command in docker.commands)
 
 
 def test_real_manifest_lifecycle_promotes_and_seals_test(tmp_path: Path) -> None:
@@ -436,7 +513,8 @@ def test_invalid_counterfactual_bundle_does_not_enter_replay_cache(
 
     assert first[0].candidate_outcome.metrics["evaluation_valid"] == 0.0
     assert second[0].candidate_outcome.metrics["evaluation_valid"] == 0.0
-    assert len(backend.calls) == 4
+    assert len(backend.calls) == 3
+    assert sum(call[1] == "policy_off" for call in backend.calls) == 1
     assert not any(
         row["event"] == "counterfactual_evidence_replayed"
         for row in sink.events
@@ -677,7 +755,7 @@ def test_paired_ablation_replays_later_root_when_arm_state_is_identical(
     )
     assert len(recursive_model.requests) == 2
     assert len(no_recursive_model.requests) == 0
-    assert len(recursive_backend.calls) == 12
+    assert len(recursive_backend.calls) == 10
     assert len(no_recursive_backend.calls) == 0
     proposal_replay = next(
         row
@@ -806,165 +884,13 @@ def test_family_out_compiler_targets_unseen_validation_families(tmp_path: Path) 
     assert all("items" in path.parts for path in compiled.skill_paths)
 
 
-def test_subscription_trial_auth_is_ephemeral_and_not_passed_as_env(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    auth_path = tmp_path / "auth.json"
-    auth_path.write_text('{"tokens":{"access_token":"fake-secret"}}\n', encoding="utf-8")
-    monkeypatch.setenv("ASSUMPTION_V2_CODEX_AUTH_PATH", str(auth_path))
-    monkeypatch.setenv("OPENAI_API_KEY", "api-key-must-not-enter-subscription-agent")
-    agent = {
-        "env": ["OPENAI_API_KEY"],
-        "setup": "auth_json",
-        "trajectory_env": {"CODEX_HOME": "/logs/agent"},
-    }
-    delegate = RecordingSubprocess()
-    runner = ModuleType("fake_skilllearn_runner")
-    runner.subprocess = delegate
-    runner.get_agent = lambda agent_id: agent
-    sink = MemoryEventSink()
-    backend = SkillLearnSubprocessBackend(
-        BENCH_ROOT,
-        provider_mode="codex_subscription",
-        record_upstream=False,
-        event_sink=sink,
-    )
-
-    with backend._provider_runtime(
-        runner,
-        agent_runtime_volume="assumption-v2-agent-test",
-        trace_id="subscription-isolation-test",
-    ):
-        assert agent["env"] == []
-        assert agent["setup"] is None
-        assert agent["trajectory_env"]["CODEX_HOME"] == "/root/.codex"
-        assert agent["trajectory_env"]["PATH"].startswith(
-            "/opt/assumption-v2-agent/bin:"
-        )
-        tests_dir = tmp_path / "verifier-tests"
-        tests_dir.mkdir()
-        (tests_dir / "test.sh").write_text("#!/bin/sh\n", encoding="utf-8")
-        runner.subprocess.run(
-            [
-                "docker",
-                "run",
-                "-d",
-                "--name",
-                "trial",
-                "-v",
-                f"{tests_dir}:/tests:ro",
-                "image",
-                "sleep",
-                "3600",
-            ]
-        )
-        command = delegate.commands[-1]
-        assert not any(":/tests" in value for value in command)
-        assert command[-3:] == [
-            "sh",
-            "-c",
-            "trap 'exit 0' TERM INT; while :; do sleep 86400; done",
-        ]
-        assert any(
-            row["event"] == "skilllearn_fixed_container_lifetime_removed"
-            for row in sink.events
-        )
-        mounts = [
-            command[index + 1]
-            for index, value in enumerate(command[:-1])
-            if value == "-v"
-        ]
-        mount = next(value for value in mounts if value.endswith(":/root/.codex"))
-        host_home = Path(mount.split(":", 1)[0])
-        assert (
-            "assumption-v2-agent-test:/opt/assumption-v2-agent:ro" in mounts
-        )
-        assert (host_home / "auth.json").is_file()
-        assert "fake-secret" not in repr(command)
-        assert "api-key-must-not-enter-subscription-agent" not in repr(command)
-        runner.subprocess.run(
-            ["docker", "exec", "trial", "sh", "-c", "npm install"],
-            timeout=300,
-        )
-        assert delegate.kwargs[-1]["timeout"] == 300
-        runner.subprocess.run(
-            ["docker", "exec", "trial", "sh", "-c", "codex exec --help"],
-            timeout=1800,
-        )
-        assert "timeout" not in delegate.kwargs[-1]
-        assert not any(command[:2] == ["docker", "cp"] for command in delegate.commands)
-        runner.subprocess.run(
-            ["docker", "exec", "trial", "bash", "/tests/test.sh"],
-            timeout=1800,
-        )
-        assert delegate.commands[-3] == [
-            "docker",
-            "exec",
-            "trial",
-            "mkdir",
-            "-p",
-            "/tests",
-        ]
-        assert delegate.commands[-2] == [
-            "docker",
-            "cp",
-            f"{tests_dir.resolve()}/.",
-            "trial:/tests",
-        ]
-        assert delegate.commands[-1] == [
-            "docker",
-            "exec",
-            "trial",
-            "bash",
-            "/tests/test.sh",
-        ]
-        assert "timeout" not in delegate.kwargs[-1]
-        assert sum(
-            row["event"] == "skilllearn_fixed_wall_timeout_removed"
-            for row in sink.events
-        ) == 2
-        assert any(
-            row["event"] == "skilllearn_verifier_mount_withheld"
-            for row in sink.events
-        )
-        assert any(
-            row["event"] == "skilllearn_verifier_materialized_post_agent"
-            for row in sink.events
-        )
-        delegate.agent_stdout = json.dumps(
-            {
-                "type": "turn.failed",
-                "error": {"message": "You've hit your usage limit for the model."},
-            }
-        )
-        with pytest.raises(RuntimeError, match="subscription_usage_limit"):
-            runner.subprocess.run(
-                ["docker", "exec", "trial", "sh", "-c", "codex exec --help"],
-                timeout=1800,
-            )
-        assert any(
-            row["event"] == "skilllearn_agent_terminal_error_detected"
-            and row["payload"]["error_type"] == "subscription_usage_limit"
-            for row in sink.events
-        )
-
-    assert not host_home.exists()
-    assert agent["env"] == ["OPENAI_API_KEY"]
-    assert agent["setup"] == "auth_json"
-    assert runner.subprocess is delegate
-    assert any(
-        row["event"] == "skilllearn_ephemeral_auth_cleanup_completed"
-        for row in sink.events
-    )
-
-
 def test_openai_compatible_trial_compiles_sanitized_codex_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     secret = "provider-secret-must-not-enter-command-or-events"
     monkeypatch.setenv("ASSUMPTION_V2_API_KEY", secret)
     monkeypatch.setenv("ASSUMPTION_V2_API_BASE", "https://ruoli.dev")
+    monkeypatch.setenv("ASSUMPTION_V2_API_ALLOWED_IPV4S", "45.78.76.197")
     monkeypatch.setenv("OPENAI_API_KEY", "ambient-key-must-be-replaced")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
     agent = {
@@ -1008,6 +934,26 @@ def test_openai_compatible_trial_compiles_sanitized_codex_provider(
         assert "requires_openai_auth=false" in run_template
         assert "api.openai.com" not in run_template
         assert secret not in run_template
+        runner.subprocess.run(
+            [
+                "docker",
+                "run",
+                "-d",
+                "--name",
+                "trial",
+                "image",
+                "sleep",
+                "3600",
+            ]
+        )
+        command = delegate.commands[-1]
+        assert command[0:2] == ["docker", "run"]
+        assert command[command.index("--network") + 1] == "assumption-v2-restricted"
+        assert command[command.index("--dns") + 1] == "127.0.0.1"
+        assert "ruoli.dev:45.78.76.197" in command
+        assert "PIP_NO_INDEX=1" in command
+        assert command[command.index("--pull") + 1] == "never"
+        assert secret not in repr(command)
         prepared = next(
             row
             for row in sink.events
@@ -1100,7 +1046,7 @@ def test_openai_compatible_terminal_errors_use_provider_labels() -> None:
                     }
                 ),
             },
-            "subscription_usage_limit",
+            "provider_usage_limit",
         ),
     ],
 )
@@ -1118,7 +1064,7 @@ def test_upstream_trial_timeouts_are_invalid_observations(
         pair_id="pair",
         repeat=0,
         agent_id="codex",
-        model="gpt-5.3-codex-spark",
+        model="gpt-5.4-mini",
         max_steps=100,
         manifest_hash="manifest",
     )
@@ -1137,7 +1083,7 @@ def test_upstream_trial_timeouts_are_invalid_observations(
 
 def test_open_provider_circuit_skips_model_execution() -> None:
     circuit = SkillLearnProviderCircuit()
-    assert circuit.open("subscription_usage_limit") is True
+    assert circuit.open("provider_usage_limit") is True
     backend = SkillLearnSubprocessBackend(
         BENCH_ROOT,
         record_upstream=False,
@@ -1152,7 +1098,7 @@ def test_open_provider_circuit_skips_model_execution() -> None:
         pair_id="pair",
         repeat=0,
         agent_id="codex",
-        model="gpt-5.3-codex-spark",
+        model="gpt-5.4-mini",
         max_steps=100,
         manifest_hash="manifest",
     )
@@ -1160,55 +1106,24 @@ def test_open_provider_circuit_skips_model_execution() -> None:
     observation = backend.run(request, skill_source_dir=None, trace_id="circuit-open")
 
     assert observation.valid is False
-    assert observation.error_type == "provider_circuit_open_subscription_usage_limit"
-
-
-def test_ephemeral_auth_cleanup_retries_transient_oserror(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    secret_home = tmp_path / "secret-home"
-    secret_home.mkdir()
-    (secret_home / "auth.json").write_text("secret", encoding="utf-8")
-    real_rmtree = shutil.rmtree
-    attempts = 0
-
-    def flaky_rmtree(path):
-        nonlocal attempts
-        attempts += 1
-        if attempts == 1:
-            raise OSError(39, "Directory not empty")
-        return real_rmtree(path)
-
-    monkeypatch.setattr(shutil, "rmtree", flaky_rmtree)
-    sink = MemoryEventSink()
-
-    _cleanup_ephemeral_codex_home(
-        secret_home,
-        event_sink=sink,
-        trace_id="cleanup-retry",
-    )
-
-    assert attempts == 2
-    assert not secret_home.exists()
-    assert sink.events[-1]["payload"]["attempt_count"] == 2
+    assert observation.error_type == "provider_circuit_open_provider_usage_limit"
 
 
 def test_loaded_runners_isolate_agent_registry_across_parallel_backends(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    auth_path = tmp_path / "auth.json"
-    auth_path.write_text('{"tokens":{"access_token":"fake-secret"}}\n', encoding="utf-8")
-    monkeypatch.setenv("ASSUMPTION_V2_CODEX_AUTH_PATH", str(auth_path))
+    monkeypatch.setenv("ASSUMPTION_V2_API_KEY", "fake-secret")
+    monkeypatch.setenv("ASSUMPTION_V2_API_BASE", "https://ruoli.dev")
+    monkeypatch.setenv("ASSUMPTION_V2_API_ALLOWED_IPV4S", "45.78.76.197")
     first = SkillLearnSubprocessBackend(
         BENCH_ROOT,
-        provider_mode="codex_subscription",
+        provider_mode="openai_compatible",
         record_upstream=False,
     )
     second = SkillLearnSubprocessBackend(
         BENCH_ROOT,
-        provider_mode="codex_subscription",
+        provider_mode="openai_compatible",
         record_upstream=False,
     )
     first_runner = first._load_runner()
@@ -1234,9 +1149,9 @@ def test_loaded_runners_isolate_agent_registry_across_parallel_backends(
                 both_entered.wait(timeout=5)
                 assert first_exited.wait(timeout=5)
                 agent = second_runner.get_agent("codex")
-                assert agent["env"] == []
+                assert agent["env"] == ["OPENAI_API_KEY", "OPENAI_BASE_URL"]
                 assert agent["setup"] is None
-                assert agent["trajectory_env"]["CODEX_HOME"] == "/root/.codex"
+                assert "codex exec" in agent["run"]
         except BaseException as exc:
             errors.append(exc)
 
@@ -1290,7 +1205,11 @@ def test_prebuilt_cache_is_keyed_by_exact_non_oracle_environment(tmp_path: Path)
         ("skills/tool", "/root/tool")
     ]
     sink = MemoryEventSink()
-    cache = SkillLearnPrebuiltImageCache(benchmark, event_sink=sink)
+    cache = SkillLearnPrebuiltImageCache(
+        benchmark,
+        cache_only=False,
+        event_sink=sink,
+    )
 
     first = cache.ensure(
         family="family",
@@ -1317,7 +1236,10 @@ def test_prebuilt_cache_is_keyed_by_exact_non_oracle_environment(tmp_path: Path)
         "changed oracle content\n",
         encoding="utf-8",
     )
-    oracle_changed = SkillLearnPrebuiltImageCache(benchmark).ensure(
+    oracle_changed = SkillLearnPrebuiltImageCache(
+        benchmark,
+        cache_only=False,
+    ).ensure(
         family="family",
         item_id="item-1",
         agent_id="codex",
@@ -1328,7 +1250,10 @@ def test_prebuilt_cache_is_keyed_by_exact_non_oracle_environment(tmp_path: Path)
     assert oracle_changed.reused is True
 
     (environment / "payload.txt").write_text("version-two\n", encoding="utf-8")
-    payload_changed = SkillLearnPrebuiltImageCache(benchmark).ensure(
+    payload_changed = SkillLearnPrebuiltImageCache(
+        benchmark,
+        cache_only=False,
+    ).ensure(
         family="family",
         item_id="item-1",
         agent_id="codex",
