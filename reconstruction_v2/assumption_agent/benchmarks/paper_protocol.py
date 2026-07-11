@@ -816,6 +816,11 @@ def build_protocol_lock(
         "preflight": preflight,
         "validation_issues": sorted(set(issues)),
         "claim_eligible": claim_eligible,
+        "test_infrastructure_inspected": bool(
+            primary.test_ids or secondary.test_ids
+        ),
+        "sealed_test_scoring_performed": False,
+        "sealed_test_bytes_exposed_to_model": False,
         "sealed_test_content_accessed": False,
         "secret_value_persisted": False,
         "raw_content_persisted": False,
