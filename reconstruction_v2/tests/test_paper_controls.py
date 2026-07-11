@@ -507,6 +507,9 @@ def _development_report(
                     "proposal_failure_isolation_policy",
                     "openai_compatible_codex_config",
                     "codex_network_minimization",
+                    "model_only_tool_policy",
+                    "verifier_execution_receipt_policy",
+                    "offline_verifier_policy",
                     "trial_network_budget_policy",
                     "trial_network_byte_limit",
                 )

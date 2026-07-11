@@ -31,8 +31,18 @@ from assumption_agent.events import MemoryEventSink
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
     SkillLearnSubprocessBackend,
     _ContainerNetworkBudgetMonitor,
+    _DockerVerifierIsolationSubprocessProxy,
+    _inspect_codex_tool_policy,
+    _inspect_verifier_execution_receipt,
     _parse_docker_byte_size,
     _parse_docker_net_io,
+    _run_invalid_only_trial,
+)
+from assumption_agent.benchmarks.docker_egress import DockerEgressPolicy
+from assumption_agent.benchmarks.offline_verifier import (
+    OFFLINE_VERIFIER_MOUNT,
+    POSTER_VERIFIER_PROFILE,
+    OfflineVerifierRuntime,
 )
 from assumption_agent.benchmarks.skilllearn_experiment import _run_paired_arms
 from assumption_agent.models import HypothesisProgram, HypothesisStatus, SplitName
@@ -288,6 +298,185 @@ def test_network_budget_parser_and_monitor_kill_over_limit() -> None:
         if row["event"] == "skilllearn_trial_network_budget_exceeded"
     )
     assert exceeded["payload"]["observed_bytes"] == 33 * 1024 * 1024
+
+
+def test_network_budget_violation_is_never_retried() -> None:
+    request = SkillLearnTrialRequest(
+        item_id="anthropic-poster-design-4",
+        family="anthropic-poster-design",
+        split=SplitName.TRAIN,
+        variant=TrialVariant.POLICY_OFF,
+        evaluator_epoch="epoch-offline",
+        pair_id="poster-network-budget",
+        repeat=0,
+        agent_id="codex",
+        model="gpt-5.4-mini",
+        max_steps=20,
+        manifest_hash="manifest-offline",
+    )
+    calls: list[int] = []
+
+    def run_once(attempt: int) -> SkillLearnTrialObservation:
+        calls.append(attempt)
+        return SkillLearnTrialObservation(
+            request=request,
+            success=False,
+            score=0.0,
+            metrics={"evaluation_valid": 0.0},
+            total_tokens=0,
+            steps=0,
+            duration_seconds=1.0,
+            provider_fingerprint="provider-fixed",
+            fairness_fingerprint="budget-fixed",
+            error_type="trial_network_byte_limit_exceeded",
+        )
+
+    sink = MemoryEventSink()
+    observation = _run_invalid_only_trial(
+        request=request,
+        run_once=run_once,
+        maximum_attempts=3,
+        backoff_seconds=0.0,
+        retry_semaphore=threading.Semaphore(1),
+        event_sink=sink,
+        trace_id="network-budget-no-retry",
+    )
+
+    assert observation.error_type == "trial_network_byte_limit_exceeded"
+    assert calls == [1]
+    suppressed = next(
+        row
+        for row in sink.events
+        if row["event"] == "skilllearn_invalid_trial_retry_suppressed"
+    )
+    assert suppressed["payload"]["suppression_reason"] == "hard_network_budget_exceeded"
+    assert suppressed["payload"]["hard_budget_violation"] is True
+
+
+def test_verifier_receipt_requires_a_real_ctrf_test_run(tmp_path: Path) -> None:
+    test_script = tmp_path / "tests" / "test.sh"
+    verifier_dir = tmp_path / "trial" / "verifier"
+    test_script.parent.mkdir(parents=True)
+    verifier_dir.mkdir(parents=True)
+    test_script.write_text(
+        "pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py\n",
+        encoding="utf-8",
+    )
+    (verifier_dir / "reward.txt").write_text("0\n", encoding="utf-8")
+    result = {"verifier_exit": 0, "reward": 0}
+
+    missing = _inspect_verifier_execution_receipt(
+        test_script=test_script,
+        verifier_dir=verifier_dir,
+        result=result,
+    )
+
+    assert missing.valid is False
+    assert missing.error_type == "verifier_execution_ctrf_missing"
+
+    (verifier_dir / "ctrf.json").write_text(
+        json.dumps(
+            {
+                "results": {
+                    "tool": {"name": "pytest", "version": "8.4.1"},
+                    "summary": {
+                        "tests": 2,
+                        "passed": 1,
+                        "failed": 1,
+                        "skipped": 0,
+                        "pending": 0,
+                        "other": 0,
+                    },
+                    "tests": [
+                        {"name": "test_ok", "status": "passed"},
+                        {"name": "test_bad", "status": "failed"},
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    complete = _inspect_verifier_execution_receipt(
+        test_script=test_script,
+        verifier_dir=verifier_dir,
+        result=result,
+    )
+
+    assert complete.valid is True
+    assert complete.reward == 0
+    assert complete.test_count == 2
+    assert complete.receipt_hash
+
+
+def test_codex_tool_audit_rejects_remote_tools_and_runtime_installs(
+    tmp_path: Path,
+) -> None:
+    trace = tmp_path / "codex.txt"
+    trace.write_text(
+        "Reading additional input from stdin...\n"
+        + json.dumps(
+            {
+                "type": "item.completed",
+                "item": {"id": "search-1", "type": "web_search"},
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "type": "item.completed",
+                "item": {
+                    "id": "command-1",
+                    "type": "command_execution",
+                    "command": "/bin/bash -lc 'python3 -m pip install Pillow'",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    audit = _inspect_codex_tool_policy(trace)
+
+    assert audit.valid is False
+    assert audit.error_type == "model_remote_tool_policy_violation"
+    assert audit.remote_tool_call_count == 1
+    assert audit.runtime_install_command_count == 1
+    assert audit.trace_hash
+
+
+def test_unlocalized_online_verifier_family_is_blocked_before_model_start() -> None:
+    sink = MemoryEventSink()
+    backend = SkillLearnSubprocessBackend(
+        BENCH_ROOT,
+        model="gpt-5.4-mini",
+        provider_mode="openai_compatible",
+        event_sink=sink,
+    )
+    request = SkillLearnTrialRequest(
+        item_id="organize-messy-files-2",
+        family="organize-messy-files",
+        split=SplitName.TRAIN,
+        variant=TrialVariant.POLICY_OFF,
+        evaluator_epoch="epoch-offline",
+        pair_id="unlocalized-family",
+        repeat=0,
+        agent_id="codex",
+        model="gpt-5.4-mini",
+        max_steps=100,
+        manifest_hash="manifest-offline",
+    )
+
+    observation = backend.run(request, skill_source_dir=None, trace_id="offline-block")
+
+    assert observation.valid is False
+    assert observation.error_type == "offline_verifier_profile_missing"
+    assert any(
+        row["event"] == "skilllearn_trial_blocked_missing_offline_verifier_profile"
+        and row["payload"]["model_container_started"] is False
+        and row["payload"]["runtime_network_attempted"] is False
+        for row in sink.events
+    )
+    assert not any(row["event"] == "skilllearn_trial_started" for row in sink.events)
 
 
 def test_prebuilt_cache_fails_closed_before_any_online_install(tmp_path: Path) -> None:
@@ -927,6 +1116,11 @@ def test_openai_compatible_trial_compiles_sanitized_codex_provider(
         run_template = agent["run"]
         assert "--ignore-user-config" in run_template
         assert "--ephemeral" in run_template
+        assert "--strict-config" in run_template
+        assert "tools.web_search=false" in run_template
+        assert "image_generation" in run_template
+        assert "standalone_web_search" in run_template
+        assert "package installation" in run_template
         assert 'model_provider="assumption_v2_openai_compatible"' in run_template
         assert "https://ruoli.dev/v1" in run_template
         assert "wire_api" in run_template and "responses" in run_template
@@ -985,6 +1179,73 @@ def test_openai_compatible_trial_compiles_sanitized_codex_provider(
 
     assert agent == original_agent
     assert runner.subprocess is delegate
+
+
+def test_poster_verifier_uses_readonly_local_runtime_and_skips_online_script(
+    tmp_path: Path,
+) -> None:
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test.sh").write_text("curl https://astral.sh | sh\n", encoding="utf-8")
+    (tests_dir / "test_outputs.py").write_text("def test_ok(): pass\n", encoding="utf-8")
+    runtime = OfflineVerifierRuntime(
+        profile=POSTER_VERIFIER_PROFILE,
+        runtime_key="runtime-key",
+        volume_name="offline-verifier-volume",
+        base_image_id="sha256:base",
+        reused=True,
+    )
+    delegate = RecordingSubprocess()
+    sink = MemoryEventSink()
+    proxy = _DockerVerifierIsolationSubprocessProxy(
+        delegate,
+        offline_verifier_runtime=runtime,
+        egress_policy=DockerEgressPolicy.from_values(
+            base_url="https://ruoli.dev",
+            allowed_ipv4s=("45.78.76.197",),
+        ),
+        event_sink=sink,
+        trace_id="offline-poster",
+    )
+
+    proxy.run(
+        [
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            "poster-trial",
+            "-v",
+            f"{tests_dir}:/tests:ro",
+            "image",
+            "sleep",
+            "3600",
+        ]
+    )
+    run_command = delegate.commands[-1]
+    assert f"offline-verifier-volume:{OFFLINE_VERIFIER_MOUNT}:ro" in run_command
+    assert f"{tests_dir}:/tests:ro" not in run_command
+
+    proxy.run(
+        ["docker", "exec", "poster-trial", "bash", "/tests/test.sh"],
+        timeout=1800,
+    )
+    verifier_command = delegate.commands[-1]
+    assert verifier_command[:5] == [
+        "docker",
+        "exec",
+        "poster-trial",
+        "sh",
+        "-lc",
+    ]
+    assert "python3 -m pytest" in verifier_command[-1]
+    assert "PIP_NO_INDEX=1" in verifier_command[-1]
+    assert "/tests/test.sh" not in verifier_command[-1]
+    assert any(
+        row["event"] == "skilllearn_offline_verifier_command_selected"
+        and row["payload"]["original_online_test_script_executed"] is False
+        for row in sink.events
+    )
 
 
 def test_openai_compatible_terminal_errors_use_provider_labels() -> None:

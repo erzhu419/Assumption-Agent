@@ -62,6 +62,25 @@ def test_required_env_preflight_is_bound_to_selected_manifest_items(
     assert eligible["checks"]["benchmark_required_env"]["passed"] is True
     assert eligible["checks"]["benchmark_required_env"]["required_env_names"] == []
     assert "benchmark_required_env" not in eligible["blockers"]
+    assert full["checks"]["offline_verifier_profile_coverage"][
+        "missing_profile_item_count"
+    ] == 90
+    assert eligible["checks"]["offline_verifier_profile_coverage"][
+        "missing_profile_item_count"
+    ] == 85
+
+    poster_ids = [
+        item.id for item in adapter.discover() if item.family == "anthropic-poster-design"
+    ]
+    poster = build_preflight(
+        BENCH_ROOT,
+        trial_provider_mode="openai_compatible",
+        item_ids=poster_ids,
+    )
+    assert poster["checks"]["offline_verifier_profile_coverage"]["passed"] is True
+    assert poster["checks"]["offline_verifier_profile_coverage"][
+        "missing_profile_item_count"
+    ] == 0
 
 
 def test_development_prewarm_receipt_binds_every_train_validation_item() -> None:

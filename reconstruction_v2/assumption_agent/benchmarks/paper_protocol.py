@@ -39,6 +39,7 @@ from .prewarm import DEVELOPMENT_PREWARM_VERSION
 from .skilllearn_lifecycle import (
     BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
     CODEX_NETWORK_MINIMIZATION_VERSION,
+    MODEL_ONLY_TOOL_POLICY_VERSION,
     INVALID_TRIAL_RETRY_POLICY_VERSION,
     LOCAL_EVIDENCE_TRANSPORT_VERSION,
     NETWORK_SCOPE_AUDIT_VERSION,
@@ -54,8 +55,10 @@ from .skilllearn_lifecycle import (
     TRAINING_EVIDENCE_POLICY_VERSION,
     TRAINING_EVIDENCE_REPLAY_POLICY_VERSION,
     TRIAL_TIMEOUT_POLICY_VERSION,
+    VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION,
     VERIFIER_ISOLATION_VERSION,
 )
+from .offline_verifier import OFFLINE_VERIFIER_POLICY_VERSION
 from .skilllearnbench import SkillLearnBenchAdapter
 
 
@@ -179,6 +182,27 @@ class PaperProtocol:
                 issues.append("skill_routing_mismatch")
             if execution.get("verifier_isolation") != VERIFIER_ISOLATION_VERSION:
                 issues.append("verifier_isolation_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("verifier_execution_receipt_policy")
+                != VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION
+            ):
+                issues.append("verifier_execution_receipt_policy_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("offline_verifier_policy")
+                != OFFLINE_VERIFIER_POLICY_VERSION
+            ):
+                issues.append("offline_verifier_policy_mismatch")
+            if (
+                major is not None
+                and major >= 3
+                and execution.get("model_only_tool_policy")
+                != MODEL_ONLY_TOOL_POLICY_VERSION
+            ):
+                issues.append("model_only_tool_policy_mismatch")
             if execution.get("parallel_unit") != "benchmark_item":
                 issues.append("parallel_unit_invalid")
             if execution.get("within_pair_execution") != "sequential_balanced_order":

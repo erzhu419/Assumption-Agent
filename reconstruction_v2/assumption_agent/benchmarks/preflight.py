@@ -16,7 +16,13 @@ from .docker_egress import (
     validate_env_policy,
 )
 from .skilllearn_lifecycle import VERIFIER_ISOLATION_VERSION
+from .offline_verifier import (
+    OFFLINE_VERIFIER_POLICY_VERSION,
+    offline_verifier_profile_for_family,
+    test_script_requires_offline_profile,
+)
 from ..provider_chain import proposal_provider_status
+from ..models import stable_hash
 from ..secure_env import (
     alternate_model_allowed,
     configured_skilllearn_provider_mode,
@@ -165,6 +171,37 @@ def build_preflight(
         "policy": DEPENDENCY_CACHE_POLICY_VERSION,
         "online_build_allowed": False,
     }
+    missing_offline_profile_ids: list[str] = []
+    declared_profile_ids: set[str] = set()
+    for item in inventory_items:
+        if item.id not in selected_ids:
+            continue
+        test_script = root / "tasks" / item.family / item.id / "tests" / "test.sh"
+        profile = offline_verifier_profile_for_family(item.family)
+        if profile is not None:
+            declared_profile_ids.add(profile.profile_id)
+        elif test_script_requires_offline_profile(test_script):
+            missing_offline_profile_ids.append(item.id)
+    checks["offline_verifier_profile_coverage"] = {
+        "passed": repository_ok and not unknown_ids and not missing_offline_profile_ids,
+        "policy": OFFLINE_VERIFIER_POLICY_VERSION,
+        "selected_item_count": len(selected_ids),
+        "declared_profile_count": len(declared_profile_ids),
+        "declared_profile_set_hash": stable_hash(
+            {"profile_ids": sorted(declared_profile_ids)}
+        ),
+        "missing_profile_item_count": len(missing_offline_profile_ids),
+        "missing_profile_item_set_hash": stable_hash(
+            {
+                "item_ids": sorted(
+                    stable_hash({"item_id": item_id})
+                    for item_id in missing_offline_profile_ids
+                )
+            }
+        ),
+        "runtime_network_fallback_allowed": False,
+        "raw_content_persisted": False,
+    }
     required_checks = (
         "python_supported",
         "docker_cli",
@@ -177,6 +214,7 @@ def build_preflight(
         "verifier_isolation",
         "container_egress_policy",
         "dependency_cache_only",
+        "offline_verifier_profile_coverage",
     )
     blockers = [name for name in required_checks if not checks[name].get("passed")]
     return {

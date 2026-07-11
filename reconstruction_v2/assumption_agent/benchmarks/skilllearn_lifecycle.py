@@ -64,11 +64,20 @@ from .docker_egress import (
     DockerEgressPolicy,
     configured_trial_network_byte_limit,
 )
+from .offline_verifier import (
+    OFFLINE_VERIFIER_MOUNT,
+    OFFLINE_VERIFIER_POLICY_VERSION,
+    OfflineVerifierRuntime,
+    SkillLearnOfflineVerifierRuntimeCache,
+    offline_verifier_profile_for_family,
+    test_script_requires_offline_profile,
+)
 
 
 BASELINE_LANE = "skilllearn_incumbent"
 CANDIDATE_LANE = "skilllearn_challenger"
 VERIFIER_ISOLATION_VERSION = "post_agent_verifier_copy_v1"
+VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION = "pytest_ctrf_and_reward_receipt_v1"
 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION = "runner_local_agent_registry_v1"
 TRIAL_TIMEOUT_POLICY_VERSION = "no_fixed_trial_wall_or_container_timeout_v2"
 PROVIDER_FAILURE_POLICY_VERSION = "codex_jsonl_terminal_error_circuit_v1"
@@ -80,7 +89,7 @@ BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION = (
     "behavior_identical_validation_baseline_arm_replay_v1"
 )
 INVALID_TRIAL_RETRY_POLICY_VERSION = (
-    "same_request_invalid_only_clean_replacement_v1"
+    "same_request_transient_invalid_clean_replacement_v2"
 )
 LOCAL_EVIDENCE_TRANSPORT_VERSION = (
     "local_content_addressed_task_and_post_agent_verifier_v1"
@@ -91,7 +100,8 @@ PROPOSAL_FAILURE_ISOLATION_POLICY_VERSION = (
 )
 PROVIDER_ROUTE_POLICY_VERSION = "single_model_single_provider_all_arms_v1"
 OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION = "codex_custom_responses_provider_v1"
-CODEX_NETWORK_MINIMIZATION_VERSION = "analytics_and_otel_disabled_v1"
+CODEX_NETWORK_MINIMIZATION_VERSION = "model_only_no_remote_tools_v2"
+MODEL_ONLY_TOOL_POLICY_VERSION = "no_web_image_or_runtime_install_v1"
 OPENAI_COMPATIBLE_CODEX_PROVIDER_ID = "assumption_v2_openai_compatible"
 PREBUILT_IMAGE_POLICY_VERSION = "per_item_base_shared_agent_runtime_v3"
 SHARED_AGENT_RUNTIME_MOUNT = "/opt/assumption-v2-agent"
@@ -110,6 +120,44 @@ _FATAL_PROVIDER_ERROR_TYPES = frozenset(
         "provider_usage_limit",
     }
 )
+_FORBIDDEN_CODEX_TOOL_TYPES = frozenset(
+    {
+        "web_search",
+        "web_search_call",
+        "image_generation",
+        "image_generation_call",
+    }
+)
+_FORBIDDEN_RUNTIME_COMMAND_PATTERNS = (
+    re.compile(
+        r"(?:^|[;&|]\s*|-(?:l)?c\s+['\"]?)(?:sudo\s+)?(?:pip|pip3)\s+install\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[;&|]\s*|-(?:l)?c\s+['\"]?)python(?:3(?:\.\d+)?)?\s+-m\s+pip\s+install\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[;&|]\s*|-(?:l)?c\s+['\"]?)uv\s+pip\s+install\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[;&|]\s*|-(?:l)?c\s+['\"]?)uvx(?:\s|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[;&|]\s*|-(?:l)?c\s+['\"]?)(?:sudo\s+)?apt(?:-get)?\s+(?:update|install)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[;&|]\s*|-(?:l)?c\s+['\"]?)(?:npm|pnpm|yarn)\s+(?:install|add)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[;&|]\s*|-(?:l)?c\s+['\"]?)npx(?:\s|$)",
+        re.IGNORECASE,
+    ),
+)
 
 
 class SkillLearnAgentTerminalError(RuntimeError):
@@ -120,6 +168,25 @@ class SkillLearnAgentTerminalError(RuntimeError):
 
 class SkillLearnTrainingEvidenceError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class _VerifierExecutionReceipt:
+    valid: bool
+    error_type: str | None
+    evidence_kind: str
+    reward: int | None
+    test_count: int
+    receipt_hash: str
+
+
+@dataclass(frozen=True)
+class _CodexToolPolicyAudit:
+    valid: bool
+    error_type: str | None
+    remote_tool_call_count: int
+    runtime_install_command_count: int
+    trace_hash: str
 
 
 class SkillLearnProviderCircuit:
@@ -206,6 +273,8 @@ class SkillLearnTrialObservation:
     prebuilt_cache_reused: bool = False
     agent_runtime_key: str = ""
     agent_runtime_version: str = ""
+    offline_verifier_profile_id: str = ""
+    offline_verifier_runtime_key: str = ""
 
     @property
     def valid(self) -> bool:
@@ -245,6 +314,8 @@ class SkillLearnTrialObservation:
             "prebuilt_cache_reused": self.prebuilt_cache_reused,
             "agent_runtime_key": self.agent_runtime_key,
             "agent_runtime_version": self.agent_runtime_version,
+            "offline_verifier_profile_id": self.offline_verifier_profile_id,
+            "offline_verifier_runtime_key": self.offline_verifier_runtime_key,
             "secret_value_persisted": False,
         }
 
@@ -839,6 +910,7 @@ class SkillLearnSubprocessBackend:
         trials_dir: str | Path | None = None,
         record_upstream: bool = True,
         prebuilt_cache: SkillLearnPrebuiltImageCache | None = None,
+        offline_verifier_cache: SkillLearnOfflineVerifierRuntimeCache | None = None,
         provider_circuit: SkillLearnProviderCircuit | None = None,
         event_sink: EventSink | None = None,
     ) -> None:
@@ -862,6 +934,10 @@ class SkillLearnSubprocessBackend:
         self.provider_circuit = provider_circuit or SkillLearnProviderCircuit()
         self.trial_network_byte_limit = configured_trial_network_byte_limit()
         self.event_sink = event_sink or NullEventSink()
+        self.offline_verifier_cache = (
+            offline_verifier_cache
+            or SkillLearnOfflineVerifierRuntimeCache(event_sink=self.event_sink)
+        )
         self._runner_module: ModuleType | None = None
         self._runner_instance_token = stable_hash(
             {"benchmark_root": str(self.benchmark_root), "instance": id(self)}
@@ -915,6 +991,35 @@ class SkillLearnSubprocessBackend:
             )
         if request.variant is TrialVariant.POLICY_ON and skill_source_dir is None:
             return self._local_error(request, "candidate_skill_source_missing")
+        offline_verifier_profile = offline_verifier_profile_for_family(request.family)
+        verifier_script = (
+            self.benchmark_root
+            / "tasks"
+            / request.family
+            / request.item_id
+            / "tests"
+            / "test.sh"
+        )
+        if (
+            offline_verifier_profile is None
+            and test_script_requires_offline_profile(verifier_script)
+        ):
+            self.event_sink.emit(
+                Event(
+                    event="skilllearn_trial_blocked_missing_offline_verifier_profile",
+                    stage="benchmark.skilllearn.offline_verifier",
+                    trace_id=trace_id,
+                    payload={
+                        "policy": OFFLINE_VERIFIER_POLICY_VERSION,
+                        "request_hash": request.request_hash,
+                        "family_hash": stable_hash({"family": request.family}),
+                        "model_container_started": False,
+                        "runtime_network_attempted": False,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+            return self._local_error(request, "offline_verifier_profile_missing")
 
         self.event_sink.emit(
             Event(
@@ -929,6 +1034,15 @@ class SkillLearnSubprocessBackend:
                     "max_steps": request.max_steps,
                     "provider_mode": self.provider_mode,
                     "verifier_isolation": VERIFIER_ISOLATION_VERSION,
+                    "verifier_execution_receipt_policy": (
+                        VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION
+                    ),
+                    "offline_verifier_policy": OFFLINE_VERIFIER_POLICY_VERSION,
+                    "offline_verifier_profile_id": (
+                        offline_verifier_profile.profile_id
+                        if offline_verifier_profile
+                        else None
+                    ),
                     "runner_agent_registry_isolation": (
                         RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
                     ),
@@ -940,6 +1054,7 @@ class SkillLearnSubprocessBackend:
                         else None
                     ),
                     "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+                    "model_only_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
                     "trial_network_budget_policy": (
                         TRIAL_NETWORK_BUDGET_POLICY_VERSION
                     ),
@@ -955,6 +1070,7 @@ class SkillLearnSubprocessBackend:
         result: Mapping[str, Any]
         return_code: int
         prebuilt_image: SkillLearnPrebuiltImage | None = None
+        offline_verifier_runtime: OfflineVerifierRuntime | None = None
         egress_policy: DockerEgressPolicy | None = None
         try:
             runner = self._load_runner()
@@ -967,6 +1083,14 @@ class SkillLearnSubprocessBackend:
                 runner=runner,
                 trace_id=f"{trace_id}:prebuild",
             )
+            if offline_verifier_profile is not None:
+                offline_verifier_runtime = self.offline_verifier_cache.ensure(
+                    profile=offline_verifier_profile,
+                    base_image_tag=prebuilt_image.tag,
+                    base_image_id=prebuilt_image.image_id,
+                    delegate=runner.subprocess,
+                    trace_id=f"{trace_id}:offline-verifier",
+                )
             egress_policy = DockerEgressPolicy.from_env()
             egress_policy.ensure(
                 event_sink=self.event_sink,
@@ -992,6 +1116,22 @@ class SkillLearnSubprocessBackend:
                             prebuilt_image.image_id if prebuilt_image else None
                         ),
                         "verifier_transport": "local_docker_copy_after_agent_exit",
+                        "offline_verifier_policy": OFFLINE_VERIFIER_POLICY_VERSION,
+                        "offline_verifier_profile_id": (
+                            offline_verifier_runtime.profile.profile_id
+                            if offline_verifier_runtime
+                            else None
+                        ),
+                        "offline_verifier_runtime_key": (
+                            offline_verifier_runtime.runtime_key
+                            if offline_verifier_runtime
+                            else None
+                        ),
+                        "verifier_dependency_transport": (
+                            "local_readonly_content_addressed_volume"
+                            if offline_verifier_runtime
+                            else "unsupported_family_fails_receipt_closed"
+                        ),
                         "model_transport": "online_openai_compatible_responses",
                         "model_endpoint_origin": _configured_openai_compatible_origin(),
                         "huggingface_dataset_access_required": False,
@@ -1035,11 +1175,19 @@ class SkillLearnSubprocessBackend:
                     prebuilt_image.agent_runtime_volume if prebuilt_image else None
                 ),
                 egress_policy=egress_policy,
+                offline_verifier_runtime=offline_verifier_runtime,
                 trace_id=trace_id,
             ):
                 return_code, result = runner.run_task(
                     f"{request.family}/{request.item_id}",
                     **kwargs,
+                )
+                result = self._audit_trial_artifacts(
+                    runner=runner,
+                    request=request,
+                    skill_config=skill_config,
+                    result=result,
+                    trace_id=trace_id,
                 )
         except Exception as exc:
             caught_error_type = (
@@ -1071,6 +1219,7 @@ class SkillLearnSubprocessBackend:
             return_code=return_code,
             duration_seconds=time.monotonic() - started,
             prebuilt_image=prebuilt_image,
+            offline_verifier_runtime=offline_verifier_runtime,
         )
         if observation.error_type in _FATAL_PROVIDER_ERROR_TYPES:
             opened = self.provider_circuit.open(observation.error_type)
@@ -1115,6 +1264,12 @@ class SkillLearnSubprocessBackend:
                     "prebuilt_cache_reused": observation.prebuilt_cache_reused,
                     "agent_runtime_key": observation.agent_runtime_key,
                     "agent_runtime_version": observation.agent_runtime_version,
+                    "offline_verifier_profile_id": (
+                        observation.offline_verifier_profile_id
+                    ),
+                    "offline_verifier_runtime_key": (
+                        observation.offline_verifier_runtime_key
+                    ),
                 },
             )
         )
@@ -1156,6 +1311,7 @@ class SkillLearnSubprocessBackend:
         *,
         agent_runtime_volume: str | None = None,
         egress_policy: DockerEgressPolicy | None = None,
+        offline_verifier_runtime: OfflineVerifierRuntime | None = None,
         trace_id: str = "skilllearn-provider-runtime",
     ) -> Iterator[None]:
         active_egress_policy = egress_policy or DockerEgressPolicy.from_env()
@@ -1164,6 +1320,7 @@ class SkillLearnSubprocessBackend:
                 runner,
                 agent_runtime_volume=agent_runtime_volume,
                 egress_policy=active_egress_policy,
+                offline_verifier_runtime=offline_verifier_runtime,
                 trace_id=trace_id,
             ):
                 yield
@@ -1178,11 +1335,16 @@ class SkillLearnSubprocessBackend:
             if isinstance(agent, dict) and agent_runtime_volume:
                 trajectory_env = dict(agent.get("trajectory_env") or {})
                 trajectory_env["PATH"] = f"{SHARED_AGENT_RUNTIME_MOUNT}/bin:$PATH"
+                if offline_verifier_runtime is not None:
+                    trajectory_env["PYTHONPATH"] = (
+                        f"{OFFLINE_VERIFIER_MOUNT}/site"
+                    )
                 agent["trajectory_env"] = trajectory_env
             with self._verifier_isolation(
                 runner,
                 agent_runtime_volume=agent_runtime_volume,
                 egress_policy=active_egress_policy,
+                offline_verifier_runtime=offline_verifier_runtime,
                 trace_id=trace_id,
             ):
                 yield
@@ -1198,12 +1360,14 @@ class SkillLearnSubprocessBackend:
         *,
         agent_runtime_volume: str | None = None,
         egress_policy: DockerEgressPolicy,
+        offline_verifier_runtime: OfflineVerifierRuntime | None = None,
         trace_id: str = "skilllearn-verifier-isolation",
     ) -> Iterator[None]:
         original_subprocess = runner.subprocess
         proxy = _DockerVerifierIsolationSubprocessProxy(
             original_subprocess,
             agent_runtime_volume=agent_runtime_volume,
+            offline_verifier_runtime=offline_verifier_runtime,
             egress_policy=egress_policy,
             network_byte_limit=self.trial_network_byte_limit,
             provider_mode=self.provider_mode,
@@ -1253,6 +1417,11 @@ class SkillLearnSubprocessBackend:
         config_values = (
             "--ignore-user-config",
             "--ephemeral",
+            "--strict-config",
+            "--disable",
+            "image_generation",
+            "--disable",
+            "standalone_web_search",
             "--config",
             "analytics.enabled=false",
             "--config",
@@ -1261,6 +1430,18 @@ class SkillLearnSubprocessBackend:
             'otel.metrics_exporter="none"',
             "--config",
             'otel.trace_exporter="none"',
+            "--config",
+            "tools.web_search=false",
+            "--config",
+            (
+                "developer_instructions="
+                + json.dumps(
+                    "This evaluation environment is offline except for model inference. "
+                    "Do not use web search, image generation services, package installation, "
+                    "or commands that fetch network content. Use only preinstalled local tools "
+                    "and files."
+                )
+            ),
             "--config",
             f"model_provider={json.dumps(OPENAI_COMPATIBLE_CODEX_PROVIDER_ID)}",
             "--config",
@@ -1330,6 +1511,11 @@ class SkillLearnSubprocessBackend:
                     "otel_exporter": "none",
                     "otel_metrics_exporter": "none",
                     "otel_trace_exporter": "none",
+                    "strict_config": True,
+                    "web_search_enabled": False,
+                    "image_generation_enabled": False,
+                    "runtime_package_install_allowed": False,
+                    "model_only_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
                     "network_minimization_version": (
                         CODEX_NETWORK_MINIMIZATION_VERSION
                     ),
@@ -1342,6 +1528,111 @@ class SkillLearnSubprocessBackend:
             )
         )
 
+    def _audit_trial_artifacts(
+        self,
+        *,
+        runner: ModuleType,
+        request: SkillLearnTrialRequest,
+        skill_config: str,
+        result: Mapping[str, Any],
+        trace_id: str,
+    ) -> Mapping[str, Any]:
+        trials_root = self.trials_dir or Path(runner.TRIALS_DIR).expanduser().resolve()
+        trial_path = (
+            trials_root
+            / skill_config
+            / request.family
+            / request.item_id
+            / request.trial_id
+        )
+        test_script = (
+            self.benchmark_root
+            / "tasks"
+            / request.family
+            / request.item_id
+            / "tests"
+            / "test.sh"
+        )
+        verifier_receipt = _inspect_verifier_execution_receipt(
+            test_script=test_script,
+            verifier_dir=trial_path / "verifier",
+            result=result,
+        )
+        tool_audit = _inspect_codex_tool_policy(trial_path / "agent" / "codex.txt")
+        audited = dict(result)
+        audited.update(
+            {
+                "verifier_receipt_policy": (
+                    VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION
+                ),
+                "verifier_receipt_valid": verifier_receipt.valid,
+                "verifier_receipt_kind": verifier_receipt.evidence_kind,
+                "verifier_receipt_hash": verifier_receipt.receipt_hash,
+                "verifier_receipt_test_count": verifier_receipt.test_count,
+                "model_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
+                "model_tool_policy_valid": tool_audit.valid,
+                "model_remote_tool_call_count": (
+                    tool_audit.remote_tool_call_count
+                ),
+                "model_runtime_install_command_count": (
+                    tool_audit.runtime_install_command_count
+                ),
+                "model_tool_trace_hash": tool_audit.trace_hash,
+            }
+        )
+        existing_error = _safe_error_label(audited.get("error"))
+        if existing_error is None:
+            if not tool_audit.valid:
+                audited["error"] = tool_audit.error_type
+            elif not verifier_receipt.valid:
+                audited["error"] = verifier_receipt.error_type
+        self.event_sink.emit(
+            Event(
+                event=(
+                    "skilllearn_verifier_execution_receipt_validated"
+                    if verifier_receipt.valid
+                    else "skilllearn_verifier_execution_receipt_invalid"
+                ),
+                stage="benchmark.skilllearn.verifier_receipt",
+                trace_id=trace_id,
+                payload={
+                    "policy": VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION,
+                    "request_hash": request.request_hash,
+                    "valid": verifier_receipt.valid,
+                    "error_type": verifier_receipt.error_type,
+                    "evidence_kind": verifier_receipt.evidence_kind,
+                    "reward": verifier_receipt.reward,
+                    "test_count": verifier_receipt.test_count,
+                    "receipt_hash": verifier_receipt.receipt_hash,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        self.event_sink.emit(
+            Event(
+                event=(
+                    "skilllearn_model_only_tool_policy_validated"
+                    if tool_audit.valid
+                    else "skilllearn_model_only_tool_policy_violated"
+                ),
+                stage="benchmark.skilllearn.model_tool_policy",
+                trace_id=trace_id,
+                payload={
+                    "policy": MODEL_ONLY_TOOL_POLICY_VERSION,
+                    "request_hash": request.request_hash,
+                    "valid": tool_audit.valid,
+                    "error_type": tool_audit.error_type,
+                    "remote_tool_call_count": tool_audit.remote_tool_call_count,
+                    "runtime_install_command_count": (
+                        tool_audit.runtime_install_command_count
+                    ),
+                    "trace_hash": tool_audit.trace_hash,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        return audited
+
     def _sanitize_result(
         self,
         request: SkillLearnTrialRequest,
@@ -1350,6 +1641,7 @@ class SkillLearnSubprocessBackend:
         return_code: int,
         duration_seconds: float,
         prebuilt_image: SkillLearnPrebuiltImage | None = None,
+        offline_verifier_runtime: OfflineVerifierRuntime | None = None,
     ) -> SkillLearnTrialObservation:
         usage = result.get("token_usage") if isinstance(result.get("token_usage"), Mapping) else {}
         total_tokens = _as_nonnegative_int(usage.get("total_tokens"))
@@ -1406,6 +1698,11 @@ class SkillLearnSubprocessBackend:
             ),
             prebuilt_image_key=prebuilt_image.cache_key if prebuilt_image else "",
             prebuilt_image_id=prebuilt_image.image_id if prebuilt_image else "",
+            offline_verifier_runtime_key=(
+                offline_verifier_runtime.runtime_key
+                if offline_verifier_runtime
+                else ""
+            ),
         )
         sanitized_upstream = {
             "task_id_hash": stable_hash({"task_id": result.get("task_id")}),
@@ -1414,6 +1711,9 @@ class SkillLearnSubprocessBackend:
             "model": result.get("model"),
             "provider_mode": self.provider_mode,
             "verifier_isolation": VERIFIER_ISOLATION_VERSION,
+            "verifier_execution_receipt_policy": (
+                VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION
+            ),
             "runner_agent_registry_isolation": (
                 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
             ),
@@ -1425,6 +1725,7 @@ class SkillLearnSubprocessBackend:
                 else None
             ),
             "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+            "model_only_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
             "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
             "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
             "provider_dns_policy": PROVIDER_DNS_POLICY_VERSION,
@@ -1441,12 +1742,37 @@ class SkillLearnSubprocessBackend:
             "agent_runtime_version": (
                 prebuilt_image.agent_runtime_version if prebuilt_image else None
             ),
+            "offline_verifier_policy": OFFLINE_VERIFIER_POLICY_VERSION,
+            "offline_verifier_profile_id": (
+                offline_verifier_runtime.profile.profile_id
+                if offline_verifier_runtime
+                else None
+            ),
+            "offline_verifier_runtime_key": (
+                offline_verifier_runtime.runtime_key
+                if offline_verifier_runtime
+                else None
+            ),
             "skill_config": result.get("skill_config"),
             "passed": result.get("passed"),
             "reward": result.get("reward"),
             "agent_exit": result.get("agent_exit"),
             "agent_timed_out": result.get("agent_timed_out"),
             "verifier_exit": result.get("verifier_exit"),
+            "verifier_receipt_valid": result.get("verifier_receipt_valid"),
+            "verifier_receipt_kind": result.get("verifier_receipt_kind"),
+            "verifier_receipt_hash": result.get("verifier_receipt_hash"),
+            "verifier_receipt_test_count": _as_nonnegative_int(
+                result.get("verifier_receipt_test_count")
+            ),
+            "model_tool_policy_valid": result.get("model_tool_policy_valid"),
+            "model_remote_tool_call_count": _as_nonnegative_int(
+                result.get("model_remote_tool_call_count")
+            ),
+            "model_runtime_install_command_count": _as_nonnegative_int(
+                result.get("model_runtime_install_command_count")
+            ),
+            "model_tool_trace_hash": result.get("model_tool_trace_hash"),
             "error_type": error_type,
             "token_usage": {str(key): _as_nonnegative_int(value) for key, value in usage.items()},
         }
@@ -1470,6 +1796,16 @@ class SkillLearnSubprocessBackend:
             agent_runtime_version=(
                 prebuilt_image.agent_runtime_version if prebuilt_image else ""
             ),
+            offline_verifier_profile_id=(
+                offline_verifier_runtime.profile.profile_id
+                if offline_verifier_runtime
+                else ""
+            ),
+            offline_verifier_runtime_key=(
+                offline_verifier_runtime.runtime_key
+                if offline_verifier_runtime
+                else ""
+            ),
         )
 
     def _local_error(self, request: SkillLearnTrialRequest, error_type: str) -> SkillLearnTrialObservation:
@@ -1488,6 +1824,7 @@ class SkillLearnSubprocessBackend:
             agent_runtime_key="",
             prebuilt_image_key="",
             prebuilt_image_id="",
+            offline_verifier_runtime_key="",
         )
         return SkillLearnTrialObservation(
             request=request,
@@ -2882,6 +3219,7 @@ class _DockerVerifierIsolationSubprocessProxy:
         delegate: Any,
         *,
         agent_runtime_volume: str | None = None,
+        offline_verifier_runtime: OfflineVerifierRuntime | None = None,
         egress_policy: DockerEgressPolicy,
         network_byte_limit: int = DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
         provider_mode: str = "openai_compatible",
@@ -2890,6 +3228,7 @@ class _DockerVerifierIsolationSubprocessProxy:
     ) -> None:
         self.delegate = delegate
         self.agent_runtime_volume = agent_runtime_volume
+        self.offline_verifier_runtime = offline_verifier_runtime
         self.egress_policy = egress_policy
         self.network_byte_limit = network_byte_limit
         self.provider_mode = provider_mode
@@ -2968,6 +3307,9 @@ class _DockerVerifierIsolationSubprocessProxy:
                             }
                         ),
                         "agent_runtime_mounted": bool(self.agent_runtime_volume),
+                        "offline_verifier_runtime_mounted": bool(
+                            self.offline_verifier_runtime
+                        ),
                         "codex_home_mounted": False,
                         "tests_mount_present_during_agent": False,
                     },
@@ -2979,6 +3321,13 @@ class _DockerVerifierIsolationSubprocessProxy:
                 )
                 if mount not in command:
                     command[3:3] = ["-v", mount]
+            if self.offline_verifier_runtime is not None:
+                verifier_mount = (
+                    f"{self.offline_verifier_runtime.volume_name}:"
+                    f"{OFFLINE_VERIFIER_MOUNT}:ro"
+                )
+                if verifier_mount not in command:
+                    command[3:3] = ["-v", verifier_mount]
             network_args = self.egress_policy.docker_run_args()
             command[2:2] = network_args
             self.event_sink.emit(
@@ -3038,6 +3387,41 @@ class _DockerVerifierIsolationSubprocessProxy:
                     },
                 )
             )
+            if self.offline_verifier_runtime is not None:
+                command = [
+                    "docker",
+                    "exec",
+                    container_name,
+                    "sh",
+                    "-lc",
+                    self.offline_verifier_runtime.profile.verifier_command,
+                ]
+                self.event_sink.emit(
+                    Event(
+                        event="skilllearn_offline_verifier_command_selected",
+                        stage="benchmark.skilllearn.offline_verifier",
+                        trace_id=self.trace_id,
+                        payload={
+                            "policy": OFFLINE_VERIFIER_POLICY_VERSION,
+                            "profile_id": (
+                                self.offline_verifier_runtime.profile.profile_id
+                            ),
+                            "profile_hash": (
+                                self.offline_verifier_runtime.profile.profile_hash
+                            ),
+                            "runtime_key": (
+                                self.offline_verifier_runtime.runtime_key
+                            ),
+                            "container_name_hash": stable_hash(
+                                {"container_name": container_name}
+                            ),
+                            "original_online_test_script_executed": False,
+                            "verifier_network": "provider_restricted_no_dependency_access",
+                            "runtime_mount_read_only": True,
+                            "raw_content_persisted": False,
+                        },
+                    )
+                )
         timeout_stage = _trial_timeout_stage(command)
         if timeout_stage and "timeout" in kwargs:
             kwargs = dict(kwargs)
@@ -3193,6 +3577,7 @@ def _fairness_fingerprint(
     agent_runtime_key: str,
     prebuilt_image_key: str,
     prebuilt_image_id: str,
+    offline_verifier_runtime_key: str,
 ) -> str:
     return stable_hash(
         {
@@ -3207,13 +3592,19 @@ def _fairness_fingerprint(
             "agent_runtime_key": agent_runtime_key,
             "prebuilt_image_key": prebuilt_image_key,
             "prebuilt_image_id": prebuilt_image_id,
+            "offline_verifier_policy": OFFLINE_VERIFIER_POLICY_VERSION,
+            "offline_verifier_runtime_key": offline_verifier_runtime_key,
             "verifier_isolation": VERIFIER_ISOLATION_VERSION,
+            "verifier_execution_receipt_policy": (
+                VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION
+            ),
             "runner_agent_registry_isolation": (
                 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
             ),
             "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
             "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
             "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+            "model_only_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
             "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
             "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
             "provider_dns_policy": PROVIDER_DNS_POLICY_VERSION,
@@ -3246,12 +3637,17 @@ def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
             "provider_mode": provider_mode,
             "base_url": base_url,
             "verifier_isolation": VERIFIER_ISOLATION_VERSION,
+            "verifier_execution_receipt_policy": (
+                VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION
+            ),
+            "offline_verifier_policy": OFFLINE_VERIFIER_POLICY_VERSION,
             "runner_agent_registry_isolation": (
                 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION
             ),
             "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
             "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
             "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+            "model_only_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
             "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
             "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
             "provider_dns_policy": PROVIDER_DNS_POLICY_VERSION,
@@ -3377,6 +3773,155 @@ def _safe_error_label(value: Any) -> str | None:
     return label[:96] or "upstream_error"
 
 
+def _inspect_verifier_execution_receipt(
+    *,
+    test_script: Path,
+    verifier_dir: Path,
+    result: Mapping[str, Any],
+) -> _VerifierExecutionReceipt:
+    evidence_kind = "pytest_ctrf" if _test_script_uses_ctrf(test_script) else "unsupported"
+    reward: int | None = None
+    test_count = 0
+    evidence_hashes: dict[str, Any] = {
+        "policy": VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION,
+        "test_script_hash": _file_content_hash(test_script) if test_script.is_file() else None,
+        "evidence_kind": evidence_kind,
+    }
+
+    error_type: str | None = None
+    verifier_exit = result.get("verifier_exit")
+    try:
+        verifier_exit_code = int(verifier_exit)
+    except (TypeError, ValueError):
+        verifier_exit_code = None
+    if verifier_exit_code is None:
+        error_type = "verifier_execution_exit_missing"
+    elif verifier_exit_code != 0:
+        error_type = (
+            "verifier_timeout"
+            if verifier_exit_code == -1
+            else "verifier_execution_nonzero_exit"
+        )
+
+    reward_file = verifier_dir / "reward.txt"
+    if reward_file.is_file():
+        raw_reward = reward_file.read_text(encoding="utf-8", errors="replace").strip()
+        if raw_reward in {"0", "1"}:
+            reward = int(raw_reward)
+            evidence_hashes["reward_sha256"] = _file_content_hash(reward_file)
+        elif error_type is None:
+            error_type = "verifier_execution_reward_malformed"
+    elif error_type is None:
+        error_type = "verifier_execution_reward_missing"
+
+    result_reward = result.get("reward")
+    if (
+        reward is not None
+        and isinstance(result_reward, (int, float))
+        and float(result_reward) != float(reward)
+        and error_type is None
+    ):
+        error_type = "verifier_execution_reward_mismatch"
+
+    if not test_script.is_file() and error_type is None:
+        error_type = "verifier_execution_test_script_missing"
+    elif evidence_kind != "pytest_ctrf" and error_type is None:
+        error_type = "verifier_execution_receipt_unsupported"
+    elif evidence_kind == "pytest_ctrf":
+        ctrf_file = verifier_dir / "ctrf.json"
+        if not ctrf_file.is_file():
+            if error_type is None:
+                error_type = "verifier_execution_ctrf_missing"
+        else:
+            evidence_hashes["ctrf_sha256"] = _file_content_hash(ctrf_file)
+            try:
+                payload = json.loads(ctrf_file.read_text(encoding="utf-8"))
+                results = payload.get("results") if isinstance(payload, Mapping) else None
+                summary = results.get("summary") if isinstance(results, Mapping) else None
+                test_rows = results.get("tests") if isinstance(results, Mapping) else None
+                if not isinstance(summary, Mapping) or not isinstance(test_rows, list):
+                    raise ValueError("CTRF results are incomplete")
+                test_count = _as_nonnegative_int(summary.get("tests"))
+                if test_count <= 0 or len(test_rows) != test_count:
+                    raise ValueError("CTRF contains no complete test execution")
+                evidence_hashes["test_count"] = test_count
+                evidence_hashes["summary_hash"] = stable_hash(
+                    {
+                        key: summary.get(key)
+                        for key in (
+                            "tests",
+                            "passed",
+                            "failed",
+                            "skipped",
+                            "pending",
+                            "other",
+                        )
+                    }
+                )
+            except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                if error_type is None:
+                    error_type = "verifier_execution_ctrf_malformed"
+
+    receipt_hash = stable_hash(evidence_hashes)
+    return _VerifierExecutionReceipt(
+        valid=error_type is None,
+        error_type=error_type,
+        evidence_kind=evidence_kind,
+        reward=reward,
+        test_count=test_count,
+        receipt_hash=receipt_hash,
+    )
+
+
+def _test_script_uses_ctrf(test_script: Path) -> bool:
+    if not test_script.is_file():
+        return False
+    return "--ctrf" in test_script.read_text(encoding="utf-8", errors="replace")
+
+
+def _inspect_codex_tool_policy(trace_path: Path) -> _CodexToolPolicyAudit:
+    if not trace_path.is_file():
+        return _CodexToolPolicyAudit(
+            valid=False,
+            error_type="model_tool_audit_trace_missing",
+            remote_tool_call_count=0,
+            runtime_install_command_count=0,
+            trace_hash="",
+        )
+    remote_tool_ids: set[str] = set()
+    runtime_install_ids: set[str] = set()
+    for raw_line in trace_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            row = json.loads(raw_line)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        item = row.get("item") if isinstance(row, Mapping) else None
+        if not isinstance(item, Mapping):
+            continue
+        item_type = str(item.get("type") or "")
+        item_id = str(item.get("id") or stable_hash(item))
+        if item_type in _FORBIDDEN_CODEX_TOOL_TYPES:
+            remote_tool_ids.add(item_id)
+        if item_type == "command_execution":
+            command = str(item.get("command") or "")
+            if any(pattern.search(command) for pattern in _FORBIDDEN_RUNTIME_COMMAND_PATTERNS):
+                runtime_install_ids.add(item_id)
+    remote_tool_count = len(remote_tool_ids)
+    runtime_install_count = len(runtime_install_ids)
+    error_type = None
+    if remote_tool_count:
+        error_type = "model_remote_tool_policy_violation"
+    elif runtime_install_count:
+        error_type = "model_runtime_install_policy_violation"
+    return _CodexToolPolicyAudit(
+        valid=error_type is None,
+        error_type=error_type,
+        remote_tool_call_count=remote_tool_count,
+        runtime_install_command_count=runtime_install_count,
+        trace_hash=_file_content_hash(trace_path),
+    )
+
+
 def _as_nonnegative_int(value: Any) -> int:
     try:
         return max(0, int(value or 0))
@@ -3402,7 +3947,31 @@ def _run_invalid_only_trial(
     if observation.request.request_hash != request.request_hash:
         raise PermissionError("trial execution changed the frozen request key")
     for attempt in range(2, maximum_attempts + 1):
-        if observation.valid or not _retryable_invalid_observation(observation):
+        if observation.valid:
+            break
+        suppression_reason = _invalid_retry_suppression_reason(observation)
+        if suppression_reason is not None:
+            event_sink.emit(
+                Event(
+                    event="skilllearn_invalid_trial_retry_suppressed",
+                    stage="benchmark.skilllearn.invalid_retry",
+                    trace_id=trace_id,
+                    payload={
+                        "policy": INVALID_TRIAL_RETRY_POLICY_VERSION,
+                        "request_hash": request.request_hash,
+                        "attempts_executed": attempt - 1,
+                        "maximum_attempts": maximum_attempts,
+                        "error_type": observation.error_type,
+                        "suppression_reason": suppression_reason,
+                        "hard_budget_violation": (
+                            observation.error_type
+                            == "trial_network_byte_limit_exceeded"
+                        ),
+                        "same_request_key": True,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
             break
         previous = observation
         delay = backoff_seconds * (attempt - 1)
@@ -3461,16 +4030,34 @@ def _run_invalid_only_trial(
 def _retryable_invalid_observation(
     observation: SkillLearnTrialObservation,
 ) -> bool:
+    return _invalid_retry_suppression_reason(observation) is None
+
+
+def _invalid_retry_suppression_reason(
+    observation: SkillLearnTrialObservation,
+) -> str | None:
     error_type = observation.error_type or ""
-    if not error_type or error_type in _FATAL_PROVIDER_ERROR_TYPES:
-        return False
+    if not error_type:
+        return "missing_error_type"
+    if error_type in _FATAL_PROVIDER_ERROR_TYPES:
+        return "fatal_provider_error"
     if error_type.startswith("provider_circuit_open_"):
-        return False
-    return error_type not in {
+        return "provider_circuit_open"
+    if error_type == "trial_network_byte_limit_exceeded":
+        return "hard_network_budget_exceeded"
+    if error_type.startswith("verifier_execution_"):
+        return "nontransient_verifier_infrastructure_error"
+    if error_type.startswith("offline_verifier_"):
+        return "nontransient_offline_verifier_configuration_error"
+    if error_type.startswith("model_") and error_type.endswith("_policy_violation"):
+        return "nontransient_model_tool_policy_violation"
+    if error_type in {
         "candidate_skill_source_missing",
         "compiled_candidate_skill_missing",
         "runner_configuration_error",
-    }
+    }:
+        return "nontransient_configuration_error"
+    return None
 
 
 def _program_behavior_hash(program: HypothesisProgram) -> str:

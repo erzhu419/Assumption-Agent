@@ -54,6 +54,7 @@ from .docker_egress import (
 from .skilllearn_lifecycle import (
     BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
     CODEX_NETWORK_MINIMIZATION_VERSION,
+    MODEL_ONLY_TOOL_POLICY_VERSION,
     OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION,
     PREBUILT_IMAGE_POLICY_VERSION,
     PROVIDER_FAILURE_POLICY_VERSION,
@@ -66,6 +67,7 @@ from .skilllearn_lifecycle import (
     TRAINING_EVIDENCE_POLICY_VERSION,
     TRAINING_EVIDENCE_REPLAY_POLICY_VERSION,
     TRIAL_TIMEOUT_POLICY_VERSION,
+    VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION,
     SkillLearnBackendPool,
     SkillLearnEvolutionHarness,
     SkillLearnGenerationResult,
@@ -74,6 +76,7 @@ from .skilllearn_lifecycle import (
     SkillLearnSubprocessBackend,
     TrainingEvidenceReplayCache,
 )
+from .offline_verifier import OFFLINE_VERIFIER_POLICY_VERSION
 from .skilllearnbench import SkillLearnBenchAdapter
 
 
@@ -200,6 +203,11 @@ def main() -> None:
             else None
         ),
         "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+        "model_only_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
+        "verifier_execution_receipt_policy": (
+            VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION
+        ),
+        "offline_verifier_policy": OFFLINE_VERIFIER_POLICY_VERSION,
         "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
         "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
         "provider_dns_policy": PROVIDER_DNS_POLICY_VERSION,
