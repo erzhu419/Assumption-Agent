@@ -10,9 +10,13 @@ from ..events import JsonlEventSink
 from ..models import stable_hash
 from ..splits import SplitManifest
 from .offline_verifier import (
+    OFFLINE_VERIFIER_PROFILE_CATALOG,
     OFFLINE_VERIFIER_POLICY_VERSION,
     OFFLINE_VERIFIER_PROFILES,
+    offline_verifier_activation_blocker_for_family,
+    offline_verifier_profile_for_family,
     probe_offline_verifier_runtime,
+    test_script_requires_offline_profile,
 )
 from .skilllearn_lifecycle import (
     SkillLearnPrebuiltImageCache,
@@ -47,8 +51,38 @@ def probe_offline_verifier_matrix(
         event_sink=sink,
     )
     train_by_family: dict[str, str] = {}
+    incomplete_train_verifier_ids: list[str] = []
+    activation_blocked_train_ids: list[str] = []
+    missing_profile_train_ids: list[str] = []
     for item_id in manifest.train_ids:
         item = inventory[item_id]
+        test_script = (
+            benchmark_root
+            / "tasks"
+            / item.family
+            / item_id
+            / "tests"
+            / "test.sh"
+        )
+        if (
+            offline_verifier_profile_for_family(item.family) is None
+            and test_script_requires_offline_profile(test_script)
+        ):
+            if offline_verifier_activation_blocker_for_family(item.family):
+                activation_blocked_train_ids.append(item_id)
+            else:
+                missing_profile_train_ids.append(item_id)
+        test_outputs = (
+            benchmark_root
+            / "tasks"
+            / item.family
+            / item_id
+            / "tests"
+            / "test_outputs.py"
+        )
+        if not test_outputs.is_file():
+            incomplete_train_verifier_ids.append(item_id)
+            continue
         train_by_family.setdefault(item.family, item_id)
     rows: list[dict[str, Any]] = []
     profile_rows: list[dict[str, Any]] = []
@@ -63,12 +97,36 @@ def probe_offline_verifier_matrix(
         fail_tests = synthetic_tests / "fail"
         pass_tests.mkdir()
         fail_tests.mkdir()
+        secret_audit_source = (
+            "from pathlib import Path\n"
+            "import os\n\n"
+            "SECRET_NAMES = {b'OPENAI_API_KEY', b'ASSUMPTION_V2_API_KEY'}\n\n"
+            "def assert_model_secrets_absent():\n"
+            "    assert not {name.decode() for name in SECRET_NAMES} & set(os.environ)\n"
+            "    for proc in Path('/proc').iterdir():\n"
+            "        if not proc.name.isdigit():\n"
+            "            continue\n"
+            "        try:\n"
+            "            command = (proc / 'cmdline').read_bytes()\n"
+            "            if b'org.apache.druid.cli.Main' not in command:\n"
+            "                continue\n"
+            "            environ = (proc / 'environ').read_bytes().split(b'\\0')\n"
+            "            names = {row.split(b'=', 1)[0] for row in environ if b'=' in row}\n"
+            "            assert not SECRET_NAMES & names\n"
+            "        except (FileNotFoundError, PermissionError, ProcessLookupError):\n"
+            "            continue\n\n"
+        )
         (pass_tests / "test_outputs.py").write_text(
-            "def test_known_pass():\n    assert True\n",
+            secret_audit_source
+            + "def test_known_pass():\n"
+            + "    assert_model_secrets_absent()\n",
             encoding="utf-8",
         )
         (fail_tests / "test_outputs.py").write_text(
-            "def test_known_fail():\n    assert False\n",
+            secret_audit_source
+            + "def test_known_fail():\n"
+            + "    assert_model_secrets_absent()\n"
+            + "    assert False\n",
             encoding="utf-8",
         )
         for profile in OFFLINE_VERIFIER_PROFILES:
@@ -143,6 +201,14 @@ def probe_offline_verifier_matrix(
                             ),
                             "known_fail_receipt_hash": fail_receipt.get(
                                 "receipt_hash"
+                            ),
+                            "model_secret_env_canary_verified": bool(
+                                pass_receipt.get(
+                                    "model_secret_env_canary_injected"
+                                )
+                                and fail_receipt.get(
+                                    "model_secret_env_canary_injected"
+                                )
                             ),
                             "passed": contract_passed,
                             "error_type": (
@@ -239,13 +305,67 @@ def probe_offline_verifier_matrix(
                             ),
                         }
                     )
+    profile_matrix_passed = bool(
+        all(bool(row["passed"]) for row in rows)
+        and all(bool(row["passed"]) for row in profile_rows)
+    )
+    manifest_execution_ready = not (
+        incomplete_train_verifier_ids
+        or activation_blocked_train_ids
+        or missing_profile_train_ids
+    )
+    blockers = []
+    if incomplete_train_verifier_ids:
+        blockers.append("incomplete_train_verifier_payload")
+    if activation_blocked_train_ids:
+        blockers.append("inactive_offline_verifier_profile")
+    if missing_profile_train_ids:
+        blockers.append("missing_offline_verifier_profile")
+    inactive_profiles = [
+        {
+            "profile_id": profile.profile_id,
+            "profile_hash": profile.profile_hash,
+            "family_count": len(profile.families),
+            "activation_blocker": profile.activation_blocker,
+        }
+        for profile in OFFLINE_VERIFIER_PROFILE_CATALOG
+        if profile.activation_blocker is not None
+    ]
     payload: dict[str, Any] = {
-        "report_version": "offline_verifier_family_matrix_v2",
+        "report_version": "offline_verifier_family_matrix_v4",
         "policy": OFFLINE_VERIFIER_POLICY_VERSION,
         "manifest_hash": manifest.manifest_hash,
         "split": "train",
+        "representative_selection_policy": "train_first_complete_verifier_v2",
         "model_executed": False,
         "sealed_test_content_accessed": False,
+        "incomplete_train_verifier_item_count": len(
+            incomplete_train_verifier_ids
+        ),
+        "incomplete_train_verifier_item_set_hash": stable_hash(
+            sorted(
+                stable_hash({"item_id": item_id})
+                for item_id in incomplete_train_verifier_ids
+            )
+        ),
+        "activation_blocked_train_item_count": len(
+            activation_blocked_train_ids
+        ),
+        "activation_blocked_train_item_set_hash": stable_hash(
+            sorted(
+                stable_hash({"item_id": item_id})
+                for item_id in activation_blocked_train_ids
+            )
+        ),
+        "missing_profile_train_item_count": len(missing_profile_train_ids),
+        "missing_profile_train_item_set_hash": stable_hash(
+            sorted(
+                stable_hash({"item_id": item_id})
+                for item_id in missing_profile_train_ids
+            )
+        ),
+        "inactive_profile_count": len(inactive_profiles),
+        "inactive_profiles": inactive_profiles,
         "family_count": len(rows),
         "passed_family_count": sum(bool(row["passed"]) for row in rows),
         "failed_family_count": sum(not bool(row["passed"]) for row in rows),
@@ -256,10 +376,10 @@ def probe_offline_verifier_matrix(
         "failed_profile_count": sum(
             not bool(row["passed"]) for row in profile_rows
         ),
-        "passed": (
-            all(bool(row["passed"]) for row in rows)
-            and all(bool(row["passed"]) for row in profile_rows)
-        ),
+        "profile_matrix_passed": profile_matrix_passed,
+        "manifest_execution_ready": manifest_execution_ready,
+        "blockers": blockers,
+        "passed": profile_matrix_passed and manifest_execution_ready,
         "profile_contracts": profile_rows,
         "families": rows,
         "raw_content_persisted": False,

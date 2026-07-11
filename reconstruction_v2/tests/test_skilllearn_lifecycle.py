@@ -43,6 +43,7 @@ from assumption_agent.benchmarks.docker_egress import DockerEgressPolicy
 from assumption_agent.benchmarks.offline_verifier import (
     OFFLINE_VERIFIER_MOUNT,
     POSTER_VERIFIER_PROFILE,
+    WEIGHTED_GDP_VERIFIER_PROFILE,
     OfflineVerifierRuntime,
 )
 from assumption_agent.benchmarks.skilllearn_experiment import _run_paired_arms
@@ -409,6 +410,99 @@ def test_verifier_receipt_requires_a_real_ctrf_test_run(tmp_path: Path) -> None:
     assert complete.receipt_hash
 
 
+def test_verifier_receipt_structurally_binds_semantic_prelude(tmp_path: Path) -> None:
+    test_script = tmp_path / "tests" / "test.sh"
+    verifier_dir = tmp_path / "trial" / "verifier"
+    test_script.parent.mkdir(parents=True)
+    verifier_dir.mkdir(parents=True)
+    test_script.write_text(
+        "pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py\n",
+        encoding="utf-8",
+    )
+    (verifier_dir / "reward.txt").write_text("0\n", encoding="utf-8")
+    (verifier_dir / "ctrf.json").write_text(
+        json.dumps(
+            {
+                "results": {
+                    "summary": {
+                        "tests": 1,
+                        "passed": 0,
+                        "failed": 1,
+                        "skipped": 0,
+                        "pending": 0,
+                        "other": 0,
+                    },
+                    "tests": [{"name": "test_failure", "status": "failed"}],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = {"verifier_exit": 0, "reward": 0}
+
+    missing = _inspect_verifier_execution_receipt(
+        test_script=test_script,
+        verifier_dir=verifier_dir,
+        result=result,
+        offline_verifier_profile=WEIGHTED_GDP_VERIFIER_PROFILE,
+    )
+
+    assert missing.valid is False
+    assert missing.error_type == "semantic_prelude_receipt_missing"
+
+    (verifier_dir / "semantic_prelude.json").write_text(
+        json.dumps(
+            {
+                "prelude_id": "weighted_gdp_ssconvert_v1",
+                "exit_code": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (verifier_dir / "semantic_prelude_details.txt").write_text(
+        "tool=ssconvert\ncommand_exit=0\nsheet_count=3\n",
+        encoding="utf-8",
+    )
+    succeeded = _inspect_verifier_execution_receipt(
+        test_script=test_script,
+        verifier_dir=verifier_dir,
+        result=result,
+        offline_verifier_profile=WEIGHTED_GDP_VERIFIER_PROFILE,
+    )
+
+    assert succeeded.valid is True
+    assert succeeded.semantic_prelude_valid is True
+    assert succeeded.semantic_prelude_succeeded is True
+    assert succeeded.semantic_prelude_exit_code == 0
+    assert succeeded.semantic_prelude_details["sheet_count"] == "3"
+
+    (verifier_dir / "semantic_prelude.json").write_text(
+        json.dumps(
+            {
+                "prelude_id": "weighted_gdp_ssconvert_v1",
+                "exit_code": 3,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (verifier_dir / "semantic_prelude_details.txt").write_text(
+        "tool=ssconvert\ncommand_exit=3\nsheet_count=0\n",
+        encoding="utf-8",
+    )
+    task_failure = _inspect_verifier_execution_receipt(
+        test_script=test_script,
+        verifier_dir=verifier_dir,
+        result=result,
+        offline_verifier_profile=WEIGHTED_GDP_VERIFIER_PROFILE,
+    )
+
+    assert task_failure.valid is True
+    assert task_failure.error_type is None
+    assert task_failure.semantic_prelude_valid is True
+    assert task_failure.semantic_prelude_succeeded is False
+    assert task_failure.reward == 0
+
+
 def test_codex_tool_audit_rejects_remote_tools_and_runtime_installs(
     tmp_path: Path,
 ) -> None:
@@ -454,8 +548,8 @@ def test_unlocalized_online_verifier_family_is_blocked_before_model_start() -> N
         event_sink=sink,
     )
     request = SkillLearnTrialRequest(
-        item_id="weighted-gdp-calculation-2",
-        family="weighted-gdp-calculation",
+        item_id="nlp-paper-reproduction-2",
+        family="nlp-paper-reproduction",
         split=SplitName.TRAIN,
         variant=TrialVariant.POLICY_OFF,
         evaluator_epoch="epoch-offline",
@@ -477,6 +571,49 @@ def test_unlocalized_online_verifier_family_is_blocked_before_model_start() -> N
         and row["payload"]["runtime_network_attempted"] is False
         for row in sink.events
     )
+    assert not any(row["event"] == "skilllearn_trial_started" for row in sink.events)
+
+
+def test_inactive_druid_verifier_is_blocked_before_model_start() -> None:
+    sink = MemoryEventSink()
+    backend = SkillLearnSubprocessBackend(
+        BENCH_ROOT,
+        model="gpt-5.4-mini",
+        provider_mode="openai_compatible",
+        event_sink=sink,
+    )
+    request = SkillLearnTrialRequest(
+        item_id="fix-security-bug-1",
+        family="fix-security-bug",
+        split=SplitName.TRAIN,
+        variant=TrialVariant.POLICY_OFF,
+        evaluator_epoch="epoch-offline",
+        pair_id="inactive-druid-family",
+        repeat=0,
+        agent_id="codex",
+        model="gpt-5.4-mini",
+        max_steps=100,
+        manifest_hash="manifest-offline",
+    )
+
+    observation = backend.run(request, skill_source_dir=None, trace_id="druid-block")
+
+    assert observation.valid is False
+    assert observation.error_type == "offline_verifier_profile_inactive"
+    blocked = next(
+        row
+        for row in sink.events
+        if row["event"]
+        == "skilllearn_trial_blocked_inactive_offline_verifier_profile"
+    )
+    assert blocked["payload"]["activation_blocker"] == (
+        "druid_maven_cache_incomplete"
+    )
+    assert blocked["payload"]["catalog_profile_id"] == (
+        "druid-security-py312-v1"
+    )
+    assert blocked["payload"]["model_container_started"] is False
+    assert blocked["payload"]["runtime_network_attempted"] is False
     assert not any(row["event"] == "skilllearn_trial_started" for row in sink.events)
 
 

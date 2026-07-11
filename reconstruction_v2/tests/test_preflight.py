@@ -69,10 +69,30 @@ def test_required_env_preflight_is_bound_to_selected_manifest_items(
     assert "benchmark_required_env" not in eligible["blockers"]
     assert full["checks"]["offline_verifier_profile_coverage"][
         "missing_profile_item_count"
-    ] == 19
+    ] == 13
     assert eligible["checks"]["offline_verifier_profile_coverage"][
         "missing_profile_item_count"
-    ] == 14
+    ] == 8
+    assert full["checks"]["offline_verifier_profile_coverage"][
+        "activation_blocked_item_count"
+    ] == 3
+    assert eligible["checks"]["offline_verifier_profile_coverage"][
+        "activation_blocked_item_count"
+    ] == 3
+    assert eligible["checks"]["offline_verifier_profile_coverage"][
+        "activation_blocked_profile_count"
+    ] == 1
+    assert eligible["checks"]["offline_verifier_profile_coverage"][
+        "activation_blocker_item_counts"
+    ] == {"druid_maven_cache_incomplete": 3}
+    assert full["checks"]["verifier_payload_completeness"][
+        "missing_test_outputs_item_count"
+    ] == 1
+    assert eligible["checks"]["verifier_payload_completeness"][
+        "missing_test_outputs_item_count"
+    ] == 1
+    assert "verifier_payload_completeness" in full["blockers"]
+    assert "verifier_payload_completeness" in eligible["blockers"]
 
     poster_ids = [
         item.id for item in adapter.discover() if item.family == "anthropic-poster-design"
@@ -86,6 +106,7 @@ def test_required_env_preflight_is_bound_to_selected_manifest_items(
     assert poster["checks"]["offline_verifier_profile_coverage"][
         "missing_profile_item_count"
     ] == 0
+    assert poster["checks"]["verifier_payload_completeness"]["passed"] is True
 
 
 def test_development_prewarm_receipt_binds_every_train_validation_item() -> None:

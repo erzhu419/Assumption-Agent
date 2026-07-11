@@ -67,8 +67,12 @@ from .docker_egress import (
 from .offline_verifier import (
     OFFLINE_VERIFIER_MOUNT,
     OFFLINE_VERIFIER_POLICY_VERSION,
+    OfflineVerifierProfile,
     OfflineVerifierRuntime,
     SkillLearnOfflineVerifierRuntimeCache,
+    inspect_semantic_prelude_receipt,
+    offline_verifier_activation_blocker_for_family,
+    offline_verifier_catalog_profile_for_family,
     offline_verifier_profile_for_family,
     test_script_requires_offline_profile,
 )
@@ -77,7 +81,9 @@ from .offline_verifier import (
 BASELINE_LANE = "skilllearn_incumbent"
 CANDIDATE_LANE = "skilllearn_challenger"
 VERIFIER_ISOLATION_VERSION = "post_agent_verifier_copy_v1"
-VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION = "pytest_ctrf_and_reward_receipt_v1"
+VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION = (
+    "pytest_ctrf_reward_and_semantic_prelude_receipt_v2"
+)
 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION = "runner_local_agent_registry_v1"
 TRIAL_TIMEOUT_POLICY_VERSION = "no_fixed_trial_wall_or_container_timeout_v2"
 PROVIDER_FAILURE_POLICY_VERSION = "codex_jsonl_terminal_error_circuit_v1"
@@ -177,6 +183,13 @@ class _VerifierExecutionReceipt:
     evidence_kind: str
     reward: int | None
     test_count: int
+    semantic_prelude_required: bool
+    semantic_prelude_valid: bool
+    semantic_prelude_succeeded: bool
+    semantic_prelude_id: str | None
+    semantic_prelude_exit_code: int | None
+    semantic_prelude_details: Mapping[str, str]
+    semantic_prelude_receipt_hash: str
     receipt_hash: str
 
 
@@ -983,6 +996,29 @@ class SkillLearnSubprocessBackend:
         )
         if profile is None:
             if test_script_requires_offline_profile(test_script):
+                activation_blocker = (
+                    offline_verifier_activation_blocker_for_family(family)
+                )
+                if activation_blocker is not None:
+                    self.event_sink.emit(
+                        Event(
+                            event=(
+                                "skilllearn_trial_prewarm_blocked_inactive_"
+                                "offline_verifier_profile"
+                            ),
+                            stage="benchmark.skilllearn.offline_verifier",
+                            trace_id=trace_id,
+                            payload={
+                                "policy": OFFLINE_VERIFIER_POLICY_VERSION,
+                                "family_hash": stable_hash({"family": family}),
+                                "activation_blocker": activation_blocker,
+                                "model_container_started": False,
+                                "runtime_network_attempted": False,
+                                "raw_content_persisted": False,
+                            },
+                        )
+                    )
+                    raise RuntimeError("offline_verifier_profile_inactive")
                 raise RuntimeError("offline_verifier_profile_missing")
             return image, None
         runtime = self.offline_verifier_cache.ensure(
@@ -1038,22 +1074,47 @@ class SkillLearnSubprocessBackend:
             offline_verifier_profile is None
             and test_script_requires_offline_profile(verifier_script)
         ):
+            catalog_profile = offline_verifier_catalog_profile_for_family(
+                request.family
+            )
+            activation_blocker = (
+                offline_verifier_activation_blocker_for_family(request.family)
+            )
+            inactive = activation_blocker is not None
             self.event_sink.emit(
                 Event(
-                    event="skilllearn_trial_blocked_missing_offline_verifier_profile",
+                    event=(
+                        "skilllearn_trial_blocked_inactive_offline_verifier_profile"
+                        if inactive
+                        else "skilllearn_trial_blocked_missing_offline_verifier_profile"
+                    ),
                     stage="benchmark.skilllearn.offline_verifier",
                     trace_id=trace_id,
                     payload={
                         "policy": OFFLINE_VERIFIER_POLICY_VERSION,
                         "request_hash": request.request_hash,
                         "family_hash": stable_hash({"family": request.family}),
+                        "catalog_profile_id": (
+                            catalog_profile.profile_id if catalog_profile else None
+                        ),
+                        "catalog_profile_hash": (
+                            catalog_profile.profile_hash if catalog_profile else None
+                        ),
+                        "activation_blocker": activation_blocker,
                         "model_container_started": False,
                         "runtime_network_attempted": False,
                         "raw_content_persisted": False,
                     },
                 )
             )
-            return self._local_error(request, "offline_verifier_profile_missing")
+            return self._local_error(
+                request,
+                (
+                    "offline_verifier_profile_inactive"
+                    if inactive
+                    else "offline_verifier_profile_missing"
+                ),
+            )
 
         self.event_sink.emit(
             Event(
@@ -1591,6 +1652,9 @@ class SkillLearnSubprocessBackend:
             test_script=test_script,
             verifier_dir=trial_path / "verifier",
             result=result,
+            offline_verifier_profile=offline_verifier_profile_for_family(
+                request.family
+            ),
         )
         tool_audit = _inspect_codex_tool_policy(trial_path / "agent" / "codex.txt")
         audited = dict(result)
@@ -1603,6 +1667,27 @@ class SkillLearnSubprocessBackend:
                 "verifier_receipt_kind": verifier_receipt.evidence_kind,
                 "verifier_receipt_hash": verifier_receipt.receipt_hash,
                 "verifier_receipt_test_count": verifier_receipt.test_count,
+                "verifier_semantic_prelude_required": (
+                    verifier_receipt.semantic_prelude_required
+                ),
+                "verifier_semantic_prelude_valid": (
+                    verifier_receipt.semantic_prelude_valid
+                ),
+                "verifier_semantic_prelude_succeeded": (
+                    verifier_receipt.semantic_prelude_succeeded
+                ),
+                "verifier_semantic_prelude_id": (
+                    verifier_receipt.semantic_prelude_id
+                ),
+                "verifier_semantic_prelude_exit_code": (
+                    verifier_receipt.semantic_prelude_exit_code
+                ),
+                "verifier_semantic_prelude_details": dict(
+                    verifier_receipt.semantic_prelude_details
+                ),
+                "verifier_semantic_prelude_receipt_hash": (
+                    verifier_receipt.semantic_prelude_receipt_hash
+                ),
                 "model_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
                 "model_tool_policy_valid": tool_audit.valid,
                 "model_remote_tool_call_count": (
@@ -1637,6 +1722,25 @@ class SkillLearnSubprocessBackend:
                     "evidence_kind": verifier_receipt.evidence_kind,
                     "reward": verifier_receipt.reward,
                     "test_count": verifier_receipt.test_count,
+                    "semantic_prelude_required": (
+                        verifier_receipt.semantic_prelude_required
+                    ),
+                    "semantic_prelude_valid": (
+                        verifier_receipt.semantic_prelude_valid
+                    ),
+                    "semantic_prelude_succeeded": (
+                        verifier_receipt.semantic_prelude_succeeded
+                    ),
+                    "semantic_prelude_id": verifier_receipt.semantic_prelude_id,
+                    "semantic_prelude_exit_code": (
+                        verifier_receipt.semantic_prelude_exit_code
+                    ),
+                    "semantic_prelude_details": dict(
+                        verifier_receipt.semantic_prelude_details
+                    ),
+                    "semantic_prelude_receipt_hash": (
+                        verifier_receipt.semantic_prelude_receipt_hash
+                    ),
                     "receipt_hash": verifier_receipt.receipt_hash,
                     "raw_content_persisted": False,
                 },
@@ -1798,6 +1902,31 @@ class SkillLearnSubprocessBackend:
             "verifier_receipt_hash": result.get("verifier_receipt_hash"),
             "verifier_receipt_test_count": _as_nonnegative_int(
                 result.get("verifier_receipt_test_count")
+            ),
+            "verifier_semantic_prelude_required": result.get(
+                "verifier_semantic_prelude_required"
+            ),
+            "verifier_semantic_prelude_valid": result.get(
+                "verifier_semantic_prelude_valid"
+            ),
+            "verifier_semantic_prelude_succeeded": result.get(
+                "verifier_semantic_prelude_succeeded"
+            ),
+            "verifier_semantic_prelude_id": result.get(
+                "verifier_semantic_prelude_id"
+            ),
+            "verifier_semantic_prelude_exit_code": result.get(
+                "verifier_semantic_prelude_exit_code"
+            ),
+            "verifier_semantic_prelude_details_hash": stable_hash(
+                result.get("verifier_semantic_prelude_details")
+                if isinstance(
+                    result.get("verifier_semantic_prelude_details"), Mapping
+                )
+                else {}
+            ),
+            "verifier_semantic_prelude_receipt_hash": result.get(
+                "verifier_semantic_prelude_receipt_hash"
             ),
             "model_tool_policy_valid": result.get("model_tool_policy_valid"),
             "model_remote_tool_call_count": _as_nonnegative_int(
@@ -3446,6 +3575,10 @@ class _DockerVerifierIsolationSubprocessProxy:
                             "runtime_key": (
                                 self.offline_verifier_runtime.runtime_key
                             ),
+                            "semantic_prelude_id": (
+                                self.offline_verifier_runtime.profile.semantic_prelude_id
+                            ),
+                            "model_secret_env_unset_before_verifier": True,
                             "container_name_hash": stable_hash(
                                 {"container_name": container_name}
                             ),
@@ -3812,6 +3945,7 @@ def _inspect_verifier_execution_receipt(
     test_script: Path,
     verifier_dir: Path,
     result: Mapping[str, Any],
+    offline_verifier_profile: OfflineVerifierProfile | None = None,
 ) -> _VerifierExecutionReceipt:
     evidence_kind = "pytest_ctrf" if _test_script_uses_ctrf(test_script) else "unsupported"
     reward: int | None = None
@@ -3820,6 +3954,19 @@ def _inspect_verifier_execution_receipt(
         "policy": VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION,
         "test_script_hash": _file_content_hash(test_script) if test_script.is_file() else None,
         "evidence_kind": evidence_kind,
+    }
+    semantic_prelude = inspect_semantic_prelude_receipt(
+        profile=offline_verifier_profile,
+        verifier_dir=verifier_dir,
+    )
+    evidence_hashes["semantic_prelude"] = {
+        "required": semantic_prelude.required,
+        "valid": semantic_prelude.valid,
+        "succeeded": semantic_prelude.succeeded,
+        "prelude_id": semantic_prelude.prelude_id,
+        "exit_code": semantic_prelude.exit_code,
+        "details": dict(semantic_prelude.details),
+        "receipt_hash": semantic_prelude.receipt_hash,
     }
 
     error_type: str | None = None
@@ -3896,6 +4043,9 @@ def _inspect_verifier_execution_receipt(
                 if error_type is None:
                     error_type = "verifier_execution_ctrf_malformed"
 
+    if not semantic_prelude.valid and error_type is None:
+        error_type = semantic_prelude.error_type
+
     receipt_hash = stable_hash(evidence_hashes)
     return _VerifierExecutionReceipt(
         valid=error_type is None,
@@ -3903,6 +4053,13 @@ def _inspect_verifier_execution_receipt(
         evidence_kind=evidence_kind,
         reward=reward,
         test_count=test_count,
+        semantic_prelude_required=semantic_prelude.required,
+        semantic_prelude_valid=semantic_prelude.valid,
+        semantic_prelude_succeeded=semantic_prelude.succeeded,
+        semantic_prelude_id=semantic_prelude.prelude_id,
+        semantic_prelude_exit_code=semantic_prelude.exit_code,
+        semantic_prelude_details=semantic_prelude.details,
+        semantic_prelude_receipt_hash=semantic_prelude.receipt_hash,
         receipt_hash=receipt_hash,
     )
 

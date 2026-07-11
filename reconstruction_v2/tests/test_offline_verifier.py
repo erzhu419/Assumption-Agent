@@ -5,10 +5,16 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from assumption_agent.benchmarks.offline_verifier import (
+    OFFLINE_VERIFIER_PROFILE_CATALOG,
     OFFLINE_VERIFIER_PROFILES,
     OFFLINE_VERIFIER_POLICY_VERSION,
+    DRUID_SECURITY_VERIFIER_PROFILE,
     POSTER_VERIFIER_PROFILE,
+    WEIGHTED_GDP_VERIFIER_PROFILE,
     _process_failure_diagnostic,
+    offline_verifier_activation_blocker_for_family,
+    offline_verifier_catalog_profile_for_family,
+    offline_verifier_profile_for_family,
     offline_verifier_runtime_key,
     offline_verifier_volume_name,
     prepare_offline_verifier_runtime,
@@ -45,6 +51,9 @@ class ExistingRuntimeDocker:
                                 "org.assumption-agent.verifier.key": self.runtime_key,
                                 "org.assumption-agent.verifier.policy": (
                                     OFFLINE_VERIFIER_POLICY_VERSION
+                                ),
+                                "org.assumption-agent.verifier.profile": (
+                                    POSTER_VERIFIER_PROFILE.profile_hash
                                 ),
                             }
                         }
@@ -93,11 +102,34 @@ def test_offline_profile_family_mapping_is_unique() -> None:
         for family in profile.families
     ]
 
-    assert len(OFFLINE_VERIFIER_PROFILES) == 6
-    assert len(families) == 14
+    catalog_families = [
+        family
+        for profile in OFFLINE_VERIFIER_PROFILE_CATALOG
+        for family in profile.families
+    ]
+
+    assert len(OFFLINE_VERIFIER_PROFILES) == 7
+    assert len(families) == 15
     assert len(set(families)) == len(families)
-    assert len({profile.profile_id for profile in OFFLINE_VERIFIER_PROFILES}) == 6
-    assert len({profile.profile_hash for profile in OFFLINE_VERIFIER_PROFILES}) == 6
+    assert len({profile.profile_id for profile in OFFLINE_VERIFIER_PROFILES}) == 7
+    assert len({profile.profile_hash for profile in OFFLINE_VERIFIER_PROFILES}) == 7
+    assert len(OFFLINE_VERIFIER_PROFILE_CATALOG) == 8
+    assert len(catalog_families) == 16
+    assert len(set(catalog_families)) == len(catalog_families)
+    assert WEIGHTED_GDP_VERIFIER_PROFILE.probe_workspace_mode == "image_root"
+    assert DRUID_SECURITY_VERIFIER_PROFILE.probe_workspace_mode == "image_root"
+    assert DRUID_SECURITY_VERIFIER_PROFILE not in OFFLINE_VERIFIER_PROFILES
+    assert offline_verifier_profile_for_family("fix-security-bug") is None
+    assert (
+        offline_verifier_catalog_profile_for_family("fix-security-bug")
+        is DRUID_SECURITY_VERIFIER_PROFILE
+    )
+    assert offline_verifier_activation_blocker_for_family("fix-security-bug") == (
+        "druid_maven_cache_incomplete"
+    )
+    assert "unset OPENAI_API_KEY" in DRUID_SECURITY_VERIFIER_PROFILE.verifier_command
+    assert "ssconvert" in WEIGHTED_GDP_VERIFIER_PROFILE.verifier_command
+    assert "start-single-server-small" in DRUID_SECURITY_VERIFIER_PROFILE.verifier_command
 
 
 def test_process_failure_diagnostic_redacts_credentials() -> None:

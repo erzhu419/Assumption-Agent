@@ -18,6 +18,8 @@ from .docker_egress import (
 from .skilllearn_lifecycle import VERIFIER_ISOLATION_VERSION
 from .offline_verifier import (
     OFFLINE_VERIFIER_POLICY_VERSION,
+    offline_verifier_activation_blocker_for_family,
+    offline_verifier_catalog_profile_for_family,
     offline_verifier_profile_for_family,
     test_script_requires_offline_profile,
 )
@@ -172,6 +174,9 @@ def build_preflight(
         "online_build_allowed": False,
     }
     missing_offline_profile_ids: list[str] = []
+    activation_blocked_item_ids: list[str] = []
+    activation_blocked_profile_ids: set[str] = set()
+    activation_blocker_item_counts: dict[str, int] = {}
     declared_profile_ids: set[str] = set()
     for item in inventory_items:
         if item.id not in selected_ids:
@@ -182,6 +187,19 @@ def build_preflight(
             declared_profile_ids.add(profile.profile_id)
         elif test_script_requires_offline_profile(test_script):
             missing_offline_profile_ids.append(item.id)
+            activation_blocker = offline_verifier_activation_blocker_for_family(
+                item.family
+            )
+            if activation_blocker is not None:
+                catalog_profile = offline_verifier_catalog_profile_for_family(
+                    item.family
+                )
+                activation_blocked_item_ids.append(item.id)
+                if catalog_profile is not None:
+                    activation_blocked_profile_ids.add(catalog_profile.profile_id)
+                activation_blocker_item_counts[activation_blocker] = (
+                    activation_blocker_item_counts.get(activation_blocker, 0) + 1
+                )
     checks["offline_verifier_profile_coverage"] = {
         "passed": repository_ok and not unknown_ids and not missing_offline_profile_ids,
         "policy": OFFLINE_VERIFIER_POLICY_VERSION,
@@ -199,7 +217,57 @@ def build_preflight(
                 )
             }
         ),
+        "activation_blocked_item_count": len(activation_blocked_item_ids),
+        "activation_blocked_item_set_hash": stable_hash(
+            {
+                "item_ids": sorted(
+                    stable_hash({"item_id": item_id})
+                    for item_id in activation_blocked_item_ids
+                )
+            }
+        ),
+        "activation_blocked_profile_count": len(
+            activation_blocked_profile_ids
+        ),
+        "activation_blocked_profile_set_hash": stable_hash(
+            {"profile_ids": sorted(activation_blocked_profile_ids)}
+        ),
+        "activation_blocker_item_counts": dict(
+            sorted(activation_blocker_item_counts.items())
+        ),
         "runtime_network_fallback_allowed": False,
+        "raw_content_persisted": False,
+    }
+    missing_verifier_payload_ids = [
+        item.id
+        for item in inventory_items
+        if item.id in selected_ids
+        and not (
+            root
+            / "tasks"
+            / item.family
+            / item.id
+            / "tests"
+            / "test_outputs.py"
+        ).is_file()
+    ]
+    checks["verifier_payload_completeness"] = {
+        "passed": (
+            repository_ok
+            and not unknown_ids
+            and not missing_verifier_payload_ids
+        ),
+        "selected_item_count": len(selected_ids),
+        "missing_test_outputs_item_count": len(missing_verifier_payload_ids),
+        "missing_test_outputs_item_set_hash": stable_hash(
+            {
+                "item_ids": sorted(
+                    stable_hash({"item_id": item_id})
+                    for item_id in missing_verifier_payload_ids
+                )
+            }
+        ),
+        "benchmark_payload_modified": False,
         "raw_content_persisted": False,
     }
     required_checks = (
@@ -215,10 +283,11 @@ def build_preflight(
         "container_egress_policy",
         "dependency_cache_only",
         "offline_verifier_profile_coverage",
+        "verifier_payload_completeness",
     )
     blockers = [name for name in required_checks if not checks[name].get("passed")]
     return {
-        "preflight_version": "skilllearnbench_preflight_v3",
+        "preflight_version": "skilllearnbench_preflight_v4",
         "checks": checks,
         "blockers": blockers,
         "ready_for_inventory_and_manifest": repository_ok,

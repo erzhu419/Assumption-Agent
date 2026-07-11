@@ -23,7 +23,11 @@ Paper evaluation is fail-closed:
 - Codex web search and image generation are disabled; the full JSONL trace is
   audited for remote-tool calls and runtime package-install commands.
 - a trial is valid only when a parseable `reward.txt` and non-empty pytest CTRF
-  execution receipt agree that the verifier actually ran.
+  execution receipt agree that the verifier actually ran;
+- profiles with semantic setup also require a structured prelude receipt; a
+  failed prelude forces reward 0 but remains a valid task failure, preventing an
+  agent from turning a broken service into an excluded sample;
+- model-provider credentials are unset before verifier or child service startup.
 
 Any task whose verifier contains online installation commands but lacks a local
 profile is rejected before the model container starts. This keeps unsupported
@@ -48,24 +52,32 @@ Frozen mirror endpoint:
 https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
-Six content-addressed profiles now cover 76 tasks across Python 3.8, 3.10, 3.11,
-and 3.12. Together with five network-free dbscan tasks, this gives 81/95
-credential-independent tasks a local verifier path. The poster profile pins
+Seven active content-addressed profiles declare local paths for 82 tasks across
+Python 3.8, 3.10, 3.11, and 3.12. One weighted-GDP instance lacks upstream
+`test_outputs.py`, so 81 of those profiled tasks are runnable; together with five
+network-free dbscan tasks, the honest runnable coverage is 86/95
+credential-independent tasks. The poster profile pins
 pytest, CTRF, Pillow, NumPy, and python-docx; the shared light profiles add only
 pytest/CTRF and pypinyin where required. Larger packages such as pandas,
 python-docx, PyPDF2, and OpenCV already exist in their immutable task images and
 are not downloaded again.
 
-The cached wheelhouses total 40,893,608 bytes: 31,557,639 bytes for the original
-poster profile and 9,335,969 bytes for the five additional ABI/profile sets.
-Their initial downloads used TUNA. The v2 runtime rebuild reused every
-wheelhouse, attempted zero downloads, and installed and probed all six volumes
-with Docker `--network none`. Runtime volumes are mounted read-only during
-evaluation.
+The unique catalog wheelhouses total 43,557,600 bytes. The v3 preparation reused
+the existing 40,893,608 bytes; the experimental Druid profile downloaded one
+2,663,992-byte requests wheel set from TUNA. GDP reused the common Python 3.12
+wheelhouse. All volume installs and import probes used Docker `--network none`.
+Runtime volumes are mounted read-only during evaluation. Druid's wheelhouse and
+semantic prelude remain diagnostic-only because its local Maven corpus is
+incomplete.
 
-The v2 verifier wrapper also preserves the local semantic/audit behavior that
+The v3 verifier wrapper also preserves the local semantic/audit behavior that
 is independent of package installation: `/root` working directory,
 `RESULTS_PATH`, court PDFs, the dependency-audit CSV, and the travel itinerary.
+It additionally emits content-addressed semantic-prelude receipts for GDP
+formula export and for the cataloged Druid deploy/restart diagnostic. The Druid
+hostname repair is local (`127.0.0.1`) and does not enable external DNS or
+egress. Formal trial lookup excludes that profile while
+`druid_maven_cache_incomplete` is present.
 
 Preparation is explicit and is not called by the evaluation pipeline:
 
@@ -88,8 +100,14 @@ sg docker -c 'env PYTHONPATH=. python3 -m \
   --events artifacts/offline_verifier_matrix/events.jsonl'
 ```
 
+With the current upstream checkout this command intentionally exits 2 even
+though all 7 active profiles and 15 family representatives pass. The v4 receipt
+separately records an incomplete GDP verifier payload, an inactive Druid train
+item, and two train items with no local profile. This is the fail-closed
+manifest-completeness and activation contract.
+
 See `docs/skilllearn_offline_verifier_matrix.md` for family coverage. A full
-95-task paper run remains blocked on 14 tasks until every selected family is
+95-task paper run remains blocked on 9 tasks until every selected family is
 either localized or excluded by a preregistered infrastructure rule.
 
 The 2026-07-11 local probe resolved the host to `101.6.15.130` and downloaded the
