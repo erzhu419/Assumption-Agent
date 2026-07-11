@@ -1855,6 +1855,12 @@ def test_openai_compatible_trial_compiles_sanitized_codex_provider(
         assert "tools.web_search=false" not in run_template
         assert 'web_search="disabled"' in run_template
         assert "codex-action-supervisor.mjs" in run_template
+        assert "/opt/assumption-v2-agent/bin/node" in run_template
+        assert "/opt/assumption-v2-agent/bin/codex exec" in run_template
+        assert (
+            "env PATH=/opt/assumption-v2-agent/bin:/usr/local/bin:/usr/bin:/bin"
+            in run_template
+        )
         assert "--limit 100" in run_template
         assert "--trace /logs/agent/codex.txt" in run_template
         assert "--process-scope dedicated_container" in run_template

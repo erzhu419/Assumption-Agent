@@ -1697,7 +1697,10 @@ class SkillLearnSubprocessBackend:
         codex_config = " ".join(shlex.quote(value) for value in config_values)
         agent["env"] = env_names
         agent["setup"] = None
-        codex_command = f"codex exec {codex_config}"
+        codex_binary = "codex"
+        if self.codex_agent_execution_policy.action_budget_enforced:
+            codex_binary = f"{SHARED_AGENT_RUNTIME_MOUNT}/bin/codex"
+        codex_command = f"{shlex.quote(codex_binary)} exec {codex_config}"
         if self.codex_agent_execution_policy.action_budget_enforced:
             trajectory_env = dict(agent.get("trajectory_env") or {})
             codex_home = str(trajectory_env.get("CODEX_HOME") or "/logs/agent")
@@ -1712,7 +1715,15 @@ class SkillLearnSubprocessBackend:
                     shlex.quote(receipt_path),
                     shlex.quote(trace_path),
                     "&&",
-                    "node",
+                    "env",
+                    shlex.quote(
+                        "PATH="
+                        f"{SHARED_AGENT_RUNTIME_MOUNT}/bin:"
+                        "/usr/local/bin:/usr/bin:/bin"
+                    ),
+                    shlex.quote(
+                        f"{SHARED_AGENT_RUNTIME_MOUNT}/bin/node"
+                    ),
                     shlex.quote(
                         f"{SHARED_AGENT_RUNTIME_MOUNT}/"
                         f"{CODEX_ACTION_SUPERVISOR_FILENAME}"
