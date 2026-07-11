@@ -44,6 +44,9 @@ V33_PROTOCOL = (
 V34_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_4_ruoli_gpt54mini.json"
 )
+V35_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_5_ruoli_gpt54mini.json"
+)
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
 
@@ -183,6 +186,33 @@ def test_v34_protocol_freezes_model_only_action_budget() -> None:
         payload["execution"].pop("codex_network_minimization")
         payload["execution"].pop("development_prewarm")
     assert v34 == v33
+
+
+def test_v35_protocol_changes_only_online_parallelism() -> None:
+    protocol = PaperProtocol.read(V35_PROTOCOL)
+
+    assert protocol.validate_structure() == []
+    assert protocol.payload["protocol_version"] == "3.5.0"
+    assert protocol.codex_agent_execution_policy == MODEL_ONLY_ACTION_BUDGET_POLICY
+    assert {
+        name: phase["parallel_workers"]
+        for name, phase in protocol.payload["phases"].items()
+    } == {
+        "smoke": 1,
+        "development": 1,
+        "family_out_development": 1,
+        "sealed_test": 1,
+        "family_out_transfer": 1,
+    }
+
+    v34 = copy.deepcopy(PaperProtocol.read(V34_PROTOCOL).payload)
+    v35 = copy.deepcopy(protocol.payload)
+    for payload in (v34, v35):
+        payload.pop("protocol_id")
+        payload.pop("protocol_version")
+    for phase in v35["phases"].values():
+        phase["parallel_workers"] = 4
+    assert v35 == v34
 
 
 @pytest.mark.parametrize(
@@ -337,7 +367,7 @@ def test_execution_lock_binds_tracked_offline_readiness_receipt(
         validate_protocol_lock_for_execution(protocol, lock, manifest, ROOT)
 
 
-@pytest.mark.parametrize("protocol_path", (V33_PROTOCOL, V34_PROTOCOL))
+@pytest.mark.parametrize("protocol_path", (V33_PROTOCOL, V34_PROTOCOL, V35_PROTOCOL))
 def test_versioned_execution_lock_binds_resolved_agent_policy(
     monkeypatch: pytest.MonkeyPatch,
     protocol_path: Path,

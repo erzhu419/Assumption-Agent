@@ -3,7 +3,7 @@
 > - 初版日期：2026-07-11
 > - 本次复核：2026-07-11
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
-> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；clean lock、v4 prewarm 与 max2 v5 canary 已通过，fresh development 因四并发持续负载下的 429 fail closed
+> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；active v3.5 仅把所有在线 phase 的 worker 从 4 版本化为 1
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -68,14 +68,15 @@
 > request slot 中 17 条形成有效离线评价（3 success），4 条收到 `provider_rate_limit`，熔断后
 > 17 条在本地跳过。没有 cap、action、tool 或 verifier violation，但 all-valid-before-proposal
 > 正确阻止 proposal/validation/report/archive。由此可知 API/单次 route 可用，尚未满足的是冻结
-> 四并发的持续容量；不拼接 17 条旧样本、不补评分 gate、不启用 online evaluator、不执行 sealed。**
+> 四并发的持续容量。active v3.5 因而只把五个在线 phase 的 worker 从 4 改为 1，其余合同
+> 不变；不拼接 17 条旧样本、不补评分 gate、不启用 online evaluator、不执行 sealed。**
 
 ### 1.2 结论分层
 
 | 命题 | 当前状态 | 证据层级 |
 |---|---|---|
 | legacy HLE 是高维手写控制面，学习 policy 没有闭环 | 支持 | 代码审计 + 历史 artifacts |
-| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 184/184 离线测试 + 小型 live probes |
+| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 186/186 离线测试 + 小型 live probes |
 | v2 的内部 runtime action 能改变 lane plan | 支持 | 代码 + 单元测试 |
 | v2 主 SkillLearn 路径执行了每个 typed action/verifier/fallback 的强语义 | **不支持，且协议已停止这样声称** | 只接受四类显式 prompt/self-check lowering；其余 fail closed |
 | promotion threshold 完全由冻结 protocol 所有 | 支持 | protocol-bound spec + 宽松 candidate 对抗测试 |
@@ -342,7 +343,7 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 
 ### 7.2 当前证据到哪一层
 
-**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **184/184 通过**。这证明 schema、
+**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **186/186 通过**。这证明 schema、
 wiring、guard、replay、failure handling 和若干 invariant；不证明真实 benchmark
 improvement。新增覆盖包括 protocol threshold ownership、candidate 宽松阈值攻击、
 backend action lowering、真实/声明 fallback 分离、offline-ready split 不重抽样，以及
@@ -756,7 +757,7 @@ dependency-cache-only 尚未强制；但当前
 [`docker_egress.py`](../assumption_agent/benchmarks/docker_egress.py) 和 protocol manifest 已
 实现 provider-only hard egress、offline package mode 与 network fuse。本次已同步主
 README、benchmark protocol、offline-verifier matrix 和 status 摘要；本轮又把 receipt
-runtime provenance、v3.4 execution-policy binding 与 test 状态更新为 184/184。历史段落仍
+runtime provenance、v3.5 serial execution-policy binding 与 test 状态更新为 186/186。历史段落仍
 保留为 diagnostic ledger，不能当作当前协议。
 
 这种文档漂移本身会破坏 protocol review；重新跑论文实验前必须同步。
@@ -769,12 +770,13 @@ runtime provenance、v3.4 execution-policy binding 与 test 状态更新为 184/
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
 | 完成 | 冻结 offline-ready 范围 | 86-item manifests 保留旧 split；readiness matrix/static preflight 均 `blockers=[]`，无模型调用 |
 | 完成（v3.3 历史） | 全 manifest runtime prewarm | cache-only 86/86、47 images、7 verifier runtimes；无 agent、无 sealed scoring；不作为 v3.4 receipt |
-| 完成（v3.4 active） | clean commit、lock 与 v4 prewarm | lock 绑定最新 scoped clean commit、claim-eligible、0 validation issue；新 supervisor/runtime 的 cache-only prewarm 86/86、0 model call、0 sealed scoring |
+| 完成（v3.4 历史） | clean commit、lock 与 v4 prewarm | lock 绑定运行时 scoped clean commit `ad66d5a2`、claim-eligible、0 validation issue；cache-only prewarm 86/86、0 model call、0 sealed scoring |
 | 本次排除（非稳定性结论） | 64 MiB fuse 作为本 batch 的直接 blocker | v3.3 38/38 均低于 64 MiB；最大 40.6 MB，video-1 为 19.69 MB；0 cap/provider error。canary/full 波动为 1.47/19.69 MB，尚无跨运行稳定性证据 |
 | 完成（零模型） | 定位 model-only execution boundary | 根因为 Codex 0.144.1 丢弃 `tools.web_search=false`；canonical 顶层 disabled 的 loopback 为 7 tools / 0 web，旧键阳性对照为 8 tools / 1 hosted web；未调用模型、未评分 |
 | 完成（实现与离线注入） | 执行 action budget | `codex_action_start_v1` 在第 N 个 `item.started` 终止 PGID，并按 task/TID 清除 dedicated-container 基线后的 live task；异常退出、malformed、N+1、`setsid`、zombie leader/live worker、残留 descendant 与 evidence tamper 均 fail closed；所有 arms 统一 action-step cost，不再混合 token/step |
 | 完成（机制） | v3.4 clean runtime canary | lock/prewarm、PATH、host-readable receipt 均已验证；max2 v5 为 2-step valid truncation，本地 verifier 有效，0 remote tool，全部 agent task 已退出 |
-| P1（外部容量） | 完整 fresh development | 四并发 run 得到 17 valid、4 个 429 与 17 个 circuit skip；不得拼接。下一份 claim-bearing invocation 仍须 38/38 all-valid 才解锁 proposal/paired validation，并最终产出 recursive/no-recursive report/archive、0 invalid、sealed evaluation=false |
+| 完成（协议版本化） | v3.5 serial execution policy | 五个在线 phase 的 `parallel_workers` 全部由 4 改为 1；其余 model/subset/budget/offline evaluator/retry/circuit/search/promotion/sealed 合同不变；186/186 离线测试通过 |
+| P1（外部容量） | v3.5 clean lock、fresh prewarm 与完整 development | v3.4 四并发 run 得到 17 valid、4 个 429 与 17 个 circuit skip，均不得拼接。v3.5 新 invocation 仍须 38/38 all-valid 才解锁 proposal/paired validation，并最终产出 recursive/no-recursive report/archive、0 invalid、sealed evaluation=false |
 | P1 | 递归因果归因 | 两臂共享 train evidence 和 roots，唯一差异是 repair；behavior-identical 时 effect 报 N/A，不重采样 |
 | P1 | contrastive trigger learning | train successes 进入 anti-trigger/precision；candidate selection 不只最大化 failure support；报告 activation precision、harm、abstention |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
@@ -808,7 +810,7 @@ runtime provenance、v3.4 execution-policy binding 与 test 状态更新为 184/
 13. 已执行并 fail-closed：full train 为 37 valid / 1 `web_search` policy invalid；
     proposal/counterfactual/sealed 均为 0，四份 report/archive 未生成。不得重试或通过新 gate
     洗掉 invalid；v3.3 已冻结为不可复用的诊断证据；
-    v3.1–v3.3 仅作为 immutable evidence，当前代码仍可按其声明的 legacy schema 验证历史
+    v3.1–v3.4 仅作为 immutable evidence，当前代码仍可按其声明的 schema 验证历史
     receipt，但不承诺这些协议在当前 commit backward-executable；
 14. 已完成零模型定位：Codex 0.144.1 把旧 boolean key 丢弃并默认暴露 cached hosted
     search；canonical 顶层 disabled 的真实 wire 捕获无 web，旧键阳性对照稳定检出 web；
@@ -826,10 +828,14 @@ runtime provenance、v3.4 execution-policy binding 与 test 状态更新为 184/
 20. 已执行并 fail-closed：四并发 development 的 38 个 outcome 为 17 valid（3 success）、4 个
     `provider_rate_limit`、17 个 circuit skip；0 cap/action/tool/verifier violation，未进入 proposal，
     四份 report/archive 未生成，sealed 未触碰，17 条 valid 不得跨 run 拼接；
-21. 当前只处理 provider 持续容量/并发这一 execution contract，不增加评分 gate。下一次完整 run
-    若 38/38 all-valid 才进入 proposal 和 paired validation；若没有 promotion，直接转 contrastive
-    trigger learning，不先扩 family-out、multi-clade 或 evaluator mutation；有 retained validation
-    gain 后再做 family-out，最后才增加多 clade 与 evaluator mutation。
+21. 已完成 v3.5 最小版本化：五个在线 phase 的 worker 统一从 4 改为 1，其他实验合同不变，
+    strict only-delta 与 lock-policy 离线测试已加入，full suite 为 186/186；旧 v3.4 lock/prewarm/
+    observation 均不复用；
+22. 下一步在 clean commit 上生成 v3.5 新 lock 与 fresh cache-only prewarm，然后直接从零 serial
+    develop，不再增加 canary/gate。若 38/38 all-valid 才进入 proposal 和 paired validation；若串行
+    仍 429，停在 provider 总量配额；若没有 promotion，直接转 contrastive trigger learning，
+    不先扩 family-out、multi-clade 或 evaluator mutation。有 retained validation gain 后再做
+    family-out，最后才增加多 clade 与 evaluator mutation。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -963,7 +969,8 @@ online evaluator 无法修复该问题。
 proposal、paired validation 与 promotion；recursive/no-recursive 两份 report/archive 是该生命周期
 的末端产物。之后才有资格做 family-out、sealed test、多 clade 和 evaluator co-evolution。
 本次结果不支持再次抬 cap，也不支持把失败 run 的 17 条 valid observation 拼入下一次运行；
-任何并发调整都必须作为显式 execution-policy revision，而不能伪装成重试或新 gate。最诚实的
+并发调整现已作为显式 v3.5 execution-policy revision 落地：所有在线 phase 统一为 1 worker，
+其余合同不变；它不能复用 v3.4 的任何 observation，也不能伪装成重试或新 gate。最诚实的
 论文级表述是：
 
 > **显式 HypothesisProgram 是一个有希望、可能更易归因的 self-evolution 搜索表示；
@@ -984,6 +991,8 @@ proposal、paired validation 与 promotion；recursive/no-recursive 两份 repor
 - v2 benchmark protocol：[`BENCHMARK_PROTOCOL.md`](../BENCHMARK_PROTOCOL.md)
 - v2 current status：[`STATUS.md`](../STATUS.md)
 - active paper protocol：
+  [`skilllearn_paper_protocol_v3_5_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_5_ruoli_gpt54mini.json)
+- immutable v3.4 execution diagnostic protocol：
   [`skilllearn_paper_protocol_v3_4_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_4_ruoli_gpt54mini.json)
 - immutable v3.3 execution diagnostic protocol：
   [`skilllearn_paper_protocol_v3_3_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_3_ruoli_gpt54mini.json)
