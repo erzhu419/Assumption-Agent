@@ -3,7 +3,7 @@
 > - 初版日期：2026-07-11
 > - 本次复核：2026-07-11
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
-> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`；clean lock 与 v4 prewarm 已通过，真实 train canary 被外部 provider capacity 阻塞
+> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；clean lock、v4 prewarm 与 max2 v5 canary 已通过，fresh development 因四并发持续负载下的 429 fail closed
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -62,10 +62,13 @@
 > `codex_action_start_v1`：每个 `item.started` 都占一单位，由容器内 supervisor
 > 在第 100 个 start 终止，并按 task/TID 清理专用 trial 容器基线后新增的所有 live task；它不是 semantic turn。异常退出、畸形
 > start、残留 descendant 和 receipt/trace 不一致均 fail closed。v3.4 clean lock、共享 runtime
-> 与 v4 86/86 prewarm 已通过；第一次 canary 在模型请求前暴露并修复 PATH 作用域错误，随后
-> 两次 fresh canary 都被 Ruoli 的 no-distributor 503 阻断，最终正确归类为
-> `provider_model_unavailable`。因此尚无 passing action-budget canary，也未启动 full
-> development；不重试 v3.3 样本、不补评分 gate、不启用 online evaluator、不执行 sealed。**
+> 与 v4 86/86 prewarm 已通过；PATH 作用域和 root-owned `0600` audit artifact 两个本地问题
+> 已分别修复。max2 v5 随后完成真实模型推理、2-step 受控截断和本地 verifier：action/tool/
+> process/receipt 均 valid，0 web/remote tool。fresh development 因而获准从零启动；38 个 train
+> request slot 中 17 条形成有效离线评价（3 success），4 条收到 `provider_rate_limit`，熔断后
+> 17 条在本地跳过。没有 cap、action、tool 或 verifier violation，但 all-valid-before-proposal
+> 正确阻止 proposal/validation/report/archive。由此可知 API/单次 route 可用，尚未满足的是冻结
+> 四并发的持续容量；不拼接 17 条旧样本、不补评分 gate、不启用 online evaluator、不执行 sealed。**
 
 ### 1.2 结论分层
 
@@ -78,7 +81,7 @@
 | promotion threshold 完全由冻结 protocol 所有 | 支持 | protocol-bound spec + 宽松 candidate 对抗测试 |
 | 86-item offline-ready runtime 已预验 | 支持 | readiness/preflight `blockers=[]`；v3.4 v4 cache-only prewarm 86/86、model 未执行、sealed scoring=false |
 | v2 已产生可保留的 promoted incumbent | **不支持** | available mixed-protocol artifact scan 中 23 份 archive 均 `incumbent_id=null`，22 份 report 无 promotion |
-| v2 稳定优于 raw 或 budget-matched raw | **不支持** | v3.3 full train 为 37 valid / 1 remote-tool-policy invalid；没有 proposal、paired validation 或 main result |
+| v2 稳定优于 raw 或 budget-matched raw | **不支持** | v3.4 full development 为 17 valid / 21 provider-capacity invalid；没有 proposal、paired validation 或 main result |
 | v2 已实现 Red Queen 式多 clade 搜索和 evaluator co-evolution | **不支持** | 目前是单 incumbent；evaluator 路径未接主实验 |
 
 ### 1.3 潜力判断
@@ -555,9 +558,24 @@ action count 静默混算，v3.4 明确对所有 arms 统一使用 action starts
 token usage 继续作为二级报告指标，并逐 trial 持久化 completeness/truncation。64 MiB cap、
 subset、workers、retries、evaluator、promotion、statistics、recursive/no-recursive 定义和
 sealed policy 均不变。clean commit/lock、新 runtime cache 与 86/86 v4 cache-only prewarm
-现已完成；当前唯一执行阻塞是同一路由 `max_steps=2` non-claim/train-only canary 的
-no-distributor 503。只有该 canary 恢复并由本地 offline verifier 形成 valid observation 后，
-才允许 fresh-root development；切换 online evaluator 对 provider inference 503 没有帮助。
+已经完成。v4 canary 实际到达模型和 verifier，但 root-owned `0600` trace/receipt 使宿主 auditor
+无法读取；`1df3092a` / `ad66d5a2` 将这两类 immutable artifact 显式创建为 `0644`，同时保留
+temp-file + rename 原子写入、内容 hash 和 nonce 绑定。对应离线/Docker 回归直接断言生产模式，
+不再靠测试侧 `chmod` 掩盖回归。
+
+随后同一路由 `max_steps=2` non-claim/train-only v5 canary 通过：observation
+`evaluation_valid=1`、`task_success=0`、`steps=2`、`truncated=true`，action receipt、process
+cleanup、model-only tool audit 与 post-agent local verifier 均 valid，0 remote/web tool、0 runtime
+install。任务未通过不等于执行机制无效；这个结果满足了启动一次 fresh-root development 的
+预设条件。
+
+fresh development 最终覆盖 38 个 train request outcome：17 条 valid（3 success）、4 条已启动
+trial 因 `provider_rate_limit` invalid、熔断器打开一次后 17 条在本地跳过。21 个实际启动 trial
+均完成 network finalize，最大 47.2 MB、0 hard-cap；17 条完成推理的 action/tool/verifier audit
+全部 valid。运行以 `all_valid_before_proposal_v1` fail closed，proposal、paired validation、
+recursive/no-recursive report/archive 与 sealed event 均为 0。失败运行中的 17 条 valid observation
+不能跨进程拼接。切换 online evaluator 对 model inference 429 没有帮助；下一次运行前需要解决
+冻结四并发与 provider 持续容量的矛盾，而不是继续增加评分 gate。
 
 ### 7.3 当前 infrastructure/protocol 状态
 
@@ -755,7 +773,8 @@ runtime provenance、v3.4 execution-policy binding 与 test 状态更新为 184/
 | 本次排除（非稳定性结论） | 64 MiB fuse 作为本 batch 的直接 blocker | v3.3 38/38 均低于 64 MiB；最大 40.6 MB，video-1 为 19.69 MB；0 cap/provider error。canary/full 波动为 1.47/19.69 MB，尚无跨运行稳定性证据 |
 | 完成（零模型） | 定位 model-only execution boundary | 根因为 Codex 0.144.1 丢弃 `tools.web_search=false`；canonical 顶层 disabled 的 loopback 为 7 tools / 0 web，旧键阳性对照为 8 tools / 1 hosted web；未调用模型、未评分 |
 | 完成（实现与离线注入） | 执行 action budget | `codex_action_start_v1` 在第 N 个 `item.started` 终止 PGID，并按 task/TID 清除 dedicated-container 基线后的 live task；异常退出、malformed、N+1、`setsid`、zombie leader/live worker、残留 descendant 与 evidence tamper 均 fail closed；所有 arms 统一 action-step cost，不再混合 token/step |
-| P1（外部阻塞） | v3.4 clean runtime canary 与 fresh development | lock/prewarm 已通过；PATH bug 已修复，但两个真实 canary 均收到 Ruoli no-distributor 503，最新为 fatal `provider_model_unavailable`。同一路由 canary 通过后才启动一次 fresh develop：同一 invocation 的 38/38 all-valid train 才解锁 proposal 和 paired validation，生命周期末端必须产出 recursive/no-recursive 两份 report/archive、0 invalid、sealed evaluation=false；不复用 v3.3 的 37 条 observation |
+| 完成（机制） | v3.4 clean runtime canary | lock/prewarm、PATH、host-readable receipt 均已验证；max2 v5 为 2-step valid truncation，本地 verifier 有效，0 remote tool，全部 agent task 已退出 |
+| P1（外部容量） | 完整 fresh development | 四并发 run 得到 17 valid、4 个 429 与 17 个 circuit skip；不得拼接。下一份 claim-bearing invocation 仍须 38/38 all-valid 才解锁 proposal/paired validation，并最终产出 recursive/no-recursive report/archive、0 invalid、sealed evaluation=false |
 | P1 | 递归因果归因 | 两臂共享 train evidence 和 roots，唯一差异是 repair；behavior-identical 时 effect 报 N/A，不重采样 |
 | P1 | contrastive trigger learning | train successes 进入 anti-trigger/precision；candidate selection 不只最大化 failure support；报告 activation precision、harm、abstention |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
@@ -800,12 +819,17 @@ runtime provenance、v3.4 execution-policy binding 与 test 状态更新为 184/
     显式记录 test infrastructure inspected、sealed scoring=false、test bytes exposed to model=false；
 17. 已诊断并修复：max2 canary v1 在模型请求前因 shell 的 `PATH=... rm && node` 作用域失败；
     `995e6446` 使用固定 runtime PATH 和 node/codex 绝对路径；
-18. 当前外部阻塞：canary v2/v3 均只收到 Ruoli no-distributor 503；`ba0f36cf` 将其归类为
-    fatal `provider_model_unavailable` 并阻止 retry churn。没有 passing canary，未启动 development；
-19. 同一路由 canary 通过后才启动一次 fresh-root development；若没有 promotion，直接转
-    contrastive trigger learning，不先扩
-    family-out、multi-clade 或 evaluator mutation；
-20. 有 retained validation gain 后再做 family-out，最后才增加多 clade 与 evaluator mutation。
+18. 已完成：canary v2/v3 的 no-distributor 503 被 `ba0f36cf` 正确归类；v4 到达模型和 verifier
+    后暴露 root-owned `0600` audit artifact，`1df3092a` / `ad66d5a2` 改为显式 `0644` 并补生产断言；
+19. 已完成：max2 v5 为 evaluation-valid 的 2-action 截断与本地 verifier failure，0 remote tool，
+    action receipt 和 process cleanup 均 valid，因此一次 fresh-root development 获准启动；
+20. 已执行并 fail-closed：四并发 development 的 38 个 outcome 为 17 valid（3 success）、4 个
+    `provider_rate_limit`、17 个 circuit skip；0 cap/action/tool/verifier violation，未进入 proposal，
+    四份 report/archive 未生成，sealed 未触碰，17 条 valid 不得跨 run 拼接；
+21. 当前只处理 provider 持续容量/并发这一 execution contract，不增加评分 gate。下一次完整 run
+    若 38/38 all-valid 才进入 proposal 和 paired validation；若没有 promotion，直接转 contrastive
+    trigger learning，不先扩 family-out、multi-clade 或 evaluator mutation；有 retained validation
+    gain 后再做 family-out，最后才增加多 clade 与 evaluator mutation。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -928,17 +952,18 @@ error。代价不是修改 evaluator、子集或 promotion gate，而是把低 r
 这不是通过重试或放松 auditor 把 v3.3 invalid 洗成 performance evidence；v3.3 的 37 条
 valid observation 仍全部不可复用，sealed 仍未触碰。
 
-因此当前距离目标的第一段只剩 provider 恢复后的执行验证，而不是继续补 gate：v3.4 clean
-lock、新 runtime cache 与 86/86 cache-only prewarm 已完成。max2 canary 的本地 PATH 问题也已
-修复，但随后两个 fresh attempt 都只收到 Ruoli no-distributor 503，最新分类为 fatal
-`provider_model_unavailable`；offline evaluator 尚未来得及运行，切换 online evaluator 不会
-解决 model inference route 不可用。只有同一路由 canary 能同时证明 actual wire 无 web、
-budget receipt valid、全部 agent task 已退出且本地 verifier 继续执行，才从 fresh root 启动
-一次 develop；同一 invocation 的 38/38 all-valid train 会解锁 proposal、
-paired validation 与 promotion，recursive/no-recursive 两份 report/archive 是该生命周期的
-末端产物。之后才有资格做 family-out、
-sealed test、多 clade 和 evaluator co-evolution。本次结果不支持再次抬 cap，也不支持声称
-transport 已跨运行稳定；任何失败 run 的 valid observation 都不能跨进程拼接。最诚实的
+因此当前距离目标的第一段不再是修 gate 或证明单次 API 连通性。v3.4 clean lock、新 runtime
+cache、86/86 cache-only prewarm 和 max2 v5 action-budget canary 均已通过；v5 同时证明 actual
+wire 无 web、budget receipt valid、全部 agent task 已退出且本地 verifier 在 agent 后执行。
+fresh development 也已真实启动，但冻结四并发在 17 条有效离线结果之后触发四个 429，随后
+17 个 slot 被 circuit 本地跳过。API credential 和 bounded inference 可用，持续四并发容量不可用；
+online evaluator 无法修复该问题。
+
+下一份 claim-bearing run 仍必须在同一 invocation 内取得 38/38 all-valid train，才能解锁
+proposal、paired validation 与 promotion；recursive/no-recursive 两份 report/archive 是该生命周期
+的末端产物。之后才有资格做 family-out、sealed test、多 clade 和 evaluator co-evolution。
+本次结果不支持再次抬 cap，也不支持把失败 run 的 17 条 valid observation 拼入下一次运行；
+任何并发调整都必须作为显式 execution-policy revision，而不能伪装成重试或新 gate。最诚实的
 论文级表述是：
 
 > **显式 HypothesisProgram 是一个有希望、可能更易归因的 self-evolution 搜索表示；
@@ -997,7 +1022,10 @@ transport 已跨运行稳定；任何失败 run 的 valid observation 都不能�
   [`v3.4 86-item prewarm`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/development_prewarm.json)；
   [`max2 v1 pre-model PATH failure`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/diagnostics/max2_offer_letter_canary_v1.json)；
   [`max2 v2 raw 503 diagnosis`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/diagnostics/max2_offer_letter_canary_v2.json)；
-  [`max2 v3 classified provider blocker`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/diagnostics/max2_offer_letter_canary_v3.json)
+  [`max2 v3 classified provider blocker`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/diagnostics/max2_offer_letter_canary_v3.json)；
+  [`max2 v4 host-permission diagnostic`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/diagnostics/max2_offer_letter_canary_v4.json)；
+  [`max2 v5 passing action-budget canary`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/diagnostics/max2_offer_letter_canary_v5.json)；
+  [`v3.4 four-worker provider-capacity failure`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)
 
 ## 附录 B：复杂度统计口径
 
