@@ -3,7 +3,7 @@
 > - 初版日期：2026-07-11
 > - 本次复核：2026-07-11
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
-> - 本次实现复核：protocol/action/offline-subset working tree，134/134 tests 通过
+> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`，136/136 tests 通过
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -45,24 +45,25 @@
 > **学习闭环在 harness 层已接通；promotion 所有权、外部 backend action/fallback
 > 边界和 86-item 离线可运行协议已经闭合。尚未成立的是 clean development promotion、
 > contrastive trigger learning、跨 family 泛化，以及 Red Queen 式多谱系搜索和
-> evaluator co-evolution。v3.1 full development 已因 provider 429 与可复现的 32 MiB
-> 可行性截断 fail-closed；v3.2 的一次性 64 MiB 修订消除了该截断，但同一路由随后明确
-> 报告模型 distributor channel 不可用，并在 8 个有效 train observation 后熔断。两版均
-> 未进入 proposal/validation，离线 verifier 始终可用；这些是 execution/transport
-> diagnostics，不是算法负结果。**
+> evaluator co-evolution。新 GPT Pro 渠道证明 `gpt-5.4-mini` 路由可持续执行，且两项
+> temperature receipt false-negative 已修复并由真实 run 验证；但最终 v3.2 clean run
+> 仍因 `video-object-counting-1` 的 71.1 MB 合法模型流量超过冻结 64 MiB hard cap 而
+> fail-closed。38 个 train trial 中 37 valid、9 success、1 budget invalid，未进入
+> proposal/validation。当前 blocker 已从 provider/evaluator 转为 Responses 多轮上下文的
+> 传输效率；不再抬 cap、改子集或补 promotion gate。**
 
 ### 1.2 结论分层
 
 | 命题 | 当前状态 | 证据层级 |
 |---|---|---|
 | legacy HLE 是高维手写控制面，学习 policy 没有闭环 | 支持 | 代码审计 + 历史 artifacts |
-| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 134/134 离线测试 + 小型 live probes |
+| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 136/136 离线测试 + 小型 live probes |
 | v2 的内部 runtime action 能改变 lane plan | 支持 | 代码 + 单元测试 |
 | v2 主 SkillLearn 路径执行了每个 typed action/verifier/fallback 的强语义 | **不支持，且协议已停止这样声称** | 只接受四类显式 prompt/self-check lowering；其余 fail closed |
 | promotion threshold 完全由冻结 protocol 所有 | 支持 | protocol-bound spec + 宽松 candidate 对抗测试 |
 | 86-item offline-ready runtime 已预验 | 支持 | readiness/preflight `blockers=[]`；cache-only prewarm 86/86，model 未执行 |
 | v2 已产生可保留的 promoted incumbent | **不支持** | available mixed-protocol artifact scan 中 23 份 archive 均 `incumbent_id=null`，22 份 report 无 promotion |
-| v2 稳定优于 raw 或 budget-matched raw | **不支持** | v3.1 受资源合同阻断；v3.2 受冻结 provider capacity 阻断，尚无 clean external main result |
+| v2 稳定优于 raw 或 budget-matched raw | **不支持** | 最终 v3.2 clean run 为 37 valid / 1 hard-cap invalid；没有 proposal、paired validation 或 main result |
 | v2 已实现 Red Queen 式多 clade 搜索和 evaluator co-evolution | **不支持** | 目前是单 incumbent；evaluator 路径未接主实验 |
 
 ### 1.3 潜力判断
@@ -323,10 +324,11 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 
 ### 7.2 当前证据到哪一层
 
-**[TEST]** 当前 working tree 的 `reconstruction_v2` 离线 suite 为 **134/134 通过**。这证明
-schema、wiring、guard、replay、failure handling 和若干 invariant；不证明真实 benchmark
+**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **136/136 通过**。这证明 schema、
+wiring、guard、replay、failure handling 和若干 invariant；不证明真实 benchmark
 improvement。新增覆盖包括 protocol threshold ownership、candidate 宽松阈值攻击、
-backend action lowering、真实/声明 fallback 分离，以及 offline-ready split 不重抽样。
+backend action lowering、真实/声明 fallback 分离、offline-ready split 不重抽样，以及
+离线 verifier receipt 必须绑定 proxy 实际执行的 frozen runtime profile/command。
 
 **[ARTIFACT]** 对 `reconstruction_v2/artifacts` 中可读的 v1/v2/v3 smoke、diagnostics
 和 development runs 做混合扫描得到：
@@ -406,12 +408,51 @@ channel（503），随后也以 turn failure/429 收尾；provider circuit 打�
 validation 或 sealed，见
 [`v3.2 development events`](../artifacts/paper_primary_v3_2_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)。
 
-因此当前唯一实际 blocker 是冻结在线 agent provider 的持续容量，不是 evaluator 在线化、
-依赖下载、并发 race 或新的 gate 缺口。降低 workers 也不能由这些证据保证修复明确的
-“无可用 channel”，且会制造又一个 protocol version；本轮不这样做。后续只允许两条路：
-同一路由容量恢复后先过一个 bounded non-claim canary，再 fresh-run v3.2；或者由用户明确
-授权后冻结一个新 provider/model route 并从零运行。不能静默切 provider，也不能拼接
-任一失败 run 的有效 observation。
+随后使用用户提供、仅注入进程且未落盘的新 GPT Pro credential 对同一
+`https://ruoli.dev` / `gpt-5.4-mini` route 做最小 canary：models、Responses、chat
+端点均为 HTTP 200，真实 Codex container 也完成 agent -> offline verifier，证明
+`ruoli` 本身并非永久不可用。这里没有切 model/provider contract，也没有使用 online
+evaluator。
+
+第一个新渠道 full root `gptpro01` 完成 38/38 train：36 valid、12 success、2 invalid；
+provider/circuit 与 64 MiB cap 错误均为 0，最大 trial 流量 62.9 MB。两个 invalid 都来自
+`temperature-simulation-2/3` 的确定性 receipt false-negative：proxy 实际执行的离线
+profile 已生成完整 CTRF（各 7 tests、5 pass/2 fail、reward 0），但旧 auditor 错误检查
+了未被执行的 upstream `test.sh` 是否含 `--ctrf`，把本应是“有效任务失败”的结果标成
+`verifier_execution_receipt_unsupported`。这不是增加 gate 的理由，而是 evidence source
+绑定错误。
+
+提交 `e43670f6`、`18ff3417` 之后，receipt 直接绑定 proxy 实际执行的 frozen runtime
+profile ID/hash/command hash；profile-backed CTRF 缺失或畸形仍 fail closed，reward 0
+仍是 valid failure。全套 136/136 tests 通过。最终 clean root `gptpro03` 的 lock 绑定
+`18ff3417` 且 claim eligible，prewarm 再次为 86/86、0 failed、无 online build。
+真实 run 中两项 temperature receipt 均成为 `pytest_ctrf`、`test_count=7`、valid=true，
+证明修复生效而未把失败改成成功。
+
+`gptpro03` 最终 38/38 train 返回：37 valid、9 success、1 invalid；provider error 为 0。
+唯一 invalid 是 `video-object-counting-1` 的真实 hard-cap：TX 66.5 MB、RX 4.6 MB、总计
+71.1 MB，超过冻结 67,108,864-byte limit，容器被监控终止且禁止 retry。因
+`all_valid_before_proposal_v1`，proposal/generation/validation/no-recursive/promotion 均为 0，
+report/archive 未生成；sealed/test content 仍未访问，见
+[`gptpro03 development events`](../artifacts/paper_primary_v3_2_offline86_ruoli_gpt54mini_gptpro03/development_recursive.events.jsonl)。
+
+该 71.1 MB 全部发生在只允许模型端点的 egress 域内。trace 只有 23 次本地命令和 10 次
+agent message，可见 shell 输出合计约 13 KB，没有 web/image、包安装或视频上传命令；
+15.4 MB 本地视频只被 ffmpeg/OpenCV 读取。同族 `video-object-counting-3` 用 16 次命令、
+约 8.79 MB 即完成。因此最可信解释不是依赖缺失或数据外泄，而是 Responses 多轮工具
+往返反复发送累计 context/envelope，叠加数次无效能力探测和调试循环，造成 TX 放大。
+
+据此，**v3.2 也正式判为 execution-infeasible**。本项目不会第三次抬 cap、删除该题、
+降低验收标准或重跑到碰巧通过。本地 Codex 0.144.1 审计确认请求压缩已经默认开启；
+`previous_response_id` 没有公开 ConfigToml 开关，固定 mini route 的最小
+`/responses/compact` canary 又返回 503 `model_not_found`。可用且必须 protocol-owned 的
+节流手段是 `model_reasoning_effort=low`、更早的本地 auto-compaction，以及低 verbosity；
+tool-output cap 对本题约 13 KB 可见输出预计是低杠杆。
+
+下一工作流只允许改进 model transport/trajectory 效率：统一冻结上述配置，并把视频类
+轨迹收敛为“一次能力探测、一个整合脚本、一次最终校验”；先在 train-only 长轨迹
+canary 上证明仍低于现有 64 MiB，再冻结一次新的 execution-policy revision。
+promotion/subset/evaluator/cap 不变，也不拼接任何失败 run 的有效 observation。
 
 ### 7.3 当前 infrastructure/protocol 状态
 
@@ -454,6 +495,11 @@ cache-only 验收为 **86/86 passed、0 failed、47 个唯一镜像、7 个离�
 offline-verifier v3、32 MiB/题 hard fuse、prompt-action lowering v1 和 protocol-owned
 promotion v2；v3.2 只把同一 fuse 版本化为 64 MiB。旧 live 与 v3.1 observations 因此
 都只能作诊断，不能与 v3.2 直接合并。
+
+最新 `gptpro03` protocol lock 绑定 clean commit `18ff3417`、`validation_issues=[]`，对应
+prewarm 为 86/86。该 run 的 37 条 valid train observation 与 1 条 hard-cap invalid 也不能
+被事后修补或跨进程 replay；它只证明 offline receipt 修复和 provider 稳定性，同时否证
+当前 64 MiB execution contract 对所有 train trajectory 的可行性。
 
 sealed test 仍未访问，这是正确状态。
 
@@ -586,8 +632,9 @@ behavior-different 的 recursive/no-recursive held-out comparison 显示 repair 
 dependency-cache-only 尚未强制；但当前
 [`docker_egress.py`](../assumption_agent/benchmarks/docker_egress.py) 和 protocol manifest 已
 实现 provider-only hard egress、offline package mode 与 network fuse。本次已同步主
-README、benchmark protocol、offline-verifier matrix 和 status 摘要，并把 test 状态更新为
-134/134；历史段落仍保留为 diagnostic ledger，不能当作当前协议。
+README、benchmark protocol、offline-verifier matrix 和 status 摘要；本轮又把 receipt
+runtime provenance 与 test 状态更新为 136/136。历史段落仍保留为 diagnostic ledger，
+不能当作当前协议。
 
 这种文档漂移本身会破坏 protocol review；重新跑论文实验前必须同步。
 
@@ -600,7 +647,7 @@ README、benchmark protocol、offline-verifier matrix 和 status 摘要，并把
 | 完成 | 冻结 offline-ready 范围 | 86-item manifests 保留旧 split；readiness matrix/static preflight 均 `blockers=[]`，无模型调用 |
 | 完成（本地预验） | 全 manifest runtime prewarm | cache-only 86/86、47 images、7 verifier runtimes；无 agent、无 sealed scoring |
 | 完成 | 提交并重建 current-protocol lock/receipt | scoped Git clean；claim-eligible lock 无 validation issue；post-commit prewarm 86/86 |
-| P1（外部阻塞） | 完整 current-protocol development | v3.2 已消除 32 MiB 截断，但冻结 provider 明确无可用 distributor channel；恢复/明确更换 route 后，仍要求两份 report/archive 全部落盘、0 invalid、0 provider/budget/runtime mismatch、sealed access=false |
+| P1（执行阻塞） | 先收敛 model transport/trajectory，再完整 development | provider 已稳定；v3.2 最终为 37 valid / 1 hard-cap invalid。不得抬 cap/删题/补 gate；先证明长轨迹在现有 64 MiB 内完成，再要求两份 report/archive、0 invalid、sealed access=false |
 | P1 | 递归因果归因 | 两臂共享 train evidence 和 roots，唯一差异是 repair；behavior-identical 时 effect 报 N/A，不重采样 |
 | P1 | contrastive trigger learning | train successes 进入 anti-trigger/precision；candidate selection 不只最大化 failure support；报告 activation precision、harm、abstention |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
@@ -620,12 +667,19 @@ README、benchmark protocol、offline-verifier matrix 和 status 摘要，并把
 6. 已完成设计：新建 v3.2，仅把统一 fuse 一次性版本化为 64 MiB，其余实验合同不变；
 7. 已完成：v3.2 clean lock/prewarm 均通过，64 MiB 未触发；full run 在 8 个有效 train
    observation 后被 provider 的“无可用 distributor channel”503/429 熔断；
-8. 下一步不是改 gate：等待同一路由恢复并先过 bounded canary，或由用户明确授权冻结
-   新 provider/model route；随后从零跑完整 recursive/no-recursive development。不拼接
-   失败 observation，不再调整 cap/依赖/subset/promotion；
-9. 若 clean development 没有 promotion，直接转 contrastive trigger learning，不先扩
+8. 已完成：新 GPT Pro credential 的 API/Codex canary 证明同一路由恢复；`gptpro01`
+   跑完 38 train，暴露两个 deterministic receipt false-negative，而非 provider/cap 问题；
+9. 已完成：receipt auditor 改为绑定实际 runtime profile/command，136/136 tests 通过；
+   `gptpro03` 中两项 temperature 均以 7-test CTRF valid failure 完成；
+10. 已完成：`gptpro03` 跑完 38 train，但 `video-object-counting-1` 以 71.1 MB 超过
+    冻结 64 MiB；37 valid / 1 invalid，proposal 被 fail-closed，v3.2 判 execution-infeasible；
+11. 下一步不是改 gate：请求压缩已开启、remote compact 对 fixed mini route 不可用；
+    protocol-owned 地冻结 low reasoning/verbosity 与更早本地 compaction，并减少重复工具
+    往返；用 train-only 长轨迹 canary 验证现有 cap 内可行后，只冻结一次
+    execution-policy revision。从零运行，不拼接 observation；
+12. 若 clean development 没有 promotion，直接转 contrastive trigger learning，不先扩
    family-out、multi-clade 或 evaluator mutation；
-10. 有 retained validation gain 后再做 family-out，最后才增加多 clade 与 evaluator mutation。
+13. 有 retained validation gain 后再做 family-out，最后才增加多 clade 与 evaluator mutation。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -690,7 +744,7 @@ outcome，而不是模型自评。
 
 | 层级 | 可声明内容 | 当前状态 |
 |---|---|---|
-| L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：134 tests、protocol ownership、backend lowering contract 与 offline preflight 均通过 |
+| L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：136 tests、protocol ownership、backend lowering、runtime receipt provenance 与 offline preflight 均通过 |
 | L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 部分达到 |
 | L2 validation learning | clean held-out validation 上有可晋级净收益 | 未达到 |
 | L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | 未达到 |
@@ -727,21 +781,24 @@ outcome，而不是模型自评。
 guard、archive 和 evaluator epoch 做成了清晰的小型系统。这使研究问题第一次真正可
 证伪，也比继续给 legacy HLE monolith 加规则更有价值。
 
-本次已经关闭三个会让任何后续结果先天不可解释的 P0：candidate 不能再控制 promotion
+本次已经关闭四个会让后续结果先天不可解释的 P0：candidate 不能控制 promotion
 及格线；外部 backend 不再把 prompt/verifier/fallback 声明伪装成 typed/observed 事实；
-86-item offline-ready manifests 已通过 readiness audit，all-manifest cache-only runtime
-prewarm 已达到 86/86，且 clean scoped commit 上的 current lock 已 claim eligible。下一步
-已经停止“不断补 gate”并转入 full development；第一次尝试因 provider 429 与一个既有
-network fuse fail-closed，尚未进入 candidate evaluation。transport canary 确认 429
-冷却后，唯一一次 v3.1 clean rerun 又复现同一 hard-cap；v3.1 已停止。一次性 v3.2
-64 MiB 修订消除了该截断，但冻结 provider 随后明确报告没有可用 distributor channel。
-当前应停在外部容量 blocker，不再扩 protocol 控制面。
+86-item offline-ready manifests 通过 readiness 与 86/86 prewarm；receipt 现在绑定 proxy
+实际执行的 runtime profile/command，完整 CTRF 的任务失败不再被误标成 infrastructure
+failure。新 GPT Pro route 也证明 Ruoli 模型调用可用且持续，离线 evaluator 从未需要
+替换为 online evaluator。
 
-但重构仍不能写成“已证明有效”。available mixed-protocol artifacts 中尚无 incumbent 或
-promotion，也没有完成的 current-protocol clean development、family-out 或 sealed result。
-当前 full attempt 的 26 条有效 train observation 只能定位 transport/预算问题，不能跨
-失败进程拼接为论文样本。当前
-最诚实的论文级表述是：
+真正剩下的近端 blocker 是传输效率。最终 v3.2 clean run 已把训练批次推进到 38/38，
+但 37 valid / 1 hard-cap invalid 仍不足以写入训练 replay 或进入 proposal；这既不是
+promotion gate 太严，也不是算法候选被验证为无效。`video-object-counting-1` 的 71.1 MB
+流量说明当前 stateless/累计-context 工具轨迹不能稳定满足 64 MiB execution contract。
+v3.2 已据此停止；不再抬 cap、删题、降阈值或重采样。
+
+因此距离目标还缺四个按因果顺序排列的结果：先让相同模型/离线 verifier 的长轨迹在
+现有 cap 内稳定完成；再得到 38/38 valid 的 development 和两份 recursive/no-recursive
+report/archive；随后才观察 proposal、paired validation 与至少一次真实 promotion；最后
+才有资格做 family-out、sealed test、多 clade 和 evaluator co-evolution。任何失败 run 的
+valid observation 都不能跨进程拼接。最诚实的论文级表述是：
 
 > **显式 HypothesisProgram 是一个有希望、可能更易归因的 self-evolution 搜索表示；
 > v2 已证明协议所有权、离线 evaluator 和学习环 wiring 可运行，但尚未证明它在冻结、
@@ -777,7 +834,11 @@ promotion，也没有完成的 current-protocol clean development、family-out �
   [`v3.1 clean-rerun cap recurrence`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini_rerun01/development_recursive.events.jsonl)；
   [`v3.2 claim lock`](../artifacts/paper_primary_v3_2_offline86_ruoli_gpt54mini/protocol_lock.json)；
   [`v3.2 86-item prewarm`](../artifacts/paper_primary_v3_2_offline86_ruoli_gpt54mini/development_prewarm.json)；
-  [`v3.2 provider-capacity failure`](../artifacts/paper_primary_v3_2_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)
+  [`v3.2 provider-capacity failure`](../artifacts/paper_primary_v3_2_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)；
+  [`GPT Pro Codex canary`](../artifacts/paper_primary_v3_2_offline86_ruoli_gpt54mini/gpt_pro_transport_canary/report.json)；
+  [`gptpro01 receipt false-negative run`](../artifacts/paper_primary_v3_2_offline86_ruoli_gpt54mini_gptpro01/development_recursive.events.jsonl)；
+  [`gptpro03 final 64 MiB hard-cap run`](../artifacts/paper_primary_v3_2_offline86_ruoli_gpt54mini_gptpro03/development_recursive.events.jsonl)；
+  [`video-object-counting-1 failed trace`](../artifacts/paper_primary_v3_2_offline86_ruoli_gpt54mini_gptpro03/development_recursive/upstream_trials/no_skill/video-object-counting/video-object-counting-1/v2_policy_off_66599fccf924efd4c6/agent/codex.txt)
 
 ## 附录 B：复杂度统计口径
 
