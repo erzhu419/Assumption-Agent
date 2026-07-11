@@ -555,20 +555,8 @@ int main(int argc, char **argv) {
             timeout=15,
             check=False,
         )
-        subprocess.run(
-            [
-                docker,
-                "exec",
-                container,
-                "chmod",
-                "0644",
-                f"/out/{name}/receipt.json",
-                f"/out/{name}/codex.txt",
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+        assert stat.S_IMODE(trace.stat().st_mode) == 0o644
+        assert stat.S_IMODE(receipt.stat().st_mode) == 0o644
         payload = json.loads(receipt.read_text(encoding="utf-8"))
         audit = audit_codex_action_budget(
             trace_path=trace,
