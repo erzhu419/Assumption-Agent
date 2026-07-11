@@ -45,10 +45,11 @@
 > **学习闭环在 harness 层已接通；promotion 所有权、外部 backend action/fallback
 > 边界和 86-item 离线可运行协议已经闭合。尚未成立的是 clean development promotion、
 > contrastive trigger learning、跨 family 泛化，以及 Red Queen 式多谱系搜索和
-> evaluator co-evolution。v3.1 full development 已 fail-closed：第一次受 provider 429
-> 与 32 MiB cap 共同阻断，唯一一次 clean rerun 又在同一 train item 复现该 cap，均未
-> 进入 proposal/validation。离线 verifier 始终可用；v3.2 只做一次 64 MiB 资源预算
-> 版本升级。这些是 execution diagnostics，不是算法负结果。**
+> evaluator co-evolution。v3.1 full development 已因 provider 429 与可复现的 32 MiB
+> 可行性截断 fail-closed；v3.2 的一次性 64 MiB 修订消除了该截断，但同一路由随后明确
+> 报告模型 distributor channel 不可用，并在 8 个有效 train observation 后熔断。两版均
+> 未进入 proposal/validation，离线 verifier 始终可用；这些是 execution/transport
+> diagnostics，不是算法负结果。**
 
 ### 1.2 结论分层
 
@@ -61,7 +62,7 @@
 | promotion threshold 完全由冻结 protocol 所有 | 支持 | protocol-bound spec + 宽松 candidate 对抗测试 |
 | 86-item offline-ready runtime 已预验 | 支持 | readiness/preflight `blockers=[]`；cache-only prewarm 86/86，model 未执行 |
 | v2 已产生可保留的 promoted incumbent | **不支持** | available mixed-protocol artifact scan 中 23 份 archive 均 `incumbent_id=null`，22 份 report 无 promotion |
-| v2 稳定优于 raw 或 budget-matched raw | **不支持** | v3.1 full development 在 train execution 阶段 fail-closed；v3.2 尚未形成 clean external main result |
+| v2 稳定优于 raw 或 budget-matched raw | **不支持** | v3.1 受资源合同阻断；v3.2 受冻结 provider capacity 阻断，尚无 clean external main result |
 | v2 已实现 Red Queen 式多 clade 搜索和 evaluator co-evolution | **不支持** | 目前是单 incumbent；evaluator 路径未接主实验 |
 
 ### 1.3 潜力判断
@@ -395,6 +396,23 @@ dependency policy、4 workers、search budget 和 promotion contract 均不变�
 train-only 已观察最大流量向上取下一 2 的幂，不读取 validation/test，也不复用 v3.1
 observations。后续不再允许第二次按题调 cap。
 
+v3.2 在 clean commit `748469b2` 上重新得到 claim-eligible lock 和 86/86 cache-only
+prewarm，随后 full development 的 64 MiB budget 没有触发；`court-form-filling-6` 本轮以
+4.70 MB 正常完成并通过 verifier-validity 检查。然而同一路由在 8 个有效 train
+observation（1 pass、7 fail）后发生独立 transport outage：一个 trial 明确以 429 终止，
+其余三个在途 trial 的原始 Codex JSONL 先连续报告 `gpt-5.4-mini` 没有可用 distributor
+channel（503），随后也以 turn failure/429 收尾；provider circuit 打开后，29 个尚未启动
+请求被本地跳过。training evidence 因 30/38 invalid 再次 fail-closed，未进入 proposal、
+validation 或 sealed，见
+[`v3.2 development events`](../artifacts/paper_primary_v3_2_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)。
+
+因此当前唯一实际 blocker 是冻结在线 agent provider 的持续容量，不是 evaluator 在线化、
+依赖下载、并发 race 或新的 gate 缺口。降低 workers 也不能由这些证据保证修复明确的
+“无可用 channel”，且会制造又一个 protocol version；本轮不这样做。后续只允许两条路：
+同一路由容量恢复后先过一个 bounded non-claim canary，再 fresh-run v3.2；或者由用户明确
+授权后冻结一个新 provider/model route 并从零运行。不能静默切 provider，也不能拼接
+任一失败 run 的有效 observation。
+
 ### 7.3 当前 infrastructure/protocol 状态
 
 全 inventory 的
@@ -582,7 +600,7 @@ README、benchmark protocol、offline-verifier matrix 和 status 摘要，并把
 | 完成 | 冻结 offline-ready 范围 | 86-item manifests 保留旧 split；readiness matrix/static preflight 均 `blockers=[]`，无模型调用 |
 | 完成（本地预验） | 全 manifest runtime prewarm | cache-only 86/86、47 images、7 verifier runtimes；无 agent、无 sealed scoring |
 | 完成 | 提交并重建 current-protocol lock/receipt | scoped Git clean；claim-eligible lock 无 validation issue；post-commit prewarm 86/86 |
-| P1（v3.2 待运行） | 完整 current-protocol development | v3.1 同一 train item 两次超过 32 MiB，已判 execution-infeasible；v3.2 一次性固定 64 MiB，clean commit 后重新生成 lock/prewarm，再要求两份 report/archive 全部落盘、0 invalid、0 provider/budget/runtime mismatch、sealed access=false |
+| P1（外部阻塞） | 完整 current-protocol development | v3.2 已消除 32 MiB 截断，但冻结 provider 明确无可用 distributor channel；恢复/明确更换 route 后，仍要求两份 report/archive 全部落盘、0 invalid、0 provider/budget/runtime mismatch、sealed access=false |
 | P1 | 递归因果归因 | 两臂共享 train evidence 和 roots，唯一差异是 repair；behavior-identical 时 effect 报 N/A，不重采样 |
 | P1 | contrastive trigger learning | train successes 进入 anti-trigger/precision；candidate selection 不只最大化 failure support；报告 activation precision、harm、abstention |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
@@ -600,12 +618,14 @@ README、benchmark protocol、offline-verifier matrix 和 status 摘要，并把
 5. 已完成：同协议 fresh-root rerun 再次在 `court-form-filling-6` 超过 32 MiB；按 stop
    rule 中止，v3.1 判 execution-infeasible；
 6. 已完成设计：新建 v3.2，仅把统一 fuse 一次性版本化为 64 MiB，其余实验合同不变；
-7. 下一步在 v3.2 clean commit 上重建 lock、复验 cache-only prewarm，再跑完整
-   recursive/no-recursive development；不再新增依赖/readiness gate、不逐题事后排除、
-   不修改 promotion 阈值，也不再调整 cap；
-8. 若 clean development 没有 promotion，直接转 contrastive trigger learning，不先扩
+7. 已完成：v3.2 clean lock/prewarm 均通过，64 MiB 未触发；full run 在 8 个有效 train
+   observation 后被 provider 的“无可用 distributor channel”503/429 熔断；
+8. 下一步不是改 gate：等待同一路由恢复并先过 bounded canary，或由用户明确授权冻结
+   新 provider/model route；随后从零跑完整 recursive/no-recursive development。不拼接
+   失败 observation，不再调整 cap/依赖/subset/promotion；
+9. 若 clean development 没有 promotion，直接转 contrastive trigger learning，不先扩
    family-out、multi-clade 或 evaluator mutation；
-9. 有 retained validation gain 后再做 family-out，最后才增加多 clade 与 evaluator mutation。
+10. 有 retained validation gain 后再做 family-out，最后才增加多 clade 与 evaluator mutation。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -713,8 +733,9 @@ guard、archive 和 evaluator epoch 做成了清晰的小型系统。这使研�
 prewarm 已达到 86/86，且 clean scoped commit 上的 current lock 已 claim eligible。下一步
 已经停止“不断补 gate”并转入 full development；第一次尝试因 provider 429 与一个既有
 network fuse fail-closed，尚未进入 candidate evaluation。transport canary 确认 429
-冷却后，唯一一次 v3.1 clean rerun 又复现同一 hard-cap；v3.1 已停止。当前只做一次
-可审计的 v3.2 64 MiB 资源版本升级，不扩 protocol 控制面。
+冷却后，唯一一次 v3.1 clean rerun 又复现同一 hard-cap；v3.1 已停止。一次性 v3.2
+64 MiB 修订消除了该截断，但冻结 provider 随后明确报告没有可用 distributor channel。
+当前应停在外部容量 blocker，不再扩 protocol 控制面。
 
 但重构仍不能写成“已证明有效”。available mixed-protocol artifacts 中尚无 incumbent 或
 promotion，也没有完成的 current-protocol clean development、family-out 或 sealed result。
@@ -753,7 +774,10 @@ promotion，也没有完成的 current-protocol clean development、family-out �
   [`86-item runtime prewarm receipt`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/development_prewarm.json)；
   [`mechanism smoke`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/smoke_recursive.report.json)；
   [`full-development fail-closed events`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)；
-  [`v3.1 clean-rerun cap recurrence`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini_rerun01/development_recursive.events.jsonl)
+  [`v3.1 clean-rerun cap recurrence`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini_rerun01/development_recursive.events.jsonl)；
+  [`v3.2 claim lock`](../artifacts/paper_primary_v3_2_offline86_ruoli_gpt54mini/protocol_lock.json)；
+  [`v3.2 86-item prewarm`](../artifacts/paper_primary_v3_2_offline86_ruoli_gpt54mini/development_prewarm.json)；
+  [`v3.2 provider-capacity failure`](../artifacts/paper_primary_v3_2_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)
 
 ## 附录 B：复杂度统计口径
 
