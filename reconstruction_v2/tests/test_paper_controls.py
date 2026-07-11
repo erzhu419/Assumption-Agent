@@ -42,7 +42,9 @@ BENCH_ROOT = (
     / "repos"
     / "SkillLearnBench"
 )
-PROTOCOL_PATH = ROOT / "manifests" / "skilllearn_paper_protocol_v3_ruoli_gpt54mini.json"
+PROTOCOL_PATH = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_2_ruoli_gpt54mini.json"
+)
 MANIFEST_PATH = (
     ROOT / "manifests" / "skilllearnbench_instance_holdout_offline_ready_v1.json"
 )

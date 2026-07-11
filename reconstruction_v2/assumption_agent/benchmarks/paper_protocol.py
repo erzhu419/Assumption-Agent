@@ -84,6 +84,10 @@ PAPER_ROUTES_BY_MAJOR: dict[int, dict[str, Any]] = {
 }
 
 OFFLINE_READINESS_RECEIPT_VERSION = "skilllearn_offline_readiness_receipt_v1"
+TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION = {
+    "3.1.0": DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
+    "3.2.0": 64 * 1024 * 1024,
+}
 
 
 @dataclass(frozen=True)
@@ -372,13 +376,19 @@ class PaperProtocol:
                 != TRIAL_NETWORK_BUDGET_POLICY_VERSION
             ):
                 issues.append("trial_network_budget_policy_mismatch")
-            if (
-                major is not None
-                and major >= 3
-                and execution.get("trial_network_byte_limit")
-                != DEFAULT_TRIAL_NETWORK_BYTE_LIMIT
-            ):
-                issues.append("trial_network_byte_limit_mismatch")
+            if major is not None and major >= 3:
+                expected_network_byte_limit = (
+                    TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION.get(
+                        str(self.payload.get("protocol_version") or "")
+                    )
+                )
+                if expected_network_byte_limit is None:
+                    issues.append("trial_network_byte_limit_protocol_version_unsupported")
+                elif (
+                    execution.get("trial_network_byte_limit")
+                    != expected_network_byte_limit
+                ):
+                    issues.append("trial_network_byte_limit_mismatch")
         evolution = self.payload.get("evolution")
         if not isinstance(evolution, Mapping):
             issues.append("evolution_budget_missing")

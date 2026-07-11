@@ -26,8 +26,11 @@ from assumption_agent.splits import SplitManifest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROTOCOL = ROOT / "manifests" / "skilllearn_paper_protocol_v3_ruoli_gpt54mini.json"
-RUOLI_PROTOCOL = (
+PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_2_ruoli_gpt54mini.json"
+)
+RUOLI_PROTOCOL = PROTOCOL
+V31_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_ruoli_gpt54mini.json"
 )
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
@@ -87,8 +90,8 @@ def test_v3_protocol_freezes_ruoli_for_every_arm() -> None:
     assert protocol.payload["execution"]["counterfactual_replay_policy"] == (
         "behavior_identical_validation_replay_v1"
     )
-    assert protocol.payload["execution"]["trial_network_byte_limit"] == 32 * 1024 * 1024
-    assert protocol.payload["protocol_version"] == "3.1.0"
+    assert protocol.payload["execution"]["trial_network_byte_limit"] == 64 * 1024 * 1024
+    assert protocol.payload["protocol_version"] == "3.2.0"
     assert protocol.promotion_gate_spec.to_dict() == protocol.payload["promotion"]
     assert protocol.payload["evolution"]["minimum_trigger_support"] == 2
     assert protocol.payload["phases"]["smoke"]["parallel_workers"] == 4
@@ -97,6 +100,13 @@ def test_v3_protocol_freezes_ruoli_for_every_arm() -> None:
         protocol.payload["phases"]["smoke"]["max_consecutive_non_promotions"]
         == 1
     )
+
+
+def test_v31_protocol_remains_valid_as_historical_evidence() -> None:
+    protocol = PaperProtocol.read(V31_PROTOCOL)
+
+    assert protocol.payload["protocol_version"] == "3.1.0"
+    assert protocol.payload["execution"]["trial_network_byte_limit"] == 32 * 1024 * 1024
 
 
 @pytest.mark.parametrize(
@@ -272,7 +282,7 @@ def test_v3_protocol_rejects_route_drift() -> None:
     ).validate_structure()
 
     payload = copy.deepcopy(protocol.payload)
-    payload["execution"]["trial_network_byte_limit"] = 64 * 1024 * 1024
+    payload["execution"]["trial_network_byte_limit"] = 32 * 1024 * 1024
     assert "trial_network_byte_limit_mismatch" in PaperProtocol(
         protocol.path,
         payload,

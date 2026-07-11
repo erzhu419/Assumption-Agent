@@ -17,7 +17,8 @@ Paper evaluation is fail-closed:
 - each task container uses `assumption-v2-restricted`;
 - external DNS is disabled and `ruoli.dev` is pinned in `/etc/hosts`;
 - the host `DOCKER-USER` chain permits only the pinned model endpoint on TCP 443;
-- a Docker network-I/O watchdog stops any trial above 32 MiB total traffic;
+- a Docker network-I/O watchdog stops any active v3.2 trial above 64 MiB total
+  traffic; the immutable v3.1 diagnostic contract used 32 MiB;
 - all other container egress, including PyPI, GitHub, Hugging Face, Maven, and
   Ubuntu repositories, is rejected.
 - Codex web search and image generation are disabled; the full JSONL trace is

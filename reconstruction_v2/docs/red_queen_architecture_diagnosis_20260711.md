@@ -3,7 +3,7 @@
 > - 初版日期：2026-07-11
 > - 本次复核：2026-07-11
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
-> - 本次实现复核：protocol/action/offline-subset working tree，133/133 tests 通过
+> - 本次实现复核：protocol/action/offline-subset working tree，134/134 tests 通过
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -45,22 +45,23 @@
 > **学习闭环在 harness 层已接通；promotion 所有权、外部 backend action/fallback
 > 边界和 86-item 离线可运行协议已经闭合。尚未成立的是 clean development promotion、
 > contrastive trigger learning、跨 family 泛化，以及 Red Queen 式多谱系搜索和
-> evaluator co-evolution。第一次 current-protocol full development 已 fail-closed：
-> 离线 verifier 保持可用，但在线代理模型通道在 train 阶段持续 429，因而没有进入
-> proposal 或 validation；这是一条 transport diagnostic，不是算法负结果。**
+> evaluator co-evolution。v3.1 full development 已 fail-closed：第一次受 provider 429
+> 与 32 MiB cap 共同阻断，唯一一次 clean rerun 又在同一 train item 复现该 cap，均未
+> 进入 proposal/validation。离线 verifier 始终可用；v3.2 只做一次 64 MiB 资源预算
+> 版本升级。这些是 execution diagnostics，不是算法负结果。**
 
 ### 1.2 结论分层
 
 | 命题 | 当前状态 | 证据层级 |
 |---|---|---|
 | legacy HLE 是高维手写控制面，学习 policy 没有闭环 | 支持 | 代码审计 + 历史 artifacts |
-| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 133/133 离线测试 + 小型 live probes |
+| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 134/134 离线测试 + 小型 live probes |
 | v2 的内部 runtime action 能改变 lane plan | 支持 | 代码 + 单元测试 |
 | v2 主 SkillLearn 路径执行了每个 typed action/verifier/fallback 的强语义 | **不支持，且协议已停止这样声称** | 只接受四类显式 prompt/self-check lowering；其余 fail closed |
 | promotion threshold 完全由冻结 protocol 所有 | 支持 | protocol-bound spec + 宽松 candidate 对抗测试 |
 | 86-item offline-ready runtime 已预验 | 支持 | readiness/preflight `blockers=[]`；cache-only prewarm 86/86，model 未执行 |
 | v2 已产生可保留的 promoted incumbent | **不支持** | available mixed-protocol artifact scan 中 23 份 archive 均 `incumbent_id=null`，22 份 report 无 promotion |
-| v2 稳定优于 raw 或 budget-matched raw | **不支持** | current-protocol full development 在 train transport 阶段 fail-closed，尚无 clean external main result |
+| v2 稳定优于 raw 或 budget-matched raw | **不支持** | v3.1 full development 在 train execution 阶段 fail-closed；v3.2 尚未形成 clean external main result |
 | v2 已实现 Red Queen 式多 clade 搜索和 evaluator co-evolution | **不支持** | 目前是单 incumbent；evaluator 路径未接主实验 |
 
 ### 1.3 潜力判断
@@ -321,7 +322,7 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 
 ### 7.2 当前证据到哪一层
 
-**[TEST]** 当前 working tree 的 `reconstruction_v2` 离线 suite 为 **133/133 通过**。这证明
+**[TEST]** 当前 working tree 的 `reconstruction_v2` 离线 suite 为 **134/134 通过**。这证明
 schema、wiring、guard、replay、failure handling 和若干 invariant；不证明真实 benchmark
 improvement。新增覆盖包括 protocol threshold ownership、candidate 宽松阈值攻击、
 backend action lowering、真实/声明 fallback 分离，以及 offline-ready split 不重抽样。
@@ -382,10 +383,17 @@ validation/sealed，也不进入任何性能汇总，见
 
 29 个实际启动 trial 的 network receipt 显示总流量中位数约 2.40 MB、p90 约 5.53 MB、
 p95 约 22.03 MB；唯一超过 32 MiB 的就是被右删失的 `court-form-filling-6`，且只超出
-175,568 bytes（0.52%）。因此当前 v3 不因单个 train diagnostic 原地抬 cap，而获得最多
-一次同协议、全新 run-root 的 clean rerun。如果 hard-cap 再现，就停止重跑并判定 v3
-execution contract 不可行；之后至多做一次版本化、train-only 资源预算修订与全量重跑，
-不能反复调到通过。
+175,568 bytes（0.52%）。因此 v3.1 没有因单个 train diagnostic 原地抬 cap，而获得最多
+一次同协议、全新 run-root 的 clean rerun。该 rerun 在同一 item 上再次触发 hard cap，
+这次观测到 38,599,999 bytes；进程在 stop condition 已不可逆后主动中止，没有继续烧完
+余下 train。v3.1 因此正式判为 execution-infeasible，而不是继续重跑到碰巧通过。
+
+唯一允许的资源修订已版本化为
+[`v3.2 protocol`](../manifests/skilllearn_paper_protocol_v3_2_ruoli_gpt54mini.json)：
+统一 provider-only fuse 从 32 MiB 提高到 64 MiB；model、86-item subset、offline evaluator、
+dependency policy、4 workers、search budget 和 promotion contract 均不变。64 MiB 是
+train-only 已观察最大流量向上取下一 2 的幂，不读取 validation/test，也不复用 v3.1
+observations。后续不再允许第二次按题调 cap。
 
 ### 7.3 当前 infrastructure/protocol 状态
 
@@ -424,9 +432,10 @@ cache-only 验收为 **86/86 passed、0 failed、47 个唯一镜像、7 个离�
 闭包和 CLI verifier adapter；NLP 则需要 Python 3.10 CPU runtime 与约 0.5--1.2 GB 的
 最小 ML closure。它们是后续独立 infrastructure workstream，不再阻塞主学习实验。
 
-旧 development lock 仍声明 `network_scope_audit=v1`，而当前协议已升级为 hard-egress v2、
+旧 development lock 仍声明 `network_scope_audit=v1`，v3.1 已升级为 hard-egress v2、
 offline-verifier v3、32 MiB/题 hard fuse、prompt-action lowering v1 和 protocol-owned
-promotion v2。旧 live 数据因此只能作诊断，不能与新协议直接合并。
+promotion v2；v3.2 只把同一 fuse 版本化为 64 MiB。旧 live 与 v3.1 observations 因此
+都只能作诊断，不能与 v3.2 直接合并。
 
 sealed test 仍未访问，这是正确状态。
 
@@ -560,7 +569,7 @@ dependency-cache-only 尚未强制；但当前
 [`docker_egress.py`](../assumption_agent/benchmarks/docker_egress.py) 和 protocol manifest 已
 实现 provider-only hard egress、offline package mode 与 network fuse。本次已同步主
 README、benchmark protocol、offline-verifier matrix 和 status 摘要，并把 test 状态更新为
-133/133；历史段落仍保留为 diagnostic ledger，不能当作当前协议。
+134/134；历史段落仍保留为 diagnostic ledger，不能当作当前协议。
 
 这种文档漂移本身会破坏 protocol review；重新跑论文实验前必须同步。
 
@@ -573,7 +582,7 @@ README、benchmark protocol、offline-verifier matrix 和 status 摘要，并把
 | 完成 | 冻结 offline-ready 范围 | 86-item manifests 保留旧 split；readiness matrix/static preflight 均 `blockers=[]`，无模型调用 |
 | 完成（本地预验） | 全 manifest runtime prewarm | cache-only 86/86、47 images、7 verifier runtimes；无 agent、无 sealed scoring |
 | 完成 | 提交并重建 current-protocol lock/receipt | scoped Git clean；claim-eligible lock 无 validation issue；post-commit prewarm 86/86 |
-| P1（重跑中） | 完整 current-protocol development | 首次 full run 已 fail-closed：26/38 valid，12 invalid；单题 canary 已确认 provider 恢复，下一次在新 run root 重新生成 lock/prewarm，再要求两份 report/archive 全部落盘、0 invalid、0 provider/budget/runtime mismatch、sealed access=false |
+| P1（v3.2 待运行） | 完整 current-protocol development | v3.1 同一 train item 两次超过 32 MiB，已判 execution-infeasible；v3.2 一次性固定 64 MiB，clean commit 后重新生成 lock/prewarm，再要求两份 report/archive 全部落盘、0 invalid、0 provider/budget/runtime mismatch、sealed access=false |
 | P1 | 递归因果归因 | 两臂共享 train evidence 和 roots，唯一差异是 repair；behavior-identical 时 effect 报 N/A，不重采样 |
 | P1 | contrastive trigger learning | train successes 进入 anti-trigger/precision；candidate selection 不只最大化 failure support；报告 activation precision、harm、abstention |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
@@ -588,14 +597,15 @@ README、benchmark protocol、offline-verifier matrix 和 status 摘要，并把
    被 provider 429/circuit 与一个既有 hard-byte fuse fail-closed；未进入 proposal/validation；
 4. 已完成：一个单题、5-step、非 claim transport canary 得到有效 offline-verifier
    observation，确认 provider 已从 429 恢复；
-5. 下一步使用新 run root 重建 lock、复验 cache-only prewarm，再跑完整
-   recursive/no-recursive development；
-6. lock/prewarm 已是 86/86，不再新增依赖/readiness gate，不逐题事后排除，也不修改
-   promotion 阈值。若 32 MiB fuse 在 provider 恢复后的独立 run 再次成为唯一 invalid，
-   只允许做一次 protocol-level 去留/上限决策并重新冻结，禁止按题反复调参；
-7. 若 clean development 没有 promotion，直接转 contrastive trigger learning，不先扩
+5. 已完成：同协议 fresh-root rerun 再次在 `court-form-filling-6` 超过 32 MiB；按 stop
+   rule 中止，v3.1 判 execution-infeasible；
+6. 已完成设计：新建 v3.2，仅把统一 fuse 一次性版本化为 64 MiB，其余实验合同不变；
+7. 下一步在 v3.2 clean commit 上重建 lock、复验 cache-only prewarm，再跑完整
+   recursive/no-recursive development；不再新增依赖/readiness gate、不逐题事后排除、
+   不修改 promotion 阈值，也不再调整 cap；
+8. 若 clean development 没有 promotion，直接转 contrastive trigger learning，不先扩
    family-out、multi-clade 或 evaluator mutation；
-8. 有 retained validation gain 后再做 family-out，最后才增加多 clade 与 evaluator mutation。
+9. 有 retained validation gain 后再做 family-out，最后才增加多 clade 与 evaluator mutation。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -660,7 +670,7 @@ outcome，而不是模型自评。
 
 | 层级 | 可声明内容 | 当前状态 |
 |---|---|---|
-| L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：133 tests、protocol ownership、backend lowering contract 与 offline preflight 均通过 |
+| L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：134 tests、protocol ownership、backend lowering contract 与 offline preflight 均通过 |
 | L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 部分达到 |
 | L2 validation learning | clean held-out validation 上有可晋级净收益 | 未达到 |
 | L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | 未达到 |
@@ -702,8 +712,9 @@ guard、archive 和 evaluator epoch 做成了清晰的小型系统。这使研�
 86-item offline-ready manifests 已通过 readiness audit，all-manifest cache-only runtime
 prewarm 已达到 86/86，且 clean scoped commit 上的 current lock 已 claim eligible。下一步
 已经停止“不断补 gate”并转入 full development；第一次尝试因 provider 429 与一个既有
-network fuse fail-closed，尚未进入 candidate evaluation。transport canary 已确认 429
-冷却；恢复动作现在只剩一次全新 run，不应再扩 protocol 控制面。
+network fuse fail-closed，尚未进入 candidate evaluation。transport canary 确认 429
+冷却后，唯一一次 v3.1 clean rerun 又复现同一 hard-cap；v3.1 已停止。当前只做一次
+可审计的 v3.2 64 MiB 资源版本升级，不扩 protocol 控制面。
 
 但重构仍不能写成“已证明有效”。available mixed-protocol artifacts 中尚无 incumbent 或
 promotion，也没有完成的 current-protocol clean development、family-out 或 sealed result。
@@ -729,6 +740,8 @@ promotion，也没有完成的 current-protocol clean development、family-out �
 - v2 benchmark protocol：[`BENCHMARK_PROTOCOL.md`](../BENCHMARK_PROTOCOL.md)
 - v2 current status：[`STATUS.md`](../STATUS.md)
 - active paper protocol：
+  [`skilllearn_paper_protocol_v3_2_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_2_ruoli_gpt54mini.json)
+- immutable v3.1 diagnostic protocol：
   [`skilllearn_paper_protocol_v3_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_ruoli_gpt54mini.json)
 - frozen offline-ready manifests：
   [`instance holdout`](../manifests/skilllearnbench_instance_holdout_offline_ready_v1.json)；
@@ -739,7 +752,8 @@ promotion，也没有完成的 current-protocol clean development、family-out �
   [`offline verifier matrix`](../artifacts/offline_verifier_matrix_offline86_20260711_v1/matrix.json)；
   [`86-item runtime prewarm receipt`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/development_prewarm.json)；
   [`mechanism smoke`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/smoke_recursive.report.json)；
-  [`full-development fail-closed events`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)
+  [`full-development fail-closed events`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)；
+  [`v3.1 clean-rerun cap recurrence`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini_rerun01/development_recursive.events.jsonl)
 
 ## 附录 B：复杂度统计口径
 
