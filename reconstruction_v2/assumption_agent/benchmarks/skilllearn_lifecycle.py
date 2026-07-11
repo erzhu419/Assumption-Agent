@@ -4088,14 +4088,40 @@ def _inspect_verifier_execution_receipt(
     result: Mapping[str, Any],
     offline_verifier_profile: OfflineVerifierProfile | None = None,
 ) -> _VerifierExecutionReceipt:
-    evidence_kind = "pytest_ctrf" if _test_script_uses_ctrf(test_script) else "unsupported"
+    if offline_verifier_profile is not None:
+        executed_verifier_command = offline_verifier_profile.verifier_command
+        evidence_kind = (
+            "pytest_ctrf"
+            if "--ctrf" in executed_verifier_command
+            else "unsupported"
+        )
+    else:
+        executed_verifier_command = None
+        evidence_kind = (
+            "pytest_ctrf" if _test_script_uses_ctrf(test_script) else "unsupported"
+        )
     reward: int | None = None
     test_count = 0
     evidence_hashes: dict[str, Any] = {
         "policy": VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION,
         "test_script_hash": _file_content_hash(test_script) if test_script.is_file() else None,
         "evidence_kind": evidence_kind,
+        "executed_verifier_source": (
+            "offline_verifier_profile"
+            if offline_verifier_profile is not None
+            else "benchmark_test_script"
+        ),
     }
+    if offline_verifier_profile is not None:
+        evidence_hashes.update(
+            {
+                "offline_verifier_profile_id": offline_verifier_profile.profile_id,
+                "offline_verifier_profile_hash": offline_verifier_profile.profile_hash,
+                "executed_verifier_command_hash": stable_hash(
+                    {"command": executed_verifier_command}
+                ),
+            }
+        )
     semantic_prelude = inspect_semantic_prelude_receipt(
         profile=offline_verifier_profile,
         verifier_dir=verifier_dir,

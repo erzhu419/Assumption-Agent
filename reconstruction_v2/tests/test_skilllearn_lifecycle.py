@@ -46,6 +46,7 @@ from assumption_agent.benchmarks.skilllearn_lifecycle import (
 )
 from assumption_agent.benchmarks.docker_egress import DockerEgressPolicy
 from assumption_agent.benchmarks.offline_verifier import (
+    COMMON_PY38_VERIFIER_PROFILE,
     OFFLINE_VERIFIER_MOUNT,
     POSTER_VERIFIER_PROFILE,
     WEIGHTED_GDP_VERIFIER_PROFILE,
@@ -416,6 +417,64 @@ def test_verifier_receipt_requires_a_real_ctrf_test_run(tmp_path: Path) -> None:
     assert complete.reward == 0
     assert complete.test_count == 2
     assert complete.receipt_hash
+
+
+def test_verifier_receipt_binds_the_executed_offline_profile(tmp_path: Path) -> None:
+    test_script = tmp_path / "tests" / "test.sh"
+    verifier_dir = tmp_path / "trial" / "verifier"
+    test_script.parent.mkdir(parents=True)
+    verifier_dir.mkdir(parents=True)
+    test_script.write_text(
+        "python3 /tests/test_outputs.py\n",
+        encoding="utf-8",
+    )
+    (verifier_dir / "reward.txt").write_text("0\n", encoding="utf-8")
+    (verifier_dir / "ctrf.json").write_text(
+        json.dumps(
+            {
+                "results": {
+                    "summary": {
+                        "tests": 2,
+                        "passed": 1,
+                        "failed": 1,
+                        "skipped": 0,
+                        "pending": 0,
+                        "other": 0,
+                    },
+                    "tests": [
+                        {"name": "test_ok", "status": "passed"},
+                        {"name": "test_bad", "status": "failed"},
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = {"verifier_exit": 0, "reward": 0}
+
+    receipt = _inspect_verifier_execution_receipt(
+        test_script=test_script,
+        verifier_dir=verifier_dir,
+        result=result,
+        offline_verifier_profile=COMMON_PY38_VERIFIER_PROFILE,
+    )
+    renamed_profile = replace(
+        COMMON_PY38_VERIFIER_PROFILE,
+        profile_id="common-pytest-ctrf-py38-test-v1",
+    )
+    renamed_receipt = _inspect_verifier_execution_receipt(
+        test_script=test_script,
+        verifier_dir=verifier_dir,
+        result=result,
+        offline_verifier_profile=renamed_profile,
+    )
+
+    assert receipt.valid is True
+    assert receipt.evidence_kind == "pytest_ctrf"
+    assert receipt.reward == 0
+    assert receipt.test_count == 2
+    assert renamed_receipt.valid is True
+    assert renamed_receipt.receipt_hash != receipt.receipt_hash
 
 
 def test_verifier_receipt_structurally_binds_semantic_prelude(tmp_path: Path) -> None:
