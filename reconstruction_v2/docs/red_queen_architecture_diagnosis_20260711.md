@@ -45,7 +45,9 @@
 > **学习闭环在 harness 层已接通；promotion 所有权、外部 backend action/fallback
 > 边界和 86-item 离线可运行协议已经闭合。尚未成立的是 clean development promotion、
 > contrastive trigger learning、跨 family 泛化，以及 Red Queen 式多谱系搜索和
-> evaluator co-evolution。**
+> evaluator co-evolution。第一次 current-protocol full development 已 fail-closed：
+> 离线 verifier 保持可用，但在线代理模型通道在 train 阶段持续 429，因而没有进入
+> proposal 或 validation；这是一条 transport diagnostic，不是算法负结果。**
 
 ### 1.2 结论分层
 
@@ -58,7 +60,7 @@
 | promotion threshold 完全由冻结 protocol 所有 | 支持 | protocol-bound spec + 宽松 candidate 对抗测试 |
 | 86-item offline-ready runtime 已预验 | 支持 | readiness/preflight `blockers=[]`；cache-only prewarm 86/86，model 未执行 |
 | v2 已产生可保留的 promoted incumbent | **不支持** | available mixed-protocol artifact scan 中 23 份 archive 均 `incumbent_id=null`，22 份 report 无 promotion |
-| v2 稳定优于 raw 或 budget-matched raw | **不支持** | 尚无 clean external main result |
+| v2 稳定优于 raw 或 budget-matched raw | **不支持** | current-protocol full development 在 train transport 阶段 fail-closed，尚无 clean external main result |
 | v2 已实现 Red Queen 式多 clade 搜索和 evaluator co-evolution | **不支持** | 目前是单 incumbent；evaluator 路径未接主实验 |
 
 ### 1.3 潜力判断
@@ -345,6 +347,46 @@ raw 4/18、candidate 5/18、2 gain/1 harm，LCB 为负并被拒绝；第二代�
 [`development_recursive.events.jsonl`](../artifacts/paper_primary_v3_ruoli_gpt54mini/runs/685a4482_full_development_20260711/development_recursive.events.jsonl)。
 这些结果都不能形成性能主张。
 
+**[ARTIFACT]** clean commit `e07913f9` 上的 current-protocol smoke 已完成机制验收：
+两臂均为 2 个有效 pair、0 invalid、0 provider/budget mismatch，且 behavior-identical
+validation 被精确 replay；两臂 candidate/raw 都是 0/2，因此没有 promotion。它只证明
+运输、lowering、paired replay 和 fail-closed promotion 能协同工作，不是性能证据，见
+[`smoke_recursive.report.json`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/smoke_recursive.report.json)
+和
+[`smoke_no_recursive.report.json`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/smoke_no_recursive.report.json)。
+
+随后第一次 current-protocol full development 在完整 38-item train 上严格中止，见
+[`development_recursive.events.jsonl`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)：
+
+- 26 个本地 verifier 有效 observation，其中 9 pass、17 fail；
+- 2 个已启动 trial 收到 `429 Too Many Requests`，provider circuit 随即打开；
+- 9 个尚未启动的 trial 按同一 circuit 在本地跳过，没有继续消耗模型请求；
+- `court-form-filling-6` 的长轨迹累计模型流量为 33,730,000 bytes，超过冻结的
+  33,554,432-byte fuse，作为 hard-budget invalid 处理；
+- 因 12/38 training observations 无效，training evidence 没有写入 replay cache，
+  proposal、repair、validation、archive 和 promotion 均未执行；report/archive 也没有落盘；
+- sealed split 保持未访问。
+
+这次失败没有调用 online evaluator：task payload 与 verifier 均来自冻结的本地
+SkillLearnBench checkout，evaluation 仍由 post-agent offline verifier 完成；唯一在线流量
+是预注册的 agent model inference。因而缺口不是“再下载一个 evaluator”或“再补一个
+readiness gate”，而是恢复预注册 provider transport 后取得一份完整、0-invalid 的
+development evidence。当前进程内 training replay 也不能跨失败进程复用这 26 条有效结果，
+所以它们只能作为 transport diagnostic，不能与后续 run 拼接成 claim。
+
+全 run 退出后的单题、5-step、非 claim transport canary 已在同一 provider route 上恢复：
+模型请求完成、offline verifier 正常执行，observation 为 `evaluation_valid=1`、
+`task_success=0`。这说明 429 已冷却；任务失败不等于 transport 失败。canary 没有读取
+validation/sealed，也不进入任何性能汇总，见
+[`transport recovery canary`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/transport_recovery_canary/report.json)。
+
+29 个实际启动 trial 的 network receipt 显示总流量中位数约 2.40 MB、p90 约 5.53 MB、
+p95 约 22.03 MB；唯一超过 32 MiB 的就是被右删失的 `court-form-filling-6`，且只超出
+175,568 bytes（0.52%）。因此当前 v3 不因单个 train diagnostic 原地抬 cap，而获得最多
+一次同协议、全新 run-root 的 clean rerun。如果 hard-cap 再现，就停止重跑并判定 v3
+execution contract 不可行；之后至多做一次版本化、train-only 资源预算修订与全量重跑，
+不能反复调到通过。
+
 ### 7.3 当前 infrastructure/protocol 状态
 
 全 inventory 的
@@ -531,7 +573,7 @@ README、benchmark protocol、offline-verifier matrix 和 status 摘要，并把
 | 完成 | 冻结 offline-ready 范围 | 86-item manifests 保留旧 split；readiness matrix/static preflight 均 `blockers=[]`，无模型调用 |
 | 完成（本地预验） | 全 manifest runtime prewarm | cache-only 86/86、47 images、7 verifier runtimes；无 agent、无 sealed scoring |
 | 完成 | 提交并重建 current-protocol lock/receipt | scoped Git clean；claim-eligible lock 无 validation issue；post-commit prewarm 86/86 |
-| P1 | 完整 current-protocol development | recursive/no-recursive 两份 report/archive 全部落盘；0 invalid、0 provider/budget/runtime mismatch；sealed access=false |
+| P1（重跑中） | 完整 current-protocol development | 首次 full run 已 fail-closed：26/38 valid，12 invalid；单题 canary 已确认 provider 恢复，下一次在新 run root 重新生成 lock/prewarm，再要求两份 report/archive 全部落盘、0 invalid、0 provider/budget/runtime mismatch、sealed access=false |
 | P1 | 递归因果归因 | 两臂共享 train evidence 和 roots，唯一差异是 repair；behavior-identical 时 effect 报 N/A，不重采样 |
 | P1 | contrastive trigger learning | train successes 进入 anti-trigger/precision；candidate selection 不只最大化 failure support；报告 activation precision、harm、abstention |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
@@ -542,10 +584,18 @@ README、benchmark protocol、offline-verifier matrix 和 status 摘要，并把
 
 1. 已完成：审阅并提交 protocol/action/subset 改动以及 3 个新 manifest/receipt 文件；
 2. 已完成：在 clean scoped commit 上重建 claim-eligible lock 和 86-item content-hashed prewarm receipt；
-3. 下一步：跑完一次 clean recursive/no-recursive development；
-4. 只有 lock/prewarm 给出具体缺失依赖时才修该 blocker；否则不再新增基础设施 gate；
-5. 若没有 promotion，直接转 contrastive trigger learning，不先扩 family-out、multi-clade 或 evaluator mutation；
-6. 有 retained validation gain 后再做 family-out，最后才增加多 clade 与 evaluator mutation。
+3. 已执行但未形成性能证据：第一次 full development 在 26 个有效 train observation 后，
+   被 provider 429/circuit 与一个既有 hard-byte fuse fail-closed；未进入 proposal/validation；
+4. 已完成：一个单题、5-step、非 claim transport canary 得到有效 offline-verifier
+   observation，确认 provider 已从 429 恢复；
+5. 下一步使用新 run root 重建 lock、复验 cache-only prewarm，再跑完整
+   recursive/no-recursive development；
+6. lock/prewarm 已是 86/86，不再新增依赖/readiness gate，不逐题事后排除，也不修改
+   promotion 阈值。若 32 MiB fuse 在 provider 恢复后的独立 run 再次成为唯一 invalid，
+   只允许做一次 protocol-level 去留/上限决策并重新冻结，禁止按题反复调参；
+7. 若 clean development 没有 promotion，直接转 contrastive trigger learning，不先扩
+   family-out、multi-clade 或 evaluator mutation；
+8. 有 retained validation gain 后再做 family-out，最后才增加多 clade 与 evaluator mutation。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -651,10 +701,14 @@ guard、archive 和 evaluator epoch 做成了清晰的小型系统。这使研�
 及格线；外部 backend 不再把 prompt/verifier/fallback 声明伪装成 typed/observed 事实；
 86-item offline-ready manifests 已通过 readiness audit，all-manifest cache-only runtime
 prewarm 已达到 86/86，且 clean scoped commit 上的 current lock 已 claim eligible。下一步
-就应停止“不断补 gate”，转入真正检验学习机制的 clean development。
+已经停止“不断补 gate”并转入 full development；第一次尝试因 provider 429 与一个既有
+network fuse fail-closed，尚未进入 candidate evaluation。transport canary 已确认 429
+冷却；恢复动作现在只剩一次全新 run，不应再扩 protocol 控制面。
 
 但重构仍不能写成“已证明有效”。available mixed-protocol artifacts 中尚无 incumbent 或
-promotion，也没有 current-protocol clean development、family-out 或 sealed result。当前
+promotion，也没有完成的 current-protocol clean development、family-out 或 sealed result。
+当前 full attempt 的 26 条有效 train observation 只能定位 transport/预算问题，不能跨
+失败进程拼接为论文样本。当前
 最诚实的论文级表述是：
 
 > **显式 HypothesisProgram 是一个有希望、可能更易归因的 self-evolution 搜索表示；
@@ -683,7 +737,9 @@ promotion，也没有 current-protocol clean development、family-out 或 sealed
   [`skilllearn_offline_readiness_receipt_v1.json`](../manifests/skilllearn_offline_readiness_receipt_v1.json)
 - local ignored diagnostics（非 clone 中的主证据）：
   [`offline verifier matrix`](../artifacts/offline_verifier_matrix_offline86_20260711_v1/matrix.json)；
-  [`86-item runtime prewarm receipt`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/development_prewarm.json)
+  [`86-item runtime prewarm receipt`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/development_prewarm.json)；
+  [`mechanism smoke`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/smoke_recursive.report.json)；
+  [`full-development fail-closed events`](../artifacts/paper_primary_v3_1_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)
 
 ## 附录 B：复杂度统计口径
 
