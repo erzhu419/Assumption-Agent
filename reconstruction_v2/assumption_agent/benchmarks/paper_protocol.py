@@ -29,6 +29,11 @@ from ..secure_env import (
 )
 from ..splits import SplitManifest
 from .preflight import build_preflight
+from .codex_execution_policy import (
+    CodexAgentExecutionPolicy,
+    codex_agent_execution_policy_for_protocol_version,
+    declared_policy_matches,
+)
 from .docker_egress import (
     DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
     DEPENDENCY_CACHE_POLICY_VERSION,
@@ -87,6 +92,7 @@ OFFLINE_READINESS_RECEIPT_VERSION = "skilllearn_offline_readiness_receipt_v1"
 TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION = {
     "3.1.0": DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
     "3.2.0": 64 * 1024 * 1024,
+    "3.3.0": 64 * 1024 * 1024,
 }
 
 
@@ -109,6 +115,15 @@ class PaperProtocol:
         if not isinstance(promotion, Mapping):
             raise ValueError("paper protocol promotion policy is missing")
         return PromotionGateSpec.from_mapping(promotion)
+
+    @property
+    def codex_agent_execution_policy(self) -> CodexAgentExecutionPolicy:
+        policy = codex_agent_execution_policy_for_protocol_version(
+            self.payload.get("protocol_version")
+        )
+        if policy is None:
+            raise ValueError("paper protocol has no supported Codex execution policy")
+        return policy
 
     @classmethod
     def read(cls, path: str | Path) -> "PaperProtocol":
@@ -341,6 +356,20 @@ class PaperProtocol:
                 != CODEX_NETWORK_MINIMIZATION_VERSION
             ):
                 issues.append("codex_network_minimization_mismatch")
+            resolved_codex_policy = codex_agent_execution_policy_for_protocol_version(
+                self.payload.get("protocol_version")
+            )
+            declared_codex_policy = execution.get("codex_agent_execution_policy")
+            if resolved_codex_policy is None:
+                issues.append("codex_agent_execution_policy_protocol_version_unsupported")
+            elif str(self.payload.get("protocol_version") or "") in {"3.1.0", "3.2.0"}:
+                if declared_codex_policy is not None:
+                    issues.append("legacy_codex_agent_execution_policy_must_be_implicit")
+            elif not declared_policy_matches(
+                resolved_codex_policy,
+                declared_codex_policy,
+            ):
+                issues.append("codex_agent_execution_policy_mismatch")
             if (
                 major is not None
                 and major >= 3
@@ -760,6 +789,12 @@ def build_protocol_lock(
         "provider_status": provider_status,
         "max_steps": int(protocol.payload["max_steps"]),
         "execution": dict(protocol.payload["execution"]),
+        "resolved_codex_agent_execution_policy": (
+            protocol.codex_agent_execution_policy.to_dict()
+        ),
+        "resolved_codex_agent_execution_policy_hash": (
+            protocol.codex_agent_execution_policy.policy_hash
+        ),
         "evolution": dict(protocol.payload["evolution"]),
         "promotion": protocol.promotion_gate_spec.to_dict(),
         "static_program_hash": static_program.payload_hash,
@@ -807,6 +842,23 @@ def validate_protocol_lock_for_execution(
         raise PermissionError("execution promotion contract lock mismatch")
     if lock.get("execution") != dict(protocol.payload["execution"]):
         raise PermissionError("execution policy lock mismatch")
+    resolved_policy_fields_present = any(
+        key in lock
+        for key in (
+            "resolved_codex_agent_execution_policy",
+            "resolved_codex_agent_execution_policy_hash",
+        )
+    )
+    if (
+        str(protocol.payload.get("protocol_version") or "") == "3.3.0"
+        or resolved_policy_fields_present
+    ) and (
+        lock.get("resolved_codex_agent_execution_policy")
+        != protocol.codex_agent_execution_policy.to_dict()
+        or lock.get("resolved_codex_agent_execution_policy_hash")
+        != protocol.codex_agent_execution_policy.policy_hash
+    ):
+        raise PermissionError("resolved Codex agent execution policy lock mismatch")
     if lock.get("evolution") != dict(protocol.payload["evolution"]):
         raise PermissionError("execution evolution budget lock mismatch")
     if lock.get("max_steps") != int(protocol.payload["max_steps"]):

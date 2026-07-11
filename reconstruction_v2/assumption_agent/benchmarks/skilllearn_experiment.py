@@ -115,6 +115,7 @@ def main() -> None:
     model_presence = map_legacy_model_env()
     provider_status = proposal_provider_status()
     paper_protocol = PaperProtocol.read(args.protocol)
+    codex_agent_execution_policy = paper_protocol.codex_agent_execution_policy
     promotion_spec = paper_protocol.promotion_gate_spec
     execution_contract = paper_protocol.payload["execution"]
     evolution_contract = paper_protocol.payload["evolution"]
@@ -261,6 +262,10 @@ def main() -> None:
             else None
         ),
         "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+        "codex_agent_execution_policy": codex_agent_execution_policy.to_dict(),
+        "codex_agent_execution_policy_hash": (
+            codex_agent_execution_policy.policy_hash
+        ),
         "model_only_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
         "verifier_execution_receipt_policy": (
             VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION
@@ -390,6 +395,7 @@ def main() -> None:
             trials_dir=args.work_dir / "upstream_trials",
             prebuilt_cache=prebuilt_cache,
             provider_circuit=provider_circuit,
+            codex_agent_execution_policy=codex_agent_execution_policy,
             event_sink=sink,
         )
         for _ in range(parallel_workers)

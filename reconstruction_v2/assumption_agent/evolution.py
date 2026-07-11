@@ -705,6 +705,9 @@ def _counterfactual_replay_descriptor(
 ) -> dict[str, object]:
     evaluator_epoch = str(getattr(runner.evaluator, "epoch", ""))
     runtime_version = str(getattr(runner.runtime, "runtime_version", ""))
+    evidence_execution_policy_hash = str(
+        getattr(runner, "evidence_execution_policy_hash", "")
+    )
     if not evaluator_epoch or not runtime_version:
         raise ValueError("counterfactual replay requires frozen evaluator and runtime versions")
     task_rows = [
@@ -718,7 +721,7 @@ def _counterfactual_replay_descriptor(
     baseline_behavior_hashes = sorted(
         _runner_behavior_hash(runner, row) for row in baseline_programs
     )
-    return {
+    descriptor: dict[str, object] = {
         "policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
         "split": split.value,
         "evaluator_epoch": evaluator_epoch,
@@ -727,6 +730,11 @@ def _counterfactual_replay_descriptor(
         "baseline_behavior_set_hash": stable_hash(baseline_behavior_hashes),
         "task_set_hash": stable_hash(task_rows),
     }
+    if evidence_execution_policy_hash:
+        descriptor["evidence_execution_policy_hash"] = (
+            evidence_execution_policy_hash
+        )
+    return descriptor
 
 
 def _validate_replayed_pairs(

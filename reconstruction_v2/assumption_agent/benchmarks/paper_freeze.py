@@ -217,6 +217,9 @@ def freeze_paper_workspace(
         "protocol_id": protocol.id,
         "protocol_hash": protocol.protocol_hash,
         "protocol_lock_hash": protocol_lock.get("lock_hash"),
+        "codex_agent_execution_policy_hash": (
+            protocol.codex_agent_execution_policy.policy_hash
+        ),
         "manifest_hash": manifest.manifest_hash,
         "manifest_role": _manifest_role(protocol_lock, manifest),
         "evaluator_epoch": evaluator_epoch,
@@ -490,6 +493,13 @@ def _validate_development_report(
         ),
         "test_content_accessed": False,
     }
+    if str(protocol.payload.get("protocol_version") or "") == "3.3.0":
+        expected["codex_agent_execution_policy"] = (
+            protocol.codex_agent_execution_policy.to_dict()
+        )
+        expected["codex_agent_execution_policy_hash"] = (
+            protocol.codex_agent_execution_policy.policy_hash
+        )
     registry_isolation = protocol.payload["execution"].get(
         "runner_agent_registry_isolation"
     )

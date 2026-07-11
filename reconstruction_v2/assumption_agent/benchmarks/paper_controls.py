@@ -29,6 +29,7 @@ from .skilllearn_lifecycle import (
     SkillLearnTrialBackend,
     SkillLearnTrialRequest,
     TrialVariant,
+    codex_agent_execution_policy_for_backend,
 )
 from .skilllearnbench import SkillLearnBenchAdapter
 
@@ -120,6 +121,13 @@ class PaperControlRunner:
         self.items = {row.id: row for row in adapter.discover()}
         self._routing_manifests: dict[Path, Mapping[str, Any] | None] = {}
         self._routing_lock = threading.Lock()
+        if (
+            codex_agent_execution_policy_for_backend(self.backend).policy_hash
+            != self.protocol.codex_agent_execution_policy.policy_hash
+        ):
+            raise ValueError(
+                "paper control backend does not match the frozen Codex execution policy"
+            )
         expected_controls = {str(row["id"]) for row in protocol.payload["controls"]}
         supplied_controls = {row.id for row in self.controls}
         if supplied_controls != expected_controls:
@@ -301,6 +309,9 @@ class PaperControlRunner:
             model=self.backend.model,
             max_steps=self.backend.max_steps,
             manifest_hash=self.manifest.manifest_hash,
+            codex_agent_execution_policy_hash=(
+                codex_agent_execution_policy_for_backend(self.backend).policy_hash
+            ),
             program_id=None if control.root is None else control.id,
             program_set_hash=program_set_hash,
             treatment_hash=treatment_hash,
@@ -337,6 +348,9 @@ class PaperControlRunner:
             prebuilt_cache_reused=observation.prebuilt_cache_reused,
             agent_runtime_key=observation.agent_runtime_key,
             agent_runtime_version=observation.agent_runtime_version,
+            codex_agent_execution_policy_hash=(
+                codex_agent_execution_policy_for_backend(self.backend).policy_hash
+            ),
         )
         return record
 
@@ -788,6 +802,9 @@ def main() -> None:
             trials_dir=args.trials_dir,
             prebuilt_cache=prebuilt_cache,
             provider_circuit=provider_circuit,
+            codex_agent_execution_policy=(
+                protocol.codex_agent_execution_policy
+            ),
             event_sink=sink,
         )
         for _ in range(parallel_workers)

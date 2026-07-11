@@ -15,6 +15,10 @@ from assumption_agent.benchmarks.paper_protocol import (
     PaperProtocol,
     validate_protocol_lock_for_execution,
 )
+from assumption_agent.benchmarks.codex_execution_policy import (
+    LEGACY_CODEX_AGENT_EXECUTION_POLICY,
+    LOW_REASONING_LOCAL_COMPACTION_POLICY,
+)
 from assumption_agent.benchmarks.skilllearn_experiment import _experiment_phase_name
 from assumption_agent.benchmarks.paper_report import (
     PaperTrialRecord,
@@ -32,6 +36,9 @@ PROTOCOL = (
 RUOLI_PROTOCOL = PROTOCOL
 V31_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_ruoli_gpt54mini.json"
+)
+V33_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_3_ruoli_gpt54mini.json"
 )
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
@@ -92,6 +99,7 @@ def test_v3_protocol_freezes_ruoli_for_every_arm() -> None:
     )
     assert protocol.payload["execution"]["trial_network_byte_limit"] == 64 * 1024 * 1024
     assert protocol.payload["protocol_version"] == "3.2.0"
+    assert protocol.codex_agent_execution_policy == LEGACY_CODEX_AGENT_EXECUTION_POLICY
     assert protocol.promotion_gate_spec.to_dict() == protocol.payload["promotion"]
     assert protocol.payload["evolution"]["minimum_trigger_support"] == 2
     assert protocol.payload["phases"]["smoke"]["parallel_workers"] == 4
@@ -107,6 +115,63 @@ def test_v31_protocol_remains_valid_as_historical_evidence() -> None:
 
     assert protocol.payload["protocol_version"] == "3.1.0"
     assert protocol.payload["execution"]["trial_network_byte_limit"] == 32 * 1024 * 1024
+    assert protocol.codex_agent_execution_policy == LEGACY_CODEX_AGENT_EXECUTION_POLICY
+
+
+def test_v33_protocol_freezes_low_reasoning_early_local_compaction() -> None:
+    protocol = PaperProtocol.read(V33_PROTOCOL)
+
+    assert protocol.payload["protocol_version"] == "3.3.0"
+    assert protocol.payload["execution"]["trial_network_byte_limit"] == 64 * 1024 * 1024
+    assert protocol.codex_agent_execution_policy == LOW_REASONING_LOCAL_COMPACTION_POLICY
+    assert protocol.payload["execution"]["codex_agent_execution_policy"] == {
+        "version": "codex_low_reasoning_early_local_compaction_v1",
+        "model_reasoning_effort": "low",
+        "model_verbosity": "low",
+        "model_auto_compact_token_limit": 32768,
+        "model_auto_compact_token_limit_scope": "body_after_prefix",
+        "tool_output_token_limit": 10000,
+        "enable_request_compression": True,
+        "remote_compaction_v2": False,
+    }
+    assert protocol.payload["phases"] == PaperProtocol.read(PROTOCOL).payload["phases"]
+    assert protocol.payload["promotion"] == PaperProtocol.read(PROTOCOL).payload["promotion"]
+
+    v32 = copy.deepcopy(PaperProtocol.read(PROTOCOL).payload)
+    v33 = copy.deepcopy(protocol.payload)
+    for payload in (v32, v33):
+        payload.pop("protocol_id")
+        payload.pop("protocol_version")
+        payload["execution"].pop("codex_agent_execution_policy", None)
+    assert v33 == v32
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    tuple(LOW_REASONING_LOCAL_COMPACTION_POLICY.to_dict()),
+)
+def test_v33_protocol_rejects_agent_execution_policy_drift(field_name: str) -> None:
+    protocol = PaperProtocol.read(V33_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    del payload["execution"]["codex_agent_execution_policy"][field_name]
+
+    assert "codex_agent_execution_policy_mismatch" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
+def test_v32_rejects_silent_v33_agent_execution_policy() -> None:
+    protocol = PaperProtocol.read(PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    payload["execution"]["codex_agent_execution_policy"] = (
+        LOW_REASONING_LOCAL_COMPACTION_POLICY.to_dict()
+    )
+
+    assert "legacy_codex_agent_execution_policy_must_be_implicit" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
 
 
 @pytest.mark.parametrize(
@@ -215,6 +280,22 @@ def test_execution_lock_binds_tracked_offline_readiness_receipt(
     _patch_execution_environment(monkeypatch, protocol, lock)
 
     with pytest.raises(PermissionError, match="offline readiness receipt lock mismatch"):
+        validate_protocol_lock_for_execution(protocol, lock, manifest, ROOT)
+
+
+def test_v33_execution_lock_binds_resolved_agent_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    protocol = PaperProtocol.read(V33_PROTOCOL)
+    manifest = SplitManifest.read(ROOT / str(protocol.payload["primary_manifest"]))
+    lock = _execution_lock(protocol)
+    _patch_execution_environment(monkeypatch, protocol, lock)
+
+    lock["resolved_codex_agent_execution_policy_hash"] = "0" * 64
+    lock["lock_hash"] = stable_hash(
+        {key: value for key, value in lock.items() if key != "lock_hash"}
+    )
+    with pytest.raises(PermissionError, match="resolved Codex agent execution policy"):
         validate_protocol_lock_for_execution(protocol, lock, manifest, ROOT)
 
 
@@ -425,6 +506,13 @@ def _execution_lock(protocol: PaperProtocol) -> dict[str, object]:
         "code_fingerprint": {"file_count": 1, "tree_hash": "locked"},
         "git": {"commit": "locked-commit", "scoped_dirty": False},
     }
+    if str(protocol.payload.get("protocol_version") or "") == "3.3.0":
+        lock["resolved_codex_agent_execution_policy"] = (
+            protocol.codex_agent_execution_policy.to_dict()
+        )
+        lock["resolved_codex_agent_execution_policy_hash"] = (
+            protocol.codex_agent_execution_policy.policy_hash
+        )
     lock["lock_hash"] = stable_hash(lock)
     return lock
 

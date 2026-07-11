@@ -42,6 +42,7 @@ class PaperTrialRecord:
     prebuilt_cache_reused: bool = False
     agent_runtime_key: str = ""
     agent_runtime_version: str = ""
+    codex_agent_execution_policy_hash: str = ""
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "PaperTrialRecord":
@@ -76,6 +77,9 @@ class PaperTrialRecord:
             prebuilt_cache_reused=bool(data.get("prebuilt_cache_reused")),
             agent_runtime_key=str(data.get("agent_runtime_key") or ""),
             agent_runtime_version=str(data.get("agent_runtime_version") or ""),
+            codex_agent_execution_policy_hash=str(
+                data.get("codex_agent_execution_policy_hash") or ""
+            ),
         )
         issues = record.validate()
         if issues:
@@ -116,6 +120,11 @@ class PaperTrialRecord:
             issues.append("prebuilt_image_id_invalid")
         if self.agent_runtime_key and len(self.agent_runtime_key) != 64:
             issues.append("agent_runtime_key_invalid")
+        if (
+            self.codex_agent_execution_policy_hash
+            and len(self.codex_agent_execution_policy_hash) != 64
+        ):
+            issues.append("codex_agent_execution_policy_hash_invalid")
         return issues
 
     def to_dict(self) -> dict[str, Any]:
@@ -191,6 +200,12 @@ def build_paper_report(
         blockers.append("no_records_for_split")
     if any(row.protocol_hash != protocol.protocol_hash for row in selected):
         blockers.append("record_protocol_hash_mismatch")
+    if str(protocol.payload.get("protocol_version") or "") == "3.3.0" and any(
+        row.codex_agent_execution_policy_hash
+        != protocol.codex_agent_execution_policy.policy_hash
+        for row in selected
+    ):
+        blockers.append("record_codex_agent_execution_policy_hash_mismatch")
     if expected_manifest_hash and any(
         row.manifest_hash != expected_manifest_hash for row in selected
     ):
@@ -203,6 +218,9 @@ def build_paper_report(
         "protocol_id": protocol.id,
         "protocol_hash": protocol.protocol_hash,
         "protocol_lock_hash": protocol_lock.get("lock_hash"),
+        "codex_agent_execution_policy_hash": (
+            protocol.codex_agent_execution_policy.policy_hash
+        ),
         "manifest_hash": expected_manifest_hash,
         "evaluator_epoch_hash": stable_hash({"epochs": sorted(evaluator_epochs)}),
         "split": split,

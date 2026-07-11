@@ -64,6 +64,10 @@ from .skilllearn_compiler import (
     skilllearn_program_treatment_hash,
 )
 from .skilllearnbench import SkillLearnBenchAdapter
+from .codex_execution_policy import (
+    CodexAgentExecutionPolicy,
+    LEGACY_CODEX_AGENT_EXECUTION_POLICY,
+)
 from .docker_egress import (
     DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
     DEPENDENCY_CACHE_POLICY_VERSION,
@@ -249,6 +253,9 @@ class SkillLearnTrialRequest:
     model: str
     max_steps: int
     manifest_hash: str
+    codex_agent_execution_policy_hash: str = (
+        LEGACY_CODEX_AGENT_EXECUTION_POLICY.policy_hash
+    )
     program_id: str | None = None
     program_set_hash: str = ""
     treatment_hash: str = ""
@@ -274,6 +281,9 @@ class SkillLearnTrialRequest:
             "model": self.model,
             "max_steps": self.max_steps,
             "manifest_hash": self.manifest_hash,
+            "codex_agent_execution_policy_hash": (
+                self.codex_agent_execution_policy_hash
+            ),
             "program_id": self.program_id,
             "program_set_hash": self.program_set_hash,
             "treatment_hash": self.treatment_hash,
@@ -467,6 +477,8 @@ class SkillLearnTrialBackend(Protocol):
     agent_id: str
     model: str
     max_steps: int
+    codex_agent_execution_policy: CodexAgentExecutionPolicy
+    codex_agent_execution_policy_hash: str
 
     def run(
         self,
@@ -475,6 +487,17 @@ class SkillLearnTrialBackend(Protocol):
         skill_source_dir: Path | None,
         trace_id: str,
     ) -> SkillLearnTrialObservation: ...
+
+
+def codex_agent_execution_policy_for_backend(
+    backend: object,
+) -> CodexAgentExecutionPolicy:
+    policy = getattr(backend, "codex_agent_execution_policy", None)
+    return (
+        policy
+        if isinstance(policy, CodexAgentExecutionPolicy)
+        else LEGACY_CODEX_AGENT_EXECUTION_POLICY
+    )
 
 
 @dataclass(frozen=True)
@@ -891,15 +914,28 @@ class SkillLearnBackendPool:
         if not backends:
             raise ValueError("backend pool cannot be empty")
         first = backends[0]
+        first_policy = codex_agent_execution_policy_for_backend(first)
         if any(
-            (row.agent_id, row.model, row.max_steps)
-            != (first.agent_id, first.model, first.max_steps)
+            (
+                row.agent_id,
+                row.model,
+                row.max_steps,
+                codex_agent_execution_policy_for_backend(row).policy_hash,
+            )
+            != (
+                first.agent_id,
+                first.model,
+                first.max_steps,
+                first_policy.policy_hash,
+            )
             for row in backends
         ):
             raise ValueError("all pooled backends must share one frozen configuration")
         self.agent_id = first.agent_id
         self.model = first.model
         self.max_steps = first.max_steps
+        self.codex_agent_execution_policy = first_policy
+        self.codex_agent_execution_policy_hash = first_policy.policy_hash
         self._available: queue.Queue[SkillLearnTrialBackend] = queue.Queue()
         for backend in backends:
             self._available.put(backend)
@@ -938,12 +974,17 @@ class SkillLearnSubprocessBackend:
         prebuilt_cache: SkillLearnPrebuiltImageCache | None = None,
         offline_verifier_cache: SkillLearnOfflineVerifierRuntimeCache | None = None,
         provider_circuit: SkillLearnProviderCircuit | None = None,
+        codex_agent_execution_policy: CodexAgentExecutionPolicy = (
+            LEGACY_CODEX_AGENT_EXECUTION_POLICY
+        ),
         event_sink: EventSink | None = None,
     ) -> None:
         self.benchmark_root = Path(benchmark_root).expanduser().resolve()
         self.agent_id = agent_id
         self.model = model
         self.max_steps = max_steps
+        self.codex_agent_execution_policy = codex_agent_execution_policy
+        self.codex_agent_execution_policy_hash = codex_agent_execution_policy.policy_hash
         self.provider_mode = (
             provider_mode
             or (
@@ -1054,6 +1095,13 @@ class SkillLearnSubprocessBackend:
             raise ValueError("trial request does not match the frozen backend model configuration")
         if request.max_steps != self.max_steps:
             raise ValueError("trial request does not match the frozen backend step budget")
+        if (
+            request.codex_agent_execution_policy_hash
+            != self.codex_agent_execution_policy_hash
+        ):
+            raise ValueError(
+                "trial request does not match the frozen Codex agent execution policy"
+            )
         circuit_error = self.provider_circuit.error_type
         if circuit_error:
             self.event_sink.emit(
@@ -1162,6 +1210,12 @@ class SkillLearnSubprocessBackend:
                         else None
                     ),
                     "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+                    "codex_agent_execution_policy": (
+                        self.codex_agent_execution_policy.to_dict()
+                    ),
+                    "codex_agent_execution_policy_hash": (
+                        self.codex_agent_execution_policy_hash
+                    ),
                     "model_only_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
                     "trial_network_budget_policy": (
                         TRIAL_NETWORK_BUDGET_POLICY_VERSION
@@ -1545,6 +1599,7 @@ class SkillLearnSubprocessBackend:
             'otel.trace_exporter="none"',
             "--config",
             "tools.web_search=false",
+            *self.codex_agent_execution_policy.codex_cli_values(),
             "--config",
             (
                 "developer_instructions="
@@ -1631,6 +1686,12 @@ class SkillLearnSubprocessBackend:
                     "model_only_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
                     "network_minimization_version": (
                         CODEX_NETWORK_MINIMIZATION_VERSION
+                    ),
+                    "codex_agent_execution_policy": (
+                        self.codex_agent_execution_policy.to_dict()
+                    ),
+                    "codex_agent_execution_policy_hash": (
+                        self.codex_agent_execution_policy_hash
                     ),
                     "agent_setup": None,
                     "run_template_hash": stable_hash(
@@ -1840,6 +1901,7 @@ class SkillLearnSubprocessBackend:
             self.agent_id,
             self.model,
             self.provider_mode,
+            self.codex_agent_execution_policy,
         )
         fairness_fingerprint = _fairness_fingerprint(
             agent_id=self.agent_id,
@@ -1858,6 +1920,7 @@ class SkillLearnSubprocessBackend:
                 if offline_verifier_runtime
                 else ""
             ),
+            codex_agent_execution_policy=self.codex_agent_execution_policy,
         )
         sanitized_upstream = {
             "task_id_hash": stable_hash({"task_id": result.get("task_id")}),
@@ -1880,6 +1943,12 @@ class SkillLearnSubprocessBackend:
                 else None
             ),
             "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+            "codex_agent_execution_policy": (
+                self.codex_agent_execution_policy.to_dict()
+            ),
+            "codex_agent_execution_policy_hash": (
+                self.codex_agent_execution_policy_hash
+            ),
             "model_only_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
             "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
             "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
@@ -1993,6 +2062,7 @@ class SkillLearnSubprocessBackend:
             self.agent_id,
             self.model,
             self.provider_mode,
+            self.codex_agent_execution_policy,
         )
         fairness = _fairness_fingerprint(
             agent_id=self.agent_id,
@@ -2005,6 +2075,7 @@ class SkillLearnSubprocessBackend:
             prebuilt_image_key="",
             prebuilt_image_id="",
             offline_verifier_runtime_key="",
+            codex_agent_execution_policy=self.codex_agent_execution_policy,
         )
         return SkillLearnTrialObservation(
             request=request,
@@ -2184,6 +2255,8 @@ class SkillLearnCounterfactualRunner:
         self.manifest = manifest
         self.guard = guard
         self.backend = backend
+        backend_policy = codex_agent_execution_policy_for_backend(backend)
+        self.evidence_execution_policy_hash = backend_policy.policy_hash
         self.evaluator = evaluator
         self.compiler = compiler
         self.output_root = Path(output_root)
@@ -2608,6 +2681,12 @@ class SkillLearnCounterfactualRunner:
                     self.backend.agent_id,
                     self.backend.model,
                     provider_mode,
+                    codex_agent_execution_policy_for_backend(self.backend),
+                ),
+                "codex_agent_execution_policy_hash": (
+                    codex_agent_execution_policy_for_backend(
+                        self.backend
+                    ).policy_hash
                 ),
                 "baseline_behavior_set_hash": (
                     skilllearn_program_set_treatment_hash(baseline_programs)
@@ -2648,6 +2727,9 @@ class SkillLearnCounterfactualRunner:
             model=self.backend.model,
             max_steps=self.backend.max_steps,
             manifest_hash=self.manifest.manifest_hash,
+            codex_agent_execution_policy_hash=(
+                codex_agent_execution_policy_for_backend(self.backend).policy_hash
+            ),
             program_id=program_id,
             program_set_hash=program_set_hash,
             treatment_hash=treatment_hash,
@@ -3165,6 +3247,9 @@ class SkillLearnEvolutionHarness:
             model=self.backend.model,
             max_steps=self.backend.max_steps,
             manifest_hash=self.manifest.manifest_hash,
+            codex_agent_execution_policy_hash=(
+                codex_agent_execution_policy_for_backend(self.backend).policy_hash
+            ),
             program_set_hash=program_set_hash,
             treatment_hash=treatment_hash,
         )
@@ -3219,6 +3304,9 @@ class SkillLearnEvolutionHarness:
             "agent_id": self.backend.agent_id,
             "model": self.backend.model,
             "max_steps": self.backend.max_steps,
+            "codex_agent_execution_policy_hash": (
+                codex_agent_execution_policy_for_backend(self.backend).policy_hash
+            ),
             "incumbent_behavior_set_hash": stable_hash(
                 incumbent_behavior_hashes
             ),
@@ -3890,6 +3978,9 @@ def _fairness_fingerprint(
     prebuilt_image_key: str,
     prebuilt_image_id: str,
     offline_verifier_runtime_key: str,
+    codex_agent_execution_policy: CodexAgentExecutionPolicy = (
+        LEGACY_CODEX_AGENT_EXECUTION_POLICY
+    ),
 ) -> str:
     return stable_hash(
         {
@@ -3916,6 +4007,9 @@ def _fairness_fingerprint(
             "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
             "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
             "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+            "codex_agent_execution_policy_hash": (
+                codex_agent_execution_policy.policy_hash
+            ),
             "model_only_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
             "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
             "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
@@ -3932,7 +4026,14 @@ def _fairness_fingerprint(
     )
 
 
-def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
+def _provider_fingerprint(
+    agent_id: str,
+    model: str,
+    provider_mode: str,
+    codex_agent_execution_policy: CodexAgentExecutionPolicy = (
+        LEGACY_CODEX_AGENT_EXECUTION_POLICY
+    ),
+) -> str:
     base_url = (
         os.environ.get("ASSUMPTION_V2_API_BASE")
         or os.environ.get("OPENAI_BASE_URL")
@@ -3959,6 +4060,9 @@ def _provider_fingerprint(agent_id: str, model: str, provider_mode: str) -> str:
             "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
             "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
             "codex_network_minimization": CODEX_NETWORK_MINIMIZATION_VERSION,
+            "codex_agent_execution_policy_hash": (
+                codex_agent_execution_policy.policy_hash
+            ),
             "model_only_tool_policy": MODEL_ONLY_TOOL_POLICY_VERSION,
             "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
             "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
@@ -4441,6 +4545,8 @@ def _validate_training_observations(
         or row.request.agent_id != descriptor.get("agent_id")
         or row.request.model != descriptor.get("model")
         or row.request.max_steps != descriptor.get("max_steps")
+        or row.request.codex_agent_execution_policy_hash
+        != descriptor.get("codex_agent_execution_policy_hash")
         for row in observations
     ):
         raise PermissionError("training replay crossed a frozen execution boundary")

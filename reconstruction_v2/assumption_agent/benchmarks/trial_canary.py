@@ -8,11 +8,15 @@ from pathlib import Path
 from ..events import JsonlEventSink
 from ..models import SplitName, stable_hash
 from ..secure_env import (
+    configured_api_origin,
     configured_model,
     configured_skilllearn_provider_mode,
     load_dotenv,
     map_legacy_model_env,
 )
+from ..splits import SplitManifest
+from .docker_egress import configured_trial_network_byte_limit
+from .paper_protocol import PaperProtocol
 from .skilllearn_lifecycle import (
     SkillLearnPrebuiltImageCache,
     SkillLearnSubprocessBackend,
@@ -27,19 +31,38 @@ def main() -> None:
         description="Run one diagnostic raw SkillLearnBench trial without retry or learning."
     )
     parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--protocol", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--env-file", type=Path, required=True)
     parser.add_argument("--family", required=True)
     parser.add_argument("--item-id", required=True)
-    parser.add_argument("--allowed-ipv4", action="append", required=True)
     parser.add_argument("--trials-dir", type=Path, required=True)
     parser.add_argument("--events", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--max-steps", type=int, default=100)
     args = parser.parse_args()
 
     load_dotenv(args.env_file)
     map_legacy_model_env()
-    os.environ["ASSUMPTION_V2_API_ALLOWED_IPV4S"] = ",".join(args.allowed_ipv4)
+    protocol = PaperProtocol.read(args.protocol)
+    manifest = SplitManifest.read(args.manifest)
+    protocol_root = protocol.path.parent.parent
+    if args.manifest.expanduser().resolve() != (
+        protocol_root / str(protocol.payload["primary_manifest"])
+    ).resolve():
+        raise ValueError("diagnostic canary requires the frozen primary manifest")
+    if configured_model() != protocol.payload["model"]:
+        raise ValueError("diagnostic canary model does not match the protocol")
+    if configured_skilllearn_provider_mode() != protocol.payload["trial_provider_mode"]:
+        raise ValueError("diagnostic canary provider mode does not match the protocol")
+    if configured_api_origin() != protocol.payload["provider_endpoint_origin"]:
+        raise ValueError("diagnostic canary provider endpoint does not match the protocol")
+    if configured_trial_network_byte_limit() != protocol.payload["execution"][
+        "trial_network_byte_limit"
+    ]:
+        raise ValueError("diagnostic canary network cap does not match the protocol")
+    os.environ["ASSUMPTION_V2_API_ALLOWED_IPV4S"] = ",".join(
+        str(value) for value in protocol.payload["provider_endpoint_ipv4s"]
+    )
     os.environ["ASSUMPTION_V2_SKILLLEARN_CACHE_ONLY"] = "1"
     root = args.root.expanduser().resolve()
     adapter = SkillLearnBenchAdapter(root)
@@ -53,18 +76,24 @@ def main() -> None:
     )
     if item is None:
         raise ValueError("canary item is absent from the local benchmark inventory")
+    if args.item_id not in manifest.train_ids or manifest.family_by_id.get(
+        args.item_id
+    ) != args.family:
+        raise PermissionError("diagnostic canary item is not in the frozen train split")
     sink = JsonlEventSink(args.events)
     cache = SkillLearnPrebuiltImageCache(root, cache_only=True, event_sink=sink)
-    model = configured_model()
-    provider_mode = configured_skilllearn_provider_mode()
+    model = str(protocol.payload["model"])
+    provider_mode = str(protocol.payload["trial_provider_mode"])
+    max_steps = int(protocol.payload["max_steps"])
     backend = SkillLearnSubprocessBackend(
         root,
         model=model,
-        max_steps=args.max_steps,
+        max_steps=max_steps,
         provider_mode=provider_mode,
         trials_dir=args.trials_dir,
         record_upstream=True,
         prebuilt_cache=cache,
+        codex_agent_execution_policy=protocol.codex_agent_execution_policy,
         event_sink=sink,
     )
     request = SkillLearnTrialRequest(
@@ -77,13 +106,10 @@ def main() -> None:
         repeat=0,
         agent_id="codex",
         model=model,
-        max_steps=args.max_steps,
-        manifest_hash=stable_hash(
-            {
-                "diagnostic": True,
-                "family": args.family,
-                "item_id": args.item_id,
-            }
+        max_steps=max_steps,
+        manifest_hash=manifest.manifest_hash,
+        codex_agent_execution_policy_hash=(
+            protocol.codex_agent_execution_policy.policy_hash
         ),
     )
     observation = backend.run(
@@ -93,6 +119,15 @@ def main() -> None:
     )
     payload = {
         "report_version": "skilllearn_single_trial_canary_v1",
+        "paper_protocol_id": protocol.id,
+        "paper_protocol_hash": protocol.protocol_hash,
+        "manifest_hash": manifest.manifest_hash,
+        "codex_agent_execution_policy": (
+            protocol.codex_agent_execution_policy.to_dict()
+        ),
+        "codex_agent_execution_policy_hash": (
+            protocol.codex_agent_execution_policy.policy_hash
+        ),
         "claim_eligible": False,
         "learning_enabled": False,
         "retry_enabled": False,

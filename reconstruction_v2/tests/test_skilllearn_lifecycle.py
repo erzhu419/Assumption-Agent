@@ -43,6 +43,12 @@ from assumption_agent.benchmarks.skilllearn_lifecycle import (
     _parse_docker_byte_size,
     _parse_docker_net_io,
     _run_invalid_only_trial,
+    _fairness_fingerprint,
+    _provider_fingerprint,
+)
+from assumption_agent.benchmarks.codex_execution_policy import (
+    LEGACY_CODEX_AGENT_EXECUTION_POLICY,
+    LOW_REASONING_LOCAL_COMPACTION_POLICY,
 )
 from assumption_agent.benchmarks.docker_egress import DockerEgressPolicy
 from assumption_agent.benchmarks.offline_verifier import (
@@ -1652,6 +1658,93 @@ def test_family_out_compiler_targets_unseen_validation_families(tmp_path: Path) 
     assert all("items" in path.parts for path in compiled.skill_paths)
 
 
+def test_low_reasoning_local_compaction_policy_renders_exact_codex_cli_values() -> None:
+    assert LOW_REASONING_LOCAL_COMPACTION_POLICY.codex_cli_values() == (
+        "--config",
+        'model_reasoning_effort="low"',
+        "--config",
+        'model_verbosity="low"',
+        "--config",
+        "model_auto_compact_token_limit=32768",
+        "--config",
+        'model_auto_compact_token_limit_scope="body_after_prefix"',
+        "--config",
+        "tool_output_token_limit=10000",
+        "--enable",
+        "enable_request_compression",
+        "--disable",
+        "remote_compaction_v2",
+    )
+
+
+def test_agent_execution_policy_changes_request_and_execution_fingerprints() -> None:
+    request = SkillLearnTrialRequest(
+        item_id="item",
+        family="family",
+        split=SplitName.TRAIN,
+        variant=TrialVariant.POLICY_OFF,
+        evaluator_epoch="epoch",
+        pair_id="pair",
+        repeat=1,
+        agent_id="codex",
+        model="gpt-5.4-mini",
+        max_steps=100,
+        manifest_hash="manifest",
+    )
+    compact_request = replace(
+        request,
+        codex_agent_execution_policy_hash=(
+            LOW_REASONING_LOCAL_COMPACTION_POLICY.policy_hash
+        ),
+    )
+    assert request.request_hash != compact_request.request_hash
+
+    legacy_provider = _provider_fingerprint(
+        "codex",
+        "gpt-5.4-mini",
+        "openai_compatible",
+        LEGACY_CODEX_AGENT_EXECUTION_POLICY,
+    )
+    compact_provider = _provider_fingerprint(
+        "codex",
+        "gpt-5.4-mini",
+        "openai_compatible",
+        LOW_REASONING_LOCAL_COMPACTION_POLICY,
+    )
+    assert legacy_provider != compact_provider
+    common = {
+        "agent_id": "codex",
+        "model": "gpt-5.4-mini",
+        "provider_mode": "openai_compatible",
+        "max_steps": 100,
+        "prebuilt_enabled": True,
+        "agent_runtime_key": "runtime",
+        "prebuilt_image_key": "image",
+        "prebuilt_image_id": "sha256:image",
+        "offline_verifier_runtime_key": "verifier",
+    }
+    assert _fairness_fingerprint(
+        **common,
+        provider_fingerprint=legacy_provider,
+        codex_agent_execution_policy=LEGACY_CODEX_AGENT_EXECUTION_POLICY,
+    ) != _fairness_fingerprint(
+        **common,
+        provider_fingerprint=compact_provider,
+        codex_agent_execution_policy=LOW_REASONING_LOCAL_COMPACTION_POLICY,
+    )
+
+
+def test_backend_pool_rejects_mixed_agent_execution_policies() -> None:
+    legacy = SkillLearnSubprocessBackend(BENCH_ROOT)
+    compact = SkillLearnSubprocessBackend(
+        BENCH_ROOT,
+        codex_agent_execution_policy=LOW_REASONING_LOCAL_COMPACTION_POLICY,
+    )
+
+    with pytest.raises(ValueError, match="frozen configuration"):
+        SkillLearnBackendPool((legacy, compact))
+
+
 def test_openai_compatible_trial_compiles_sanitized_codex_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1684,6 +1777,7 @@ def test_openai_compatible_trial_compiles_sanitized_codex_provider(
         model="gpt-5.4-mini",
         provider_mode="openai_compatible",
         record_upstream=False,
+        codex_agent_execution_policy=LOW_REASONING_LOCAL_COMPACTION_POLICY,
         event_sink=sink,
     )
 
@@ -1697,6 +1791,13 @@ def test_openai_compatible_trial_compiles_sanitized_codex_provider(
         assert "--ephemeral" in run_template
         assert "--strict-config" in run_template
         assert "tools.web_search=false" in run_template
+        assert 'model_reasoning_effort="low"' in run_template
+        assert 'model_verbosity="low"' in run_template
+        assert "model_auto_compact_token_limit=32768" in run_template
+        assert 'model_auto_compact_token_limit_scope="body_after_prefix"' in run_template
+        assert "tool_output_token_limit=10000" in run_template
+        assert "enable_request_compression" in run_template
+        assert "remote_compaction_v2" in run_template
         assert "image_generation" in run_template
         assert "standalone_web_search" in run_template
         assert "package installation" in run_template
