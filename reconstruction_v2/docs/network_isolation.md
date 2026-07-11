@@ -48,10 +48,24 @@ Frozen mirror endpoint:
 https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
-The first profile, `anthropic-poster-py312-v1`, pins pytest, CTRF, Pillow,
-NumPy, and python-docx. Preparation downloaded 13 wheels (31,557,639 bytes)
-from TUNA once. Installation, import validation, and subsequent verifier runs
-use Docker `--network none`; the runtime is mounted read-only.
+Six content-addressed profiles now cover 76 tasks across Python 3.8, 3.10, 3.11,
+and 3.12. Together with five network-free dbscan tasks, this gives 81/95
+credential-independent tasks a local verifier path. The poster profile pins
+pytest, CTRF, Pillow, NumPy, and python-docx; the shared light profiles add only
+pytest/CTRF and pypinyin where required. Larger packages such as pandas,
+python-docx, PyPDF2, and OpenCV already exist in their immutable task images and
+are not downloaded again.
+
+The cached wheelhouses total 40,893,608 bytes: 31,557,639 bytes for the original
+poster profile and 9,335,969 bytes for the five additional ABI/profile sets.
+Their initial downloads used TUNA. The v2 runtime rebuild reused every
+wheelhouse, attempted zero downloads, and installed and probed all six volumes
+with Docker `--network none`. Runtime volumes are mounted read-only during
+evaluation.
+
+The v2 verifier wrapper also preserves the local semantic/audit behavior that
+is independent of package installation: `/root` working directory,
+`RESULTS_PATH`, court PDFs, the dependency-audit CSV, and the travel itinerary.
 
 Preparation is explicit and is not called by the evaluation pipeline:
 
@@ -59,12 +73,24 @@ Preparation is explicit and is not called by the evaluation pipeline:
 sg docker -c 'env PYTHONPATH=. python3 -m assumption_agent.benchmarks.offline_verifier \
   --profile anthropic-poster-py312-v1 \
   --base-image-tag assumption-v2-item:d8eaa6ca2b652f13fe2145e7 \
-  --report artifacts/offline_verifier_prep/poster.json'
+  --report artifacts/offline_verifier_prep/poster.json \
+  --events artifacts/offline_verifier_prep/events.jsonl'
+```
+
+The train-only verifier matrix is also offline and model-free:
+
+```bash
+sg docker -c 'env PYTHONPATH=. python3 -m \
+  assumption_agent.benchmarks.offline_verifier_matrix \
+  --root reference/self_evo_continual_20260707/repos/SkillLearnBench \
+  --manifest manifests/skilllearnbench_instance_holdout_credential_independent_v1.json \
+  --output-root artifacts/offline_verifier_matrix \
+  --events artifacts/offline_verifier_matrix/events.jsonl'
 ```
 
 See `docs/skilllearn_offline_verifier_matrix.md` for family coverage. A full
-paper run remains blocked until every selected family is either localized or
-excluded by a preregistered infrastructure rule.
+95-task paper run remains blocked on 14 tasks until every selected family is
+either localized or excluded by a preregistered infrastructure rule.
 
 The 2026-07-11 local probe resolved the host to `101.6.15.130` and downloaded the
 11,053-byte `six==1.16.0` wheel entirely from the same host. Router policy should

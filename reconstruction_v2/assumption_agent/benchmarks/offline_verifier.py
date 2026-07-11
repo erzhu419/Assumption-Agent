@@ -13,11 +13,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from ..events import Event, EventSink, NullEventSink
+from ..events import Event, EventSink, JsonlEventSink, NullEventSink
 from ..models import stable_hash
 
 
-OFFLINE_VERIFIER_POLICY_VERSION = "family_profile_readonly_volume_v1"
+OFFLINE_VERIFIER_POLICY_VERSION = "family_profile_readonly_volume_v2"
 OFFLINE_VERIFIER_MOUNT = "/opt/assumption-v2-verifier"
 TUNA_PYPI_INDEX_URL = "https://pypi.tuna.tsinghua.edu.cn/simple"
 TUNA_PYPI_HOST = "pypi.tuna.tsinghua.edu.cn"
@@ -25,6 +25,13 @@ _RUNTIME_NETWORK_COMMAND = re.compile(
     r"(?:^|[;&|]\s*)(?:sudo\s+)?(?:apt(?:-get)?|pip3?|uvx|curl|wget|npm|pnpm|yarn|npx)\b"
     r"|\bpython(?:3(?:\.\d+)?)?\s+-m\s+pip\b",
     re.IGNORECASE | re.MULTILINE,
+)
+_DIAGNOSTIC_SECRET = re.compile(
+    r"(?i)(?:(?:sk-|s2k-|ghp_|hf_)[a-z0-9_-]{8,}|bearer\s+\S+|"
+    r"https?://[^\s/:@]+:[^\s/@]+@)"
+)
+_DIAGNOSTIC_SIGNAL = re.compile(
+    r"(?i)(?:error|failed|requires-python|ignored|no matching distribution|not found)"
 )
 
 
@@ -54,16 +61,35 @@ class OfflineVerifierProfile:
         )
 
     @property
+    def wheelhouse_key(self) -> str:
+        return stable_hash(
+            {
+                "requirements": self.requirements,
+                "python_version": self.python_version,
+                "python_abi": self.python_abi,
+                "platform": self.platform,
+            }
+        )
+
+    @property
     def verifier_command(self) -> str:
         site = f"{OFFLINE_VERIFIER_MOUNT}/site"
         return (
-            "set -u; mkdir -p /logs/verifier; "
+            "set -u; mkdir -p /logs/verifier; cd /root; "
             "rm -f /logs/verifier/ctrf.json /logs/verifier/reward.txt; "
+            "export RESULTS_PATH=/root/results.json WORKING_DIR=/root; "
             f"PYTHONPATH={site} PYTHONNOUSERSITE=1 PIP_NO_INDEX=1 "
             "PIP_DISABLE_PIP_VERSION_CHECK=1 UV_OFFLINE=1 HF_HUB_OFFLINE=1 "
             "TRANSFORMERS_OFFLINE=1 python3 -m pytest "
             "--ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA -v; "
-            "status=$?; if [ \"$status\" -eq 0 ]; then "
+            "status=$?; "
+            "cp /root/sc100-filled.pdf /logs/verifier/sc100-filled.pdf 2>/dev/null || true; "
+            "cp /root/sc100-blank.pdf /logs/verifier/sc100-blank.pdf 2>/dev/null || true; "
+            "cp /root/security_audit.csv /logs/verifier/security_audit.csv "
+            "2>/dev/null || true; "
+            "cp /app/output/itinerary.json /logs/verifier/itinerary.json "
+            "2>/dev/null || true; "
+            "if [ \"$status\" -eq 0 ]; then "
             "echo 1 > /logs/verifier/reward.txt; else "
             "echo 0 > /logs/verifier/reward.txt; fi; exit 0"
         )
@@ -88,7 +114,83 @@ POSTER_VERIFIER_PROFILE = OfflineVerifierProfile(
     ),
 )
 
-OFFLINE_VERIFIER_PROFILES = (POSTER_VERIFIER_PROFILE,)
+COMMON_PY312_VERIFIER_PROFILE = OfflineVerifierProfile(
+    profile_id="common-pytest-ctrf-py312-v1",
+    families=(
+        "court-form-filling",
+        "enterprise-information-search",
+        "financial-analysis",
+        "offer-letter-generator",
+        "organize-messy-files",
+        "schedule-planning",
+        "stock-data-visualization",
+        "video-object-counting",
+    ),
+    requirements=("pytest==8.4.1", "pytest-json-ctrf==0.3.5"),
+    import_probe=(
+        "import pytest; assert pytest.__version__ == '8.4.1'"
+    ),
+)
+
+CHINESE_POEM_VERIFIER_PROFILE = OfflineVerifierProfile(
+    profile_id="chinese-poem-py312-v1",
+    families=("chinese-poem-generator",),
+    requirements=(
+        "pytest==8.4.1",
+        "pytest-json-ctrf==0.3.5",
+        "pypinyin==0.55.0",
+    ),
+    import_probe=(
+        "import pytest, pypinyin; "
+        "assert pytest.__version__ == '8.4.1'; "
+        "assert pypinyin.__version__ == '0.55.0'"
+    ),
+)
+
+COMMON_PY310_VERIFIER_PROFILE = OfflineVerifierProfile(
+    profile_id="common-pytest-ctrf-py310-v1",
+    families=(
+        "dependency-vulnerability-check",
+        "earthquake-plate-calculation",
+    ),
+    requirements=("pytest==8.4.1", "pytest-json-ctrf==0.3.5"),
+    import_probe=(
+        "import pytest; assert pytest.__version__ == '8.4.1'"
+    ),
+    python_version="3.10",
+    python_abi="cp310",
+)
+
+COMMON_PY311_VERIFIER_PROFILE = OfflineVerifierProfile(
+    profile_id="common-pytest-ctrf-py311-v1",
+    families=("travel-planning",),
+    requirements=("pytest==8.4.1", "pytest-json-ctrf==0.3.5"),
+    import_probe=(
+        "import pytest; assert pytest.__version__ == '8.4.1'"
+    ),
+    python_version="3.11",
+    python_abi="cp311",
+)
+
+COMMON_PY38_VERIFIER_PROFILE = OfflineVerifierProfile(
+    profile_id="common-pytest-ctrf-py38-v1",
+    families=("temperature-simulation",),
+    requirements=("pytest==8.3.5", "pytest-json-ctrf==0.4.1"),
+    import_probe=(
+        "import pytest; assert pytest.__version__ == '8.3.5'"
+    ),
+    python_version="3.8",
+    python_abi="cp38",
+)
+
+OFFLINE_VERIFIER_PROFILES = (
+    POSTER_VERIFIER_PROFILE,
+    COMMON_PY312_VERIFIER_PROFILE,
+    CHINESE_POEM_VERIFIER_PROFILE,
+    COMMON_PY310_VERIFIER_PROFILE,
+    COMMON_PY311_VERIFIER_PROFILE,
+    COMMON_PY38_VERIFIER_PROFILE,
+)
 
 
 def offline_verifier_profile_for_family(
@@ -139,10 +241,7 @@ class SkillLearnOfflineVerifierRuntimeCache:
         delegate: Any,
         trace_id: str,
     ) -> OfflineVerifierRuntime:
-        runtime_key = offline_verifier_runtime_key(
-            profile=profile,
-            base_image_id=base_image_id,
-        )
+        runtime_key = offline_verifier_runtime_key(profile=profile)
         volume_name = offline_verifier_volume_name(runtime_key)
         inspected = delegate.run(
             ["docker", "volume", "inspect", volume_name],
@@ -247,13 +346,12 @@ class SkillLearnOfflineVerifierRuntimeCache:
 def offline_verifier_runtime_key(
     *,
     profile: OfflineVerifierProfile,
-    base_image_id: str,
 ) -> str:
     return stable_hash(
         {
             "policy": OFFLINE_VERIFIER_POLICY_VERSION,
+            "runtime_scope": "profile_python_abi_v1",
             "profile_hash": profile.profile_hash,
-            "base_image_id": base_image_id,
         }
     )
 
@@ -269,22 +367,39 @@ def prepare_offline_verifier_runtime(
     report_path: Path,
     refresh_wheels: bool = False,
     delegate: Any = subprocess,
+    event_sink: EventSink | None = None,
+    trace_id: str = "offline-verifier-prepare",
 ) -> Mapping[str, Any]:
+    sink = event_sink or NullEventSink()
+    _emit_preparation_event(
+        sink,
+        event="skilllearn_offline_verifier_preparation_started",
+        trace_id=trace_id,
+        profile=profile,
+        payload={
+            "base_image_tag_hash": stable_hash({"tag": base_image_tag}),
+            "refresh_wheels": refresh_wheels,
+        },
+    )
     image = delegate.run(
         ["docker", "image", "inspect", base_image_tag],
         capture_output=True,
         text=True,
     )
     if int(getattr(image, "returncode", 1)) != 0:
+        _emit_preparation_failure(
+            sink,
+            trace_id=trace_id,
+            profile=profile,
+            step="base_image_inspect",
+            completed=image,
+        )
         raise RuntimeError("offline verifier base image is unavailable")
     image_payload = json.loads(str(getattr(image, "stdout", "") or ""))[0]
     base_image_id = str(image_payload.get("Id") or "")
     if not base_image_id.startswith("sha256:"):
         raise RuntimeError("offline verifier base image has no immutable ID")
-    runtime_key = offline_verifier_runtime_key(
-        profile=profile,
-        base_image_id=base_image_id,
-    )
+    runtime_key = offline_verifier_runtime_key(profile=profile)
     volume_name = offline_verifier_volume_name(runtime_key)
     cache_root = Path(
         os.environ.get(
@@ -292,14 +407,18 @@ def prepare_offline_verifier_runtime(
             Path.home() / ".cache" / "assumption-agent-v2" / "offline-verifier",
         )
     ).expanduser().resolve()
-    wheelhouse = cache_root / profile.profile_hash / "wheels"
+    wheelhouse = cache_root / "wheelhouses" / profile.wheelhouse_key / "wheels"
+    legacy_wheelhouse = cache_root / profile.profile_hash / "wheels"
+    if not wheelhouse.exists() and legacy_wheelhouse.is_dir():
+        wheelhouse.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(legacy_wheelhouse, wheelhouse)
     if refresh_wheels and wheelhouse.exists():
         shutil.rmtree(wheelhouse)
     wheelhouse.mkdir(parents=True, exist_ok=True)
     wheels = tuple(sorted(wheelhouse.glob("*.whl")))
     wheelhouse_reused = bool(wheels) and not refresh_wheels
     online_download_attempted = False
-    runtime_cache = SkillLearnOfflineVerifierRuntimeCache()
+    runtime_cache = SkillLearnOfflineVerifierRuntimeCache(event_sink=sink)
     runtime_reused = False
     if not refresh_wheels:
         try:
@@ -317,9 +436,35 @@ def prepare_offline_verifier_runtime(
                 "offline_verifier_runtime_probe_failed",
             }:
                 raise
+    _emit_preparation_event(
+        sink,
+        event="skilllearn_offline_verifier_cache_checked",
+        trace_id=trace_id,
+        profile=profile,
+        payload={
+            "runtime_key": runtime_key,
+            "runtime_reused": runtime_reused,
+            "wheelhouse_key": profile.wheelhouse_key,
+            "wheelhouse_reused": wheelhouse_reused,
+            "wheel_count": len(wheels),
+        },
+    )
     if not runtime_reused:
         if not wheels:
             online_download_attempted = True
+            _emit_preparation_event(
+                sink,
+                event="skilllearn_offline_verifier_wheel_download_started",
+                trace_id=trace_id,
+                profile=profile,
+                payload={
+                    "package_index_origin": TUNA_PYPI_INDEX_URL,
+                    "requirements_hash": stable_hash(profile.requirements),
+                    "python_version": profile.python_version,
+                    "python_abi": profile.python_abi,
+                    "platform": profile.platform,
+                },
+            )
             download_command = [
                 sys.executable,
                 "-m",
@@ -357,9 +502,37 @@ def prepare_offline_verifier_runtime(
                 },
             )
             if int(getattr(downloaded, "returncode", 1)) != 0:
+                _emit_preparation_failure(
+                    sink,
+                    trace_id=trace_id,
+                    profile=profile,
+                    step="wheel_download",
+                    completed=downloaded,
+                )
                 raise RuntimeError("offline verifier wheel download failed")
             wheels = tuple(sorted(wheelhouse.glob("*.whl")))
             wheelhouse_reused = False
+            _emit_preparation_event(
+                sink,
+                event="skilllearn_offline_verifier_wheel_download_completed",
+                trace_id=trace_id,
+                profile=profile,
+                payload={
+                    "package_index_origin": TUNA_PYPI_INDEX_URL,
+                    "wheel_count": len(wheels),
+                    "wheel_total_bytes": sum(path.stat().st_size for path in wheels),
+                    "wheel_set_hash": stable_hash(
+                        [
+                            {
+                                "filename": path.name,
+                                "size": path.stat().st_size,
+                                "sha256": _sha256(path),
+                            }
+                            for path in wheels
+                        ]
+                    ),
+                },
+            )
         if not wheels:
             raise RuntimeError("offline verifier wheelhouse is empty")
         delegate.run(
@@ -384,6 +557,13 @@ def prepare_offline_verifier_runtime(
             text=True,
         )
         if int(getattr(created, "returncode", 1)) != 0:
+            _emit_preparation_failure(
+                sink,
+                trace_id=trace_id,
+                profile=profile,
+                step="runtime_volume_create",
+                completed=created,
+            )
             raise RuntimeError("offline verifier volume creation failed")
         install_command = (
             "set -eu; rm -rf /runtime/site; mkdir -p /runtime/site; "
@@ -391,6 +571,17 @@ def prepare_offline_verifier_runtime(
             "--disable-pip-version-check --find-links=/wheels "
             "--target=/runtime/site "
             + " ".join(profile.requirements)
+        )
+        _emit_preparation_event(
+            sink,
+            event="skilllearn_offline_verifier_install_started",
+            trace_id=trace_id,
+            profile=profile,
+            payload={
+                "runtime_key": runtime_key,
+                "wheel_count": len(wheels),
+                "container_network": "none",
+            },
         )
         installed = delegate.run(
             [
@@ -419,6 +610,13 @@ def prepare_offline_verifier_runtime(
                 capture_output=True,
                 text=True,
             )
+            _emit_preparation_failure(
+                sink,
+                trace_id=trace_id,
+                profile=profile,
+                step="runtime_wheel_install",
+                completed=installed,
+            )
             raise RuntimeError("offline verifier wheel installation failed")
         runtime_cache.ensure(
             profile=profile,
@@ -426,6 +624,17 @@ def prepare_offline_verifier_runtime(
             base_image_id=base_image_id,
             delegate=delegate,
             trace_id="offline-verifier-prepare-verify",
+        )
+        _emit_preparation_event(
+            sink,
+            event="skilllearn_offline_verifier_install_completed",
+            trace_id=trace_id,
+            profile=profile,
+            payload={
+                "runtime_key": runtime_key,
+                "container_network": "none",
+                "probe_passed": True,
+            },
         )
     report: dict[str, Any] = {
         "report_version": "offline_verifier_preparation_receipt_v2",
@@ -460,6 +669,22 @@ def prepare_offline_verifier_runtime(
     report["receipt_hash"] = stable_hash(report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _emit_preparation_event(
+        sink,
+        event="skilllearn_offline_verifier_preparation_completed",
+        trace_id=trace_id,
+        profile=profile,
+        payload={
+            "runtime_key": runtime_key,
+            "runtime_reused": runtime_reused,
+            "wheelhouse_reused": wheelhouse_reused,
+            "online_download_attempted": online_download_attempted,
+            "wheel_count": len(wheels),
+            "wheel_total_bytes": report["wheel_total_bytes"],
+            "receipt_hash": report["receipt_hash"],
+            "probe_passed": True,
+        },
+    )
     return report
 
 
@@ -471,7 +696,10 @@ def probe_offline_verifier_runtime(
     tests_dir: Path,
     report_path: Path,
     delegate: Any = subprocess,
+    event_sink: EventSink | None = None,
+    trace_id: str = "offline-verifier-probe",
 ) -> Mapping[str, Any]:
+    sink = event_sink or NullEventSink()
     workspace = workspace.expanduser().resolve()
     tests_dir = tests_dir.expanduser().resolve()
     if not workspace.is_dir():
@@ -487,17 +715,26 @@ def probe_offline_verifier_runtime(
         raise RuntimeError("offline verifier probe base image is unavailable")
     image_payload = json.loads(str(getattr(image, "stdout", "") or ""))[0]
     base_image_id = str(image_payload.get("Id") or "")
-    runtime_key = offline_verifier_runtime_key(
-        profile=profile,
-        base_image_id=base_image_id,
-    )
+    runtime_key = offline_verifier_runtime_key(profile=profile)
     volume_name = offline_verifier_volume_name(runtime_key)
-    SkillLearnOfflineVerifierRuntimeCache().ensure(
+    _emit_preparation_event(
+        sink,
+        event="skilllearn_offline_verifier_probe_started",
+        trace_id=trace_id,
+        profile=profile,
+        payload={
+            "base_image_tag_hash": stable_hash({"tag": base_image_tag}),
+            "workspace_hash": _directory_hash(workspace),
+            "tests_hash": _directory_hash(tests_dir),
+            "container_network": "none",
+        },
+    )
+    SkillLearnOfflineVerifierRuntimeCache(event_sink=sink).ensure(
         profile=profile,
         base_image_tag=base_image_tag,
         base_image_id=base_image_id,
         delegate=delegate,
-        trace_id="offline-verifier-probe",
+        trace_id=f"{trace_id}:runtime",
     )
     with tempfile.TemporaryDirectory(
         prefix="assumption-v2-verifier-probe-"
@@ -570,7 +807,84 @@ def probe_offline_verifier_runtime(
     report["receipt_hash"] = stable_hash(report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _emit_preparation_event(
+        sink,
+        event="skilllearn_offline_verifier_probe_completed",
+        trace_id=trace_id,
+        profile=profile,
+        payload={
+            "runtime_key": runtime_key,
+            "container_network": "none",
+            "reward": reward,
+            "test_count": test_count,
+            "probe_passed": report["probe_passed"],
+            "receipt_hash": report["receipt_hash"],
+        },
+    )
     return report
+
+
+def _emit_preparation_event(
+    sink: EventSink,
+    *,
+    event: str,
+    trace_id: str,
+    profile: OfflineVerifierProfile,
+    payload: Mapping[str, Any],
+) -> None:
+    sink.emit(
+        Event(
+            event=event,
+            stage="benchmark.skilllearn.offline_verifier_preparation",
+            trace_id=trace_id,
+            payload={
+                "policy": OFFLINE_VERIFIER_POLICY_VERSION,
+                "profile_id": profile.profile_id,
+                "profile_hash": profile.profile_hash,
+                **dict(payload),
+                "secret_value_persisted": False,
+                "raw_content_persisted": False,
+            },
+        )
+    )
+
+
+def _emit_preparation_failure(
+    sink: EventSink,
+    *,
+    trace_id: str,
+    profile: OfflineVerifierProfile,
+    step: str,
+    completed: Any,
+) -> None:
+    _emit_preparation_event(
+        sink,
+        event="skilllearn_offline_verifier_preparation_failed",
+        trace_id=trace_id,
+        profile=profile,
+        payload={
+            "step": step,
+            **_process_failure_diagnostic(completed),
+        },
+    )
+
+
+def _process_failure_diagnostic(completed: Any) -> dict[str, Any]:
+    stdout = str(getattr(completed, "stdout", "") or "")
+    stderr = str(getattr(completed, "stderr", "") or "")
+    combined = "\n".join(value for value in (stdout, stderr) if value)
+    signal_lines = [
+        _DIAGNOSTIC_SECRET.sub("[REDACTED]", line.strip())
+        for line in combined.splitlines()
+        if _DIAGNOSTIC_SIGNAL.search(line)
+    ]
+    summary = "\n".join(signal_lines[-12:])[-2000:]
+    return {
+        "return_code": int(getattr(completed, "returncode", 1)),
+        "process_output_hash": stable_hash({"stdout": stdout, "stderr": stderr}),
+        "diagnostic_summary": summary or None,
+        "diagnostic_summary_persisted": bool(summary),
+    }
 
 
 def _sha256(path: Path) -> str:
@@ -607,6 +921,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--probe-workspace", type=Path)
     parser.add_argument("--probe-tests", type=Path)
     parser.add_argument("--refresh-wheels", action="store_true")
+    parser.add_argument("--events", type=Path)
     args = parser.parse_args(argv)
     profile = next(
         (row for row in OFFLINE_VERIFIER_PROFILES if row.profile_id == args.profile),
@@ -616,6 +931,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
         raise ValueError(f"unknown offline verifier profile: {args.profile}")
     if (args.probe_workspace is None) != (args.probe_tests is None):
         raise ValueError("offline verifier probe requires workspace and tests together")
+    sink = JsonlEventSink(args.events) if args.events is not None else None
     if args.probe_workspace is not None:
         report = probe_offline_verifier_runtime(
             profile=profile,
@@ -623,6 +939,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
             workspace=args.probe_workspace,
             tests_dir=args.probe_tests,
             report_path=args.report,
+            event_sink=sink,
         )
     else:
         report = prepare_offline_verifier_runtime(
@@ -630,6 +947,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
             base_image_tag=args.base_image_tag,
             report_path=args.report,
             refresh_wheels=args.refresh_wheels,
+            event_sink=sink,
         )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0

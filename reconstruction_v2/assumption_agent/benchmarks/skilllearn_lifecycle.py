@@ -960,6 +960,40 @@ class SkillLearnSubprocessBackend:
             trace_id=trace_id,
         )
 
+    def prewarm_trial_environment(
+        self,
+        *,
+        family: str,
+        item_id: str,
+        trace_id: str,
+    ) -> tuple[SkillLearnPrebuiltImage, OfflineVerifierRuntime | None]:
+        image = self.prewarm_environment(
+            family=family,
+            item_id=item_id,
+            trace_id=trace_id,
+        )
+        profile = offline_verifier_profile_for_family(family)
+        test_script = (
+            self.benchmark_root
+            / "tasks"
+            / family
+            / item_id
+            / "tests"
+            / "test.sh"
+        )
+        if profile is None:
+            if test_script_requires_offline_profile(test_script):
+                raise RuntimeError("offline_verifier_profile_missing")
+            return image, None
+        runtime = self.offline_verifier_cache.ensure(
+            profile=profile,
+            base_image_tag=image.tag,
+            base_image_id=image.image_id,
+            delegate=self._load_runner().subprocess,
+            trace_id=f"{trace_id}:offline-verifier",
+        )
+        return image, runtime
+
     def run(
         self,
         request: SkillLearnTrialRequest,

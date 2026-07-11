@@ -12,6 +12,11 @@ from assumption_agent.benchmarks.prewarm import (
 )
 from assumption_agent.benchmarks.skilllearnbench import SkillLearnBenchAdapter
 from assumption_agent.benchmarks.docker_egress import DEPENDENCY_CACHE_POLICY_VERSION
+from assumption_agent.benchmarks.offline_verifier import (
+    OFFLINE_VERIFIER_POLICY_VERSION,
+    offline_verifier_profile_for_family,
+    offline_verifier_runtime_key,
+)
 from assumption_agent.models import stable_hash
 from assumption_agent.splits import SplitManifest
 
@@ -64,10 +69,10 @@ def test_required_env_preflight_is_bound_to_selected_manifest_items(
     assert "benchmark_required_env" not in eligible["blockers"]
     assert full["checks"]["offline_verifier_profile_coverage"][
         "missing_profile_item_count"
-    ] == 90
+    ] == 19
     assert eligible["checks"]["offline_verifier_profile_coverage"][
         "missing_profile_item_count"
-    ] == 85
+    ] == 14
 
     poster_ids = [
         item.id for item in adapter.discover() if item.family == "anthropic-poster-design"
@@ -90,21 +95,46 @@ def test_development_prewarm_receipt_binds_every_train_validation_item() -> None
         / "skilllearnbench_instance_holdout_credential_independent_v1.json"
     )
     selected_ids = (*manifest.train_ids, *manifest.validation_ids)
-    rows = [
-        {
-            "item_id_hash": stable_hash({"item_id": item_id}),
-            "family_hash": stable_hash({"family": manifest.family_by_id[item_id]}),
-            "attempt_count": 1,
-            "passed": True,
-            "prebuilt_image_key": stable_hash({"image": item_id}),
-            "prebuilt_image_id": "sha256:" + stable_hash({"image_id": item_id}),
-            "agent_runtime_key": "a" * 64,
-            "agent_runtime_version": "codex-cli 0.144.1",
-            "error_type": None,
-            "error_message_hash": None,
-        }
-        for item_id in selected_ids
-    ]
+    rows = []
+    for item_id in selected_ids:
+        profile = offline_verifier_profile_for_family(
+            manifest.family_by_id[item_id]
+        )
+        rows.append(
+            {
+                "item_id_hash": stable_hash({"item_id": item_id}),
+                "family_hash": stable_hash(
+                    {"family": manifest.family_by_id[item_id]}
+                ),
+                "attempt_count": 1,
+                "passed": True,
+                "prebuilt_image_key": stable_hash({"image": item_id}),
+                "prebuilt_image_id": "sha256:"
+                + stable_hash({"image_id": item_id}),
+                "agent_runtime_key": "a" * 64,
+                "agent_runtime_version": "codex-cli 0.144.1",
+                "verifier_runtime_mode": (
+                    "local_profile" if profile is not None else "native_image"
+                ),
+                "offline_verifier_profile_id": (
+                    profile.profile_id if profile is not None else None
+                ),
+                "offline_verifier_profile_hash": (
+                    profile.profile_hash if profile is not None else None
+                ),
+                "offline_verifier_runtime_key": (
+                    offline_verifier_runtime_key(profile=profile)
+                    if profile is not None
+                    else None
+                ),
+                "verifier_runtime_network": "none",
+                "error_type": None,
+                "error_message_hash": None,
+            }
+        )
+    local_profile_item_count = sum(
+        row["verifier_runtime_mode"] == "local_profile" for row in rows
+    )
     receipt = {
         "prewarm_version": DEVELOPMENT_PREWARM_VERSION,
         "manifest_hash": manifest.manifest_hash,
@@ -119,6 +149,43 @@ def test_development_prewarm_receipt_binds_every_train_validation_item() -> None
         "maximum_attempts": 3,
         "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
         "dependency_cache_only_enforced": True,
+        "offline_verifier_policy": OFFLINE_VERIFIER_POLICY_VERSION,
+        "offline_verifier_runtime_network": "none",
+        "offline_verifier_runtime_network_fallback_allowed": False,
+        "local_profile_item_count": local_profile_item_count,
+        "native_image_verifier_item_count": len(rows) - local_profile_item_count,
+        "unique_offline_verifier_profile_count": len(
+            {
+                row["offline_verifier_profile_hash"]
+                for row in rows
+                if row["offline_verifier_profile_hash"]
+            }
+        ),
+        "unique_offline_verifier_runtime_count": len(
+            {
+                row["offline_verifier_runtime_key"]
+                for row in rows
+                if row["offline_verifier_runtime_key"]
+            }
+        ),
+        "offline_verifier_profile_set_hash": stable_hash(
+            sorted(
+                {
+                    row["offline_verifier_profile_hash"]
+                    for row in rows
+                    if row["offline_verifier_profile_hash"]
+                }
+            )
+        ),
+        "offline_verifier_runtime_set_hash": stable_hash(
+            sorted(
+                {
+                    row["offline_verifier_runtime_key"]
+                    for row in rows
+                    if row["offline_verifier_runtime_key"]
+                }
+            )
+        ),
         "online_build_attempted": False,
         "passed": True,
         "items": rows,
@@ -139,3 +206,21 @@ def test_development_prewarm_receipt_binds_every_train_validation_item() -> None
     )
     with pytest.raises(ValueError, match="failed_item_count"):
         validate_development_prewarm_receipt(tampered, manifest=manifest)
+
+    tampered_rows = [dict(row) for row in rows]
+    local_index = next(
+        index
+        for index, row in enumerate(tampered_rows)
+        if row["verifier_runtime_mode"] == "local_profile"
+    )
+    tampered_rows[local_index]["offline_verifier_runtime_key"] = "b" * 64
+    wrong_runtime = {**receipt, "items": tampered_rows}
+    wrong_runtime["receipt_hash"] = stable_hash(
+        {
+            key: value
+            for key, value in wrong_runtime.items()
+            if key != "receipt_hash"
+        }
+    )
+    with pytest.raises(ValueError, match="profile does not match family"):
+        validate_development_prewarm_receipt(wrong_runtime, manifest=manifest)

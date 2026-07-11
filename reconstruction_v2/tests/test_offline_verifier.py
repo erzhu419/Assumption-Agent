@@ -5,13 +5,16 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from assumption_agent.benchmarks.offline_verifier import (
+    OFFLINE_VERIFIER_PROFILES,
     OFFLINE_VERIFIER_POLICY_VERSION,
     POSTER_VERIFIER_PROFILE,
+    _process_failure_diagnostic,
     offline_verifier_runtime_key,
     offline_verifier_volume_name,
     prepare_offline_verifier_runtime,
     test_script_requires_offline_profile as _requires_offline_profile,
 )
+from assumption_agent.events import MemoryEventSink
 
 
 class ExistingRuntimeDocker:
@@ -19,8 +22,7 @@ class ExistingRuntimeDocker:
         self.commands: list[list[str]] = []
         self.base_image_id = "sha256:" + "a" * 64
         self.runtime_key = offline_verifier_runtime_key(
-            profile=POSTER_VERIFIER_PROFILE,
-            base_image_id=self.base_image_id,
+            profile=POSTER_VERIFIER_PROFILE
         )
 
     def run(self, args, *positional, **kwargs):
@@ -62,17 +64,56 @@ def test_existing_offline_runtime_never_redownloads(
 ) -> None:
     monkeypatch.setenv("ASSUMPTION_V2_OFFLINE_VERIFIER_CACHE", str(tmp_path / "cache"))
     delegate = ExistingRuntimeDocker()
+    sink = MemoryEventSink()
 
     report = prepare_offline_verifier_runtime(
         profile=POSTER_VERIFIER_PROFILE,
         base_image_tag="poster-image:cached",
         report_path=tmp_path / "receipt.json",
         delegate=delegate,
+        event_sink=sink,
+        trace_id="existing-runtime",
     )
 
     assert report["runtime_reused"] is True
     assert report["online_download_attempted"] is False
     assert not any("pip" in command for command in delegate.commands)
+    assert any(
+        row["event"] == "skilllearn_offline_verifier_preparation_completed"
+        and row["payload"]["runtime_reused"] is True
+        and row["payload"]["online_download_attempted"] is False
+        for row in sink.events
+    )
+
+
+def test_offline_profile_family_mapping_is_unique() -> None:
+    families = [
+        family
+        for profile in OFFLINE_VERIFIER_PROFILES
+        for family in profile.families
+    ]
+
+    assert len(OFFLINE_VERIFIER_PROFILES) == 6
+    assert len(families) == 14
+    assert len(set(families)) == len(families)
+    assert len({profile.profile_id for profile in OFFLINE_VERIFIER_PROFILES}) == 6
+    assert len({profile.profile_hash for profile in OFFLINE_VERIFIER_PROFILES}) == 6
+
+
+def test_process_failure_diagnostic_redacts_credentials() -> None:
+    completed = SimpleNamespace(
+        returncode=1,
+        stdout="ERROR: token sk-12345678 was rejected\n",
+        stderr="ERROR: https://user:password@example.invalid/simple failed\n",
+    )
+
+    diagnostic = _process_failure_diagnostic(completed)
+
+    assert diagnostic["return_code"] == 1
+    assert diagnostic["diagnostic_summary_persisted"] is True
+    assert "sk-12345678" not in diagnostic["diagnostic_summary"]
+    assert "user:password" not in diagnostic["diagnostic_summary"]
+    assert diagnostic["diagnostic_summary"].count("[REDACTED]") == 2
 
 
 def test_online_test_script_requires_a_local_profile(tmp_path: Path) -> None:

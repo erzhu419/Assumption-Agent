@@ -29,6 +29,7 @@ from assumption_agent.evaluation import PromotionGate, PromotionGateSpec
 from assumption_agent.evolution import CounterfactualEvidenceReplayCache
 from assumption_agent.events import MemoryEventSink
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
+    SkillLearnPrebuiltImage,
     SkillLearnSubprocessBackend,
     _ContainerNetworkBudgetMonitor,
     _DockerVerifierIsolationSubprocessProxy,
@@ -453,8 +454,8 @@ def test_unlocalized_online_verifier_family_is_blocked_before_model_start() -> N
         event_sink=sink,
     )
     request = SkillLearnTrialRequest(
-        item_id="organize-messy-files-2",
-        family="organize-messy-files",
+        item_id="weighted-gdp-calculation-2",
+        family="weighted-gdp-calculation",
         split=SplitName.TRAIN,
         variant=TrialVariant.POLICY_OFF,
         evaluator_epoch="epoch-offline",
@@ -477,6 +478,95 @@ def test_unlocalized_online_verifier_family_is_blocked_before_model_start() -> N
         for row in sink.events
     )
     assert not any(row["event"] == "skilllearn_trial_started" for row in sink.events)
+
+
+def test_trial_prewarm_binds_declared_offline_verifier_runtime() -> None:
+    image = SkillLearnPrebuiltImage(
+        tag="assumption-v2-item:poster",
+        cache_key="image-key",
+        environment_hash="environment-hash",
+        image_id="sha256:" + "a" * 64,
+        agent_runtime_key="agent-runtime-key",
+        agent_runtime_volume="agent-runtime-volume",
+        agent_runtime_version="codex-cli 0.144.1",
+        reused=True,
+    )
+
+    class ImageCache:
+        def ensure(self, **kwargs):
+            return image
+
+    class VerifierCache:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def ensure(self, **kwargs):
+            self.calls.append(kwargs)
+            return OfflineVerifierRuntime(
+                profile=kwargs["profile"],
+                runtime_key="verifier-runtime-key",
+                volume_name="verifier-runtime-volume",
+                base_image_id=kwargs["base_image_id"],
+                reused=True,
+            )
+
+    verifier_cache = VerifierCache()
+    backend = SkillLearnSubprocessBackend(
+        BENCH_ROOT,
+        record_upstream=False,
+        prebuilt_cache=ImageCache(),
+        offline_verifier_cache=verifier_cache,
+    )
+    runner = ModuleType("prewarm_runner")
+    runner.subprocess = RecordingSubprocess()
+    backend._runner_module = runner
+
+    warmed_image, runtime = backend.prewarm_trial_environment(
+        family="anthropic-poster-design",
+        item_id="anthropic-poster-design-1",
+        trace_id="prewarm-poster",
+    )
+
+    assert warmed_image is image
+    assert runtime is not None
+    assert runtime.profile is POSTER_VERIFIER_PROFILE
+    assert verifier_cache.calls[0]["base_image_tag"] == image.tag
+    assert verifier_cache.calls[0]["base_image_id"] == image.image_id
+
+
+def test_trial_prewarm_uses_native_verifier_only_for_network_free_script() -> None:
+    image = SkillLearnPrebuiltImage(
+        tag="assumption-v2-item:dbscan",
+        cache_key="image-key",
+        environment_hash="environment-hash",
+        image_id="sha256:" + "b" * 64,
+        agent_runtime_key="agent-runtime-key",
+        agent_runtime_volume="agent-runtime-volume",
+        agent_runtime_version="codex-cli 0.144.1",
+        reused=True,
+    )
+
+    class ImageCache:
+        def ensure(self, **kwargs):
+            return image
+
+    backend = SkillLearnSubprocessBackend(
+        BENCH_ROOT,
+        record_upstream=False,
+        prebuilt_cache=ImageCache(),
+    )
+    runner = ModuleType("native_prewarm_runner")
+    runner.subprocess = RecordingSubprocess()
+    backend._runner_module = runner
+
+    warmed_image, runtime = backend.prewarm_trial_environment(
+        family="dbscan-parameter-tuning",
+        item_id="dbscan-parameter-tuning-1",
+        trace_id="prewarm-dbscan",
+    )
+
+    assert warmed_image is image
+    assert runtime is None
 
 
 def test_prebuilt_cache_fails_closed_before_any_online_install(tmp_path: Path) -> None:
@@ -1240,6 +1330,9 @@ def test_poster_verifier_uses_readonly_local_runtime_and_skips_online_script(
     ]
     assert "python3 -m pytest" in verifier_command[-1]
     assert "PIP_NO_INDEX=1" in verifier_command[-1]
+    assert "RESULTS_PATH=/root/results.json" in verifier_command[-1]
+    assert "security_audit.csv" in verifier_command[-1]
+    assert "itinerary.json" in verifier_command[-1]
     assert "/tests/test.sh" not in verifier_command[-1]
     assert any(
         row["event"] == "skilllearn_offline_verifier_command_selected"

@@ -22,9 +22,14 @@ from .skilllearn_lifecycle import (
     SkillLearnSubprocessBackend,
 )
 from .docker_egress import DEPENDENCY_CACHE_POLICY_VERSION
+from .offline_verifier import (
+    OFFLINE_VERIFIER_POLICY_VERSION,
+    offline_verifier_profile_for_family,
+    offline_verifier_runtime_key,
+)
 
 
-DEVELOPMENT_PREWARM_VERSION = "train_validation_images_v1"
+DEVELOPMENT_PREWARM_VERSION = "train_validation_images_and_offline_verifiers_v2"
 
 
 def prewarm_development_images(
@@ -89,12 +94,17 @@ def prewarm_development_images(
                     )
                 )
                 try:
-                    image = backend.prewarm_environment(
+                    image, verifier_runtime = backend.prewarm_trial_environment(
                         family=manifest.family_by_id[item_id],
                         item_id=item_id,
                         trace_id=trace_id,
                     )
-                    return {
+                    verifier_runtime_mode = (
+                        "local_profile"
+                        if verifier_runtime is not None
+                        else "native_image"
+                    )
+                    row = {
                         "item_id_hash": stable_hash({"item_id": item_id}),
                         "family_hash": stable_hash(
                             {"family": manifest.family_by_id[item_id]}
@@ -105,9 +115,52 @@ def prewarm_development_images(
                         "prebuilt_image_id": image.image_id,
                         "agent_runtime_key": image.agent_runtime_key,
                         "agent_runtime_version": image.agent_runtime_version,
+                        "verifier_runtime_mode": verifier_runtime_mode,
+                        "offline_verifier_profile_id": (
+                            verifier_runtime.profile.profile_id
+                            if verifier_runtime is not None
+                            else None
+                        ),
+                        "offline_verifier_profile_hash": (
+                            verifier_runtime.profile.profile_hash
+                            if verifier_runtime is not None
+                            else None
+                        ),
+                        "offline_verifier_runtime_key": (
+                            verifier_runtime.runtime_key
+                            if verifier_runtime is not None
+                            else None
+                        ),
+                        "verifier_runtime_network": "none",
                         "error_type": None,
                         "error_message_hash": None,
                     }
+                    sink.emit(
+                        Event(
+                            event="skilllearn_development_prewarm_completed",
+                            stage="benchmark.skilllearn.prewarm",
+                            trace_id=trace_id,
+                            payload={
+                                "item_id_hash": row["item_id_hash"],
+                                "family_hash": row["family_hash"],
+                                "attempt": attempt,
+                                "prebuilt_image_key": image.cache_key,
+                                "prebuilt_image_id": image.image_id,
+                                "agent_runtime_key": image.agent_runtime_key,
+                                "verifier_runtime_mode": verifier_runtime_mode,
+                                "offline_verifier_profile_hash": row[
+                                    "offline_verifier_profile_hash"
+                                ],
+                                "offline_verifier_runtime_key": row[
+                                    "offline_verifier_runtime_key"
+                                ],
+                                "verifier_runtime_network": "none",
+                                "secret_value_persisted": False,
+                                "raw_content_persisted": False,
+                            },
+                        )
+                    )
+                    return row
                 except Exception as exc:  # Infrastructure evidence, never task evidence.
                     last_error = exc
                     sink.emit(
@@ -138,6 +191,11 @@ def prewarm_development_images(
                 "prebuilt_image_id": "",
                 "agent_runtime_key": "",
                 "agent_runtime_version": "",
+                "verifier_runtime_mode": "",
+                "offline_verifier_profile_id": None,
+                "offline_verifier_profile_hash": None,
+                "offline_verifier_runtime_key": None,
+                "verifier_runtime_network": "none",
                 "error_type": type(last_error).__name__,
                 "error_message_hash": stable_hash({"message": str(last_error)}),
             }
@@ -164,6 +222,47 @@ def prewarm_development_images(
         "maximum_attempts": attempts,
         "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
         "dependency_cache_only_enforced": True,
+        "offline_verifier_policy": OFFLINE_VERIFIER_POLICY_VERSION,
+        "offline_verifier_runtime_network": "none",
+        "offline_verifier_runtime_network_fallback_allowed": False,
+        "local_profile_item_count": sum(
+            row["verifier_runtime_mode"] == "local_profile" for row in rows
+        ),
+        "native_image_verifier_item_count": sum(
+            row["verifier_runtime_mode"] == "native_image" for row in rows
+        ),
+        "unique_offline_verifier_profile_count": len(
+            {
+                str(row["offline_verifier_profile_hash"])
+                for row in rows
+                if row["passed"] and row["offline_verifier_profile_hash"]
+            }
+        ),
+        "unique_offline_verifier_runtime_count": len(
+            {
+                str(row["offline_verifier_runtime_key"])
+                for row in rows
+                if row["passed"] and row["offline_verifier_runtime_key"]
+            }
+        ),
+        "offline_verifier_profile_set_hash": stable_hash(
+            sorted(
+                {
+                    str(row["offline_verifier_profile_hash"])
+                    for row in rows
+                    if row["passed"] and row["offline_verifier_profile_hash"]
+                }
+            )
+        ),
+        "offline_verifier_runtime_set_hash": stable_hash(
+            sorted(
+                {
+                    str(row["offline_verifier_runtime_key"])
+                    for row in rows
+                    if row["passed"] and row["offline_verifier_runtime_key"]
+                }
+            )
+        ),
         "online_build_attempted": False,
         "passed": passed,
         "items": rows,
@@ -196,10 +295,14 @@ def validate_development_prewarm_receipt(
         "failed_item_count": 0,
         "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
         "dependency_cache_only_enforced": True,
+        "offline_verifier_policy": OFFLINE_VERIFIER_POLICY_VERSION,
+        "offline_verifier_runtime_network": "none",
+        "offline_verifier_runtime_network_fallback_allowed": False,
         "online_build_attempted": False,
         "passed": True,
         "test_content_accessed": False,
         "secret_value_persisted": False,
+        "raw_content_persisted": False,
     }
     for key, value in expected.items():
         if receipt.get(key) != value:
@@ -207,15 +310,102 @@ def validate_development_prewarm_receipt(
     rows = receipt.get("items")
     if not isinstance(rows, list) or len(rows) != expected["selected_item_count"]:
         raise ValueError("development prewarm item rows are incomplete")
-    if any(
-        not isinstance(row, Mapping)
-        or not row.get("passed")
-        or not row.get("prebuilt_image_key")
-        or not row.get("prebuilt_image_id")
-        or not row.get("agent_runtime_key")
+    expected_item_hashes = {
+        stable_hash({"item_id": item_id})
+        for item_id in (*manifest.train_ids, *manifest.validation_ids)
+    }
+    expected_profile_by_item_hash = {
+        stable_hash({"item_id": item_id}): offline_verifier_profile_for_family(
+            manifest.family_by_id[item_id]
+        )
+        for item_id in (*manifest.train_ids, *manifest.validation_ids)
+    }
+    observed_item_hashes: set[str] = set()
+    for row in rows:
+        if (
+            not isinstance(row, Mapping)
+            or not row.get("passed")
+            or not row.get("prebuilt_image_key")
+            or not row.get("prebuilt_image_id")
+            or not row.get("agent_runtime_key")
+            or row.get("verifier_runtime_network") != "none"
+        ):
+            raise ValueError("development prewarm item provenance is incomplete")
+        item_hash = str(row.get("item_id_hash") or "")
+        if not item_hash or item_hash in observed_item_hashes:
+            raise ValueError("development prewarm item hashes are incomplete")
+        observed_item_hashes.add(item_hash)
+        mode = row.get("verifier_runtime_mode")
+        expected_profile = expected_profile_by_item_hash.get(item_hash)
+        if mode == "local_profile":
+            if (
+                not row.get("offline_verifier_profile_id")
+                or not row.get("offline_verifier_profile_hash")
+                or not row.get("offline_verifier_runtime_key")
+            ):
+                raise ValueError(
+                    "development prewarm offline verifier provenance is incomplete"
+                )
+            if expected_profile is None or (
+                row.get("offline_verifier_profile_id") != expected_profile.profile_id
+                or row.get("offline_verifier_profile_hash")
+                != expected_profile.profile_hash
+                or row.get("offline_verifier_runtime_key")
+                != offline_verifier_runtime_key(profile=expected_profile)
+            ):
+                raise ValueError(
+                    "development prewarm offline verifier profile does not match family"
+                )
+        elif mode == "native_image":
+            if any(
+                row.get(key) is not None
+                for key in (
+                    "offline_verifier_profile_id",
+                    "offline_verifier_profile_hash",
+                    "offline_verifier_runtime_key",
+                )
+            ):
+                raise ValueError(
+                    "development prewarm native verifier provenance is malformed"
+                )
+            if expected_profile is not None:
+                raise ValueError(
+                    "development prewarm declared profile was not prewarmed"
+                )
+        else:
+            raise ValueError("development prewarm verifier runtime mode is invalid")
+    if observed_item_hashes != expected_item_hashes:
+        raise ValueError("development prewarm item hashes do not match the manifest")
+    local_profile_count = sum(
+        row.get("verifier_runtime_mode") == "local_profile" for row in rows
+    )
+    native_image_count = len(rows) - local_profile_count
+    if receipt.get("local_profile_item_count") != local_profile_count:
+        raise ValueError("development prewarm local profile count mismatch")
+    if receipt.get("native_image_verifier_item_count") != native_image_count:
+        raise ValueError("development prewarm native verifier count mismatch")
+    profile_hashes = {
+        str(row["offline_verifier_profile_hash"])
         for row in rows
+        if row.get("offline_verifier_profile_hash")
+    }
+    runtime_keys = {
+        str(row["offline_verifier_runtime_key"])
+        for row in rows
+        if row.get("offline_verifier_runtime_key")
+    }
+    if receipt.get("unique_offline_verifier_profile_count") != len(profile_hashes):
+        raise ValueError("development prewarm offline verifier profile count mismatch")
+    if receipt.get("unique_offline_verifier_runtime_count") != len(runtime_keys):
+        raise ValueError("development prewarm offline verifier runtime count mismatch")
+    if receipt.get("offline_verifier_profile_set_hash") != stable_hash(
+        sorted(profile_hashes)
     ):
-        raise ValueError("development prewarm item provenance is incomplete")
+        raise ValueError("development prewarm offline verifier profile set mismatch")
+    if receipt.get("offline_verifier_runtime_set_hash") != stable_hash(
+        sorted(runtime_keys)
+    ):
+        raise ValueError("development prewarm offline verifier runtime set mismatch")
     return declared_hash
 
 
