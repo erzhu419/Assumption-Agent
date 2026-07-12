@@ -54,6 +54,7 @@ from .skilllearn_lifecycle import (
     BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
     CODEX_NETWORK_MINIMIZATION_VERSION,
     MODEL_ONLY_TOOL_POLICY_VERSION,
+    MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION,
     INVALID_TRIAL_RETRY_POLICY_VERSION,
     LOCAL_EVIDENCE_TRANSPORT_VERSION,
     NETWORK_SCOPE_AUDIT_VERSION,
@@ -100,9 +101,13 @@ TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION = {
     "3.6.0": 64 * 1024 * 1024,
     "3.7.0": 64 * 1024 * 1024,
     "3.8.0": 64 * 1024 * 1024,
+    "3.9.0": 64 * 1024 * 1024,
 }
 
-CONTRASTIVE_PROTOCOL_VERSIONS = frozenset({"3.6.0", "3.7.0", "3.8.0"})
+CONTRASTIVE_PROTOCOL_VERSIONS = frozenset(
+    {"3.6.0", "3.7.0", "3.8.0", "3.9.0"}
+)
+MODEL_SLOT_PROTOCOL_VERSIONS = frozenset({"3.9.0"})
 
 CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION = (
     "train_contrastive_precision_then_support_v1"
@@ -310,6 +315,20 @@ class PaperProtocol:
                 issues.append("parallel_unit_invalid")
             if execution.get("within_pair_execution") != "sequential_balanced_order":
                 issues.append("within_pair_execution_invalid")
+            if protocol_version in MODEL_SLOT_PROTOCOL_VERSIONS:
+                if execution.get("model_inference_concurrency_policy") != (
+                    MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION
+                ):
+                    issues.append("model_inference_concurrency_policy_mismatch")
+                if execution.get("model_inference_slots") != 1:
+                    issues.append("model_inference_slots_mismatch")
+            else:
+                for field in (
+                    "model_inference_concurrency_policy",
+                    "model_inference_slots",
+                ):
+                    if field in execution:
+                        issues.append(f"{field}_unexpected")
             if (
                 major is not None
                 and major >= 3

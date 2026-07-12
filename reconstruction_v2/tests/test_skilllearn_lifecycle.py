@@ -39,6 +39,8 @@ from assumption_agent.evolution import (
 from assumption_agent.events import MemoryEventSink
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
     CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+    MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION,
+    SkillLearnModelInferenceLimiter,
     SkillLearnPrebuiltImage,
     SkillLearnSubprocessBackend,
     _ContainerNetworkBudgetMonitor,
@@ -347,6 +349,42 @@ class ConcurrentFakeBackend(FakeSkillLearnBackend):
             with self._lock:
                 self.active -= 1
                 self.active_by_item[item_id] -= 1
+
+
+class BlockingAgentSubprocess:
+    def __init__(self, *, fail_first: bool = False) -> None:
+        self._lock = threading.Lock()
+        self.active_agents = 0
+        self.maximum_active_agents = 0
+        self.agent_entered = threading.Event()
+        self.release_agents = threading.Event()
+        self.verifier_entered = threading.Event()
+        self.fail_first = fail_first
+        self.agent_calls = 0
+
+    def run(self, args, *positional, **kwargs):
+        command = list(args)
+        command_text = " ".join(str(value) for value in command)
+        if "codex exec" in command_text:
+            with self._lock:
+                self.agent_calls += 1
+                call_index = self.agent_calls
+                self.active_agents += 1
+                self.maximum_active_agents = max(
+                    self.maximum_active_agents,
+                    self.active_agents,
+                )
+            self.agent_entered.set()
+            try:
+                if self.fail_first and call_index == 1:
+                    raise RuntimeError("synthetic agent failure")
+                assert self.release_agents.wait(timeout=2.0)
+            finally:
+                with self._lock:
+                    self.active_agents -= 1
+        if "/tests/test.sh" in command_text:
+            self.verifier_entered.set()
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
 
 
 def test_network_budget_parser_and_monitor_kill_over_limit() -> None:
@@ -2674,6 +2712,82 @@ def test_poster_verifier_uses_readonly_local_runtime_and_skips_online_script(
         and row["payload"]["original_online_test_script_executed"] is False
         for row in sink.events
     )
+
+
+def test_shared_model_slot_serializes_agents_but_not_verifier() -> None:
+    delegate = BlockingAgentSubprocess()
+    limiter = SkillLearnModelInferenceLimiter(1)
+    sink = MemoryEventSink()
+    egress = DockerEgressPolicy.from_values(
+        base_url="https://ruoli.dev",
+        allowed_ipv4s=("45.78.76.197",),
+    )
+    first = _DockerVerifierIsolationSubprocessProxy(
+        delegate,
+        egress_policy=egress,
+        model_inference_limiter=limiter,
+        event_sink=sink,
+        trace_id="slot-first",
+    )
+    second = _DockerVerifierIsolationSubprocessProxy(
+        delegate,
+        egress_policy=egress,
+        model_inference_limiter=limiter,
+        event_sink=sink,
+        trace_id="slot-second",
+    )
+    command = ["docker", "exec", "trial", "sh", "-c", "codex exec --help"]
+    first_thread = threading.Thread(target=lambda: first.run(command))
+    second_thread = threading.Thread(target=lambda: second.run(command))
+
+    first_thread.start()
+    assert delegate.agent_entered.wait(timeout=1.0)
+    second_thread.start()
+    second.run(["docker", "exec", "verifier", "bash", "/tests/test.sh"])
+
+    assert delegate.verifier_entered.is_set()
+    delegate.release_agents.set()
+    first_thread.join(timeout=2.0)
+    second_thread.join(timeout=2.0)
+    assert not first_thread.is_alive()
+    assert not second_thread.is_alive()
+    assert delegate.maximum_active_agents == 1
+    assert limiter.maximum_active == 1
+    assert sum(
+        row["event"] == "skilllearn_agent_slot_acquired" for row in sink.events
+    ) == 2
+    assert sum(
+        row["event"] == "skilllearn_agent_slot_released" for row in sink.events
+    ) == 2
+
+
+def test_shared_model_slot_releases_after_agent_exception() -> None:
+    delegate = BlockingAgentSubprocess(fail_first=True)
+    limiter = SkillLearnModelInferenceLimiter(1)
+    sink = MemoryEventSink()
+    proxy = _DockerVerifierIsolationSubprocessProxy(
+        delegate,
+        egress_policy=DockerEgressPolicy.from_values(
+            base_url="https://ruoli.dev",
+            allowed_ipv4s=("45.78.76.197",),
+        ),
+        model_inference_limiter=limiter,
+        event_sink=sink,
+        trace_id="slot-exception",
+    )
+    command = ["docker", "exec", "trial", "sh", "-c", "codex exec --help"]
+
+    with pytest.raises(RuntimeError, match="synthetic agent failure"):
+        proxy.run(command)
+    delegate.release_agents.set()
+    proxy.run(command)
+
+    assert delegate.agent_calls == 2
+    assert limiter.maximum_active == 1
+    assert MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION == limiter.policy
+    assert sum(
+        row["event"] == "skilllearn_agent_slot_released" for row in sink.events
+    ) == 2
 
 
 def test_openai_compatible_terminal_errors_use_provider_labels() -> None:

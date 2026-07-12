@@ -57,6 +57,7 @@ from .docker_egress import (
 from .skilllearn_lifecycle import (
     BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
     CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+    MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION,
     MODEL_ONLY_TOOL_POLICY_VERSION,
     OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION,
     PREBUILT_IMAGE_POLICY_VERSION,
@@ -76,6 +77,7 @@ from .skilllearn_lifecycle import (
     SkillLearnGenerationResult,
     SkillLearnPrebuiltImageCache,
     SkillLearnProviderCircuit,
+    SkillLearnModelInferenceLimiter,
     SkillLearnSubprocessBackend,
     TrainingEvidenceReplayCache,
     codex_network_minimization_for_policy,
@@ -196,6 +198,17 @@ def main() -> None:
     invalid_trial_retry_workers = int(
         execution_contract["invalid_trial_retry_workers"]
     )
+    model_inference_concurrency_policy = execution_contract.get(
+        "model_inference_concurrency_policy"
+    )
+    model_inference_slots = int(execution_contract.get("model_inference_slots") or 0)
+    if model_inference_concurrency_policy not in {
+        None,
+        MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION,
+    }:
+        raise ValueError("unsupported model inference concurrency policy")
+    if (model_inference_concurrency_policy is None) != (model_inference_slots == 0):
+        raise ValueError("model inference concurrency policy and slots must be paired")
     manifest = SplitManifest.read(args.manifest)
     protocol_root = paper_protocol.path.parent.parent
     allowed_manifest_paths = {
@@ -298,6 +311,16 @@ def main() -> None:
         "trial_provider_mode": trial_provider_mode,
         "max_steps": max_steps,
         "parallel_workers": parallel_workers,
+        **(
+            {
+                "model_inference_concurrency_policy": (
+                    model_inference_concurrency_policy
+                ),
+                "model_inference_slots": model_inference_slots,
+            }
+            if model_inference_concurrency_policy is not None
+            else {}
+        ),
         "prebuilt_image_policy": PREBUILT_IMAGE_POLICY_VERSION,
         "runner_agent_registry_isolation": RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
         "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
@@ -457,6 +480,11 @@ def main() -> None:
     guard = SplitAccessGuard(manifest, event_sink=sink)
     prebuilt_cache = SkillLearnPrebuiltImageCache(args.root, event_sink=sink)
     provider_circuit = SkillLearnProviderCircuit()
+    model_inference_limiter = (
+        SkillLearnModelInferenceLimiter(model_inference_slots)
+        if model_inference_concurrency_policy is not None
+        else None
+    )
     backends = tuple(
         SkillLearnSubprocessBackend(
             args.root,
@@ -467,6 +495,7 @@ def main() -> None:
             trials_dir=args.work_dir / "upstream_trials",
             prebuilt_cache=prebuilt_cache,
             provider_circuit=provider_circuit,
+            model_inference_limiter=model_inference_limiter,
             codex_agent_execution_policy=codex_agent_execution_policy,
             event_sink=sink,
         )

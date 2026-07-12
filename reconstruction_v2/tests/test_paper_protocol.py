@@ -23,6 +23,9 @@ from assumption_agent.benchmarks.codex_execution_policy import (
     LOW_REASONING_LOCAL_COMPACTION_POLICY,
     MODEL_ONLY_ACTION_BUDGET_POLICY,
 )
+from assumption_agent.benchmarks.skilllearn_lifecycle import (
+    MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION,
+)
 from assumption_agent.benchmarks.skilllearn_experiment import _experiment_phase_name
 from assumption_agent.benchmarks.paper_report import (
     PaperTrialRecord,
@@ -58,6 +61,9 @@ V37_PROTOCOL = (
 )
 V38_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_8_ruoli_gpt54mini.json"
+)
+V39_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_9_ruoli_gpt54mini.json"
 )
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
@@ -316,6 +322,38 @@ def test_v38_protocol_changes_only_supported_online_parallelism() -> None:
     assert v38 == v37
 
 
+def test_v39_protocol_adds_outer_parallelism_with_one_shared_model_slot() -> None:
+    protocol = PaperProtocol.read(V39_PROTOCOL)
+
+    assert protocol.validate_structure() == []
+    assert protocol.payload["protocol_version"] == "3.9.0"
+    assert {
+        name: phase["parallel_workers"]
+        for name, phase in protocol.payload["phases"].items()
+    } == {
+        "smoke": 6,
+        "development": 6,
+        "family_out_development": 6,
+        "sealed_test": 6,
+        "family_out_transfer": 6,
+    }
+    assert protocol.payload["execution"][
+        "model_inference_concurrency_policy"
+    ] == MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION
+    assert protocol.payload["execution"]["model_inference_slots"] == 1
+
+    v38 = copy.deepcopy(PaperProtocol.read(V38_PROTOCOL).payload)
+    v39 = copy.deepcopy(protocol.payload)
+    for payload in (v38, v39):
+        payload.pop("protocol_id")
+        payload.pop("protocol_version")
+    for phase in v39["phases"].values():
+        phase["parallel_workers"] = 2
+    v39["execution"].pop("model_inference_concurrency_policy")
+    v39["execution"].pop("model_inference_slots")
+    assert v39 == v38
+
+
 @pytest.mark.parametrize(
     "protocol_path",
     (V31_PROTOCOL, PROTOCOL, V33_PROTOCOL, V34_PROTOCOL, V35_PROTOCOL),
@@ -348,7 +386,7 @@ def test_v31_through_v35_keep_historical_candidate_selection(
     ),
 )
 @pytest.mark.parametrize(
-    "protocol_path", (V36_PROTOCOL, V37_PROTOCOL, V38_PROTOCOL)
+    "protocol_path", (V36_PROTOCOL, V37_PROTOCOL, V38_PROTOCOL, V39_PROTOCOL)
 )
 def test_contrastive_protocol_rejects_contract_drift(
     protocol_path: Path,
@@ -378,6 +416,25 @@ def test_v31_through_v35_reject_v36_only_contract_fields(
     protocol = PaperProtocol.read(V35_PROTOCOL)
     payload = copy.deepcopy(protocol.payload)
     payload["execution"][field_name] = "hybrid-policy"
+
+    assert f"{field_name}_unexpected" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ("model_inference_concurrency_policy", "model_inference_slots"),
+)
+def test_v38_rejects_v39_only_model_slot_fields(field_name: str) -> None:
+    protocol = PaperProtocol.read(V38_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    payload["execution"][field_name] = (
+        MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION
+        if field_name.endswith("policy")
+        else 1
+    )
 
     assert f"{field_name}_unexpected" in PaperProtocol(
         protocol.path,
@@ -546,6 +603,7 @@ def test_execution_lock_binds_tracked_offline_readiness_receipt(
         V36_PROTOCOL,
         V37_PROTOCOL,
         V38_PROTOCOL,
+        V39_PROTOCOL,
     ),
 )
 def test_versioned_execution_lock_binds_resolved_agent_policy(

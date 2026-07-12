@@ -23,6 +23,7 @@ from .skilllearn_compiler import (
 )
 from .skilllearn_lifecycle import (
     SkillLearnBackendPool,
+    SkillLearnModelInferenceLimiter,
     SkillLearnPrebuiltImageCache,
     SkillLearnProviderCircuit,
     SkillLearnSubprocessBackend,
@@ -805,12 +806,20 @@ def main() -> None:
     phase = protocol.payload["phases"][phase_name]
     repeats = int(phase["repeats"])
     parallel_workers = int(phase["parallel_workers"])
+    model_inference_slots = int(
+        protocol.payload["execution"].get("model_inference_slots") or 0
+    )
     sink = JsonlEventSink(args.events)
     prebuilt_cache = SkillLearnPrebuiltImageCache(
         args.benchmark_root,
         event_sink=sink,
     )
     provider_circuit = SkillLearnProviderCircuit()
+    model_inference_limiter = (
+        SkillLearnModelInferenceLimiter(model_inference_slots)
+        if model_inference_slots > 0
+        else None
+    )
     backends = tuple(
         SkillLearnSubprocessBackend(
             args.benchmark_root,
@@ -821,6 +830,7 @@ def main() -> None:
             trials_dir=args.trials_dir,
             prebuilt_cache=prebuilt_cache,
             provider_circuit=provider_circuit,
+            model_inference_limiter=model_inference_limiter,
             codex_agent_execution_policy=(
                 protocol.codex_agent_execution_policy
             ),
@@ -864,6 +874,7 @@ def main() -> None:
                 "valid_count": sum(row.valid for row in records),
                 "split": split.value,
                 "parallel_workers": parallel_workers,
+                "model_inference_slots": model_inference_slots,
                 "test_content_accessed": guard.test_accessed,
                 "secret_value_persisted": False,
             },

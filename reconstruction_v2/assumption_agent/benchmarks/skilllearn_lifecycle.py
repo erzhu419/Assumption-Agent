@@ -108,6 +108,9 @@ VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION = (
 RUNNER_AGENT_REGISTRY_ISOLATION_VERSION = "runner_local_agent_registry_v1"
 TRIAL_TIMEOUT_POLICY_VERSION = "no_fixed_trial_wall_or_container_timeout_v2"
 PROVIDER_FAILURE_POLICY_VERSION = "codex_jsonl_terminal_error_circuit_v1"
+MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION = (
+    "process_shared_agent_stage_semaphore_v1"
+)
 TRAINING_EVIDENCE_POLICY_VERSION = "all_valid_before_proposal_v1"
 CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
     "valid_train_failures_and_success_controls_v1"
@@ -249,6 +252,85 @@ class SkillLearnProviderCircuit:
                 return False
             self._error_type = error_type
             return True
+
+
+class SkillLearnModelInferenceLimiter:
+    """Share a bounded online-agent slot pool across item workers."""
+
+    policy = MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION
+
+    def __init__(self, slots: int) -> None:
+        if isinstance(slots, bool) or not isinstance(slots, int) or slots <= 0:
+            raise ValueError("model inference slots must be positive")
+        self.slots = slots
+        self._semaphore = threading.BoundedSemaphore(slots)
+        self._lock = threading.Lock()
+        self._active = 0
+        self._maximum_active = 0
+
+    @property
+    def maximum_active(self) -> int:
+        with self._lock:
+            return self._maximum_active
+
+    @contextmanager
+    def acquire(
+        self,
+        *,
+        event_sink: EventSink,
+        trace_id: str,
+    ) -> Iterator[None]:
+        queued_at = time.monotonic()
+        event_sink.emit(
+            Event(
+                event="skilllearn_agent_slot_wait_started",
+                stage="benchmark.skilllearn.model_concurrency",
+                trace_id=trace_id,
+                payload={
+                    "policy": self.policy,
+                    "slot_limit": self.slots,
+                },
+            )
+        )
+        self._semaphore.acquire()
+        with self._lock:
+            self._active += 1
+            self._maximum_active = max(self._maximum_active, self._active)
+            active_count = self._active
+        try:
+            event_sink.emit(
+                Event(
+                    event="skilllearn_agent_slot_acquired",
+                    stage="benchmark.skilllearn.model_concurrency",
+                    trace_id=trace_id,
+                    payload={
+                        "policy": self.policy,
+                        "slot_limit": self.slots,
+                        "active_count": active_count,
+                        "wait_seconds": time.monotonic() - queued_at,
+                    },
+                )
+            )
+            yield
+        finally:
+            with self._lock:
+                self._active -= 1
+                active_count = self._active
+            try:
+                event_sink.emit(
+                    Event(
+                        event="skilllearn_agent_slot_released",
+                        stage="benchmark.skilllearn.model_concurrency",
+                        trace_id=trace_id,
+                        payload={
+                            "policy": self.policy,
+                            "slot_limit": self.slots,
+                            "active_count": active_count,
+                        },
+                    )
+                )
+            finally:
+                self._semaphore.release()
 
 
 class TrialVariant(str, Enum):
@@ -1072,6 +1154,7 @@ class SkillLearnSubprocessBackend:
         prebuilt_cache: SkillLearnPrebuiltImageCache | None = None,
         offline_verifier_cache: SkillLearnOfflineVerifierRuntimeCache | None = None,
         provider_circuit: SkillLearnProviderCircuit | None = None,
+        model_inference_limiter: SkillLearnModelInferenceLimiter | None = None,
         codex_agent_execution_policy: CodexAgentExecutionPolicy = (
             LEGACY_CODEX_AGENT_EXECUTION_POLICY
         ),
@@ -1097,6 +1180,7 @@ class SkillLearnSubprocessBackend:
         self.record_upstream = record_upstream
         self.prebuilt_cache = prebuilt_cache
         self.provider_circuit = provider_circuit or SkillLearnProviderCircuit()
+        self.model_inference_limiter = model_inference_limiter
         self.trial_network_byte_limit = configured_trial_network_byte_limit()
         self.event_sink = event_sink or NullEventSink()
         self.offline_verifier_cache = (
@@ -1302,6 +1386,16 @@ class SkillLearnSubprocessBackend:
                     ),
                     "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
                     "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
+                    "model_inference_concurrency_policy": (
+                        self.model_inference_limiter.policy
+                        if self.model_inference_limiter is not None
+                        else None
+                    ),
+                    "model_inference_slots": (
+                        self.model_inference_limiter.slots
+                        if self.model_inference_limiter is not None
+                        else None
+                    ),
                     "openai_compatible_codex_config": (
                         OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION
                         if self.provider_mode == "openai_compatible"
@@ -1652,6 +1746,7 @@ class SkillLearnSubprocessBackend:
             egress_policy=egress_policy,
             network_byte_limit=self.trial_network_byte_limit,
             provider_mode=self.provider_mode,
+            model_inference_limiter=self.model_inference_limiter,
             event_sink=self.event_sink,
             trace_id=trace_id,
         )
@@ -2201,6 +2296,16 @@ class SkillLearnSubprocessBackend:
                 else ""
             ),
             codex_agent_execution_policy=self.codex_agent_execution_policy,
+            model_inference_concurrency_policy=(
+                self.model_inference_limiter.policy
+                if self.model_inference_limiter is not None
+                else None
+            ),
+            model_inference_slots=(
+                self.model_inference_limiter.slots
+                if self.model_inference_limiter is not None
+                else 0
+            ),
         )
         sanitized_upstream = {
             "task_id_hash": stable_hash({"task_id": result.get("task_id")}),
@@ -2394,6 +2499,16 @@ class SkillLearnSubprocessBackend:
             prebuilt_image_id="",
             offline_verifier_runtime_key="",
             codex_agent_execution_policy=self.codex_agent_execution_policy,
+            model_inference_concurrency_policy=(
+                self.model_inference_limiter.policy
+                if self.model_inference_limiter is not None
+                else None
+            ),
+            model_inference_slots=(
+                self.model_inference_limiter.slots
+                if self.model_inference_limiter is not None
+                else 0
+            ),
         )
         return SkillLearnTrialObservation(
             request=request,
@@ -4066,6 +4181,7 @@ class _DockerVerifierIsolationSubprocessProxy:
         egress_policy: DockerEgressPolicy,
         network_byte_limit: int = DEFAULT_TRIAL_NETWORK_BYTE_LIMIT,
         provider_mode: str = "openai_compatible",
+        model_inference_limiter: SkillLearnModelInferenceLimiter | None = None,
         event_sink: EventSink | None = None,
         trace_id: str = "skilllearn-docker-isolation",
     ) -> None:
@@ -4075,6 +4191,7 @@ class _DockerVerifierIsolationSubprocessProxy:
         self.egress_policy = egress_policy
         self.network_byte_limit = network_byte_limit
         self.provider_mode = provider_mode
+        self.model_inference_limiter = model_inference_limiter
         self.event_sink = event_sink or NullEventSink()
         self.trace_id = trace_id
         self._verifier_sources: dict[str, Path] = {}
@@ -4285,7 +4402,14 @@ class _DockerVerifierIsolationSubprocessProxy:
                     },
                 )
             )
-        completed = self.delegate.run(command, *positional, **kwargs)
+        if timeout_stage == "agent" and self.model_inference_limiter is not None:
+            with self.model_inference_limiter.acquire(
+                event_sink=self.event_sink,
+                trace_id=self.trace_id,
+            ):
+                completed = self.delegate.run(command, *positional, **kwargs)
+        else:
+            completed = self.delegate.run(command, *positional, **kwargs)
         if (
             started_container_name
             and int(getattr(completed, "returncode", 1)) == 0
@@ -4428,9 +4552,10 @@ def _fairness_fingerprint(
     codex_agent_execution_policy: CodexAgentExecutionPolicy = (
         LEGACY_CODEX_AGENT_EXECUTION_POLICY
     ),
+    model_inference_concurrency_policy: str | None = None,
+    model_inference_slots: int = 0,
 ) -> str:
-    return stable_hash(
-        {
+    payload = {
             "backend": "skilllearnbench_upstream_v1",
             "agent_id": agent_id,
             "model": model,
@@ -4472,7 +4597,12 @@ def _fairness_fingerprint(
                 else None
             ),
         }
-    )
+    if model_inference_concurrency_policy is not None:
+        payload["model_inference_concurrency_policy"] = (
+            model_inference_concurrency_policy
+        )
+        payload["model_inference_slots"] = model_inference_slots
+    return stable_hash(payload)
 
 
 def _provider_fingerprint(

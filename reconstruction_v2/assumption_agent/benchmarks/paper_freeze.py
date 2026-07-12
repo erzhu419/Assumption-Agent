@@ -566,6 +566,8 @@ def _validate_development_report(
         "openai_compatible_codex_config",
         "codex_network_minimization",
         "model_only_tool_policy",
+        "model_inference_concurrency_policy",
+        "model_inference_slots",
         "verifier_execution_receipt_policy",
         "offline_verifier_policy",
         "container_egress_policy",

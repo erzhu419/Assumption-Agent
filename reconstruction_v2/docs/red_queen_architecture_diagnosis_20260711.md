@@ -3,7 +3,7 @@
 > - 初版日期：2026-07-11
 > - 本次复核：2026-07-12
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
-> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 仅把五个在线 phase 固定改为 2 个跨题 worker
+> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -46,7 +46,9 @@
 > 边界和 86-item 离线可运行协议已经闭合。contrastive trigger learning 已在 v3.6 的代码、
 > manifest、离线测试和 live train 中运行到真实 paired validation，但串行轮只完成 2/16 pairs
 > 后因吞吐主动终止。v3.7 把跨题 worker 从 1 改为 6，但首批 6/6 请求均收到 429，
-> 熔断后其余 30 条本地跳过。当前 v3.8 只把 worker 从 6 降到 2，完整 fresh-root 结果仍待运行。
+> 熔断后其余 30 条本地跳过。v3.8 两路完成 16 valid 后又同时收到 2 个 503，熔断跳过 20。
+> 当前 v3.9 保留 6 路题级 pipeline，但只允许 1 个在线 Codex agent stage；本地准备/verifier
+> 仍并行，完整 fresh-root 结果待运行。
 > 仍未成立的是 clean development promotion、
 > 跨 family 泛化，以及 Red Queen 式多谱系搜索和
 > evaluator co-evolution。v3.3 已把 low reasoning/verbosity、32,768-token
@@ -81,14 +83,14 @@
 > 3 个候选，但第一个 repair 的 transport/JSON 成功后没有 mapping-valued `hypothesis`，裸
 > `ValueError` 穿透旧异常边界，仍在 validation trial 前退出。现已把 malformed root/repair
 > envelope 与 canonical parse 纳入既有 typed failure isolation，并让 report/freeze 从 generation
-> rows 绑定非 claim 状态；没有新增评分 gate、响应 retry 或在线 evaluator。两次 38 条都不能跨进程复用。其后第三个 v3.5 fresh root 首次完成 38/38 train、proposal、真实 repair、双臂 paired validation、两代 lifecycle 与四份 report/archive；两臂均未 promotion，第一代 recursive 为 0 gain/2 harm，no-recursive 为 1 gain/0 harm但 LCB 仍小于 0。第二代 no-recursive 又被一次 Ruoli 503、circuit skip、9 个 invalid pair 与 8 个 budget mismatch 污染，旧 lifecycle 错把它计作普通 non-promotion。v3.6 已一次性把成功 train rows 变成无 instruction/context 的 negative controls，按 train activation precision / false positives / failure support / complexity 选择候选，并把 invalid counterfactual evidence 归类为 terminal non-claim。其串行 live root 完成 38/38 valid train（7 success/31 residual），选出的 root 为 26/27 train activation precision、1 个 success false positive，并完成 2/16 validation pairs 后主动停止；无 report/archive/promotion/freeze。v3.7 只把跨题 worker 从 1 改为 6，但首批 6/6 train 请求均收到 provider 429，熔断后 30 条跳过；无可复用 bundle/report。v3.8 不改 promotion mapping、offline evaluator、model、split、预算、retry 或 circuit，只把五个在线 phase 的 worker 从 6 固定为 2；同题 variants 仍串行，v3.6/v3.7 rows 不复用。**
+> rows 绑定非 claim 状态；没有新增评分 gate、响应 retry 或在线 evaluator。两次 38 条都不能跨进程复用。其后第三个 v3.5 fresh root 首次完成 38/38 train、proposal、真实 repair、双臂 paired validation、两代 lifecycle 与四份 report/archive；两臂均未 promotion，第一代 recursive 为 0 gain/2 harm，no-recursive 为 1 gain/0 harm但 LCB 仍小于 0。第二代 no-recursive 又被一次 Ruoli 503、circuit skip、9 个 invalid pair 与 8 个 budget mismatch 污染，旧 lifecycle 错把它计作普通 non-promotion。v3.6 已一次性把成功 train rows 变成无 instruction/context 的 negative controls，按 train activation precision / false positives / failure support / complexity 选择候选，并把 invalid counterfactual evidence 归类为 terminal non-claim。其串行 live root 完成 38/38 valid train（7 success/31 residual），选出的 root 为 26/27 train activation precision、1 个 success false positive，并完成 2/16 validation pairs 后主动停止；无 report/archive/promotion/freeze。v3.7 的六路 agent 首批 6/6 收到 429；v3.8 的两路 agent 在 16 valid 后同时收到 2 个 503。两轮均被既有 circuit 正确阻止、无可复用 bundle/report。v3.9 不改 evaluator、learning/promotion、model、split、预算、retry 或 circuit；只把调度改为 6 个 outer item pipeline 共用 1 个在线 agent slot，本地容器准备和离线 verifier 仍可并行，同题 variants 仍串行，旧 rows 不复用。**
 
 ### 1.2 结论分层
 
 | 命题 | 当前状态 | 证据层级 |
 |---|---|---|
 | legacy HLE 是高维手写控制面，学习 policy 没有闭环 | 支持 | 代码审计 + 历史 artifacts |
-| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 275/275 离线测试 + v3.5 full mechanical live loop |
+| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 289/289 离线测试 + v3.5 full mechanical live loop |
 | v2 的内部 runtime action 能改变 lane plan | 支持 | 代码 + 单元测试 |
 | v2 主 SkillLearn 路径执行了每个 typed action/verifier/fallback 的强语义 | **不支持，且协议已停止这样声称** | 只接受四类显式 prompt/self-check lowering；其余 fail closed |
 | promotion threshold 完全由冻结 protocol 所有 | 支持 | protocol-bound spec + 宽松 candidate 对抗测试 |
@@ -355,7 +357,7 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 
 ### 7.2 当前证据到哪一层
 
-**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **275/275 通过**。这证明 schema、
+**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **289/289 通过**。这证明 schema、
 wiring、guard、replay、failure handling 和若干 invariant；不证明真实 benchmark
 improvement。新增覆盖包括 protocol threshold ownership、candidate 宽松阈值攻击、
 backend action lowering、真实/声明 fallback 分离、offline-ready split 不重抽样，以及
@@ -849,7 +851,7 @@ dependency-cache-only 尚未强制；但当前
 [`docker_egress.py`](../assumption_agent/benchmarks/docker_egress.py) 和 protocol manifest 已
 实现 provider-only hard egress、offline package mode 与 network fuse。本次已同步主
 README、benchmark protocol、offline-verifier matrix 和 status 摘要；本轮又把 receipt
-runtime provenance、v3.5 serial execution-policy / repair identity / response-contract binding、v3.6 contrastive/invalid-evidence contract、v3.7/v3.8 并发容量版本与 test 状态更新为 275/275。历史段落仍
+runtime provenance、v3.5 serial execution-policy / repair identity / response-contract binding、v3.6 contrastive/invalid-evidence contract、v3.7-v3.9 并发容量/共享 slot 与 test 状态更新为 289/289。历史段落仍
 保留为 diagnostic ledger，不能当作当前协议。
 
 这种文档漂移本身会破坏 protocol review；重新跑论文实验前必须同步。
@@ -960,7 +962,12 @@ runtime provenance、v3.5 serial execution-policy / repair identity / response-c
     请求全部返回 `provider_rate_limit`，一次 circuit open 后其余 30 个 request slot 本地跳过。
     无 valid training bundle、proposal、report、archive、family-out 或 sealed access。v3.8 只把五个
     online phase 的 worker 从 6 改为 2，其他字段归一化后完全不变；从新 lock/root 开始，
-    不拼接 v3.7 rows，也不新增 gate。
+    不拼接 v3.7 rows，也不新增 gate；
+31. 已运行 v3.8 two-worker fresh root：完成 16 个 valid train rows 后，两条同时在途请求均返回
+    `provider_model_unavailable`，既有 circuit 跳过其余 20。无 valid bundle/proposal/report/archive/
+    sealed。v3.9 采用旧快版真正的两级并发结构：6 个题级 worker 共用 1 个进程级在线 agent
+    semaphore，slot 只包围 `docker exec ... codex exec`；docker run、准备、离线 verifier 不取 slot。
+    slot policy/count 进入 protocol/lock/plan/fairness/freeze，异常 finally 释放；不新增评分 gate。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -1026,7 +1033,7 @@ activation；held-out causal activation precision 的分母则是 evidence-valid
 
 | 层级 | 可声明内容 | 当前状态 |
 |---|---|---|
-| L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：275 tests、protocol ownership、backend lowering、runtime receipt provenance、跨题并发与 offline preflight 均通过 |
+| L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：289 tests、protocol ownership、backend lowering、runtime receipt provenance、两级并发与 offline preflight 均通过 |
 | L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 达到机械链路：v3.5 第三轮完成；无 promotion claim |
 | L2 validation learning | clean held-out validation 上有可晋级净收益 | 未达到 |
 | L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | 未达到 |
@@ -1100,8 +1107,9 @@ run 只能保留为 L1 机械闭环与 contrastive-learning 动机，不能作�
 也不能 freeze 空 incumbent 或进入 sealed。identity/response/invalid-evidence 修复都不是放宽评分 gate；
 archive 冲突硬拒绝、promotion contract 和 evaluator 均未改变。v3.6 live 已从零完成 38/38
 contrastive train 并进入真实 paired validation，但串行执行只完成 2/16 pairs 后主动终止，因而
-没有完整 development claim。v3.7 的固定六路又被首批 6/6 provider 429 明确否决。下一份运行
-必须使用 v3.8 fresh lock/root，以固定 2 个跨题 worker
+没有完整 development claim。v3.7 的固定六路被首批 6/6 429 否决，v3.8 的固定两路又在
+16 valid 后被 2 个同时 503 否决。下一份运行必须使用 v3.9 fresh lock/root，以 6 个题级
+pipeline 配 1 个共享在线 agent slot
 从零完成同一协议；有 retained validation gain 和真实 incumbent
 后才有资格做 family-out、sealed test、多 clade 与 evaluator co-evolution。v3.4 与 pre-v3.6 rows
 以及被中断的 v3.6 rows 都不能跨协议拼接。最诚实的论文级表述是：
@@ -1124,6 +1132,8 @@ contrastive train 并进入真实 paired validation，但串行执行只完成 2
 - v2 benchmark protocol：[`BENCHMARK_PROTOCOL.md`](../BENCHMARK_PROTOCOL.md)
 - v2 current status：[`STATUS.md`](../STATUS.md)
 - active paper protocol：
+  [`skilllearn_paper_protocol_v3_9_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_9_ruoli_gpt54mini.json)
+- immutable v3.8 two-worker capacity diagnostic protocol：
   [`skilllearn_paper_protocol_v3_8_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_8_ruoli_gpt54mini.json)
 - immutable v3.7 six-worker capacity diagnostic protocol：
   [`skilllearn_paper_protocol_v3_7_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_7_ruoli_gpt54mini.json)
